@@ -1275,9 +1275,7 @@ default — `settings` grouped as SETTINGS is (audio, display, hud, camera,
 lighting, driving, steering, controls, metrics), `defaults` the value each one
 replaced, `where` the source file that owns that default; `"all"` lists every
 preference's effective value. Only the allowlist is read: never the garage,
-career or season saves, ghosts, replays, accounts or the renderer's self-heal
-latches. When present, `ttlb` carries every `apex26.ttlb.<track>` board (merged
-on import via `ttBoardAdd`, not overwritten blindly).
+saves, accounts or the renderer's self-heal latches.
 
 ### `garageFile() → {format, exportedAt, build, count, garage}`
 The GARAGE file as an object — the twin of `settingsFile()` and what SAVE

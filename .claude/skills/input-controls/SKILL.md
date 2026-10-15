@@ -29,23 +29,6 @@ filter, slew or recalibration. Digital sources share `KEY_RAMP_IN` /
 advances per PHYSICS step (`Input.steer(stepDt)`), and opposite arrows held
 together resolve last-key-wins.
 
-## Where things live (`js/input/`)
-
-| File | Role |
-|---|---|
-| `input.js` | `Input` singleton: `steer(stepDt)`, `throttle()` / `braking()`, `poll()`, `onKey` gate (`menuOverlayOpen` → `UiLayers.anyOpen()`), `inputState()` for probes |
-| `bindings.js` | `InputBindings.create` — action map (pause, camera, radio, …) wired from `key-binds.js` |
-| `steer-tuning.js` | `applySteerTuning`, `STEER_SCHEMA` migrations; pad dead zone / saturation / curve |
-| `pad-menu.js` | Menu stick → arrow keys (`PAD_NAV_DEADZONE`) |
-| `tilt-roll.js` | Tilt filter + `steerToTilt` / recalibrate shared with `controller.html` |
-| `phone-pad.js` | VS FRIEND phone samples → `remoteSample` |
-| `hold-buttons.js` | On-screen hold/toggle gas and look-back when enabled |
-| `haptics.js` | `Input.vibrate` / `rumble` throttles |
-
-`game.js` reads `steerMode` from store, calls `Input.steer(stepDt)` in the physics step, and
-implements assists (`helpFromSlider`, `raceLineAssist`, `gripSteer` → `js/physics/grip-steer.js`).
-Settings UI: `js/ui/key-binds.js`, `js/ui/settings-export.js` sliders (`pm-*` ids).
-
 ## Assists
 
 | Store / slider | Effect |

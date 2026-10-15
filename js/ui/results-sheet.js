@@ -300,8 +300,7 @@ function buildResults(order, race) {
       parts.push("BEST " + lapClock(G, self.best) + (self.best === fl ? " ★" : ""));
     }
     const pen = verdict && verdict.penalty;
-    const penWhy = verdict && verdict.penaltyWhy;
-    if (pen > 0) parts.push("PEN +" + pen + "s" + (penWhy ? " (" + penWhy + ")" : ""));
+    if (pen > 0) parts.push("PEN +" + pen + "s");
     detail.textContent = parts.join(" · ");
     card.append(heading, detail); els.resultsTable.appendChild(card);
   }
@@ -344,7 +343,7 @@ function buildResults(order, race) {
     const down = !dnf && winnerData && typeof winnerData.lap === "number" &&
       isFinite(winnerData.lap) && typeof carData.lap === "number" && isFinite(carData.lap)
       ? Math.max(0, lapsAt(winnerData) - lapsAt(carData)) : 0;
-    const suffix = dnf ? `  (${dnf})` : carData.penalty ? `  (+${carData.penalty}s${carData.penaltyWhy ? " " + carData.penaltyWhy : ""})` : "";
+    const suffix = dnf ? `  (${dnf})` : carData.penalty ? `  (+${carData.penalty}s)` : "";
     const downSuffix = down ? `  (+${down}${down > 1 ? " LAPS)" : " LAP)"}` : "";
     nm.textContent = `${c.code}  ${c.name}${suffix}${downSuffix}`;
     if (other) {

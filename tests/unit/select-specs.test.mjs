@@ -898,9 +898,7 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
     "the selected job must pass matrix.circuits to APEX_CIRCUITS, or the circuit lane runs the whole fleet");
   // The deploy gate runs it now: no caller-key exclusion on the plan job.
   const selectJob = /\n  select:\n[\s\S]*?\n  selected:\n/.exec(yml)?.[0] || "";
-  // The JOB's `if:` (the ship-filter STEP inside it sits out the fast tier on purpose since 2026-10-15).
-  const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
-  assert.ok(selectJob && selectJobIf && !/concurrency_key == ''/.test(selectJobIf),
+  assert.ok(selectJob && !/concurrency_key == ''/.test(selectJob),
     "the select job must not skip itself on the Pages call — exact-commit deploys need the change-aware gate too");
 });
 

@@ -11,21 +11,6 @@ fallback) and **WGX** (`js/render/webgpu/`, opt-in WebGPU, DEFERRED). Most
 black-canvas reports start with "which one am I on?" — and a unit test of a
 backend is not evidence that it runs (`docs/ARCHITECTURE.md` §Boot evidence).
 
-## Where things live (rendering stack)
-
-| Layer | Path | Notes |
-|---|---|---|
-| Backend factory | `js/render/gfx.js` | `Gfx.create(canvas, opts)` tries TLX → WGX → GLX; stores `gfx` on `G` |
-| TLX (default) | `js/render/three/tlx.js`, `tsl-*.js`, `tlx-post.js` | `TLX.create`; pin with `apex26.gfxBackend` / `apex26.tlxForceGL` |
-| GLX fallback | `js/render/glx/glx.js`, `glsl-*.js` | WebGL2 path; `GLX.create` |
-| WGX opt-in | `js/render/webgpu/wgx.js`, `wgsl-chunks.js` | `WGX.create`; failures land in `apex26.gfxWgxFail` |
-| Shared assets | `js/render/shared/assets.js` | PBR pack layers — **asset-pack** |
-| Soft present (CI) | `js/render/gfx.js` + `#game-soft` | Headless blit; probes use `awaitSoftPresent()` |
-| Scene bridge | `js/game.js` | Per-frame `gfx` draw/update; garage uses the same `gfx` in `js/garage/scene.js` |
-| Diagnose | `js/agent/apex.js` | `__apex.diag().env.backend`, `texCensus()`, `assets()` |
-
-Pick the backend section below from `env.backend`; cross-backend parity → `tests/unit/backend-surface-parity.test.mjs`.
-
 ## Step 0 — which backend answered (BROWSER-ONLY: needs a live page)
 
 ```js

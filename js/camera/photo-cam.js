@@ -36,12 +36,8 @@ function initPhotoCam() {
 // Split out of initPhotoCam so blur can release the input WITHOUT also
 // re-deriving the pose from the game camera, which would teleport the shot.
 const altitudeHeld = { up: false, down: false };
-// Physical aliases own their holds independently: releasing Space cannot
-// cancel a still-held R, nor can one Shift release cancel the other.
-const aliasHeld = { KeyR: false, Space: false, ShiftLeft: false, ShiftRight: false };
 function releasePhotoInput() {
   altitudeHeld.up = altitudeHeld.down = false;
-  for (const code in aliasHeld) aliasHeld[code] = false;
   photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
   photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; photoMouse.pid = null;
   G.photoAlt = 0; G.photoVertT = 0;
@@ -149,15 +145,13 @@ function photoKeyHandler(e) {
     case "KeyS": photoKeys.s = down; break;
     case "KeyA": photoKeys.a = down; break;
     case "KeyD": photoKeys.d = down; break;
-    case "KeyR": case "Space":
-      aliasHeld[e.code] = down; photoKeys.up = aliasHeld.KeyR || aliasHeld.Space; break;
+    case "KeyR": case "Space": photoKeys.up = down; break;
     case "KeyF": photoKeys.dn = down; break;
     case "ArrowUp": photoKeys.pu = down; break;
     case "ArrowDown": photoKeys.pd = down; break;
     case "ArrowLeft": photoKeys.yl = down; break;
     case "ArrowRight": photoKeys.yr = down; break;
-    case "ShiftLeft": case "ShiftRight":
-      aliasHeld[e.code] = down; photoKeys.boost = aliasHeld.ShiftLeft || aliasHeld.ShiftRight; break;
+    case "ShiftLeft": case "ShiftRight": photoKeys.boost = down; break;
     default: hit = false;
   }
   // A key-UP still reaches Input: W held from driving, released in here, stayed held after RESUME.

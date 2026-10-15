@@ -17,7 +17,6 @@
  *   node tools/ci/pick-unit-slices.mjs js/circuits/scenery/monaco.js
  *   node tools/ci/pick-unit-slices.mjs --json
  *   node tools/ci/pick-unit-slices.mjs --all --github-output
- *   node tools/ci/pick-unit-slices.mjs --since <base> --needed-only --github-output   # a pull request: needed rows only
  *   node tools/ci/pick-unit-slices.mjs --costs
  */
 import { execFileSync } from "node:child_process";
@@ -309,21 +308,15 @@ export function costs(selected) {
  * stays BLOCKED even when the aggregator `CI` is green (measured on #454
  * 35e66e231: vm-b1/b2/page/slow ran, vm-a1/a2 never appeared). Unneeded rows
  * carry `needed:"false"` so the job exits 0 without work.
- *
- * EXCEPT ON A PULL REQUEST (`--needed-only`, 2026-10-15): `CI` is the deploy
- * branch's one required check, so the six names owe a PR nothing, and each unneeded row was still a job start
- * waiting ~11 min for a runner on a jammed day (docs/notes/CI-CLOG-SURVEY-
- * 2026-10-15.md). The PR plan lists only the needed rows; when there are
- * none, `slices` is `[]` and ci.yml's node-suites job skips on any_node=false.
  */
-export function ciOutputs(result, { neededOnly = false } = {}) {
+export function ciOutputs(result) {
   const selected = [...result.slices.keys()];
   const nodeNeeded = NODE_SLICES.filter((s) => result.slices.has(s));
   return {
     reason: result.reason,
     any_node: nodeNeeded.length > 0 ? "true" : "false",
     driving: result.slices.has("driving-model") ? "true" : "false",
-    slices: NODE_SLICES.filter((slice) => !neededOnly || result.slices.has(slice)).map((slice) => ({
+    slices: NODE_SLICES.map((slice) => ({
       slice,
       needed: result.slices.has(slice) ? "true" : "false",
     })),
@@ -347,7 +340,7 @@ function main(argv = process.argv.slice(2)) {
     result.reason = "fail-safe";
   }
 
-  const out = ciOutputs(result, { neededOnly: argv.includes("--needed-only") });
+  const out = ciOutputs(result);
   const c = costs(result.slices);
 
   if (argv.includes("--github-output")) {

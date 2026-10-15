@@ -60,14 +60,6 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 // 180 clears the slowest measured spec by 44%. Re-derive ci.yml's
 // `timeout-minutes` with it: cap >= (tests x timeout) + setup + margin.
 export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
-/** Browser-leg LANES (2026-10-15): ci.yml's `selected` job carries a job-level
- *  concurrency group `selected-lane-<lane>` with `queue: max` on pull requests,
- *  so at most LANES selected legs run fleet-wide at once and the rest wait in
- *  FIFO order WITHOUT holding a runner or being cancelled
- *  (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax,
- *  `concurrency.queue`). ready-full-cap.mjs still caps whole ready RUNS at the
- *  desk; this caps legs in GitHub. 12 = three ready runs' worth of ~4 legs each. */
-export const LANES = 12;
 
 // These specs already have their own jobs with runner-measured timeout
 // policies. Re-running them in the selected job used its generic 120 s cap and
@@ -869,7 +861,7 @@ export function shards(r, db = timings(), quarantine = loadQuarantine()) {
     }
   }
   let k = 0, sel = 0, ob = 0, sp = 0;
-  const out = bins.map((b, i) => {
+  const out = bins.map((b) => {
     const files = b.items.flatMap((x) => x.files);
     const budgeted = b.items.some((x) => x.budgeted);
     const name = b.solo ? b.name
@@ -887,10 +879,7 @@ export function shards(r, db = timings(), quarantine = loadQuarantine()) {
       tests: b.items.reduce((n, x) => n + x.tests, 0), sec, perTest, workers, retries,
       timeout: shardCapMin(sec, perTest, maxCapMin, retries),
       // APEX_CIRCUITS for the job: empty = every circuit (see select()).
-      circuits: (r.circuits || []).join(","),
-      // The leg's concurrency lane on a pull request (ci.yml `selected`): legs
-      // cycle through LANES groups, so a run's own legs never queue behind each other.
-      lane: i % LANES };
+      circuits: (r.circuits || []).join(",") };
   });
   // Unique names: a matrix name keys ci.yml's timings artifact, and a repeat
   // there is an upload that collides.

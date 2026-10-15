@@ -48,13 +48,13 @@ function dockEl() {
   };
 }
 
-test("clampXY keeps a dock between its safe-area home and MAX (a negative share would park it off screen)", () => {
+test("clampXY rejects offsets past ±MAX (keeps legitimate negatives)", () => {
   const c = DL.clampXY({ x: 2, y: -2 });
   assert.equal(c.x, DL.MAX);
-  assert.equal(c.y, 0, "down past the home bar clips to the home");
+  assert.equal(c.y, -DL.MAX, "past −MAX clips to −MAX; a small negative is kept");
   const neg = DL.clampXY({ x: -0.1, y: -0.2 });
-  assert.equal(neg.x, 0, "outboard past the screen edge clips to the home edge");
-  assert.equal(neg.y, 0, "below the home bar clips to the home");
+  assert.equal(neg.x, -0.1, "legitimate negative x is not zeroed");
+  assert.equal(neg.y, -0.2, "legitimate negative y is not zeroed");
   // Property-wise: vm-realm objects fail deepStrictEqual on prototype identity.
   const junk = DL.clampXY({ x: "no", y: null });
   assert.equal(junk.x, 0);

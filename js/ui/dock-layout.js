@@ -21,13 +21,14 @@ const DockLayout = (function () {
     return v < lo ? lo : v > hi ? hi : v;
   }
   // +x is inboard from the dock's home edge; +y is up from the bottom (apply).
-  // The home IS the safe-area edge, so an offset only moves a dock inboard or up: [0, MAX]. A negative share
-  // translated the dock past the screen edge or under the home bar (cda4027e3 allowed ±MAX for "a pack nudge",
-  // but the REPOSITION drag is the only writer — HUD review 2026-10-14). Past MAX still clips.
+  // Negative shares are legitimate (a pack nudge back toward the home edge /
+  // down toward the home bar) and stay inside ±MAX — zeroing them dropped a
+  // saved REPOSITION that had slid a few percent past the home. Past ±MAX
+  // still clips so a drag cannot park a primary control under the notch.
   function clampXY(xy) {
     return {
-      x: clamp01(xy && xy.x, 0, MAX),
-      y: clamp01(xy && xy.y, 0, MAX),
+      x: clamp01(xy && xy.x, -MAX, MAX),
+      y: clamp01(xy && xy.y, -MAX, MAX),
     };
   }
   function emptyScheme() { return { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } }; }

@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  SLICES, NODE_SLICES, SLICE_COST_P50_SEC, pick, costs, testFileOwners, ciOutputs,
+  SLICES, NODE_SLICES, SLICE_COST_P50_SEC, pick, costs, testFileOwners,
 } from "../../tools/ci/pick-unit-slices.mjs";
 
 function runJson(...args) {
@@ -21,7 +21,7 @@ test("SLICES / NODE_SLICES match the six-slice ci.yml matrix", () => {
   ]);
   assert.deepEqual(NODE_SLICES, ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"]);
   const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
-  assert.match(ci, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
+  assert.match(ci, /include: \$\{\{ fromJSON\(needs\.unit-plan\.outputs\.slices\) \}\}/);
 });
 
 test("a scenery-only circuit file skips the physics-heavy slices", () => {
@@ -195,20 +195,4 @@ test("15-F1: every other source an ADAPTED spec reads schedules the page slice (
     assert.ok(slices(f).has("page"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
   // An unrelated engine file keeps the cheap plan.
   assert.ok(!slices("js/track/core/mesh.js").has("page"));
-});
-
-test("--needed-only (a pull request) lists only the needed rows; a deploy push keeps all six names", () => {
-  const scenery = pick(["js/circuits/scenery/monaco.js"]);
-  const draft = ciOutputs(scenery, { neededOnly: true });
-  assert.deepEqual(draft.slices.map((r) => r.slice), ["vm-a1", "vm-a2"], "a scenery diff on a pull request runs the two elevation shards only");
-  assert.ok(draft.slices.every((r) => r.needed === "true"));
-  assert.equal(ciOutputs(scenery).slices.length, NODE_SLICES.length, "a deploy push / the train still emits every row (the reuse check wants expanded rows)");
-  const docs = ciOutputs(pick(["docs/TESTING.md"]), { neededOnly: true });
-  assert.deepEqual(docs.slices, [], "nothing needed → an empty matrix; ci.yml's node-suites `if:` skips the job on any_node=false");
-  assert.equal(docs.any_node, "false");
-  const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
-  assert.match(ci, /NEEDED_ONLY: \$\{\{ github\.event_name == 'pull_request' \}\}/,
-    "ci.yml asks for needed rows only on every pull request (CI is the one required check since 2026-10-15)");
-  assert.match(ci, /needs\.select\.outputs\.any_node == 'true' \|\| github\.event_name != 'pull_request'/,
-    "node-suites skips at the job level only on a pull request with nothing needed");
 });

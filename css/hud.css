@@ -1280,9 +1280,6 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
    the attribute the JS sets could not actually hide it. Restated, as
    #cs-cam-panel and the dock groups already do. Found by the hidden-override
    guard in tests/unit/css-layers.test.mjs. */
-/* Race chrome over the canvas, not controls: a TOUCH steer that starts on the radio card or the start-light plate
-   must reach the canvas (js/input/input.js listens there). ARRANGE HUD still grabs the card (its own rule). */
-body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
 #lights[hidden] { display: none; }
 #lights {
   position: fixed;
@@ -2354,9 +2351,6 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 @supports (anchor-name: --a) {
   @media (orientation: landscape) {
     body:not(.desktop) #dock-left { anchor-name: --apex-dock-left; }
-    /* LEFT-HANDED: row-reverse paints #dock-right on the left, so it is the left dock TYRES hangs from. */
-    body.mirror-controls:not(.desktop) #dock-left { anchor-name: none; }
-    body.mirror-controls:not(.desktop) #dock-right { anchor-name: --apex-dock-left; }
     body:not(.desktop) #hud-tyre {
       position: absolute;
       position-anchor: --apex-dock-left;

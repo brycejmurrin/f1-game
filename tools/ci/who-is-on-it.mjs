@@ -403,7 +403,5 @@ export function main(argv = process.argv.slice(2)) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  // exitCode, not exit(): exit() drops whatever stdout has not flushed, and a
-  // pipe takes 64 KiB at a time — `--json | node …` got the board cut mid-string.
-  process.exitCode = main();
+  process.exit(main());
 }

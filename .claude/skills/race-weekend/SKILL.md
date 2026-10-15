@@ -24,24 +24,6 @@ The rules modules that turn a lap into a weekend. Each is one
 
 Design evidence: `docs/research/TYRE-STRATEGY-DESIGN.md`, `docs/research/PIT-*.md`.
 
-## Where things live (race rules ↔ `js/game.js`)
-
-Weekend **rules modules** stay out of `game.js`; the entry file **wires and classifies**:
-
-- `ensureRaceSession()` (`lazyBundles`) loads pit/radio/reliability before grid setup;
-  `onRaceSessionReady` recreates `pits = PitLane.create(G)` and hooks race session deps.
-- `raceCtl = RaceControl.create(G)` — per-tick `updateCaution` / `applyCaution`; `cautionInfo()`
-  merges `SportingRegs.createPassWatch` (SC pass-back) for the HUD flag chip.
-- `scWatch` / `scPassCall`, `blueWatch` / `blueFlagCall` — sporting-reg penalties surfaced via `announce()`.
-- `realRace.update(dt)` — scripted race / WATCH transport; `realRace.owns(c)` gates player `raceT` and recover.
-- Finish pipeline (~`classify` helpers): `SportingRegs.applyCompoundRule`, `RaceControl.finishOrder`,
-  `RaceControl.classify`, `RaceControl.finishDelay` + `postFinish` solo wait; `holdCaution` for scripted flags.
-- `wxArc` / `trackWetness()` / `gripMult(c)` — weather arc vs `TyreModel` wetness for grip and pits.
-- `pits.think` / human pit UI read the same `PitLane` state the AI `planFor` uses.
-
-Domain edits: the `js/race/*` and `js/physics/tyre-model.js` files above; flags/debris/episode
-owners → **race-incidents-control**. Do not grep `game.js` blindly — open these symbols first.
-
 ## Hooks (live page)
 
 ```js

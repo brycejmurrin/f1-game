@@ -199,9 +199,6 @@ file changes a screen owned by another.
 - `.pc-stickwrap` / `.pc-move-wrap` / `.pc-look-wrap` / `.pc-altcol` / `.pc-btn` —
   `hud` + `photo-studio`. Photo Studio borrows the camera controls, then fits
   their zoom and anchors around its side or bottom dock while it is open.
-- `.mirror-controls` — `touch-controls` + `hud`. LEFT-HANDED body class (`js/game.js`): `touch-controls` reverses
-  `#hud-dock`, so `#dock-right` paints on the left; `hud` re-points TYRES's `--apex-dock-left` anchor to it, and
-  `js/ui/hud.js` `pickDocks()` hands the fit the docks by painted side.
 - `.bc-on` — `hud` + `touch-controls` (+ `watch-transport`). Body class for the broadcast HUD: `touch-controls`
   keeps CAM / PAUSE on the `--tap-hud` band under it (`#bc-pip` hangs under PAUSE), so `--tap-btn`
   (PAUSE past 150 % BUTTON SIZE) is `body:not(.desktop):not(.bc-on)` only.

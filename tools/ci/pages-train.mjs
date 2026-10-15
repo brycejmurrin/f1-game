@@ -37,14 +37,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // ci.yml jobs gated on `inputs.fast_tier_run == ''`: the ones a train skips
-// when it names a fast run. Driving model may be skipped by the plan step's own
+// when it names a fast run. Driving model may be skipped by unit-plan's own
 // path filter (ci-verdict and poke-train read that as a pass); every other
 // row must be green. Node suites are a matrix: at least one expanded row, all
 // green (a job-level skip reports one unexpanded row, conclusion skipped).
-// The node-slice plan lives in `Select specs for this change` since
-// 2026-10-15 (was the `Plan node unit slices` job); that job re-runs on the
-// train, so it is not a tree-only row.
-export const TREE_ONLY = ["Structural guards (tooling A)", "Structural guards (tooling B)", "Structural guards"];
+export const TREE_ONLY = ["Structural guards (tooling A)", "Structural guards (tooling B)", "Structural guards", "Plan node unit slices"];
 export const NODE_SUITES = "Pure-node unit suites (";
 export const DRIVING = "Driving model (characterization traces)";
 
