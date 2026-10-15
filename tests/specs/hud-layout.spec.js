@@ -868,8 +868,9 @@ for (const v of [
 // PORTRAIT RADIO CARD (race-anyway). Every dock group is 0px tall here, so
 // announceLane publishes no lane; `left: calc(var(--announce-lane-x) / …)`
 // with no fallback went invalid-at-computed-value-time (`auto`), and the -50%
-// shift parked the card at x -72..72 on 390x844, over #minimap. The fallback
-// in css/hud.css centres it.
+// shift parked the card at x -72..72 on 390x844, over #minimap. Landscape
+// still centres (50% / -50%). Portrait pins the left edge past the map
+// column (34% / 0%) so HUD 150% on 390 clears #minimap.
 test.describe("portrait radio card (phone-portrait-390)", () => {
   test.setTimeout(300_000);
   const v = { name: "phone-portrait-390", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 };
@@ -894,6 +895,11 @@ test.describe("portrait radio card (phone-portrait-390)", () => {
           ann.hidden = false;
           ann.removeAttribute("data-lane-collapsed");
         }
+        // Measure the unpublished-lane fallback the player gets on portrait
+        // (no dock groups). A leftover hud-radio-top / data-radio-corner from
+        // race() would hide the 150% × map overlap Pages 38622878195 hit.
+        document.body.classList.remove("hud-radio-top");
+        if (document.body.removeAttribute) document.body.removeAttribute("data-radio-corner");
         const root = document.documentElement;
         for (const k of ["--announce-lane-w", "--announce-lane-x", "--announce-lane-shift"]) {
           root.style.removeProperty(k);
