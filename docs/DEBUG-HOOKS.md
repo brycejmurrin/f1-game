@@ -1526,6 +1526,13 @@ Pairwise race vs practice stage table from two `raceEntryProfile()` snapshots
 (same shape `raceEntryStages()` uses internally). Rows include `raceMs`,
 `practiceMs`, and `deltaMs`, sorted by largest absolute delta first.
 
+### `frametimeBench(cmd) → true | {p50,p95,p99,max,frames,longTasks,heapUsedMB,heapTotalMB} | {cmds}`
+Read-only Playwright seam (`js/perf/metrics-overlay.js`). `frametimeBench("reset")`
+clears `PerfGov.resetFrameStats()` and arms a longtask observer; after a wall-clock
+sample window, `frametimeBench("snapshot")` returns frame percentiles from the
+governor's ring plus heap from `performance.memory` when present. Used by
+`tests/specs/perf-frametime.spec.js`; does not change gameplay.
+
 ### `multiDraw(on?) → {supported, on, multiCalls, rangesSubmitted, drawElementsAvoided, perChunkDraws, consecutiveGroups, setGroups}`
 GLX `WEBGL_multi_draw` — the per-chunk `drawElements` calls collapsed into one
 `multiDrawElementsWEBGL` per light-set group. `multiDraw(true)` turns it on,
