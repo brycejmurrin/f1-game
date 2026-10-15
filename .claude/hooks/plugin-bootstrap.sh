@@ -27,7 +27,6 @@ t() { timeout "$1" "${@:2}"; }
 # name@marketplace. anthropic-plugin-directory is built in; the official one is added below.
 PLUGINS=(
   design@anthropic-plugin-directory
-  axe-accessibility@anthropic-plugin-directory
   responsive-check-mobile-layout-tester@anthropic-plugin-directory
   ci-optimizer-faster-github-actions-and-gitlab-ci@anthropic-plugin-directory
   parallax-threejs@anthropic-plugin-directory
@@ -53,7 +52,6 @@ python3 - <<'PY' >>"$LOG" 2>&1 || true
 import glob, json
 DROP = {
     "design": ["slack", "figma", "linear", "asana", "atlassian", "notion", "intercom", "google calendar", "gmail"],
-    "axe-accessibility": ["axe-mcp-server"],
     "parallax-threejs": ["spector"],
 }
 base = glob.glob("/root/.claude/plugins/cache/*/")
