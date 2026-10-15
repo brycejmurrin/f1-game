@@ -13,7 +13,7 @@ article{background:var(--card);border:1px solid var(--bd);padding:4px 12px;margi
 <h1>Bahrain International Circuit — survey</h1>
 <p>Sakhir, Bahrain · theme <b>desert</b> (night race, <code>night:true</code>) · base sha 6508220 (+ merges of shared-shot-tooling-5b45, day-wet-lighting-b7b8) · read-only survey, nothing in <code>js/</code>/<code>css/</code> edited · captured 2026-10-15 on a GPU-less VM (SwiftShader, TLX backend, 1280×720).</p>
 <p class=n>Legend: <b>measured</b> = computed from the built centreline/audit in this session; <b>source claim</b> = comment/brief text; <b>guess</b> = flagged as such.</p>
-<h2>Code &amp; geometry summary</h2>
+<h2>Code &amp; scenery deep-dive</h2><h3>Geometry summary</h3>
 <table><tr><th>Item</th><th>Value</th><th>Kind</th></tr>
 <tr><td>Built lap length</td><td>5386.9 m (official 5.412 km: −0.5 %; path.len 5419 is source metadata)</td><td>measured</td></tr>
 <tr><td>Nodes / spacing</td><td>1347 nodes, ~4 m</td><td>measured</td></tr>
@@ -30,10 +30,10 @@ article{background:var(--card);border:1px solid var(--bd);padding:4px 12px;margi
 <tr><td>dressingExclusions</td><td>foliage + lighting excluded 0–1: generic lamps off; the bespoke lighting rig (bahrain.js:735-765) carries the night lamp budget</td><td>def</td></tr>
 <tr><td>Bridges</td><td>none</td><td>def</td></tr>
 <tr><td>Build</td><td>props 180 093 verts (road 28 944, terrain 35 022), 6 903 instanced, 244 059 total; 190 674 tris after compaction</td><td>verify/audit</td></tr></table>
-<h2>Corner list</h2>
+<h3>Corner list</h3>
 <p class=n>From <code>def.turns</code> (racing-lap fracs) and the built curvature at the peak node within ±8 nodes. Direction: +k = LEFT. Brief says 15 corners, clockwise; built has 10 R / 5 L. Brief names T8 a right-hander while built T8 is L (r59) — unresolved (real layout not re-checked).</p>
 <table><tr><th>#</th><th>racing frac</th><th>s (m)</th><th>dir</th><th>radius m</th><th>y m</th></tr><tr><td>T1</td><td>0.1038</td><td>559</td><td>R</td><td>14</td><td>+0.12</td></tr><tr><td>T2</td><td>0.1213</td><td>653</td><td>L</td><td>32</td><td>-0.02</td></tr><tr><td>T3</td><td>0.1413</td><td>761</td><td>R</td><td>65</td><td>-0.07</td></tr><tr><td>T4</td><td>0.2503</td><td>1348</td><td>R</td><td>20</td><td>-0.09</td></tr><tr><td>T5</td><td>0.3183</td><td>1715</td><td>R</td><td>46</td><td>-0.05</td></tr><tr><td>T6</td><td>0.3408</td><td>1836</td><td>L</td><td>46</td><td>-0.10</td></tr><tr><td>T7</td><td>0.3868</td><td>2084</td><td>R</td><td>16</td><td>-0.06</td></tr><tr><td>T8</td><td>0.4573</td><td>2463</td><td>L</td><td>59</td><td>-0.02</td></tr><tr><td>T9</td><td>0.4733</td><td>2550</td><td>L</td><td>13</td><td>+0.02</td></tr><tr><td>T10</td><td>0.6073</td><td>3271</td><td>L</td><td>30</td><td>+0.00</td></tr><tr><td>T11</td><td>0.6653</td><td>3584</td><td>R</td><td>103</td><td>-2.38</td></tr><tr><td>T12</td><td>0.6768</td><td>3646</td><td>R</td><td>98</td><td>-2.91</td></tr><tr><td>T13</td><td>0.7223</td><td>3891</td><td>R</td><td>51</td><td>-0.07</td></tr><tr><td>T14</td><td>0.7313</td><td>3939</td><td>R</td><td>29</td><td>+0.09</td></tr><tr><td>T15</td><td>0.8783</td><td>4731</td><td>R</td><td>18</td><td>+0.03</td></tr></table>
-<h2>Scenery &amp; landmark inventory</h2>
+<h3>Scenery &amp; landmark inventory</h3>
 <p class=n>Counted from <code>js/circuits/scenery/bahrain.js</code> (1155 lines) by call-site (not by emitted instances). Fracs are in the SCENERY frame (sceneryStartFrac 0.2250) unless noted SF/racing.</p>
 <table><tr><th>Category</th><th>Call sites</th><th>Placement / anchors</th></tr>
 <tr><td>Registered landmark modelGroups (required)</td><td>8</td><td>main-tribuna (SF, L, gap 18), sakhir-tower (SF+0.020, R, 62, 42 m, 12-band LED), control-tower (SF+0.008, R, 38), schumacher-corner (T1F−0.002, L, 14), university-grandstand (0.18, R, 28), beyon-grandstand (0.52, R, 38), drag-tree (drag strip), + bahrain-main-tribuna-b via helper (SF+0.014, L, 19, not required)</td></tr>
