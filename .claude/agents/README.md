@@ -20,7 +20,7 @@ lenses (`.claude/workflows/README.md`).
 | **code-hunter** | Bug / perf / dead-code hunt over ONE slice, one agent per slice in parallel; takes the scout's list as `known:` and prints ≤ 12 `FINDING` rows as found, then `covered:` / `not covered:` / `measured:`. Node-only checks (`node --test` one file, VM runs under `timeout 180`); the whole run stays well under 10 min. The one opus pin. |
 | **agent-surface-reviewer** | Reviews ONE skill, agent, hook, rule file or AGENTS.md section (trigger, paths, commands, walkthrough, structure, enforcement) and writes a ≤ 60-line report to the `scratch/` path it is given; `retest <old report>` adds BEFORE/AFTER. Its one write is that report (hook-enforced: Write/Edit to `scratch/**.md` only, no Bash writes). Returns VERDICT + top 2 gaps. |
 | **finding-verifier** | Re-reads up to 15 `file:line — claim` rows on the current tree and returns `CONFIRMED / STALE / REFUTED / NEEDS-BROWSER` with evidence, then `refuted: k/N stale: k/N`. Run it before acting on any hunt, survey, review or audit finding; never fixes. |
-| **worker** | ONE scoped change handed off by the parent: every tool the session has (no `tools:` list, MCP included), its own worktree (`isolation: worktree`), node-only verification, commits on its branch, and coordinates mid-task with `SendMessage` (`main` for blocked / question / collision / scope / checkpoint, a named peer only for an interface it moves). Several run in parallel on disjoint OWNED paths; the spawn prompt names goal, OWNED, FORBIDDEN, verify command, peers, and whether it pushes. Never merges, arms, readies or cancels; no browser runs. Ends with a fixed `WORKER <name>:` report. |
+| **worker** | ONE scoped change handed off by the parent: an explicit `tools:` list of every tool — all ten MCP servers by `mcp__<server>` (GitHub, Claude sessions, apex-tools, Context7, Docs, Drive, TinyFish, and the three browser servers that the subagent hook still refuses), git and shell via Bash, edits, web, SendMessage / ListAgents, tasks, worktrees, artifacts — its own worktree (`isolation: worktree`), node-only verification, commits on its branch, and coordinates mid-task with `SendMessage` (`main` for blocked / question / collision / scope / checkpoint, a named peer only for an interface it moves). Several run in parallel on disjoint OWNED paths; the spawn prompt names goal, OWNED, FORBIDDEN, verify command, peers, and whether it pushes. Never merges, arms, readies or cancels; no browser runs. Ends with a fixed `WORKER <name>:` report. |
 
 **Token routing:** prefer these over attaching fat skills. Deploy/version →
 `deploy-research` (not full `mcp-probe`). Pre-push verify → `verify-agent`;
@@ -43,7 +43,7 @@ New agents must be listed here and remain trackable
 
 Frontmatter is read by two hosts, and each ignores the other's fields:
 `name` (matches the filename) and `description` (what + when) for both;
-`tools:` is the Claude Code allowlist (read-only agents list no Write/Edit; track-surveyor and agent-surface-reviewer write, scoped by `protect-files.py`)
+`tools:` is the Claude Code allowlist (read-only agents list no Write/Edit; track-surveyor and agent-surface-reviewer write, scoped by `protect-files.py`; worker writes within its brief's OWNED paths and lists every tool, MCP servers as `mcp__<server>`)
 and `background: true` keeps a Claude Code agent off the foreground;
 `readonly: true` and `is_background: true` are the Cursor equivalents
 (`https://cursor.com/docs/subagents`). `model:` is a TIER, pinned by
