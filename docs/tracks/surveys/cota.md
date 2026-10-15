@@ -42,8 +42,8 @@
 | Issue | Notes |
 |--------|--------|
 | Night tower/amphi floods | `furniture.lamp: "none"` — cluster dark except main-straight hand lamps |
-| Storm / rain spray | Visible on wet road; check for exposure wash on tower orbit |
-| Pit garage footing | Terrain-footed bays on paddock straight; glass still in ground-audit baseline |
+| Storm / rain spray | Visible on wet road; watch exposure on tower orbit |
+| Pit garage footing | Terrain-footed bays; glass in ground-audit baseline |
 | T1 hill physics | `rise: 18` vs ~40 m real — separate physics pass |
 
 ## Verification
