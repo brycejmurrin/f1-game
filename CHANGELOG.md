@@ -15,10 +15,18 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 ### Fixed
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
+- Blue flags: letting one lapping car through no longer counts toward a penalty for the next one in the queue (#2163).
+- Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
+- A car handed back after a heavy shunt never drives backwards at speed (#2167).
+- AI cars hold their line under the Safety Car and VSC instead of weaving to defend (#2175).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
 - Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
+- Restoring a career backup keeps your Daily Challenge class bests, so the share line no longer reads NO LAP (#2165).
+- A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
+- Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
+- A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)

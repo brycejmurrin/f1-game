@@ -355,3 +355,10 @@ test("evaluate + render: PLAN is done/items from the body, HOLD is flagged, a sw
   assert.match(lines[2], /\s2\/3\s+ARM$/, "two of three items closed (one ticked, one struck)");
   assert.match(lines[3], /WAIT \(HOLD\)$/);
 });
+
+test("#2184: a newer label-noise run (all jobs skipped, success) does not turn a red head green", () => {
+  const real = { id: 1, path: ".github/workflows/ci.yml", status: "completed", conclusion: "failure", display_title: "Fix" };
+  const noise = { id: 2, path: ".github/workflows/ci.yml", status: "completed", conclusion: "success", display_title: "CI ignored: label bug" };
+  assert.deepEqual(ciState([noise, real]), { state: "failure", runId: 1 });
+  assert.deepEqual(ciState([noise]), { state: "none", runId: null });
+});
