@@ -114,6 +114,7 @@
       "Bash(node tools/gen/assets.mjs bake*)",
       "Bash(node tools/track/rotate-markings.cjs --write*)",
       "mcp__github__delete_file",
+      "mcp__github__update_pull_request_branch",
       "mcp__github__create_repository",
       "mcp__github__fork_repository"
     ]
