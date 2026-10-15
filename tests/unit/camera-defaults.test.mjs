@@ -156,11 +156,10 @@ test("the six geometric knobs stay deltas defaulting to 0", () => {
   }
 });
 
-test("shipped chase corner lead is baked into vantage.js", () => {
+// The shipped NUMBER is checked live by "CORNER LEAD's registry default is the
+// shipped lead" above; a regex on the constant could only ever restate it.
+test("vantage.js reads the tuner's corner lead", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
-  // 0.54 since 2026-09-08 — the owner's CAMERA TUNER corner lead became the
-  // shipped amount. It was 0.18.
-  assert.match(src, /CHASE_CORNER_LEAD_DEFAULT\s*=\s*0\.54/);
   assert.match(src, /CamTune\.cornerLead\(mode\)/);
 });
 
@@ -208,11 +207,22 @@ test("cockpit turn chasing is a 0–1 look-ahead blend, shipped at 0.4", () => {
     "an untouched install gets the shipped amount");
 });
 
+// Read off the LOADED CAM_MODES and the cut setCamMode() actually starts: a
+// `id:"cinematic"[\s\S]*cut:0.6` regex matched any later entry's cut too.
 test("broadcast cameras carry per-mode cut ease durations", () => {
-  const src = fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8");
-  assert.match(src, /id:\s*"cinematic"[\s\S]*cut:\s*0\.6/);
-  assert.match(src, /id:\s*"heli"[\s\S]*cut:\s*0\.55/);
-  assert.match(src, /\.cut\s*\|\|\s*0\.35/);
+  const dom = makeDom();
+  const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
+  ctx.window = ctx;
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx);
+  const modes = ctx.CamModes.CAM_MODES, idx = (id) => modes.findIndex((m) => m.id === id);
+  assert.equal(modes[idx("cinematic")].cut, 0.6);
+  assert.equal(modes[idx("heli")].cut, 0.55);
+  const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", camCutT: 0 };
+  const cams = ctx.CamModes.create(G);
+  const cutTo = (id) => { G.camMode = id === "chase" ? idx("cockpit") : idx("chase"); cams.setCamMode(idx(id)); return G.camCutT; };
+  assert.equal(cutTo("cinematic"), 0.6);
+  assert.equal(cutTo("heli"), 0.55);
+  assert.equal(cutTo("side"), 0.45, "each mode's own cut, not the cinematic one");
 });
 
 test("a camera cut publishes HUD classes without waiting for rAF", () => {
@@ -457,7 +467,7 @@ test("CamTune global baseline layers under per-mode; copyFrom and presets work",
   assert.equal(CamTune.bob(), 1);
 });
 
-test("vantage.js FOV blends use comfort speedFov; corner-lead comment matches 0.54", () => {
+test("vantage.js FOV blends use comfort speedFov", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
   assert.match(src, /const spFov = spN \* \(typeof CamTune/);
   // Chase/far FOV goes through CamFeel.modeFov(..., spFov, ...) when CamFeel is
@@ -466,8 +476,6 @@ test("vantage.js FOV blends use comfort speedFov; corner-lead comment matches 0.
   assert.match(src, /CamFeel\.modeFov\(\s*far \? "far" : "chase",\s*spFov/);
   assert.match(src, /lerp\(57, 63, spFov\)/);
   assert.doesNotMatch(src, /lerp\(57, 63, spN\)/);
-  assert.match(src, /shipped 0\.54/);
-  assert.doesNotMatch(src, /shipped 0\.18\)/);
 });
 
 // Announcement filtering across these cameras is exercised as behavior in
