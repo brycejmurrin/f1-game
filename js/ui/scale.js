@@ -59,27 +59,21 @@ const UiScale = (() => {
     const SCALE_STEP = 0.25;
     // Touch defaults live in the `(pointer: coarse)` block of css/tokens.css and
     // are mirrored here — CSS owns FIRST paint, this owns every write after it,
-    // and the two must not disagree. BUTTON SIZE stays a ratio of HUD SIZE so it
-    // keeps following that slider while unset.
+    // and the two must not disagree. BUTTON SIZE keeps its own fixed default.
     // 1.25, corrected 2026-09-14 from 1.4536. See the long note on the
     // `(pointer: coarse)` block in css/tokens.css: 1.24 x 1.4536 put ~34mm
     // pedals on a phone and the column covered the minimap and the sector strip.
     // Target size and readout size are separate floors; this ratio carries the
     // buttons' physical floor, --hud-scale no longer carries a blanket bump.
-    const BTN_OVER_HUD = 1.25;
+    const BTN_DEFAULT = 1.25;
     const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : 109) : 100);
     const scaleSnap = (v, k) => {
       const n = Math.max(minFor(k), Math.min(maxFor(k), +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
     };
-    // BUTTON SIZE's default is not a number, it is ANOTHER SLIDER: unset, the
-    // dock follows HUD SIZE (css/tokens.css declares --hud-btn-scale as
-    // var(--hud-scale)). Resolving that here rather than only in the widget
-    // keeps one answer — the range input, its % readout and __apex.btnScale()
-    // all report the axis actually in force, instead of the widget saying 130
-    // while the hook said 100. `stored` still separates "following" from "set".
+    // Button size is an independent preference, including when unset.
     const scaleDefaultFor = (k) => (k === "hudBtnScale"
-      ? scalePct("hudScale") * (coarseUi() ? BTN_OVER_HUD : 1)
+      ? 100 * (coarseUi() ? BTN_DEFAULT : 1)
       : scaleDefault(k));
     const scalePct = (k) => {
       const v = store.get(k, null);
@@ -124,16 +118,8 @@ const UiScale = (() => {
         try { if (els.select && !els.select.hidden) G.updateTrackPreview(); } catch { /* menus not ready */ }
       });
     }
-    // Moving HUD SIZE moves the dock too while BUTTON SIZE is unset, so its
-    // widget has to be repainted or it reads a number the screen contradicts.
-    function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); applyBtnScale(); }
-    // BUTTON SIZE: the touch dock's own axis (--hud-btn-scale, css/tokens.css),
-    // which DEFAULTS to --hud-scale rather than to 1 — the dock and the readouts
-    // fight over the same edges, and shrinking the buttons is how a player buys
-    // the readouts room back. Unset it must therefore behave exactly as before,
-    // so applyScale's "nothing stored => no inline style" rule is what makes
-    // this safe: the :root declaration keeps the two locked together until the
-    // player moves this slider, and only then do they part.
+    function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
+    // The touch dock keeps its own fixed default and explicit override.
     function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
     // BUTTON OPACITY has its OWN clamp and does not reuse applyScale: that
     // helper snaps to SCALE_MIN..SCALE_MAX (40..200), which is meaningless for a
@@ -196,13 +182,7 @@ const UiScale = (() => {
       store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale"), "hudBtnScale"));
       applyBtnScale();
     };
-    // REVERT IS PER-SETTING, and it is the same `store.set(key, null)` that
-    // setScale already exposes: clearing the key drops the inline custom property,
-    // so :root's own declaration takes back over — UI/HUD SIZE return to the
-    // stylesheet default and BUTTON SIZE returns to FOLLOWING HUD SIZE. That is
-    // why its button reads "follow HUD size" and the other two read "reset": they
-    // are the same action but not the same promise, and labelling both "reset"
-    // would have said the button snaps to a number when it snaps to a link.
+    // Revert restores this axis's independent default.
     const revert = (key, apply) => (e) => {
       e.preventDefault(); e.stopPropagation();   // the button sits inside a <label>
       store.set(key, null);
@@ -213,7 +193,8 @@ const UiScale = (() => {
     const btnRev = $("pm-btnscale-r"); if (btnRev) btnRev.onclick = revert("hudBtnScale", applyBtnScale);
 
     applyUiScale();
-    applyHudScale();   // calls applyBtnScale — an unset button slider follows it
+    applyHudScale();
+    applyBtnScale();
     function setScale(key, prop, v) {
       if (v !== undefined) {
         if (v === null) store.set(key, null);

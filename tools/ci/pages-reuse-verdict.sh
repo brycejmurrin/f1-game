@@ -100,6 +100,31 @@ gate_ran() {
 
 TREE="$(tree_of "$SHA")" || { say "::warning::$SHA is not in this checkout; running the full gate"; verdict false "" ""; exit 0; }
 
+# THE TIP'S OWN FAST TIER, FIRST (2026-10-14, Actions audit T1 + T4;
+# tools/ci/pages-train.mjs). Its newest deploy-branch ci.yml push run on this
+# exact sha counts as fast_run while it is STILL RUNNING once every tree-only
+# job it shares with the gate is listed, completed and green: the run that
+# pokes this train is in progress by construction (its CI aggregator comes
+# after poke-train), and listing only completed runs re-ran those jobs in 71 of
+# 82 poked trains. A tip whose fast tier CONCLUDED failure stops the train
+# here, before a ~135 job-minute gate that fails the same tree again — and
+# before any tree-equal reuse, so a red tip is never published either. Any
+# lookup failure reads `none`: no fast_run, the full gate runs.
+read -r FT_STATE FT_ID FT_REST <<EOF_FT || true
+$(node "$(dirname "$0")/pages-train.mjs" fast-tier "$SHA" 2>/dev/null || echo "none pages-train failed")
+EOF_FT
+case "$FT_STATE" in
+  red)
+    say "::error::tip fast tier red: run $FT_ID ${FT_REST:-} — fix or re-run the tip's ci.yml push run; the train gates nothing on a red tip"
+    [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "**Tip fast tier red**: run $FT_ID ${FT_REST:-} — the train stops here" >> "$GITHUB_STEP_SUMMARY"
+    exit 1 ;;
+  green)
+    FAST_RUN="$FT_ID"
+    say "fast tier's tree-only jobs already green on $SHA: ci.yml run $FAST_RUN (reused by the gate)" ;;
+  *)
+    say "no reusable fast tier on $SHA: ${FT_ID:-} ${FT_REST:-}" ;;
+esac
+
 candidates="$SHA"
 for parent in "$SHA^1" "$SHA^2"; do
   p="$(git rev-parse --verify -q "$parent" 2>/dev/null)" || continue
@@ -114,20 +139,6 @@ done
 for c in $candidates; do
   json="$(gh api "repos/$REPO/actions/runs?head_sha=$c&status=success&per_page=30" 2>/dev/null)" \
     || { say "::warning::could not list workflow runs for $c; running the full gate"; continue; }
-  # The fast tier on the same tree, remembered for the verdict either way.
-  if [ -z "$FAST_RUN" ] && [ "$c" = "$SHA" ]; then
-    FAST_RUN="$(printf '%s' "$json" | node -e '
-      let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
-        let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}
-        const self = process.env.GITHUB_RUN_ID || "";
-        const deployBranch = process.env.DEPLOY_BRANCH || "";
-        const fast = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self
-          && r.path === ".github/workflows/ci.yml" && r.event === "push" && deployBranch !== "" && r.head_branch === deployBranch;
-        const r = runs.find(fast);
-        if (r) process.stdout.write(String(r.id));
-      });')"
-    [ -n "$FAST_RUN" ] && say "fast tier already green on $c: ci.yml run $FAST_RUN (its tree-only jobs are reused)"
-  fi
   hit="$(printf '%s' "$json" | node -e '
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
       let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}

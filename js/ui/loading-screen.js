@@ -34,7 +34,7 @@ const LoadingScreen = (function () {
    *  (js/garage/setup-camera.js startDriveOut). A harness-driven page
    *  (navigator.webdriver: Playwright, the Chrome MCP) unless it opts back into
    *  player pace with ?fullIntro=1 or window.__apexFullIntro = true (the
-   *  garage-out-before-card spec does, to keep the 7.6 s drive-out covered).
+   *  garage-out-before-card spec does, to keep the ~10.6 s drive-out covered).
    *  Not a motion flag: a player's reduced-motion setting still gets it all. */
   function isAutomation() {
     try {
