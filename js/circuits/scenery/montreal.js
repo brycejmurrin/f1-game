@@ -28,6 +28,7 @@
 
       const BASE   = pyMin || 0;
       const BANK_T = BASE - 0.35;   // far-bank shore: above river (−0.45), below main island
+      const BANK_LIFT = 0.12;       // survey 2026-10-14: keeps farBank tops above ribbon (ground-audit)
 
       const WALL     = [0.78, 0.79, 0.80];   // pale concrete
       // Bright teal Olympic Basin + St. Lawrence — COL.basinTeal when available
@@ -91,7 +92,7 @@
         // below the main island slab (−0.10), reading as a separate island bank.
         // anchor().c[1] reflects groundYAt for large dist (≈−2.46), NOT pyMin,
         // so we must compute the lift explicitly from BANK_T and that value.
-        addBox(out, vadd(a.c, a.u, BANK_T - H / 2 - a.c[1]),
+        addBox(out, vadd(a.c, a.u, BANK_T + BANK_LIFT - H / 2 - a.c[1]),
                [lenM, H, depth], col || FARBANK, [a.r, a.u, a.t]);
       };
 
@@ -139,7 +140,7 @@
 
       // Continuous low clipped hedge / treeline ribbon framing the verges
       hedge(0.13, 0.19,  1, 9, 1.6, HEDGE);
-      hedge(0.38, 0.50,  1, 9, 1.4, HEDGE);   // mid-island right verge
+      hedge(0.38, 0.50,  1, 9.6, 1.4, HEDGE);   // mid-island right verge (+0.6 m: clears marshal @0.47)
       hedge(0.62, 0.69, -1, 9, 1.6, HEDGE);
       hedge(0.73, 0.78, -1, 9, 1.6, HEDGE);
       hedge(0.78, 0.885, 1, 9, 1.6, HEDGE);
@@ -527,12 +528,14 @@
               const hv = hash(kk * 31 + r * 13 + c * 7);
               const p = vadd(vadd(a0.c, a0.r, r * 11), a0.t, (c - 1.5) * 11);
               if (onTrack(p[0], p[2], 14)) continue;
-              // Gravel walk under and around each parterre.
-              addBox(out, vadd(p, a0.u, 0.05), [10.4, 0.10, 10.4], GRAVEL, b);
+              const gy = groundUnder(p[0], p[2]);
+              const padY = gy !== null ? gy - p[1] + 0.08 : 0.08;
+              // Gravel walk under and around each parterre (terrain-anchored).
+              addBox(out, vadd(p, a0.u, padY), [10.4, 0.10, 10.4], GRAVEL, b);
               // Clipped green edging, then the massed colour inside it.
               out._mat = MAT.FOLIAGE;
-              addBox(out, vadd(p, a0.u, 0.35), [8.6, 0.60, 8.6], EDGE, b);
-              addBox(out, vadd(p, a0.u, 0.52), [7.0, 0.62, 7.0],
+              addBox(out, vadd(p, a0.u, padY + 0.30), [8.6, 0.60, 8.6], EDGE, b);
+              addBox(out, vadd(p, a0.u, padY + 0.47), [7.0, 0.62, 7.0],
                      BED[Math.floor(hv * 997) % BED.length], b);
               out._mat = 0;
             }
