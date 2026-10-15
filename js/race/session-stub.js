@@ -123,7 +123,7 @@ var SessionRecords = {
 
 var StartLights = {
   _stub: true,
-  create: () => ({ update: function () {}, lampsFor: () => [] }),
+  create: () => ({ update: function () {}, lampsFor: () => [], countCredit: () => 0 }),
 };
 
 var MarshalPanels = {

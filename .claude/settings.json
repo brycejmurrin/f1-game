@@ -158,7 +158,8 @@
     "baseRef": "head"
   },
   "env": {
-    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0"
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0",
+    "APEX_MERGE_DESK": "1"
   },
   "enabledMcpjsonServers": [
     "apex-tools",

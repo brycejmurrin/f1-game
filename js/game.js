@@ -8595,8 +8595,10 @@ function tickBody(now) {
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }
     _audioParamStep = true;   // any other update() caller (the __apex step hooks) sets them
-    PerfGov.recordSimulation(steps, steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0);   // only what the line below drops; the sub-step remainder carries
-    if (steps === 5 && physAcc >= PHYS_DT) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
+    const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
+    PerfGov.recordSimulation(steps, dropped);
+    if (dropped) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
+    if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);   // solo lights on the wall clock, not the step cap (#1882)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
