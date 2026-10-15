@@ -33,7 +33,10 @@
         seat.cone(out, vadd(crown, a.u, h * 0.16), h * 0.44, h * 0.22, col, 7, b);
         out._mat = 0;
       };
-      const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.34 && s <= 0.46);
+      // Pit straight, hairpin meadow, and the aldeia modelGroup footprint (s≈0.26,
+      // size 64 m along t) — stone pines through the village read as z-fighting.
+      const openArea = (s) => (s >= 0.92 || s <= 0.10) || (s >= 0.34 && s <= 0.48)
+        || (s >= 0.20 && s <= 0.36) || (s >= 0.46 && s <= 0.52);
       every(26, (k) => {
         const s = k / n;
         if (openArea(s)) return;
@@ -43,6 +46,11 @@
         if (h > 0.74) stonePine(k, h > 0.88 ? -1 : 1, 30 + h * 18, 13 + h * 8, PINE_D);
       });
       every(22, (k) => {
+        const s = k / n;
+        // forestEdge bands below already plant pines; scrub on top clips (1.7 m²
+        // severe @ s≈0.474 in clip-audit).
+        if (s >= 0.11 && s <= 0.33) return;
+        if (s >= 0.47 && s <= 0.91) return;
         const h = hash(k * 97 + 23);
         if (h < 0.44) return;
         bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
@@ -375,10 +383,13 @@
         addCyl(out, a.c, 0.19, 16, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 16.4), [1.3, 0.6, 2.6], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
       }
-      for (const [s0, s1] of [[0.12, 0.32], [0.48, 0.9]]) {
-        for (const side of [-1, 1])
-          forestEdge(s0, s1, side, 20, { density: 0.46, hMin: 8, hMax: 14, pineFrac: 0.82, col: PINE, col2: PINE_D });
-      }
+      // Inland (−1) pines through s≈0.26 clip into estoril-aldeia (55 m³ severe);
+      // keep the windward (+1) belt only on that straight.
+      forestEdge(0.12, 0.32, 1, 20,
+        { density: 0.46, hMin: 8, hMax: 14, pineFrac: 0.82, col: PINE, col2: PINE_D });
+      for (const side of [-1, 1])
+        forestEdge(0.55, 0.9, side, 20,
+          { density: 0.46, hMin: 8, hMax: 14, pineFrac: 0.82, col: PINE, col2: PINE_D });
 
       // ── HAIRPIN MEADOW (0.34–0.46) — the one open stretch was bare grass.
       // Scattered cork oaks (sobreiros): the low, spreading, dark-crowned tree
@@ -386,7 +397,7 @@
       // stays open. acacia()'s flat umbrella + low fork is the closest form.
       every(18, (k) => {
         const s = k / n;
-        if (s < 0.345 || s > 0.455) return;
+        if (s < 0.345 || s > 0.42) return;
         const h = hash(k * 59 + 7);
         if (h < 0.5) return;
         acacia(k, h < 0.75 ? -1 : 1, 40 + h * 30, 6 + h * 3,

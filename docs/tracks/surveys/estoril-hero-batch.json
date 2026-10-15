@@ -1,0 +1,13 @@
+[
+  {"track":"estoril","frac":0.975,"cam":"orbit","az":-25,"el":18,"dist":85,"tod":"night","weather":"dry","out":"artifacts/shots/tracks/estoril/s23-pit-night-dry.jpg"},
+  {"track":"estoril","frac":0.895,"cam":"orbit","az":50,"el":26,"dist":88,"tod":"night","weather":"dry","out":"artifacts/shots/tracks/estoril/s26-parabolica-night-dry.jpg"},
+  {"track":"estoril","frac":0.405,"cam":"orbit","az":15,"el":38,"dist":105,"tod":"night","weather":"dry","out":"artifacts/shots/tracks/estoril/s28-hairpin-night-dry.jpg"},
+  {"track":"estoril","frac":0.975,"cam":"orbit","az":-25,"el":18,"dist":85,"tod":"day","weather":"wet","out":"artifacts/shots/tracks/estoril/s29-pit-day-wet.jpg"},
+  {"track":"estoril","frac":0.975,"cam":"orbit","az":-25,"el":18,"dist":85,"tod":"day","weather":"rain","out":"artifacts/shots/tracks/estoril/s30-pit-day-rain.jpg"},
+  {"track":"estoril","frac":0.975,"cam":"orbit","az":-25,"el":18,"dist":85,"tod":"day","weather":"overcast","out":"artifacts/shots/tracks/estoril/s31-pit-day-overcast.jpg"},
+  {"track":"estoril","frac":0.975,"cam":"orbit","az":-25,"el":18,"dist":85,"tod":"day","weather":"fog","out":"artifacts/shots/tracks/estoril/s32-pit-day-fog.jpg"},
+  {"track":"estoril","frac":0.975,"cam":"orbit","az":-25,"el":18,"dist":85,"tod":"day","weather":"storm","out":"artifacts/shots/tracks/estoril/s33-pit-day-storm.jpg"},
+  {"track":"estoril","frac":0.895,"cam":"orbit","az":50,"el":26,"dist":88,"tod":"day","weather":"wet","out":"artifacts/shots/tracks/estoril/s34-parabolica-day-wet.jpg"},
+  {"track":"estoril","frac":0.895,"cam":"orbit","az":50,"el":26,"dist":88,"tod":"day","weather":"rain","out":"artifacts/shots/tracks/estoril/s35-parabolica-day-rain.jpg"},
+  {"track":"estoril","frac":0.895,"cam":"orbit","az":50,"el":26,"dist":88,"tod":"day","weather":"overcast","out":"artifacts/shots/tracks/estoril/s36-parabolica-day-overcast.jpg"}
+]
