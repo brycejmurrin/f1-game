@@ -62,7 +62,7 @@
       const LEAF = [0.17, 0.40, 0.19], LEAF_D = [0.13, 0.33, 0.16];
       const GRAVEL = [0.62, 0.58, 0.48];
 
-      const openArena = (s) => (s >= 0.94 || s <= 0.20);
+      const openArena = (s) => (s >= 0.915 || s <= 0.20);  // pit-building belt starts .92; trees no longer held off by the old Veedol walls
       // Schumacher-S bank keep-out: after the monotonic surveyHeights remap the
       // left-side marshal / tyre kit at ~0.79 clips a pine trunk (≥1.0 m). The
       // old scaffoldStand booked this corridor; indexSolid alone was not enough
@@ -75,7 +75,7 @@
       // lap runs through a green trench. The scattered ranks that follow then
       // break up the wall's edge rather than being the whole wood.
       // Split the back-half wall around Schumacher-S so the bank keep-out is empty.
-      for (const [s0, s1] of [[0.205, 0.615], [0.640, 0.766], [0.798, 0.935]]) {
+      for (const [s0, s1] of [[0.205, 0.565], [0.640, 0.766], [0.798, 0.915]]) {
         for (const side of [-1, 1]) {
           // Front rank, right side: skip the single node 0.4417. clearTreeDist
           // pushes that pine ~25 m out to clear the barrier, which lands it
@@ -103,7 +103,7 @@
       // 18 m in the air once the SRTM smoothing (#287) lowered that verge.
       const deep = (s0, s1, side) => (side > 0 && s0 === 0.215
         ? [[0.215, 0.430], [0.480, 0.5500], [0.5631, s1]] : [[s0, s1]]);
-      for (const [a0, a1] of [[0.215, 0.605], [0.650, 0.766], [0.798, 0.925]]) {
+      for (const [a0, a1] of [[0.215, 0.575], [0.645, 0.766], [0.798, 0.925]]) {
         for (const side of [-1, 1]) for (const [s0, s1] of deep(a0, a1, side)) {
           forestEdge(s0, s1, side, 41, {
             density: 0.2, hMin: 24, hMax: 40, pineFrac: 0.97,
@@ -295,13 +295,13 @@
       // The three elevated camera positions the Arena is always cut between.
       cameraTower(K(0.108), -1, 9, { h: 16 });
       cameraTower(K(0.190), 1, 9, { h: 14 });
-      cameraTower(K(0.660), -1, 10, { h: 15 });
+      cameraTower(K(0.605), -1, 10, { h: 15 });
 
-      groundPatch(K(0.660), -1, 6, [30, 0.18, 40], GRAVEL,
+      groundPatch(K(0.605), -1, 6, [30, 0.18, 40], GRAVEL,
         { id: "nurburgring-dunlop-gravel", samples: 7 });
-      tyreWall(0.645, 0.680, -1, 5, [0.20, 0.40, 0.85]);
-      scaffoldStand(0.648, 0.686, 1, 15, 7);
-      marshalPost(K(0.655), 1, 9);
+      tyreWall(0.588, 0.624, -1, 5, [0.20, 0.40, 0.85]);
+      scaffoldStand(0.590, 0.628, 1, 15, 7);
+      marshalPost(K(0.598), 1, 9);
 
       groundPatch(K(0.785), 1, 5, [24, 0.18, 32], GRAVEL,
         { id: "nurburgring-schumacher-gravel", samples: 6 });
@@ -313,17 +313,17 @@
       indexSolid(0.766, 0.798, 1, 12, 6 * 1.9 + 1);
       marshalPost(K(0.790), -1, 9);
 
-      groundPatch(K(0.930), -1, 5, [22, 0.18, 30], GRAVEL,
+      groundPatch(K(0.832), -1, 5, [22, 0.18, 30], GRAVEL,
         { id: "nurburgring-veedol-gravel", samples: 6 });
-      tyreWall(0.915, 0.950, -1, 4, [0.86, 0.20, 0.18]);
-      marshalPost(K(0.935), 1, 9);
+      tyreWall(0.818, 0.846, -1, 4, [0.86, 0.20, 0.18]);
+      marshalPost(K(0.826), 1, 9);
       // Coca-Cola Kurve (T15): final right-hander onto the pit straight — gravel
       // on the outside exit (InsideF2 / Coach Dave Academy track guides).
-      groundPatch(K(0.968), 1, 5, [18, 0.18, 24], GRAVEL,
+      groundPatch(K(0.855), 1, 5, [18, 0.18, 24], GRAVEL,
         { id: "nurburgring-coca-cola-gravel", samples: 5 });
-      tyreWall(0.958, 0.978, 1, 4.2, [0.86, 0.20, 0.18]);
+      tyreWall(0.848, 0.868, 1, 4.2, [0.86, 0.20, 0.18]);
       {
-        const a = anchor(K(0.972), -1, 14);
+        const a = anchor(K(0.860), -1, 14);
         const b = [a.r, a.u, a.t];
         modelGroup("nurburgring-coca-cola-kurve", {
           center: vadd(a.c, a.u, 6), size: [8, 14, 28], basis: b,
@@ -338,15 +338,18 @@
         }, { required: true });
       }
 
-      for (const [s0, s1] of [[0.20, 0.29], [0.32, 0.50], [0.54, 0.63], [0.69, 0.77], [0.80, 0.90]]) {
+      for (const [s0, s1] of [[0.20, 0.29], [0.32, 0.50], [0.54, 0.575], [0.64, 0.77]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
         guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
       }
+      // T15-T16 (built apex .8385/.849): the guardrail yields to the tyre walls.
+      for (const [s0, s1] of [[0.80, 0.816], [0.860, 0.90]]) guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
+      for (const [s0, s1] of [[0.80, 0.844], [0.872, 0.90]]) guardrail(s0, s1, 1, 7, [0.80, 0.81, 0.83]);
       guardrail(0.955, 0.045, 1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.96, 0.04, -1, 9, 4, [0.74, 0.76, 0.80]);
       fence(0.10, 0.19, 1, 9, 4, [0.74, 0.76, 0.80]);
-      fence(0.64, 0.69, 1, 9, 4, [0.74, 0.76, 0.80]);
-      for (const s of [0.25, 0.37, 0.46, 0.57, 0.72, 0.84]) {
+      fence(0.585, 0.635, 1, 9, 4, [0.74, 0.76, 0.80]);
+      for (const s of [0.25, 0.37, 0.46, 0.57, 0.72, 0.82]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
