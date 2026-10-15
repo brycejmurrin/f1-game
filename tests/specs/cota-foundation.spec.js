@@ -125,7 +125,10 @@ test.describe("COTA shared-foundation migration", () => {
       }));
 
       expect(result.models.invalid).toEqual([]);
-      expect(result.models.suppressed).toEqual([]);
+      // Pit garages on the paddock straight are honoured as a no-op once the
+      // engine pit complex emits the row (same contract as montreal-foundation).
+      expect(result.models.suppressed.map((entry) => entry.id).sort())
+        .toEqual(["cota-pit-garages"]);
       expect(result.models.unsafe).toEqual([]);
       const emitted = new Set(result.models.emitted.map((entry) => entry.id));
       for (const id of REQUIRED_MODELS) expect(emitted.has(id), `${timeOfDay}: ${id}`).toBe(true);
