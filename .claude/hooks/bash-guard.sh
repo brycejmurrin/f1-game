@@ -28,7 +28,10 @@
 #    the parsed argv (round 2, see "one parse" below).
 #  git push / gh — force, mirror, delete, deploy-branch pushes are blocked;
 #    `gh pr merge --squash|--rebase` is denied and other merges / ready flips
-#    ask (merge_policy.py, shared with github-mcp-guard.sh).
+#    ask (merge_policy.py, shared with github-mcp-guard.sh). A push while
+#    `tools/ci/queue-depth.mjs` says hold is refused (AGENTS.md rule 4;
+#    APEX_PUSH_HOLD=0 overrides), and an Actions run cancel (`gh run cancel`,
+#    …/actions/runs/<id>/cancel) is refused (APEX_RUN_CANCEL_OK=1 overrides).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
 #    .claude/agents; never a generated doc) runs only docs-integrity — no
 #    ratchet raise, no test:guards.
@@ -91,6 +94,7 @@ for n,ln in enumerate(L):
         keep=bool(re.search(r"(^|[;&|(\s])(\S*/)?(sh|bash|dash|zsh|source|eval)(\s|$)",ln[:m.start()]) or re.search(r"\|\s*(\S*/)?(sh|bash|dash|zsh)(\s|$)",ln[m.end():]))
     out.append(ln)
 s="\n".join(out)
+hd=s
 res=[];i=0;n=len(s)
 while i<n:
     c=s[i]
@@ -105,8 +109,13 @@ while i<n:
         i=j+1
     else:
         res.append(c); i+=1
-sys.stdout.write("".join(res))
+sys.stdout.write(hd + "\n__APEX_SCAN_SPLIT__\n" + "".join(res))
 ')
+# SCANQ is the heredoc-stripped text WITH its quoted strings (2026-10-15): the
+# run-cancel rule reads a URL out of a quoted curl argument, but a heredoc body
+# (a test being written, a note) is never a command.
+SCANQ="${SCAN%%$'\n'__APEX_SCAN_SPLIT__$'\n'*}"
+SCAN="${SCAN#*$'\n'__APEX_SCAN_SPLIT__$'\n'}"
 # Prefixes that carry the verb: wrappers, a shell -c, an absolute path.
 # 15-F7: `timeout 5 pkill -f chrome` and `xargs pkill -f` are the same kill (timeout,
 # xargs and their flags/duration are wrappers; setsid/doas/stdbuf likewise).
@@ -274,6 +283,51 @@ print(json.dumps(d))
 trap emit_on_exit EXIT
 if [ -n "$GH_DECISION" ] && printf '%s' "$GH_DECISION" | grep -q '"deny"'; then exit 0; fi
 
+# --- cancelling an Actions run ---------------------------------------------------
+# NEVER (2026-10-15, docs/notes/CI-CLOG-SURVEY-2026-10-15.md): a queued run holds
+# no slot, so a cancel sweep frees nothing — it throws away the run's queue
+# position and the branch owner pushes a "retrigger" commit, which buys a new
+# run plus a docs-guards run at the back of the queue. 306 of 401 PR runs ended
+# cancelled that day. Your own superseded run is replaced by your next push and
+# a closed PR's runs are cancelled by the close; nothing else needs a cancel.
+# `gh run cancel` on SCAN (command position); the REST path on SCANQ (quoted
+# strings kept, heredoc bodies dropped: a quoted URL is blanked out of SCAN,
+# and a heredoc body is text being written). github-mcp-guard.sh is the MCP
+# door (actions_run_trigger cancel_workflow_run). APEX_RUN_CANCEL_OK=1 when the
+# user asked for the cancel.
+if [ "${APEX_RUN_CANCEL_OK:-}" != 1 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_RUN_CANCEL_OK=1'; then
+  if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}gh[[:space:]]+run[[:space:]]+cancel([[:space:]]|\$)" \
+     || printf '%s' "$SCANQ" | grep -Eq 'actions/runs/[^/[:space:]]+/(force-)?cancel'; then
+    echo "BLOCKED: cancelling an Actions run. A queued run holds no slot — a cancel only loses its queue position and buys a retrigger push (2026-10-15: 306 of 401 PR runs). Your own superseded run is replaced by your next push; a closed PR's runs are cancelled by the close. APEX_RUN_CANCEL_OK=1 <command> only when the user asked for this cancel." >&2
+    exit 2
+  fi
+fi
+
+# --- the queue hold on git push (AGENTS.md rule 4) -------------------------------
+# Prose until 2026-10-15: "if queue-depth.mjs says hold, commit locally only".
+# Enforced here on every `git … push` in the command (the same shape the
+# fallback regex above reads; heredoc bodies and quoted text are not commands).
+# The gauge is skipped when it cannot answer (no token, API down: rc 3 — the
+# push proceeds with a note), in a checkout whose origin is not this repository
+# (the hook's own tests), under APEX_GUARD_PROBE, and with APEX_PUSH_HOLD=0 in
+# the environment or the command, which is the override for "the user asked
+# for this push now". A hold reads as exit 1 and the push is refused with the
+# gauge's own line; retry when `node tools/ci/queue-depth.mjs` says ok.
+PUSH_RE="(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"
+if [ -z "${APEX_GUARD_PROBE:-}" ] && [ "${APEX_PUSH_HOLD:-}" != 0 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_PUSH_HOLD=0' \
+   && printf '%s' "$SCAN" | grep -Eq "$PUSH_RE" \
+   && [ -f "$ROOT/tools/ci/queue-depth.mjs" ] \
+   && git -C "$ROOT" remote get-url origin 2>/dev/null | grep -q 'f1-game'; then
+  QLINE=$(cd "$ROOT" && timeout -k 5 "${APEX_QUEUE_TIMEOUT:-90}" node tools/ci/queue-depth.mjs 2>/dev/null); QRC=$?
+  case "$QRC" in
+    0) ;;
+    1) echo "BLOCKED: ${QLINE:-= queue hold}" >&2
+       echo "AGENTS.md rule 4: a push now only adds queue wait for every session. Commit locally; push when 'node tools/ci/queue-depth.mjs' says ok (poll it, do not loop on pushes). APEX_PUSH_HOLD=0 git push … overrides when the user asked for this push now." >&2
+       exit 2 ;;
+    *) echo "bash-guard: queue-depth could not answer (rc $QRC: no token, API unreachable or timed out) — the push is not held." >&2 ;;
+  esac
+fi
+
 # --- guards before git commit ---------------------------------------------------
 # WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
 # `git( -C dir)? commit` on the raw text, so `git -c k=v commit`, `git
@@ -316,6 +370,19 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   if [ -n "$C_GITDIR" ] && [ "$C_GITDIR" != "-" ]; then
     R2="$(git -C "$C_GITDIR" rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$R2" ] && ROOT="$R2"
+  fi
+  # A LINKED WORKTREE BORROWS THE MAIN CHECKOUT'S node_modules (2026-10-15).
+  # EnterWorktree, `isolation: worktree` subagents and `git worktree add` make
+  # a tree with no node_modules, so every worker commit used to block here
+  # (census session_01CgCjzTvy729SeWsHzuv8eh). The dependencies are the same
+  # package.json, the link is git-ignored (`node_modules` in .gitignore), and
+  # the main checkout's install is what SessionStart already verified.
+  if [ ! -e "$ROOT/node_modules" ]; then
+    WT_COMMON="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    WT_MAIN="$([ -n "$WT_COMMON" ] && dirname "$WT_COMMON")"
+    if [ -n "$WT_MAIN" ] && [ "$WT_MAIN" != "$ROOT" ] && [ -d "$WT_MAIN/node_modules" ]; then
+      ln -s "$WT_MAIN/node_modules" "$ROOT/node_modules" 2>/dev/null || true
+    fi
   fi
   if [ -z "${APEX_GUARD_PROBE:-}" ] && [ ! -d "$ROOT/node_modules" ]; then
     echo "BLOCKED: node_modules is missing, so 'npm run test:guards' cannot run before this commit. Run the SessionStart install (bash tools/env/cloud-agent-install.sh) first." >&2

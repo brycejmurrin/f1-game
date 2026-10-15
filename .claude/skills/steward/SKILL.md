@@ -32,7 +32,7 @@ The other two look identical from the conclusion alone:
 
 - **A job that hit `timeout-minutes` reports `cancelled`** with zero failures
   and every test green right up to the kill — that is a real red. It blocked
-  two deploys on Pages #1959/#1961 and is why `node-suites` is its own job (matrix slices, each with its own cap; the slice names are required checks — see ci.yml).
+  two deploys on Pages #1959/#1961 and is why `node-suites` is its own job (matrix slices, each with its own cap; `CI` is the one required check since 2026-10-15 — see ci.yml).
 - Anywhere else, `cancelled` with zero failures is a timeout until proven
   otherwise (AGENTS.md rule 8).
 
@@ -56,9 +56,9 @@ A PR that ends `cancelled` twice, zero failures — the recipe:
     node tools/ci/sync-pr.mjs <branch> --plan   # cached refs only; no conflict proof
     node tools/ci/sync-pr.mjs <branch> --push   # fresh verified sync, when publication is intended
 
-**Do not sync on every tip move.** Branch protection (2026-09-30) requires
-the fast-tier checks green on the PR's own head, NOT an up-to-date
-branch, and every re-sync is a fresh PR run. Sync when GitHub
+**Do not sync on every tip move.** Branch protection requires the `CI`
+check green on the PR's own head (one check since 2026-10-15; the fast-tier
+names before that), NOT an up-to-date branch, and every re-sync is a fresh PR run. Sync when GitHub
 reports a conflict, or when a required check is red on the tip and the fix
 is already there. A green PR merges as it stands. **Red AND conflicting:** fix the red on the branch first, then sync once, then ONE push (two pushes cancel the live run — AGENTS.md rule 4).
 Bare `sync-pr <branch>` (no flag) does the real merge and pushes nothing.

@@ -90,7 +90,7 @@ const LoadingScreen = (function () {
    * and from lap 1 the grid: your slot, pole, what you start on. The numbers
    * are RealRace.situation()'s (info.real.story), so card and voice agree.
    * Pure: info in, [label, value] rows out. */
-  const WX = { dry: "DRY", wet: "WET", rain: "RAIN", overcast: "CLOUDY", fog: "FOG" };
+  const WX = { dry: "DRY", wet: "WET", rain: "RAIN", storm: "STORM", overcast: "CLOUDY", fog: "FOG" };
   const TOD = { dawn: "DAWN", day: "DAY", dusk: "DUSK", night: "NIGHT" };
   const TYRE = { soft: "SOFT", medium: "MEDIUM", hard: "HARD", intermediate: "INTER", "full wet": "WET" };
   function gapStr(g) { return !g ? "" : g.lapsDown > 0 ? "+" + g.lapsDown + " LAP" + (g.lapsDown > 1 ? "S" : "") : g.s > 0 ? "+" + g.s.toFixed(1) + "s" : ""; }
@@ -316,6 +316,7 @@ const LoadingScreen = (function () {
     };
 
     let timer = 0, phase = "", build = null, el = null, flyT0 = 0, flyMs = FLY_MS, skipCb = null;
+    let garageRadioT = 0;   // the pit-exit radio line (garage())
     // This run's flyby: `cur` is its info (shot list, field), `view` what the
     // map slot shows ("map" | "grid"), `mapBox` the map's CSS box, `markN`
     // the turn marked on the map (0 none), and `radioState` the radio check
@@ -717,6 +718,7 @@ const LoadingScreen = (function () {
       clearTimeout(timer);
       timer = 0;
       build = null; skipCb = null;
+      if (garageRadioT) { clearTimeout(garageRadioT); garageRadioT = 0; }
       phase = "";
       // The voice outlives the screen unless something cancels it: the screen's
       // own budget timer is cleared above, and speechSynthesis has no owner.
@@ -799,7 +801,31 @@ const LoadingScreen = (function () {
       r.hidden = false;
       setPhase("garage");
       armSkip(onSkipCb);
+      garageRadioT = setTimeout(garageRadio, GARAGE_RADIO_MS);
       return true;
+    }
+    /* THE TEAM ON THE RADIO as the car rolls out of the garage (GARAGE_RADIO_MS
+     * in: the shutter is up and the car moving): one short line, through the
+     * flyby radio check's own gates — TEAM RADIO normal/chatty, a voice that
+     * will speak (sound on, sayPreRace's own refusals), a free channel (never
+     * over the announcer) — with the same click-hiss sting around it. */
+    const PIT_CLEAR = ["Box clear. Go, go, go.", "Lane's clear. Off you go.", "You're clear. Limiter on."];
+    const GARAGE_RADIO_MS = 2600, GARAGE_RADIO_LIFE_S = 4;
+    function garageRadio() {
+      garageRadioT = 0;
+      if (phase !== "garage") return;
+      const r = radio();
+      let chat = "normal";
+      try { chat = store && store.get ? store.get("radioChat", "normal") : "normal"; } catch (_) { chat = "normal"; }
+      if (!r || typeof r.sayPreRace !== "function" || (chat !== "normal" && chat !== "chatty")) return;
+      const a = ann();
+      if (a && typeof a.speaking === "function" && a.speaking()) return;
+      const lead = typeof GameAudio !== "undefined" && GameAudio.radioLeadS ? GameAudio.radioLeadS("radio") : 0;
+      try {
+        const secs = r.sayPreRace(PIT_CLEAR[(Date.now() >>> 10) % PIT_CLEAR.length], GARAGE_RADIO_LIFE_S, lead);
+        if (secs && typeof GameAudio !== "undefined" && GameAudio.radioSting)
+          GameAudio.radioSting("radio", Math.min(GARAGE_RADIO_LIFE_S, (typeof secs === "number" ? secs : 2) + 0.6));
+      } catch (e) { Log.warn("audio", "garage radio failed", e); }
     }
     function armSkip(onSkipCb) {
       skipCb = typeof onSkipCb === "function" ? onSkipCb : null;
