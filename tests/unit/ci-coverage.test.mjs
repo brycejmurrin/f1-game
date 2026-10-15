@@ -414,7 +414,7 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.match(plan.run, /--github-output/);
   assert.equal(plan.if, "${{ inputs.fast_tier_run == '' }}", "the plan runs exactly when the node matrix does");
   // A draft asks for the needed rows only; every other event keeps all six.
-  assert.match(String(plan.env.NEEDED_ONLY), /github\.event\.pull_request\.draft == true/);
+  assert.match(String(plan.env.NEEDED_ONLY), /github\.event_name == 'pull_request'/);
   assert.match(plan.run, /FLAG="--needed-only"/);
   assert.match(plan.run, /pick-unit-slices\.mjs --since "\$BASE" \$FLAG --github-output/);
   assert.match(selectJob, /^      any_node: \$\{\{ steps\.plan\.outputs\.any_node \}\}$/m);
@@ -425,11 +425,11 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   // The six "Pure-node unit suites (<slice>)" names are REQUIRED checks: a
   // job-level skip on any_node=false never expands the matrix, so they never
   // report and the PR sits BLOCKED green (#522). The job always runs on every
-  // event but a DRAFT — a draft cannot merge, so its plan lists only the
-  // needed rows and the job skips when there are none (2026-10-15).
+  // event but a pull request — its plan lists only the needed rows and the job
+  // skips when there are none (2026-10-15).
   const nodeIf = (node.match(/^    if: (.*)$/m) || [])[1] || "";
-  assert.match(nodeIf, /needs\.select\.outputs\.any_node == 'true' \|\| !\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\)/,
-    "node-suites may skip at the job level only on a draft with no needed slice");
+  assert.match(nodeIf, /needs\.select\.outputs\.any_node == 'true' \|\| github\.event_name != 'pull_request'/,
+    "node-suites may skip at the job level only on a pull request with no needed slice");
   const steps = node.split(/\n      - /).slice(1);
   const setup = steps.filter((st) => /^uses: actions\/checkout@|^uses: \.\/\.github\/actions\/setup-apex|^name: Plan the slices for this diff|^name: Was this head already green as a draft\?/.test(st));
   assert.equal(setup.length, 4, "checkout, the reuse question, setup-apex and the plan step");
