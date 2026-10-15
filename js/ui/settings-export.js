@@ -470,9 +470,13 @@ function typeOk(v, def) {
 }
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
-  const groups = file.settings || {};
+  // A file is player input: a non-object `settings` or group is "nothing here",
+  // never a value to assign into (strict mode throws on a primitive, #2191).
+  const isPlain = (o) => o !== null && typeof o === "object" && !Array.isArray(o);
+  const groups = isPlain(file.settings) ? file.settings : {};
   // Legacy: REDUCE MOTION lived under appearance before ACCESSIBILITY.
-  if (groups.appearance && Object.prototype.hasOwnProperty.call(groups.appearance, "motion")
+  if (isPlain(groups.appearance) && Object.prototype.hasOwnProperty.call(groups.appearance, "motion")
+      && (groups.a11y == null || isPlain(groups.a11y))
       && !(groups.a11y && Object.prototype.hasOwnProperty.call(groups.a11y, "motion"))) {
     (groups.a11y ||= {}).motion = groups.appearance.motion;
   }
@@ -482,7 +486,7 @@ function applySettings(file, G) {
     // back: an older number would re-run migrations that have already run.
     if (row.info) continue;
     const g = groups[row.group];
-    if (!g || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
+    if (!isPlain(g) || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
     const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
     if (v === undefined) { skipped++; continue; }
     if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
@@ -891,8 +895,10 @@ function create(G) {
       disarm();
       pick((obj) => {
         if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
-        const r = apply(obj, revisions);
-        if (!r.ok) { flash(b, label, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
+        let r;
+        // A throw here would surface as an unhandled rejection over the game (#2191).
+        try { r = apply(obj, revisions); } catch (e) { Log.warn("ui", "file load threw", e && e.message); r = null; }
+        if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
         if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
@@ -923,9 +929,10 @@ function create(G) {
     note.textContent = "Back up preferences, appearance profiles, tuners, control bindings and time-trial leaderboards with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads; leaderboards in the file are merged with yours (best laps kept). Photos, personal background images, career progress, ghosts, replays and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
 
     const shareNote = document.createElement("p");
+    shareNote.id = "pm-share-code-help";
     shareNote.className = "adv-help";
     shareNote.setAttribute("data-help", "keep");
-    shareNote.textContent = "Paste an APXS1 / APXL1 / APXD1 share code (or a #share= link) to stage a setup, livery, or daily challenge. Ghosts still use APXG1 / #ghost=.";
+    shareNote.textContent = "Paste an APXS1 / APXL1 / APXD1 share code (or a #share= link) to stage a setup, livery, or daily challenge. Your previous setup or livery is kept after an import: paste UNDO here to restore it. Ghosts still use APXG1 / #ghost=.";
     // textarea — not <input>: settings-export tests pick the LOAD file input via
     // querySelector("input"), and a text field here would steal that match.
     const shareIn = document.createElement("textarea");
@@ -936,18 +943,25 @@ function create(G) {
     shareIn.autocomplete = "off";
     shareIn.placeholder = "paste APXS1 / APXL1 / APXD1 code";
     shareIn.setAttribute("aria-label", "Share code");
+    shareIn.setAttribute("aria-describedby", "pm-share-code-help pm-share-code-status");
+    const shareStatus = document.createElement("p");
+    shareStatus.id = "pm-share-code-status";
+    shareStatus.className = "adv-help";
+    shareStatus.setAttribute("data-help", "keep");
+    shareStatus.setAttribute("role", "status");
+    shareStatus.setAttribute("aria-live", "polite");
+    shareStatus.setAttribute("aria-atomic", "true");
     const shareBtn = document.createElement("button");
     shareBtn.type = "button";
     shareBtn.id = "pm-share-code-import";
     shareBtn.className = "sel-chip";
     shareBtn.textContent = "IMPORT SHARE CODE";
     shareBtn.onclick = () => {
-      if (typeof ShareCode === "undefined") { shareBtn.textContent = "UNAVAILABLE"; return; }
+      if (typeof ShareCode === "undefined") { shareStatus.textContent = "Share codes are unavailable. Reload the page and try again."; return; }
       const started = { n: 0 };
       const decoded = ShareCode.decode(shareIn.value);
       if (!decoded.ok) {
-        shareBtn.textContent = "INVALID CODE";
-        setTimeout(() => { shareBtn.textContent = "IMPORT SHARE CODE"; }, 1800);
+        shareStatus.textContent = ShareCode.messageFor(decoded);
         return;
       }
       const applied = ShareCode.apply(decoded, {
@@ -960,8 +974,7 @@ function create(G) {
         openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
         openDaily: () => { if (G.openDailyPicker) G.openDailyPicker(); },
       });
-      shareBtn.textContent = applied && applied.ok && !started.n ? "IMPORTED" : "FAILED";
-      setTimeout(() => { shareBtn.textContent = "IMPORT SHARE CODE"; }, 1800);
+      shareStatus.textContent = ShareCode.messageFor(started.n ? { ok: false } : applied);
     };
 
     host.append(h,
@@ -975,7 +988,7 @@ function create(G) {
         "Read an apex26-settings file back in. Only allowlisted keys are written; the garage, career and accounts are never touched.",
         (obj) => applySettings(obj, G), "SETTINGS", null, SETTINGS_MAX_BYTES),
       note,
-      shareNote, shareIn, shareBtn);
+      shareNote, shareIn, shareBtn, shareStatus);
   }
 
   // THE GARAGE PAIR LIVES IN THE GARAGE, not here: a player looking to back up
@@ -1009,7 +1022,7 @@ function create(G) {
       }
       disarm();
       const r = resetGarage();
-      if (!r.ok) { flash(resetBtn, resetLabel, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
+      if (!r.ok) { flash(resetBtn, resetLabel, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
       Log.info("ui", "garage reset to shipped defaults", { applied: r.applied, skipped: r.skipped, failed: r.failed });
       if (r.failed) { flash(resetBtn, resetLabel, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
       if (!r.applied) { flash(resetBtn, resetLabel, "NOTHING TO RESET", 2200); return; }

@@ -1377,6 +1377,11 @@ const api = {
   raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
   // Legs + marks + longtask ring (real-device probe; soft-blit CI is not this freeze).
   raceEntryProfile: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.snapshot()) || null,
+  raceEntryStages: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stageTable()) || null,
+  raceEntryStageDiff: (raceSnap, practiceSnap) => (
+    typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.diffStages
+      ? RaceEntryProfile.diffStages(raceSnap, practiceSnap)
+      : null),
   // WEBGL_multi_draw (GLX only, apex26.multiDraw). multiDraw(true|false)
   // toggles it live; no argument reports the COUNTED oracle — multi-draw calls
   // issued, ranges inside them, the drawElements calls thereby avoided, and the

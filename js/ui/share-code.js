@@ -205,6 +205,11 @@ const ShareCode = (function () {
     if (result && result.reason === "livery-full") return "Livery not added — " + String(result.team || "").toUpperCase()
       + " is at the " + LIVERY_CAP + "-livery limit for share codes. Delete one in GARAGE › TEAM first.";
     if (result && result.reason === "nothing-to-undo") return "There is no share code import to undo.";
+    if (result && result.reason === "recovery-pending") return "Finish restoring your previous import first: paste UNDO in SETTINGS › FILES, then try the new code again.";
+    if (result && result.reason === "undo-save-failed") return "Import stopped — your recovery copy could not be saved. Free browser storage, then try the code again.";
+    if (result && result.reason === "import-save-failed") return "Import could not be saved completely. Your recovery copy is kept: free browser storage, then paste UNDO in SETTINGS › FILES before trying again.";
+    if (result && result.reason === "undo-restore-failed") return "Restore could not be saved completely. Your recovery copy is kept: free browser storage, then paste UNDO again in SETTINGS › FILES.";
+    if (result && result.reason === "undo-cleanup-failed") return "Your previous setup / livery was restored, but recovery cleanup failed. Free browser storage, then paste UNDO again in SETTINGS › FILES to finish.";
     return "That share code is incomplete or corrupt.";
   }
 
@@ -216,8 +221,8 @@ const ShareCode = (function () {
     if (typeof h.startRace === "function") { /* intentionally unused */ }
     if (decoded.kind === "undo") return undo(store);
     if (decoded.kind === "setup") {
-      saveUndo(store, ["setup." + decoded.team]);
-      store.set("setup." + decoded.team, decoded.tune);
+      const failed = importValues(store, decoded, { ["setup." + decoded.team]: decoded.tune });
+      if (failed) return failed;
       if (typeof h.selectTeam === "function") h.selectTeam(decoded.team);
       if (typeof h.openGarage === "function") h.openGarage("share");
       return { ok: true, kind: "setup", team: decoded.team };
@@ -236,10 +241,12 @@ const ShareCode = (function () {
         }
         next = kept.concat([decoded.livery]);
       }
-      saveUndo(store, ["livery." + decoded.team, customKey]);
-      if (next) store.set(customKey, next);
+      const values = {};
+      if (next) values[customKey] = next;
       // Select the livery that was actually stored (a crafted code could name another id).
-      store.set("livery." + decoded.team, decoded.livery ? decoded.livery.id : decoded.id);
+      values["livery." + decoded.team] = decoded.livery ? decoded.livery.id : decoded.id;
+      const failed = importValues(store, decoded, values);
+      if (failed) return failed;
       if (typeof h.selectTeam === "function") h.selectTeam(decoded.team);
       if (typeof h.openGarage === "function") h.openGarage("share");
       return { ok: true, kind: "livery", team: decoded.team };
@@ -253,22 +260,73 @@ const ShareCode = (function () {
 
   // One-deep undo for the last setup/livery code: the keys it is about to overwrite,
   // with their previous values (null = absent: undo removes it via store.set(k, undefined)).
-  function saveUndo(store, keys) {
+  function durableSet(store, key, value) {
+    try { return store.set(key, value) === true; }
+    catch (_) { return false; }
+  }
+  function restoreValues(store, rec) {
+    let complete = true;
+    for (const k of rec.keys) {
+      if (!/^(setup|livery|livery\.custom)\.[a-z0-9_-]+$/.test(String(k))) continue;
+      const v = Object.prototype.hasOwnProperty.call(rec.prev, k) ? rec.prev[k] : null;
+      // Try every key even after a failure; the recovery record stays for a retry.
+      if (!durableSet(store, k, v == null ? undefined : v)) complete = false;
+    }
+    return complete;
+  }
+  function importValues(store, decoded, values) {
+    const keys = Object.keys(values);
     const prev = {};
-    for (const k of keys) prev[k] = store.get(k, null);
-    store.set(UNDO_KEY, { keys, prev, at: Date.now() });
+    // What the player STORED, not get()'s shipped GarageDefaults fallback: undoing
+    // over a default must leave the key absent, not pin the default (#2191).
+    for (const k of keys) {
+      const v = typeof store.getStored === "function" ? store.getStored(k) : store.get(k, null);
+      prev[k] = v === undefined ? null : v;
+    }
+    const oldUndo = store.get(UNDO_KEY, undefined);
+    const rec = { keys, prev, at: Date.now(), pending: true };
+    const failed = (reason) => ({ ok: false, kind: decoded.kind, team: decoded.team, reason });
+    if (oldUndo && oldUndo.pending === true) return failed("recovery-pending");
+    if (!durableSet(store, UNDO_KEY, rec)) {
+      // GameStore caches refused writes (and SAVE RETRY can replay them). Put
+      // the existing recovery record back before returning without an import.
+      durableSet(store, UNDO_KEY, oldUndo);
+      return failed("undo-save-failed");
+    }
+    for (const k of keys) {
+      if (!durableSet(store, k, values[k])) {
+        // Restore session values too: a quota failure must not look loaded.
+        // If rollback is also refused, the durable backup survives reload.
+        restoreValues(store, rec);
+        return failed("import-save-failed");
+      }
+    }
+    if (!durableSet(store, UNDO_KEY, Object.assign({}, rec, { pending: false }))) {
+      // The durable record is still pending. Restore its cached value as well,
+      // so a new import cannot replace the only copy of the original values.
+      durableSet(store, UNDO_KEY, rec);
+      restoreValues(store, rec);
+      return failed("import-save-failed");
+    }
+    return null;
   }
   function undo(store) {
     const rec = store && store.get(UNDO_KEY, null);
     if (!rec || !Array.isArray(rec.keys) || !rec.prev || typeof rec.prev !== "object") {
       return { ok: false, kind: "undo", reason: "nothing-to-undo" };
     }
-    for (const k of rec.keys) {
-      if (!/^(setup|livery|livery\.custom)\.[a-z0-9_-]+$/.test(String(k))) continue;
-      const v = Object.prototype.hasOwnProperty.call(rec.prev, k) ? rec.prev[k] : null;
-      store.set(k, v == null ? undefined : v);
+    const pending = Object.assign({}, rec, { pending: true });
+    if (!durableSet(store, UNDO_KEY, pending)) {
+      durableSet(store, UNDO_KEY, rec);
+      return { ok: false, kind: "undo", reason: "undo-restore-failed" };
     }
-    store.set(UNDO_KEY, undefined);
+    if (!restoreValues(store, pending)) return { ok: false, kind: "undo", reason: "undo-restore-failed" };
+    if (!durableSet(store, UNDO_KEY, undefined)) {
+      // Failed removal also evicts GameStore's cached record: reinstate it so
+      // UNDO can retry in this session as well as after a reload.
+      durableSet(store, UNDO_KEY, pending);
+      return { ok: false, kind: "undo", reason: "undo-cleanup-failed" };
+    }
     return { ok: true, kind: "undo" };
   }
 

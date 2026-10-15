@@ -1283,3 +1283,12 @@ test("the read is fitted at the PLAYER'S announcer rate: a slow voice is trimmed
   assert.ok(slow < dflt, `a slow voice keeps fewer lines (${slow} vs ${dflt}) — fitted at the default it was cut mid-read at 24 s`);
   assert.ok(fast > dflt, `a fast voice keeps more (${fast} vs ${dflt})`);
 });
+
+
+test("storm introductions warn of heavy rain and preserve the existing wet circuit read", () => {
+  const plain = info({ track: { name: "Test circuit", lengthKm: 5 }, weather: "storm" });
+  assert.match(said(plain), /heavy rain/i, "storm is wet weather, not an unmentioned dry default");
+  const spa = info({ track: { id: "spa", name: "Spa", lengthKm: 7.004 }, weather: "storm" });
+  assert.match(said(spa), /rain on one half of this circuit/i, "reuse the authored wet read and its recorded coverage");
+  assert.equal(said(spa), said({ ...spa, weather: "rain" }), "storm keeps the established heavy-rain narration");
+});
