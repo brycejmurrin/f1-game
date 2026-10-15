@@ -1021,16 +1021,12 @@ const api = {
       const side = opts.side === "L" ? -1 : opts.side === "R" ? 1 : (opts.side || 1);
       const dist = opts.dist != null ? opts.dist : 14, height = opts.height != null ? opts.height : 9;
       const p = smp.p, r = smp.r;
-      const place = (sd, d, hgt) => [p[0] + r[0] * sd * d, p[1] + hgt, p[2] + r[2] * sd * d];
+      const eye = [p[0] + r[0] * side * dist, p[1] + height, p[2] + r[2] * side * dist];
       const target = opts.look === "in"
         ? [p[0], p[1] + 1, p[2]]
         : [p[0] + r[0] * side * (dist + 80), p[1] + height * 0.4, p[2] + r[2] * side * (dist + 80)];
-      // opts.clear (look "in" only): step higher, closer, then across the road until the view is clear.
-      const clear = opts.clear && opts.look === "in" && typeof ShotClear !== "undefined"
-        ? ShotClear.side(G.track, place, target, side, dist, height, opts.fov || 62) : null;
-      const eye = clear ? clear.eye : place(side, dist, height);
       G.dbgCam = { eye, target, fov: Math.min(170, Math.max(1, opts.fov || 62)), far: opts.far || 6000, fog: opts.fog };
-      return clear ? { eye, target, clear } : { eye, target };
+      return { eye, target };
     }
     // centre + span: a focus point at lap-fraction s, or the whole-track bbox
     let cx, cy, cz, span;
@@ -1077,25 +1073,17 @@ const api = {
     if (!G.track) return false;
     Tracks.sample(G.track, ((f % 1) + 1) % 1 * G.track.total, smp);
     const cx = smp.p[0], cy = smp.p[1] + h, cz = smp.p[2];
+    const a = az * Math.PI / 180, e = Math.min(85, Math.max(-30, el)) * Math.PI / 180;
     // basis: track tangent = "ahead", right = smp.r
-    const fwd = [smp.t[0], 0, smp.t[2]], rt = [smp.r[0], 0, smp.r[2]], roadY = smp.p[1];
-    const place = (azD, elD, d) => {
-      const a = azD * Math.PI / 180, e = Math.min(85, Math.max(-30, elD)) * Math.PI / 180;
-      const dir = [Math.cos(a) * fwd[0] + Math.sin(a) * rt[0], Math.cos(a) * fwd[2] + Math.sin(a) * rt[2]];
-      const eye = [cx + dir[0] * Math.cos(e) * d, cy + Math.sin(e) * d, cz + dir[1] * Math.cos(e) * d];
-      // Never sink the eye under the road or the ground beneath it (a hill
-      // beside the track hid the whole frame): floor it 1.2 m above both.
-      const ty = Tracks.terrainY(G.track, eye[0], eye[2]);
-      eye[1] = Math.max(eye[1], roadY + 1.2, ty == null ? -Infinity : ty + 1.2);
-      return eye;
-    };
-    const target = [cx, cy, cz], fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
-    // opts.clear: nudge the eye (up, round, in) until nothing hides the car or fills the frame's middle.
-    const clear = opts.clear && typeof ShotClear !== "undefined" ? ShotClear.orbit(G.track, place, target, az, el, dist, fov) : null;
-    const eye = clear ? clear.eye : place(az, el, dist);
-    G.dbgCam = { eye, target, fov, far: opts.far || 6000, fog: opts.fog };
-    return clear ? { eye, target, fov, clear: { az: clear.az, el: clear.el, dist: clear.dist, moved: clear.moved, blocked: clear.blocked } }
-      : { eye, target, fov };
+    const fwd = [smp.t[0], 0, smp.t[2]], rt = [smp.r[0], 0, smp.r[2]];
+    const dir = [Math.cos(a) * fwd[0] + Math.sin(a) * rt[0], 0, Math.cos(a) * fwd[2] + Math.sin(a) * rt[2]];
+    const eye = [cx + dir[0] * Math.cos(e) * dist, cy + Math.sin(e) * dist, cz + dir[2] * Math.cos(e) * dist];
+    // Never let a low/negative elevation sink the eye under the ground (which
+    // renders the track's underside through the terrain). Floor it just above road.
+    eye[1] = Math.max(eye[1], smp.p[1] + 1.2);
+    const fov = Math.min(170, Math.max(1, opts.fov != null ? opts.fov : 55));
+    G.dbgCam = { eye, target: [cx, cy, cz], fov, far: opts.far || 6000, fog: opts.fog };
+    return { eye, target: [cx, cy, cz], fov };
   },
 
   // cinematic(frac, opts) — auto outside-of-corner camera.  Reads the local track
@@ -1123,7 +1111,7 @@ const api = {
     const el   = opts.el   != null ? opts.el   : 18;
     const h    = opts.h    != null ? opts.h    : 1.5;
     const fov  = opts.fov  != null ? opts.fov  : 52;
-    const res  = this.orbit(fr, az, el, dist, h, { fov, far: opts.far, fog: opts.fog, clear: opts.clear });
+    const res  = this.orbit(fr, az, el, dist, h, { fov, far: opts.far, fog: opts.fog });
     return res ? Object.assign(res, { az: +az.toFixed(1), k: +k.toFixed(5) }) : false;
   },
 
