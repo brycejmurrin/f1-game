@@ -326,24 +326,13 @@ async function build() {
     off += buf.length;
     if (i % 25 === 0) console.log(`[voicepack] ${i}/${list.length}`);
   }
-  const binary = Buffer.concat(chunks);
-  fs.writeFileSync(path.join(outDir, pack + ".bin"), binary);
-  const man = { v: 1, id: pack, voice, speaker: spec.speaker, model: "Kokoro-82M v1.0 (ONNX " + dtype + ")", licence: "Apache-2.0", speed, clips, binarySha256: createHash("sha256").update(binary).digest("hex") };
+  fs.writeFileSync(path.join(outDir, pack + ".bin"), Buffer.concat(chunks));
+  const man = { v: 1, id: pack, voice, speaker: spec.speaker, model: "Kokoro-82M v1.0 (ONNX " + dtype + ")", licence: "Apache-2.0", speed, clips };
   fs.writeFileSync(path.join(outDir, pack + ".json"), JSON.stringify(man) + "\n");
   console.log(`[voicepack] ${pack}: ${list.length} clips, ${(off / 1024).toFixed(0)} KB`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  // Metadata-only migration of committed packs; no TTS or audio rewrite.
-  if (flag("seal")) {
-    const dir = path.resolve(ROOT, arg("out", "assets/voice"));
-    for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".json"))) {
-      const target = path.join(dir, file), bin = path.join(dir, file.replace(/\.json$/, ".bin"));
-      if (!fs.existsSync(bin)) continue;
-      const man = JSON.parse(fs.readFileSync(target, "utf8"));
-      man.binarySha256 = createHash("sha256").update(fs.readFileSync(bin)).digest("hex");
-      fs.writeFileSync(target, JSON.stringify(man) + "\n");
-    }
-  } else if (flag("list")) for (const p of phrases(arg("id", "george"), arg("speaker", null))) console.log(p.key + (p.text !== p.key ? "\t" + p.text : ""));
+  if (flag("list")) for (const p of phrases(arg("id", "george"), arg("speaker", null))) console.log(p.key + (p.text !== p.key ? "\t" + p.text : ""));
   else await build();
 }
