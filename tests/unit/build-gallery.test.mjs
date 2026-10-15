@@ -54,7 +54,7 @@ test("raw GitHub URLs use the committed branch path", () => {
 test("collectSurveyBranchShots includes committed silverstone survey JPEGs", () => {
   const shots = collectSurveyBranchShots();
   assert.ok(
-    shots.some((s) => s.circuit === "silverstone" && s.sector === "hero-abbey" && s.tod === "dusk"),
+    shots.some((s) => s.circuit === "silverstone" && s.sector === "orbit-f17" && s.tod === "dusk"),
     `expected silverstone branch shots, got ${shots.length} total`,
   );
 });
