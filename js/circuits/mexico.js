@@ -28,20 +28,28 @@
     // would stand inside it.
     ownPitStraight: true,
     dressingExclusions: [
-      // 0.02-0.30 is Magdalena Mixiuhca park (T1 -> Esses): the generic city
-      // pass stood 20-50 m towers 25-30 m off both edges here (measured 44
-      // props h > 20 within 60 m). The skyline stays the scenery file's
-      // far ring and backdrop; the park band is its forestEdge/avenue.
+      // The generic city pass is off for the whole lap, as contiguous windows
+      // (terrain-over-road.spec.js pins the first two verbatim). Park first:
+      // 0.02-0.30 (Magdalena Mixiuhca park, T1 -> Esses) stood 20-50 m towers
+      // 25-30 m off both edges (measured 44 props h > 20 within 60 m);
+      // 0.48-0.94 is the park's sports-facility side (27 towers 20-45 m tall
+      // 23-32 m off the road). The windows below close the gaps that were left:
+      // the pit straight 0.94-0.02 and T3 -> Horquilla 0.30-0.48 put brick towers
+      // 15-30 m off the road, with neon bands from cityStyle at night on a daytime
+      // circuit. The skyline is the scenery file's own: far ring, backdrop,
+      // cityFront facades and three towers.
       { kind: "city", s0: 0.02, s1: 0.30 },
-      // 0.48-0.60 is the same park's sports-facility side (the scenery file's
-      // park band, podium halls, Palacio de los Deportes at 0.575): the city
-      // pass stood 27 towers 20-45 m tall 23-32 m off the road there.
       { kind: "city", s0: 0.48, s1: 0.94 },
+      { kind: "city", s0: 0.30, s1: 0.48 },
+      { kind: "city", s0: 0.94, s1: 1.0 },
+      { kind: "city", s0: 0.0, s1: 0.02 },
       { kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 },
     ],
     pal: { zenith: [0.56, 0.72, 0.92], horizon: [0.68, 0.72, 0.78], grass: [0.34, 0.52, 0.26], runoff: [0.52, 0.38, 0.24], fog: [0.70, 0.74, 0.80], fogDensity: 0.0022, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
     // Racing-lap arc fractions, like the elevations below (no sceneryStartFrac
-    // shift); the banks land on the curated apexes above.
+    // shift); the banks land on the curated apexes above. MEASURED via
+    // Tracks.bankAngle: max 5.99 deg at 0.693 (T11), 3.5 deg at 0.892-0.930
+    // (T15), none after 0.93. docs/tracks/mexico.md still says 6 deg at ~0.97.
     bankZones: [
       { frac: 0.9102, angleDeg: 3.5, widthM: 200 },   // T15 (was 0.1866 + shift 0.7236)
       { frac: 0.5044, angleDeg: 3.0, widthM: 80 },    // T6

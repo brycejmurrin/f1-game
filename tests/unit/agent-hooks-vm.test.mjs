@@ -321,3 +321,54 @@ test("a short jump() across the line is not banked twice and counts no lap", asy
   assert.equal(g.G._testInput, input);
   assert.equal(g.apex.world({ detail: "brief" }).seq, a.seq + 1);
 });
+
+// #2172: world(), obs() and physState() read ONE slip budget (AgentView.slipBudget).
+// world() used to estimate it from axEstSm / LONG_GRIP alone, which ignores the
+// mods.braking pedal scaling player-forces bills, so with a strong-brake kit it
+// reported more of the circle spent than obs()/physState() did.
+test("world(), obs() and physState() report the same slip budget under hard braking with mods.braking > 1", async () => {
+  await load("monza", 0.05, 80);
+  const mods = g.G.player.mods;
+  g.G.player.mods = Object.assign({}, mods, { braking: 1.4 });
+  try {
+    g.apex.setInput({ steer: 0, throttle: false, brake: true });
+    g.apex.step(1 / 60, 20);
+    const grip = g.apex.world().ego.grip, o = g.apex.obs(), p = g.apex.physState();
+    gt(o.axFrac, 0.3, "the car is braking hard");
+    assert.equal(o.axFrac, p.axFrac);
+    assert.equal(o.slipFactor, p.slipFactor);
+    assert.equal(grip.longUsedPct, Math.round(o.axFrac * 100), "world().ego.grip.longUsedPct");
+    assert.ok(Math.abs(grip.slipFactor - o.slipFactor) < 0.006, `world slipFactor ${grip.slipFactor} vs obs ${o.slipFactor}`);
+    assert.ok(Math.abs(o.slipFactor - Math.sqrt(1 - o.axFrac * o.axFrac)) < 0.002, "slipFactor is the whole-car circle of axFrac");
+    // The driven axle's circle is a different quantity and keeps its own name.
+    assert.equal(p.drivenSlip, +g.G.player.slipFactor.toFixed(3));
+  } finally {
+    g.G.player.mods = mods;
+    g.apex.clearInput();
+  }
+});
+
+// #2172: with no curated `turns`, world()/trackInfo() fall back to peakFracs —
+// SMOOTHED curvature peaks, a different rule from __apex.corners()' raw peaks
+// (agentview.js says so at peakFracs). Pin the fallback: it runs, it yields a
+// sorted list of named corners, and it is not the raw-peak list.
+test("a def without turns gets the smoothed-peak corner table, not __apex.corners()' raw peaks", async () => {
+  const def = g.ctx.Tracks.LIST.find((t) => t.id === "spa");
+  const turns = def.turns;
+  assert.ok(Array.isArray(turns) && turns.length > 0, "spa ships a curated turn list");
+  def.turns = undefined;
+  try {
+    await load("spa", 0.05, 60);
+    const ti = g.apex.trackInfo();
+    const fracs = ti.corners.map((c) => c.frac);
+    gt(fracs.length, 5, "the fallback found the circuit's corners");
+    lt(fracs.length, turns.length + 10);
+    for (let i = 1; i < fracs.length; i++) gt(fracs[i], fracs[i - 1], "sorted, one corner per peak");
+    for (const f of fracs) assert.ok(f >= 0 && f < 1, `frac ${f} in [0, 1)`);
+    const raw = g.apex.corners();
+    assert.notDeepEqual(JSON.parse(JSON.stringify(fracs)), JSON.parse(JSON.stringify(raw)),
+      "peakFracs and corners() are documented as different rules");
+  } finally {
+    def.turns = turns;
+  }
+});

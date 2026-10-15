@@ -992,8 +992,8 @@ test("the card over the scene: black bars and a light hint in every theme, an un
   const css = readCssSource("css/overlays.css");
   const bars = css.match(/#loading::before,\s*#loading::after\s*\{([^}]*)\}/)[1];
   assert.match(bars, /background:\s*#000/, "cinema bars — the LIGHT theme's --bg made them white");
-  const hint = css.match(/#loading\[data-phase="run"\] #ld-card::after\s*\{([^}]*)\}/)[1];
-  assert.match(hint, /color:\s*#fff/, "the hint sits on the 3D scene, not a themed plate");
+  assert.match(css, /#loading\[data-phase="run"\] #ld-card::after[\s\S]*?color:\s*#fff/, "the hint sits on the 3D scene, not a themed plate");
+  assert.match(read("css/a11y-loading.css"), /background:\s*rgba\(0,\s*0,\s*0/, "a dark plate holds contrast over bright flyby sky");
   assert.match(css.match(/\n#ld-map\s*\{([^}]*)\}/)[1], /object-fit:\s*contain/, "fitCanvas pins px width AND height; the 45% cap squashed the outline");
   assert.match(css, /@starting-style\s*\{\s*#loading\[data-phase\] #ld-card\s*\{[^}]*opacity:\s*0/, "a transition cannot start from display: none");
   assert.match(css, /:root\[data-motion="reduce"\] #loading::before,\s*:root\[data-motion="reduce"\] #loading::after\s*\{\s*content:\s*none;/);
