@@ -1,1 +1,0 @@
-1792009758	Cursor Agent	Job 6: ERS electric layer + overtake boost cue (OWNED: js/audio/ers-layer.js + engine.js ERS hook + tests/unit/ers-audio-*.test.mjs; FORBIDDEN: tone-model, engine-voice/RPM, tyre/wind, rivals, mix ducker, radio, car-sfx, soundtrack/panel, non-audio)  [cursor/ers-audio-layer-7743; session c682c2c467b51ccbb97f8264]
