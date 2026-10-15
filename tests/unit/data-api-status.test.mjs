@@ -995,7 +995,8 @@ test("#2190 an oversize body is served from memory within its TTL and replaces t
   assert.equal(h.calls.length, n, "second request within TTL: no network");
   h.tick(ttl + 1); offline = true;
   assert.equal((await h.api.request(url, ttl)).length, big.length, "stale fallback is the big body, not the old disk one");
-  for (let i = 0; i < 6; i++) {
-    await h.api.request("https://api.openf1.org/v1/position?session_key=" + (100 + i), ttl).catch(() => {});
-  }
+  offline = false;
+  for (let i = 0; i < 4; i++) await h.api.request("https://api.openf1.org/v1/position?session_key=" + (100 + i), ttl);
+  offline = true;
+  await assert.rejects(h.api.request(url, ttl), "the LRU holds 4 bodies: the oldest is evicted, not kept forever");
 });
