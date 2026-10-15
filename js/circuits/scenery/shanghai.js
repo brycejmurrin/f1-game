@@ -355,7 +355,7 @@
       // alone put the gantry — and the start lamps it carries — 508 m away.
       gantry(sl(0.004), 9, STEEL);
 
-      wall(0.965, 0.05, 1, 6, 1.1, WHITE);
+      wall(sl(0.965), sl(0.05), 1, 6, 1.1, WHITE);
       place(K(0.99), 1, 10, [5, 2.4, 12], CONC);
       // place() sinks every box 0.8 m, so a 0.6 m red band stands wholly
       // underground, flush with the block's faces (a same-facing coplanar
@@ -567,8 +567,8 @@
         [sl(0.060), 1, 120],   // snail outside
         [sl(0.098), 1, 110],   // snail outside
         [0.470, 1,  58],   // mid-sector run
-        [0.800, 1,  74],   // back-straight run
-        [0.905, -1, 60],   // T14 hairpin
+        [sl(0.700), 1,  74],   // back-straight run
+        [sl(0.8227), -1, 110],   // T14 hairpin
       ]);
 
       (function pudongCluster() {
@@ -773,8 +773,8 @@
           [sl(0.018), -1, 26, 20, 5.5, RED],
           [sl(0.038),  1, 22, 14, 4.0, WHITE],
           [0.468, 1, 28, 16, 4.5, RED],
-          [0.770, 1, 22, 18, 5.0, YELLOW],
-          [0.835, -1, 20, 14, 4.0, RED],
+          [sl(0.670), 1, 22, 18, 5.0, YELLOW],
+          [sl(0.735), -1, 20, 14, 4.0, RED],
         ]) {
           billboard(K(sf), side, gap, w, h, col);
         }
@@ -849,61 +849,69 @@
         bush(K(s), side, d + 6, MARSH_N);
       }
 
-      fence(0.72, 0.88, 1, 8, 3.0, [0.70, 0.72, 0.76]);
-      billboard(K(0.76), 1, 10, 18, 5, RED);
-      billboard(K(0.82), 1, 10, 18, 5, YELLOW);
-      billboard(K(0.79), 1, 10, 18, 5, RED);
-      marshalPost(K(0.80), 1, 14);
-      marshalPost(K(0.74), 1, 12);
-      grandstandEx(0.755, 1, 38, 34, null, null,
+      // Back straight = built 0.604-0.81 (1.1 km). Its dressing was raw authored
+      // 0.72-0.88 = racing 0.81-0.97 (T14 and the start straight). BS(r) keeps
+      // the old layout's spacing (r = the old raw frac) and seats it ~0.10 lap
+      // earlier, on the straight itself; the first fence run covers the rest.
+      const BS = (r) => sl(r - 0.10);
+      fence(sl(0.606), sl(0.67), 1, 8, 3.0, [0.70, 0.72, 0.76]);
+      billboard(K(BS(0.76)), 1, 10, 18, 5, RED);
+      billboard(K(BS(0.82)), 1, 10, 18, 5, YELLOW);
+      billboard(K(BS(0.79)), 1, 10, 18, 5, RED);
+      marshalPost(K(BS(0.80)), 1, 14);
+      marshalPost(K(BS(0.74)), 1, 12);
+      grandstandEx(BS(0.755), 1, 38, 34, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", endWalls: true });
-      grandstandEx(0.775, 1, 62, 30, null, null,
+      grandstandEx(BS(0.775), 1, 62, 30, null, null,
         { livery: "darkSteel", roof: "none" });
-      grandstandEx(0.80,  1, 38, 34, null, null,
+      grandstandEx(BS(0.808),  1, 38, 34, null, null,
         { livery: "alu", roof: "truss", pylons: true });
-      grandstandEx(0.823, 1, 62, 30, null, null,
+      grandstandEx(BS(0.823), 1, 62, 30, null, null,
         { livery: "crimson", roof: "flat", endWalls: true });
-      grandstandEx(0.845, 1, 38, 32, null, null,
+      grandstandEx(BS(0.845), 1, 38, 32, null, null,
         { livery: "darkSteel", roof: "flat", endWalls: true });
-      grandstandEx(0.865, 1, 58, 28, null, null,
+      grandstandEx(BS(0.865), 1, 58, 28, null, null,
         { livery: "alu", roof: "cantilever" });
 
       // Sail canopy motif carried onto the back straight's stand run.
-      sailRow(0.750, 0.870, 1, 50, 4, { rx: 15, rz: 9, h: 15, col: [0.88, 0.89, 0.91] });
+      sailRow(BS(0.750), BS(0.870), 1, 50, 4, { rx: 15, rz: 9, h: 15, col: [0.88, 0.89, 0.91] });
       // sparse low shrub clumps on the verge (were 0.9 m green box slabs)
       for (let i = 0; i < 4; i++) {
-        bush((K(0.74) + i * Math.round(n * 0.014)) % n, 1, 36 + i * 8, MARSH);
+        bush((K(BS(0.74)) + i * Math.round(n * 0.014)) % n, 1, 36 + i * 8, MARSH);
       }
 
       // Lamp posts along the back straight (one side, at regular intervals)
-      along(0.72, 0.88, 35, (k) => {
+      along(BS(0.72), BS(0.88), 35, (k) => {
         const a = anchor(k, -1, 14), b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.12, 9.5, STEEL, 5, b);
         addBox(out, vadd(a.c, a.u, 9.6), [0.55, 0.28, 0.55], LAMP_GLOW, b);
       });
 
-      grandstandEx(0.88,  -1, 24, 30, null, null,
+      // T14 hairpin (built 0.8227, right-hand R13): racing frame through sl().
+      // These were raw authored 0.88-0.93 = racing 0.97-1.02, on the start
+      // straight; the hairpin itself was bare. Outside of a right-hander = -1.
+      grandstandEx(sl(0.800), -1, 34, 30, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
-      grandstandEx(0.892, -1, 48, 28, null, null,
+      grandstandEx(sl(0.8125), -1, 60, 28, null, null,
         { livery: "crimson", roof: "none" });
-      grandstandEx(0.905, -1, 28, 32, null, null,
+      grandstandEx(sl(0.8227), -1, 38, 32, null, null,
         { livery: "alu", roof: "truss", pylons: true });
-      grandstandEx(0.918, -1, 52, 28, null, null,
+      grandstandEx(sl(0.834), -1, 62, 28, null, null,
         { livery: "darkSteel", roof: "flat", pylons: true });
-      grandstandEx(0.93,  -1, 30, 28, null, null,
+      grandstandEx(sl(0.848), -1, 36, 28, null, null,
         { livery: "crimson", roof: "flat", endWalls: true });
       for (const [s, dist, rx] of [
-        [0.880, 35, 16],
-        [0.905, 39, 17],
-        [0.930, 41, 15],
+        [0.800, 80, 16],
+        [0.8227, 84, 17],
+        [0.848, 82, 15],
       ]) {
-        groundedSail(s, -1, dist, {
+        groundedSail(sl(s), -1, dist, {
           rx, rz: 9, h: 15, col: [0.88, 0.89, 0.91],
         });
       }
-      // big pale runoff apron at the hairpin
-      runoffApron(K(0.90), 1, 4, [40, 0.35, 55], PALE);
-      marshalPost(K(0.90), 1, 14);
+      // big pale runoff apron on the outside of the hairpin
+      runoffApron(K(sl(0.8227)), -1, 3, [22, 0.35, 48], PALE);
+      marshalPost(K(sl(0.8227)), -1, 28);
 
       (function lakeBoardwalk() {
         const a = anchor(K(sl(0.005)), -1, 112), b = [a.r, a.u, a.t];
@@ -959,12 +967,9 @@
         lit: true, windowCol: WIN_LIT,
         step: 42,
       });
-      cityFront(0.36, 0.56, 1, 82, {
-        minH: 18, maxH: 46, depth: 24,
-        palette: [[0.72, 0.75, 0.80], [0.66, 0.70, 0.76], CONC],
-        lit: true, windowCol: WIN_TOWER,
-        step: 54,
-      });
+      // (cityFront(0.36, 0.56, +1, 82) retired: blank grey slabs stood 80 m off the
+      // road at T10-T13 and the back straight and dominated the eye frames; the
+      // marsh campus has no skyline wall — the Pudong cluster carries the city.)
 
       for (let k = 0; k < n; k += Math.max(1, Math.round(n / 50))) {
         for (const side of [-1, 1]) {
@@ -985,7 +990,7 @@
       fence(0.50, 0.70, -1, 7, 3.2, [0.70, 0.72, 0.76]);
 
       // Tyre walls protecting the heavy corners.
-      tyreWall(0.885, 0.915, 1, 4, RED);
+      tyreWall(sl(0.812), sl(0.836), -1, 26, RED);
       tyreWall(sl(0.06),  sl(0.09),  1, 4, YELLOW);
       tyreWall(0.305, 0.325, -1, 10, RED);
 
@@ -1007,7 +1012,7 @@
       (function crowds() {
         const spots = [
           [sl(0.045), -1, 18], [sl(0.06),  1, 70], [0.46, 1, 16],
-          [0.80,   1, 22], [sl(0.10), -1, 30],
+          [sl(0.70),  1, 22], [sl(0.10), -1, 30],
         ];
         // [0.905, -1, 20] retired 2026-10-05: it is racing ~-0.006, inside the
         // footprint of the main grandstand (mainGrandstand above) — clip 2.56 m.
@@ -1023,16 +1028,16 @@
         }
       })();
 
-      hedge(0.90, 0.95, -1, 42, 3.0, TREE_G);
+      hedge(sl(0.80), sl(0.855), -1, 100, 3.0, TREE_G);
       for (let i = 0; i < 4; i++) {
-        tree(K(0.90 + i * 0.012), -1, 42 + (i % 2) * 6, 7 + hash(i) * 3, TREE_G);
+        tree(K(sl(0.805 + i * 0.014)), -1, 96 + (i % 2) * 6, 7 + hash(i) * 3, TREE_G);
       }
       for (let i = 0; i < 5; i++) {
-        palm(K(0.92 + i * 0.010), -1, 65, 6 + hash(i * 3) * 2, [0.30, 0.46, 0.26]);
+        palm(K(sl(0.805 + i * 0.010)), -1, 112, 6 + hash(i * 3) * 2, [0.30, 0.46, 0.26]);
       }
       // pines lining the back straight verge
       for (let i = 0; i < 8; i++) {
-        pine(K(0.72 + i * 0.018), 1, 58 + (i % 2) * 5, 8 + hash(i * 5) * 4, TREE_G);
+        pine(K(BS(0.72 + i * 0.018)), 1, 58 + (i % 2) * 5, 8 + hash(i * 5) * 4, TREE_G);
       }
 
       (function formalGardens() {

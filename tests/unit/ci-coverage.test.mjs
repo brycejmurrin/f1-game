@@ -3,6 +3,7 @@
 // Nothing consumes this report automatically. A broken parse could claim zero
 // fixed specs or a non-blocking/push-only selector and still look plausible.
 // These tests pin the mechanism and event/base semantics, never the count.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

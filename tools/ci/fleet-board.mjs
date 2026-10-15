@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // fleet-board.mjs — the backlog's phone view and the claim mirror, run hourly by .github/workflows/fleet.yml.
-// @doc Fleet board: one pinned issue listing ready / claimed / blocked issues, open PRs and live claims; mirrors claims onto the `claimed` label; syncs .github/labels.json.
+// @doc Fleet board: pinned issue of ready/claimed/blocked issues, PRs, live claims; mirrors the `claimed` label; syncs labels.
 // Full description: Reads the open issues and PRs (gh api) and the live claims on claude/claims-board (who-is-on-it.mjs), then (1) syncs the labels in .github/labels.json, (2) keeps the `claimed` label true — an open issue is claimed while a live claim names `#<n>` or an open PR body says `Closes #<n>`, and gets `ready` back when neither holds — and (3) rewrites the pinned "Fleet board" issue. Without --apply it only prints.
 // @skill ci-watch
 //

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // menu-mock.mjs — every menu / sheet on BLACK with the 3D off: labelled boxes, numbers per screen, a cell cache, ~1 s a shot.
-// @doc Menu-screen layout shots (menu-screens SCREENS x VIEWPORTS), 3D off, one boot per pointer shape, boxes + tap/overflow/text numbers, content-hash cell cache.
+// @doc Menu layout shots (SCREENS x VIEWPORTS), 3D off, one boot per pointer: boxes, tap/overflow/text numbers, cell cache.
 // @skill survey-ui-matrix
 //
 //   node tools/ui/menu-mock.mjs                                                    # title,settings,racesettings,results,quali,pause @ the play-shape phone
