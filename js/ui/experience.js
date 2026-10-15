@@ -17,6 +17,12 @@ const UiExperience = (function () {
   function raceBrief(G) {
     const p = G.player, t = G.track && G.track.def;
     if (!p || !t) return { title: "SESSION PAUSED", detail: "Your session is held here." };
+    const real = typeof RealRace !== "undefined" ? RealRace.status() : null;
+    if (real && real.watch) {
+      const replay = real.replay;
+      return { title: real.name || t.name || t.id,
+        detail: (real.reel || (replay && replay.reel) ? "HIGHLIGHTS" : "WATCH") + (replay && replay.follow ? " · FOLLOWING " + replay.follow : "") };
+    }
     const rank = (G.ranked || []).indexOf(p);
     const parts = [G.session === "tt" ? "TIME TRIAL" : G.session === "quali" ? "QUALIFYING" : "RACE"];
     if (rank >= 0 && !G.timeTrial) parts.push("P" + (rank + 1));
@@ -222,7 +228,6 @@ const UiExperience = (function () {
       if (typeof SettingRow !== "undefined" && goal.closest && !goal.closest(".set-row")) {
         const built = SettingRow.build("practice-goal-row", "GOAL");
         built.sel.id = "practice-goal";
-        built.sel.setAttribute("aria-labelledby", "practice-goal-label");
         const host = goal.parentNode;
         const oldLabel = intro && intro.querySelector('label[for="practice-goal"]');
         if (oldLabel) oldLabel.remove();
@@ -257,10 +262,13 @@ const UiExperience = (function () {
       const info = raceBrief(G);
       context.replaceChildren(node("strong", info.title), node("span", info.detail));
       if (info.objective) context.appendChild(node("small", info.objective));
+      const watching = typeof RealRace !== "undefined" && !!RealRace.status().watch;
+      const strategyDoor = $("pm-strategy");
+      if (strategyDoor) { strategyDoor.hidden = watching; strategyDoor.disabled = watching; }
       const strategy = $("pm-pit-estimate");
       const next = $("pm-pit-help");
-      if (next && G.tyres.on()) context.appendChild(node("small", next.textContent.split("Drive into")[0]));
-      if (strategy && G.tyres.on()) context.appendChild(node("small", strategy.textContent));
+      if (!watching && next && G.tyres.on()) context.appendChild(node("small", next.textContent.split("Drive into")[0]));
+      if (!watching && strategy && G.tyres.on()) context.appendChild(node("small", strategy.textContent));
       const retry = $("pm-checkpoint-retry"), save = $("pm-checkpoint-save");
       if (retry) retry.disabled = !!$("pm-practice-retry").disabled;
       if (save) save.disabled = !!$("pm-practice-set").disabled;

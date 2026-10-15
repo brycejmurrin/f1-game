@@ -2,8 +2,9 @@
  * to (js/race/sporting-regs.js), in a VM: the two-dry-compound verdict at the
  * flag (B6.3.6), the give-back window for a place gained under the Safety Car
  * / VSC (B5.12.2(c), B5.13.2(c); priced per the 2026 Penalty Guidelines), the
- * championship-order grid when no qualifying is held (B2.5.4(a)), and blue-
- * flag compliance while being lapped (App. H 2.5.5(e) / App. L Ch. IV 2(a);
+ * championship-order grid when no qualifying is held (B2.5.4(a)), a false
+ * start at lights-out (B5.11.1; throttle at green or launch inside 0.2 s), and
+ * blue-flag compliance while being lapped (App. H 2.5.5(e) / App. L Ch. IV 2(a);
  * Driving Standards §K; Penalty Guidelines Flag Signals → +5 s).
  *
  * The module is pure over the car records it is handed, so a car here is a
@@ -220,6 +221,12 @@ test("game.js hands the pass watch its stricken-car predicate", () => {
   assert.match(src, /announce\("\+" \+ ev\.sec \+ "s IGNORING BLUE FLAGS"/);
   assert.match(src, /blueWatch\.tick\(player, ranked/);
   assert.match(src, /blueWatch\.reset\(\)/);
+  assert.match(src, /jumpStartPenalty\.tickAtGreen\(c\)/);
+  assert.match(src, /jumpStartPenalty\.tickReaction\(c\)/);
+  assert.match(src, /JumpStartPenalty\.create\(G/);
+  const jmp = readFileSync(join(ROOT, "js/race/jump-start-penalty.js"), "utf8");
+  assert.match(jmp, /SportingRegs\.jumpStartEarlyThrottle/);
+  assert.match(jmp, /announce\("\+5s FALSE START"/);
 });
 
 test("a passed car that then pits or takes the flag drops the standing debt: no penalty", () => {
@@ -319,7 +326,23 @@ test("a lapped finisher gains no position by crossing before a car one lap ahead
   assert.equal(w.info().owed, 0);
 });
 
-// ── 4. BLUE FLAGS (being lapped) ────────────────────────────────────────────
+// ── 4. FALSE START (standing start) ───────────────────────────────────────────
+
+test("jumpStart: throttle at green and a launch inside the reaction window", () => {
+  const vRef = 72;
+  assert.equal(R.JUMP_START_PEN_S, 5);
+  assert.equal(R.JUMP_START_WHY, "false start");
+  assert.equal(R.jumpStartEarlyThrottle(0, false), false);
+  assert.equal(R.jumpStartEarlyThrottle(R.JUMP_START_THROTTLE, false), false, "at the gate");
+  assert.equal(R.jumpStartEarlyThrottle(R.JUMP_START_THROTTLE + 0.01, false), true);
+  assert.equal(R.jumpStartEarlyThrottle(1, true), false, "auto-throttle is exempt");
+  assert.equal(R.jumpStartFastLaunch(0.1, vRef * R.JUMP_START_SPEED_VREF + 0.1, vRef), true);
+  assert.equal(R.jumpStartFastLaunch(0.1, vRef * R.JUMP_START_SPEED_VREF, vRef), false, "at the speed gate");
+  assert.equal(R.jumpStartFastLaunch(R.JUMP_START_REACT_S, 50, vRef), false, "past the window");
+  assert.equal(R.jumpStartFastLaunch(0.1, 50, 0), false);
+});
+
+// ── 5. BLUE FLAGS (being lapped) ────────────────────────────────────────────
 
 const L = 5000;
 const VREF = 72;
@@ -386,6 +409,26 @@ test("letting the lapper through clears the episode; a new hold-up can warn agai
   f.lapper.prog = f.p.prog - 40 + L;                // comes round again
   const again = blueRun(w, f, 4.1);
   assert.ok(again.some((e) => e.type === "warn"), "a new episode can warn");
+});
+
+test("a queue of lappers: hold time does not carry over from car A to car B (#2163)", () => {
+  const w = R.createBlueFlagWatch(), f = blueField(30);
+  const a = f.lapper;
+  const b = { id: "lap2", code: "HAM", pitState: "none", speed: 60, prog: f.p.prog - 40 + L };
+  f.all.push(b);
+  const first = blueRun(w, f, 5);
+  assert.ok(first.some((e) => e.type === "warn" && e.code === "VER"), "A is held past the warning");
+  a.prog = f.p.prog + 10 + L;                       // A let through: now ahead on the road
+  const second = blueRun(w, f, 5);
+  assert.equal(w.info().code, "HAM", "B is the lapper now");
+  assert.deepEqual(second.filter((e) => e.type === "penalty"), [], JSON.stringify(second));
+  assert.ok(w.info().hold <= 5 + 1e-6, "B's episode starts from zero: " + w.info().hold);
+  // A penalty stays latched for the whole unbroken blue spell (one per spell, not
+  // one per car), so a long train cannot stack them; held past BLUE_HOLD_S, B
+  // still earns the one penalty this spell has not charged yet.
+  const more = blueRun(w, f, 4);
+  assert.equal(more.filter((e) => e.type === "penalty").length, 1, JSON.stringify(more));
+  assert.equal(more.find((e) => e.type === "penalty").code, "HAM");
 });
 
 test("exemptions: caution, pit, finished/retired, troubled player, and non-race", () => {

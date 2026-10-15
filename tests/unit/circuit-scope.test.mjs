@@ -85,15 +85,16 @@ test("the sweep suites that rebuild the roster are scoped, listed, and hold the 
 
 test("ci.yml: the sweeps job scopes a circuit-only pull request and hands the ids to test:sweeps", () => {
   const ci = read(".github/workflows/ci.yml");
-  const job = ci.slice(ci.indexOf("\n  sweeps:\n"), ci.indexOf("\n  ship-filter:\n"));
+  const job = ci.slice(ci.indexOf("\n  sweeps:\n"), ci.indexOf("\n  sweeps-roll-up:\n"));
+  const plan = ci.slice(ci.indexOf("\n  select:\n"), ci.indexOf("\n  selected:\n"));
   // A pull request and the train (before_sha = live) scope; the job sits out
   // the deploy push (tests/unit/base-green.test.mjs pins the node plan's
   // push-side lookup).
-  assert.match(job, /if \[ "\$SCOPE_OK" = true \]; then\n\s+SCOPE_FILE=/, "the scope is computed only when SCOPE_OK");
-  assert.match(job, /if \[ "\$CALLED" = true \] \|\| \[ "\$EVENT" = pull_request \]; then SCOPE_OK=true; fi/);
-  assert.match(job, /m\.circuitsTouched\(ch, process\.argv\[2\]\)/, "the ids come from select-specs' circuitsTouched, the browser gate's own rule");
-  assert.match(job, /echo "circuits=\$IDS" >> "\$GITHUB_OUTPUT"/);
-  assert.match(job, /- name: Geometry sweeps[^\n]*\n\s+if: steps\.filter\.outputs\.geometry == 'true'\n\s+env:\n(?:\s+#.*\n)*\s+APEX_CIRCUITS: \$\{\{ steps\.filter\.outputs\.circuits \}\}\n\s+run: npm run test:sweeps/,
+  assert.match(plan, /if \[ "\$SCOPE_OK" = true \]; then\n\s+SCOPE_FILE=/, "the scope is computed only when SCOPE_OK");
+  assert.match(plan, /if \[ "\$CALLED" = true \] \|\| \[ "\$EVENT" = pull_request \]; then SCOPE_OK=true; fi/);
+  assert.match(plan, /m\.circuitsTouched\(ch, process\.argv\[2\]\)/, "the ids come from select-specs' circuitsTouched, the browser gate's own rule");
+  assert.match(plan, /echo "circuits=\$IDS" >> "\$GITHUB_OUTPUT"/);
+  assert.match(job, /- name: Geometry sweeps[^\n]*\n\s+if: needs\.select\.outputs\.geometry != 'false'\n\s+env:\n(?:\s+#.*\n)*\s+APEX_CIRCUITS: \$\{\{ needs\.select\.outputs\.geometry_circuits \}\}\n\s+run: npm run test:sweeps/,
     "the fleet sweeps step must read the filter's circuits output");
   // The manifest must know every id the scope could name: scope() filters by
   // id, so a renamed circuit would silently scope to nothing.

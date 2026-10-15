@@ -193,11 +193,10 @@ test("ceiling breach", () => assert.deepEqual(["js/net/lobby.js lines: 1895 > 18
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("CLI: default --jobs follows CPU count; --changed is a first-class flag", () => {
-  const cpus = Math.max(1, os.availableParallelism?.() || os.cpus().length || 4);
-  assert.equal(DEFAULT_JOBS, cpus);
+test("CLI: default --jobs stays 1 (AGENTS.md rule 4 load limits); --changed is a first-class flag", () => {
+  assert.equal(DEFAULT_JOBS, 1);
   const d = parseToolingFastArgv([]);
-  assert.equal(d.jobs, cpus);
+  assert.equal(d.jobs, 1);
   assert.equal(parseToolingFastArgv(["--changed"]).changed, true);
   assert.match(TOOLING_FAST_USAGE, /--changed/);
 });

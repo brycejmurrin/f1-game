@@ -365,9 +365,9 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 ### Composite models — landscape & vegetation
 | Model | Builds |
 |---|---|
-| `mountain(x, z, baseY, w, h, opts)` | **organic** colour-zoned, snow-capped summit + foot skirt |
+| `mountain(x, z, baseY, w, h, opts)` | **organic** colour-zoned, snow-capped summit + foot skirt; `opts.profile:"massif"` (5 rings), `stretch`, `crest` opt-in; default = the original 3-ring cone |
 | `peak(x, z, baseY, w, h, col)` | simple clean pyramid summit |
-| `ridge(x, z, baseY, ang, len, w, h, col)` | mountain ridge prism along bearing `ang` (rad) |
+| `ridge(x, z, baseY, ang, len, w, h, col, opts?)` | mountain ridge prism along bearing `ang` (rad); `opts.profile:"massif"` (+`rough`, `crest`) = elongated rounded hill instead of gabled prisms |
 | `pine(k, side, dist, h, col)` | conifer: tapered trunk + 3 stacked cones |
 | `tree(k, side, dist, h, col, opts?)` | broadleaf; optional `crown: "lobed"`, `variant: 0..2` uses bounded opaque instance recipes with uniform scaling |
 | `palm(k, side, dist, h, frond)` | thin trunk + a crown of frond prisms |
@@ -979,6 +979,10 @@ node tools/track/clip-audit.cjs --all --gate        # node tools/ci/test-bg.mjs 
 Gated by `tests/unit/prop-clipping.test.mjs` against `tools/track/clip-baseline.json`, on
 the same ratchet semantics as `props-over-road.spec.js`: a circuit not in the
 map must read 0, a capped circuit fails when it grows, no `ALLOW` hatch.
+A cap above its measurement is stale: `clip-audit.cjs --all --lower` rewrites
+those rows down (never up). On a pull request a stale row fails only for a
+circuit the diff touches, or when the diff edits the baseline; other rows print
+an advisory, so a fix merged elsewhere does not redden unrelated PRs (#2183).
 
 #### 6.2 Blocking, not separating
 

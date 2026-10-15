@@ -53,8 +53,8 @@
     ],
     hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
       { s0: 0.7310, s1: 0.8081, hw: 6.0, ease: 0.012 },  // racing arc 0.726-0.756 infield esses
-      { s0: 0.0142, s1: 0.0785, hw: 6.0, ease: 0.012 },  // racing arc 0.075-0.102 Hans Ernst
-      { s0: 0.1745, s1: 0.2287, hw: 6.1, ease: 0.012 },  // racing arc 0.195-0.212 Kumho
+      { s0: 0.0142, s1: 0.0785, hw: 6.0, ease: 0.012 },  // racing arc 0.075-0.102 Tarzan (T1 apex 0.086)
+      { s0: 0.1745, s1: 0.2287, hw: 6.1, ease: 0.012 },  // racing arc 0.195-0.212 Hugenholtz (T3 apex 0.2084)
     ],
     pal: { zenith: [0.28, 0.41, 0.60], horizon: [0.82, 0.78, 0.70], grass: [0.42, 0.50, 0.25], runoff: [0.60, 0.52, 0.34], fog: [0.74, 0.73, 0.70], fogDensity: 0.0024, sunDir: [0.5597170785495562, 0.6492718111174852, 0.5149397122655918], sun: [1, 0.94, 0.80], sunColor: [1, 0.9, 0.74] },
     elevations: [{ s: 0.56, halfM: 300, rise: 8 }],

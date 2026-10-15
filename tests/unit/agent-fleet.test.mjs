@@ -38,7 +38,7 @@ test("a subscription never stands alone: each host's timer is named beside it", 
   }
   assert.match(WORKER, /ci-watch\.mjs --sha <head> --once/, "worker reads CI on every wake");
   assert.match(WORKER, /tooling-fast\.mjs --changed/);
-  assert.match(WORKER, /never `--jobs=1` in the\n   foreground/);
+  assert.match(WORKER, /tooling-fast\.mjs --changed --jobs=3/, "worker's edit loop keeps the rule-4 job cap");
 });
 
 test("the adapter table covers each host's verified spawn path", () => {

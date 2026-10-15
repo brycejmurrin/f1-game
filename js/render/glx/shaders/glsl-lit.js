@@ -1916,9 +1916,12 @@ void main() {
       // slots, quarter-rate on most mobile ALUs — on every fogged fragment.
       float sunAmt2 = sunAmt * sunAmt, sunAmt4 = sunAmt2 * sunAmt2;
       float sunAmt16 = sunAmt4 * sunAmt4; sunAmt16 *= sunAmt16;
-      vec3 fogCol = mix(uFogColor, uSunColor, sunAmt4);
+      // In-scatter colour: the HDR sun colour capped to max component 1.0 (hue kept), so a
+      // dusk sun (>1 red) cannot wash the fog orange past the fog's own luminance.
+      vec3 fogSun = uSunColor / max(1.0, max(uSunColor.r, max(uSunColor.g, uSunColor.b)));
+      vec3 fogCol = mix(uFogColor, fogSun, sunAmt4);
       // FOG SUN CORE knob (def 0.6 = as-shipped): the tight hot bloom right at the sun.
-      fogCol += uSunColor * sunAmt16 * uFogSunCore;
+      fogCol += fogSun * sunAmt16 * uFogSunCore;
       // FOG WARM / COOL white-balance (uFogTint 0 = neutral, + warm, − cool).
       fogCol *= vec3(1.0 + max(uFogTint, 0.0) * 0.25 - max(-uFogTint, 0.0) * 0.12,
                      1.0 - abs(uFogTint) * 0.02,

@@ -12,7 +12,8 @@
  *
  * So `--jobs=N` runs N files at once and the log reads exactly as before: one
  * START and one PASS/FAIL per file, each with its own index and duration.
- * DEFAULT os.cpus() for local runs; CI and deploy.mjs pass --jobs= explicitly.
+ * DEFAULT 1, so every existing caller is byte-identical; local runs pass --jobs=3
+ * (AGENTS.md rule 4: a CPU-wide default is the box load that times runs out).
  *
  * WHY, measured here: the serial suite is ~230 s and the deploy pays it once per
  * push ATTEMPT. With five or six agent sessions landing on the deploy branch at
@@ -22,7 +23,7 @@
  * deploy.mjs cannot narrow a shipped-code retry, because pick-tests maps any
  * js/ or css/ edit to the whole tooling-fast group (see its RULES).
  *
- *   node tools/ci/tooling-fast.mjs                  # full suite (default --jobs=cpus)
+ *   node tools/ci/tooling-fast.mjs                  # full suite, serial
  *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
@@ -63,6 +64,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // source, no browser, ~0.2 s.
   // Round-2 (2026-10-10): visible text is contained in every control's accessible name (WCAG 2.5.3); static shell scan.
   "tests/unit/a11y-label-in-name.test.mjs",
+  // Flyby skip hint (#ld-card::after): dark plate holds WCAG over bright sky (#1896).
+  "tests/unit/a11y-loading-hint.test.mjs",
   // SETTINGS › ACCESSIBILITY: reduce motion Auto/On/Off, high focus ring,
   // colourblind S/M/H/I/W cues. VM + shell pins, < 0.2 s.
   "tests/unit/a11y-opts.test.mjs",
@@ -276,6 +279,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/damage.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  // Data Hub EXPORT zip: mock OpenF1 → hand-rolled ZIP, CRC-32, empty/fail. ~0.3 s.
+  "tests/unit/data-export.test.mjs",
   "tests/unit/data-hub-layout.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
   // The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).
@@ -290,6 +295,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The STANDINGS tab: API row order, gap to P1, the head-to-head bar and the
   // empty state, on mini-dom with the real Dom.el. ~0.1 s.
   "tests/unit/data-standings.test.mjs",
+  "tests/unit/day-sky-palette-storm-deck.test.mjs",
   "tests/unit/debris-step-skip.test.mjs",
   "tests/unit/deep-link.test.mjs",
   // ...and a third of the same family: two widgets keyed on ONE sign convention
@@ -360,11 +366,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
-  // The Cloud Agent bootstrap contract (.cursor/environment.json). The one docs-guards
-  // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5), ~0.3 s.
+  // The Cloud Agent bootstrap contract (.cursor/environment.json). The last docs-guards
+  // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5; the workflow retired 2026-10-15), ~0.3 s.
   "tests/unit/environment-json.test.mjs",
+  // Job 6: MGU-K electric deploy/harvest + overtake boost cue (fake-audio VM).
+  "tests/unit/ers-audio-layer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
+  "tests/unit/f1-dev-tools.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
   // Rival-car distance LOD (js/car/field-lod.js): the table, the shadow-caster
   // gate, the mirror cap and the launch warm. Real shadow/mirror passes in VMs, ~0.1 s.
@@ -470,11 +479,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-sign-occlusion.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
+  "tests/unit/geom-mountain-lowmat.test.mjs",
   "tests/unit/geometry-paths-baseline.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/ghost-share.test.mjs",
   "tests/unit/ghost.test.mjs",
+  // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
+  // repo stays untouched; every fixture-repo test imports the scrub first). ~2.5 s.
+  "tests/unit/git-fixture-env.test.mjs",
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
@@ -482,6 +495,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-occlusion.test.mjs",
   // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
   "tests/unit/glx-output-target.test.mjs",
+  // #2153: GLX resize() snaps a ±1 px present/render jitter (WGX hysteresis) so the post chain is not rebuilt (mock).
+  "tests/unit/glx-resize-hysteresis.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/harness-display.test.mjs",
@@ -581,6 +596,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a NaN is not an error but a silently dropped declaration.
   "tests/unit/loading-card.test.mjs",
   "tests/unit/loading-screen-pack-gate.test.mjs",
+  // The garage -> flyby hand-off sweep: fires once, after the garage only, in the team colour.
+  "tests/unit/loading-wipe.test.mjs",
   // answerInFlight serializes acceptAnswer so a second SDP does not start a parallel negotiation (and is not blacklisted — the guest retries).
   "tests/unit/lobby-answer-flight.test.mjs",
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
@@ -634,6 +651,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/model-pack-format.test.mjs",
   "tests/unit/move-tree.test.mjs",
   "tests/unit/net-audio-revs-vm.test.mjs",
+  "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/node-plan.test.mjs",
@@ -665,7 +683,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
+  "tests/unit/perf-frametime.test.mjs",
   "tests/unit/perf-governor.test.mjs",
+  "tests/unit/perf-race-entry.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/perf-try.test.mjs",
   // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a
@@ -689,6 +709,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
   "tests/unit/platform-session-install.test.mjs",
+  // Player collision stereo side: default centred blip path; optional pan via contact pool.
+  "tests/unit/player-collision-side.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
@@ -727,6 +749,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/race-step-snap.test.mjs",
   // Race-radio card life vs RadioVoice speech budget (phrasebook, longest slots).
   "tests/unit/radio-duration.test.mjs",
+  // radio-lines phrasebook: slot fill, recent-history pick, variant counts.
+  "tests/unit/radio-lines.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
@@ -777,6 +801,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
   "tests/unit/save-migrate.test.mjs",
+  "tests/unit/save-schema-registry.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
   // The garage LIVE atlas on a LAZY_CIRCUIT stub: paintLive skips the map instead of
   // throwing, and ctxKey re-keys on hydration. VM, ~0.3 s.
@@ -801,6 +826,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/settings-export.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
   "tests/unit/settings-tabs.test.mjs",
+  "tests/unit/settings-ttlb-backup.test.mjs",
   // R19 guards. Both belong in the EDIT LOOP rather than a slow topical group:
   // each re-derives a fact the source depends on (which livery fields move a
   // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are
@@ -1426,7 +1452,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   return { ok, passed, failed, results, logPath };
 }
 
-export const DEFAULT_JOBS = Math.max(1, os.availableParallelism?.() || os.cpus().length || 4);
+export const DEFAULT_JOBS = 1;
 
 /** Paths that force a full tooling-fast run in --changed mode (fail-safe). */
 export const TOOLING_FAST_CHANGED_RUN_ALL = [

@@ -17,9 +17,9 @@ your only escalation path besides the user; ask it instead of guessing.
    and the plan as the **Plan** checklist (3–6 `- [ ]` items, one **now:**).
 2. **Implement** with the domain skill the change matches (`.claude/skills/README.md`).
    Make every source edit first, then verify once (AGENTS.md rule 2).
-3. **Verify** with `check-changes`: `node tools/ci/tooling-fast.mjs --changed`
-   in the background (default `--jobs` = `os.cpus()`; never `--jobs=1` in the
-   foreground). Leave the full structural suite to CI. Then one browser spec or
+3. **Verify** with `check-changes`: `node tools/ci/tooling-fast.mjs --changed --jobs=3`
+   in the background while you edit (AGENTS.md rule 4; the default `--jobs` is
+   1), and the full `tooling-fast --jobs=3` before a code push (rule 3). Then one browser spec or
    group (`test-bg.mjs`, or `remote-group.mjs` on the pushed branch for a whole
    group). Never use hand-written `sleep`, `while`/`for` poll loops, or any
    foreground wait over 120 s — use `test-bg.mjs --wait` with `--timeout`
@@ -47,7 +47,7 @@ your only escalation path besides the user; ask it instead of guessing.
    with a failing test first → `steward`). On a CI wake, `ci-watch --sha
    <current head> --once` — `= ci running (0 failed)` is **not** stale; only
    `= ci passed` on that head dismisses. Re-read the head SHA before every
-   push; merge the base in, never rebase or force-push. Mark ready only after
+   push (paced by the brief's `PUSH SLOT`: `launch-policy.md`, Paced push); merge the base in, never rebase or force-push. Mark ready only after
    `ready-gate.mjs` exits 0. Arming is Merge Desk's, a direct merge Grok
    Bot's, always a merge commit. Never write "do not merge" lines in the PR
    body; the only hold is a line starting `MERGE-HOLD:`.

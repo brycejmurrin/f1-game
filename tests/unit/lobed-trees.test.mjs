@@ -86,7 +86,10 @@ test("an obstructed radial crown is rejected before any graph or geometry emissi
   const f = makeFixture({ rejectPrimitive:name=>name === "addCone" });
   assert.equal(f.nature.tree(0,1,24,12,[.2,.35,.18],{crown:"lobed",variant:0}), false);
   assert.equal(f.out.pos.length,0);
-  assert.equal(f.graph.stats().models,0);
+  // The whole-tree dry run lives in graph.instance (#2178): the recipe is
+  // cached, as a rejected pine's is, but nothing is planted.
+  assert.equal(f.graph.stats().nodes,0);
+  assert.equal(f.graph.stats().dropped,1);
   assert.ok(f.calls.every(call=>call.dry));
 });
 

@@ -105,7 +105,6 @@ jobs:
       source: ${{ steps.v.outputs.source }}
       run: ${{ steps.v.outputs.run }}
       fast_run: ${{ steps.v.outputs.fast_run }}
-      ship_only: ${{ steps.v.outputs.ship_only }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -171,11 +170,11 @@ jobs:
     needs: verdict
     # Full gate when nothing is reusable. Tree-equal full gates (a prior run
     # whose CI, sweeps, selected verdict and smoke jobs all concluded success)
-    # skip ci entirely. ship_only is always false since 2026-10-07: run 3112
-    # (37689226760) published 61e0a6442 on a smoke-only ship_only pass after
-    # dispatch 3110 (37687308660) had failed the full gate on that tree, so a
-    # green ship fast tier is no longer a gate (see pages-reuse-verdict.sh).
-    if: needs.verdict.outputs.nothing_new != 'true' && (needs.verdict.outputs.reuse != 'true' || needs.verdict.outputs.ship_only == 'true')
+    # skip ci entirely. The smoke-only ship path is gone (2026-10-14;
+    # always false since 2026-10-07, when run 3112 (37689226760) published
+    # 61e0a6442 on a smoke-only pass after dispatch 3110 (37687308660) had
+    # failed the full gate on that tree — see pages-reuse-verdict.sh).
+    if: needs.verdict.outputs.nothing_new != 'true' && needs.verdict.outputs.reuse != 'true'
     # A CALLED workflow may not request more than its caller passes, and the
     # check happens at startup for every job, skipped or not. ci.yml's
     # `poke-train` job asks for actions:write (it never runs on a Pages call,
@@ -199,10 +198,8 @@ jobs:
       # The deploy push's fast tier already passed the tree-only jobs on this
       # exact tree (verdict looked it up): the gate runs smoke + sweeps +
       # selection + the parts census (base-diffed, not tree-only) and reuses
-      # the rest — see ci.yml's `fast_tier_run` input. ship_only is the
-      # exact-SHA ship-green path: skip those jobs entirely and run smoke only.
-      fast_tier_run: ${{ needs.verdict.outputs.ship_only != 'true' && needs.verdict.outputs.fast_run || '' }}
-      smoke_only: ${{ needs.verdict.outputs.ship_only == 'true' }}
+      # the rest — see ci.yml's `fast_tier_run` input.
+      fast_tier_run: ${{ needs.verdict.outputs.fast_run }}
     # ONE TRAIN AT A TIME (rule 1 above). One group per branch, no cancel: a
     # running gate finishes, the next tick waits, a later tick replaces the
     # waiting one. A dispatch shares the group and queues the same way.
@@ -262,7 +259,10 @@ jobs:
     # 360-minute default (2026-10-04). Time queued for the lock does not count;
     # the job is a full-history checkout, staging and deploy-pages, whose own
     # deployment `timeout` input defaults to 10 minutes — this sits above it.
-    timeout-minutes: 25
+    # 30 since 2026-10-14 (process-review fix 1). Deploy job only: the `ci`
+    # gate is a reusable-workflow call (no job-level timeout allowed) whose
+    # p90 is 73 min; its jobs carry their own caps in ci.yml.
+    timeout-minutes: 30
     # The only job that needs a Pages token: deploy-pages requests the
     # deployment with pages: write and authenticates with an OIDC token.
     permissions:
@@ -372,7 +372,7 @@ jobs:
   # The live check the container cannot do: this runner reaches github.io. A
   # deploy is not done until the Pages CDN serves the build just stamped.
   verify-live:
-    name: Live version.json equals the stamped build
+    name: Live shell matches the published commit and build
     needs: deploy
     # Same transitive-skip rule as deploy: run exactly when deploy succeeded.
     if: ${{ !cancelled() && needs.deploy.result == 'success' }}
@@ -382,21 +382,41 @@ jobs:
     permissions:
       issues: write
     steps:
-      - name: Poll the live version.json
+      - name: Poll the live build and commit
         env:
           PAGE_URL: ${{ needs.deploy.outputs.page_url }}
           BUILD: ${{ needs.deploy.outputs.build }}
         run: |
-          set -u
+          set -eu
+          responses=$(mktemp -d)
+          trap 'rm -rf "$responses"' EXIT
           for i in $(seq 1 24); do
-            LIVE=$(curl -fsS "${PAGE_URL%/}/version.json?_=${GITHUB_RUN_ID}-$i" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(String(JSON.parse(s).build))}catch(_){}})' || true)
-            echo "attempt $i: live=${LIVE:-?} expected=$BUILD"
-            if [ "${LIVE:-}" = "$BUILD" ]; then
-              curl -fsS "${PAGE_URL%/}/index.html?_=${GITHUB_RUN_ID}" | grep -q "name=\"apex-build\" content=\"$BUILD\"" && echo "live shell carries build $BUILD" && exit 0
+            # Complete both downloads before checking them: grep -q on a curl
+            # pipe can close early (curl 23) and still report a matching prefix.
+            if curl -fsS --output "$responses/version.json" "${PAGE_URL%/}/version.json?_=${GITHUB_RUN_ID}-$i" &&
+               curl -fsS --output "$responses/index.html" "${PAGE_URL%/}/index.html?_=${GITHUB_RUN_ID}-$i" &&
+               node -e '
+                 const fs = require("node:fs");
+                 try {
+                   const version = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+                   const html = fs.readFileSync(process.argv[2], "utf8");
+                   const build = Number(process.env.BUILD);
+                   const sha = process.env.GITHUB_SHA;
+                   const metas = [...html.matchAll(/<meta\s+name="(apex-build|apex-sha)"\s+content="([^"]*)"\s*\/?\s*>/g)];
+                   const values = name => metas.filter(m => m[1] === name).map(m => m[2]);
+                   const builds = values("apex-build"), shas = values("apex-sha");
+                   if (!Number.isInteger(build) || build < 1 || version.build !== build ||
+                       !/^[0-9a-f]{40}$/.test(sha || "") || builds.length !== 1 ||
+                       shas.length !== 1 || builds[0] !== String(build) || shas[0] !== sha) process.exit(1);
+                 } catch (_) { process.exit(1); }
+               ' "$responses/version.json" "$responses/index.html"; then
+              echo "live shell carries build $BUILD and commit $GITHUB_SHA"
+              exit 0
             fi
+            echo "attempt $i: waiting for build $BUILD and commit $GITHUB_SHA"
             sleep 10
           done
-          echo "::error::live version.json never reached build $BUILD within 4 minutes"
+          echo "::error::live version.json never reached build $BUILD with matching shell commit $GITHUB_SHA within 4 minutes"
           exit 1
       # A BROKEN-BUT-LIVE BUILD MUST NOT BE SILENT (2026-09-22). deploy-pages
       # succeeded, so the environment records a deployment and the CDN may be
@@ -415,7 +435,7 @@ jobs:
             --body "$(printf '%s\n' \
               "Pages run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} deployed commit ${GITHUB_SHA} as build ${BUILD}, but ${PAGE_URL} never served that build within 4 minutes." \
               "" \
-              "Either the CDN is lagging (re-run verify-live) or the published shell is broken. Check \`version.json\` and the \`apex-build\` meta on the live site before redeploying (AGENTS.md §Watching CI and Pages; deploy-research)." \
+              "Either the CDN is lagging (re-run verify-live) or the published shell is broken. Check \`version.json\` and the \`apex-build\` / \`apex-sha\` metas on the live site before redeploying (AGENTS.md §Watching CI and Pages; deploy-research)." \
               "" \
               "Opened automatically by pages.yml verify-live.")" \
             --label ci || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"

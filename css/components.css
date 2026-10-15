@@ -700,4 +700,17 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .sheet { background: var(--surf-1); }
 }
+/* TOUCH: ranges, selects and disclosure rows reach the painted tap floor
+   (#2158: #pm-pace / #sp-vol 32 tall, the Spotify selects 40, EXTRA PAINT and
+   EXTRA FUNDS summaries 37 and 27 at 844x390). Only the hit box grows: the
+   native range track and thumb keep their size, centred in it. The dev tuner
+   panels keep their dense rows (they fit a docked panel beside the car). */
+@media (pointer: coarse) {
+  :is(input[type="range"], select):not(:is(#lighting, #camtune, #flyby, #freecam, #garrival) *) {
+    height: var(--tap-paint); min-height: var(--tap-paint);
+  }
+  summary:not(:is(#lighting, #camtune, #flyby, #freecam, #garrival) *) {
+    min-height: var(--tap-paint); align-content: center; box-sizing: border-box;
+  }
+}
 } /* @layer components */

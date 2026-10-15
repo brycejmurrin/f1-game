@@ -27,7 +27,21 @@
     night: false,
     theme: "green",
     lengthKm: 4.017,
-    baseHW: 7,
+    // Runway width. hwZones can only NARROW (applyHwZones keeps the smaller
+    // half-width), so the runway is the base and the rest of the lap is the zones:
+    // 10.5 m half-width (21 m, the ~20 m Flight Straight runway) on control points
+    // 64-72 (arc ~0.60-0.85, ~1 km), 7 m everywhere else. s0/s1 are control-point
+    // INDEX fractions (83 points): 63/83 and 73/83 bound the runway; ease 0.02
+    // ramps the width over ~2 points at each runway end. The 7 m part is four
+    // zones, not one wrapped zone, so each holds a curated corner and none wraps
+    // the start line (tests/unit/hw-zones.test.mjs).
+    baseHW: 10.5,
+    hwZones: [
+      { s0: 0.8795, s1: 0.9999, hw: 7, ease: 0.02 },   // T7 exit .. T8 .. start line (points 73-83)
+      { s0: 0.0000, s1: 0.1205, hw: 7, ease: 0.02 },   // pit straight, T1, T2 (points 0-10)
+      { s0: 0.1205, s1: 0.4819, hw: 7, ease: 0.02 },   // Sodra / Opel loops (points 10-40)
+      { s0: 0.4819, s1: 0.7590, hw: 7, ease: 0.02 },   // T5, T6 up to the runway (points 40-63)
+    ],
     sceneryCoordinates: "racing",
     terrainOuter: 110,
     pal: {
