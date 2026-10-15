@@ -2,7 +2,7 @@
 name: worker
 description: Implementation subagent with every tool listed explicitly — all MCP servers (GitHub, Claude sessions, apex-tools, Context7, Docs, Drive, TinyFish), git and shell through Bash, file edits, WebFetch/WebSearch, SendMessage, tasks, worktrees, artifacts. Use when the parent hands off ONE scoped change (edit, node-verify, commit on its own worktree branch) and wants it to coordinate by message (SendMessage to main or a named peer) while it works, not only in a final report; several run in parallel on disjoint paths. Not a read-only check (verify-agent), not one circuit (track-surveyor), never a browser run.
 model: inherit
-tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, Agent, SendMessage, ListAgents, ReadNotifications, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__Context7, mcp__Claude_Docs, mcp__Google_Drive, mcp__tinyfish, mcp__playwright-official, mcp__chrome-devtools, mcp__plugin_browser-use_browser-use
+tools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, Agent, SendMessage, ListAgents, ReadNotifications, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__Context7, mcp__Claude_Docs, mcp__Google_Drive, mcp__tinyfish, mcp__TinyFish, mcp__MDN, mcp__mcp_browserstack_com, mcp__playwright-official, mcp__chrome-devtools, mcp__plugin_browser-use_browser-use
 maxTurns: 120
 isolation: worktree
 ---
@@ -18,7 +18,7 @@ share a checkout and a command aimed at the main checkout fails.
   commit, switch, merge, fetch, push) plus `node`, `npm` and the repo tools.
   GitHub itself goes through `mcp__github` (PRs, issues, Actions logs, checks).
 - **Web**: WebFetch, WebSearch, and `mcp__Context7` for library docs,
-  `mcp__tinyfish` for search and fetch.
+  `mcp__tinyfish`/`mcp__TinyFish` for search and fetch, `mcp__MDN` for web-platform docs.
 - **Claude sessions**: `mcp__claude-code-remote` (list, read and message other
   sessions, `send_later` reminders, PR subscriptions); SendMessage and
   ListAgents for agents inside this session; ReadNotifications.
