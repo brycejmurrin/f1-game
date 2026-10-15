@@ -14,6 +14,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- Phone-controller reconnect diagnostics no longer include the pairing code.
 - VS FRIEND: running into the back of your friend's car is one clean bump, so you no longer stay glued to their gearbox for several frames (#2164).
 - A rival's pass-by whoosh no longer keeps hissing under the pause menu, the results sheet or the title screen (#2187).
 - The team-radio key-up squelch now plays on phones, and on desktop it follows the master and SFX volume (#2189).
@@ -31,6 +32,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Data Hub cancels superseded telemetry selections, clears old session content when a Grand Prix or year has no data, and keeps keyboard navigation inside telemetry dialogs.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
+- Spotify now-playing updates recover when a response body stalls.
 - Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
 - Restoring a career backup keeps your Daily Challenge class bests, so the share line no longer reads NO LAP (#2165).
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
@@ -39,6 +41,10 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Track Designer on a landscape phone: the map gets most of the screen and UNDO / FIT VIEW sit beside it instead of covering it (#2152).
 - Touch: sliders, dropdowns and fold-out rows (OVERALL SPEED, Spotify, EXTRA PAINT, EXTRA FUNDS, free-camera FOV) are big enough to tap (#2158).
 - Free camera with the lighting panel open: the camera bar no longer covers the panel's FREE CAMERA button on a phone (#2159).
+
+- Returning tabs refuse changed lazy scripts after a release, preventing mixed-version audio, race and multiplayer code.
+- Cached phone-controller links keep their own page offline, and updates preserve working offline Career access when its UI cannot be installed.
+- Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)

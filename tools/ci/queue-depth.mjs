@@ -19,7 +19,8 @@
  *
  * HOLD (commit locally, do not push or launch) when ANY of:
  *   Linux jobs in flight (queued + running) ≥ LINUX_HOLD (60; the account has 40 slots)
- *   queued jobs, any OS                     ≥ QUEUED_HOLD (10)
+ *   queued jobs, any OS                     ≥ QUEUED_HOLD (10) — runner-queued only; a `pending`
+ *                                             job waits in a CI concurrency lane and drives no hold
  *   macOS jobs in flight                    ≥ MACOS_SLOTS (5)
  *   the oldest queued Linux job's age       ≥ STARVED_AGE_MIN (10 min; #2266)
  * The line also prints the OBSERVED Linux running count and the oldest queued
@@ -88,7 +89,17 @@ const QUEUED_RUN = new Set(["queued", "pending", "requested", "waiting"]);
 export const DEFAULT_OUT = "apex-status/queue-depth.json";
 
 /** Job statuses that wait for a runner; `waiting` (an environment gate) holds no slot. */
-const QUEUED = new Set(["queued", "requested", "pending"]);
+const QUEUED = new Set(["queued", "requested"]);
+/**
+ * `pending` is a job waiting its turn in a concurrency group: ci.yml's
+ * `queue: max` smoke and selected lanes hold ready PRs' legs FIFO. It holds no
+ * runner and no push frees it, so it is counted apart (`laneWaiting`) and
+ * drives no hold. Counting it as queued froze the gauge at hold for hours on
+ * 2026-10-15 (30 "queued", oldest 101 min, while 7 of 40 runners worked).
+ * docs.github.com/en/rest/actions/concurrency-groups lists a group's members as
+ * `in_progress` / `pending`.
+ */
+const LANE_WAITING = "pending";
 
 /** macOS when any runner label names it (macos-latest, macos-14, macos-15-xlarge …). */
 export const isMac = (job) => (job?.labels || []).some((l) => /^macos/i.test(String(l)));
@@ -98,11 +109,12 @@ export const isMac = (job) => (job?.labels || []).some((l) => /^macos/i.test(Str
  * @param {Array<{status?:string, labels?:string[]}>} jobs
  */
 export function countJobs(jobs) {
-  const c = { linux: { running: 0, queued: 0, oldestQueuedAt: null }, macos: { running: 0, queued: 0, oldestQueuedAt: null } };
+  const c = { linux: { running: 0, queued: 0, oldestQueuedAt: null }, macos: { running: 0, queued: 0, oldestQueuedAt: null }, laneWaiting: 0 };
   for (const j of jobs || []) {
     if (!j) continue;
     const os = isMac(j) ? c.macos : c.linux;
     if (j.status === "in_progress") os.running++;
+    else if (j.status === LANE_WAITING) c.laneWaiting++;
     else if (QUEUED.has(j.status)) {
       os.queued++;
       const t = Date.parse(j.created_at);
@@ -144,6 +156,7 @@ export function evaluate(c, meta = {}) {
     linux: { ...c.linux, inFlight: linuxInFlight, slots: LINUX_SLOTS, oldestQueuedMin: linuxAge },
     macos: { ...c.macos, inFlight: macInFlight, slots: MACOS_SLOTS, oldestQueuedMin: macAge },
     queued,
+    laneWaiting: c.laneWaiting ?? 0,
     runsExamined,
     runsCounted,
     runsLive,
@@ -157,7 +170,8 @@ export function reportLine(v) {
   const more = v.truncated || v.runsCounted
     ? `; ${v.runsExamined} of ${v.runsLive} live runs examined${counted}${v.truncated ? ", a lower bound" : ""}` : "";
   // #2266: the observed concurrency (running) and the oldest wait, beside the model's slots.
-  const seen = `; ${v.linux.running} Linux running${v.linux.oldestQueuedMin == null ? "" : `, oldest queued ${v.linux.oldestQueuedMin}m`}`;
+  const seen = `; ${v.linux.running} Linux running${v.linux.oldestQueuedMin == null ? "" : `, oldest queued ${v.linux.oldestQueuedMin}m`}`
+    + (v.laneWaiting ? `, ${v.laneWaiting} waiting in CI lanes` : "");
   return `= queue ${v.verdict} (${v.linux.inFlight} Linux jobs in flight / ${v.linux.slots}, ${v.queued} queued, `
     + `${v.macos.inFlight} macOS / ${v.macos.slots}${seen}${more})${v.hold ? ` — ${v.reasons.join("; ")}: commit locally, do not push` : ""}`;
 }
