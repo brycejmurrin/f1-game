@@ -55,10 +55,16 @@ var RaceRadio = (function () {
   // the straight. Fractions of the car's own lateral limit (G.LAT_MAX).
   const LOAD_BRAKE = 0.15, LOAD_LAT = 0.5;
 
-  /** Card duration for a line — long enough to read and to speak it. */
-  function durFor(text) {
-    const words = String(text).split(/\s+/).filter(Boolean).length;
-    return Math.min(5, Math.max(2.4, words * 0.38 + 1.0));
+  /** Card duration for a line — matches RadioVoice.cardDurS (courtesy lead + speech budget). */
+  function durFor(text, kind) {
+    kind = kind || "info";
+    const sp = RadioVoice.SPEAKERS[kind] || "radio";
+    let lead = kind === "comm" ? 0 : null;
+    if (lead == null && typeof GameAudio !== "undefined" && GameAudio.radioLeadS) {
+      lead = GameAudio.radioLeadS(sp === "control" ? "control" : "radio");
+    }
+    if (lead == null) lead = sp === "control" ? RadioVoice.CONTROL_LEAD_S : RadioVoice.RADIO_LEAD_S;
+    return RadioVoice.cardDurS({ msg: text, kind, lead });
   }
 
   function create(G, opts) {
@@ -170,7 +176,7 @@ var RaceRadio = (function () {
       // Refused (a full card queue): an URGENT line stays queued and is offered
       // again until its ttl — "LAST LAP" is a once line, and dropping it here
       // lost it for the race. Anything else is dropped, as before.
-      if (!G.announce(text, durFor(text), kind, valid)) { if (c.tier < 5) queue[c.ch].delete(c.id); return false; }
+      if (!G.announce(text, durFor(text, kind), kind, valid)) { if (c.tier < 5) queue[c.ch].delete(c.id); return false; }
       queue[c.ch].delete(c.id);
       m.said.set(c.cdKey, t);
       if (c.once) m.once.add(c.once);
@@ -605,7 +611,7 @@ var RaceRadio = (function () {
         : f.ahead && f.gapA != null ? "P" + f.pos + ". " + gapT(f.gapA) + " TO " + S(f.ahead)
         : f.behind && f.gapB != null ? "P" + f.pos + ". " + gapT(f.gapB) + " TO " + S(f.behind) + " BEHIND"
         : "P" + f.pos;
-      return G.announce(text, durFor(text), "race") ? text : "";
+      return G.announce(text, durFor(text, "race"), "race") ? text : "";
     }
 
     /** A replay highlight as commentary (js/race/real-replay.js fire): h = {kind,
