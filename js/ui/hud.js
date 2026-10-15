@@ -1462,9 +1462,16 @@ function fitHud() {
     const barR = hudDockEl ? hudDockEl.getBoundingClientRect() : null;
     let sat = 0, sab = 0;
     try { const cs = getComputedStyle(root); sat = parseFloat(cs.getPropertyValue("--sat")) || 0; sab = parseFloat(cs.getPropertyValue("--sab")) || 0; } catch (_) { /* mini-dom */ }
-    const topButtons = 44 * Math.min(1.5, Math.max(1, btnScale));
-    const roomL = window.innerHeight - sat - sab - topButtons - 4 * FIT_AIR;
-    const roomR = roomL - 44 * Math.max(0, Math.min(2, btnScale) - 1.5);   // PAUSE paints on past 150 % (touch-controls.css --tap-btn)
+    const controlsRoom = window.innerHeight - sat - sab - 4 * FIT_AIR;
+    // Dock and CAM/PAUSE share one effective size. Solve their joint height
+    // budget so increasing BUTTON SIZE can plateau, never shrink the pedals.
+    // CAM tops out at 150%; PAUSE above the right dock can reach 200%.
+    const heightCap = (height, topMax = 1.5) => {
+      if (!height) return Infinity;
+      if (controlsRoom <= height + 44) return (controlsRoom - 44) / height;
+      if (controlsRoom <= topMax * (height + 44)) return controlsRoom / (height + 44);
+      return (controlsRoom - 44 * topMax) / height;
+    };
     // PLAN vs THE CLUSTER at HUD 200%. #hud-tyre is anchored on the left dock,
     // outside the centred cluster, so the viewport budget above never sees them
     // meet (852×393 @200%: the gearbox plate sat on PLAN). The tyre's left edge
@@ -1524,9 +1531,10 @@ function fitHud() {
     const barW = barR && barR.width ? barR.width : window.innerWidth;
     const barGap = hudDockEl ? parseFloat(getComputedStyle(hudDockEl).columnGap) || 0 : 0;
     const controlsW = gL.w + gR.w;
-    capDock = Math.min(gL.h ? roomL / gL.h : Infinity, gR.h ? roomR / gR.h : Infinity,
+    capDock = Math.min(heightCap(gL.h), heightCap(gR.h, 2),
       controlsW ? (barW - 2 * barGap - 2 * FIT_AIR) / controlsW : Infinity);
     const dockZ = Math.min(Math.max(btnFloor, btnScale), Math.max(0.4, capDock));
+    const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
     // Readouts adapt to the stable controls, never the reverse.
     const roomW = barW - controlsW * dockZ - 2 * barGap - 2 * FIT_AIR;
     if (bottom && roomW > 0) capBot = Math.min(capBot, roomW / bottom);
@@ -1605,6 +1613,12 @@ function fitHud() {
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css),
   // so a cap between BUTTON SIZE and that floor still has to be written.
   set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));
+  // Earlier tower/sector budgets saw the old CAM/PAUSE footprint. Refit on
+  // the next HUD tick only when their clamped, published zoom changed.
+  const dockAfter = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
+  if (Math.abs(Math.min(2, Math.max(1, zDockPub)) - Math.min(2, Math.max(1, dockAfter))) > 1e-6) {
+    _fitKey = ""; _fitWait = 0; _fitPending = true;
+  }
   // Publish --dock-r-w in the FINAL chrome zoom, after dock/top caps land.
   // CSS: right = 10px + sar/--hud-z + --dock-r-w (dock-r-w is NOT re-divided).
   // Use the LEFTMOST painted right-dock control / BOOST — wrap-reverse
