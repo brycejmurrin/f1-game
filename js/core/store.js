@@ -329,7 +329,7 @@ const GameStore = (function () {
   const MIRROR_OPEN_MS = 4000;      // a blocked/never-settling open() degrades to "no mirror"
   const MIRROR_FLUSH_MS = 500;      // settleRound() writes the slot and the season back to back
   const MIRROR_RETRY_MS = 2000;     // one automatic retry; a later write/pagehide retries retained failures again
-  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, ready: null };
+  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, ready: null, settled: false };
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
   let _mirrorPending = new Map();   // full key -> { v: JSON string or null for a delete, lsOk }
   // Compare the last COMMITTED/restored payload, not permanent key ownership:
@@ -477,7 +477,7 @@ const GameStore = (function () {
   // disk holds the older value, and the boot's own re-save of it (Career.load)
   // must neither win here nor overwrite the row when the queue flushes.
   function mirrorRestore() {
-    if (typeof indexedDB === "undefined" || !indexedDB || typeof localStorage === "undefined") { _restoreDone = true; return Promise.resolve(0); }
+    if (typeof indexedDB === "undefined" || !indexedDB || typeof localStorage === "undefined") { _restoreDone = mirror.settled = true; return Promise.resolve(0); }
     return mirrorOpen().then((db) => new Promise((res) => {
       if (!db) { res([]); return; }
       let r;
@@ -536,7 +536,7 @@ const GameStore = (function () {
     }).catch((e) => {
       Log.warn("game", "durable mirror restore failed: " + ((e && e.message) || e));
       return 0;
-    }).then((n) => { _restoreDone = true; return n; });
+    }).then((n) => { _restoreDone = mirror.settled = true; return n; });
   }
 
   mirror.ready = mirrorRestore();
