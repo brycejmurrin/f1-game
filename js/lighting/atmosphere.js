@@ -424,9 +424,8 @@ function _applyRaceBody() {
     G.frame.exposure = isNightSession
       ? Math.max(G.frame.exposure != null ? G.frame.exposure : 0.90, 0.95)
       : Math.max(G.frame.exposure != null ? G.frame.exposure : 1.0, _storm ? 1.03 : 1.00);
-    // STORM: a near-black deck, a sun all but gone, a darker frame and the
-    // spray-and-cloudburst murk — visibility is what a storm costs
-    // (https://www.the-race.com/formula-1/why-f1-cant-solve-its-wet-weather-problem/).
+    // STORM: night keeps the near-black deck and visibility cost; day stays
+    // overcast daylight (grey deck, readable exposure) — never a night sky.
     // Scales the rain look above, so a tuned rain preset carries into it.
     if (wxStorm()) {
       G._cloudBase = Math.min(0.98, G._cloudBase + 0.10);
