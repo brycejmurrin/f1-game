@@ -14,7 +14,7 @@
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
               cameraTower, sponsorHoarding, broadcastCompound, circuitKit, terrainYAt,
-              indexSolid, seat } = api;
+              indexSolid, seat, floodMast, lampPost: apiLampPost } = api;
       const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
       // Pit straight sides. The engine's pit complex (garages, pit wall) takes
       // pit.side +1, the RIGHT: the infield of this clockwise lap, where the
@@ -96,12 +96,16 @@
         });
       };
 
-      // ── Lamp post: smaller roadside post ─────────────────────────────────────
+      // ── Lamp post: smaller roadside post + registered sodium lens ────────────
       const lampPost = (k, side, dist) => {
         const p = anchor(k, side, dist);
         if (onTrack(p.c[0], p.c[2], 1.5)) return;
         addCyl(out, p.c, 0.14, 8.0, [0.50, 0.50, 0.52], 5, [p.r, p.u, p.t]);
-        addBox(out, vadd(p.c, p.u, 8.2), [1.0, 0.5, 0.6], [0.98, 0.94, 0.74], [p.r, p.u, p.t]);
+        const head = vadd(p.c, p.u, 8.2);
+        addBox(out, head, [1.0, 0.5, 0.6], [0.98, 0.94, 0.74], [p.r, p.u, p.t]);
+        if (typeof apiLampPost === "function") {
+          apiLampPost({ pos: head, k, side, kind: "sodium" });
+        }
       };
 
       // ── Jacaranda / plane avenue ─────────────────────────────────────────────
@@ -656,6 +660,15 @@
         lightMast(K(s), -1, 50, 52);
         if (s >= 0.80) lightMast(K(s), 1, 50, 52);
       }
+      // Foro Sol: dressingExclusions drop generic lighting 0.70–0.89 — registered
+      // flood masts (stadium Musco idiom) replace the decorative lightMast heads.
+      if (typeof floodMast === "function") {
+        for (const [s, side, gap] of [
+          [0.728, -1, 38], [0.758, -1, 42], [0.788, -1, 40], [0.818, -1, 44],
+          [0.738,  1, 36], [0.768,  1, 40], [0.798,  1, 38], [0.838,  1, 42],
+          [0.848, -1, 46], [0.862,  1, 44],
+        ]) floodMast(K(s), side, gap, { h: 46, cool: true, pool: false, arms: 3 });
+      }
 
       // Foro Sol scoreboard — masts from grade so the screen is not a floating slab
       {
@@ -773,6 +786,10 @@
       // Taller floodlights flanking the Peraltada
       lightMast(K(0.90), 1, 32, 44);
       lightMast(K(0.94), 1, 32, 44);
+      if (typeof floodMast === "function") {
+        floodMast(K(0.905), 1, 36, { h: 42, cool: true, pool: false, arms: 3 });
+        floodMast(K(0.945), 1, 36, { h: 42, cool: true, pool: false, arms: 3 });
+      }
       // Lamp posts along the Peraltada exit
       lampPost(K(0.91), -1, 14);
       lampPost(K(0.93), -1, 14);
