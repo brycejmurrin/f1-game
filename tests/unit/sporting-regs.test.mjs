@@ -411,6 +411,26 @@ test("letting the lapper through clears the episode; a new hold-up can warn agai
   assert.ok(again.some((e) => e.type === "warn"), "a new episode can warn");
 });
 
+test("a queue of lappers: hold time does not carry over from car A to car B (#2163)", () => {
+  const w = R.createBlueFlagWatch(), f = blueField(30);
+  const a = f.lapper;
+  const b = { id: "lap2", code: "HAM", pitState: "none", speed: 60, prog: f.p.prog - 40 + L };
+  f.all.push(b);
+  const first = blueRun(w, f, 5);
+  assert.ok(first.some((e) => e.type === "warn" && e.code === "VER"), "A is held past the warning");
+  a.prog = f.p.prog + 10 + L;                       // A let through: now ahead on the road
+  const second = blueRun(w, f, 5);
+  assert.equal(w.info().code, "HAM", "B is the lapper now");
+  assert.deepEqual(second.filter((e) => e.type === "penalty"), [], JSON.stringify(second));
+  assert.ok(w.info().hold <= 5 + 1e-6, "B's episode starts from zero: " + w.info().hold);
+  // A penalty stays latched for the whole unbroken blue spell (one per spell, not
+  // one per car), so a long train cannot stack them; held past BLUE_HOLD_S, B
+  // still earns the one penalty this spell has not charged yet.
+  const more = blueRun(w, f, 4);
+  assert.equal(more.filter((e) => e.type === "penalty").length, 1, JSON.stringify(more));
+  assert.equal(more.find((e) => e.type === "penalty").code, "HAM");
+});
+
 test("exemptions: caution, pit, finished/retired, troubled player, and non-race", () => {
   const cases = [
     ["caution VSC", (f) => { f.ctx.caution = 2; }],
