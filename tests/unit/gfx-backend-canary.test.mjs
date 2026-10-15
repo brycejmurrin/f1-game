@@ -2473,13 +2473,9 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   const post = code("js/render/three/tlx-post.js");
   assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
   assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
-  // ForceGL / WebGL2 path: readPixels must not run in the Promise executor —
-  // Appearance's MutationObserver → previewScene used to freeze 10–15 s on that
-  // turn under llvmpipe (2026-10-05). setTimeout(run, 0) yields one macrotask.
-  const capBody = fnBody(tlx, "capturePixels");
-  assert.match(capBody, /setTimeout\s*\(\s*run\s*,\s*0\s*\)/,
-    "WebGL capturePixels defers sync readPixels off the caller's turn");
-  assert.match(capBody, /gl\.readPixels/, "the deferred run still readPixels");
+  // WebGL2 readback timing/state/cleanup are exercised against the production
+  // capture method in renderer-soft-lifecycle. The old timer + client-memory
+  // readPixels pin only deferred a synchronous GPU stall to another turn.
   assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
   assert.match(fnBody(tlx, "softPresentState"), /\bon:\s*!!\s*_softBlit\b/,
     "softPresentState must be OWN so descriptor-copy does not keep GLX's");
@@ -6184,6 +6180,23 @@ test("TLX mirror honours software readback backpressure and resumes when the rea
   _softBlit = false; _softReadPending = true;
   assert.equal(begin(frame, 320, 100), true, "hardware mirrors retain their normal cadence");
   assert.equal(opened, 2);
+});
+
+test("TLX car shadow pass honours software readback backpressure (#2226)", () => {
+  // Measured 2026-10-15 (SwiftShader, monaco orbit): the car map was the only
+  // submitter while a soft read waited, ~30 queue.submit/s, so the read missed
+  // the stale guard and every replacement queued behind that backlog —
+  // awaitSoftPresent timed out at 90 s. A held frame KEEPs the map instead.
+  let _softBlit = true, _softReadPending = true, began = 0, kept = 0;
+  const shadowSys = { carShadowBegin() { began++; }, carShadowKeep() { kept++; return true; } };
+  const begin = eval("(function(vp,boxScale){" + fnBody(code("js/render/three/tlx.js"), "carShadowBegin") + "})");
+  for (let i = 0; i < 60; i++) begin([], 1);
+  assert.equal(began, 0, "a pending read cannot accumulate car-shadow submissions");
+  assert.equal(kept, 60, "a held frame keeps the car map armed (no shadow strobe)");
+  _softReadPending = false; begin([], 1);
+  assert.equal(began, 1, "the pass resumes when the read drains");
+  _softBlit = false; _softReadPending = true; begin([], 1);
+  assert.equal(began, 2, "hardware presentation keeps the per-frame car pass");
 });
 
 test("TLX scene MSAA: preset-driven on the desktop WebGL2 backend only, depth resolved", () => {

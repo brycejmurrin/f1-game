@@ -16,7 +16,6 @@ const DataTelemetry = (function () {
     function loadTelemetry() {
       return ensureSession().then(function () {
         const wrap = el("div", "dh-tabbody dh-split");
-        if (sel.sessionKey === null) { wrap.appendChild(emptyMsg(NO_TELEM_MSG)); return wrap; }
         const leftPane = el("div", "dh-split-L");
         const rightPane = el("div", "dh-split-R");
         leftPane.appendChild(buildPicker(function (meta) {
@@ -63,6 +62,7 @@ const DataTelemetry = (function () {
       // Keep the picker (first child of leftPane); remove everything appended after it
       while (leftPane.children.length > 1) leftPane.removeChild(leftPane.lastChild);
       clear(rightPane);
+      if (!meta || meta.sessionKey == null) { tray = []; rightPane.appendChild(emptyMsg(NO_TELEM_MSG)); return; }
       rightPane.appendChild(spinner());
 
       F1API.sessionDrivers(meta.sessionKey).then(function (drivers) {
@@ -96,6 +96,12 @@ const DataTelemetry = (function () {
         const driverByNum = {};
         drivers.forEach(function (d) { driverByNum[d.num] = d; });
 
+        function selectionChanged() {
+          // A changed tray supersedes both outcomes of the pending lap load.
+          ++telGen;
+          abortStaleLanes();
+          syncChips();
+        }
         function syncChips() {
           drivers.forEach(function (d) {
             const selected = trayHas(d.num, meta.sessionKey);
@@ -128,7 +134,7 @@ const DataTelemetry = (function () {
             rm.addEventListener("click", function () {
               const idx = tray.findIndex(function (o) { return o.d.num === e.d.num && o.sessionKey === e.sessionKey; });
               if (idx !== -1) tray.splice(idx, 1);
-              syncChips();
+              selectionChanged();
             });
             row.appendChild(rm);
             summary.appendChild(row);
@@ -149,7 +155,7 @@ const DataTelemetry = (function () {
           if (tray.length > 1) {
             const clr = el("button", "dh-livebtn dh-lane-clear", "CLEAR SELECTION");
             clr.type = "button"; clr.dataset.block = "tight";
-            clr.addEventListener("click", function () { tray = []; syncChips(); });
+            clr.addEventListener("click", function () { tray = []; selectionChanged(); });
             summary.appendChild(clr);
           }
           detail.appendChild(summary);
@@ -168,7 +174,7 @@ const DataTelemetry = (function () {
           b.setAttribute("aria-label", "Select " + fullName);
           b.addEventListener("click", function () {
             trayToggle(d, meta);
-            syncChips();
+            selectionChanged();
           });
           chipByNum[d.num] = b;
           pick.appendChild(b);

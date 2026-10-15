@@ -522,6 +522,7 @@ const DataHub = (function () {
     return out;
   }
   const sel = { year: null, meetingKey: null, sessionKey: null, meta: null, selAt: 0, pinned: false };
+  let selectionGen = 0;           // explicit picker intent, shared across tab instances
   const SESSION_STALE_MS = 120 * 1000;
 
   function ensureSession(force) {
@@ -532,7 +533,7 @@ const DataHub = (function () {
     // pinned historic session (and the telemetry tab with it) with whatever
     // latestSession() returns. Only an explicit unpin (year/meeting change)
     // releases it.
-    if (have && sel.pinned) return Promise.resolve(sel.meta);
+    if (sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
     return F1API.latestSession(0).then(function (ses) {
       // A pick that landed while this was in flight is the newer, explicit choice.
@@ -581,6 +582,7 @@ const DataHub = (function () {
   // flight (TELEMETRY's COMPARE lanes) would be waited out first.
   function buildPicker(onPick, onChange) {
     let pickerGen = 0;
+    const initialSessionKey = sel.sessionKey;
     const box = el("div", "dh-picker");
     const yearRow = el("div", "dh-pick-years");
     apiYears().forEach(function (y) {
@@ -588,6 +590,7 @@ const DataHub = (function () {
       b.type = "button";
       b.addEventListener("click", function () {
         if (y === sel.year) return;
+        ++selectionGen;
         cancelRealRace();
         if (onChange) onChange();
         sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
@@ -618,6 +621,14 @@ const DataHub = (function () {
 
     let sesIndex = {};
     function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
+    // An explicit empty year/meeting is still the player's selection. Clear
+    // the old session body and keep sibling tabs from reverting to latest.
+    function emptySelection(userChanged) {
+      if (!userChanged) return;
+      sel.meta = null; sel.sessionKey = null; sel.selAt = 0;
+      sel.pinned = true;
+      if (openFlag && box.isConnected !== false) onPick(null);
+    }
     // A pick made here and answered after the player left this tab must not
     // call onPick: its invalidateOther would bump the generation of the tab now
     // loading and leave it spinning forever. But `sel` already moved, so drop
@@ -632,6 +643,7 @@ const DataHub = (function () {
     }
 
     gpSel.addEventListener("change", function () {
+      ++selectionGen;
       cancelRealRace();
       if (onChange) onChange();
       sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
@@ -643,6 +655,7 @@ const DataHub = (function () {
       if (!sesSel.value) return;
       const m = sesIndex[sesSel.value];
       if (!m) return;
+      ++selectionGen;
       cancelRealRace();
       sel.sessionKey = m.sessionKey; sel.meta = m; sel.pinned = true;
       onPick(m);
@@ -669,10 +682,12 @@ const DataHub = (function () {
     }
 
     function loadGPs(userChanged) {
-      const myGen = ++pickerGen;
+      const myGen = ++pickerGen, mySelection = selectionGen;
       ph(gpSel, "loading…"); ph(sesSel, "—");
       F1API.meetings(sel.year).then(function (ms) {
-        if (myGen !== pickerGen || detached(userChanged)) return;
+        if (myGen !== pickerGen || mySelection !== selectionGen) return;
+        if (!ms.length) emptySelection(userChanged);
+        if (detached(userChanged)) return;
         if (!ms.length) { ph(gpSel, "no data"); return; }
         // The LATEST MEETING THAT HAS STARTED, not the year's last entry: the
         // current season lists every future round, and defaulting to December's
@@ -684,16 +699,18 @@ const DataHub = (function () {
         setSelectOptions(gpSel, meetingPickerOptions(ms), sel.meetingKey);
         loadSessions(userChanged);
       }, function () {
-        if (myGen !== pickerGen) return;
+        if (myGen !== pickerGen || mySelection !== selectionGen) return;
         ph(gpSel, "error");
       });
     }
 
     function loadSessions(userChanged) {
-      const myGen = ++pickerGen;
+      const myGen = ++pickerGen, mySelection = selectionGen;
       ph(sesSel, "loading…");
       F1API.sessionsForMeeting(sel.meetingKey).then(function (ss) {
-        if (myGen !== pickerGen || detached(userChanged)) return;
+        if (myGen !== pickerGen || mySelection !== selectionGen) return;
+        if (!ss.length) emptySelection(userChanged);
+        if (detached(userChanged)) return;
         sesIndex = {};
         ss.forEach(function (s) { sesIndex[s.sessionKey] = s; });
         if (!ss.length) { ph(sesSel, "no data"); return; }
@@ -705,9 +722,12 @@ const DataHub = (function () {
         setSelectOptions(sesSel, ss.map(function (s) {
           return { value: s.sessionKey, label: s.name || s.type || "Session" };
         }), sel.sessionKey);
-        if (userChanged) { sel.pinned = true; onPick(sel.meta); }
+        if (userChanged) sel.pinned = true;
+        // Another tab's detached picker may have filled shared metadata first;
+        // this view still started empty and needs its own initial body paint.
+        if (userChanged || (initialSessionKey === null && openFlag && box.isConnected !== false)) onPick(sel.meta);
       }, function () {
-        if (myGen !== pickerGen) return;
+        if (myGen !== pickerGen || mySelection !== selectionGen) return;
         ph(sesSel, "error");
       });
     }

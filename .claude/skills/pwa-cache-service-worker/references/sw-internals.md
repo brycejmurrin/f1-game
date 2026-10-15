@@ -17,11 +17,14 @@ Refs: [update()](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerR
 **Cache name.** `apex26-{build}` from `version.json`. `INSTALL_COMPLETE` records required success; `INSTALL_SETTLED` records
 completion of optional work. Activate retains older generations until settled,
 then deletes only numerically older `apex26-*` generations; newer caches are
-preserved. Essential 404 aborts install; optional failures are recorded.
+preserved. Essential failures abort install; this includes deferred GLX and career UI,
+whose absence would remove offline rendering or career access. Other optional
+failures are recorded and may degrade their features.
 
 **Fetch.** Ordinary navigation is network-first with a bounded cache fallback. Online
 `version.json` failure must not mask a newer generation with stale precache.
-A `?b=` shell-bust navigation bypasses generic stale-shell fallback.
+A `?b=` shell-bust navigation applies only to the game shell. Secondary HTML
+queries fall back to their own queryless cached document, never the game shell.
 Unversioned asset packs use a three-second network/cache race. Successful network
 responses never await generation lookup or CacheStorage writes; synchronous
 `waitUntil()` registration keeps those writes alive after the response is sent.

@@ -562,5 +562,40 @@
     display: none;
   }
 }
+/* Short LANDSCAPE phone (#2152, 844×390 touch + insets): the mode row above
+   the stage and UNDO/FIT floating on the map left 22px of a 78px map to draw
+   on. The mode bar moves over the rail, the stage takes the column's full
+   height, the toolbar becomes a column beside the map (never over it), the
+   strip keeps its 48px grips and the foot message shares the button row. */
+@media (max-height: 500px) and (orientation: landscape) {
+  #trackdesigner .td-body { grid-template-columns: minmax(0, 1fr) minmax(240px, 44%); grid-template-rows: auto minmax(0, 1fr); }
+  #trackdesigner [data-role="mode-bar"] { grid-column: 2; grid-row: 1; }
+  #trackdesigner [data-role="mode-bar"] > .td-chips { gap: 0; }
+  #trackdesigner [data-role="mode-bar"] .sel-chip { letter-spacing: 0; min-width: var(--tap-paint); }
+  #trackdesigner .td-rail { grid-column: 2; grid-row: 2; }
+  #trackdesigner .td-stage {
+    grid-column: 1; grid-row: 1 / span 2;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(72px, 1fr) auto;
+    column-gap: calc(var(--gap) / 2);
+  }
+  #trackdesigner .td-stage > canvas:not([data-role="profile"]) { grid-column: 1; grid-row: 1; }
+  #trackdesigner .td-stage > canvas[data-role="profile"] { grid-column: 1; grid-row: 2; height: 48px; min-height: 48px; }
+  #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: 96px; min-height: 72px; }
+  #trackdesigner .td-stage > .td-chips[data-role="toolbar"],
+  #trackdesigner[data-mode="scenery"] .td-stage > .td-chips[data-role="toolbar"] {
+    position: static; grid-column: 2; grid-row: 1 / span 2;
+    flex-flow: column wrap; align-content: start; gap: calc(var(--gap) / 4);
+    pointer-events: auto;
+  }
+  #trackdesigner .td-stage > .td-chips[data-role="toolbar"] .sel-chip,
+  #trackdesigner[data-mode="scenery"] .td-stage > .td-chips[data-role="toolbar"] .sel-chip {
+    flex: none; width: 4.75rem; min-height: var(--tap-paint); justify-content: center;
+  }
+  #trackdesigner .td-foot { flex-wrap: nowrap; align-items: center; }
+  /* Two lines at most; the live region still announces the whole message. */
+  #trackdesigner .td-foot .td-msg { flex: 1 1 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  #trackdesigner .td-foot .td-msg:empty { display: none; }
+}
 
 }
