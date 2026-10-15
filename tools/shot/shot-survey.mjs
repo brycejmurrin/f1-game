@@ -29,8 +29,7 @@ const has = (n) => argv.includes(n);
 function usage(code = 2) {
   console.error(`usage: node tools/shot/shot-survey.mjs --tracks id[,id…] [--preset scenery|quick|dual_lite|night_pass|lap|dual|inspect|full|custom]
        [--label name] [--out dir] [--resume] [--no-panel] [--no-index] [--gl llvmpipe|swiftshader]
-       [--fracs 0,0.5] [--count N] [--tod day|dusk|dawn|night]
-       [--weather dry|wet|rain|overcast|fog|storm] [--dry-run]`);
+       [--fracs 0,0.5] [--count N] [--tod day|dusk|dawn|night] [--dry-run]`);
   process.exit(code);
 }
 
@@ -46,7 +45,6 @@ const wantPanel = !has("--no-panel");
 const wantIndex = !has("--no-index");
 const gl = flag("--gl", process.env.APEX_GL || "");
 const tod = flag("--tod", "");
-const weather = flag("--weather", "");
 const count = flag("--count", "");
 const fracsRaw = flag("--fracs", "");
 const dryRun = has("--dry-run");
@@ -56,7 +54,6 @@ const planArgs = { preset, label };
 const planJson = flag("--plan-json", "");
 if (planJson) Object.assign(planArgs, JSON.parse(planJson), { preset, label });
 if (tod) planArgs.tod = tod;
-if (weather) planArgs.weather = weather;
 if (count) planArgs.count = Number(count);
 if (fracsRaw) planArgs.fracs = fracsRaw.split(",").map(Number);
 const plan = buildTrackShotSurveyPlan(planArgs);
@@ -172,7 +169,7 @@ for (let ti = 0; ti < tracks.length; ti++) {
         try {
           reply = await sess.send({
             shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
-            h: s.h, side: s.side, tod: s.tod, weather: s.weather, hud: s.hud,
+            h: s.h, side: s.side, tod: s.tod, hud: s.hud,
           });
         } catch (e) {
           failed.push({ ...s, track, error: String(e.message || e) });
