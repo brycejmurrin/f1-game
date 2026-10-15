@@ -9,23 +9,23 @@
       "lines": 2584
     },
     "js/agent/apex.js": {
-      "codeLines": 2347,
-      "lines": 3343
+      "codeLines": 2338,
+      "lines": 3333
     },
     "js/car/car3d.js": {
       "lines": 2207
     },
     "js/game.js": {
-      "codeLines": 5138,
-      "gMembers": 291,
-      "lines": 9419,
+      "codeLines": 5146,
+      "gMembers": 292,
+      "lines": 9430,
       "topLets": 155
     },
     "js/lighting/presets.js": {
       "lines": 7316
     },
     "js/net/lobby.js": {
-      "lines": 2190
+      "lines": 2187
     },
     "js/render/glx/glx.js": {
       "lines": 2971
