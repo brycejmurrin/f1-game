@@ -92,6 +92,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `script-loader.js` | `ScriptLoader` | tag | ScriptLoader: extracted runtime orchestration. |
 | `lazy-bundles.js` | `LazyBundles` | tag | LazyBundles: extracted runtime orchestration. |
 | `wake-lock.js` | `RaceWakeLock` | tag | RaceWakeLock: asynchronous screen wake-lock ownership. |
+| `save-schema-registry.js` | `SaveSchemaRegistry` | tag | SaveSchemaRegistry: manifest of every apex26.* persistence key. |
 | `store.js` | `GameStore` | tag | persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26.", plus the uncached raw-string lane the settings panels… |
 
 **`js/`**
@@ -306,6 +307,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `start-lights.js` | `StartLights` | LAZY_RACE_SESSION | the start gantry's lights. |
 | `marshal-panels.js` | `MarshalPanels` | LAZY_RACE_SESSION | marshal light panels. |
 | `flying-start.js` | `FlyingStart` | LAZY_RACE_SESSION | FLYING START: qualifying and time trial begin at speed, the way a Data Hub JUMP IN does (js/race/real-race.js). |
+| `jump-start-penalty.js` | `JumpStartPenalty` | LAZY_RACE_SESSION | FALSE START (FIA 2026 SR B5.11.1; js/race/sporting-regs.js): throttle at green or a launch faster than the minimum reaction window. |
 
 **`js/workers/`**
 
@@ -382,6 +384,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `soundtrack.js` | `GameAudioSoundtrack` | LAZY_AUDIO | GameAudioSoundtrack: playlist, bounded decoded caches, external backends and music ducking. create(host) receives live… |
 | `radio-fx.js` | `GameAudioRadioFx` | LAZY_AUDIO | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |
 | `tone-model.js` | `GameAudioToneModel` | LAZY_AUDIO | GameAudioToneModel: constant manufacturer timbre, player presets and positive pitch ranges. patchTune mutates the supplied tune using recognized finite… |
+| `ers-layer.js` | `ErsLayer` | LAZY_AUDIO | ErsLayer — player-car MGU-K electric layer and overtake/boost cue. |
 | `engine.js` | `GameAudio` | LAZY_AUDIO | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
 | `music-lib.js` | `MusicLib` | LAZY_AUDIO | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | LAZY_AUDIO | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |

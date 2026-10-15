@@ -47,6 +47,54 @@ const CASES = [
   ["tools/gen/gen-shell.mjs", /gen-shell/],
 ];
 
+// #1708: the remaining tools/car and tools/gfx content CLIs (the issue's own
+// `grep -L 'cli-args\|help'` check named them) plus two tools/track probes.
+// Six of these launch Chromium or a full 40-circuit build when run, so --help
+// must print a usage line and exit 0 fast, and a typo'd flag must be REFUSED
+// through tools/lib/cli-args.mjs (audit-aero forwards to render-car, whose
+// own flag set refuses it) — never ignored on the way to a full run.
+const PARSED = [
+  "tools/car/audit-aero.mjs",
+  "tools/car/audit-parts.mjs",
+  "tools/car/cockpit-pale-sweep.mjs",
+  "tools/car/crest-sweep.mjs",
+  "tools/car/logo-authored-sweep.mjs",
+  "tools/car/trace-logo.mjs",
+  "tools/gfx/batch-visible-probe.mjs",
+  "tools/gfx/chunk-reach.cjs",
+  "tools/gfx/chunk-share-census.mjs",
+  "tools/gfx/frame-hitch.mjs",
+  "tools/gfx/road-lut-census.mjs",
+  "tools/gfx/tlx-pack-check.cjs",
+  "tools/track/track-verts.cjs",
+  "tools/track/startline-probe.cjs",
+];
+// Measured 2026-10-15: every --help above returns in < 1 s idle; 10 s is the
+// "launched nothing" bar (a Chromium boot or a 40-circuit build takes longer).
+const FAST_MS = 10000;
+const runFast = (rel, flag) => {
+  const t0 = Date.now();
+  const r = spawnSync(process.execPath, [rel, flag], { cwd: ROOT, encoding: "utf8", timeout: FAST_MS, killSignal: "SIGKILL" });
+  return { ...r, ms: Date.now() - t0 };
+};
+
+for (const rel of PARSED) {
+  const base = path.basename(rel);
+  test(`${base} --help prints usage and exits 0 without launching (#1708)`, () => {
+    const r = runFast(rel, "--help");
+    assert.equal(r.error, undefined, `${base} --help did not return within ${FAST_MS} ms (${r.error && r.error.code})`);
+    assert.equal(r.status, 0, r.stderr || r.stdout);
+    assert.match(r.stdout, new RegExp(`^usage: node ${rel.replace(/\./g, "\\.")}`, "m"));
+    assert.ok(r.ms < FAST_MS, `${base} --help took ${r.ms} ms`);
+  });
+  test(`${base} --no-such-flag exits non-zero before work (#1708)`, () => {
+    const r = runFast(rel, "--no-such-flag");
+    assert.equal(r.error, undefined, `${base} --no-such-flag did not return within ${FAST_MS} ms (${r.error && r.error.code})`);
+    assert.notEqual(r.status, 0, r.stdout);
+    assert.match(r.stderr, /unknown flag --no-such-flag/);
+  });
+}
+
 test("gen-shell.mjs refuses an unknown flag instead of writing", () => {
   const r = spawnSync(process.execPath, ["tools/gen/gen-shell.mjs", "--bogus"], { cwd: ROOT, encoding: "utf8", timeout: 20000 });
   assert.equal(r.status, 2, r.stdout + r.stderr);

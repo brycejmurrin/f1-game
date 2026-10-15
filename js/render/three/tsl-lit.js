@@ -2135,8 +2135,10 @@
             // Integer powers as exact multiplies (GLX sunAmt4 / sunAmt16), not exp2/log2.
             const sunAmt = max(sunAmount, 1e-4);
             const sunAmt2 = sunAmt.mul(sunAmt), sunAmt4 = sunAmt2.mul(sunAmt2).toVar(), sunAmt8 = sunAmt4.mul(sunAmt4);
-            const fogCol = mix(vec3(U.fogColor), vec3(U.sunColor), sunAmt4).toVar();
-            fogCol.addAssign(vec3(U.sunColor).mul(sunAmt8.mul(sunAmt8)).mul(U.fogSunCore));
+            // In-scatter sun colour capped to max component 1.0 (GLX parity: a dusk HDR sun must not wash the fog).
+            const fogSun = vec3(U.sunColor).div(max(float(1.0), max(U.sunColor.x, max(U.sunColor.y, U.sunColor.z))));
+            const fogCol = mix(vec3(U.fogColor), fogSun, sunAmt4).toVar();
+            fogCol.addAssign(fogSun.mul(sunAmt8.mul(sunAmt8)).mul(U.fogSunCore));
             // FOG WARM/COOL white-balance matrix
             fogCol.mulAssign(vec3(
               float(1.0).add(max(U.fogTint, 0.0).mul(0.25)).sub(max(U.fogTint.negate(), 0.0).mul(0.12)),

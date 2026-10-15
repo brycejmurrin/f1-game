@@ -52,7 +52,7 @@
         if (openArea(s)) return;
         const h = hash(k * 67 + 19);
         if (h < 0.58) return;
-        tree(k, h < 0.5 ? -1 : 1, 48 + h * 20, 8 + h * 4, [0.29, 0.34, 0.20]);
+        stonePine(k, h < 0.5 ? -1 : 1, 48 + h * 20, 10 + h * 4, PINE_D);   // no generic yellow tiered tree
       });
 
       // ── SCENERY FRACS ARE ENGINE FRACS HERE ───────────────────────────────
@@ -72,7 +72,7 @@
         modelGroup("estoril-pit-terrace", {
           center: vadd(a.c, a.u, 7), size: [22, 16, LEN + 6], basis: b,
         }, (stage) => {
-          stage._mat = MAT.CONCRETE;
+          stage._mat = 0;   // plain: limewash must not be greyed by the concrete layer
           // 17 m deep garage mass (official box depth), open to the pit lane.
           seat.box(stage, a.c, [17, 7.0, LEN], LIME, b);
           for (let i = 0; i < BAYS; i++) {
@@ -105,7 +105,7 @@
         modelGroup("estoril-timing-tower", {
           center: vadd(a.c, a.u, 13), size: [14, 30, 14], basis: b,
         }, (stage) => {
-          stage._mat = MAT.CONCRETE;
+          stage._mat = 0;   // plain: limewash must not be greyed by the concrete layer
           seat.box(stage, a.c, [8, 19, 8], LIME, b);
           for (let f = 1; f <= 4; f++)                       // shaded window slots
             seat.box(stage, vadd(vadd(a.c, a.u, f * 4.0), a.r, -4.15), [0.3, 1.6, 6.4], [0.18, 0.21, 0.25], b);
@@ -128,7 +128,7 @@
       // into the Alcabideche hillside (was the sole ground-audit buried line).
       // Hungaroring made the same call; seated paddock boxes deferred to keep
       // the tris ratchet after the 30-bay terrace.
-      broadcastCompound(K(0.918), 1, 68, { vans: 2, dishes: 2, mastH: 9 });
+      broadcastCompound(K(0.918), 1, 90, { vans: 2, dishes: 2, mastH: 9 });
       sponsorHoarding(0.955, 0.045, -1, 6.5, { h: 2.2, step: 11,
         palette: [[0.14, 0.36, 0.22], [0.86, 0.22, 0.18], [0.94, 0.86, 0.24], LIME] });
 
@@ -288,7 +288,7 @@
         modelGroup("estoril-aldeia", {
           center: vadd(a.c, a.u, 11), size: [32, 26, 64], basis: b,
         }, (stage) => {
-          stage._mat = MAT.CONCRETE;
+          stage._mat = 0;   // plain: limewash must not be greyed by the concrete layer
           for (let i = 0; i < 6; i++) {
             const h = hash(i * 29 + 5);
             // Always −r (downslope): (h-0.5)*11 let cubes land on the church.
@@ -298,7 +298,7 @@
             seat.box(stage, p, [w, ht, d], h < 0.4 ? LIME_D : LIME, b);
             stage._mat = MAT.ROOF;
             seat.prism(stage, vadd(p, a.u, ht), [w + 0.4, 1.5, d + 0.4], h < 0.5 ? TILE : TILE_D, b);
-            stage._mat = MAT.CONCRETE;
+            stage._mat = 0;   // plain: limewash must not be greyed by the concrete layer
           }
           // Church on the uphill (+r) spine, clear of the house row.
           const c = vadd(a.c, a.r, 10);
@@ -325,7 +325,7 @@
         modelGroup("estoril-deposito", {
           center: vadd(a.c, a.u, 13), size: [20, 32, 40], basis: b,
         }, (stage) => {
-          stage._mat = MAT.CONCRETE;
+          stage._mat = 0;   // plain: limewash must not be greyed by the concrete layer
           addFrustum(stage, a.c, 2.6, 2.1, 17, LIME, 10, b);                        // shaft
           seat.cyl(stage, vadd(a.c, a.u, 8.5), 2.35, 0.5, LIME_D, 10, b);           // mid collar
           addFrustum(stage, vadd(a.c, a.u, 17), 3.0, 4.6, 5.4, LIME, 12, b);        // flared tank underside
@@ -334,7 +334,7 @@
           stage._mat = MAT.ROOF;
           seat.cyl(stage, vadd(a.c, a.u, 25.0), 4.8, 0.4, TILE_D, 12, b);           // cap slab
           seat.cone(stage, vadd(a.c, a.u, 25.4), 3.6, 1.6, TILE_D, 12, b);
-          stage._mat = MAT.CONCRETE;
+          stage._mat = 0;   // plain: limewash must not be greyed by the concrete layer
           seat.cyl(stage, vadd(a.c, a.u, 27.0), 0.5, 1.4, [0.42, 0.42, 0.44], 6, b); // vent stack
           const cot = vadd(a.c, a.t, 11);
           seat.box(stage, cot, [9, 4.2, 12], LIME, b);                              // pump house
@@ -375,10 +375,17 @@
         addCyl(out, a.c, 0.19, 16, [0.22, 0.22, 0.25], 6, [a.r, a.u, a.t]);
         addBox(out, vadd(a.c, a.u, 16.4), [1.3, 0.6, 2.6], [0.94, 0.92, 0.82], [a.r, a.u, a.t]);
       }
-      for (const [s0, s1] of [[0.12, 0.32], [0.48, 0.9]]) {
-        for (const side of [-1, 1])
-          forestEdge(s0, s1, side, 20, { density: 0.46, hMin: 8, hMax: 14, pineFrac: 0.82, col: PINE, col2: PINE_D });
-      }
+      // Pine belts: stone pines only (forestEdge's stacked-cone firs are a
+      // northern look, wrong for Sintra's Atlantic coast).
+      every(15, (k) => {
+        const s = k / n;
+        if (!((s >= 0.12 && s <= 0.32) || (s >= 0.48 && s <= 0.90))) return;
+        for (const side of [-1, 1]) {
+          const h = hash(k * 41 + side * 7);
+          if (h < 0.54) continue;
+          stonePine(k, side, 22 + h * 14, 10 + h * 6, h < 0.77 ? PINE : PINE_D);
+        }
+      });
 
       // ── HAIRPIN MEADOW (0.34–0.46) — the one open stretch was bare grass.
       // Scattered cork oaks (sobreiros): the low, spreading, dark-crowned tree
