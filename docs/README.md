@@ -28,6 +28,7 @@ drives it.
 | Doc | Covers |
 |---|---|
 | [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
+| [changelog.d/](changelog.d/README.md) | Per-PR changelog fragments (one file per PR, never edit `CHANGELOG.md`) and the fold that writes it. |
 | [FLOW.md](FLOW.md) | The session state machine, the routes into a start (which play the garage/flyby intro), and the finish presentation per mode. |
 | [USAGE-PATHS.md](USAGE-PATHS.md) | End-to-end player journeys: every title door, Garage forward/back, restart, qualifying, championship, TV finishes, WATCH, multiplayer, designer and recovery paths; a regression checklist with source evidence. |
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |

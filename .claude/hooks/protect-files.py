@@ -51,6 +51,7 @@ GENERATED = {
     "js/roster.js": "node tools/gen/gen-shell.mjs writes it from tools/manifest.cjs",
     "tools/carview.html": "node tools/gen/gen-shell.mjs writes it from tools/manifest.cjs",
     "tools/README.md": "node tools/gen/gen-tools-readme.mjs writes it from the tools' @doc headers",
+    "CHANGELOG.md": "a PR adds a fragment docs/changelog.d/<slug>.md; node tools/gen/gen-changelog.mjs --fold writes it",
     # Not generated, but never hand-edited: a ceiling moves through the tool
     # (--auto-raise in the commit hook, --update with a reason in the commit),
     # so the number in the diff is a measurement, not a wish (AGENTS.md
