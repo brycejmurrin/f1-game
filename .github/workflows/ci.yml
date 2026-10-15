@@ -190,21 +190,8 @@ on:
     # (tools/ci/node-plan.mjs) skips the multi-minute scripts on a diff that
     # reaches none of them, so a docs PR costs guards plus seconds. The push
     # filter above stays: a docs push to the deploy branch buys no gate.
-  # MERGE QUEUE (2026-09-30). On 2026-09-29 the deploy branch's log was ~80 %
-  # `sync-pr` base merges: fifteen open PRs each re-merged the tip every time
-  # it moved, every re-merge bought a fresh PR run (122 green, 39 cancelled by
-  # the next re-merge in one afternoon), and two PRs regenerating the ladder
-  # figures against different bases merged cleanly and reddened the branch 14
-  # times. A merge queue tests the MERGED result once and lands it; the
-  # per-PR sync loop stops. This event is what the queue fires; the heavy
-  # jobs' tier expression reads it as the full tier (it is neither a deploy
-  # push nor a draft PR), the filters fail safe on an event they do not know,
-  # and `select` runs on merge_group too so the queue still gets a selected
-  # verdict. Enabling the queue is a repository setting (Bryce); this trigger
-  # is the half in code. `poke-train` stays a deploy-branch push only.
-  # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#merge_group
-  merge_group:
-    types: [checks_requested]
+  # NO merge_group (removed 2026-10-14): merge queues need an organisation-owned
+  # repo and this one is user-owned (docs/notes/CI-MERGE-BURST-2026-10-03.md).
   # NIGHTLY (2026-09-01): the wide browser run — the boot group (73 tests)
   # across 4 shards — moved here from every push. Its whole recorded failure
   # history in this file's header is timeouts on starved runners, never an
@@ -371,7 +358,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: ${{ github.event_name == 'pull_request' && github.event.pull_request.commits + 1 || 0 }}
+          fetch-depth: 0
           filter: blob:none
       - name: Fetch comparison bases
         run: |
@@ -406,6 +393,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           SMOKE_ONLY: ${{ inputs.smoke_only }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: bash tools/ci/ci-ship-filter-step.sh
       - name: Does this diff touch the renderer?
         id: renderer
@@ -434,7 +422,7 @@ jobs:
         env:
           EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
           PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || '' }}
           OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
@@ -469,7 +457,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: ${{ github.event_name == 'pull_request' && github.event.pull_request.commits + 1 || 0 }}
+          fetch-depth: 0
           filter: blob:none
         if: needs.reuse-draft.outputs.reuse != 'true'
       - uses: ./.github/actions/setup-apex
@@ -493,7 +481,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: ${{ github.event_name == 'pull_request' && github.event.pull_request.commits + 1 || 0 }}
+          fetch-depth: 0
           filter: blob:none
         if: needs.reuse-draft.outputs.reuse != 'true'
       - uses: ./.github/actions/setup-apex
@@ -525,13 +513,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: ${{ github.event_name == 'pull_request' && github.event.pull_request.commits + 1 || 0 }}
+          fetch-depth: 0
           filter: blob:none
-      - name: Fetch ratchet comparison base
-        if: needs.reuse-draft.outputs.reuse != 'true'
-        run: |
-          base="${{ github.event.pull_request.base.sha || github.event.before || 'origin/claude/f1-game-project-26h3ng' }}"
-          bash tools/ci/ci-fetch-diff-base.sh "$base" || true
       - uses: ./.github/actions/setup-apex
         if: needs.reuse-draft.outputs.reuse != 'true'
       - name: Ratchet ceilings vs the base
@@ -901,7 +884,7 @@ jobs:
         env:
           BEFORE: ${{ inputs.before_sha != '' && inputs.before_sha || github.event.before }}
           EVENT: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
           CALLED: ${{ inputs.concurrency_key != '' }}
         run: |
           set -u
@@ -913,7 +896,6 @@ jobs:
           case "$EVENT" in
             push) ;;
             pull_request) BEFORE="${PR_BASE:-}" ;;
-            merge_group) BEFORE="${PR_BASE:-}" ;;
             *) [ "$CALLED" = "true" ] || run_all "event is '$EVENT', not a push, a PR or a Pages call" ;;
           esac
           # A PR diffs against the test commit's first parent (ci-pr-base.sh):
@@ -1819,7 +1801,7 @@ jobs:
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'merge_group' || inputs.concurrency_key != '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}
     outputs:
       shards: ${{ needs.plan.outputs.shards }}
       any: ${{ needs.plan.outputs.any }}
@@ -2071,7 +2053,7 @@ jobs:
     # BEFORE deciding: failures in junit stay a hard fail; clean junit marks
     # infra-retry and exits 0. ci-verdict defers `selected` to this job when
     # this job is green, so the aggregator does not re-fail on the rollup.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!cancelled() && inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group' || inputs.concurrency_key != '')) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!cancelled() && inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '')) }}
     steps:
       # Junit must land BEFORE the verdict: cancel/red with clean junit is
       # infra-retry (selected-gate-verdict.mjs). Carry-forward still uses the

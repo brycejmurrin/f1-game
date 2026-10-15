@@ -191,7 +191,7 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // `schedule` too: the nightly's change-aware lane (every spec the last day
   // of merges routed; tools/ci/ci-resolve-before.sh).
   assert.match(ciWorkflow.split("\n  select:\n")[1].split(/^  [a-z][\w-]*:$/m)[0],
-    /if: \$\{\{ \(github\.event_name != 'pull_request' \|\| !github\.event\.pull_request\.draft \|\| contains\(github\.event\.pull_request\.labels\.\*\.name, 'run-ci'\)\) && inputs\.smoke_only != true && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| github\.event_name == 'merge_group' \|\| inputs\.concurrency_key != ''\) \}\}/);
+    /if: \$\{\{ \(github\.event_name != 'pull_request' \|\| !github\.event\.pull_request\.draft \|\| contains\(github\.event\.pull_request\.labels\.\*\.name, 'run-ci'\)\) && inputs\.smoke_only != true && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| inputs\.concurrency_key != ''\) \}\}/);
   assert.doesNotMatch(selectJob, /inputs\.concurrency_key == ''/, "the plan must never exclude the deploy gate");
   assert.doesNotMatch(selectJob + selectedJob, /^    continue-on-error:/m);
   // The runner consumes the plan as a matrix and takes its cap per shard.
@@ -209,7 +209,7 @@ test("selection resolves the event-specific base and fails closed when it cannot
   // A direct push still resolves against the push's before; a Pages call
   // substitutes the train's live commit (asserted in the Pages-call test).
   assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/);
-  assert.match(selectJob, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.merge_group\.base_sha \}\}/);
+  assert.match(selectJob, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   // Base resolution is delegated to ci-select-specs-step.sh -> ci-resolve-before.sh (HEAD~1 fallback).
   assert.match(selectJob, /ci-select-specs-step\.sh/);
   assert.match(selectStep, /ci-resolve-before\.sh/);
@@ -256,7 +256,7 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
     assert.equal(resolve({ EVENT: "push", PUSH_BEFORE: "" }).stdout, first, "CALLED unset is not a Pages call");
     assert.notEqual(resolve({ EVENT: "push", PUSH_BEFORE: bogus }).status, 0);
     assert.equal(resolve({ EVENT: "pull_request", PR_BASE: first }).stdout, first);
-    assert.equal(resolve({ EVENT: "merge_group", PR_BASE: first }).stdout, first);
+    assert.notEqual(resolve({ EVENT: "merge_group", PR_BASE: first }).status, 0, "an unknown event fails closed");
     // The empty tree is a base the selector can diff against: every tracked file changed.
     assert.equal(g("diff", "--name-only", EMPTY_TREE), "a");
   } finally {
@@ -293,7 +293,9 @@ test("docs-guards.yml and ci.yml both run on every pull request; the prose list 
   const pushIgnore = listAfter(onBlock, "paths-ignore");
   assert.ok(pushIgnore.list.length >= 3, `ci.yml push paths-ignore parsed to ${pushIgnore.list.length} entries`);
   assert.ok(pushIgnore.at < onBlock.indexOf("  pull_request:"), "the one paths-ignore list must be the push one");
-  const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  merge_group:"));
+  const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
+  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review(?:, labeled)?\]/,
+    "the pull_request block was sliced whole (labeled enables run-ci on draft PRs)");
   assert.doesNotMatch(prBlock, /paths(-ignore)?:/,
     "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required checks");
   const docsOn = docsWorkflow.slice(docsWorkflow.indexOf("\non:"), docsWorkflow.indexOf("\npermissions:"));
@@ -656,29 +658,29 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), ...env },
   }).trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
 
-  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "", ship_only: "false" },
+  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
-  assert.equal(verdict(M2, { [D]: [run({ event: "merge_group" })] }).reuse, "true", "a merge_group run is a full gate");
+  assert.equal(verdict(M2, { [D]: [run({ event: "merge_group" })] }).reuse, "false", "a merge_group run is not a ci.yml gate any more");
   // A DRAFT PR's run is the fast tier (sweeps and smoke skipped) and concludes
   // success all the same: never a gate, and a real gate after it still counts.
   assert.equal(verdict(M2, { [D]: [run({ id: 8 })] }).reuse, "false", "a draft PR run (sweeps skipped) is not a gate");
-  assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "", ship_only: "false" },
+  assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
     "…the ready run beside it is");
   // THE FAST TIER IS NOT A GATE. Run 2237 reused the merge commit's own
   // deploy-branch push run (guards + node suites only) as if it were the full
   // gate; the head_sha candidate is checked first, so this must be rejected
   // before the parent's real run is even looked at.
   assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })], [D]: [run()] }),
-    { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "7", ship_only: "false" },
+    { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "7" },
     "a deploy-branch push run (fast tier) must be skipped in favour of the parent's full run — and remembered as fast_run");
   // Pages run 3112 (37689226760, 2026-10-07) published 61e0a6442 on its own
   // green ship fast tier as smoke-only, after dispatch 3110 (37687308660) had
   // FAILED the full gate on that tree. The fast tier is never a gate: the
   // full gate runs, reusing only the fast tier's tree-only jobs.
   assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })] }),
-    { reuse: "false", source: "", run: "", fast_run: "7", ship_only: "false" },
-    "an exact-SHA ship fast tier alone runs the gate (fast_run named, ship_only never)");
+    { reuse: "false", source: "", run: "", fast_run: "7" },
+    "an exact-SHA ship fast tier alone runs the gate (fast_run named, no smoke-only shortcut)");
   assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" }), run({ id: 99, path: ".github/workflows/pages.yml", event: "workflow_dispatch", conclusion: "failure" })] }).reuse, "false",
     "a failed Pages gate beside a green fast tier on the same sha: the gate runs again");
   // A successful run is not proof the gate RAN: the CI aggregator passes skipped jobs.
@@ -694,7 +696,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 14, event: "merge_group" })] }).reuse, "false", "merge_group needs its gate jobs too (no jobs on record: not a gate)");
   // T1: the poking run is in progress when the train starts; its tree-only jobs count.
   assert.deepEqual(verdict(M2, { [M2]: [run({ id: 20, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }),
-    { reuse: "false", source: "", run: "", fast_run: "20", ship_only: "false" },
+    { reuse: "false", source: "", run: "", fast_run: "20" },
     "an IN-PROGRESS exact-sha fast tier whose tree-only jobs all passed is fast_run (71 of 82 poked trains re-ran them)");
   assert.equal(verdict(M2, { [M2]: [run({ id: 21, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }).fast_run, "",
     "a node suite still running: not reused");
@@ -727,7 +729,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 99 })] }, { GITHUB_RUN_ID: "99" }).reuse, "false", "a run never reuses itself");
   assert.equal(verdict(M1, { [B]: [run()], [C]: [run({ path: ".github/workflows/pages.yml", event: "push" })] }).reuse, "false",
     "both parents green but the merge tree is new: the gate runs");
-  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7", fast_run: "", ship_only: "false" },
+  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7", fast_run: "" },
     "a fast-forwarded commit with its own green push run: reuse");
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
@@ -1754,7 +1756,7 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   assert.match(job, /^    name: Selected specs \(verdict\)$/m, "the required-check name; branch protection names it");
   assert.match(job, /^    needs: \[select, selected, guards\]$/m);
   assert.match(job, /inputs\.smoke_only != true/, "Pages ship-reuse skips the verdict with the legs");
-  assert.match(job, /github\.event_name == 'merge_group'/, "merge queue keeps the required name");
+  assert.doesNotMatch(job, /github\.event_name == 'merge_group'/, "merge_group trigger was removed from ci.yml");
   assert.doesNotMatch(job, /^    if: \$\{\{ always\(\)/m, "always() turned a superseded run's cancelled `selected` into a red verdict");
   // The reading: select must pass; selected passes or is skipped; and (since
   // 2026-10-04) ANY dropped routed spec is a red off the train, whether or not

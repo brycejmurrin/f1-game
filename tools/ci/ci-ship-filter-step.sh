@@ -4,9 +4,11 @@
 set -u
 run_all() { echo "ships=true" >> "$GITHUB_OUTPUT"; echo "RUNNING SMOKE: $1"; exit 0; }
 [ "${SMOKE_ONLY:-}" = "true" ] && run_all "Pages ship-reuse: one smoke shard"
+IS_PR=false
 case "${EVENT:-}" in
   push) ;;
-  *) [ "${CALLED:-}" = "true" ] || run_all "event is '${EVENT:-}', not a push or a Pages call" ;;
+  pull_request) [ "${CALLED:-}" = "true" ] || IS_PR=true ;;
+  *) [ "${CALLED:-}" = "true" ] || run_all "event is '${EVENT:-}', not a push, a pull request or a Pages call" ;;
 esac
 PATHS_FILE="${RUNNER_TEMP:-.}/staged-paths.txt"
 node --input-type=module -e '
@@ -23,6 +25,27 @@ if ! [ -s "$PATHS_FILE" ]; then
   exit 1
 fi
 echo "--- staged paths ($(wc -l < "$PATHS_FILE") entries) ---"; cat "$PATHS_FILE"; echo "--------------------"
+shipped_hit() {
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if printf '%s\n' "$1" | grep -qE "^${p}(/|$)"; then printf '%s' "$p"; return 0; fi
+  done < "$PATHS_FILE"
+  return 1
+}
+if [ "$IS_PR" = true ]; then
+  PR_FROM="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
+  case "${PR_FROM:-}" in
+    ""|0000000000000000000000000000000000000000) run_all "pull request with no comparison base" ;;
+  esac
+  git cat-file -e "${PR_FROM}^{commit}" 2>/dev/null || run_all "PR base $PR_FROM unreachable in this checkout"
+  PR_CHANGED=$(git diff --name-only "$PR_FROM" "$GITHUB_SHA") || run_all "git diff against the PR base $PR_FROM failed"
+  echo "--- this PR's own diff (against $PR_FROM) ---"; echo "$PR_CHANGED"; echo "---------------------------------------------"
+  if printf '%s\n' "$PR_CHANGED" | grep -qx 'tests/specs/smoke.spec.js'; then
+    run_all "the PR edits the fixed smoke spec itself"
+  fi
+  if HIT="$(shipped_hit "$PR_CHANGED")"; then run_all "the PR touches a shipped path ($HIT)"; fi
+  echo "the PR's own diff ships nothing; checking that its base ships what is live before skipping"
+fi
 API="${GITHUB_API_URL:-https://api.github.com}/repos/${GITHUB_REPOSITORY}/deployments?environment=github-pages&per_page=20"
 RESP=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
              -H "Accept: application/vnd.github+json" "$API") \
@@ -63,11 +86,6 @@ echo "--- changed since live ($LIVE) ---"; echo "$CHANGED"; echo "--------------
 if printf '%s\n' "$CHANGED" | grep -qx 'tests/specs/smoke.spec.js'; then
   run_all "the fixed smoke spec itself changed"
 fi
-while IFS= read -r p; do
-  [ -n "$p" ] || continue
-  if printf '%s\n' "$CHANGED" | grep -qE "^${p}(/|$)"; then
-    run_all "the diff touches a shipped path ($p)"
-  fi
-done < "$PATHS_FILE"
+if HIT="$(shipped_hit "$CHANGED")"; then run_all "the diff touches a shipped path ($HIT)"; fi
 echo "ships=false" >> "$GITHUB_OUTPUT"
 echo "SKIPPING SMOKE: nothing in this diff reaches _site/ — the deployed bytes are unchanged since $LIVE"
