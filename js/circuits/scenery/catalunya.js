@@ -246,13 +246,13 @@
         { livery: "orange", tiers: 2, roof: "cantilever", endWalls: true });
       // Wider step on the final-corner bends so terrace units do not fold into
       // each other (clip addBox×addBox ~0.92) or fight stonePine (~0.70).
-      sunTerrace(0.360, 0.400, -1, 19, 5);
+      sunTerrace(0.360, 0.400, -1, 23, 5);
       sunTerrace(0.630, 0.655, 1, 22, 4, 12);
-      sunTerrace(0.678, 0.705, -1, 20, 5, 12);
+      sunTerrace(0.678, 0.690, -1, 20, 4, 12);
       sunTerrace(0.830, 0.862, -1, 20, 5, 12);
-      sunTerrace(0.880, 0.908,  1, 19, 4, 12);
+      sunTerrace(0.880, 0.902,  1, 22, 4, 12);
       sunTerrace(0.920, 0.945, 1, 18, 4, 12);
-      for (const [s, side, gap] of [[0.690, -1, 33], [0.932, 1, 30], [0.845, -1, 33]]) {
+      for (const [s, side, gap] of [[0.715, -1, 36], [0.932, 1, 30], [0.845, -1, 33]]) {
         const a = anchor(K(s), side, gap);
         sailCanopy(a.c, [a.r, a.u, a.t],
           { rad: 15, rx: 9, rz: 17, h: 15, col: [0.94, 0.92, 0.86], ribs: 6, thick: 0.4 });
@@ -267,7 +267,7 @@
       marshalPost(K(0.150), 1, 10);
 
       groundPatch(K(0.450), -1, 5, [24, 0.18, 32], GRAVEL,
-        { id: "catalunya-chicane-gravel", samples: 6 });
+        { id: "catalunya-seat-gravel", samples: 6 });
       tyreWall(0.436, 0.466, -1, 4, [0.20, 0.40, 0.85]);
       marshalPost(K(0.453), 1, 9);
 
@@ -312,8 +312,8 @@
 
       for (const [s, side, gap] of [
         [0.030, -1, 24], [0.155, 1, 34], [0.383, -1, 30],
-        [0.643, 1, 34], [0.700, -1, 36], [0.935, 1, 34],
-      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3, light: false });
+        [0.643, 1, 34], [0.732, -1, 38], [0.935, 1, 34],
+      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3 });
 
       for (const [i, s, gap] of [[0, 0.030, 46], [1, 0.045, 34], [2, 0.060, 46]]) {
         const a = anchor(K(s), 1, gap);
