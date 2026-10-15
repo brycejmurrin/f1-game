@@ -14,7 +14,7 @@ code{font-size:12px;color:var(--mut);word-break:break-all}.tag{display:inline-bl
 .hi{color:var(--warn);font-weight:600}ol li,ul li{margin:.4em 0}
 </style></head><body><main>
 <h1>Dijon-Prenois · survey report</h1>
-<p class="meta">Circuit <b>dijon</b> · France · French GP (retired, <code>classic:true</code>) · theme <b>green</b> · day circuit (<code>night:false</code>) · base commit <code>2d8e554</code> (branch <code>cursor/dijon-survey-a1</code>; the report ships in its tip commit) · surveyed 2026-10-15 · read-only: no js/ or css/ edits.<br>
+<p class="meta">Circuit <b>dijon</b> · France · French GP (retired, <code>classic:true</code>) · theme <b>green</b> · day circuit (<code>night:false</code>) · base commit <code>f0e2fca</code> (branch <code>cursor/dijon-survey-a1</code>; the report ships in its tip commit) · surveyed 2026-10-15 · read-only: no js/ or css/ edits.<br>
 Both tooling merges applied: <code>cursor/shared-shot-tooling-5b45</code> (weather shot tooling and gallery builder) and <code>cursor/day-wet-lighting-b7b8</code> (PR #1979, day rain/storm no longer look like night). Captured with <code>tools/shot/shot.mjs</code>, TLX renderer, SwiftShader, 1280x720 frames.</p>
 
 <h2>1. Summary</h2>
@@ -114,6 +114,7 @@ Both tooling merges applied: <code>cursor/shared-shot-tooling-5b45</code> (weath
 <li><b>Unexplained warm light pools on the verge at night/dusk</b> (frames 29, 30, 33, 43, 45) while the tarmac stays nearly black. <span class="tag">guess</span> engine lamp/headlight pools; the circuit has no lamps (furniture lamp "none"). Needs lightState to confirm.</li>
 <li><b>Audit baselines are the ceiling, not zero:</b> clip 4 severe, coplanar 2, ground buried 1 / flatCoplanar 7; 108 trees and 1 far hill are guard-dropped. Fix only by editing the circuit; never loosen the baselines.</li>
 <li><b>Built length is 2.2% short of the real 3.801 km</b> (3717 m). <span class="tag">measured</span> The brief says not to change the def; recorded for completeness.</li>
+<li><b>Tooling: the gallery builder mis-files storm frames and ignores <code>--out DIR</code>.</b> <span class="tag">measured</span> <code>WEATHER_TAIL</code> (tools/track/build-gallery.cjs:41) lacks <code>storm</code>, so <code>dijon-19..21-orbit-fNN-day-storm.png</code> list as tod "unknown" with sector "orbit-fNN-day". The help text says <code>--out DIR</code> but only <code>--out=DIR</code> is read (:644), so the documented form silently writes into the tracked gallery/tracks. Gallery build of this branch (to a scratch dir): 45 Dijon frames from the branch, 143 shots over 30 circuits in total.</li>
 </ol>
 
 <h2>8. Not captured / uncertain</h2>
