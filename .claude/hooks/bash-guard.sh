@@ -369,6 +369,24 @@ fi
 read -r _C_N C_RUN C_ALL C_GITDIR C_PATHS <<EOF
 $COMMIT_LINE
 EOF
+# `git add X && git commit` IN ONE COMMAND (2026-10-15 blocker census: 7 blocks
+# in 7 sessions). This hook runs before the whole command, so X is still
+# unstaged when the unstaged rule below reads the tree. A `git add` in the same
+# command counts as staged: its paths join the unstaged cover and the docs-only
+# set (never C_PATHS, the commit's own pathspec, which the ratchet rule reads);
+# -A/--all/-u/--update/./:/ stage everything, so they read like `commit -a`.
+ADD_PATHS=""; ADD_ALL=0
+set -f   # a glob pathspec stays a word, not this cwd's matches
+for w in $(printf '%s\n' "$SCAN" | grep -oE "(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:];&|()]+)?[[:space:]]+add([[:space:]]+[^;&|()[:space:]]+)*" \
+           | sed -E 's/^[;&|([:space:]]*git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+add//'); do
+  case "$w" in
+    -A|--all|-u|--update|.|:/) ADD_ALL=1 ;;
+    -*) ;;
+    *) ADD_PATHS="$ADD_PATHS $w" ;;
+  esac
+done
+set +f
+[ "$ADD_ALL" = 1 ] && C_ALL=1
 # Another host's adapter (.cursor/hooks/shell-guard.sh, used by Cursor and
 # Codex) sets APEX_COMMIT_GATE=githook when core.hooksPath is .githooks: the
 # git pre-commit hook runs this same gate there, so it is not run twice.
@@ -424,13 +442,13 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   # js/game.js` with only docs/a.md staged used to take the docs-only path
   # and commit js/game.js unguarded. The named paths join the set judged.
   COMMITTED="$STAGED"
-  for p in $C_PATHS; do COMMITTED="$COMMITTED
+  for p in $C_PATHS $ADD_PATHS; do COMMITTED="$COMMITTED
 $p"; done
   GENERATED_DOCS=$(cd "$ROOT" && node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ')
   [ -n "$GENERATED_DOCS" ] || GENERATED_DOCS="tools/README.md docs/DEBUG-HOOKS.md docs/ARCHITECTURE.md docs/LIGHTING-TUNER-SLIDERS.md docs/notes/PREPUSH-GATE-LADDER.md"
   DOCS_ONLY=0
   # `--all` / -a stage at commit time: the index is not what will be committed.
-  if [ -n "$STAGED$C_PATHS" ] && [ "$C_ALL" != "1" ]; then
+  if [ -n "$STAGED$C_PATHS$ADD_PATHS" ] && [ "$C_ALL" != "1" ]; then
     DOCS_ONLY=1
     while IFS= read -r f; do
       [ -z "$f" ] && continue
@@ -474,7 +492,7 @@ EOF
       [ -z "$f" ] && continue
       case "$f" in .claude/memory/*) continue ;; esac
       covered=0
-      for p in $C_PATHS; do
+      for p in $C_PATHS $ADD_PATHS; do
         p="${p%/}"; case "$f" in "$p"|"$p"/*) covered=1 ;; esac
         [ "$p" = "." ] && covered=1
       done

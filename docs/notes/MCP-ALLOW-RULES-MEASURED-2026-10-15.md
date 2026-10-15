@@ -201,13 +201,14 @@ ready and re-run through.
   Cloud sessions ignore `defaultMode` `bypassPermissions` and `dontAsk` in a
   settings file.
 
-### The two hook fixes (applied by a default-mode session)
+### The two hook fixes (applied in this session after Bryce switched it to default mode)
 
 1. protect-files / shellparse: `git checkout|restore` with `--ours`,
-   `--theirs`, `--merge` or `-m`, or a source of HEAD, MERGE_HEAD, ORIG_HEAD or
-   the deploy branch, is kind `git-resolve`. That kind skips the generated-file
-   and shared-contract rules. The live-run and scoped-agent rules still apply.
-   Any other ref stays blocked (R4-SUPPLY-4).
+   `--theirs`, `--merge` or `-m`, or a source of MERGE_HEAD or the deploy
+   branch, is kind `git-resolve`. That kind skips the generated-file and
+   shared-contract rules. The live-run and scoped-agent rules still apply.
+   Any other ref, HEAD included, stays blocked: R4-SUPPLY-4 pins
+   `git checkout HEAD js/roster.js`.
 2. bash-guard: a `git add` earlier in the same command counts as staged for the
    unstaged rule and the docs-only set. `git add -A`, `-u` and `.` read like
    `commit -a`.

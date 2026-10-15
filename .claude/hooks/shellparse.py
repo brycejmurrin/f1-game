@@ -949,6 +949,12 @@ def _abs(p, cwd):
 # `git checkout <ref> -- f`, `git restore --source=<ref> f`, `git diff --output=f`,
 # `sed -n 'w f'`, `curl -so f URL` each overwrote a generated file with no hook.
 CHECKOUT_WITH_ARG = {"-b", "-B", "--orphan", "--conflict", "--pathspec-from-file", "-s", "--source"}
+# Merge-resolution sources: the incoming side of a merge and the deploy branch,
+# whose generated files the deploy gate already checked. A restore from one is
+# not a hand edit (kind "git-resolve", 2026-10-15). Any other ref, HEAD
+# included, stays git-checkout / git-restore (R4-SUPPLY-4 pins those).
+RESOLVE_SOURCES = {"MERGE_HEAD", "origin/claude/f1-game-project-26h3ng",
+                   "refs/remotes/origin/claude/f1-game-project-26h3ng", "claude/f1-game-project-26h3ng"}
 GIT_OUTPUT_CMDS = {"diff", "log", "show", "diff-tree", "diff-index", "diff-files", "whatchanged",
                    "range-diff", "format-patch"}
 # curl options whose argument is a file curl WRITES (`-` is stdout), and the
@@ -982,6 +988,7 @@ def _git_writes(args, c):
                 out.append((rest[k + 1], "git-" + sub))
     elif sub in ("checkout", "restore"):
         pos, after, branch, staged, worktree, k = [], [], False, False, False, 0
+        side, source = False, None
         while k < len(rest):
             a = rest[k]
             if a == "--":
@@ -989,12 +996,19 @@ def _git_writes(args, c):
                 break
             if a in CHECKOUT_WITH_ARG:
                 branch = branch or a in ("-b", "-B", "--orphan")
+                if a in ("-s", "--source") and k + 1 < len(rest):
+                    source = rest[k + 1]
                 k += 2
                 continue
+            if a.startswith("--source="):
+                source = a.split("=", 1)[1]
+            if a in ("--ours", "--theirs", "--merge", "-m"):
+                side = True
             if a in ("--staged", "--worktree"):
                 staged, worktree = staged or a == "--staged", worktree or a == "--worktree"
             elif re.match(r"^-[A-Za-z]", a) and not a.startswith("--"):
-                flags = a[1:].split("s", 1)[0]   # -sHEAD~5: the rest is restore's source
+                flags, _, src = a[1:].partition("s")   # -sHEAD~5: the rest is restore's source
+                source = src or source
                 staged, worktree = staged or "S" in flags, worktree or "W" in flags
                 branch = branch or (sub == "checkout" and bool(set(flags) & set("bB")))
             elif not a.startswith("-"):
@@ -1009,7 +1023,16 @@ def _git_writes(args, c):
             # `checkout <tree-ish> <paths>` / `checkout -- <paths>`; a lone word is
             # a branch unless a FILE of that name exists (git then restores it)
             paths = after + pos[1:] + [p for p in pos[:1] if os.path.isfile(_abs(p, c))]
-        out += [(p, "git-" + sub) for p in paths]
+            if pos and (after or len(pos) > 1 or not os.path.isfile(_abs(pos[0], c))):
+                source = pos[0]
+        # CONFLICT RESOLUTION IS NOT A HAND EDIT (2026-10-15 blocker census, sync
+        # lanes on tests/data/ratchets.json): --ours/--theirs/--merge take one
+        # side of an in-progress merge, and a RESOLVE_SOURCES ref restores
+        # committed content. protect-files skips the generated-file and
+        # shared-contract rules for kind git-resolve; live-run and scoped-agent
+        # rules still apply.
+        kind = "git-resolve" if side or source in RESOLVE_SOURCES else "git-" + sub
+        out += [(p, kind) for p in paths]
     return [(_abs(p, c), kind) for p, kind in out if p and p != "-"]
 
 
