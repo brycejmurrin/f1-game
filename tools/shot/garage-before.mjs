@@ -21,6 +21,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "../ci/github-token.mjs";
+import { proxyFetch } from "../lib/proxy-fetch.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -185,7 +186,7 @@ export const GITHUB_API_BASE_DELAY_MS = 1000;
 /** Exact-name pack lookups walk this many ancestors — never page the repo-wide artifact list. */
 export const ANCESTOR_PACK_LIMIT = 20;
 
-let _githubFetch = (...args) => globalThis.fetch(...args);
+let _githubFetch = proxyFetch;   // #2188: Node fetch ignores HTTPS_PROXY
 let _githubDelay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
 let _githubRandom = Math.random;
 let _revList = defaultRevList;
@@ -205,7 +206,7 @@ function defaultRevList(sha, limit) {
  * Pass `delay: 0` or `delay: async () => {}` for instant retries; omit / null to restore defaults.
  */
 export function setGithubApiTestHooks({ fetch, delay, random, revList } = {}) {
-  _githubFetch = fetch == null ? (...args) => globalThis.fetch(...args) : fetch;
+  _githubFetch = fetch == null ? proxyFetch : fetch;
   if (delay == null) {
     _githubDelay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
   } else if (typeof delay === "function") {

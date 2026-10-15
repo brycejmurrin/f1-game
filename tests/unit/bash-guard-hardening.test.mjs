@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HOOK = path.join(ROOT, ".claude/hooks/bash-guard.sh");
@@ -743,6 +743,44 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
   assert.ok(new RegExp(g.matcher).test("mcp__github__actions_run_trigger"), "the matcher must route actions_run_trigger through the guard");
+});
+
+// #2182: the hold refused handoff pushes that start no CI (a topic branch with
+// no PR, a draft without run-ci) while the queue was jammed, so a reclaimed
+// container could lose unpushed work. The fake gauge runs the REAL pushVerdict
+// with a faked PR lookup and holds otherwise.
+test("#2182: the push hold lets a push that starts no CI through; a ready PR or run-ci draft still holds", () => {
+  const repo = scratchRepo("hook-push-noci-");
+  try {
+    repo.g("remote", "add", "origin", "https://github.com/brycejmurrin/f1-game.git");
+    repo.g("checkout", "-qb", "cursor/no-pr-1");
+    fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });
+    const real = pathToFileURL(path.join(ROOT, "tools/ci/queue-depth.mjs")).href;
+    fs.writeFileSync(path.join(repo.dir, "tools/ci/queue-depth.mjs"), `import { execSync } from "node:child_process";
+import { pushVerdict } from ${JSON.stringify(real)};
+const PRS = { "cursor/draft-1": [{ number: 1, draft: true, labels: [] }], "cursor/runci-1": [{ number: 2, draft: true, labels: [{ name: "run-ci" }] }],
+  "cursor/ready-1": [{ number: 3, draft: false, labels: [] }] };
+const req = (q) => ({ json: PRS[decodeURIComponent(q).match(/head=brycejmurrin:([^&]+)/)[1]] || [] });
+const i = process.argv.indexOf("--push");
+if (i >= 0) {
+  const p = pushVerdict(process.argv[i + 1], execSync("git branch --show-current", { encoding: "utf8" }).trim(), req);
+  if (p.skip) { console.log(p.line); process.exit(0); }
+}
+console.log("= queue hold (99 Linux jobs in flight / 40, 50 queued, 0 macOS / 5)"); process.exit(1);
+`);
+    const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_PUSH_HOLD: "" } });
+    for (const c of ["git push -u origin cursor/no-pr-1", "git push", "git push origin HEAD", "git push -u origin cursor/draft-1"]) {
+      const r = run(c);
+      assert.equal(r.status, 0, `starts no CI, must pass: ${c} (${r.stderr})`);
+      assert.match(r.stderr, /bash-guard: = queue skip — push starts no CI \((cursor\/no-pr-1: no open PR|cursor\/draft-1: PR #1 is a draft without run-ci)\)/, c);
+    }
+    for (const c of ["git push -u origin cursor/ready-1", "git push origin HEAD:cursor/runci-1", "git push --tags origin",
+      "git push origin cursor/no-pr-1 cursor/ready-1"]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `starts CI or unknown, must hold: ${c} (${r.stderr})`);
+      assert.match(r.stderr, /BLOCKED: = queue hold/);
+    }
+  } finally { repo.rm(); }
 });
 
 test("2026-10-15: git push holds while queue-depth says hold; a silent gauge or APEX_PUSH_HOLD=0 lets it through", () => {
