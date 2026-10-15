@@ -11,7 +11,7 @@
         broadcastCompound, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge,
-        acacia, mountain, circuitKit, addPyramid, groundUnder, terrainYAt } = api;
+        acacia, mountain, circuitKit, addPyramid, groundUnder, terrainYAt, floodMast } = api;
 
       const THORN = [0.24, 0.36, 0.20], THORN_D = [0.19, 0.30, 0.17];
       const GUM = [0.20, 0.34, 0.22];
@@ -507,6 +507,14 @@
           size: [16, 9, 44], modules: 5 });
         circuitKit.hospitality({ id: "kit:kyalami:hospitality-b", frac: 0.976, side: 1, gap: 58,
           size: [16, 9, 40], modules: 4 });
+      }
+      // Pit straight + main grandstand: furniture.lamp is "none"; registered floods
+      // carry the night-race wash (bahrain / catalunya pattern).
+      if (typeof floodMast === "function") {
+        for (const [s, side, gap] of [
+          [0.010, 1, 36], [0.030, 1, 40], [0.985, -1, 30], [0.968, -1, 34],
+          [0.390, -1, 32], [0.410, -1, 36], [0.250, 1, 34],
+        ]) floodMast(K(s), side, gap, { h: 38, cool: true, pool: false, arms: 2 });
       }
       // Kyalami International Convention Centre: a long, low exhibition hall
       // on the estate beside the paddock, on the flat floor beyond the skirt.
