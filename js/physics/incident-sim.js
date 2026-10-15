@@ -411,7 +411,9 @@ const IncidentSim = (function () {
           if (fin(lg.head)) c.head = lg.head;
           if (fin(lg.s)) c.s = lg.s;
           if (fin(lg.x)) c.x = lg.x;
-          if (fin(lg.speed)) c.speed = lg.speed;
+          // lg.speed is Rapier's SIGNED roll: floor it as the settled handback
+          // does, never raw (#2167) — an AI moves on s, so it never reverses.
+          if (fin(lg.speed)) c.speed = Math.max(c.human ? REVERSE_MAX : 0, lg.speed);
           c.vLat = 0; c.yawRateCur = 0;
         }
         _fallbacks++;

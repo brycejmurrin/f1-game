@@ -301,7 +301,7 @@ const DataHub = (function () {
     for (const id in state) {
       const st = state[id];
       if (!st || st.status !== "failed") continue;
-      state[id] = st.node ? { node: st.node, at: st.at, status: "ready", error: null } : null;
+      state[id] = st.node ? { node: st.node, at: st.at, dataAt: st.dataAt, offlineCopy: st.offlineCopy, status: "ready", error: null } : null;
     }
     root.hidden = true;
     openFlag = false;
@@ -364,17 +364,18 @@ const DataHub = (function () {
       contentEl.appendChild(errorBlock(id, st.error, !!st.node));
       if (st.node) {
         contentEl.appendChild(st.node);
-        contentEl.appendChild(footnote(st.at));
+        contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
       }
       contentEl.scrollTop = 0;
       return;
     }
-    if (st && st.node && (Date.now() - st.at) < maxAge) {
+    // A node may say when it goes stale on its own (Schedule: the NEXT race ends).
+    if (st && st.node && (Date.now() - st.at) < maxAge && !(Date.now() >= st.node.nextFlipAt)) {
       // loadTab calls showTab to paint the fresh node; only log reuse on a later visit.
       if (Date.now() - st.at > 1000) Log.info("data", "tab " + id + " cached");
       clear(contentEl);
       contentEl.appendChild(st.node);
-      contentEl.appendChild(footnote(st.at));
+      contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
       contentEl.scrollTop = 0;
       return;
     }
@@ -387,13 +388,20 @@ const DataHub = (function () {
     Log.info("data", "tab " + id + " load");
     clear(contentEl);
     contentEl.appendChild(spinner());
+    const staleApi = typeof F1API !== "undefined" && F1API.staleSince ? F1API : null;   // absent in hand-made test stubs
+    const staleMark = staleApi ? staleApi.staleMark() : 0;
 
     tabDef(id).load().then(function (node) {
       if (gen[id] !== myGen) return;
       Log.info("data", "tab " + id + " done");
+      // A failed refetch that fell back to the API's stored copy: the footnote
+      // dates the copy, not this render (`at` still governs node reuse).
+      const staleAt = staleApi ? staleApi.staleSince(staleMark) : null;
       state[id] = {
         node: node,
         at: Date.now(),
+        dataAt: staleAt,
+        offlineCopy: staleAt != null,
         // Empty is a successful API answer and gets the normal freshness
         // window. Failed is recorded only in the rejection arm below.
         status: node && node.querySelector && node.querySelector(".dh-empty") ? "empty" : "ready",
@@ -411,14 +419,14 @@ const DataHub = (function () {
       // refresh failed rather than pretending there is nothing to show.
       const st = state[id];
       state[id] = st && st.node
-        ? { node: st.node, at: st.at, status: "failed", error: err }
+        ? { node: st.node, at: st.at, dataAt: st.dataAt, offlineCopy: st.offlineCopy, status: "failed", error: err }
         : { node: null, at: 0, status: "failed", error: err };
       if (openFlag && active === id) {
         clear(contentEl);
         contentEl.appendChild(errorBlock(id, err, !!(st && st.node)));
         if (st && st.node) {
           contentEl.appendChild(st.node);
-          contentEl.appendChild(footnote(st.at));
+          contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
         }
       }
       // Keep the failed state even without a stale node. Switching away and
@@ -480,13 +488,13 @@ const DataHub = (function () {
     return w;
   }
 
-  function footnote(at) {
+  function footnote(at, offlineCopy) {
     const mins = Math.floor((Date.now() - at) / MINUTE);
     let txt;
     if (mins < 1) txt = "updated just now";
     else if (mins < 60) txt = "updated " + mins + "m ago";
     else txt = "updated " + Math.floor(mins / 60) + "h " + (mins % 60) + "m ago";
-    if (navigator.onLine === false) txt += " · offline copy";
+    if (offlineCopy || navigator.onLine === false) txt += " · offline copy";
     return el("div", "dh-footnote", txt);
   }
 

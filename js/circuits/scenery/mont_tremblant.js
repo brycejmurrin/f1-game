@@ -6,28 +6,33 @@
    3-7 m behind it is the DEFAULT everywhere; the built structures are the
    exceptions and each one is named by a §4 row.
 
-   Block -> brief row:
+   Block -> row. FRAMES: every frac below is AUTHORED (engine frac = authored +
+   _sceneryShift 0.2834; the sl() blocks are the exception, keyed to the start
+   line). The rows are keyed to the BUILT corners and crests, measured with
+   TrackSpace.sceneryNode + curvature + the Y profile (survey fix, mont_tremblant
+   cursor/mont_tremblant-fix-a1): the brief's s column is the brief's own
+   numbering, not a frac on this centreline.
      1  palette + helpers                      —
-     2  continuous armco, both sides           rows 0.090 0.330 0.412 0.456 0.626
-     3  default forest wall (the run-off)      rows 0.090 0.255 0.330 0.456 0.503 0.626
-     4  depth behind the wall (3 bands)        rows 0.090 0.330  (§6 enclosure)
-     5  bulk forestEdge runs                   rows 0.020 0.330 0.776 0.897
+     2  continuous armco, both sides           rows 0.115 0.335 0.412 0.456 0.550
+     3  default forest wall (the run-off)      rows 0.090 0.255 0.456 0.503 0.550
+     4  depth behind the wall (3 bands)        rows 0.090 0.115  (§6 enclosure)
+     5  bulk forestEdge runs — REMOVED         (coplanar fights; block 3-4 ranks carry it)
      6  esses cutting / green tunnel           row  0.205
-     7  ski mountain + wooded ridges (skyline) rows 0.150 0.560
+     7  ski mountain + wooded ridges (skyline) rows 0.150 0.335
      8  paddock: garages, motorhomes, tower   row  0.005
      9  start-line open grandstand             row  0.020
-    10  Turn 1 on the crest                    row  0.181
+    10  Turn 1 on the crest (racing 0.059)     row  0.776
     11  esses exit, gravel spill               row  0.255
     12  T4 apex + spectator bank               row  0.412
     13  T5 outside, hardwood run-off           row  0.456
     13b Lac Ouimet (SE outfield water sheet)   fracs 0.40-0.52 −1
     14  the Carousel                           row  0.503
-    15  back straight / the Hump crest         row  0.560
-    16  T8-T9 climbing 90s                     row  0.626
-    17  the Bridge (required modelGroup)       row  0.776
-    18  Namerow hairpin                        row  0.836
-    19  Paddock Bend onto the pit straight     row  0.897
-    20  marshal posts around the lap           rows 0.181 0.255 0.330 0.503 0.626 0.836
+    15  back straight / the Hump crest         row  0.323 (the lap's biggest crest, racing 0.6065)
+    16  T8-T9 climbing 90s                     row  0.542
+    17  the Bridge (overheadSpan deck)         row  0.589
+    18  Namerow, the R16 uphill hairpin        row  0.615 (racing 0.8983, lap high Y 22.6)
+    19  Paddock Bend onto the pit straight     row  0.658 (racing 0.941, the last corner)
+    20  marshal posts around the lap           rows 0.115 0.255 0.323 0.503 0.542 0.615 0.776
 
    Season is NOT baked in: everything wooded is deep summer green and the
    lighting presets carry the autumn this place is famous for.
@@ -45,7 +50,7 @@
         pine, tree, bush, forestEdge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
         motorhome, groundPatch, ridge, mountain, terrainYAt, addBox,
-        indexSolid, waterBand } = api;
+        indexSolid, waterBand, overheadSpan } = api;
 
       // ---------------------------------------------------------------- 1.
       // PALETTE + HELPERS. Deep summer green; the presets do the season.
@@ -161,13 +166,13 @@
 
       // ---------------------------------------------------------------- 2.
       // ARMCO. Continuous, both sides, the whole lap — there is nothing else
-      // between a mistake and the trunks. (rows 0.090 / 0.330 / 0.456)
+      // between a mistake and the trunks. (rows 0.090 / 0.115 / 0.456)
       for (const side of [-1, 1]) guardrail(0.0, 1.0, side, RAIL, ARMCO);
       // Doubled rail through the fastest, most exposed stretches.
-      guardrail(0.300, 0.360, -1, RAIL + 1.6, ARMCO);   // downhill sweep, row 0.330
-      guardrail(0.545, 0.600, -1, RAIL + 1.6, ARMCO);   // back straight, row 0.560
-      guardrail(0.610, 0.660, 1, RAIL + 1.4, ARMCO);    // climbing 90s, row 0.626
-      guardrail(0.820, 0.858, -1, RAIL + 1.5, ARMCO);   // Namerow, row 0.836
+      guardrail(0.085, 0.150, -1, RAIL + 1.6, ARMCO);   // downhill sweep, row 0.115 (racing 0.35-0.43)
+      guardrail(0.300, 0.350, -1, RAIL + 1.6, ARMCO);   // back straight over the Hump, row 0.323
+      guardrail(0.520, 0.570, 1, RAIL + 1.4, ARMCO);    // climbing 90s, row 0.542
+      guardrail(0.601, 0.633, -1, RAIL + 1.5, ARMCO);   // Namerow, row 0.615
 
       // ---------------------------------------------------------------- 3.
       // THE FOREST WALL — the default dressing everywhere the table is silent.
@@ -178,9 +183,9 @@
         [0.700, 0.760, 1],                      // paddock via sl() (racing start)
         [0.012, 0.034, -1],                     // start-line stand, row 0.020
         [0.700, 0.760, -1],                     // start-line stand via sl()
-        [0.885, 0.930, 1],                      // Paddock Bend stand, row 0.897
+        [0.640, 0.690, 1],                      // Paddock Bend stand, row 0.658
         [0.400, 0.425, 1],                      // T4 spectator bank, row 0.412
-        [0.828, 0.848, -1],                     // Namerow bank, row 0.836
+        [0.605, 0.625, -1],                     // Namerow bank, row 0.615
       ];
       const blocked = (k, side) => {
         const f = k / n;
@@ -207,7 +212,7 @@
           // Lac Ouimet / carousel outfield owns this strip.
           if (side === -1 && within(k, 0.390, 0.536)) continue;
           // T8-T9 climbing 90s owns its own pine ranks.
-          if (within(k, 0.608, 0.668)) continue;
+          if (within(k, 0.538, 0.574)) continue;
           const base = CAM_NEAR + hash(k * 13 + (side + 2) * 91) * 4; // 20-24 m
           // Hot infield: thinner (2 ranks) — no reseed. Orbit ring skipped on
           // ALL +1 (not only hot): wall + Band A otherwise stack canopies.
@@ -264,15 +269,34 @@
       // Three bands, each stepping back, lighter and taller, all in pine and
       // ridge so the depth is free in prop verts (see COST MODEL above).
 
+      // NEAR rank: trunks at arm's length behind the armco on the OUTFIELD (-1)
+      // only — the brief's identity (rows 0.090 / 0.115). The infield stays
+      // clear (blocksOrbitView keeps the orbit/eye wedge open) and every
+      // built row keeps its own room. Tri-neutral: Band B below gives up the
+      // same number of canopy pines.
+      every(10, (k) => {
+        if (blocked(k, -1)) return;
+        if (within(k, 0.390, 0.536) || within(k, 0.299, 0.347)) return;   // lake strip, the Hump
+        if (within(k, 0.196, 0.252) || within(k, 0.765, 0.791)) return;   // esses cutting, T1 inside
+        if (within(k, 0.574, 0.645)) return;                              // Bridge abutments, Namerow bank + fence
+        const h = hash(k * 331 + 17);
+        if (h < 0.62) return;
+        const dist = 9 + h * 5;
+        const a = anchor(k, -1, dist);
+        if (onTrack(a.c[0], a.c[2], 5.0)) return;
+        if (minEdge(a.c[0], a.c[2]) < dist * 0.85) return;
+        pine(k, -1, dist, 14 + h * 8, h < 0.75 ? PINE : PINE2);
+      });
+
       // Band A, 22-50 m: the body of the wood, still legible as trunks.
       every(11, (k) => {
         for (const side of [-1, 1]) {
           if (blocked(k, side)) continue;
-          // Row 0.560: the outfield over the Hump is the ONE place the lap
+          // Row 0.323: the outfield over the Hump is the ONE place the lap
           // breathes — block 15 sets the treeline there and this band keeps off.
-          if (side === -1 && within(k, 0.546, 0.598)) continue;
+          if (side === -1 && within(k, 0.299, 0.347)) continue;
           if (side === -1 && within(k, 0.390, 0.536)) continue;
-          if (within(k, 0.608, 0.668)) continue;
+          if (within(k, 0.538, 0.574)) continue;
           const h = hash(k * 53 + (side + 2) * 17);
           if (h < 0.09) continue;
           const hot = side === 1 && camHot(k);
@@ -303,7 +327,7 @@
           if (side === -1 && within(k, 0.390, 0.530)) continue;
           const h = hash(k * 131 + (side + 2) * 37);
           if (h < 0.10) continue;
-          for (let r = 0; r < 3; r++) {
+          for (let r = 0; r < 2; r++) {
             const g = hash(k * 191 + r * 59 + (side + 2) * 13);
             if (g < 0.15) continue;
             const dist = 62 + r * 24 + g * 18; // past orbit wedge on hot +1
@@ -339,14 +363,12 @@
       }
 
       // ---------------------------------------------------------------- 5.
-      // BULK FOREST EDGE. Named by the brief where the treeline must read as
-      // continuous and unbroken: it closes the moment the start stand ends
-      // (row 0.020), runs the whole downhill sweep with nothing built at all
-      // (row 0.330), walks up to both Bridge abutments (row 0.776), and holds
-      // the outfield to the line past Paddock Bend (row 0.897).
-      // forestEdge removed: coplanar-audit still found fold fights with −1
-      // edges at ≥48 m (pine×pine same-facing). Depth comes from the ranked
-      // wall + bands A/B instead.
+      // BULK FOREST EDGE — NOT EMITTED. The brief asks for an unbroken treeline
+      // after the start stand (row 0.020), down the whole sweep (row 0.115),
+      // up to both Bridge abutments (row 0.589) and past Paddock Bend (row 0.658).
+      // forestEdge was removed: coplanar-audit found fold fights with −1
+      // edges at ≥48 m (pine×pine same-facing). Those rows are carried by the
+      // ranked wall (block 3), the NEAR rank below and bands A/B instead.
 
       // ---------------------------------------------------------------- 6.
       // THE CUTTING AND THE ESSES (T2-T3, row 0.205). Earth banks either side,
@@ -372,9 +394,11 @@
           const a = anchor(k, side, 7.5 + h * 3.2);
           const y = terrainYAt(a.c[0], a.c[2]);
           if (y === null) continue;
-          addBox(out, [a.c[0], y + 1.1 + h * 1.4, a.c[2]],
-                 [2.6 + h * 2.2, 2.4 + h * 2.6, 5.0 + h * 4.0],
-                 h < 0.5 ? ROCK : ROCK2, [a.r, a.u, a.t]);
+          // Low, wide slabs sunk into the bank (the tall 2.4-5 m boxes read as
+          // loose primitives on the dirt, survey #04), in the bank's own tones.
+          addBox(out, [a.c[0], y + 0.55 + h * 0.5, a.c[2]],
+                 [2.6 + h * 2.2, 1.3 + h * 1.0, 5.0 + h * 4.0],
+                 h < 0.5 ? ROCK2 : [0.34, 0.31, 0.26], [a.r, a.u, a.t]);
         }
       }
       // every(13) and CAM_NEAR out: past the chase corridor, not on the rail.
@@ -423,7 +447,7 @@
       }
 
       // ---------------------------------------------------------------- 7.
-      // THE SKI MOUNTAIN (rows 0.150 and 0.560). Skyline, not roadside: world
+      // THE SKI MOUNTAIN (rows 0.150 and 0.323). Skyline, not roadside: world
       // x/z taken far off the infield shoulder so the mass sits over the crest
       // before Turn 1 and shows again above the treeline off the back straight.
       // The massif is not a cone — a summit, a lower north shoulder, and the
@@ -452,13 +476,13 @@
       // colour break goes on a layer that is genuinely in front of it.)
       ridgeAt(K(0.138), 1, 900, 540, 210, 155, TRAIL, -6);
       ridgeAt(K(0.168), 1, 1010, 430, 180, 190, HILL2, -6);
-      // And the same mass read from the back straight (row 0.560), where the
+      // And the same mass read from the back straight (row 0.323), where the
       // trees pull back and the lap finally breathes.
-      const bk = K(0.560);
+      const bk = K(0.323);
       const bfar = anchor(bk, -1, 1600).c;
       mountain(bfar[0], bfar[2], terrainYAt(bfar[0], bfar[2]) - 25, 1700, 470, {});
       for (let i = 0; i < 5; i++) {
-        const k = K(0.534 + i * 0.020);
+        const k = K(0.297 + i * 0.020);
         const h = hash(i * 617);
         ridgeAt(k, -1, 430 + i * 130, 380 + h * 140, 130 + h * 60,
                 52 + i * 11 + h * 26, i < 2 ? HILL : (i < 4 ? HILL2 : HAZE), -5);
@@ -487,20 +511,19 @@
       building(K(sl(0.005)), 1, 14, 15, 7.5, 118, { wall: CONC, roof: ROOF, floor: 2, window: WIN });
       groundPatch(K(sl(0.005)), 1, 26, [52, 0.35, 96], [0.31, 0.31, 0.33]);
       // Hand-seated vans on terrainY (motorhome() sank 0.4–0.5 m into the grade).
-      for (const [sf, gap, w, h, d, wall] of [
-        [sl(0.996), 56, 9, 3.8, 13, VAN_A],
-        [sl(0.016), 56, 9, 3.8, 12, VAN_B],
-      ]) {
+      const seatVan = (sf, gap, w, h, d, wall) => {
         const a0 = anchor(K(sf), 1, gap);
         const gy = terrainYAt(a0.c[0], a0.c[2]);
-        if (gy == null || onTrack(a0.c[0], a0.c[2], 4)) continue;
+        if (gy == null || onTrack(a0.c[0], a0.c[2], 4)) return;
         const a = { c: [a0.c[0], gy, a0.c[2]], r: a0.r, u: a0.u, t: a0.t };
         const b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, h * 0.28), [w, h * 0.56, d], wall, b);
         addBox(out, vadd(a.c, a.u, h * 0.78), [w * 0.86, h * 0.44, d * 0.90], wall, b);
         addBox(out, vadd(vadd(a.c, a.r, -1 * (w / 2 + 0.02)), a.u, h * 0.35),
                [0.05, h * 0.18, d * 0.82], GLASS, b);
-      }
+      };
+      seatVan(sl(0.996), 56, 9, 3.8, 13, VAN_A);
+      seatVan(sl(0.016), 56, 9, 3.8, 12, VAN_B);
       cameraTower(K(sl(0.042)), 1, 16, {});
       fence(sl(0.975), sl(0.062), 1, 11, 2.4, [0.62, 0.64, 0.66]);
       {
@@ -574,22 +597,16 @@
       });
 
       // --------------------------------------------------------------- 10.
-      // TURN 1, apex on the crest (row 0.181). Marshal post and a short tyre
-      // wall inside; the billboard stays LOW so the blind downhill exit is not
-      // given away from the approach.
-      marshalPost(K(0.175), 1, 6);
-      tyreWall(0.176, 0.190, 1, 5, TYRE);
-      billboard(K(0.170), 1, 8, 6, 1.8, [0.18, 0.34, 0.72]);
-      // Nothing tall on the crest itself: the exit stays blind. Scrub only.
-      every(9, (k) => {
-        if (!within(k, 0.178, 0.196)) return;
-        const h = hash(k * 233);
-        if (h < 0.45) return;
-        const d = 5.0 + h * 2.0;
-        const a = anchor(k, 1, d);
-        if (onTrack(a.c[0], a.c[2], 2.0)) return;
-        bush(k, 1, d, h > 0.78 ? FERN : SCRUB);
-      });
+      // TURN 1, apex on the crest (row 0.776 = racing 0.0592, the L29 left at the
+      // top of the pit-straight rise: Y 19.8, falling 1-4 % beyond it — MEASURED,
+      // the old row 0.181 landed on the lap's lowest point). The inside of a LEFT
+      // is -1. Marshal post and a short tyre wall inside; the billboard stays LOW
+      // so the blind downhill exit is not given away from the approach.
+      marshalPost(K(0.770), -1, 6);
+      tyreWall(0.771, 0.786, -1, 5, TYRE);
+      billboard(K(0.765), -1, 8, 6, 1.8, [0.18, 0.34, 0.72]);
+      // Nothing tall on the crest itself: the exit stays blind. (Scrub there clipped
+      // the wall's own undergrowth by 1.1 m, so the apex is left to the tyre wall.)
 
       // --------------------------------------------------------------- 11.
       // ESSES EXIT (row 0.255). Dirt and gravel spill on the inside where cars
@@ -688,14 +705,16 @@
       });
 
       // --------------------------------------------------------------- 15.
-      // BACK STRAIGHT OVER THE HUMP (row 0.560). The one place the lap
+      // BACK STRAIGHT OVER THE HUMP (row 0.323 = racing 0.6065: the lap's biggest
+      // crest, 4.2 m of prominence on the 428 m straight; the old row 0.560 sat on
+      // a smooth R276 rise with no crest). The one place the lap
       // breathes: the trees pull back to ~22 m on the outfield so the ridge
       // and the mountain show above the treeline before the forest closes in.
       // RacingCircuits.info: the 1965 extension "featured … a huge elevation
       // change, known as 'The Hump', at around its midpoint." Landmark is a
       // low crest cabin + viewing lip — not a grandstand (club circuit).
       every(14, (k) => {
-        if (!within(k, 0.548, 0.596)) return;
+        if (!within(k, 0.299, 0.347)) return;
         const h = hash(k * 73);
         const dist = 22 + h * 12;
         const a = anchor(k, -1, dist);
@@ -704,9 +723,9 @@
         pine(k, -1, dist, 13 + h * 9, PINE2);
         if (h > 0.7) bush(k, -1, dist - 9, SCRUB);
       });
-      marshalPost(K(0.572), -1, 24);
+      marshalPost(K(0.347), -1, 24);
       {
-        const a0 = anchor(K(0.560), -1, 28);
+        const a0 = anchor(K(0.323), -1, 28);
         const gy = terrainYAt(a0.c[0], a0.c[2]);
         const a = {
           c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
@@ -735,14 +754,16 @@
       }
 
       // --------------------------------------------------------------- 16.
-      // T8-T9, the 90s climbing back up the hillside (row 0.626). Armco,
-      // marshal post, tyre wall on the inside of the tighter one, pine packed
-      // hard behind both rails.
-      marshalPost(K(0.620), 1, 7);
-      tyreWall(0.632, 0.646, 1, 5, TYRE);
-      marshalPost(K(0.650), 1, 7);
+      // T8-T9, the right-hand bends climbing the hillside (row 0.542 = racing
+      // 0.8251, R89, then 0.817 R100: the slow climbing rights between the Carousel
+      // and the hairpin, Y 17-19 at 1.5-2 % grade; the old row 0.626 sat on the
+      // R41 exit of the Namerow hairpin). Armco, marshal post, tyre wall on the
+      // inside (+1, a right), pine packed hard behind both rails.
+      marshalPost(K(0.536), 1, 7);
+      tyreWall(0.548, 0.562, 1, 5, TYRE);
+      marshalPost(K(0.566), 1, 7);
       every(12, (k) => {
-        if (!within(k, 0.608, 0.658)) return;
+        if (!within(k, 0.538, 0.574)) return;
         for (const side of [-1, 1]) {
           const h = hash(k * 83 + (side + 2) * 29);
           const dist = CAM_NEAR + 2.6 + h * 4.5 + (side > 0 ? 1.7 : 0);
@@ -755,20 +776,23 @@
       });
 
       // --------------------------------------------------------------- 17.
-      // THE BRIDGE (row 0.776). A service crossing: two squat abutments either
-      // side of the rail with the deck spanning between them
-      // (racingcircuits.info: "under a bridge" before the climb to Namerow;
-      // speedtherapy.com track notes: Turn 12 "The Bridge"). Deck stays as
-      // over-road boxes (a spanning modelGroup is footprint-rejected); the
-      // required landmark is the outfield abutment marker.
+      // THE BRIDGE (row 0.589 = racing 0.872, the gentle R320-510 climb 120 m
+      // before the Namerow hairpin: "under a bridge" before the climb to Namerow,
+      // racingcircuits.info; speedtherapy.com track notes: Turn 12 "The Bridge").
+      // The old row 0.776 shared T1's corner. Two squat abutments either side of
+      // the rail with the deck spanning between them. The deck is an
+      // overheadSpan(): the engine drops a raw over-road addBox as a prop over
+      // the tarmac (the 34 m deck never rendered), and overheadSpan is the
+      // sanctioned cross-track span (clearance >= 4.8 m, support-footprint check).
+      // The required landmark is the outfield abutment marker.
       {
-        const BR = K(0.776);
+        const BR = K(0.589);
         building(BR, 1, 7.5, 9, 6.5, 14, { wall: CONC, roof: ROOF });
         building(BR, -1, 7.5, 9, 6.5, 14, { wall: CONC, roof: ROOF });
-        const bdk = overRoad(BR, 7.2);
-        addBox(out, bdk.c, [34, 1.8, 8.0], CONC, bdk.b);
-        const bp = overRoad(BR, 8.7);
-        addBox(out, bp.c, [34, 1.0, 8.8], ROOF, bp.b);
+        overheadSpan({
+          id: "tremblant-bridge-deck", frac: 0.589, clearance: 6.2, thickness: 1.8,
+          depth: 8.0, span: 28, supportGap: 2.5, color: CONC, supportColor: ROCK,
+        });
         for (const side of [-1, 1]) {
           for (const j of [-1, 1]) {
             for (let i = 0; i < 2; i++) {
@@ -804,24 +828,28 @@
           }, { required: true });
         }
       }
-      guardrail(0.762, 0.792, 1, 3.0, ARMCO);
-      guardrail(0.762, 0.792, -1, 3.0, ARMCO);
-      marshalPost(K(0.766), 1, 9);
+      guardrail(0.576, 0.600, 1, 3.0, ARMCO);
+      guardrail(0.576, 0.600, -1, 3.0, ARMCO);
+      marshalPost(K(0.580), 1, 9);
 
       // --------------------------------------------------------------- 18.
-      // NAMEROW, the uphill hairpin (row 0.836). Named for Norm Namerow
+      // NAMEROW, the uphill hairpin (row 0.615 = racing 0.8983: the R16 right at
+      // the lap's high point, Y 22.6, then the dive to Paddock Bend — MEASURED;
+      // the old row 0.836 sat on a falling R80 bend and left this corner bare).
+      // The outside of a right is -1, and the hairpin's inside is only 9 m deep,
+      // so every prop here stays on the outside. Named for Norm Namerow
       // (cmhf.ca/norm-namerow; racingcircuits.info: "challenging uphill
       // Namerow hairpin"). Speedtherapy track notes: Turn 14, slowest point,
       // then dive downhill toward Paddock Bend. Tyre wall and marshal post on
       // the outside, spectator bank above; required marker on the outside bank.
-      tyreWall(0.828, 0.848, -1, 5, TYRE);
-      marshalPost(K(0.832), -1, 9);
-      spectatorHill(0.826, 0.852, -1, 15, {
+      tyreWall(0.605, 0.625, -1, 5, TYRE);
+      marshalPost(K(0.609), -1, 9);
+      spectatorHill(0.603, 0.629, -1, 15, {
         rows: 4, rise: 1.2, depth: 2.0, density: 0.40, step: 9, grass: SCRUB,
       });
-      fence(0.824, 0.854, -1, 8.5, 2.2, [0.62, 0.64, 0.66]);  // below the bank
+      fence(0.601, 0.631, -1, 8.5, 2.2, [0.62, 0.64, 0.66]);  // below the bank
       {
-        const a0 = anchor(K(0.836), -1, 18);
+        const a0 = anchor(K(0.615), -1, 18);
         const gy = terrainYAt(a0.c[0], a0.c[2]);
         const a = {
           c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
@@ -848,7 +876,7 @@
         }
       }
       every(9, (k) => {
-        if (!within(k, 0.820, 0.860)) return;
+        if (!within(k, 0.597, 0.637)) return;
         const h = hash(k * 89);
         const dist = 32 + h * 12;
         const a = anchor(k, -1, dist);
@@ -866,7 +894,7 @@
       // Depth over the top of the bank, so the hairpin is framed by wood and
       // not by sky: two more ranks stepping back from the spectators.
       every(12, (k) => {
-        if (!within(k, 0.814, 0.866)) return;
+        if (!within(k, 0.591, 0.643)) return;
         const h = hash(k * 269 + 5);
         for (let r = 0; r < 2; r++) {
           const dist = 54 + r * 17 + h * 12;
@@ -878,14 +906,16 @@
       });
 
       // --------------------------------------------------------------- 19.
-      // PADDOCK BEND onto the pit straight (row 0.897). RacingCircuits.info +
+      // PADDOCK BEND onto the pit straight (row 0.658 = racing 0.941: the L42
+      // left that is the lap's LAST corner, after the Namerow dive; the old row
+      // 0.897 sat on the L23 at racing 0.18). RacingCircuits.info +
       // speedtherapy Turn 15: the final sweep back to the start. Paddock-side
       // stand kept as grandstandEx (positive rake); required fascia marker
       // names the bend. Outfield stays forest right to the line (§4).
-      grandstandEx(0.897, 1, 12, 72, null, null,
+      grandstandEx(0.658, 1, 12, 72, null, null,
         { livery: "concrete", roof: "cantilever", endWalls: true });
       {
-        const a0 = anchor(K(0.897), 1, 18);
+        const a0 = anchor(K(0.658), 1, 18);
         const gy = terrainYAt(a0.c[0], a0.c[2]);
         const a = {
           c: [a0.c[0], (gy == null ? a0.c[1] : gy), a0.c[2]],
@@ -906,14 +936,14 @@
           }, { required: true });
         }
       }
-      fence(0.884, 0.934, 1, 8, 2.4, [0.62, 0.64, 0.66]);
-      motorhome(K(0.906), 1, 32, 10, 4.2, 14, { wall: VAN_B, window: GLASS });
-      motorhome(K(0.918), 1, 32, 10, 4.2, 14, { wall: VAN_A, window: GLASS });
-      billboard(K(0.934), 1, 11, 9, 3, [0.82, 0.20, 0.14]);
-      cameraTower(K(0.890), 1, 13, {});
+      fence(0.645, 0.688, 1, 8, 2.4, [0.62, 0.64, 0.66]);
+      seatVan(0.667, 32, 10, 4.2, 14, VAN_B);   // hand-seated: motorhome() sank 0.4 m into this grade
+      seatVan(0.679, 32, 10, 4.2, 14, VAN_A);
+      billboard(K(0.684), 1, 11, 9, 3, [0.82, 0.20, 0.14]);
+      cameraTower(K(0.651), 1, 13, {});
       // ...and spruce closing behind the paddock enclosure again.
       every(12, (k) => {
-        if (!within(k, 0.880, 0.936)) return;
+        if (!within(k, 0.641, 0.688)) return;
         const h = hash(k * 307 + 9);
         for (let r = 0; r < 2; r++) {
           const dist = 46 + r * 16 + h * 11;
@@ -926,9 +956,9 @@
 
       // --------------------------------------------------------------- 20.
       // MARSHAL POSTS. The only man-made punctuation for several hundred
-      // metres through the fast downhill sweep (row 0.330), plus a sparse ring
+      // metres through the fast downhill sweep (row 0.115), plus a sparse ring
       // elsewhere so the lap is always covered.
-      for (const s of [0.306, 0.330, 0.354, 0.378]) marshalPost(K(s), -1, 6);
+      for (const s of [0.085, 0.109, 0.133, 0.157]) marshalPost(K(s), -1, 6);
       for (const s of [0.062, 0.120, 0.220, 0.446, 0.700, 0.740, 0.870, 0.960])
         marshalPost(K(s), 1, 8);
   };
