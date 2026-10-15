@@ -7,7 +7,10 @@
 /* 760 left a maximised desktop with a postcard of DISPLAY and a native
    white gutter. Career hub is 1020; match that cap and hide the native
    bar so only the themed .sf-scroll thumb (ScrollFade) remains. */
-#pmsettings { --sheet-w: min(1020px, calc(100 * var(--vwz) - var(--pad) * 2)); }
+#pmsettings {
+  /* .screen pads with --safe-*; cap width to the usable box, not raw vw. */
+  --sheet-w: min(1020px, calc(var(--safe-w) - var(--pad) * 2));
+}
 #pmsettings-inner {
   --fit-at: 300px;
   --compact-at: 480px;

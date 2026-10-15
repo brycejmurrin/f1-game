@@ -129,6 +129,20 @@ async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
 }
 
 /** Touch: fitHud + sectors/BOOST clearance before box probes (CI parallel load). */
+async function waitTowerClearsGaps(page, timeoutMs = 30_000) {
+  await page.waitForFunction(() => {
+    const top = document.querySelector(".hud-top");
+    const gaps = document.querySelector(".hud-gaps");
+    if (!top || !gaps || top.hidden || gaps.hidden) return true;
+    const tr = top.getBoundingClientRect();
+    const gr = gaps.getBoundingClientRect();
+    if (!(tr.width > 0 && gr.width > 0)) return true;
+    const hit = tr.left < gr.right - 0.5 && gr.left < tr.right - 0.5
+      && tr.top < gr.bottom - 0.5 && gr.top < tr.bottom - 0.5;
+    return !hit;
+  }, null, { polling: 100, timeout: timeoutMs });
+}
+
 async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
   await page.waitForFunction(async () => {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -156,6 +170,10 @@ async function race(page, steer, manual, ins, opts) {
   await page.evaluate(([s, m, prof, lay, hudSc, btnSc]) => {
     localStorage.setItem("apex26.steerMode", JSON.stringify(s));
     localStorage.setItem("apex26.manual", JSON.stringify(m));
+    // Race-radio card life grew with #1802; silence chatter so fitHud is not
+    // still chasing a live banner while this spec measures static geometry.
+    localStorage.setItem("apex26.radioChat", JSON.stringify("off"));
+    localStorage.setItem("apex26.commentary", JSON.stringify("off"));
     // THE PROFILE IS A BOOT KEY. Every case below used the DEFAULT profile on a
     // chase camera, so the whole broadcast layout — which re-anchors `.hud-top`
     // from centre to the top-LEFT corner, into #minimap's own slot — was never
@@ -266,6 +284,15 @@ async function race(page, steer, manual, ins, opts) {
         };
         if (hit(sec) || hit(document.querySelector(".hud-top"))) return false;
       }
+      const top = document.querySelector(".hud-top");
+      const gaps = document.querySelector(".hud-gaps");
+      if (top && gaps && top.getBoundingClientRect().width > 0 && gaps.getBoundingClientRect().width > 0) {
+        const tr = top.getBoundingClientRect();
+        const gr = gaps.getBoundingClientRect();
+        const towerGaps = tr.left < gr.right - 0.5 && gr.left < tr.right - 0.5
+          && tr.top < gr.bottom - 0.5 && gr.top < tr.bottom - 0.5;
+        if (towerGaps) return false;
+      }
       // Notch safe box: a mid-fit #minimap / #hud-sectors can sit under --sal
       // for one tick. Require both inside the injected safe insets.
       const sal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sal")) || 0;
@@ -294,6 +321,7 @@ const measure = async (page, ctrl, hud, W, H, ins) => {
   });
   await waitPhoneHudFitClearance(page);
   await waitTouchSectorsClearBoost(page);
+  await waitTowerClearsGaps(page);
   await page.waitForFunction(() => {
     const ann = document.getElementById("announce");
     const sectors = document.getElementById("hud-sectors");
@@ -868,8 +896,9 @@ for (const v of [
 // PORTRAIT RADIO CARD (race-anyway). Every dock group is 0px tall here, so
 // announceLane publishes no lane; `left: calc(var(--announce-lane-x) / …)`
 // with no fallback went invalid-at-computed-value-time (`auto`), and the -50%
-// shift parked the card at x -72..72 on 390x844, over #minimap. The fallback
-// in css/hud.css centres it.
+// shift parked the card at x -72..72 on 390x844, over #minimap. Landscape
+// still centres (50% / -50%). Portrait pins the left edge past the map
+// column (34% / 0%) so HUD 150% on 390 clears #minimap.
 test.describe("portrait radio card (phone-portrait-390)", () => {
   test.setTimeout(300_000);
   const v = { name: "phone-portrait-390", w: 390, h: 844, sal: 0, sar: 0, sat: 47, sab: 34 };
@@ -894,6 +923,11 @@ test.describe("portrait radio card (phone-portrait-390)", () => {
           ann.hidden = false;
           ann.removeAttribute("data-lane-collapsed");
         }
+        // Measure the unpublished-lane fallback the player gets on portrait
+        // (no dock groups). A leftover hud-radio-top / data-radio-corner from
+        // race() would hide the 150% × map overlap Pages 38622878195 hit.
+        document.body.classList.remove("hud-radio-top");
+        if (document.body.removeAttribute) document.body.removeAttribute("data-radio-corner");
         const root = document.documentElement;
         for (const k of ["--announce-lane-w", "--announce-lane-x", "--announce-lane-shift"]) {
           root.style.removeProperty(k);
