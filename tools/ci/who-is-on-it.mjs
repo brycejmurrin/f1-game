@@ -59,6 +59,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const DEPLOY = "claude/f1-game-project-26h3ng";
+const REPO_SLUG = process.env.GITHUB_REPOSITORY || "brycejmurrin/f1-game";
 export const CLAIMS_PREFIX = "claude/claims/";
 export const RELEASED = "released";
 export const STALE_MIN = 120;
@@ -247,6 +248,19 @@ export function currentBranch() {
   return git("rev-parse", "--abbrev-ref", "HEAD").trim();
 }
 
+/** Ask Actions to run fleet.yml now, so a claim naming `#n` labels the issue in
+ *  a minute instead of at the next hourly run. A push to claude/claims-board
+ *  cannot trigger it: GitHub runs a push-triggered workflow from the PUSHED
+ *  commit's tree, and the board's tree holds claim files, not .github/
+ *  (found by a live claim of #1518, 2026-10-14). REST workflow_dispatch works
+ *  from agent containers; best effort — no gh, no token or a refusal only
+ *  means the hourly run picks the claim up. */
+export function pokeFleetBoard(run = spawnSync) {
+  const r = run("gh", ["api", "-X", "POST", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/dispatches`, "-f", `ref=${DEPLOY}`],
+    { cwd: ROOT, encoding: "utf8", timeout: 20000 });
+  return r.status === 0 ? "dispatched" : "not dispatched (the hourly run will pick it up)";
+}
+
 function pushClaim(text, branch, session) {
   const slug = claimSlug(branch, session);
   const who = git("config", "user.name").trim() || "apex26 claim";
@@ -292,6 +306,7 @@ export function main(argv = process.argv.slice(2)) {
   if (claim || release) {
     if (!branch || branch === "HEAD") { console.error("who-is-on-it: not on a branch, nothing to claim"); return 1; }
     claimed = { action: release ? "release" : "claim", ...pushClaim(release ? RELEASED : claim, branch, session) };
+    if (claimed.ok) claimed.board = pokeFleetBoard();
   }
 
   // Branch metadata from the commits-only mirror; the board into the checkout
@@ -347,7 +362,7 @@ export function main(argv = process.argv.slice(2)) {
     return 0;
   }
   if (claimed) {
-    console.log(claimed.ok ? `# ${claimed.action === "release" ? "released" : "claimed"} ${claimed.ref} @ ${claimed.sha}`
+    console.log(claimed.ok ? `# ${claimed.action === "release" ? "released" : "claimed"} ${claimed.ref} @ ${claimed.sha} — fleet board ${claimed.board}`
                            : `# ${claimed.action} FAILED for ${claimed.ref}: ${claimed.err}`);
   }
   console.log(`# who is on it — remote branches with a commit in the last ${hours} h${fetched ? "" : " (NOT fetched: --no-fetch or offline)"}`);
