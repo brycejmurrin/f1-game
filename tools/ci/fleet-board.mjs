@@ -103,7 +103,12 @@ export function readLabels(root = ROOT) {
   const list = JSON.parse(fs.readFileSync(path.join(root, ".github/labels.json"), "utf8"));
   for (const l of list) {
     if (!/^[0-9a-f]{6}$/i.test(l.color || "")) throw new Error(`label ${l.name}: color must be 6 hex digits`);
-    if (!l.name || !l.description) throw new Error(`label ${JSON.stringify(l)}: name and description required`);
+    if (typeof l.name !== "string" || !l.name || typeof l.description !== "string" || !l.description)
+      throw new Error(`label ${JSON.stringify(l)}: name and description must be non-empty strings`);
+    for (const [field, max] of [["name", 50], ["description", 100]]) {
+      const length = Array.from(l[field]).length;
+      if (length > max) throw new Error(`label ${JSON.stringify(l.name)}: ${field} must be ${max} characters or fewer (got ${length})`);
+    }
   }
   return list;
 }

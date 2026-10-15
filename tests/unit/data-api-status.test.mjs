@@ -915,3 +915,88 @@ test("export Download: the ZIP holds the JSON then one map per circuit, with CRC
     c += 46 + n;
   }
 });
+
+// Scripted fetch: `routes` maps a URL substring to a response spec (or a
+// function returning one); the clock is owned so TTL and stale-copy age are exact.
+function routeHarness(routes, { store = new Map(), start = Date.parse("2026-10-15T12:00:00Z") } = {}) {
+  let now = start;
+  const calls = [];
+  class FakeDate extends Date { constructor(...a) { super(...(a.length ? a : [now])); } static now() { return now; } }
+  const context = vm.createContext({
+    fetch: async (url) => {
+      calls.push(String(url));
+      const key = Object.keys(routes).find((k) => String(url).includes(k));
+      let spec = key ? routes[key] : { status: 200, body: [] };
+      if (typeof spec === "function") spec = spec();
+      if (spec === "offline") throw new TypeError("Failed to fetch");
+      const text = typeof spec.body === "string" ? spec.body : JSON.stringify(spec.body);
+      return { ok: spec.status >= 200 && spec.status < 300, status: spec.status,
+        headers: { get: () => null }, json: async () => JSON.parse(text), text: async () => text };
+    },
+    AbortController,
+    localStorage: { get length() { return store.size; }, key: (i) => [...store.keys()][i] ?? null,
+      getItem: (k) => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) },
+    Date: FakeDate, setTimeout: (f) => setImmediate(f), clearTimeout() {},
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+  return { api: context.__api, calls, store, tick: (ms) => { now += ms; }, now: () => now };
+}
+
+const NO_RESULTS = { status: 404, body: { detail: "No results found." } };
+
+// #2185: OpenF1 answers "no data yet" with HTTP 404 {"detail":"No results found."}
+// (measured 2026-10-15: session_result?session_key=11392, pit?session_key=9934).
+test("#2185 an OpenF1 404 'No results found.' resolves [] and is cached; any other 404 rejects", async () => {
+  const h = routeHarness({ "/session_result": NO_RESULTS, "/pit?": NO_RESULTS,
+    "/laps?": NO_RESULTS, "/weather?": { status: 404, body: { detail: "Not Found" } } });
+  assert.deepEqual([...await h.api.sessionResult(11392, 60e3)], []);
+  assert.deepEqual([...await h.api.request("https://api.openf1.org/v1/pit?session_key=9934", 60e3)], []);
+  assert.equal(await h.api.fastestLap(9934, 1), null, "no laps → the no-lap branch, not a rejection");
+  const before = h.calls.length;
+  await h.api.sessionResult(11392, 60e3);
+  assert.equal(h.calls.length, before, "the empty answer is cached under the normal TTL");
+  await assert.rejects(h.api.weather(7, 60e3), (e) => e.status === 404);
+});
+
+// #2190 (1): a refetch that fails and serves the localStorage copy reports
+// WHEN that copy was written, so the tab footnote cannot say "just now".
+test("#2190 a stale-cache serve is reported with the entry's time; a fresh fetch is not", async () => {
+  const url = "https://api.openf1.org/v1/weather?session_key=7";
+  const store = new Map();
+  const h = routeHarness({ "/weather?": "offline" }, { store });
+  const written = h.now() - 3 * 3600e3;
+  store.set("apex26.api." + url, JSON.stringify({ t: written, data: [{ rainfall: 1 }] }));
+  const mark = h.api.staleMark();
+  assert.equal((await h.api.request(url, 60e3)).length, 1, "the offline copy is served");
+  assert.equal(h.api.staleSince(mark), written);
+  const mark2 = h.api.staleMark();
+  const g = routeHarness({ "/weather?": { status: 200, body: [{ rainfall: 0 }] } });
+  await g.api.request(url, 60e3);
+  assert.equal(h.api.staleSince(mark2), null, "nothing stale since the second mark");
+  assert.equal(g.api.staleSince(0), null, "a network answer is never stale");
+});
+
+// #2190 (2): a body over CACHE_MAX_CHARS stays out of localStorage but is held
+// in a small in-memory LRU, so the next request inside its TTL is not refetched,
+// and an older small disk entry no longer stands in for it.
+test("#2190 an oversize body is served from memory within its TTL and replaces the disk copy", async () => {
+  const url = "https://api.openf1.org/v1/position?session_key=9999";
+  const big = Array.from({ length: 6000 }, (_, i) => ({ driver_number: 1, position: 1, date: "2026-10-04T12:00:" + String(i).padStart(6, "0") }));
+  const store = new Map();
+  let offline = false;
+  const h = routeHarness({ "/position?": () => offline ? "offline" : { status: 200, body: big } }, { store });
+  store.set("apex26.api." + url, JSON.stringify({ t: h.now() - 2 * 3600e3, data: [{ position: 20 }] }));
+  const ttl = 60 * 60e3;
+  assert.equal((await h.api.request(url, ttl)).length, big.length);
+  assert.equal(store.has("apex26.api." + url), false, "the small, older disk entry is dropped");
+  const n = h.calls.length;
+  assert.equal((await h.api.request(url, ttl)).length, big.length);
+  assert.equal(h.calls.length, n, "second request within TTL: no network");
+  h.tick(ttl + 1); offline = true;
+  assert.equal((await h.api.request(url, ttl)).length, big.length, "stale fallback is the big body, not the old disk one");
+  offline = false;
+  for (let i = 0; i < 4; i++) await h.api.request("https://api.openf1.org/v1/position?session_key=" + (100 + i), ttl);
+  offline = true;
+  await assert.rejects(h.api.request(url, ttl), "the LRU holds 4 bodies: the oldest is evicted, not kept forever");
+});
