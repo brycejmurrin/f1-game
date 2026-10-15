@@ -196,3 +196,55 @@ test("a lookup before the props list exists is not memoised: the lamps appear on
   bare.props.list.push({ kind: "gantry", side: 0, w: 16, h: 9, d: 1, x: 0, y: 4.5, z: 4, k: 1 });
   assert.equal(sl.lampsFor(bare), null, "a searched, empty list stays a memoised miss");
 });
+
+// #1882: the countdown ran on the capped physics steps (tickBody: frame dt
+// clamped to 0.25 s, at most 5 steps of 1/60 s), so a slow frame rate stretched
+// the lights — at 1 fps the solo sequence took ~70 s at 0 KPH. countCredit
+// hands the countdown back what the clamp and the dropped backlog took. This
+// replays tickBody's accounting frame by frame at several frame rates.
+function countdownWall(fps, credit) {
+  const PHYS_DT = 1 / 60, frame = 1 / fps, target = 5 + 1.0;   // five lamps + a 1 s hold
+  let countT = 0, physAcc = 0, wall = 0;
+  while (countT <= target && wall < 600) {
+    wall += frame;
+    const dt = Math.max(0, Math.min(frame, 1 / 4));
+    physAcc += dt;
+    let steps = 0;
+    while (physAcc >= PHYS_DT && steps < 5) { countT += PHYS_DT; physAcc -= PHYS_DT; steps++; }
+    const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;
+    if (dropped) physAcc %= PHYS_DT;
+    if (credit) countT += credit(frame, dt, dropped);
+  }
+  return wall;
+}
+
+test("#1882: the solo countdown keeps wall-clock time at any frame rate", () => {
+  const SL = load();
+  assert.equal(typeof SL.countCredit, "function", "StartLights.countCredit exists");
+  for (const fps of [60, 30, 12, 8, 2, 1]) {
+    const wall = countdownWall(fps, SL.countCredit);
+    assert.ok(Math.abs(wall - 6) <= 1 / fps + 0.02, `${fps} fps: lights out after ${wall.toFixed(2)} s of wall time, want ~6 s`);
+  }
+  // Without the credit the same 1 fps run is the issue's stuck grid.
+  assert.ok(countdownWall(1, null) > 60, "uncredited 1 fps countdown takes over a minute");
+});
+
+test("#1882: countCredit gives nothing back at full rate and caps a resumed tab at one lamp", () => {
+  const SL = load();
+  assert.equal(SL.countCredit(1 / 60, 1 / 60, 0), 0);
+  assert.equal(SL.countCredit(0.2, 0.2, 0), 0);          // under the clamp: the steps carry it all
+  assert.equal(SL.countCredit(-5, 0, 0), 0);             // non-monotonic rAF stamp
+  assert.equal(SL.countCredit(30, 0.25, 0), 0.75);        // a 30 s gap: one lamp, never the whole sequence
+  assert.ok(Math.abs(SL.countCredit(0.25, 0.25, 0.1) - 0.1) < 1e-12);   // the dropped backlog comes back
+  assert.equal(SL.create({ state: "count" }, { Particles: null }).countCredit, SL.countCredit);
+});
+
+test("#1882: tickBody credits the countdown only solo, after the step loop", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const body = game.slice(game.indexOf("function tickBody("), game.indexOf("\n}\n", game.indexOf("function tickBody(")));
+  const at = body.indexOf("startLights.countCredit(_dtMs / 1000, dt, dropped)");
+  assert.ok(at > body.indexOf("update(PHYS_DT)"), "credited after the fixed steps");
+  assert.match(body, /state === "count" && !netStart && !\(netPlay && netPlay\.awaitingStart && netPlay\.awaitingStart\(\)\)\) countT \+= startLights\.countCredit/);
+  const stub = fs.readFileSync(path.join(ROOT, "js/race/session-stub.js"), "utf8");
+  assert.match(stub, /var StartLights = \{[\s\S]*?countCredit: \(\) => 0/, "the race-session stub answers too");
+});
