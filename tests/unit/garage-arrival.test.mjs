@@ -91,7 +91,7 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   const out = cam.slice(cam.indexOf('function startDriveOut()'), cam.indexOf('function driveOutLeft()'));
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
-  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*return Math\.round\(GarageArrival\.OUT_DURATION \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
+  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.OUT_DURATION \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
   assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
   // Player pace: speed 1 (the default) → OUT_DURATION, ~10.6 s, never trimmed.
   assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 10600) <= 400, 'the default drive-out is the tuned ~10.6 s');
