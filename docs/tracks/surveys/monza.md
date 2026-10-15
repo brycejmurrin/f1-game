@@ -16,74 +16,74 @@ All committed as JPEG (q≈80, max width 1280px) under `artifacts/shots/tracks/m
 
 | | | |
 |:---:|:---:|:---:|
- ![Start / Tribuna · day · dry](../../../artifacts/shots/tracks/monza/s1-start_day-dry.jpg) | ![Start / Tribuna · dawn · dry](../../../artifacts/shots/tracks/monza/s1-start_dawn-dry.jpg) | ![Start / Tribuna · dusk · dry](../../../artifacts/shots/tracks/monza/s1-start_dusk-dry.jpg) |
- Start / Tribuna<br>day / dry | Start / Tribuna<br>dawn / dry | Start / Tribuna<br>dusk / dry |
+| ![Start / Tribuna · day · dry](../../../artifacts/shots/tracks/monza/s1-start_day-dry.jpg) | ![Start / Tribuna · dawn · dry](../../../artifacts/shots/tracks/monza/s1-start_dawn-dry.jpg) | ![Start / Tribuna · dusk · dry](../../../artifacts/shots/tracks/monza/s1-start_dusk-dry.jpg) |
+| Start / Tribuna<br>day / dry | Start / Tribuna<br>dawn / dry | Start / Tribuna<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
- ![Start / Tribuna · night · dry](../../../artifacts/shots/tracks/monza/s1-start_night-dry.jpg) | ![Rettifilo chicane · day · dry](../../../artifacts/shots/tracks/monza/s1-rettifilo_day-dry.jpg) | ![Rettifilo chicane · dusk · dry](../../../artifacts/shots/tracks/monza/s1-rettifilo_dusk-dry.jpg) |
- Start / Tribuna<br>night / dry | Rettifilo chicane<br>day / dry | Rettifilo chicane<br>dusk / dry |
+| ![Start / Tribuna · night · dry](../../../artifacts/shots/tracks/monza/s1-start_night-dry.jpg) | ![Rettifilo chicane · day · dry](../../../artifacts/shots/tracks/monza/s1-rettifilo_day-dry.jpg) | ![Rettifilo chicane · dusk · dry](../../../artifacts/shots/tracks/monza/s1-rettifilo_dusk-dry.jpg) |
+| Start / Tribuna<br>night / dry | Rettifilo chicane<br>day / dry | Rettifilo chicane<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
- ![Curva Grande · day · dry](../../../artifacts/shots/tracks/monza/s1-grande_day-dry.jpg) | ![Curva Grande · dusk · dry](../../../artifacts/shots/tracks/monza/s1-grande_dusk-dry.jpg) | ![Curva Grande (mid) · day · dry](../../../artifacts/shots/tracks/monza/s1-grande-mid_day-dry.jpg) |
- Curva Grande<br>day / dry | Curva Grande<br>dusk / dry | Curva Grande (mid)<br>day / dry |
+| ![Curva Grande · day · dry](../../../artifacts/shots/tracks/monza/s1-grande_day-dry.jpg) | ![Curva Grande · dusk · dry](../../../artifacts/shots/tracks/monza/s1-grande_dusk-dry.jpg) | ![Curva Grande (mid) · day · dry](../../../artifacts/shots/tracks/monza/s1-grande-mid_day-dry.jpg) |
+| Curva Grande<br>day / dry | Curva Grande<br>dusk / dry | Curva Grande (mid)<br>day / dry |
 
 | | | |
 |:---:|:---:|:---:|
- ![Curva Grande (mid) · dusk · dry](../../../artifacts/shots/tracks/monza/s1-grande-mid_dusk-dry.jpg) | | |
- Curva Grande (mid)<br>dusk / dry | | |
+| ![Curva Grande (mid) · dusk · dry](../../../artifacts/shots/tracks/monza/s1-grande-mid_dusk-dry.jpg) | | |
+| Curva Grande (mid)<br>dusk / dry | | |
 
 ### Sector 2
 
 | | | |
 |:---:|:---:|:---:|
- ![Variante Roggia · day · dry](../../../artifacts/shots/tracks/monza/s2-roggia_day-dry.jpg) | ![Variante Roggia · dawn · dry](../../../artifacts/shots/tracks/monza/s2-roggia_dawn-dry.jpg) | ![Variante Roggia · dusk · dry](../../../artifacts/shots/tracks/monza/s2-roggia_dusk-dry.jpg) |
- Variante Roggia<br>day / dry | Variante Roggia<br>dawn / dry | Variante Roggia<br>dusk / dry |
+| ![Variante Roggia · day · dry](../../../artifacts/shots/tracks/monza/s2-roggia_day-dry.jpg) | ![Variante Roggia · dawn · dry](../../../artifacts/shots/tracks/monza/s2-roggia_dawn-dry.jpg) | ![Variante Roggia · dusk · dry](../../../artifacts/shots/tracks/monza/s2-roggia_dusk-dry.jpg) |
+| Variante Roggia<br>day / dry | Variante Roggia<br>dawn / dry | Variante Roggia<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
- ![Variante Roggia · night · dry](../../../artifacts/shots/tracks/monza/s2-roggia_night-dry.jpg) | ![West park lake · day · dry](../../../artifacts/shots/tracks/monza/s2-lake-west_day-dry.jpg) | ![West park lake · dusk · dry](../../../artifacts/shots/tracks/monza/s2-lake-west_dusk-dry.jpg) |
- Variante Roggia<br>night / dry | West park lake<br>day / dry | West park lake<br>dusk / dry |
+| ![Variante Roggia · night · dry](../../../artifacts/shots/tracks/monza/s2-roggia_night-dry.jpg) | ![West park lake · day · dry](../../../artifacts/shots/tracks/monza/s2-lake-west_day-dry.jpg) | ![West park lake · dusk · dry](../../../artifacts/shots/tracks/monza/s2-lake-west_dusk-dry.jpg) |
+| Variante Roggia<br>night / dry | West park lake<br>day / dry | West park lake<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
- ![Villa Reale lake · day · dry](../../../artifacts/shots/tracks/monza/s2-villa-lake_day-dry.jpg) | ![Villa Reale lake · dusk · dry](../../../artifacts/shots/tracks/monza/s2-villa-lake_dusk-dry.jpg) | ![Villa Reale lake · night · dry](../../../artifacts/shots/tracks/monza/s2-villa-lake_night-dry.jpg) |
- Villa Reale lake<br>day / dry | Villa Reale lake<br>dusk / dry | Villa Reale lake<br>night / dry |
+| ![Villa Reale lake · day · dry](../../../artifacts/shots/tracks/monza/s2-villa-lake_day-dry.jpg) | ![Villa Reale lake · dusk · dry](../../../artifacts/shots/tracks/monza/s2-villa-lake_dusk-dry.jpg) | ![Villa Reale lake · night · dry](../../../artifacts/shots/tracks/monza/s2-villa-lake_night-dry.jpg) |
+| Villa Reale lake<br>day / dry | Villa Reale lake<br>dusk / dry | Villa Reale lake<br>night / dry |
 
 | | | |
 |:---:|:---:|:---:|
- ![Lesmo · day · dry](../../../artifacts/shots/tracks/monza/s2-lesmo_day-dry.jpg) | | |
- Lesmo<br>day / dry | | |
+| ![Lesmo · day · dry](../../../artifacts/shots/tracks/monza/s2-lesmo_day-dry.jpg) | | |
+| Lesmo<br>day / dry | | |
 
 ### Sector 3
 
 | | | |
 |:---:|:---:|:---:|
- ![Banking ruin · day · dry](../../../artifacts/shots/tracks/monza/s3-banking_day-dry.jpg) | ![Banking ruin · dusk · dry](../../../artifacts/shots/tracks/monza/s3-banking_dusk-dry.jpg) | ![Banking ruin · night · dry](../../../artifacts/shots/tracks/monza/s3-banking_night-dry.jpg) |
- Banking ruin<br>day / dry | Banking ruin<br>dusk / dry | Banking ruin<br>night / dry |
+| ![Banking ruin · day · dry](../../../artifacts/shots/tracks/monza/s3-banking_day-dry.jpg) | ![Banking ruin · dusk · dry](../../../artifacts/shots/tracks/monza/s3-banking_dusk-dry.jpg) | ![Banking ruin · night · dry](../../../artifacts/shots/tracks/monza/s3-banking_night-dry.jpg) |
+| Banking ruin<br>day / dry | Banking ruin<br>dusk / dry | Banking ruin<br>night / dry |
 
 | | | |
 |:---:|:---:|:---:|
- ![Sopraelevata flyover · day · dry](../../../artifacts/shots/tracks/monza/s3-flyover_day-dry.jpg) | ![Sopraelevata flyover · dawn · dry](../../../artifacts/shots/tracks/monza/s3-flyover_dawn-dry.jpg) | ![Sopraelevata flyover · dusk · dry](../../../artifacts/shots/tracks/monza/s3-flyover_dusk-dry.jpg) |
- Sopraelevata flyover<br>day / dry | Sopraelevata flyover<br>dawn / dry | Sopraelevata flyover<br>dusk / dry |
+| ![Sopraelevata flyover · day · dry](../../../artifacts/shots/tracks/monza/s3-flyover_day-dry.jpg) | ![Sopraelevata flyover · dawn · dry](../../../artifacts/shots/tracks/monza/s3-flyover_dawn-dry.jpg) | ![Sopraelevata flyover · dusk · dry](../../../artifacts/shots/tracks/monza/s3-flyover_dusk-dry.jpg) |
+| Sopraelevata flyover<br>day / dry | Sopraelevata flyover<br>dawn / dry | Sopraelevata flyover<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
- ![Sopraelevata flyover · night · dry](../../../artifacts/shots/tracks/monza/s3-flyover_night-dry.jpg) | ![Variante Ascari · day · dry](../../../artifacts/shots/tracks/monza/s3-ascari_day-dry.jpg) | ![Park gateway · day · dry](../../../artifacts/shots/tracks/monza/s3-park-gate_day-dry.jpg) |
- Sopraelevata flyover<br>night / dry | Variante Ascari<br>day / dry | Park gateway<br>day / dry |
+| ![Sopraelevata flyover · night · dry](../../../artifacts/shots/tracks/monza/s3-flyover_night-dry.jpg) | ![Variante Ascari · day · dry](../../../artifacts/shots/tracks/monza/s3-ascari_day-dry.jpg) | ![Park gateway · day · dry](../../../artifacts/shots/tracks/monza/s3-park-gate_day-dry.jpg) |
+| Sopraelevata flyover<br>night / dry | Variante Ascari<br>day / dry | Park gateway<br>day / dry |
 
 ### Sector 4
 
 | | | |
 |:---:|:---:|:---:|
- ![Parabolica · day · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_day-dry.jpg) | ![Parabolica · dawn · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_dawn-dry.jpg) | ![Parabolica · dusk · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_dusk-dry.jpg) |
- Parabolica<br>day / dry | Parabolica<br>dawn / dry | Parabolica<br>dusk / dry |
+| ![Parabolica · day · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_day-dry.jpg) | ![Parabolica · dawn · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_dawn-dry.jpg) | ![Parabolica · dusk · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_dusk-dry.jpg) |
+| Parabolica<br>day / dry | Parabolica<br>dawn / dry | Parabolica<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
- ![Parabolica · night · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_night-dry.jpg) | ![Milan skyline · day · dry](../../../artifacts/shots/tracks/monza/s4-milan_day-dry.jpg) | |
- Parabolica<br>night / dry | Milan skyline<br>day / dry | |
+| ![Parabolica · night · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_night-dry.jpg) | ![Milan skyline · day · dry](../../../artifacts/shots/tracks/monza/s4-milan_day-dry.jpg) | |
+| Parabolica<br>night / dry | Milan skyline<br>day / dry | |
 
 
 ---
