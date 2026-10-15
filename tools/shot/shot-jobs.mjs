@@ -7,16 +7,6 @@ import { parseCaptureOptions, captureViewport, captureScreenshotOptions } from "
 
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 
-/** Matches js/race/weather-arc.js VALID (storm needs live weather() after race). */
-export const WEATHERS = Object.freeze(["dry", "wet", "rain", "overcast", "fog", "storm"]);
-export const TODS = Object.freeze(["day", "dusk", "dawn", "night"]);
-
-/** Capture failures that a second/third attempt sometimes clears on software GL. */
-export function isRetryableCaptureError(err) {
-  const msg = String(err?.message || err);
-  return /wrote .+ but it is blank|scene evidence is (black|uniform)|capture readiness timed out|awaitSoftPresent|pixel spread|not healthy/.test(msg);
-}
-
 export function flag(argv, name, fallback) {
   const i = argv.indexOf(name);
   if (i < 0 || i + 1 >= argv.length) return fallback;
@@ -63,9 +53,7 @@ export function normalizeJob(raw, defaults = {}) {
   const dist = parseFloat(raw.dist ?? defaults.dist ?? 45);
   const side = parseInt(raw.side ?? defaults.side ?? 1, 10) || 1;
   const tod = String(raw.tod ?? defaults.tod ?? "day");
-  const weather = String(raw.weather ?? raw.wx ?? defaults.weather ?? "dry");
   const showHud = !!(raw.hud ?? raw.showHud ?? defaults.showHud);
-  const through = !!(raw.through ?? defaults.through);
   const team = raw.team ?? defaults.team ?? null;
   const baseCapture = defaults.capture || parseCaptureOptions([]);
   const captureArgs = ["--profile", String(raw.profile ?? baseCapture.profile)];
@@ -79,8 +67,7 @@ export function normalizeJob(raw, defaults = {}) {
   const viewport = captureViewport(capture, { width: 1280, height: 720 });
   const backend = String(raw.backend ?? defaults.backend ?? "three");
   if (!["three", "webgl2", "webgpu"].includes(backend)) throw new Error(`unknown backend "${backend}"`);
-  if (!TODS.includes(tod)) throw new Error(`unknown time of day "${tod}" — ${TODS.join("|")}`);
-  if (!WEATHERS.includes(weather)) throw new Error(`unknown weather "${weather}" — ${WEATHERS.join("|")}`);
+  if (!["day", "dusk", "dawn", "night"].includes(tod)) throw new Error(`unknown time of day "${tod}"`);
   const jpegFlag = !!(raw.jpeg ?? defaults.jpeg);
   let out = raw.out ? resolve(String(raw.out)) : null;
   const fmtHint = capture.type ? captureScreenshotOptions(capture) : out ? imageFormatFor(out, { jpegFlag }) : imageFormatFor("", { jpegFlag: jpegFlag || !!defaults.jpeg });
@@ -89,7 +76,7 @@ export function normalizeJob(raw, defaults = {}) {
   }
   const format = capture.type ? captureScreenshotOptions(capture) : imageFormatFor(out, { jpegFlag: jpegFlag || fmtHint.type === "jpeg" });
   return {
-    trackId, frac, cam, az, el, dist, side, tod, weather, showHud, through, team, out, backend, capture, viewport,
+    trackId, frac, cam, az, el, dist, side, tod, showHud, team, out, backend, capture, viewport,
     type: format.type,
     quality: format.type === "jpeg" ? capture.quality ?? format.quality ?? 85 : undefined,
     raster: !!(raw.raster ?? defaults.raster),
@@ -125,11 +112,6 @@ export function parseShotArgv(argv, ROOT) {
   const jpeg = has(argv, "--jpeg");
   const TEAM = flag(argv, "--team", null);
   const WAIT_MS = Math.max(5, parseFloat(flag(argv, "--wait", "120"))) * 1000;
-  const presentTimeoutSec = flag(argv, "--present-timeout", null);
-  const PRESENT_MS = presentTimeoutSec != null
-    ? Math.max(5, parseFloat(presentTimeoutSec)) * 1000
-    : Math.min(WAIT_MS, 120000);
-  const captureRetries = Math.max(0, parseInt(flag(argv, "--capture-retries", "2"), 10) || 0);
   const defaults = {
     ROOT, capture, backend: flag(argv, "--backend", "three"),
     az: flag(argv, "--az", "45"),
@@ -137,9 +119,7 @@ export function parseShotArgv(argv, ROOT) {
     dist: flag(argv, "--dist", "45"),
     side: flag(argv, "--side", "1"),
     tod: flag(argv, "--tod", "day"),
-    weather: flag(argv, "--weather", flag(argv, "--wx", "dry")),
     showHud: has(argv, "--hud"),
-    through: has(argv, "--through"),
     team: TEAM,
     jpeg,
     raster,
@@ -148,13 +128,13 @@ export function parseShotArgv(argv, ROOT) {
   if (batchPath) {
     const jobs = loadBatchFile(resolve(batchPath)).map((raw) => normalizeJob(raw, defaults));
     if (!jobs.length) throw new Error("batch file has no jobs");
-    return { mode: "batch", jobs, waitMs: WAIT_MS, presentMs: PRESENT_MS, captureRetries, team: TEAM, raster, capture };
+    return { mode: "batch", jobs, waitMs: WAIT_MS, team: TEAM, raster, capture };
   }
 
   const positionals = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) {
-      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster" && argv[i] !== "--through"
+      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster"
         && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
       continue;
     }
@@ -164,7 +144,7 @@ export function parseShotArgv(argv, ROOT) {
   const job = normalizeJob({
     trackId, frac: fracArg, cam, out: outArg || undefined,
   }, defaults);
-  return { mode: "single", jobs: [job], waitMs: WAIT_MS, presentMs: PRESENT_MS, captureRetries, team: TEAM, raster, capture };
+  return { mode: "single", jobs: [job], waitMs: WAIT_MS, team: TEAM, raster, capture };
 }
 
 /** Team/backend/viewport boundaries require a fresh isolated browser context. */
@@ -178,7 +158,7 @@ export function groupJobsByTrack(jobs) {
   const order = [];
   const map = new Map();
   for (const [index, j] of jobs.entries()) {
-    const key = JSON.stringify([shotSessionKey(j), j.trackId, j.tod, j.weather, j.capture?.isolated ? index : null]);
+    const key = JSON.stringify([shotSessionKey(j), j.trackId, j.tod, j.capture?.isolated ? index : null]);
     if (!map.has(key)) {
       map.set(key, []);
       order.push(key);
@@ -190,16 +170,10 @@ export function groupJobsByTrack(jobs) {
 
 export const SHOT_USAGE = `usage: node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg]
        node tools/shot/shot.mjs --batch <jobs.json|jsonl> [--jpeg] [--raster] [--wait S]
-  One Chromium boot; --batch groups compatible track/team/tod/weather/backend/viewport jobs.
-  Per job (or CLI defaults): --tod day|dusk|dawn|night  --weather dry|wet|rain|overcast|fog|storm
+  One Chromium boot; --batch groups compatible track/team/tod/backend/viewport jobs.
   --profile preview|comparison --width N --height N --dpr N --scope scene|page
   --gpu swiftshader|llvmpipe|hardware|lavapipe --browser auto|chromium|shell
-  --backend three|webgl2|webgpu (default three / TLX; recommended for surveys)
-  --present-timeout S  soft-present / readiness budget per shot (default min(--wait,120); raise on GPU-less VMs)
-  --capture-retries N  automatic retries per shot on black frame / present timeout (default 2)
-  --trace[=path] --cache-assets --isolated --seed N
-  cam: park | eye | orbit | cinematic | trackside. orbit/cinematic/trackside step round
-  a hill, building or tree between eye and car; --through keeps the asked-for placement.
+  --backend three|webgl2|webgpu --trace[=path] --cache-assets --isolated --seed N
+  cam: park | eye | orbit | cinematic | trackside.
   --jpeg / .jpg → JPEG q85 (human review). --raster → __apex.render view only (no PNG).
-  Failed shots are listed and exit non-zero. llvmpipe often fails the black-frame check — prefer swiftshader/default.
   Default out: scratch/captures/playwright-probe/<track>-<frac%>-<cam>.png`;

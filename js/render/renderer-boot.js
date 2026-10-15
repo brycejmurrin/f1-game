@@ -88,7 +88,14 @@ async function gpuAdapterAvailable() {
 // GLX. A step that outlives BOOT_STEP_MS resolves to TIMED_OUT and the caller
 // treats the backend as unavailable and falls through to GLX. Logged once, where
 // it fires; a step that settles in time costs one cleared timer.
-const BOOT_STEP_MS = 8000;
+// Software-GL CI runners (SwiftShader/llvmpipe on a starved host) can take
+// longer than 8 s to init TLX; a spec that MEASURES the TLX backend may RAISE the
+// cap (never lower it) with apex26.gfxBootStepMs, clamped to 60 s.
+const BOOT_STEP_MS = (() => {
+  let ms = 8000;
+  try { const v = Number(localStorage.getItem("apex26.gfxBootStepMs")); if (v > ms) ms = Math.min(v, 60000); } catch (_) { /* blocked storage: default cap */ }
+  return ms;
+})();
 const TIMED_OUT = { timedOut: true };
 function withTimeout(promise, ms, label) {
   if (typeof setTimeout !== "function") return Promise.resolve(promise);   // some VM harnesses: await it alone

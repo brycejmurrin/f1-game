@@ -99,6 +99,9 @@ const lazyBundles = LazyBundles.create({
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active),
     });
+    jumpStartPenalty = JumpStartPenalty.create(G, {
+      autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
+    });
   },
 });
 const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
@@ -1238,7 +1241,16 @@ function announce(msg, dur, kind, still, quiet) {   // still(): false once a que
     // newcomer that outranks nothing waiting; one that does (a warning behind
     // two reports) queues deeper instead of pushing an accepted line out.
     const low = _annQueue.length ? _annQueue[_annQueue.length - 1].pri : 0;
-    if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
+    const cap = pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX;
+    // A full queue used to refuse the newcomer outright (race-radio counted
+    // those as announce-refused and dropped the line). Shed the lowest-priority
+    // waiting cards — comm and coach first — so engineer, box and warnings still
+    // land. Only refuse when nothing waiting is weaker than the newcomer.
+    while (_annQueue.length >= cap) {
+      const tail = _annQueue[_annQueue.length - 1];
+      if (!tail || tail.pri >= pri) return false;
+      _annQueue.pop();
+    }
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
     _annQueue.splice(at, 0, { msg, dur, kind, pri, still, t: performance.now() });
@@ -1906,6 +1918,7 @@ function redFlagRestart() {
     const rh = DriverRatings.hash32(simSeed() + ":restart:" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (rh & 0xffff) / 65536);
     c.launchOn = !c.human;
+    c.jumpStartFined = false; c.penaltyWhy = null;
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   seedPlayerPose();
@@ -1965,7 +1978,7 @@ function gridUp(preOrder) {
     OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; c._coastHeld = undefined;   // last race's classification: makeCars' values (CarFields declares _coastHeld; a delete would make the car a dictionary); a race re-arms via armReliability
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.penaltyWhy = null; c.jumpStartFined = false; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
@@ -2317,7 +2330,7 @@ function reloadFlybyShots() {
 // prevents late scenery downloads (including A -> B -> A) from committing.
 // garageWarm/garageReady/garageKey: the setup garage pre-built on race settings
 // and the idle title (garagePrewarm, js/garage/prebuild.js), keyed per team/livery.
-const _menuGate = { warm: 0, generation: 0, ready: "", track: null, garageWarm: 0, garageReady: false, garageKey: "" };
+const _menuGate = { warm: 0, generation: 0, ready: "", track: null, garageWarm: 0, garageReady: false, garageKey: "", done: "" };   // done: the menuKey menuFinish ran to its end for
 // The menu finished building THIS selection (circuit, time, weather): only then is
 // `track` the world the loading screen may fly, light and grid. A fast tap to RACE!
 // before the idle build ran left the OLD circuit in `track`.
@@ -2398,6 +2411,16 @@ async function menuFinish(current, key) {
   if (!yielded && current() && _menuGate.warm > 0) await menuSlice();
   if (current()) _menuFly = fly;
   if (lit && await menuIdle(current)) { warmPrograms("|lit"); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
+  if (current()) _menuGate.done = key;
+}
+// THE MENU'S RACE PREP, read-only (__apex.menuPrep; the GPU census's menu entry waits on it before RACE!):
+// the selection's world built, menuFinish run to its end (car assets, program warm, lamp bake), the
+// warm's hidden frames drawn and no compile in flight, and the car prep's own record (null until one ends).
+function menuPrep() {
+  const key = trackIdx >= 0 ? menuKey(trackIdx) : "", p = _menuGate.prep, def = Tracks.LIST[trackIdx];
+  return { state, trackId: def ? def.id : null, key, world: menuWorld(), building: !!(p && p.building), done: !!key && _menuGate.done === key,
+    warmable: !!gfx.warm, warmKey: _warmKey, warmed: !!key && _warmKey === key, warmFrames: _menuGate.warm, warming: !!(gfx.warming && gfx.warming()),
+    garageReady: !!_menuGate.garageReady, cars: carDraw.menuCarAssets || null };
 }
 // THE GARAGE, PRE-BUILT ON RACE SETTINGS AND THE IDLE TITLE. RACE! opens on the
 // garage drive-out and GARAGE on the garage, and an undrawn garage's first frame
@@ -2806,10 +2829,14 @@ async function startRaceBody() {
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   // TLX links programs on first draw — warm during LIGHTS only when the pack is
   // already settled (or unsupported/off), else createTextureArray owns the thread.
+  // EXCEPT TLX itself (apex26.tlxWarmBeforePack, default on; "0" = the pack gate): its programs never read the pack
+  // (setMaterialMaps swaps uniform values), and a skipped warm made the first present link every program at once —
+  // census 491/492/502/503/505/507: one 11-13 s task, then 6-7 s for the mirror (PERF-HUNT-4 follow-up, hunt 5 A).
   {
     const settled = loadingScreen.packSettled || LoadingScreen.packSettled;
     const packState = (typeof Assets !== "undefined" && Assets.state) ? Assets.state() : null;
-    if (!settled || settled(packState)) {
+    const tlxEarly = gfx.backend === "three" && (() => { try { return localStorage.getItem("apex26.tlxWarmBeforePack") !== "0"; } catch (_) { return true; } })();
+    if (!settled || settled(packState) || tlxEarly) {
       try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
     }
   }
@@ -3517,6 +3544,7 @@ const G = {
   setTimeOfDay: (tod) => wxArc.setTimeOfDay(tod),
   weather: (w) => wxArc.weather(w),
   loadingInfo,                          // what the loading card describes — the flyby editor previews it
+  menuPrep,                             // the menu's race prep, read-only (__apex.menuPrep)
   get loadingScreen() { return loadingScreen; },   // js/ui/loading-screen.js — the editor drives the card's geometry
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   followCar: (c) => { cars.forEach((o) => setCarRole(o, false, o === c)); player = c; },   // a replay: the camera, HUD and audio move to this car; nobody drives (js/race/real-replay.js)
@@ -3612,6 +3640,9 @@ let raceRadio = RaceRadio.create(G);      // LAZY_RACE_SESSION — recreated on 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // LAZY_RACE_SESSION
+var jumpStartPenalty = JumpStartPenalty.create(G, {
+  autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
+});   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
@@ -4350,7 +4381,7 @@ function syncRotateBlocker(moveFocus) {
   // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
   // game-vm harness) reads every display as shown, and would pause every race.
   if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true, "rotate-block");
-  if (paused && !(garageReturn === "pit" && !$("carsetup").hidden)) els.pausemenu.hidden = active || photoMode;   // the pit garage holds its own pause: no card over it (setPaused)
+  if (paused && !(garageReturn === "pit" && !$("carsetup").hidden)) els.pausemenu.hidden = active || photoMode || els.pmsettings?.hidden === false;   // Settings keeps the foreground after rotation; the pit garage owns its pause (setPaused)
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
   }); return active;
@@ -4563,6 +4594,7 @@ function update(dt) {
       // every later race and suppresses quali flying laps. Ledger 2026-09-22.
       const wasRestart = restartPending;
       restartPending = false;
+      for (const c of cars) jumpStartPenalty.tickAtGreen(c);
       // Nothing consumes RECOVER/shift/boost edges before green, so a tap on the grid fired at lights-out (a free ~58 km/h re-place, or 2nd gear with no drive).
       Input.clearDriveEdges();
       announce("LIGHTS OUT!", 1.4, "race");
@@ -4639,6 +4671,9 @@ function update(dt) {
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars);
   for (const c of cars) updateCar(c, dt, ranked);
+  if (jumpStartPenalty.reactWindowOpen()) {
+    for (const c of cars) jumpStartPenalty.tickReaction(c);
+  }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
   collide.resolveCollisions(ranked, dt);
@@ -4786,7 +4821,12 @@ function collideFx(a, b, impact) {
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
-  if (soundOn) GameAudio.collision(impact);
+  if (soundOn) {
+    const other = a.isPlayer ? b : a;
+    const lat = (other.x != null ? other.x : 0) - (pc.x != null ? pc.x : 0);
+    const side = Math.abs(lat) > 0.08 ? Math.max(-1, Math.min(1, lat / 3.5)) : 0;
+    GameAudio.collision(impact, false, side);
+  }
   shake = Math.min(1, shake + impact * 0.45);
   hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;
@@ -5388,7 +5428,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // headway never held the car (it hovered at the edge, uncapped), so queue
     // pressure never built and a stuck car never got impatient.
     const followR = blocker ? AiDrive.followGap(aiT, !!track.street, c.speed, c.passOf || c.atkOn || c.towing > 0 ? 1 : c.atkWant ? 0.6 : 0, c.team, c.seat, blocker, c.houseStats, (c.runT || 0) + AiDrive.startGapT(c.calm = AiDrive.startCalm(c.launchOn, c.calmUntil, raceT))) : 0;
-    const qWin = Math.max(16, followR + 6);
+    const qWin = Math.max(16, followR + 6 + AiDrive.startQWinBonus(c.calm, raceT - launchT0));
     const capBlocks = blocker && blockerGap < qWin &&
       !(blocker === c.passOf && Math.abs(c.x - blocker._snapX) >= 1.8);
     if (blocker && blockerGap < qWin) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
