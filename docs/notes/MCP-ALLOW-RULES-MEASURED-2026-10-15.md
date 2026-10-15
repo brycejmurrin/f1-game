@@ -79,6 +79,25 @@ first minutes, then under their names; one sibling saw MDN under its UUID for
 A UUID-prefixed TinyFish call matched the `mcp__TinyFish` name rule, so the
 rule key is the connector, not the prefix string.
 
+## Census on 3079670f (after #2124), two default-mode siblings
+
+session_01PgViuYNygpmfLbD3B6nHWp and session_01ELD8NjQFkdHs3t2sxQkf2V, both
+`permission_mode: default`, so every verdict below is a real prompt or a real
+rule match. Neither session had the repository attached, so the `.mcp.json`
+servers (apex-tools, chrome-devtools, playwright-official) and the github MCP
+were absent and the `mcp__<server>__*` lines were not exercised there.
+
+| tool | verdict |
+|---|---|
+| TinyFish, Context7, Claude_Docs, claude-code-remote reads, Bash git, Read, WebFetch, WebSearch, Agent, ToolSearch | rule / config |
+| TaskCreate, TaskUpdate, TaskGet, TaskList, EnterWorktree, ExitWorktree, ListAgents, ReadNotifications | accept, no reason, source config: built-ins the harness allows without a rule |
+| `mcp__MDN__search`, `mcp__mcp_browserstack_com__listProducts` | prompted (user_temporary), same as rounds 3–4 |
+| `mcp__claude-code-remote__send_message`, `mcp__claude-code-remote__add_repo` | prompted (user_temporary) with `mcp__claude-code-remote` and `mcp__claude-code-remote__*` allowed: platform confirmations |
+| `Skill agent-fleet` | "Unknown skill" in a session with no attached repo: skills load from the attached checkout only |
+
+A throwaway worktree commit passed the commit hook there (the worktree had
+no `node_modules` problem because the clone was fresh and whole).
+
 ## Spawning siblings (same day)
 
 `create_session` without `source_url` makes an EMPTY session tagged
