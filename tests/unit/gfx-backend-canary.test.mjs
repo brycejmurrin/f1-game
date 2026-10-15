@@ -850,6 +850,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
+    // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
+    // RESET must not leave diag() quoting a reason from before it.
+    "apex26.gfxFallbackWhy",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
 
@@ -5978,7 +5981,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
     Event: class { constructor(type) { this.type = type; } },
     location: { reload: () => events.push("reload") },
     BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
-    canvas: {}, _claimSkipped: skip, _createHung: false,   // start()'s closure state the sliced fallback reads
+    canvas: {}, _claimSkipped: skip, _createHung: false, pick: pref, why: "",   // start()'s closure state the sliced fallback reads
     backendPreference: () => pref,
     showGraphicsUnavailable: () => events.push("unavailable"),
     async loadBackendScripts(group) {
