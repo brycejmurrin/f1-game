@@ -98,7 +98,7 @@ async function shot(op) {
     // metres above the road at frac: eye = eye height (eyeAt h, default 2.5),
     // orbit = aim point (orbit h, default 1.5) — frames a prop high in the air.
     h: op.h == null || op.h === "" ? null : Number(op.h),
-    // clear (shot.mjs parity, js/agent/shot-clear.js): the free cams step round a building, hill
+    // clear (shot.mjs parity, __apex orbit/cinematic/view): step round a building, hill
     // or tree between eye and car instead of landing inside a pit building at frac 0.
     // op.through keeps the asked-for placement.
     clear: !op.through };

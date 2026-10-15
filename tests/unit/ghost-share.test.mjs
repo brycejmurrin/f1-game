@@ -371,7 +371,7 @@ function titleLinkHarness() {
     announce: h.notify, flow: "season", session: "race", trackIdx: 0,
     daily: { stop() {} }, buildSelect() { opens++; }, scheduleFlybyTrack() {},
     store: { get: (key, fallback) => bag.has(key) ? bag.get(key) : fallback,
-      set: (key, value) => bag.set(key, value) },
+      set(key, value) { if (value === undefined) bag.delete(key); else bag.set(key, value); return true; } },
     openGarage() { opens++; top = { id: "carsetup" }; },
   };
   const ctx = vm.createContext({

@@ -316,8 +316,8 @@ test("every custom subagent declares name, description, and model", () => {
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
     "agent-surface-reviewer.md", "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
-    "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md",
-  ], "eleven agents since 2026-10-14 (agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout added; ci-watcher 2026-10-10; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+    "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md", "worker.md",
+  ], "twelve agents since 2026-10-15 (worker added; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-watcher 2026-10-10; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
@@ -329,6 +329,9 @@ test("every custom subagent declares name, description, and model", () => {
     // Writes only its scratch/**.md report (protect-files.py rule 5), so it is
     // not in the readonly list below — like track-surveyor.
     "agent-surface-reviewer.md": "sonnet",
+    // 2026-10-15: the all-tools implementation worker runs on the session's
+    // model, like track-surveyor — it writes code, so no cheaper tier.
+    "worker.md": "inherit",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
@@ -473,7 +476,14 @@ test("every mcp__ tool an agent body names is in its tools: list", () => {
     const body = text.replace(/^---\n[\s\S]*?\n---\n/, "").split(/\n\s*\n/)
       .filter((para) => !/calls for the PARENT/i.test(para)).join("\n\n");
     const named = new Set(body.match(/\bmcp__[A-Za-z0-9_-]+__[A-Za-z0-9_]+/g) || []);
-    for (const t of named) assert.ok(!fm.tools || tools.has(t), `${f}: the body names ${t}, but tools: omits it`);
+    // `mcp__<server>` or `mcp__<server>__*` in tools: grants every tool of that
+    // server (https://code.claude.com/docs/en/sub-agents §Available tools,
+    // read 2026-10-15) — the worker agent lists whole servers.
+    const grants = (t) => tools.has(t) || [...tools].some((g) => {
+      const server = /^(mcp__[A-Za-z0-9_-]+?)(?:__\*)?$/.exec(g)?.[1];
+      return server && t.startsWith(`${server}__`);
+    });
+    for (const t of named) assert.ok(!fm.tools || grants(t), `${f}: the body names ${t}, but tools: omits it`);
   }
 });
 
