@@ -974,7 +974,8 @@ test("launch unification: every session the player starts reaches raceIntro; the
   assert.doesNotMatch(read("js/ui/title-flow.js").match(/function openTimeTrial[\s\S]*?\n\}/)[0], /startRace|raceIntro/, "the title's TT / DAILY open the picker, they never start");
   // The Data Hub's JUMP IN opts in to the pre-race screen, and RealRace.launch runs the raw raceIntro (not the sheet variant: no sheet to hold).
   const tab = read("js/data/real-race-tab.js");
-  assert.match(tab.match(/function jumpIn[\s\S]*?\n    \}/)[0], /RealRace\.launch\(script, \{[^}]*intro: true \}\)/, "JUMP IN passes intro");
+  assert.match(tab.match(/function jumpIn[\s\S]*?\n    \}/)[0], /launchRace\(script, \{[^}]*intro: true \}\)/, "JUMP IN passes intro through launch recovery");
+  assert.match(tab, /RealRace\.launch\(script, options\)/, "launch recovery forwards the options");
   assert.match(real, /if \(opts && opts\.intro && G\.raceIntro\) \{\s*try \{ G\.raceIntro\(G\.startRace\); \}/, "launch runs the pre-race screen when asked");
   assert.match(game, /\n  raceIntro,   \/\/ the pre-race screen, for a launch that is not RACE!/, "the façade hands launch the raw raceIntro");
   // The drive-out is dropped only where the player's car is not leaving the garage, or nothing could show it.
