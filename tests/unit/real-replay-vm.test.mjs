@@ -601,8 +601,87 @@ function transportReplay(extra = {}) {
     traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, 10) } },
     seats: new Map([[cars[0], drivers[0]], [cars[1], drivers[1]]]), follow: "AAA", camera: "auto" };
   replay.start(options);
-  return { replay, G, cars, snaps, drivers, options };
+  return { replay, G, cars, snaps, drivers, options, ctx };
 }
+
+test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns the picture", () => {
+  for (const owner of ["auto", "manual", "locked", "fixed"]) {
+    const { replay, G, options, drivers } = transportReplay();
+    drivers[0].dnf = true; drivers[0].outT = 10;
+    options.script.passes = [];
+    options.script.cautions = [{ tFrom: 50, from: 1, level: 3 }];
+    options.traces.cars = { 1: line(0, 50, 0, 0, 10), 2: line(0, 50, 0, 0, 100) };
+    replay.start({ ...options, reel: true, camera: owner === "fixed" ? "heli" : "auto" });
+    assert.equal(replay.status().follow, "AAA");
+    replay.tick(13);
+    if (owner === "manual") replay.takePicture();
+    if (owner === "locked") replay.setLocked(true);
+    const frames = [];
+    G.snapGameCam = () => frames.push({ code: G.player.code, retired: G.player.retired });
+    replay.tick(1);
+    assert.equal(replay.status().T, 42);
+    assert.equal(replay.status().follow, owner === "auto" ? "BBB" : "AAA", owner);
+    assert.deepEqual(frames, [{ code: owner === "auto" ? "BBB" : "AAA", retired: owner !== "auto" }],
+      "the cut snaps once, after ownership-safe subject selection");
+    replay.tick(13);
+    assert.equal(replay.status().follow, owner === "auto" ? "BBB" : "AAA", "subject survives the no-driver segment");
+    replay.stop();
+  }
+});
+
+test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, including paused reels", () => {
+  for (const reel of [false, true]) for (const paused of [false, true]) for (const outerPaused of [false, true]) {
+    const { replay, G, options, ctx } = transportReplay();
+    replay.stop();
+    const classes = new Set(), writes = [], frames = [];
+    let layout;
+    const button = { textContent: "", setAttribute() {}, addEventListener() {} };
+    ctx.window = ctx;
+    ctx.document = { body: { classList: {
+      toggle: (name, on) => on ? classes.add(name) : classes.delete(name),
+      contains: (name) => classes.has(name), remove: (name) => classes.delete(name),
+    }, toggleAttribute() {} }, addEventListener() {}, getElementById: () => null };
+    ctx.RealRace = { replay: () => replay };
+    ctx.HudLayout = { setCam: (id) => { layout = id; } };
+    ctx.CamTunerPanel = { refresh() {} };
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx);
+    G.$ = (id) => id === "btn-cam" ? button : null;
+    G.store = { set: (...args) => writes.push(args) };
+    const modes = ctx.CamModes.CAM_MODES, cockpit = modes.findIndex((m) => m.id === "cockpit");
+    G.camMode = cockpit;
+    G.setCamMode = ctx.CamModes.create(G).setCamMode;
+    replay.start({ ...options, reel, tower: false });
+    G.setCamMode(cockpit); replay.takePicture();
+    replay.seek(5); replay.setPaused(paused);
+    assert.equal(classes.has("cockpit-cam"), true);
+    assert.equal(layout, "cockpit");
+    const before = replay.status();
+    G.paused = outerPaused;
+    G.snapGameCam = (paint) => frames.push({ paint, mode: modes[G.camMode].id, layout });
+    assert.equal(replay.setAuto(true), true);
+    const after = replay.status(), shot = modes[G.camMode].id;
+    assert.notEqual(shot, "cockpit", "director takes the picture without waiting for a tick or next reel cut");
+    assert.notEqual(shot, "tv", "WATCH uses its own broadcast director, not the live-race TV rig");
+    assert.equal(after.broadcast.shot, shot);
+    assert.equal(after.broadcast.cuts, before.broadcast.cuts + 1);
+    assert.equal(replay.autoOn(), true);
+    assert.equal(classes.has("cockpit-cam"), false);
+    assert.equal(layout, shot);
+    assert.match(button.textContent, /^AUTO · /);
+    assert.deepEqual(frames, [{ paint: outerPaused, mode: shot, layout: shot }], "normal frames render playback pause; the outer pause menu needs an explicit paint");
+    assert.equal(after.T, before.T);
+    assert.equal(after.follow, before.follow);
+    assert.equal(after.paused, paused);
+    replay.setAuto(true);
+    assert.equal(replay.status().broadcast.cuts, after.broadcast.cuts, "repeated AUTO does not cut again");
+    assert.equal(frames.length, 1);
+    replay.stop();
+    assert.equal(G.camMode, cockpit, "exit restores the saved driving camera");
+    assert.equal(classes.has("cockpit-cam"), true);
+    assert.equal(layout, "cockpit");
+    assert.deepEqual(writes, [], "WATCH camera choices never overwrite the saved preference");
+  }
+});
 
 test("WATCH transport pause holds the replay clock, and seek reposes ended and rewound drivers before snapping", () => {
   const { replay, cars, snaps } = transportReplay();
@@ -1008,7 +1087,7 @@ test("WATCH toolbar exposes working pointer controls, honest event labels and ph
   const state = { T: 0, duration: 100, paused: false, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
   const api = { describe: () => ({ name: "Test GP", drivers: [{ code: "AAA", name: "Alpha" }, { code: "BBB", name: "Beta" }], events: [{ t: 20, lap: 2, kind: "pass", text: "AAA PASSES BBB" }], speeds: [0.5, 1, 2] }),
     status: () => state, setPaused: (v) => { state.paused = v; }, setSpeed: (v) => { state.speed = v; },
-    follow: (v) => { state.follow = v; }, setLocked: (v) => { state.broadcast.locked = v; },
+    follow: (v) => { state.follow = v; return v; }, setLocked: (v) => { state.broadcast.locked = v; },
     setAuto: () => { state.broadcast.auto = true; state.broadcast.locked = false; },
     seek: (v) => { state.T = v; }, eventStep: (v) => calls.push(["event", v]) };
   const G = { camMode: 0, setCamMode: (i, opts) => { G.camMode = i; calls.push(["camera", opts.persist]); }, snapGameCam: () => calls.push(["snap"]), openWatchPhoto: () => calls.push(["photo", state.paused]) };
@@ -1185,5 +1264,89 @@ test("WATCH a car whose trace has ended drops to idle revs instead of keeping it
   assert.equal(b.speed, 0);
   assert.equal(b.rpm, 5000, "parked at idle: game.js never recomputes rpm for a retired car");
   assert.equal(a.rpm, 12000, "a running car's revs are game.js's to set");
+  replay.stop();
+});
+
+// Actual transport + replay + broadcast: a refused follow must not take camera ownership.
+function visibleTransportReplay() {
+  function element(tag) {
+    const listeners = {}, attrs = {};
+    return { tagName: tag.toUpperCase(), dataset: {}, children: [], style: {},
+      classList: { add() {}, remove() {} },
+      appendChild(n) { this.children.push(n); n.parentNode = this; return n; },
+      remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((n) => n !== this); },
+      setAttribute(k, v) { attrs[k] = v; }, getAttribute(k) { return attrs[k]; },
+      addEventListener(k, fn) { listeners[k] = fn; }, dispatch(k) { if (listeners[k]) listeners[k](); } };
+  }
+  const document = { body: element("body"), createElement: element, getElementById: () => null };
+  const ctx = vm.createContext({ document, RealReplay: { LEAD_S: 8 } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/watch-transport.js"), "utf8"), ctx);
+  const fixture = transportReplay({ document, WatchTransport: vm.runInContext("WatchTransport", ctx) });
+  const find = (key, parent = document.body) => parent.dataset.wt === key ? parent : parent.children.map((n) => find(key, n)).find(Boolean);
+  return { ...fixture, find };
+}
+
+test("WATCH playable events exclude unavailable footage and NEXT cannot stick at the trace endpoint", () => {
+  const { replay, options, find } = visibleTransportReplay();
+  options.script.passes = [{ t: 12, by: 1, over: 2 }, { t: 29, by: 1, over: 2 }, { t: 60, by: 1, over: 2 }];
+  replay.start(options); replay.setPaused(true);
+  assert.deepEqual(Array.from(replay.describe().events, (e) => e.t), [12, 29]);
+  assert.equal(find("markers").children.length, 2);
+  assert.ok(replay.eventStep(1)); assert.equal(replay.status().T, 4);
+  assert.ok(replay.eventStep(1)); assert.equal(replay.status().T, 21);
+  assert.equal(find("next").disabled, true);
+  assert.equal(replay.eventStep(1), null); assert.equal(replay.status().T, 21);
+  replay.seek(30); assert.ok(replay.eventStep(-1)); assert.equal(replay.status().T, 21);
+  assert.ok(replay.eventStep(-1)); assert.equal(replay.status().T, 4);
+  assert.equal(replay.status().paused, true);
+  replay.stop();
+});
+
+test("HIGHLIGHTS playable bounds preserve pre-grid footage, clamp cuts and finish at the loaded endpoint", () => {
+  const { replay, options, G } = transportReplay();
+  options.traces.cars = { 1: line(0, 50, 0, -10, 30), 2: line(0, 45, 0, -10, 30) };
+  options.script.passes = [{ t: -12, by: 1, over: 2 }, { t: -8, by: 2, over: 1 }, { t: 29, by: 1, over: 2 }, { t: 60, by: 1, over: 2 }];
+  replay.start({ ...options, reel: true });
+  assert.equal(replay.status().reel, 2, "filter unavailable events before nearby-event suppression");
+  assert.equal(replay.status().T, -10, "retain available pre-grid footage, but do not invent the lead-in");
+  replay.seek(-999); assert.equal(replay.status().T, -10);
+  assert.equal(replay.eventStep(-1), null, "clipped lead-in cannot repeatedly seek to itself");
+  G.camMode = 2; replay.setLocked(true); replay.setPaused(true); replay.skip();
+  assert.equal(replay.status().T, 21); assert.equal(G.camMode, 2);
+  assert.equal(replay.status().follow, "BBB", "cut keeps the explicitly locked subject");
+  replay.setPaused(false); replay.tick(9.1);
+  assert.equal(replay.status().finished, true, "final hold cannot run beyond all footage");
+  replay.stop(); assert.equal(G.camMode, 0, "saved driving camera is restored");
+});
+
+test("HIGHLIGHTS with no playable events falls back to the available full replay", () => {
+  const { replay, options, cars } = transportReplay();
+  options.script.passes = [{ t: 60, by: 1, over: 2 }];
+  replay.start({ ...options, reel: true, startLap: 2 });
+  assert.equal(replay.status().reel, 0); assert.equal(replay.status().T, 10);
+  replay.tick(1);
+  assert.equal(replay.status().finished, false, "empty reel does not immediately finish");
+  assert.equal(cars[0].retired, false);
+  replay.tick(26); assert.equal(replay.status().finished, true);
+  replay.stop();
+});
+
+test("WATCH unavailable driver selection stays honest and never locks the previous subject", () => {
+  const { replay, find, G } = visibleTransportReplay();
+  replay.setPaused(true); replay.seek(20);
+  const pick = find("driver"), unavailable = pick.children.find((o) => o.value === "BBB");
+  assert.equal(unavailable.disabled, true, "ended trace is unavailable at the current clock");
+  assert.match(unavailable.textContent, /unavailable/i);
+  const before = replay.status().broadcast, camera = G.camMode;
+  pick.value = "BBB"; pick.dispatch("change"); // Also protect a change queued before the car retired.
+  assert.equal(replay.status().follow, "AAA"); assert.equal(pick.value, "AAA");
+  assert.equal(replay.status().broadcast.locked, false);
+  assert.equal(replay.status().broadcast.cuts, before.cuts); assert.equal(G.camMode, camera);
+  replay.seek(5);
+  assert.equal(unavailable.disabled, false, "rewind restores the choice");
+  assert.doesNotMatch(unavailable.textContent, /unavailable/i);
+  pick.value = "BBB"; pick.dispatch("change");
+  assert.equal(replay.status().follow, "BBB"); assert.equal(replay.status().broadcast.locked, true);
+  assert.equal(replay.status().paused, true);
   replay.stop();
 });

@@ -20,6 +20,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -34,6 +35,33 @@ test("rotation never resurfaces the pause card over an active photo camera", () 
     vm.runInContext(fn, ctx); ctx.syncRotateBlocker(false);
     assert.equal(pausemenu.hidden, active || photoMode);
   }
+});
+
+test("rotation keeps foreground Settings above Pause until Settings closes", () => {
+  const fn = symbolSource("function syncRotateBlocker(");
+  let portrait = true;
+  const box = { setAttribute() {} }, pausemenu = { hidden: true }, pmsettings = { hidden: false };
+  const garage = { hidden: true };
+  const ctx = vm.createContext({ $: id => id === "carsetup" ? garage : box,
+    getComputedStyle: () => ({ display: portrait ? "flex" : "none" }),
+    rotateBlockMql: { matches: true }, paused: true, photoMode: false,
+    els: { pausemenu, pmsettings }, garageReturn: "select" });
+  vm.runInContext(fn, ctx);
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, true, "portrait keeps Pause away from foreground Settings");
+  portrait = false;
+  ctx.syncRotateBlocker(false);
+  assert.equal(pmsettings.hidden, false);
+  assert.equal(pausemenu.hidden, true, "landscape cannot open a second modal above Settings");
+  pmsettings.hidden = true;
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, false, "closing Settings restores the ordinary pause card");
+  ctx.photoMode = true;
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, true, "photo camera retains its existing pause ownership");
+  ctx.photoMode = false; ctx.garageReturn = "pit"; garage.hidden = false;
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, true, "pit work retains its existing pause ownership");
 });
 
 test('online Photo camera input integrates while shared physics continues; solo Photo holds physics', () => {
@@ -114,6 +142,56 @@ test("Photo Studio buttons keep activation and arrows while WASD still flies and
   key(event("KeyW", "keyup")); key(event("Space", "keyup"));
   assert.equal(G.photoKeys.w, false); assert.equal(G.photoKeys.up, false);
   const escape = event("Escape"); key(escape); assert.equal(escape.prevented, false, "Escape reaches the canonical layer close door");
+});
+
+test("either UP key can be released while its other physical alias keeps flying upward", () => {
+  for (const first of ["KeyR", "Space"]) {
+    const { G, api, key } = boot(), second = first === "KeyR" ? "Space" : "KeyR";
+    const send = (code, type) => key({ code, type, preventDefault() {}, stopPropagation() {} });
+    api.enterPhotoMode();
+    send(first, "keydown"); send(first, "keydown"); send(second, "keydown");
+    send(first, "keyup");
+    api.updatePhotoCam(.1);
+    assert.ok(G.photoCam.pos[1] > 0, second + " still owns upward movement");
+    send(second, "keyup");
+    const height = G.photoCam.pos[1]; api.updatePhotoCam(.1);
+    assert.equal(G.photoCam.pos[1], height, "the final release stops upward movement");
+  }
+});
+
+test("either Shift can be released while the other keeps the photo camera boosted", () => {
+  for (const first of ["ShiftLeft", "ShiftRight"]) {
+    const { G, api, key } = boot(), second = first === "ShiftLeft" ? "ShiftRight" : "ShiftLeft";
+    const send = (code, type) => key({ code, type, preventDefault() {}, stopPropagation() {} });
+    api.enterPhotoMode();
+    send("KeyW", "keydown"); send(first, "keydown"); send(first, "keydown"); send(second, "keydown");
+    send(first, "keyup"); api.updatePhotoCam(.1);
+    const heldDistance = -G.photoCam.pos[2];
+    send(second, "keyup"); api.updatePhotoCam(.1);
+    const normalDistance = -G.photoCam.pos[2] - heldDistance;
+    assert.ok(heldDistance > normalDistance * 2, "the remaining Shift keeps boost; the final release restores normal speed");
+  }
+});
+
+test("ignored Studio Space and stale alias keyups do not cancel a different held key", () => {
+  const { dom, G, api, key } = boot();
+  const send = (code, type) => key({ code, type, preventDefault() {}, stopPropagation() {} });
+  api.enterPhotoMode(); send("KeyR", "keydown");
+  const panel = dom.byId("ps-panel"), button = dom.document.createElement("button"); panel.appendChild(button); button.focus();
+  send("Space", "keydown"); send("Space", "keyup"); api.updatePhotoCam(.1);
+  assert.ok(G.photoCam.pos[1] > 0, "activating a Studio button with Space leaves held R alone");
+  send("ShiftLeft", "keydown"); send("ShiftRight", "keydown");
+  key({ type: "blur" });
+  assert.equal(G.photoKeys.up, false); assert.equal(G.photoKeys.boost, false);
+  send("ShiftLeft", "keydown"); send("ShiftLeft", "keyup");
+  assert.equal(G.photoKeys.boost, false, "blur clears the other physical Shift too");
+  button.blur(); send("Space", "keydown"); send("KeyR", "keyup");
+  const before = G.photoCam.pos[1]; api.updatePhotoCam(.1);
+  assert.ok(G.photoCam.pos[1] > before, "an old keyup after blur cannot cancel newly held Space");
+  api.exitPhotoMode(); api.enterPhotoMode();
+  send("KeyR", "keydown"); send("KeyR", "keyup");
+  const resetHeight = G.photoCam.pos[1]; api.updatePhotoCam(.1);
+  assert.equal(G.photoCam.pos[1], resetHeight, "re-entry clears prior alias state");
 });
 
 test("fly-cam UP hold survives the boundary pointerleave and a capture steal; a hidden button releases", () => {

@@ -368,3 +368,34 @@ test("resolveSha: an unresolvable or ambiguous short sha is a clear error, not a
   assert.match(r.error, /cannot expand --sha 87575fbde/);
   assert.match(resolveSha("--evil", { revParse: () => "", request: () => ({}) }).error ?? "", /invalid --sha/);
 });
+
+test("#2184: a label-noise run (all jobs skipped, success) never hides the real verdict on the head", async () => {
+  const { labelNoiseRun } = await import("../../tools/ci/ci-watch.mjs");
+  const noise = { ...run(2, "CI", "completed", "success", "2026-10-01T00:05:00Z"), display_title: "CI ignored: label bug" };
+  const real = { ...run(1, "CI", "completed", "failure", "2026-10-01T00:00:00Z"), display_title: "Fix the thing" };
+  assert.ok(labelNoiseRun(noise) && !labelNoiseRun(real) && !labelNoiseRun({}));
+  const result = await afterThreeMinutes((endpoint) => {
+    if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [noise, real] } };
+    if (endpoint === "actions/runs/1/jobs?per_page=100") return { json: { jobs: [{ id: 9, name: "CI", status: "completed", conclusion: "failure", steps: [] }] } };
+    if (endpoint.startsWith("check-runs/")) return { json: [] };
+    throw new Error(endpoint);
+  }, { once: true });
+  assert.equal(result.code, 1, result.lines.join("\n"));
+  assert.ok(result.lines.some((line) => line.startsWith("= ci failed")));
+  assert.ok(!result.lines.some((line) => line.includes("#2 ")), "the noise run is not even announced");
+});
+
+test("#2184: `= ci none-yet` names the PR's mergeable_state", async () => {
+  const lines = []; let calls = 0;
+  const code = await watchSha(SHA, { interval: 1, deadline: Infinity, once: true,
+    now: () => calls++ === 0 ? 0 : 700000, wait: async () => {}, report: (l) => lines.push(l),
+    request: (endpoint) => {
+      if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [] } };
+      if (endpoint === associated) return { json: [pr()] };
+      if (endpoint === "pulls/738") return { json: { ...pr(), mergeable_state: "unknown" } };
+      if (endpoint.endsWith("/check-runs?per_page=1")) return { json: { total_count: 0 } };
+      throw new Error(endpoint);
+    } });
+  assert.equal(code, 124);
+  assert.ok(lines.some((l) => /= ci none-yet — PR #738 .*mergeable_state unknown/.test(l)), lines.join("\n"));
+});

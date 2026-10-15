@@ -147,15 +147,16 @@ test("PA1 the Chromium cache key carries the runner image", () => {
   assert.ok(action.indexOf("id: img") < action.indexOf("id: pwcache"), "the image id is computed before the cache step reads it");
 });
 
-test("PG1 pages.yml fast_tier_run drops the run when ship_only, instead of always yielding fast_run", () => {
+test("PG1 pages.yml passes fast_run through as fast_tier_run; the always-false ship_only/smoke_only plumbing is gone", () => {
   const wf = read(".github/workflows/pages.yml");
   const line = wf.match(/fast_tier_run: \$\{\{ (.*) \}\}/)[1];
-  assert.equal(line, "needs.verdict.outputs.ship_only != 'true' && needs.verdict.outputs.fast_run || ''");
-  // evaluate the GitHub idiom (a && b || c with '' falsy) for both inputs
-  const ev = (shipOnly, fast) => ((shipOnly !== "true" && fast) || "");
-  assert.equal(ev("true", "7"), "", "ship_only wins");
-  assert.equal(ev("false", "7"), "7");
-  // the idiom it replaced returned fast_run even when ship_only was true
-  const old = (shipOnly, fast) => ((shipOnly === "true" && "") || fast);
-  assert.equal(old("true", "7"), "7", "documents the defect");
+  assert.equal(line, "needs.verdict.outputs.fast_run");
+  assert.doesNotMatch(wf, /ship_only|smoke_only/);
+  // EQUIVALENCE (2026-10-14): pages-reuse-verdict.sh printed `ship_only=false`
+  // on every path since 2026-10-07, and the expression this replaced
+  // (a && b || c with '' falsy) yields fast_run unchanged for that value.
+  const was = (shipOnly, fast) => ((shipOnly !== "true" && fast) || "");
+  for (const fast of ["", "7"]) assert.equal(was("false", fast), fast);
+  const verdict = read("tools/ci/pages-reuse-verdict.sh");
+  assert.doesNotMatch(verdict, /ship_only=|SHIP_ONLY/, "the verdict emits no ship_only line any more");
 });
