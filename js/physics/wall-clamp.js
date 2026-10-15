@@ -171,7 +171,7 @@ const WallClamp = (function () {
           const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;
           if (firstStrike || grindScrape) {
             const fxInc = firstStrike ? incidence : Math.max(incidence, 0.2);
-            GameAudio.collision(fxInc, !firstStrike || incidence < 0.45);
+            GameAudio.collision(fxInc, !firstStrike || incidence < 0.45, into);
             c.collideT = WALL_SFX_REARM;
             if (firstStrike && track.street) {
               if (addShake) addShake(0.1 + incidence * 0.3);

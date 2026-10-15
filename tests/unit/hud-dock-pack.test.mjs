@@ -1,5 +1,5 @@
 /* hud-dock-pack — phone HUD SIZE 150% left-column + docked-dash packing.
-   Pins: (1) DockLayout.clampXY keeps legitimate negative offsets inside ±MAX;
+   Pins: (1) DockLayout.clampXY keeps a dock between its safe-area home and MAX (a negative share parked it off screen);
    (2) HudLayout.packPhoneRects clears the measured 844×390 / 932×430 / 390×844
    clash shapes from the q2 before-survey (tyre×rel/strat, strat×announce,
    gearbox×strat, sectors×inputs) without moving announce. */
@@ -53,14 +53,16 @@ const box = (key, role, x, y, w, h) => ({
   round: false, cx: x + w / 2, cy: y + h / 2, rr: w / 2, contains: [],
 });
 
-test("clampXY keeps legitimate negative offsets inside ±MAX (does not zero them)", () => {
+test("clampXY keeps a dock between its safe-area home and MAX (no offset parks it past the edge)", () => {
   const DL = loadDockLayout();
   assert.ok(DL && DL.clampXY, "DockLayout exports clampXY");
+  // The REPOSITION drag is the only writer; a negative share translated the dock up to 0.35 x the pad past the
+  // screen edge or under the home bar (HUD review 2026-10-14). The home is already the safe-area edge.
   const neg = DL.clampXY({ x: -0.12, y: -0.2 });
-  assert.equal(neg.x, -0.12, "negative x toward the home edge is kept");
-  assert.equal(neg.y, -0.2, "negative y (toward the home bar) is kept within ±MAX");
+  assert.equal(neg.x, 0, "outboard past the home edge clips to the home");
+  assert.equal(neg.y, 0, "below the home bar clips to the home");
   const clipped = DL.clampXY({ x: -2, y: 2 });
-  assert.equal(clipped.x, -DL.MAX, "past −MAX clips to −MAX, not 0");
+  assert.equal(clipped.x, 0);
   assert.equal(clipped.y, DL.MAX);
 });
 
