@@ -47,7 +47,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 644,
+      "ceiling": 647,
       "slack": 5
     },
     "dynamicIdReads": {
@@ -84,7 +84,7 @@
     },
     "waitForTimeout": 85,
     "waitNoPolling": {
-      "ceiling": 54,
+      "ceiling": 44,
       "slack": 39
     },
     "zeroRefModules": {

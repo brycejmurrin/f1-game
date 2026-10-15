@@ -1193,6 +1193,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   const sponsorPay = settleSponsor();
   save();
   const persisted = saveStatus();
+  if (persisted.ok && persisted.durable && typeof CareerRestorePoints !== "undefined") CareerRestorePoints.capture(slotFlavour, slotIdx, career, { reason: "round" });
   Log.info("game", `Career.settleRound pos=${pos}${dnf ? ` dnf=${dnf}` : ""}`);
   return { pos, pts, prize, matePos, matePrize, salary, bonus, wages, obj, dnf, sponsorPay, craft,
            money: career.money, rep: career.rep, save: persisted,
