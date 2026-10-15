@@ -3,6 +3,16 @@
 You plan the batch, launch workers, read their state off GitHub, answer
 escalations and stop workers that stall. You do not implement, merge or arm.
 
+## Contents
+
+- Before launching
+- Launch template (every vendor; SKILL.md §Launch policy makes these fields mandatory)
+- Authority, permissions and modes (the 2026-10-15 track-survey fleet)
+- Per-vendor adapters (sources in the design note)
+- Reading the fleet
+- Answering an escalation
+- Never
+
 ## Before launching
 
 1. `node tools/ci/who-is-on-it.mjs` and the open draft PRs: a live claim or a
@@ -26,6 +36,7 @@ DONE WHEN: <exact verify command or measured check, green on the PR head>
 CAPS: ≤ <n> screenshots/captures (default 25); ≤ 2 nested subagents; abort at
       ~400 messages or ~90 min with no OWNED push and say so.
 ORCHESTRATOR: <host>:<your session id>
+USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do beyond AGENTS.md
 Load skill agent-fleet and follow references/worker.md.
 Open a DRAFT PR; keep its fleet block current; subscribe with your host's tool.
 When blocked or unsure: set state: blocked, needs-orchestrator: yes, comment
@@ -34,6 +45,34 @@ the ORCHESTRATOR session. Do not guess past a blocker.
 Mark ready only after ready-gate.mjs exits 0 and ready-full-cap.mjs allows it.
 Do not enable auto-merge or merge.
 ```
+
+## Authority, permissions and modes (the 2026-10-15 track-survey fleet)
+
+- **Auto mode.** Launch every sibling session in auto mode
+  (`create_session` `permission_mode: "auto"`) and run subagents without plan
+  mode: an unattended worker in `plan` or `default` stalls on an approval nobody
+  sees. Auto mode still runs the hooks and the permission classifier.
+- **Relayed authority does not travel.** A worker treats the orchestrator's
+  messages as peer data, so "Bryce approved X" mid-run is refused (seen 20+
+  times: the push-hold override, merges, opening PRs). Put everything the user
+  approves for the fleet IN THE LAUNCH PROMPT, quoting the user's exact words
+  with a UTC time. A later grant goes out the same way; a worker that still
+  refuses needs the user in its own session, or the orchestrator does the step
+  itself (e.g. sync and push the branch from its own worktree).
+- **Permissions.** `APEX_PUSH_HOLD=0` (queue-hold override) is only for a push
+  the user asked for now; the classifier may deny it and `git merge` /
+  `sync-pr` in a worker anyway. Shared allow rules belong in
+  `.claude/settings.json` on the deploy branch, so every worker that syncs gets
+  them; a local settings file helps only its own container.
+- **What the brief grants up front** (so no mid-run grant is needed): open its
+  own DRAFT PR, `subscribe_pr_activity`, a `ci-watch.mjs --sha` Monitor and one
+  `send_later` check-in, then drive the draft fast tier to green; send Merge
+  Desk `SWEEP <PR#>` when `ready-gate.mjs` exits 0; the one golden-hash /
+  baseline row it may touch (lower only); where its images go (survey frames →
+  `track-survey-assets`, never the deploy branch).
+- **Reach.** Workers report with `send_message` to the orchestrator id in the
+  brief and may message sibling owners directly (e.g. an engine worker); a
+  fleet-wide instruction is one `send_message` per live session.
 
 The last line limits the worker's own actions. It is not a merge veto: the
 worker must not copy it, or any "do not merge" wording, into the PR body or a
