@@ -14,6 +14,8 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- Fog races are thick but readable again: the track no longer fades to a white wall within ~150 m, and dawn/dusk fog no longer sits under a bright clear sky (#2256, #2257).
+- Qatar at night no longer looks brighter than midday: the floodlit road keeps its texture instead of washing out to white (#2260).
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
