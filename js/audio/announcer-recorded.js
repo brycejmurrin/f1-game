@@ -22,7 +22,7 @@ var RecordedAnnouncer = (() => {
       clearTimeout(timer); clearTimeout(deadline); timer = deadline = null;
       if (pack()) pack().stop("intro");
     }
-    function play(lines, budgetMs, landLast) {
+    function play(lines, budgetMs, landLast, options) {
       stop();
       const p = pack();
       if (!p || !G.soundOn) return false;
@@ -34,7 +34,9 @@ var RecordedAnnouncer = (() => {
       // callback must never release a newer read's channel or ownership.
       const valid = () => {
         if (gen !== generation) return false;
-        if (G.soundOn && !G.paused && !(typeof document !== "undefined" && document.hidden)) return true;
+        // Explicit editor/settings auditions may run over a paused race.
+        // Automatic introductions and results reads still end on pause.
+        if (G.soundOn && (!G.paused || (options && options.allowPaused === true)) && !(typeof document !== "undefined" && document.hidden)) return true;
         stop(); return false;
       };
       const ready = p.load ? p.load(id) : Promise.resolve(p.ready(id));
