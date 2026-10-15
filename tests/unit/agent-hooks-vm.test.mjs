@@ -353,12 +353,12 @@ test("world(), obs() and physState() report the same slip budget under hard brak
 // (agentview.js says so at peakFracs). Pin the fallback: it runs, it yields a
 // sorted list of named corners, and it is not the raw-peak list.
 test("a def without turns gets the smoothed-peak corner table, not __apex.corners()' raw peaks", async () => {
-  const def = g.ctx.Tracks.LIST.find((t) => t.id === "imola");
+  const def = g.ctx.Tracks.LIST.find((t) => t.id === "spa");
   const turns = def.turns;
-  assert.ok(Array.isArray(turns) && turns.length > 0, "imola ships a curated turn list");
+  assert.ok(Array.isArray(turns) && turns.length > 0, "spa ships a curated turn list");
   def.turns = undefined;
   try {
-    await load("imola", 0.05, 60);
+    await load("spa", 0.05, 60);
     const ti = g.apex.trackInfo();
     const fracs = ti.corners.map((c) => c.frac);
     gt(fracs.length, 5, "the fallback found the circuit's corners");
