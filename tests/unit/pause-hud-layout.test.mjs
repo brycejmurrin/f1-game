@@ -1,4 +1,5 @@
 import { readCssSource } from "../helpers/css-source.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -93,6 +94,23 @@ test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warn
   now = 3000;
   vm.runInContext("drain()", ctx);
   assert.deepEqual(shown.map((s) => s[0]), ["TYRES AT 50%"], "a fresh info card still plays");
+});
+
+test("a full announce queue sheds comm and coach so a box call can queue", () => {
+  const game = gameSource();
+  const priorities = game.match(/const ANN_PRI = [^;]+;/)[0];
+  const stale = game.match(/const ANN_STALE_MS = [^;]+;/)[0];
+  const qmax = game.match(/const ANN_QUEUE_MAX = [^;]+;/)[0];
+  const announce = game.match(/function announce\([^]*?\n\}/)[0];
+  const ctx = vm.createContext({ hudProfile: "broadcast", CAM_MODES: [{ id: "chase" }], camMode: 0,
+    announceT: 5, _annPri: 1, _annFloor: 3, _annQueue: [], performance: { now: () => 0 },
+    showAnnounce: () => {} });
+  vm.runInContext(priorities + "\n" + stale + "\n" + qmax + "\n" + announce, ctx);
+  vm.runInContext('announce("COACH TIP", 2, "coach"); announce("TV LINE", 2, "comm"); announce("TV TWO", 2, "comm")', ctx);
+  assert.equal(ctx._annQueue.length, 2, "queue capped at two equal-priority lines");
+  const ok = vm.runInContext('announce("BOX BOX BOX — H", 2.2, "box")', ctx);
+  assert.equal(ok, true, "box queues by shedding the weakest waiting card");
+  assert.ok(ctx._annQueue.some((q) => q.kind === "box"), "box is waiting behind the floor");
 });
 
 test("a give-back warning is not starved behind the caution's own radio card: it takes over at the floor", () => {
