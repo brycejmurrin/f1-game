@@ -83,7 +83,7 @@ test("measure uses injected request and pages open PRs", () => {
     if (qs.includes("status=in_progress")) {
       return { json: { workflow_runs: [run("cursor/live", "in_progress", { id: 50 })] } };
     }
-    if (qs.includes("status=queued")) {
+    if (/status=(queued|pending|waiting|requested)&/.test(qs)) {
       return { json: { workflow_runs: [] } };
     }
     return { error: `unexpected ${qs}` };
@@ -152,4 +152,25 @@ test("api() reads past spawnSync's 1 MB default (ENOBUFS on 100 open PRs, 2026-1
   assert.ok(opts.maxBuffer >= 16 << 20, `maxBuffer ${opts.maxBuffer} — a page of PR JSON exceeds 1 MB`);
   const failed = api("pulls", { run: () => ({ status: null, stdout: "", stderr: "", error: { code: "ENOBUFS" } }), env: { GH_TOKEN: "t" } });
   assert.match(failed.error, /ENOBUFS/, "a spawn error is named, not reported as a bare curl failure");
+});
+
+// #2266 (owner comment on PR #2286, 2026-10-15 21:03Z): full-tier run
+// 38801834191 (PR #2272) sat in run status `pending`, with 6 browser batches
+// waiting for lanes. measure() listed only in_progress and queued, so the cap
+// read 2/3 while a third ready PR's full tier was live.
+test("#2266: measure lists every live run status, so a `pending` full-tier run counts against the cap", () => {
+  const calls = [];
+  const request = (qs) => {
+    calls.push(qs);
+    if (qs.startsWith("pulls?")) return { json: [pr(1, "cursor/a"), pr(2, "cursor/b"), pr(3, "cursor/c")] };
+    if (qs.includes("status=in_progress")) return { json: { workflow_runs: [run("cursor/a", "in_progress", { id: 1 }), run("cursor/b", "in_progress", { id: 2 })] } };
+    if (qs.includes("status=pending")) return { json: { workflow_runs: [run("cursor/c", "pending", { id: 3 })] } };
+    return { json: { workflow_runs: [] } };
+  };
+  const v = measure({ request, cap: 3 });
+  assert.equal(v.error, undefined);
+  assert.equal(v.count, 3, "the pending run is the third live full tier");
+  assert.equal(v.ok, false);
+  for (const s of ["queued", "in_progress", "pending", "waiting", "requested"])
+    assert.ok(calls.some((c) => c.includes(`status=${s}&`)), `lists ${s} runs`);
 });

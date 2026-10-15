@@ -17,12 +17,15 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - VS FRIEND: running into the back of your friend's car is one clean bump, so you no longer stay glued to their gearbox for several frames (#2164).
 - A rival's pass-by whoosh no longer keeps hissing under the pause menu, the results sheet or the title screen (#2187).
 - The team-radio key-up squelch now plays on phones, and on desktop it follows the master and SFX volume (#2189).
+- Data Hub: a session with no data yet (Results on a race weekend, WATCH & DRIVE, Telemetry, Live) now says nothing is published yet instead of showing a load failure with a RETRY that never works (#2185).
+- Data Hub: a tab served from the stored copy after a failed refresh shows that copy's age and "offline copy" instead of "updated just now"; the Schedule's NEXT marker moves on once a race ends; large telemetry downloads are no longer fetched again on every visit (#2190).
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - Blue flags: letting one lapping car through no longer counts toward a penalty for the next one in the queue (#2163).
 - Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
 - A car handed back after a heavy shunt never drives backwards at speed (#2167).
 - AI cars hold their line under the Safety Car and VSC instead of weaving to defend (#2175).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
+- The game still opens when the browser blocks access to saved data at startup.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
 - Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
@@ -30,6 +33,9 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
 - Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
 - A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
+- Track Designer on a landscape phone: the map gets most of the screen and UNDO / FIT VIEW sit beside it instead of covering it (#2152).
+- Touch: sliders, dropdowns and fold-out rows (OVERALL SPEED, Spotify, EXTRA PAINT, EXTRA FUNDS, free-camera FOV) are big enough to tap (#2158).
+- Free camera with the lighting panel open: the camera bar no longer covers the panel's FREE CAMERA button on a phone (#2159).
 - VS FRIEND: a short network outage mid-race (up to the race's 25 s grace) no longer ends the session; your friend's car is driven by AI until their connection comes back (#2195).
 - VS FRIEND room code: INVITE ANOTHER no longer leaves a dead room behind. Closing back to the room brings the same code back for the next friend (#2197).
 - Phone as controller: an expired pairing code takes its QR down and frees the button, and a phone whose link dropped keeps trying to reconnect for about a minute (#2198).

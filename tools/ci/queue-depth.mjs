@@ -21,6 +21,11 @@
  *   Linux jobs in flight (queued + running) ≥ LINUX_HOLD (60; the account has 40 slots)
  *   queued jobs, any OS                     ≥ QUEUED_HOLD (10)
  *   macOS jobs in flight                    ≥ MACOS_SLOTS (5)
+ *   the oldest queued Linux job's age       ≥ STARVED_AGE_MIN (10 min; #2266)
+ * The line also prints the OBSERVED Linux running count and the oldest queued
+ * age (#2266): on 2026-10-15 ~17:30Z only 7–12 Linux jobs ran while 25–36 sat
+ * queued for up to 14 min, so the account had far fewer runners than the 40
+ * the model assumes. A starved pool holds even under the count thresholds.
  * QUEUED RUNS FIRST (#2181, 2026-10-15). The list used to be in_progress first,
  * then queued, cut at MAX_RUNS: under load ≥ 30 runs are in progress, so no
  * queued run — where the queued jobs live — was ever read (the tool said 155
@@ -66,6 +71,9 @@ export const LINUX_SLOTS = 40;
 export const LINUX_HOLD = 60;
 /** Concurrent macOS job slots on the account. */
 export const MACOS_SLOTS = 5;
+/** Minutes the oldest queued Linux job may wait before the pool counts as starved (#2266):
+ *  the median wait at 35–60 jobs in flight is 86 s; on 2026-10-15 starved jobs sat 14 min. */
+export const STARVED_AGE_MIN = 10;
 /** Queued jobs (any OS) at which a push only adds wait: the 35–60 band's median is 86 s. */
 export const QUEUED_HOLD = 10;
 /** Live runs examined per call (one jobs request each). */
@@ -75,8 +83,8 @@ export const MAX_COUNTED = 60;
 /** Pages of 100 runs read per status. */
 export const MAX_PAGES = 3;
 /** Run statuses listed, waiting-for-a-runner first: that is where queued jobs live (#2181). */
-export const RUN_STATUSES = ["queued", "pending", "requested", "in_progress"];
-const QUEUED_RUN = new Set(["queued", "pending", "requested"]);
+export const RUN_STATUSES = ["queued", "pending", "requested", "waiting", "in_progress"];
+const QUEUED_RUN = new Set(["queued", "pending", "requested", "waiting"]);
 export const DEFAULT_OUT = "apex-status/queue-depth.json";
 
 /** Job statuses that wait for a runner; `waiting` (an environment gate) holds no slot. */
@@ -90,12 +98,16 @@ export const isMac = (job) => (job?.labels || []).some((l) => /^macos/i.test(Str
  * @param {Array<{status?:string, labels?:string[]}>} jobs
  */
 export function countJobs(jobs) {
-  const c = { linux: { running: 0, queued: 0 }, macos: { running: 0, queued: 0 } };
+  const c = { linux: { running: 0, queued: 0, oldestQueuedAt: null }, macos: { running: 0, queued: 0, oldestQueuedAt: null } };
   for (const j of jobs || []) {
     if (!j) continue;
     const os = isMac(j) ? c.macos : c.linux;
     if (j.status === "in_progress") os.running++;
-    else if (QUEUED.has(j.status)) os.queued++;
+    else if (QUEUED.has(j.status)) {
+      os.queued++;
+      const t = Date.parse(j.created_at);
+      if (Number.isFinite(t) && (os.oldestQueuedAt === null || t < os.oldestQueuedAt)) os.oldestQueuedAt = t;
+    }
   }
   return c;
 }
@@ -103,9 +115,12 @@ export function countJobs(jobs) {
 /**
  * The verdict over counted jobs. Pure.
  * @param {ReturnType<typeof countJobs>} c
- * @param {{ runsExamined?: number, runsLive?: number }} [meta]
+ * @param {{ runsExamined?: number, runsCounted?: number, runsLive?: number, now?: number }} [meta]
  */
 export function evaluate(c, meta = {}) {
+  const now = meta.now ?? Date.now();
+  const age = (os) => os.oldestQueuedAt == null ? null : Math.max(0, Math.floor((now - os.oldestQueuedAt) / 60e3));
+  const linuxAge = age(c.linux), macAge = age(c.macos);
   const linuxInFlight = c.linux.running + c.linux.queued;
   const macInFlight = c.macos.running + c.macos.queued;
   const queued = c.linux.queued + c.macos.queued;
@@ -118,12 +133,16 @@ export function evaluate(c, meta = {}) {
   if (linuxInFlight >= LINUX_HOLD) reasons.push(`Linux jobs in flight ${n(linuxInFlight)} ≥ ${LINUX_HOLD}`);
   if (queued >= QUEUED_HOLD) reasons.push(`queued jobs ${n(queued)} ≥ ${QUEUED_HOLD}`);
   if (macInFlight >= MACOS_SLOTS) reasons.push(`macOS jobs in flight ${n(macInFlight)} ≥ ${MACOS_SLOTS}`);
+  // #2266: the 40-slot model assumes runners; a queue that does not move says
+  // the pool is smaller than that, whatever the counts.
+  if (linuxAge !== null && linuxAge >= STARVED_AGE_MIN)
+    reasons.push(`oldest queued Linux job ${linuxAge} min ≥ ${STARVED_AGE_MIN} (${c.linux.running} running${c.linux.running < LINUX_SLOTS / 2 ? ": runners starved" : ""})`);
   return {
     verdict: reasons.length ? "hold" : "ok",
     hold: reasons.length > 0,
     reasons,
-    linux: { ...c.linux, inFlight: linuxInFlight, slots: LINUX_SLOTS },
-    macos: { ...c.macos, inFlight: macInFlight, slots: MACOS_SLOTS },
+    linux: { ...c.linux, inFlight: linuxInFlight, slots: LINUX_SLOTS, oldestQueuedMin: linuxAge },
+    macos: { ...c.macos, inFlight: macInFlight, slots: MACOS_SLOTS, oldestQueuedMin: macAge },
     queued,
     runsExamined,
     runsCounted,
@@ -137,8 +156,10 @@ export function reportLine(v) {
   const counted = v.runsCounted ? `, ${v.runsCounted} queued runs counted by job total` : "";
   const more = v.truncated || v.runsCounted
     ? `; ${v.runsExamined} of ${v.runsLive} live runs examined${counted}${v.truncated ? ", a lower bound" : ""}` : "";
+  // #2266: the observed concurrency (running) and the oldest wait, beside the model's slots.
+  const seen = `; ${v.linux.running} Linux running${v.linux.oldestQueuedMin == null ? "" : `, oldest queued ${v.linux.oldestQueuedMin}m`}`;
   return `= queue ${v.verdict} (${v.linux.inFlight} Linux jobs in flight / ${v.linux.slots}, ${v.queued} queued, `
-    + `${v.macos.inFlight} macOS / ${v.macos.slots}${more})${v.hold ? ` — ${v.reasons.join("; ")}: commit locally, do not push` : ""}`;
+    + `${v.macos.inFlight} macOS / ${v.macos.slots}${seen}${more})${v.hold ? ` — ${v.reasons.join("; ")}: commit locally, do not push` : ""}`;
 }
 
 /**
@@ -180,10 +201,11 @@ export function measure(opts = {}) {
     if (j.error) return { error: `run #${run.id} jobs: ${j.error}` };
     const n = Number.isInteger(j.json?.total_count) ? j.json.total_count : 0;
     const labels = j.json?.jobs?.[0]?.labels || [];
-    for (let i = 0; i < n; i++) jobs.push({ status: "queued", labels });
+    const created_at = j.json?.jobs?.[0]?.created_at || run.created_at;
+    for (let i = 0; i < n; i++) jobs.push({ status: "queued", labels, created_at });
     counted++;
   }
-  const v = evaluate(countJobs(jobs), { runsExamined: examined.length, runsCounted: counted, runsLive: runs.size });
+  const v = evaluate(countJobs(jobs), { runsExamined: examined.length, runsCounted: counted, runsLive: runs.size, now: (opts.now || Date.now)() });
   return { at: new Date((opts.now || Date.now)()).toISOString(), ...v, line: reportLine(v) };
 }
 
