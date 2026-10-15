@@ -26,7 +26,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { symbolSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
@@ -400,8 +400,7 @@ test("warm: TLX compiles the flame / ERS lit keys during the lights", () => {
 });
 
 test("game.js swaps rivals to the one shared body mesh past tier 2", () => {
-  const g = read("js/game.js");
-  assert.match(g, /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/);
+  assert.match(gameSource(), /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/);
 });
 
 test("warm: warmCarAssets builds the caster silhouette, the field wheels and the flame (not a whole-car mesh per rival)", () => {

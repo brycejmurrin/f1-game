@@ -21,7 +21,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fnSource } from "../helpers/fn-source.mjs";
-import { symbolSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import vm from "node:vm";
 import { carDrawVm, WORKS } from "../helpers/car-draw-vm.mjs";
 
@@ -85,7 +85,7 @@ test("AI world pose is mirrored after this step's (s, x) writes", () => {
 });
 
 test("visible procedural cars draw a body-only mesh and planted wheels", () => {
-  const game = read("js/game.js");
+  const game = gameSource();
   // The mesh caches, wheel meshes and the GLB loader live in the car-draw seam
   // (js/car/car-draw.js); game.js keeps the draw loop that consumes them.
   const cd = read("js/car/car-draw.js");
