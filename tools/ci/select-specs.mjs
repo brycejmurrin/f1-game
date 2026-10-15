@@ -307,8 +307,10 @@ export const TARGET_SHARD_SEC = 360;
 // 360 s billed) and 38020479662 selected-2 at 10.3 min after 85/87, both runs
 // then `cancelled`. 18 holds 2x a full leg's work plus setup and wrap-up.
 export const MAX_SELECTED_JOB_MIN = 18;
-// Fat UI files (career*, hud-layout) cannot use Playwright --shard (it
-// splits GROUPS). One job, 2 workers. PR #1075 run 37446472987: career
+// Fat UI files (career*, hud-layout) were one job of 2 workers (PR #1075; the
+// "--shard splits GROUPS" premise was the mega peel, fixed in #1113 — the
+// config is fullyParallel). Since 2026-10-15 they run as ≥2 native --shard
+// pieces of ONE worker each (FAT_UI_MIN_PIECES). PR #1075 run 37446472987: career
 // 27/37 passed then cancelled at 9 min (~39 s/test); career-season 15/36
 // at 6 min (~46 s/test). spec-timings still reflect fake-shard leftovers
 // so billed seconds are a lie; floor the plan and the kill timer here.
@@ -318,6 +320,11 @@ export const FAT_UI_SEC_PER_TEST = 45;
 // wrap-up margin. Let the existing2x-work + timeout + setup formula grant
 // headroom, bounded at50min; retries and max-failures stay unchanged.
 export const FAT_UI_SELECTED_JOB_MIN = 50;
+// A fat UI spec always runs as at least this many native --shard pieces of ONE
+// worker each (2026-10-15; it was one leg of two workers): two workers on a
+// 2-vCPU llvmpipe runner starve each other's boots (Pages 38695272346,
+// oversize-career: 45 s boot timeout while the sibling worker built three tracks).
+export const FAT_UI_MIN_PIECES = 2;
 // Over-budget / high-timeout specs with NO CI measurement: Playwright --shard
 // so each leg has this many tests, not one 30-minute packed file. A spec with
 // a measured median is split by its measured TIME instead (shards(),
@@ -833,12 +840,21 @@ export function shards(r, db = timings(), quarantine = loadQuarantine()) {
     // `fullyParallel: true` shards by test.
     const fatUi = /(?:^|\/)(career|career-season|career-hub|hud-layout)\.spec\.js$/.test(s.file);
     if (fatUi) {
-      const workers = 2;
-      const secFat = Math.max(1, Math.max(sec / workers, (s.tests * FAT_UI_SEC_PER_TEST) / workers));
-      const nFat = piecesToFitCap(secFat, s.tests, FAT_UI_SELECTED_JOB_MIN);
+      // ONE WORKER PER PIECE, AT LEAST TWO PIECES (2026-10-15). The two-worker
+      // leg put two Chromiums on a 2-vCPU llvmpipe runner: Pages 38695272346
+      // oversize-career died in boot() (no __apex in 45 s, the Bahrain menu
+      // backdrop not even started until 44.6 s) while the sibling worker ran
+      // three track builds back-to-back; 36 of 37 tests and both sibling
+      // career legs passed, and nothing in the diff touched boot. Native
+      // --shard=i/n pieces with one worker each keep the same wall time
+      // (half the tests per runner), give every test the whole runner, and
+      // cost one more job start per fat spec — bounded fleet-wide by the lanes.
+      const workers = 1;
+      const secFat = Math.max(1, sec, s.tests * FAT_UI_SEC_PER_TEST);
+      const nFat = Math.max(FAT_UI_MIN_PIECES, piecesToFitCap(secFat, s.tests, FAT_UI_SELECTED_JOB_MIN));
       for (let i = 1; i <= nFat; i++) {
-        items.push({ solo: true, name: nFat > 1 ? `oversize-${base}-${i}of${nFat}` : `oversize-${base}`, files: [s.file],
-          shard: nFat > 1 ? `${i}/${nFat}` : "", tests: nFat > 1 ? Math.ceil(s.tests / nFat) : s.tests,
+        items.push({ solo: true, name: `oversize-${base}-${i}of${nFat}`, files: [s.file],
+          shard: `${i}/${nFat}`, tests: Math.ceil(s.tests / nFat),
           sec: secFat / nFat, perTest, workers, maxCapMin: FAT_UI_SELECTED_JOB_MIN, retries });
       }
       continue;
