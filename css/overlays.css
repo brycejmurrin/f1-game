@@ -644,6 +644,48 @@ body:has(dialog[open]) #save-warning { display: none; }
 #vsfriend .vs-driver [data-verify-remove] { flex: 0 0 auto; font-size: var(--fs-micro); }
 #vsfriend #vs-start[disabled] { opacity: 0.4; filter: saturate(0.3); }
 
+/* VS FRIEND waiting-room seat roster (scoped to #vsfriend). */
+#vsfriend .vs-roster-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  min-width: 0;
+}
+#vsfriend .vs-roster-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--gap) * 2 / 3);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+#vsfriend .vs-player-count { font-weight: 700; opacity: 1; }
+#vsfriend .vs-roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  max-height: calc(32 * var(--svhz));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+#vsfriend .vs-roster-seat { margin: 0; }
+#vsfriend .vs-roster-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+}
+#vsfriend .vs-roster-dot.on {
+  background: #7CFC7C;
+  box-shadow: 0 0 0 2px rgba(124, 252, 124, 0.35);
+}
+
 /* ---- room codes ---- */
 /* The code is meant to be READ ALOUD across a room, so it is the biggest thing
    on the screen and monospaced — a proportional font makes a run of capitals
