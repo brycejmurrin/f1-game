@@ -102,7 +102,7 @@ test("defendPull: cover concede zeros the pull against a clearly faster attacker
   assert.ok(street > 0, "street cover unchanged by pace concede");
 });
 
-test("otFireRate: hunger raises λ; streets unchanged by the same numbers", () => {
+test("otFireRate: hunger does NOT raise λ (tactics.md); streets unchanged too", () => {
   const midOpen = {
     traits: mid, blockerGap: 5, gapAhead: 5, roomL: 3, roomR: 2,
     speed: 58, aheadSpeed: 54, kAhead: 0.002, street: false, vTop,
@@ -111,7 +111,7 @@ test("otFireRate: hunger raises λ; streets unchanged by the same numbers", () =
   const hungry = A.otFireRate({
     ...midOpen, ourVmax: us, blockerVmax: them, queueT: 12,
   });
-  assert.ok(hungry > base, `hunger raises rate ${base} -> ${hungry}`);
+  assert.equal(hungry, base, "hunger leaves the fire rate alone (the reverted bump raised contact)");
   const streetBase = A.otFireRate({ ...midOpen, street: true });
   const streetHungry = A.otFireRate({
     ...midOpen, street: true, ourVmax: us, blockerVmax: them, queueT: 12,
@@ -130,14 +130,15 @@ test("otWant: permanent pace edge lowers the margin so a ~1 % car wants the move
     "street keeps the higher margin (no edgeN cut)");
 });
 
-test("latchLate + runExtra: hunger latches and stretches the run; streets untouched", () => {
+test("latchLate + runExtra: hunger does not latch but stretches the run; streets untouched", () => {
   const st = {
     traits: mid, toTurnIn: 400, kAhead: 0, vTop, speed: 70, blockerSpeed: 70,
     blockerGap: 20, street: false, queueT: 12, ourVmax: us, blockerVmax: them,
   };
   assert.equal(A.latchLate({ ...st, queueT: 0, ourVmax: us, blockerVmax: us }), false,
     "equal pace far down a straight still waits");
-  assert.equal(A.latchLate(st), true, "hunger ≥ 1.25 latches");
+  assert.ok(A.passHunger({ ...st, queueT: 0 }) > 1, "a fresh 1.2 % edge is hungry");
+  assert.equal(A.latchLate({ ...st, queueT: 0 }), false, "hunger alone does not latch (tactics.md)");
   assert.equal(A.latchLate({ ...st, street: true }), true, "street latches as before");
 
   const baseRun = A.runExtra(0.02, 0.6, true, false);

@@ -392,9 +392,9 @@ const AiDrive = (function () {
     const aggrMul = 1 + clamp(t.aggression != null ? t.aggression : 0, -1, 1) * 0.22;
     const house = houseMulCtx(ctx, 0.88, 1.12, "attack");
     const orders = ordersMul(ctx.team, ctx.seat, ctx.other, "ot");
-    // Pass hunger (permanent only): stuck behind a slower car raises λ, capped.
-    const hunger = passHunger(ctx);
-    return clamp(0.55 * situ * craftMul * awareMul * expMul * aggrMul * house * orders * hunger, 0.08, 2.8);
+    // Pass hunger does NOT raise λ: the reverted fire bump raised contact
+    // (tactics.md §Pass completion). It works through tow / run / otWant instead.
+    return clamp(0.55 * situ * craftMul * awareMul * expMul * aggrMul * house * orders, 0.08, 2.4);
   }
 
   // roll is the caller's simRnd() — only invoke when otArmed (short-circuit).
@@ -823,14 +823,11 @@ const AiDrive = (function () {
   // car held for its whole patience goes anyway: at racing speed two cars
   // accelerate alike, so a 4 % car may never close the last metres in the tow
   // (measured: requiring it, a 4 % faster car never passed in 50 s at monza).
-  // Pass hunger also latches: a ≥ ~0.7 % car that has sat in the queue long
-  // enough does not wait for a closing rate the queue cap itself forbids.
   function latchLate(ctx) {
     if (ctx.street) return true;
     if (!(ctx.toTurnIn > 150) || Math.abs(ctx.kAhead || 0) > 0.004) return true;   // the zone is near, or not a straight
     const ref = ctx.vTop > 0 ? ctx.vTop : 72;
     if ((ctx.blockerSpeed || 0) < 0.12 * ref || queuePress(ctx) >= 1) return true;
-    if (passHunger(ctx) >= 1.35) return true;
     return (ctx.speed || 0) - (ctx.blockerSpeed || 0) >= 0.015 * ref
       || (ctx.blockerGap || 0) <= 6 + (FOLLOW_TIGHT + 0.03) * (ctx.speed || 0);
   }
@@ -928,9 +925,7 @@ const AiDrive = (function () {
     q *= 1 - (1 - START_ATTACK) * (ctx.calm || 0);   // the first lap: not lap 20 into turn 1 (startCalm)
     // A queued car can never show a closing rate — the queue cap pins it to the
     // blocker's speed — so time held behind stands in for it (queuePress).
-    // Pass hunger (permanent) stands in the same way for a clear pace edge.
-    const hunger = passHunger(ctx);
-    return q * Math.max(closing, deficit, 0.7 * queuePress(ctx), 0.55 * (hunger - 1)) * craft * roll >= 0.32 && passReach(ctx);
+    return q * Math.max(closing, deficit, 0.7 * queuePress(ctx)) * craft * roll >= 0.32 && passReach(ctx);
   }
 
   // CAN IT BE HALF ALONGSIDE BY THE TURN-IN? game.js abandons a pass that is
