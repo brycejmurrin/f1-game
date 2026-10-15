@@ -122,8 +122,16 @@ function probeCity(rows) {
 }
 
 if (require.main === module) {
-  const id = process.argv[2] || "vegas";
-  const radii = (process.argv[3] || "900,400,300,200,150").split(",").map(Number);
+  // --help and a typo'd flag answer before the track build (#1708). Node >= 22.12
+  // loads the shared ESM parser through require().
+  const { exitIfHelp, parseFlags } = require("../lib/cli-args.mjs");
+  const argv = process.argv.slice(2);
+  exitIfHelp(argv, `usage: node tools/gfx/chunk-reach.cjs [track=vegas] [radii=900,400,300,200,150]
+  Builds the track in the Node VM and counts the chunked scenery (72 m cells) a
+  cube-map pass of each far radius reaches. No GPU, no browser, no timing.`);
+  parseFlags(argv, []);
+  const id = argv[0] || "vegas";
+  const radii = (argv[1] || "900,400,300,200,150").split(",").map(Number);
   const r = reach(id, radii, 12);
   console.log(`${r.id} — ${r.totalChunks} chunks, ${r.tris} tris, ${r.stations} stations`);
   console.log("  far(m)   chunks/cube   indices/cube   indices/face    vs 900m");

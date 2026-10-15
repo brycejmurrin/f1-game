@@ -29,6 +29,14 @@
  * 1/255 an 8-bit channel already quantises to), flag phase 1.563e-3.
  */
 const fs = require("fs"), path = require("path"), vm = require("vm");
+// --help and a typo'd flag answer before the packer lift and track build (#1708).
+// Node >= 22.12 loads the shared ESM parser through require().
+const { exitIfHelp, parseFlags } = require("../lib/cli-args.mjs");
+exitIfHelp(process.argv.slice(2), `usage: node tools/gfx/tlx-pack-check.cjs [track=montreal | --all]
+  Run from the repo root. Packs a real build's attributes with TLX's own packAttr,
+  decodes them and fails if any shader decision changed (material layer, flag
+  branch, integer MAT id, Uint16 index). No browser.`);
+parseFlags(process.argv.slice(2), ["--all"]);
 const ROOT = process.cwd();
 const MANIFEST = require(path.join(ROOT, "tools/manifest.cjs"));
 

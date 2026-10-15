@@ -8,6 +8,7 @@
 // the REAL script in a throwaway repo under artifacts/ (never /tmp) through
 // each case: fresh restore, a stale session saving, this session's own edit,
 // both sides adding index lines, a topic-file conflict, and deletions.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -113,6 +114,41 @@ test("a deletion travels only from the side that made it", () => {
     r.run("save");
     assert.equal(r.get(r.repo, "a.md"), null, "this session's delete reaches the repo");
     assert.equal(r.get(r.live, "b.md"), null, "theirs reaches the session");
+  } finally { r.done(); }
+});
+
+test("a branch checkout that lacks a memory is not a deletion; a committed deletion still is (#2128)", () => {
+  const r = rig();
+  const main = path.dirname(path.dirname(r.repo));
+  const git = (...a) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd: main, encoding: "utf8" });
+  try {
+    r.put(r.repo, "MEMORY.md", "# idx\n- [A](a.md)\n");
+    r.put(r.repo, "a.md", topic("a", "alpha"));
+    git("add", ".claude"); git("commit", "-qm", "base");
+    const baseBranch = git("rev-parse", "--abbrev-ref", "HEAD").trim();
+    r.run("restore");
+    git("checkout", "-qb", "mem");
+    // this session writes a memory; save carries it out; it is committed on `mem`
+    r.put(r.live, "c.md", topic("c", "gamma"));
+    r.put(r.live, "MEMORY.md", "# idx\n- [A](a.md)\n- [C](c.md)\n");
+    r.run("save");
+    git("add", ".claude"); git("commit", "-qm", "memory c");
+    r.run("save");                               // in step: the baseline learns c
+    git("checkout", "-q", baseBranch);           // a branch that never had c
+    assert.equal(r.get(r.repo, "c.md"), null, "precondition: the checkout removed the repo copy");
+    r.run("save");
+    assert.equal(r.get(r.live, "c.md"), topic("c", "gamma"), "the live memory survives the checkout");
+    assert.equal(r.get(r.repo, "c.md"), topic("c", "gamma"), "and is written back to ride this branch");
+    assert.match(r.get(r.live, "MEMORY.md"), /- \[C\]\(c\.md\)/, "its index line survives too");
+    assert.match(r.get(r.repo, "MEMORY.md"), /- \[A\]\(a\.md\)\n- \[C\]\(c\.md\)/);
+    // a deletion that a commit made is still honoured after a checkout
+    git("add", ".claude"); git("commit", "-qm", "carry c");
+    r.run("save");
+    git("rm", "-q", ".claude/memory/c.md"); git("commit", "-qm", "drop c");
+    git("checkout", "-q", "mem"); r.run("save");  // back on a branch that has c
+    git("checkout", "-q", baseBranch);            // HEAD's history deleted c
+    r.run("save");
+    assert.equal(r.get(r.live, "c.md"), null, "a deletion in HEAD's history reaches the session");
   } finally { r.done(); }
 });
 

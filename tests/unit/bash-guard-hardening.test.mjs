@@ -10,6 +10,7 @@
 // agent-config.test.mjs runs the plain forms.
 //
 // Run: node --test tests/unit/bash-guard-hardening.test.mjs   (npm run test:tooling-fast)
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -105,6 +106,35 @@ test("the pkill guard blocks -f however the flags are spelled (M36)", () => {
     "kill -9 $(pgrep -u root -f chrome)", "pgrep -9f chrome | xargs kill",
   ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
   for (const cmd of ["pkill -x firefox", "pkill -u root sleep", "echo 'pkill -9f node'", "pgrep -u root bash"])
+    assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});
+
+test("settings.json turns the merge prompts off for every session, and squash/rebase stay denied (Bryce 2026-10-15)", () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  assert.equal(settings.env.APEX_MERGE_DESK, "1", "merging, arming and draft→ready run without a tap");
+  const run = (tool_name, tool_input) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/github-mcp-guard.sh")], {
+    input: JSON.stringify({ tool_name, tool_input }), encoding: "utf8",
+    env: { ...process.env, APEX_MERGE_DESK: settings.env.APEX_MERGE_DESK },
+  }).stdout.trim();
+  assert.equal(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge" }), "", "a merge-commit merge passes silently");
+  assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), "", "draft→ready passes silently");
+  for (const m of ["squash", "rebase"])
+    assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m }), /"deny"/, `${m} stays denied`);
+});
+
+test("pkill -f blocks whatever its pattern names: it always matches its own shell (#2125)", () => {
+  // `pkill -f "serve -l 3456"` passed the old browser-word filter and killed its
+  // own shell (exit 144) in two census siblings on 2026-10-15.
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  for (const cmd of [
+    'pkill -f "serve -l 3456"', "pkill -f serve ; sleep 1", "pkill -f 'http.server'",
+    "pkill -f zzz-census-nonexistent-pattern", "timeout 5 pkill --full apex-tools-mcp",
+  ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
+  // killall matches process names, not command lines: unrelated names stay allowed
+  for (const cmd of ["killall sleep", "pkill -x serve", 'echo "pkill -f serve"'])
     assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
 });
 
@@ -616,7 +646,7 @@ test("a PASSING commit tells the model which guard path ran: additionalContext +
     fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "import { test } from 'node:test'; test('ok', () => {});\n");
     repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
     const commit = (command = "git commit -m x") => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }),
-      { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
+      { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_MERGE_DESK: "" } });   // the gh ask below needs a non-desk session
     const out = (r) => { assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout); };
     fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note ctx\n");
     repo.g("add", "docs/PHYSICS.md");
@@ -702,8 +732,14 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }), "deny");
   assert.equal(mcp({ method: "force_cancel_workflow_run", run_id: 1 }), "deny");
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_RUN_CANCEL_OK: "1" }), null, "the user asked");
-  assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }), "ask", "a re-run is at most once, infra only");
-  assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }), "ask");
+  const noDesk = { APEX_MERGE_DESK: "" };
+  assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }, noDesk), "ask", "a re-run is at most once, infra only");
+  assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }, noDesk), "ask");
+  // Bryce 2026-10-15 ("all tools and mcps enabled", "Fix for me"): settings.json sets
+  // APEX_MERGE_DESK=1 for every session, so a re-run passes silently; cancels stay denied.
+  for (const method of ["rerun_failed_jobs", "rerun_workflow_run"])
+    assert.equal(mcp({ method, run_id: 1 }, { APEX_MERGE_DESK: "1" }), null, `desk passes ${method}`);
+  assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_MERGE_DESK: "1" }), "deny", "the desk never cancels");
   assert.equal(mcp({ method: "run_workflow", workflow_id: "ci.yml", ref: "x" }), null, "a dispatch passes");
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));

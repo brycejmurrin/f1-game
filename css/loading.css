@@ -117,6 +117,19 @@
 /* Out of the accessibility tree too, not just transparent: a screen reader would
    otherwise read a card no sighted player can see yet. */
 #loading[data-phase="garage"] #ld-card { visibility: hidden; }
+/* THE HAND-OFF (loading-screen.js wipe): the phase after the garage opens on a
+   band of the player's team colour sweeping across, over the card's own scrim,
+   so garage -> card -> flyby reads as one sequence instead of a hard cut. 0.9 s,
+   once; off under reduced motion (both forms), where the cut stays a cut. */
+#loading[data-wipe] {
+  background:
+    linear-gradient(100deg, transparent 0 38%, var(--ld-wipe) 46% 54%, transparent 62%) 100% 0 / 320% 100% no-repeat,
+    radial-gradient(ellipse at 50% 45%, transparent 38%, var(--scrim-heavy) 100%);
+  animation: ld-wipe 0.9s cubic-bezier(0.6, 0, 0.3, 1) both;
+}
+@keyframes ld-wipe { to { background-position: 0% 0, 0 0; } }
+@media (prefers-reduced-motion: reduce) { #loading[data-wipe] { animation: none; background-image: radial-gradient(ellipse at 50% 45%, transparent 38%, var(--scrim-heavy) 100%); } }
+:root[data-motion="reduce"] #loading[data-wipe] { animation: none; background-image: radial-gradient(ellipse at 50% 45%, transparent 38%, var(--scrim-heavy) 100%); }
 /* PREP: cold compilation before the garage leave (LoadingScreen prep phase). Scrim
    stays (unlike garage); the race/session card stays hidden until garage-out ends. */
 #loading[data-phase="prep"] #ld-card { visibility: hidden; }
