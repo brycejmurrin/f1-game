@@ -379,6 +379,34 @@ test("the now-playing poll waits out a 429's Retry-After", async () => {
   assert.equal(polls, 1, "no poll inside the 120 s Retry-After window");
 });
 
+test("now-playing polling recovers when response headers arrive but JSON body stalls", async () => {
+  const intervals = [];
+  let polls = 0;
+  let resolveStalled;
+  const stalledBody = new Promise((resolve) => { resolveStalled = resolve; });
+  const { SpotifyMusic, flush } = load((url) => {
+    if (String(url).endsWith("/me/player")) {
+      polls++;
+      return Promise.resolve(polls === 1
+        ? { ok: true, status: 200, json: () => stalledBody }
+        : jsonResponse({ item: { name: "Recovered", artists: [] }, is_playing: true }));
+    }
+    return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, liveToken("live")]], intervals });
+  await SpotifyMusic.connect();
+  await settle();
+  assert.equal(polls, 1);
+  flush(); // fire the fake 15 s watchdog
+  await settle();
+  await intervals[0]();
+  await settle();
+  assert.equal(polls, 2, "a stalled body must not hold the poll's in-flight guard forever");
+  assert.equal(SpotifyMusic.status().track, "Recovered — ");
+  resolveStalled({ item: { name: "Obsolete", artists: [] }, is_playing: true });
+  await settle();
+  assert.equal(SpotifyMusic.status().track, "Recovered — ", "a late body cannot replace newer playback state");
+});
+
 /** A fake GameAudio that records the music backend the module installs/removes. */
 function fakeAudio() {
   const a = { backend: null, sets: [] };

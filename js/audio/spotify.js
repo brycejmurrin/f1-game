@@ -725,8 +725,16 @@ window.SpotifyMusic = (function () {
       if (r.status === 204) { track = null; paused = true; emit(); return; }   // nothing playing
       if (r.status === 429) { pollHoldUntil = Date.now() + retryAfterMs(r); return; }
       if (!r.ok) return;
-      return r.json().then((j) => {
-        if (gen !== sessionGen) return;
+      // fetch() can finish at the headers while the body never completes. The
+      // API fetch timer has already been cleared, so bound this read as well.
+      let bodyTimer;
+      return Promise.race([
+        r.json().then((j) => ({ j }), () => null),
+        new Promise((resolve) => { bodyTimer = setTimeout(() => resolve(null), FETCH_TIMEOUT_MS); }),
+      ]).then((body) => {
+        clearTimeout(bodyTimer);
+        if (!body || gen !== sessionGen) return;
+        const j = body.j;
         const it = j && j.item;
         track = it ? (it.name + " — " + (it.artists || []).map((a) => a.name).join(", ")) : null;
         title = it ? it.name : "";
