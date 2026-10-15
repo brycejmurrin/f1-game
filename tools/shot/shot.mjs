@@ -4,7 +4,9 @@
 // @skill playwright-probe
 // Usage:
 //   node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg]
-//     [--az N] [--el N] [--dist N] [--side -1|1] [--hud] [--tod day|dusk|dawn|night]
+//     [--az N] [--el N] [--dist N] [--side -1|1] [--hud]
+//     [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog|storm]
+//     [--present-timeout S] [--capture-retries N]
 //     [--jpeg] [--raster] [--team <id>] [--wait <s>]
 //   node tools/shot/shot.mjs --batch jobs.json [--jpeg] [--raster]
 //
@@ -40,6 +42,7 @@ import {
   SHOT_USAGE,
   parseShotArgv,
   groupJobsByTrack,
+  isRetryableCaptureError,
 } from "./shot-jobs.mjs";
 
 import { captureContextOptions, captureLaunchOptions, applyCaptureProfile } from "./capture-options.mjs";
@@ -80,8 +83,11 @@ async function pinTeam(page, team) {
   }, idx);
 }
 
-async function raceTrack(page, trackId, waitMs) {
-  await page.evaluate((id) => { window.__apex.headless(false); return window.__apex.race(id); }, trackId);
+async function raceTrack(page, trackId, { tod, weather }, waitMs) {
+  await page.evaluate(({ id, tod: t, wx }) => {
+    window.__apex.headless(false);
+    return window.__apex.race(id, t || undefined, wx || undefined);
+  }, { id: trackId, tod, wx: weather });
   await page.waitForFunction(
     (id) => window.__apex.info().track === id,
     trackId, { timeout: waitMs, polling: 100 },
@@ -90,13 +96,14 @@ async function raceTrack(page, trackId, waitMs) {
 
 async function frameCamera(page, job) {
   return mutateCaptureScene(page,
-    ({ frac, cam, az, el, dist, side, tod, showHud }) => {
+    ({ frac, cam, az, el, dist, side, tod, weather, showHud }) => {
       const a = window.__apex;
       a.headless(false);
       a.go();
       a.park(frac);
       a.freeze(true);
       if (a.setTimeOfDay && a.setTimeOfDay() !== tod) a.setTimeOfDay(tod);
+      if (a.weather && weather && a.weather() !== weather) a.weather(weather);
       if (a.hud) a.hud(!!showHud);
 
       if (cam === "eye") a.eyeAt(frac, 0, 2.5);
@@ -128,7 +135,7 @@ async function frameCamera(page, job) {
   );
 }
 
-async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
+async function captureJob(page, job, waitMs, presentMs, modelInfo, diagnostics) {
   const frame = await frameCamera(page, job);
 
   if (job.raster) {
@@ -148,7 +155,6 @@ async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
   }
 
   mkdirSync(dirname(job.out), { recursive: true });
-  const presentMs = Math.min(waitMs, 90000);
   const readiness = await awaitCaptureReady(page, { timeoutMs: presentMs });
   const pageScope = job.showHud || job.capture.scope === "page";
   const shot = await screenshotPresentedCanvas(page, {
@@ -182,7 +188,27 @@ async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
   console.log(JSON.stringify({ modelsPrefetch: modelInfo, readiness, pixels, renderer, scope: pageScope ? "page" : "scene", frame: { camera: frame.camera, dbgCamActive: frame.dbgCamActive, models: frame.models } }, null, 2));
 }
 
+async function captureJobWithRetries(page, job, plan, modelInfo, diagnostics, failedShots) {
+  const attempts = 1 + (plan.captureRetries ?? 2);
+  let lastErr;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      await captureJob(page, job, plan.waitMs, plan.presentMs, modelInfo, diagnostics);
+      return;
+    } catch (err) {
+      lastErr = err;
+      const retryable = isRetryableCaptureError(err);
+      if (!retryable || attempt >= attempts) break;
+      console.error(`[shot] retry ${attempt}/${attempts - 1} for ${job.out}: ${err.message}`);
+      await page.evaluate(() => window.__apex.headless(false)).catch(() => {});
+    }
+  }
+  failedShots.push({ out: job.out, trackId: job.trackId, frac: job.frac, cam: job.cam, error: lastErr?.message || String(lastErr) });
+  console.error(`shot failed: ${job.out} — ${lastErr?.message || lastErr}`);
+}
+
 let trace = null;
+const failedShots = [];
 const srv = await startStaticServer(ROOT, plan.capture.cacheAssets
   ? { immutableAssets: { namespace: randomUUID() } } : {});
 
@@ -229,15 +255,21 @@ try {
       });
     }
     if (currentTrack !== group.trackId) {
-      await raceTrack(page, group.trackId, plan.waitMs);
+      const lead = group.jobs[0];
+      await raceTrack(page, group.trackId, { tod: lead.tod, weather: lead.weather }, plan.waitMs);
       currentTrack = group.trackId;
     }
     for (const job of group.jobs) {
-      try { await captureJob(page, job, plan.waitMs, modelInfo, diagnostics); }
+      try { await captureJobWithRetries(page, job, plan, modelInfo, diagnostics, failedShots); }
       finally { await page.evaluate(() => window.__apex.headless(true)).catch(() => {}); }
     }
   }
   if (context) await context.close();
+  if (failedShots.length) {
+    console.error(`[shot] ${failedShots.length} failed shot(s):`);
+    for (const f of failedShots) console.error(`  ${f.out} (${f.trackId} ${f.frac} ${f.cam}): ${f.error}`);
+    process.exitCode = 1;
+  }
 } catch (err) {
   console.error("shot failed:", err.message);
   process.exitCode = 1;
