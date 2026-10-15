@@ -26,6 +26,12 @@ test("fitHud publishes --hud-fit-stamp after painted phone clearance", () => {
     "fitHud bumps a published stamp specs can wait on");
   assert.match(HUD_JS, /phonePaintedClash\(\)/,
     "stamp must not advance while painted readout-on-control clashes remain");
+  assert.match(HUD_JS, /towerGapsPaintedClash\(\)/,
+    "stamp must not advance while .hud-top still rects onto .hud-gaps");
+  assert.match(HUD_JS, /gapPaintedDrop\(\)/,
+    "phone fit can drop the gap strip when the painted boxes overlap");
+  assert.match(HUD_JS, /_fitPending/,
+    "invalidateFit mid-tick must not republish --hud-fit-stamp before the next fitHud");
   assert.match(HUD_JS, /phoneFitStampSync/,
     "stamp publishes at end of updateHud after REL/sectors land");
   assert.match(HUD_JS, /syncPhoneFit/,

@@ -781,7 +781,10 @@ const CarDraw = (function () {
         } catch (e) { Log.warn("gfx", "selector car asset preparation failed", e); }
         const elapsed = performance.now() - at; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
       }
-      Log.info("gfx", "selector car assets ready", { cars: field.length, casters, lod: lodPrep, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs) });
+      // Resolves to its record only when it ran to its end (the export keeps the last: menuCarAssets).
+      const done = { cars: field.length, steps: plan.length, casters, lod: lodPrep, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs), at: Math.round(performance.now()) };
+      Log.info("gfx", "selector car assets ready", done);
+      return done;
     }
     function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup, setup, stamp) {
       const state = teamDecalState(team, usePlayerSetup, setup, stamp);
@@ -1572,16 +1575,20 @@ const CarDraw = (function () {
       _teamMeshKeyCache.clear();
     }
 
+    let _menuCarPrep = null;   // the last prepareMenuCarAssets that ran to its end (menuCarAssets)
     return (_instance = {
       teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
-      warmCarAssets, warmCarAssetsAsync, prepareMenuCarAssets, loadCarModel, buildCarData,
+      warmCarAssets, warmCarAssetsAsync, loadCarModel, buildCarData,
+      // __apex.menuPrep().cars: the last menu car prep that ran to its end.
+      prepareMenuCarAssets: (current) => prepareMenuCarAssets(current).then((r) => { if (r) _menuCarPrep = r; return r; }),
       setPlayerParts, invalidateCustomMeshCaches, invalidateFactoryMeshCaches,
       WHEELS, coOpt, liveryBitmapOpts,
       get modelBuf() { return carModelBuf; },
       get playerVisualKey() { return playerVisualKey; },
+      get menuCarAssets() { return _menuCarPrep; },
     });
   }
   // The live instance, for mirror-pass.js state().glass — game.js creates exactly one.

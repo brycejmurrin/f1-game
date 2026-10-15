@@ -19,6 +19,13 @@ ASK_DESK_METHOD = ("Merge Desk arms auto-merge with the MERGE method named expli
                    "the repository default, which may be squash. Pass mergeMethod: MERGE.")
 ASK_REF = ("This GitHub API call merges or moves a branch outside a pull request; branch protection is the only "
            "other check. Confirm it by hand.")
+DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Concurrent PRs, 2026-10-15): a queued run holds no slot, so a "
+               "cancel only throws away its queue position and the branch owner pushes a retrigger commit — 306 of 401 PR "
+               "runs died that way on 2026-10-15. Your own superseded run is replaced by your next push; a closed PR's runs "
+               "are cancelled by the close. APEX_RUN_CANCEL_OK=1 only when the user asked for this cancel.")
+ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra error (AGENTS.md §Concurrent PRs). A re-run "
+             "of a SUPERSEDED run joins the branch's ci-<head.ref> group and cancels the live run; prefer "
+             "`node tools/ci/ci-rerun.mjs` when it exists. Confirm by hand.")
 
 
 def squash_or_rebase(method):
