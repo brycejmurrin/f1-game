@@ -1416,12 +1416,12 @@
         if (!onTrack(a3.c[0], a3.c[2], 12)) megaYacht(a3, 0.8, [0.94, 0.90, 0.82]);
       }
 
-      const terraceStack = (a, tiers, baseCol) => {
+      const terraceStack = (a, tiers, baseCol, seedK) => {
         const b = [a.r, a.u, a.t];
         let up = 0, back = 0, w = 26;
         for (let i = 0; i < tiers; i++) {
           const c = vadd(vadd(a.c, a.t, back), a.u, up + 4.5);
-          const col = PASTELS[(K(a.c[0] | 0) + i * 3) % PASTELS.length] || baseCol;
+          const col = PASTELS[(hash(seedK + i * 11) + i * 3) % PASTELS.length] || baseCol;
           out._mat = MAT.CONCRETE;
           addBox(out, c, [w, 9, 12], col, b);
           // balcony window band + warm glow
@@ -1438,7 +1438,7 @@
       };
       for (const sf of [0.11, 0.16]) {
         const k = K(sf), a = anchor(k, -1, 58 + hash(k) * 10);
-        if (!onTrack(a.c[0], a.c[2], 16)) terraceStack(a, 4, DUSTY);
+        if (!onTrack(a.c[0], a.c[2], 16)) terraceStack(a, 4, DUSTY, k);
       }
 
       for (let i = 0; i < 4; i++) {
