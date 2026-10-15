@@ -1450,6 +1450,32 @@ test("the Verdict prints the camera each leg drove and its mirror chain, and fla
   assert.match(r.out, /cam: {3}helmet \(asked game default, at window end helmet\)\n/);
 });
 
+test("the Verdict prints the menu entry, a mid-window camera switch and the lazy mirror warm it paid (hunt 5 E)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const menu = { entry: "menu", ok: true, prepReady: true, prepWaitMs: 4200, garage: { garageReady: true },
+    atGo: { done: true, warmed: true, warmable: true, cars: { cars: 22, steps: 65, lod: true, cpuMs: 900, maxCpuMs: 140 } } };
+  const switched = { ...tlxLegJson(), entry: "menu", menu,
+    cam: { asked: "chase", set: "chase", switchedTo: "cockpit", atWindowEnd: "cockpit" },
+    camSwitch: { to: "cockpit", at: 51234.5, set: "cockpit", beat: 10 },
+    warmEnd: { mirror: 0, mirrorDeferred: true, mirrorLazy: { ms: 2900, drawn: 1, ok: true } } };
+  switched.raceEntry = { ...(tlxLegJson().raceEntry || {}), loaf: { supported: true, summary: "1 LoAF(s), 1012 ms in 13000 ms of race entry; scripts by invoker: resolve-promise 840 ms/1",
+    longest: [{ atMs: 2500, duration: 1012.4, span: "warmCarAssets", scripts: [{ invokerType: "resolve-promise", invoker: "startRaceBody.then", sourceFunctionName: "startRaceBody", duration: 840 }] }] } };
+  switched.gapWork = { summary: "1 rAF gap(s)", rows: [{ gapMs: 1100, phase: "race start (pre-window)", atMs: 2400, prevFrameMs: 1000, prevCallbacks: 7, longTaskMs: 1000, prev: "-", between: "-" }] };
+  const early = { ...tlxLegJson(), entry: "menu-full", menu: { ok: true, prepReady: false, prepWaitMs: 150000, prepNote: "menu prep not ready after 150000 ms — START RACE pressed anyway", atGo: { done: false, warmable: false } },
+    raceEntry: { ...(tlxLegJson().raceEntry || {}), loaf: { supported: false, note: "no long-animation-frame PerformanceObserver in this browser (Chrome 123+) — nothing was measured" } } };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: switched, webgl2: early, glx: glxLegJson(), wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /cam: {3}chase \(asked chase, at window end cockpit\) {2}switch>cockpit at beat 10\n/, "a switch that landed is not CAMERA NOT AS ASKED");
+  assert.match(r.out, /mirwarm: deferred=true lazy=2900 ms drawn=1 ok=true entryMirror=0/);
+  assert.match(r.out, /menu: {2}entry=menu ok=true prepReady=true waited=4200ms done=true warmed=true garage=true {2}cars=22 steps=65 lod=true cpu=900ms max=140ms/);
+  assert.match(r.out, /menu: {2}entry=menu-full ok=true prepReady=false[^\n]*\(no warm\)[^\n]*cars: no prep recorded {3}<- menu prep not ready after 150000 ms/);
+  assert.doesNotMatch(r.out, /glx[^\n]*\n(?:\s{8}[^\n]*\n)*?\s+menu:/, "an api leg prints no menu row");
+  assert.match(r.out, /loaf: {2}1 LoAF\(s\), 1012 ms in 13000 ms of race entry; scripts by invoker: resolve-promise 840 ms\/1\n\s+1012\.4 ms at \+2500 ms \[warmCarAssets\]: resolve-promise startRaceBody\.then startRaceBody 840 ms\n/);
+  assert.match(r.out, /loaf: {2}NOT MEASURED — no long-animation-frame PerformanceObserver/);
+  assert.match(r.out, /1100 ms \[race start \(pre-window\)\] at \+2400 ms: step before 1000 ms \(7 cb\), long tasks 1000 ms/);
+});
+
 test("the census labels which work each backend's GPU timer spans (hunt 4 I5)", () => {
   // WGX times the lit pass only, GLX main + post, TLX three's summed render
   // passes: three different numbers under one name. The per-pass timer is not
