@@ -441,12 +441,11 @@
       // Parabolica / Curva Alboreto (apex s 0.824, right) — wide outer gravel, big arc stand.
       groundPatch(K(0.819), -1, 8, [50, 0.18, 110], GRAVEL,
         { id: "monza-parabolica-gravel", samples: 10 });
-      grandstandEx(0.824, -1, 14, 96, null, null,
-        { livery: "crimson", tiers: 2, roof: "cantilever", suites: true, endWalls: true });
+      // Parabolica outer stand = the tifosiBowl below (one stand per anchor; was a doubled red shell).
       tyreWall(0.804, 0.839, -1, 6, [0.88, 0.20, 0.18]);
       marshalPost(K(0.829), 1, 11);
       // Sponsor hoardings around the Parabolica outside.
-      for (const s of [0.789, 0.809, 0.829]) billboard(K(s), -1, 12, 13, 5, [0.90, 0.86, 0.30]);
+      for (const s of [0.789, 0.829]) billboard(K(s), -1, 18, 13, 5, [0.90, 0.86, 0.30]);   // gap 18: clear of the stonePine rank (gap 12 read as a leaning plank)
 
       // Catch fences behind the major spectator zones.
       fence(0.089, 0.119, 1, 7, 4, [0.74, 0.76, 0.80]);
@@ -710,12 +709,10 @@
           step: 11,
         });
       };
-      tifosiBowl(0.824, -1, 60, 92, 4, "crimson");   // Parabolica outer — largest crowd
-      tifosiBowl(0.02, 1, 40, 84, 4, "steel");      // facing the pit straight
-      tifosiBowl(0.955, -1, 30, 78, 4, "concrete"); // behind Tribuna Centrale
-      tifosiBowl(0.11, 1, 24, 64, 3, "crimson");    // Curva Grande sweep
-      tifosiBowl(0.633, -1, 30, 70, 3, "steel");     // Ascari outer
-
+      tifosiBowl(0.824, -1, 44, 96, 4, "crimson");   // Parabolica outer — largest crowd
+                  tifosiBowl(0.11, 1, 24, 64, 3, "crimson");    // Curva Grande sweep
+      // 0.02 R / 0.955 L / 0.633 L bowls removed: each doubled a grandstandEx on the same anchor.
+      
       (function museum() {
         const a = anchor(K(0.0), 1, 40);
         const b = [a.r, a.u, a.t], base = a.c;

@@ -1048,6 +1048,36 @@ test("a margin that rounds up to ten is read as '10', never '10.0 seconds'", () 
     you: { pos: 5, grid: 5 } }).join(" "), /9\.9 seconds ahead/);
 });
 
+for (const retired of [false, true]) {
+  test(`the public wrap-up reports player disqualification instead of a finish or retirement (retired=${retired})`, () => {
+    const { A: An, G, synth } = load();
+    const ann = An.create(G);
+    const winner = { name: "Lando Norris", finishT: 100, lap: 5, finPos: 1, best: 80 };
+    const you = { name: "Oscar Piastri", isPlayer: true, dsq: "two dry compounds not used", retired,
+      finishT: 104, lap: 5, finPos: 2, gridPos: 7, best: 79 };
+    // endRace appends DSQ rows and still assigns finPos; dsq does not imply retired.
+    ann.wrapUp([winner, you], info());
+    for (let i = 0; i < 8; i++) finishLine(synth);
+    const text = spoken(synth).join(" ");
+    assert.match(text, /you have been disqualified/i);
+    assert.doesNotMatch(text, /you finish|podium|up 5 places|retirement|fastest lap to you/i);
+    assert.doesNotMatch(text, /seconds ahead of piastri/i, "DSQ is not a classified runner-up");
+    ann.stop();
+  });
+}
+
+test("the public wrap-up omits a DSQ runner-up margin when the player wins", () => {
+  const { A: An, G, synth } = load();
+  const ann = An.create(G);
+  const you = { name: "You", isPlayer: true, finishT: 100, lap: 5, finPos: 1 };
+  const dsq = { name: "Oscar Piastri", dsq: "real race classification", retired: false, finishT: 104, lap: 5, finPos: 2 };
+  ann.wrapUp([you, dsq], info());
+  for (let i = 0; i < 8; i++) finishLine(synth);
+  assert.match(spoken(synth)[0], /you win/i);
+  assert.doesNotMatch(spoken(synth).join(" "), /seconds clear|ahead of/i);
+  ann.stop();
+});
+
 test("the wrap-up reads the result the stewards gave: a penalty is part of the margin, and a sprint is the sprint", async () => {
   const { A: An, G, synth } = load();
   G.state = "results";

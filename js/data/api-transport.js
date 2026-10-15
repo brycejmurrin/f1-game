@@ -36,6 +36,14 @@ const F1Transport = (function () {
     const failWarnAt = Object.create(null); // endpoint name -> last Log.warn ms
     const FAIL_WARN_MS = 30 * 1000;
     let lastCacheSweepAt = -Infinity;
+    // Bodies over CACHE_MAX_CHARS (/position, long car_data windows) skip
+    // localStorage; a few are kept here so a revisit inside the TTL is no refetch.
+    const MEM_MAX = 4;
+    const memCache = new Map();           // URL -> {t, data}, insertion order = LRU order
+    // Each stale-cache serve (refetch failed, older copy returned) is logged as
+    // {seq, t} so a tab can stamp its footnote with the copy's age (#2190).
+    let staleSeq = 0;
+    const staleLog = [];
 
     // Cached payloads serialize as {"t":<ms>,"data":…} — t first — so sweeps can
     // read the timestamp with a prefix match instead of JSON.parsing every
@@ -106,6 +114,8 @@ const F1Transport = (function () {
     }
 
     function readCache(url) {
+      const mem = memCache.get(url);
+      if (mem) { memCache.delete(url); memCache.set(url, mem); return mem; }
       try {
         const raw = localStorage.getItem(CACHE_PREFIX + url);
         if (!raw) return null;
@@ -119,8 +129,16 @@ const F1Transport = (function () {
       const key = CACHE_PREFIX + url;
       const payload = JSON.stringify({ t: Date.now(), data });
       // A multi-MB body (/position, car_data) would take the origin's whole
-      // localStorage quota from the game's own saves: keep it in memory only.
-      if (payload.length > CACHE_MAX_CHARS) return;
+      // localStorage quota from the game's own saves: keep it in memory only,
+      // and drop an older small disk copy so it cannot stand in as the stale fallback.
+      if (payload.length > CACHE_MAX_CHARS) {
+        memCache.delete(url);
+        memCache.set(url, { t: Date.now(), data });
+        while (memCache.size > MEM_MAX) memCache.delete(memCache.keys().next().value);
+        try { localStorage.removeItem(key); } catch (e) { /* no storage */ }
+        return;
+      }
+      memCache.delete(url);
       const now = Date.now();
       let swept = false;
       if (now - lastCacheSweepAt >= CACHE_SWEEP_MS) {
@@ -244,6 +262,9 @@ const F1Transport = (function () {
           return res.text().then(function (txt) {
             try {
               const j = JSON.parse(txt);
+              // OpenF1 answers a query with no data yet as HTTP 404
+              // {"detail":"No results found."} — an empty answer, not a failure.
+              if (res.status === 404 && j && /no results found/i.test(String(j.detail || ""))) return [];
               // JSON null / a non-JSON body keeps the generic HTTP message.
               if (j && (j.detail || j.error)) httpErr.message = String(j.detail || j.error);
             } catch (e) {
@@ -352,6 +373,8 @@ const F1Transport = (function () {
           const status = err && err.status;
           if (hit && status !== 401 && status !== 403 && msg.indexOf("Live F1 session") === -1 && msg.indexOf("HTTP 401") === -1 && msg.indexOf("HTTP 403") === -1) {
             warnFetchFail(name, "stale");
+            staleLog.push({ seq: ++staleSeq, t: hit.t });
+            if (staleLog.length > 64) staleLog.shift();
             return hit.data;
           }
           warnFetchFail(name, "");
@@ -384,7 +407,18 @@ const F1Transport = (function () {
       return aborted;
     }
 
-    return { request, cancelAll, cacheEntryT };
+    // staleMark() before a load, staleSince(mark) after it: the oldest
+    // stale-copy time served in between, or null when every answer was fresh.
+    function staleMark() { return staleSeq; }
+    function staleSince(mark) {
+      let t = null;
+      for (let i = 0; i < staleLog.length; i++) {
+        if (staleLog[i].seq > mark && (t === null || staleLog[i].t < t)) t = staleLog[i].t;
+      }
+      return t;
+    }
+
+    return { request, cancelAll, cacheEntryT, staleMark, staleSince };
   }
 
   return { create };

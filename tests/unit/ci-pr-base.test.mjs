@@ -50,7 +50,7 @@ test("every workflow step that diffs a pull request resolves its base through th
   const job = (from, to) => ci.slice(ci.indexOf(`\n  ${from}:\n`), ci.indexOf(`\n  ${to}:\n`));
   const CALL = /\[ "\$EVENT" = pull_request \] && BEFORE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{BEFORE:-\}"\)"/;
   assert.match(job("sweeps-parts", "sweeps"), CALL, "the parts census filter");
-  assert.match(job("sweeps", "sweeps-roll-up"), CALL, "the geometry sweeps filter");
+  assert.match(job("select", "selected"), CALL, "the shared geometry sweeps filter");
   // The three path filters and the node-slice plan are steps of `select` since 2026-10-15.
   assert.match(job("select", "selected"), CALL, "the renderer / xr filter steps");
   assert.match(job("node-suites", "sweeps-parts"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the node-suites plan step");
