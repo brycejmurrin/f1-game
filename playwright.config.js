@@ -155,6 +155,12 @@ export default defineConfig({
   // keep one retry in CI for genuine infra blips. live-reporter reports flaky
   // (passed-on-retry) counts either way.
   retries: process.env.CI ? 1 : 0,
+  // A CI retry runs at the END of the shard, alone in one worker (Playwright
+  // ≥ 1.62, #1716): an immediate retry re-ran the failed test beside the rest
+  // of the shard, under the same SwiftShader load that timed it out, so a
+  // load-induced failure tended to fail twice. Costs only the retries' own time.
+  // https://playwright.dev/docs/api/class-testconfig#test-config-retry-strategy
+  retryStrategy: process.env.CI ? "isolated" : "immediate",
   timeout: 120_000,
   // AND THE SAME FOR ASSERTIONS. This config declared no `expect` block, so
   // every web-first assertion ran on Playwright's 5 s default — below the
