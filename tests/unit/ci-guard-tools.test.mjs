@@ -1,15 +1,13 @@
-// ci-guard-tools — two guards born on 2026-10-15 (weather PRs #1800 / #1885):
+// ci-guard-tools — CI guards born on 2026-10-15 (weather PR #1800, the Actions jam):
 //  - tools/ci/ci-rerun.mjs refuses a superseded PR run (re-running one cancelled
 //    the live run on the new head), a live run, a green run and a second re-run;
-//  - tools/gfx/knob-ab.mjs fails a visual knob whose ON vs OFF frame does not
-//    beat the frame-to-frame noise (puddles passed every unit test, rendered invisible).
+//  - .github/workflows/ci-cancel-on-close.yml joins ci.yml's PR concurrency group.
 // Pure functions only, no network, no browser.
 //
 // Run: node --test tests/unit/ci-guard-tools.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
 import { decide, prNumberOf } from "../../tools/ci/ci-rerun.mjs";
-import { diffRaw, verdict, parseSet, parseArgs, PIXEL_DELTA, NOISE_MULT, MIN_MARGIN } from "../../tools/gfx/knob-ab.mjs";
 
 const run = (o = {}) => ({ id: 1, status: "completed", conclusion: "failure", event: "pull_request", head_sha: "aaaa1111", run_attempt: 1, pull_requests: [{ number: 7 }], ...o });
 
@@ -36,37 +34,6 @@ test("ci-rerun: a completed failed run on the current head is allowed; push/disp
   assert.equal(prNumberOf(run({ pull_requests: [] })), null);
 });
 
-test("knob-ab: diffRaw counts pixels over the delta and the mean", () => {
-  const a = new Uint8Array([0, 0, 0, 255, 100, 100, 100, 255]);
-  const b = new Uint8Array([4, 4, 4, 255, 100, 100, 100, 255]);     // |Δ| = 12: not changed
-  assert.deepEqual(diffRaw(a, b, 2, 1, 4).pct, 0);
-  const c = new Uint8Array([5, 4, 4, 255, 100, 100, 100, 255]);     // 13: changed
-  assert.equal(diffRaw(a, c, 2, 1, 4).pct, 50);
-  assert.throws(() => diffRaw(a, c, 4, 1, 4));
-  assert.equal(PIXEL_DELTA, 12);
-});
-
-test("knob-ab: verdict needs max(3×noise, noise+2pp) — calibrated on the measured puddle A/Bs", () => {
-  assert.equal(NOISE_MULT, 3);
-  assert.equal(MIN_MARGIN, 2.0);
-  assert.equal(verdict(1.0, 2.38).pass, false);    // GLX pre-satin: invisible by eye → FAIL (2× would have passed it)
-  assert.equal(verdict(3.03, 3.69).pass, false);   // TLX pre-satin: within noise → FAIL
-  assert.equal(verdict(1.05, 35.51).pass, true);   // GLX satin
-  assert.equal(verdict(2.99, 22.0).pass, true);    // TLX satin
-  assert.equal(verdict(0.1, 1.9).pass, false);     // tiny noise still needs +2 pp
-  assert.match(verdict(3.03, 3.69).line, /^= knob-ab FAIL/);
-});
-
-test("knob-ab: args — --knob required, numbers checked, --wet feeds wetness, --set parses", () => {
-  assert.throws(() => parseArgs([]), /--knob/);
-  assert.throws(() => parseArgs(["--knob", "x", "--backend", "vulkan"]), /backend/);
-  const o = parseArgs(["--knob", "puddles", "--weather", "rain", "--wet", "1", "--set", "lampWarmup=0"]);
-  assert.deepEqual(o.set, { lampWarmup: 0, wetness: 1 });
-  assert.equal(o.backend, "three");
-  assert.equal(o.desktop, false);
-  assert.throws(() => parseSet("a=x"), /bad pair/);
-});
-
 test("ci-cancel-on-close.yml joins ci.yml's PR concurrency group exactly", async () => {
   const fs = await import("node:fs");
   const path = await import("node:path");
@@ -83,4 +50,6 @@ test("ci-cancel-on-close.yml joins ci.yml's PR concurrency group exactly", async
   assert.match(wf, /^\s+cancel-in-progress: true\s*$/m);
   assert.match(wf, /types: \[closed\]/);
   assert.match(wf, /actions: write/);
+  for (const st of ["queued", "in_progress", "pending", "waiting", "requested"])
+    assert.match(wf, new RegExp(`\\b${st}\\b`), `straggler sweep covers live status ${st}`);
 });

@@ -50,7 +50,10 @@ jobs:
           SELF: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          for st in queued in_progress; do
+          # Every live status the List-runs API accepts; pending/waiting/requested
+          # runs hold a concurrency slot too (#2266 taught queue-depth the same).
+          # https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository
+          for st in queued in_progress pending waiting requested; do
             gh api -X GET "repos/$REPO/actions/runs" -f branch="$BRANCH" -f event=pull_request -f status="$st" -f per_page=100 \
               --jq '.workflow_runs[] | "\(.id) \(.name)"' | while read -r id name; do
               [ "$id" = "$SELF" ] && continue
