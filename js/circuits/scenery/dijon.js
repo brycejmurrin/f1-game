@@ -35,7 +35,7 @@
         tree, bush, hedge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower,
         billboard, sponsorHoarding, groundPatch, ridge,
-        modelGroup, seat, vadd, MAT, addPrism } = api;
+        modelGroup, seat, vadd, MAT, addPrism, floodMast } = api;
 
       // 1. PALETTE — dry summer Burgundy. Pale limestone, bleached grass,
       //    hedgerow much darker than the open slope. Nothing here is glossy:
@@ -264,6 +264,14 @@
       field(0.038, -1, 40, 30, 54, GRAVEL);                        // car park
       fenceRun(0.004, 0.058, -1, 52, 2.0, STEEL);
       hedgeRun(0.000, 0.052, -1, 60, 1.9, HEDGE2);
+      // Permanent-facility floods: def furniture.lamp is "none", so night relies on
+      // registered masts at the pit straight and main grandstand (catalunya idiom).
+      if (typeof floodMast === "function") {
+        for (const [s, side, gap] of [
+          [0.012, 1, 30], [0.034, 1, 34], [0.018, -1, 26], [0.042, -1, 30],
+          [0.958, -1, 28], [0.972, -1, 32],
+        ]) floodMast(K(s), side, gap, { h: 36, cool: true, pool: false, arms: 2 });
+      }
 
       // 4. PADDOCK BEHIND THE GARAGES (s 0.055, +1, 32) — service boxes on a
       //    pale gravel hardstanding, plus one camera tower overlooking the
