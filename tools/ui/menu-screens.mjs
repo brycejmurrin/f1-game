@@ -116,6 +116,10 @@ export const SCREENS = [
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-display");
       await p.waitForFunction(() => !document.getElementById("pm-panel-display").hidden, null, { polling: 100, timeout: 15000 }); } },
+  { id: "settingsappearance", name: "Settings — appearance", root: "#pmsettings", open: async (p) => {
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-open-appearance");
+      await p.waitForFunction(() => !document.getElementById("pm-panel-appearance").hidden, null, { polling: 100, timeout: 15000 }); } },
   { id: "settingsa11y", name: "Settings — accessibility", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
       await p.click("#pm-open-a11y");

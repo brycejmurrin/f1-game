@@ -1026,6 +1026,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: Settings ACCESSIBILITY #pm-panel-a11y pad / scroll-pad
   // so the last colourblind help clears BACK (survey rank 8; 844×390).
   "tests/unit/ui-fit-settings-a11y-r6.test.mjs",
+  // ui-fit round 6: Settings APPEARANCE studio reflow + pad above BACK
+  // (survey rank 7; 300×3604 @ 390×844, 222×5059 @ scale 200).
+  "tests/unit/ui-fit-settings-appearance-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
