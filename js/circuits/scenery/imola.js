@@ -150,34 +150,24 @@
 
       // Overlapping water + bank strips so the river reads as one ribbon at race speed.
       const SANTERNO = [
-        [0.94, 20, [52, 130]], [0.97, 20, [55, 140]], [0.00, 20, [58, 160]],
-        [0.03, 20, [56, 150]], [0.06, 20, [54, 145]], [0.09, 20, [52, 140]],
+        [0.94, 20, [52, 130]], [0.97, 20, [55, 142]], [0.00, 20, [58, 142]],
+        [0.03, 20, [56, 142]], [0.06, 20, [20, 100]], [0.09, 20, [52, 140]],
         [0.12, 19, [50, 130]], [0.15, 18, [48, 120]], [0.18, 18, [46, 100]],
       ];
       SANTERNO.forEach(([s, gap, sz], i) =>
         riverSurface(`santerno-water-${i}`, s, 1, gap, sz, RIVER, { required: true }));
-      const SANTERNO_BANK = [
-        // Split the mid-river bank into two short patches: a single 40 m slab
-        // at s≈0.08 underlaps the Acque Minerali return leg and the footprint
-        // guard suppresses the whole group. Two ~22 m patches leave a gap at
-        // the crossing and still read as one bank at race speed.
-        [0.95, 9,  [12, 120]], [0.00, 9,  [12, 140]], [0.04, 9,  [12, 130]],
-        [0.065, 10, [12, 22]], [0.095, 10, [12, 22]],
-        [0.12, 10, [11, 110]], [0.16, 10, [11, 90]],
-      ];
-      SANTERNO_BANK.forEach(([s, gap, sz], i) =>
-        terrainPatch(`santerno-bank-${i}`, s, 1, gap, sz, BANK));
+      // The santerno-bank-* BANK-coloured ground quads (12 m x 90-140 m) were removed: flat,
+      // untextured, brighter than the terrain and edged by a dark side face, they read as an
+      // olive slab beside the straight (survey 2026-10-15 defect 2). The terrain is the bank.
+
 
       backdrop(K(0.34), -1, 72, [40, 28, 58], [0.12, 0.28, 0.14]);
       backdrop(K(0.36), -1, 90, [36, 34, 54], [0.10, 0.24, 0.12]);
       backdrop(K(0.35),  1, 68, [38, 26, 56], [0.13, 0.30, 0.15]);
       backdrop(K(0.38), -1, 58, [32, 22, 48], [0.11, 0.26, 0.13]);
 
-      terrainPatch("acque-mist-0", 0.45,  1, 14, [48, 80], [0.72, 0.78, 0.74]);
-      terrainPatch("acque-mist-1", 0.48,  1, 16, [46, 78], [0.74, 0.80, 0.76]);
-      terrainPatch("acque-mist-2", 0.51,  1, 15, [44, 72], [0.70, 0.76, 0.72]);
-      terrainPatch("acque-mist-3", 0.54,  1, 14, [42, 65], [0.73, 0.79, 0.75]);
-      terrainPatch("acque-mist-4", 0.48, -1, 12, [36, 55], [0.71, 0.77, 0.73]);
+      // Acque Minerali "mist" was five flat pale ground quads (44x72 m); they read as an
+      // unlit slab with a hard edge (survey 2026-10-15 defect 2), so the hollow's mist is dropped.
       // Extra dark canopy walls for the enclosed park-in-the-loop read
       backdrop(K(0.46),  1, 42, [34, 20, 50], [0.08, 0.20, 0.10]);
       // dist 60 (was 48): at 48 the engine's per-primitive road cull ate this
@@ -612,6 +602,18 @@
         addBox(out, head, [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
         if (typeof lampPost === "function") lampPost({ pos: head, k, side: -1, kind: "halogen" });
       });
+      // Pit-straight lamps continue past the 0.95–1.05 run (night frames: pit straight nearly
+      // dark, survey defect 5); sparser, to stay inside the props-tris ratchet.
+      for (const [s0, span] of [[0.92, 0.03], [0.05, 0.10]]) {
+        along(s0, span, 24, (k) => {
+          const p = anchor(k, -1, 8);
+          if (onTrack(p.c[0], p.c[2], 0.5)) return;
+          addCyl(out, p.c, 0.12, 8.5, [0.58, 0.60, 0.62], 5, [p.r, p.u, p.t]);
+          const head = vadd(p.c, p.u, 8.5);
+          addBox(out, head, [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+          if (typeof lampPost === "function") lampPost({ pos: head, k, side: -1, kind: "halogen" });
+        });
+      }
       along(0.30, 0.38, 20, (k) => {
         const p = anchor(k, -1, 7);
         if (onTrack(p.c[0], p.c[2], 0.5)) return;
@@ -633,7 +635,7 @@
       const CYP = [0.11, 0.28, 0.15], CYP_D = [0.08, 0.22, 0.12];
       const cyp = (k, side, dist, h, slim) =>
         cypress(k, side, dist, h, hash(k * 7 + side) < 0.5 ? CYP : CYP_D,
-                { slim: slim || 0.93 });
+                { slim: slim || 0.94 });
       // Sparse cypress punctuation on the wooded slopes (deciduous hollow owns mid-lap).
       for (const [s0, side, gap, cnt] of [[0.32, -1, 24, 3], [0.52, 1, 26, 2], [0.64, -1, 32, 3], [0.82, -1, 20, 3]]) {
         for (let i = 0; i < cnt; i++) cyp(K(s0 + i * 0.010), side, gap + (i % 2) * 3, 13 + hash(i * 5 + s0 * 40) * 6);
