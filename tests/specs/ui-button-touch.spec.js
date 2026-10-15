@@ -719,6 +719,33 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
   // the player this exists for, and the shape where pieces meet the docks.
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
+  test.describe("desktop toolbar placement", () => {
+    test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+
+    test("entry uses the populated toolbar size without a later position jump", async ({ page }) => {
+      await page.addInitScript(() => localStorage.setItem("apex26.textSize", '"large"'));
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.headless(true));
+      await openPauseSettings(page);
+      await page.evaluate(() => window.__apex.camera("chase"));
+      await page.locator("#pm-open-display").click();
+      await page.locator("#pm-hud-details > summary").click();
+      await page.locator("#pm-hud-arrange").click();
+      const bar = page.locator("#hud-arrange-bar");
+      const before = await bar.boundingBox();
+      expect(before).not.toBeNull();
+      // Re-evaluate the same selection: neither content nor HUD changed.
+      await page.locator("#hud-arrange-element").dispatchEvent("change");
+      const after = await bar.boundingBox();
+      expect(after).not.toBeNull();
+      expect(Math.abs(after.x - before.x)).toBeLessThan(1);
+      expect(Math.abs(after.y - before.y)).toBeLessThan(1);
+      expect(after.width).toBe(before.width);
+      expect(after.height).toBe(before.height);
+    });
+  });
+
   test("drag moves a piece, − / + size it, RESET restores it, DONE gives the pause card back", async ({ page }) => {
     await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
     await page.goto("/");
@@ -796,6 +823,11 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     // Keyboard access starts with the first visible piece selected.
     await expect(page.locator("#hud-arrange-name")).toContainText("TIMING TOWER");
     await expect(vis).toBeEnabled();
+    await vis.click();
+    expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].filter(id => HudElements.isOn(id)))).toEqual([]);
+    await expect(vis).toHaveText("SHOW");
+    await vis.click();
+    expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].every(id => HudElements.isOn(id)))).toBe(true);
     // Touch the sector plate (a press with no movement selects it).
     const sec = await page.locator("#hud-sectors").boundingBox();
     expect(sec).not.toBeNull();
@@ -829,6 +861,102 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#hud-arrange-done").click();
     await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     expect(await page.evaluate(() => (document.body.dataset.hudHide || "").split(" "))).not.toContain("sectors");
+  });
+
+  test("keyboard radio moves one step and disabled readouts remain editable while paused", async ({ page }) => {
+    await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
+    const original = await page.evaluate(() => Object.fromEntries(["rel", "strat", "inputs"].map(id =>
+      [id, { hidden: document.getElementById("hud-" + id).hidden, on: HudElements.isOn(id) }])));
+    await page.locator("#pm-hud-arrange").click();
+    const picker = page.locator("#hud-arrange-element");
+    for (const id of ["rel", "strat", "inputs"]) {
+      await picker.selectOption(id);
+      await expect(page.locator("#hud-" + id)).toBeVisible();
+    }
+    await picker.selectOption("announce");
+    const before = await page.locator("#announce").boundingBox();
+    await page.locator("#hud-arrange-move").focus();
+    await page.keyboard.press("ArrowRight");
+    const after = await page.locator("#announce").boundingBox();
+    // HudLayout persists whole percentages: the first placement snaps the
+    // visible origin to that existing grid, then adds the keyboard step.
+    const expectedX = LANDSCAPE.width * (0.5 + Math.round((before.x / LANDSCAPE.width - 0.5) * 100 + 1) / 100);
+    const expectedY = LANDSCAPE.height * (0.25 + Math.round((before.y / LANDSCAPE.height - 0.25) * 100) / 100);
+    expect(Math.abs(after.x - expectedX)).toBeLessThan(2);
+    expect(Math.abs(after.y - expectedY)).toBeLessThan(2);
+    await page.keyboard.press("Shift+ArrowDown");
+    const shifted = await page.locator("#announce").boundingBox();
+    expect(Math.abs(shifted.y - after.y - LANDSCAPE.height / 20)).toBeLessThan(2);
+    await picker.selectOption("inputs");
+    await expect(page.locator("#hud-arrange-vis")).toHaveText("SHOW");
+    await page.locator("#hud-arrange-vis").click();
+    await expect(page.locator("#hud-arrange-vis")).toHaveText("HIDE");
+    await page.locator("#hud-arrange-vis").click();
+    await page.locator("#hud-arrange-done").click();
+    expect(await page.evaluate(() => Object.fromEntries(["rel", "strat", "inputs"].map(id =>
+      [id, { hidden: document.getElementById("hud-" + id).hidden, on: HudElements.isOn(id) }])))).toEqual(original);
+  });
+
+  test("crowded optional previews remain editable after fitting at maximum sizes", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem("apex26.hudLayout");
+      for (const [key, value] of Object.entries({ hudScale: 200, hudBtnScale: 300, hudProfile: "standard", textSize: "large" })) {
+        localStorage.setItem("apex26." + key, JSON.stringify(value));
+      }
+    });
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.evaluate(() => window.__apex.camera("chase"));
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
+    await page.evaluate(() => {
+      for (const [name, value] of [["--sal", "59px"], ["--sar", "59px"], ["--sab", "21px"]]) {
+        document.documentElement.style.setProperty(name, value);
+      }
+    });
+    await page.locator("#pm-hud-arrange").click();
+    await page.evaluate(() => {
+      for (const id of ["rel", "strat", "inputs"]) HudLayout.set(id, { s: 200 });
+      GameHud.invalidateFit();
+      HudLayout.clearReadouts();
+    });
+    // The fit still detects a lack of room, but cannot remove editor handles.
+    expect(await page.locator("[data-hl-arr][data-col-drop]").count()).toBeGreaterThan(0);
+    const toolbar = await page.locator("#hud-arrange-bar").boundingBox();
+    expect(toolbar).not.toBeNull();
+    expect(toolbar.x).toBeGreaterThanOrEqual(59);
+    expect(toolbar.x + toolbar.width).toBeLessThanOrEqual(LANDSCAPE.width - 59);
+    expect(toolbar.y).toBeGreaterThanOrEqual(0);
+    expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(LANDSCAPE.height - 21);
+    const picker = page.locator("#hud-arrange-element");
+    for (const id of ["rel", "strat", "inputs"]) {
+      await picker.selectOption(id);
+      await expect(page.locator("#hud-" + id)).toBeVisible();
+    }
+    await page.locator("#hud-arrange-smaller").click();
+    await expect(page.locator("#hud-inputs")).toBeVisible();
+    await page.locator("#hud-arrange-done").click();
+    await expect(page.locator("#hud-arrange-bar")).toBeHidden();
+    // The normal race drop rule is active again even for a visible producer.
+    expect(await page.evaluate(() => {
+      const el = document.getElementById("hud-inputs");
+      const hidden = el.hidden, drop = el.getAttribute("data-col-drop");
+      try {
+        el.hidden = false; el.setAttribute("data-col-drop", "");
+        return getComputedStyle(el).display;
+      } finally {
+        el.hidden = hidden;
+        if (drop === null) el.removeAttribute("data-col-drop"); else el.setAttribute("data-col-drop", drop);
+      }
+    })).toBe("none");
   });
 
   test("a dragged radio card leaves auto-placement and stays where it was dropped; RESET hands it back", async ({ page }) => {
@@ -877,6 +1005,34 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     expect(Math.abs(a2.y - ty), "message at the drop point (y)").toBeLessThanOrEqual(6);
     await page.evaluate(() => HudLayout.resetEl("announce"));
     await page.waitForFunction(() => !document.body.hasAttribute("data-radio-placed"), null, { polling: 100, timeout: BOOT_MS });
+  });
+
+  test("rotation exits Arrange and keeps restored Settings interactive above Pause", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
+    await page.locator("#pm-hud-arrange").click();
+    await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
+    await page.setViewportSize(LANDSCAPE);
+    await page.waitForFunction(() => document.getElementById("rotate-device").getAttribute("aria-hidden") === "true", null, { polling: 100, timeout: BOOT_MS });
+    await expect(page.locator("#pmsettings")).toBeVisible();
+    await expect(page.locator("#pausemenu")).toBeHidden();
+    // Real clicks prove native modal order: a visible Settings sheet can still
+    // be inert underneath a Pause dialog in the browser's top layer.
+    await page.locator("#pm-settings-close").click();
+    for (let i = 0; i < 3 && await page.locator("#pmsettings").isVisible(); i++) {
+      await page.locator("#pm-settings-close").click();
+    }
+    await expect(page.locator("#pmsettings")).toBeHidden();
+    await expect(page.locator("#pausemenu")).toBeVisible();
+    await page.locator("#pm-resume").click();
+    await expect(page.locator("#pausemenu")).toBeHidden();
+    expect(await page.evaluate(() => window.__apex.inputState().gate.anyOpen)).toBe(false);
   });
 
   test("Escape ends arranging without driving the car", async ({ page }) => {
@@ -1021,4 +1177,40 @@ test("HOW TO PLAY names every way to play", async ({ page }) => {
   expect(buttons.length).toBeGreaterThan(3);
   expect(buttons.some((t) => /WATCH/i.test(t))).toBe(true);
   expect(buttons.some((t) => /PHOTO/i.test(t))).toBe(true);
+});
+
+test.describe("Arrange map clearance handoff", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test("first keyboard move and resize keep an automatically cleared map at its painted origin", async ({ page }) => {
+    await page.addInitScript(() => {
+      for (const [key,value] of Object.entries({hudProfile:"broadcast",steerMode:"tilt",hudScale:70,hudBtnScale:300})) localStorage.setItem("apex26."+key,JSON.stringify(value));
+      localStorage.removeItem("apex26.hudLayout");
+    });
+    await page.goto("/"); await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true)); await openPauseSettings(page);
+    await page.locator("#pm-open-display").click(); await page.locator("#pm-hud-details > summary").click();
+    await page.evaluate(() => {
+      for (const [key,value] of [["--sal","47px"],["--sar","0px"],["--sab","21px"]]) document.documentElement.style.setProperty(key,value);
+      __apex.camera("chase"); __apex.jump(.18,60,0);
+    });
+    await page.locator("#pm-hud-arrange").click(); await page.locator("#hud-arrange-element").selectOption("map");
+    const snap = () => page.evaluate(() => {
+      const e=document.getElementById("minimap"),r=e.getBoundingClientRect();
+      return {x:r.x,y:r.y,w:r.width,h:r.height,value:HudLayout.get("map"),clearX:parseFloat(e.style.getPropertyValue("--hud-clear-x"))||0,clearY:parseFloat(e.style.getPropertyValue("--hud-clear-y"))||0,user:e.hasAttribute("data-hl-user")};
+    });
+    const before=await snap(); expect(before.user).toBe(false); expect(Math.abs(before.clearX)+Math.abs(before.clearY)).toBeGreaterThan(1);
+    await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
+    const moved=await snap();
+    const expectedX=Math.round(before.value.x+before.clearX/844*100+1),expectedY=Math.round(before.value.y+before.clearY/390*100);
+    expect(moved.value.x).toBe(expectedX); expect(moved.value.y).toBe(expectedY);
+    expect(Math.abs((moved.x-before.x)-((expectedX-before.value.x)*8.44-before.clearX))).toBeLessThan(2);
+    expect(Math.abs((moved.y-before.y)-((expectedY-before.value.y)*3.9-before.clearY))).toBeLessThan(2);
+    await page.locator("#hud-arrange-reset").click();
+    const reset=await snap(); expect(reset.user).toBe(false); expect(Math.abs(reset.clearX)+Math.abs(reset.clearY)).toBeGreaterThan(1);
+    await page.locator("#hud-arrange-larger").click(); const resized=await snap();
+    expect(resized.value.s).toBe(110); expect(resized.user).toBe(true);
+    expect(Math.abs(resized.x-reset.x)).toBeLessThanOrEqual(4.22+1); expect(Math.abs(resized.y-reset.y)).toBeLessThanOrEqual(1.95+1);
+    expect(Math.abs(resized.w/reset.w-1.1)).toBeLessThan(.02);
+    await page.locator("#hud-arrange-done").click();
+  });
 });
