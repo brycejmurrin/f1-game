@@ -559,7 +559,7 @@
       //     0.846+ leaves its tiers 2-6 m above falling terrain (ground-audit). Wave-6: required
       //     positive-rake bank modelGroup (spectatorHill alone had no id).
       guardrail(0.684, 0.796, -1, 12, ARMCO);
-      guardrail(0.830, 0.858, -1, 12, ARMCO);
+      guardrail(0.838, 0.852, -1, 12, ARMCO);
       tyreWall(0.830, 0.862, -1, 14, CAP);
       sponsorHoarding(0.806, 0.886, -1, 18, { h: 1.7, step: 8 });
       {
