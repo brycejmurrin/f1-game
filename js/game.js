@@ -4381,7 +4381,7 @@ function syncRotateBlocker(moveFocus) {
   // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
   // game-vm harness) reads every display as shown, and would pause every race.
   if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true, "rotate-block");
-  if (paused && !(garageReturn === "pit" && !$("carsetup").hidden)) els.pausemenu.hidden = active || photoMode;   // the pit garage holds its own pause: no card over it (setPaused)
+  if (paused && !(garageReturn === "pit" && !$("carsetup").hidden)) els.pausemenu.hidden = active || photoMode || els.pmsettings?.hidden === false;   // Settings keeps the foreground after rotation; the pit garage owns its pause (setPaused)
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
   }); return active;

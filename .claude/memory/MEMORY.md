@@ -20,4 +20,6 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
 - [Foreground wait loop killed (137)](foreground-wait-loop-killed.md) — never block a foreground Bash on a multi-minute background run; end the turn and take the notification
 - [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch queues, a third replaces it; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps
+- [Orchestrator may spawn sessions](orchestrator-may-spawn-sessions.md) — fleet work: launch sibling sessions without asking, tell Bryce each time; respect a single denied launch
 - [Merge method: verify parents](merge-method-verify-parents.md) — a "merge" merge_pull_request landed as a squash (#1743); check two parents after every merge
+- [MCP allow rules, measured](mcp-allow-rules-measured.md) — read `permission_decision` in list_events; bare `mcp__<server>` misses the .mcp.json servers and the project-file `__*` form was not seen to fix it; MDN/BrowserStack prompt regardless (claude.ai connector setting)
