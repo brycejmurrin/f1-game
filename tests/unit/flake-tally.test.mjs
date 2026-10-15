@@ -193,3 +193,44 @@ test("pickArtifactForRun keeps the matching workflow_run id", () => {
   assert.equal(pickArtifactForRun(arts, 38392542652).id, 2);
   assert.equal(pickArtifactForRun(arts, 999), null);
 });
+
+// #2188: Node's built-in fetch ignores HTTPS_PROXY, so in a cloud container the
+// GitHub callers got 401 / a rate-limited 403. They default to proxyFetch.
+test("#2188: GitHub callers default to the proxy-aware fetch; curl carries headers on stdin and never disables TLS", async () => {
+  const { fetchBypassesProxy, pickFetch, curlRequest, parseCurlStatus, curlFetch } = await import("../../tools/lib/proxy-fetch.mjs");
+  assert.equal(fetchBypassesProxy({ HTTPS_PROXY: "http://p:1" }), true);
+  assert.equal(fetchBypassesProxy({ https_proxy: "http://p:1" }), true);
+  assert.equal(fetchBypassesProxy({ HTTPS_PROXY: "http://p:1", NODE_USE_ENV_PROXY: "1" }), false, "Node proxies itself");
+  assert.equal(fetchBypassesProxy({}), false);
+  assert.notEqual(pickFetch({ HTTPS_PROXY: "x" }).toString(), pickFetch({}).toString());
+  const { args, config } = curlRequest("https://api.github.com/x", { headers: { Authorization: "Bearer SECRET", Accept: "a\"b" }, timeoutMs: 3000 });
+  assert.ok(!args.join(" ").includes("SECRET"), "the token never reaches argv");
+  assert.match(config, /^header = "Authorization: Bearer SECRET"$/m);
+  assert.match(config, /^header = "Accept: a\\"b"$/m);
+  assert.ok(args.includes("-L") && args.includes("-K") && args.includes("3"));
+  assert.ok(!args.some((a) => /^(-k|--insecure|--proxy-insecure)$/.test(a)), "TLS verification is never disabled");
+  assert.equal(parseCurlStatus("\n__APEX_HTTP_CODE__404"), 404);
+  assert.equal(parseCurlStatus("curl: (6) could not resolve"), null);
+  // curlFetch over a fake child: body bytes, status and the stdin config.
+  const { EventEmitter } = await import("node:events");
+  const { PassThrough } = await import("node:stream");
+  let stdin = "";
+  const fakeSpawn = () => {
+    const c = new EventEmitter();
+    c.stdout = new PassThrough(); c.stderr = new PassThrough();
+    c.stdin = { end: (s) => { stdin = s; setImmediate(() => { c.stdout.end(Buffer.from('{"ok":1}')); c.stderr.end("\n__APEX_HTTP_CODE__200"); setImmediate(() => c.emit("close", 0)); }); } };
+    c.kill = () => {};
+    return c;
+  };
+  const res = await curlFetch("https://api.github.com/y", { headers: { Authorization: "Bearer T" } }, fakeSpawn);
+  assert.equal(res.status, 200);
+  assert.equal(res.ok, true);
+  assert.deepEqual(await res.json(), { ok: 1 });
+  assert.match(stdin, /Authorization: Bearer T/);
+  // The three callers import it instead of a bare fetch.
+  for (const f of ["tools/ci/flake-tally.mjs", "tools/ci/verify-change.mjs", "tools/shot/garage-before.mjs"]) {
+    const src = fs.readFileSync(fileURLToPath(new URL(`../../${f}`, import.meta.url)), "utf8");
+    assert.match(src, /import \{ proxyFetch \} from "\.\.\/lib\/proxy-fetch\.mjs"/, f);
+    assert.doesNotMatch(src.replace(/\/\/.*$/gm, ""), /(^|[^.\w])fetch\(|globalThis\.fetch/m, `${f} has no bare fetch left`);
+  }
+});

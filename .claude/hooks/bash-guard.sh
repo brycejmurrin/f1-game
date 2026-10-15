@@ -30,7 +30,7 @@
 #    `gh pr merge --squash|--rebase` is denied and other merges / ready flips
 #    ask (merge_policy.py, shared with github-mcp-guard.sh). A push while
 #    `tools/ci/queue-depth.mjs` says hold is refused (AGENTS.md rule 4;
-#    APEX_PUSH_HOLD=0 overrides), and an Actions run cancel (`gh run cancel`,
+#    APEX_PUSH_HOLD=0 overrides) unless the push starts no CI (#2182), and an Actions run cancel (`gh run cancel`,
 #    …/actions/runs/<id>/cancel) is refused (APEX_RUN_CANCEL_OK=1 overrides).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
 #    .claude/agents; never a generated doc) runs only docs-integrity — no
@@ -321,14 +321,19 @@ fi
 # the environment or the command, which is the override for "the user asked
 # for this push now". A hold reads as exit 1 and the push is refused with the
 # gauge's own line; retry when `node tools/ci/queue-depth.mjs` says ok.
+# A push that starts NO CI is not held (#2182, 2026-10-15): the gauge gets the
+# command (`--push`), resolves every destination branch, and answers
+# `= queue skip …` (exit 0) when each has no open PR or a draft PR without
+# `run-ci` — a handoff push before a long wait (rule 12) must not be lost to a
+# jammed queue. An unresolvable target or a failed PR lookup measures as before.
 PUSH_RE="(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"
 if [ -z "${APEX_GUARD_PROBE:-}" ] && [ "${APEX_PUSH_HOLD:-}" != 0 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_PUSH_HOLD=0' \
    && printf '%s' "$SCAN" | grep -Eq "$PUSH_RE" \
    && [ -f "$ROOT/tools/ci/queue-depth.mjs" ] \
    && git -C "$ROOT" remote get-url origin 2>/dev/null | grep -q 'f1-game'; then
-  QLINE=$(cd "$ROOT" && timeout -k 5 "${APEX_QUEUE_TIMEOUT:-90}" node tools/ci/queue-depth.mjs 2>/dev/null); QRC=$?
+  QLINE=$(cd "$ROOT" && timeout -k 5 "${APEX_QUEUE_TIMEOUT:-90}" node tools/ci/queue-depth.mjs --push "$SCAN" 2>/dev/null); QRC=$?
   case "$QRC" in
-    0) ;;
+    0) case "$QLINE" in "= queue skip"*) echo "bash-guard: $QLINE" >&2 ;; esac ;;
     1) echo "BLOCKED: ${QLINE:-= queue hold}" >&2
        echo "AGENTS.md rule 4: a push now only adds queue wait for every session. Commit locally; push when 'node tools/ci/queue-depth.mjs' says ok (poll it, do not loop on pushes). APEX_PUSH_HOLD=0 git push … overrides when the user asked for this push now." >&2
        exit 2 ;;
