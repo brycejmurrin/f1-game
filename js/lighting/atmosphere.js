@@ -411,35 +411,22 @@ function _applyRaceBody() {
     G.frame.exposure = isNightSession
       ? Math.max(G.frame.exposure != null ? G.frame.exposure : 0.90, 0.95)
       : Math.max(G.frame.exposure != null ? G.frame.exposure : 1.0, _storm ? 1.03 : 1.00);
-    // STORM: night keeps the near-black deck and visibility cost; day stays
-    // overcast daylight (grey deck, readable exposure) — never a night sky.
+    // STORM: a near-black deck, a sun all but gone, a darker frame and the
+    // spray-and-cloudburst murk — visibility is what a storm costs
+    // (https://www.the-race.com/formula-1/why-f1-cant-solve-its-wet-weather-problem/).
     // Scales the rain look above, so a tuned rain preset carries into it.
     if (wxStorm()) {
       G._cloudBase = Math.min(0.98, G._cloudBase + 0.10);
       G.frameSky.cloud = G._cloudBase;
-      if (isNightSession) {
-        G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.55));
-        G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.6));
-        G.frame.ambientSky = G.frame.ambientSky.map((v) => v * 0.82);
-        G.frame.ambientGround = G.frame.ambientGround.map((v) => v * 0.80);
-        if (G.frameSky.zenith) G.frame.skyZenith = G.frameSky.zenith = G.frameSky.zenith.map((v) => v * 0.7);
-        if (G.frameSky.horizon) G.frame.skyHorizon = G.frameSky.horizon = G.frameSky.horizon.map((v) => v * 0.78);
-        if (G.frame.fogColor) G.frame.fogColor = G.frame.fogColor.map((v) => v * 0.78);
-        G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * 2.2;
-        G.frame.exposure *= 0.86;
-      } else {
-        _dayWetGreyDeck(G, 0.88);
-        G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.62));
-        G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.72));
-        G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * 1.04));
-        G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * 1.04));
-        G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * 1.75;
-        G.frame.exposure = Math.max(G.frame.exposure != null ? G.frame.exposure : 1.0, 1.0);
-      }
-    } else if (!isNightSession) {
-      // Rain/wet daytime: nudge the palette toward the same grey deck as dry
-      // overcast so heavy cloud reads as daylight, not a blue dusk under grey fog.
-      _dayWetGreyDeck(G, _storm ? 0.72 : 0.48);
+      G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.55));
+      G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.6));
+      G.frame.ambientSky = G.frame.ambientSky.map((v) => v * 0.82);
+      G.frame.ambientGround = G.frame.ambientGround.map((v) => v * 0.80);
+      if (G.frameSky.zenith) G.frame.skyZenith = G.frameSky.zenith = G.frameSky.zenith.map((v) => v * 0.7);
+      if (G.frameSky.horizon) G.frame.skyHorizon = G.frameSky.horizon = G.frameSky.horizon.map((v) => v * 0.78);
+      if (G.frame.fogColor) G.frame.fogColor = G.frame.fogColor.map((v) => v * 0.78);
+      G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * 2.2;
+      G.frame.exposure *= 0.86;
     }
   } else if (G.raceWeather === "overcast") {
     // Dry but heavy grey cloud: flat, soft, shadow-light. No rain, dry grip.
@@ -600,19 +587,6 @@ function floodEmit(sunY) {
   return Math.min(1, LT.floodEmitMul * (night ? 0.78
     : (tod === "dusk" || tod === "dawn") ? Math.min(0.70, 0.05 + 0.58 * Math.max(LT.twilightFloor ?? 0.30, clamp(1 - sunY * (LT.twilightRamp ?? 6), 0, 1)))
     : 0));
-}
-
-// Daytime wet weather: blend the sky palette toward the dry-overcast grey deck
-// (same targets as the overcast branch) so rain/storm never reads as night.
-function _dayWetGreyDeck(G, mix) {
-  if (!G.frameSky.zenith || !G.frameSky.horizon || mix <= 0) return;
-  const w = clamp(mix, 0, 1);
-  const deckZ = [0.58, 0.60, 0.64];
-  const deckH = [0.74, 0.73, 0.74];
-  G.frameSky.zenith = G.frameSky.zenith.map((v, i) => v + (deckZ[i] - v) * w);
-  G.frameSky.horizon = G.frameSky.horizon.map((v, i) => v + (deckH[i] - v) * w);
-  G.frame.skyZenith = G.frameSky.zenith;
-  G.frame.skyHorizon = G.frameSky.horizon;
 }
 
 // The sky shader's smoothstep, for the overcast horizon weight above.
