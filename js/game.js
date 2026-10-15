@@ -3401,13 +3401,6 @@ const G = {
   setupPan: (...a) => setupCam.setupPan(...a),
   nudgeSetupCam: (...a) => setupCam.nudgeSetupCam(...a),
   nudgeSetupZoom: (mul) => setupCam.nudgeSetupCam(0, 0, mul),
-  // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
-  // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
-  // a null style tests a car nobody is driving.
-  setupFlapArgs: () => {
-    const aSt = teamDecalState(Teams.LIST[teamIdx], true);
-    return { aLvl: aSt.val, style: aSt.aero || null };
-  },
   setSetupAero: (on, opts) => setupCam.setSetupAero(on, opts),
   get setupPreviewXOn() { return setupCam.xOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
