@@ -194,7 +194,7 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // of merges routed; tools/ci/ci-resolve-before.sh).
   // 2026-10-15: the job also plans the node slices (was unit-plan), so it runs whenever the node
   // matrix does (`fast_tier_run == ''`); the spec selection keeps its own event test on the step.
-  assert.match(selectJob, /if: \$\{\{ \(github\.event_name != 'pull_request' \|\| !github\.event\.pull_request\.draft \|\| contains\(github\.event\.pull_request\.labels\.\*\.name, 'run-ci'\)\) && \(inputs\.fast_tier_run == '' \|\| github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| inputs\.concurrency_key != ''\) \}\}/);
+  assert.match(selectJob, /if: \$\{\{ \(github\.event_name != 'pull_request' \|\| !github\.event\.pull_request\.draft \|\| contains\(github\.event\.pull_request\.labels\.\*\.name, 'run-ci'\)\) && \(github\.event\.action != 'labeled' \|\| \(github\.event\.label\.name == 'run-ci' && github\.event\.pull_request\.draft\)\) && \(inputs\.fast_tier_run == '' \|\| github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| inputs\.concurrency_key != ''\) \}\}/);
   // The JOB and the selection STEP never exclude the deploy gate; the ship
   // filter step inside the same job legitimately sits out the fast tier.
   const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
@@ -339,7 +339,10 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
 test("ci-verdict is the always-run aggregator every other job feeds", () => {
   const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(body, "ci-verdict job missing");
-  assert.match(body, /^    name: CI$/m, "the required-check display name must be the stable `CI`");
+  // The required-check display name stays the stable `CI` on every real run;
+  // only a label-noise run (all jobs skipped, #2184) is named otherwise.
+  assert.match(body, /^    name: \$\{\{ \(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && [^\n]* && 'CI label event \(ignored\)' \|\| 'CI' \}\}$/m,
+    "the required-check display name must be the stable `CI`");
   assert.match(body, /if: \$\{\{ .*!cancelled\(\).*\}\}/);
   assert.match(body, /run: node tools\/ci\/ci-verdict\.mjs/);
   assert.match(body, /NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
@@ -502,7 +505,7 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // unique run_id group (the nightly must not share the tip's group —
   // run 2758). The train is not in this group: pages.yml passes a unique
   // concurrency_key. PR branches keep newest-wins cancel on pull_request.
-  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| \(github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && 'ship-fast'\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
+  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && \(github\.event\.label\.name != 'run-ci' \|\| !github\.event\.pull_request\.draft\)\) && format\('label-\{0\}', github\.run_id\)\) \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| \(github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && 'ship-fast'\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
     "PR runs of one branch share a group; dispatched/scheduled runs keep run_id; deploy-branch pushes share ship-fast");
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
     "newest wins on PR only; ship pushes must not cancel each other");
@@ -2078,4 +2081,41 @@ test("ship-filter: a ready PR skips smoke only when neither its own diff nor its
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// #2179 / #2184 (2026-10-15): the two triggers that queued CI for nothing.
+test("ci.yml runs on PRs into the deploy branch only, and a label event other than run-ci on a draft runs nothing", () => {
+  const wf = parseYAML(ciWorkflow);
+  // #2179: `branches` on pull_request filters the BASE. Survey PRs into
+  // track-survey-assets started the full ready tier seconds before merging.
+  assert.deepEqual(wf.on.pull_request.branches, ["claude/f1-game-project-26h3ng"],
+    "pull_request must be scoped to PRs whose base is the deploy branch");
+  assert.equal(wf.on.pull_request["branches-ignore"], undefined);
+  assert.ok(wf.on.pull_request.types.includes("labeled"), "run-ci on a draft still needs the labeled trigger");
+  // #2184: the label-noise predicate, written once per place it is used.
+  const NOISE = "(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft))";
+  const LABEL_OK = "(github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft))";
+  // 1. Its own group, BEFORE the head-ref term: it can never cancel the PR's live run.
+  const group = wf.concurrency.group;
+  assert.ok(group.includes(`${NOISE} && format('label-{0}', github.run_id))`), "a label-noise run gets a throwaway group");
+  assert.ok(group.indexOf(NOISE) < group.indexOf("github.event.pull_request.head.ref"), "the throwaway group must win over the head ref");
+  assert.ok(group.indexOf("inputs.concurrency_key") < group.indexOf(NOISE), "a Pages call's key still comes first");
+  // 2. Every job skips on it (skipped jobs take no runner), so the run ends in seconds.
+  for (const [id, job] of Object.entries(wf.jobs)) {
+    const cond = String(job.if || "");
+    if (id === "draft-ci-skipped") assert.ok(cond.includes("github.event.action != 'labeled'"), "the skip notice is not re-posted by a label event");
+    else assert.ok(cond.includes(LABEL_OK), `job ${id} must skip a label event other than run-ci on a draft`);
+  }
+  // 3. A skipped job reports SUCCESS, so the noise run's verdict must not carry the required name.
+  assert.equal(wf.jobs["ci-verdict"].name, `\${{ ${NOISE} && 'CI label event (ignored)' || 'CI' }}`);
+  // 4. Tools drop it by title (ci-watch.mjs labelNoiseRun, reuse-draft-fast.sh).
+  assert.equal(wf["run-name"], `\${{ ${NOISE} && format('CI ignored: label {0}', github.event.label.name) || '' }}`);
+  const reuse = fs.readFileSync(new URL("../../tools/ci/reuse-draft-fast.sh", import.meta.url), "utf8");
+  assert.ok(reuse.includes("^CI ignored: label ") && reuse.includes('"Structural guards (tooling A)"'),
+    "a green run whose tooling A did not run is never reused as the fast tier");
+  // run-ci is a documented label, and the docs say what it buys (no selected browser specs on a draft).
+  const labels = JSON.parse(fs.readFileSync(new URL("../../.github/labels.json", import.meta.url), "utf8"));
+  assert.ok(labels.some((l) => l.name === "run-ci"), ".github/labels.json documents run-ci");
+  assert.match(String(wf.jobs.selected.if), /!\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\)/,
+    "the selected legs skip every draft; the header and docs/TESTING.md say so");
 });
