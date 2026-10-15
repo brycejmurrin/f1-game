@@ -70,6 +70,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 
 | Note | What it records |
 |---|---|
+| [notes/V8-CODE-CACHE-2026-10-14.md](notes/V8-CODE-CACHE-2026-10-14.md) | #1715: V8 code caching for game-vm (vm cachedData, ~80 ms off a 340 ms boot) and `NODE_COMPILE_CACHE`, measured flat on 216 VM unit tests (236–242 s every arm); not adopted, and when to revisit. |
 | [notes/AGENT-WORK-TRACKING-2026-10-14.md](notes/AGENT-WORK-TRACKING-2026-10-14.md) | Where the fleet's backlog lives and why: GitHub Issues + sub-issues vs Linear, Jira, Plane, Notion, Beads, Backlog.md, Taskmaster, Claude Tasks, Obsidian and the agent orchestrators, scored on free / headless / phone / PR tie-in / atomic claim; the four-layer setup behind AGENTS.md §Backlog. |
 | [notes/APEX-STEWARD-CARD-2026-10-05.md](notes/APEX-STEWARD-CARD-2026-10-05.md) | Always-on steward card + hashes (skip re-read of steward / check-changes / PR template when they match); lane mutex; `cursor/<topic>-<hash>` → ship; resolve-swarm cap; tooling/docs merge-train exclusion |
 | [notes/SECOND-BRAIN-2026-10-14.md](notes/SECOND-BRAIN-2026-10-14.md) | Obsidian and agent-memory tools (Basic Memory, Mem0, Zep/Graphiti, Letta, MCP memory, Notion, Logseq) weighed for an agent fleet: keep knowledge in git, Obsidian as a human viewer only; the context-rot and memory-poisoning evidence behind the hidden-Unicode, memory `source:` and `Supersedes:` guards. |

@@ -156,6 +156,8 @@ not to line numbers.
 
 ## 3. Code caches (two different ones, both cheap)
 
+> **Measured 2026-10-14, not adopted** — no gain on the unit suites: `docs/notes/V8-CODE-CACHE-2026-10-14.md` (#1715).
+
 **3a. V8 code cache for the VM boot.** `game-vm.cjs` calls
 `vm.runInContext(src)` for 193 files (4.80 MB) on every `createGame`, and every
 twin file pays it at least once. Switch to `new vm.Script(src, { filename, cachedData })`
