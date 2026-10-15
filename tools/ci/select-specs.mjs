@@ -1001,6 +1001,8 @@ export const CIRCUIT_FILTERED_TESTS = new Set([
   // floor it holds a scoped audit CLI to (tools/lib/circuit-scope.cjs).
   "tests/unit/prop-clipping.test.mjs",
   "tests/unit/scenery-grounding.test.mjs",
+  // 2026-10-15 (#2210): gates the scoped roster, no longer a fixed 3-circuit sample.
+  "tests/unit/scenery-ground-audit.test.mjs",
   "tests/unit/coplanar-faces.test.mjs",
   "tests/unit/props-tri-ratchet.test.mjs",
   "tests/unit/road-under-floor.test.mjs",

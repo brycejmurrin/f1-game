@@ -156,7 +156,7 @@ export const TARGETED = [
   // for the first time on a later unrelated geometry diff and reddened THAT one.
   { ere: "^tests/data/scenery-audit-baseline\\.json$",
     suites: ["tests/unit/scenery-ground-audit.test.mjs"],
-    why: "the fleet baseline tools/track/ground-audit.cjs readBaseline() loads; a stale cap 'silently permits a regression' (the suite samples monaco, monza, spa)" },
+    why: "the fleet baseline tools/track/ground-audit.cjs readBaseline() loads; a stale cap 'silently permits a regression' (the suite gates every circuit, APEX_CIRCUITS-scoped)" },
   { ere: "^js/ui/driving-line-opts\\.js$",
     suites: ["tests/unit/driving-line-opts.test.mjs"],
     why: "the sheet's store round-trip; builds no circuit" },

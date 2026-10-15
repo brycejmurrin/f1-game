@@ -13,10 +13,16 @@
 //
 // The fleet baseline lives in tests/data/scenery-audit-baseline.json and is a
 // RATCHET: `node tools/track/ground-audit.cjs --all --update` only lowers it;
-// `--all --gate` is the full check (~3 s a circuit). This file samples SAMPLE
-// so it stays well under a minute, with the same semantics as the fleet gates:
-// a count over its cap fails, and a cap above the measured count fails as
-// slack (lower it with --update) — the slack silently permits a regression.
+// `--all --gate` is the full check (~3 s a circuit). This file gates the WHOLE
+// roster, narrowed by APEX_CIRCUITS (tools/lib/circuit-scope.cjs) exactly like
+// the other fleet sweeps: a circuit-only PR audits its own circuits, a fleet
+// diff all of them. A count over its cap fails, and a cap above the measured
+// count fails as slack (lower it with --update) — the slack silently permits
+// a regression.
+//
+// It sampled monaco/monza/spa until 2026-10-15 (#2210): suzuka grew buried
+// 2 -> 3 on the deploy tip and no CI job saw it, because nothing outside the
+// sample was ever measured. SAMPLE remains the anti-vacuity set.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -31,12 +37,15 @@ const MANIFEST = require("../../tools/manifest.cjs");
 // monaco (harbour, hillside city), monza (bowl, banking), spa (forest).
 const SAMPLE = ["monaco", "monza", "spa"];
 
+const { scope } = require("../../tools/lib/circuit-scope.cjs");
+const ROSTER = scope(MANIFEST.CIRCUITS);
+
 const base = GA.readBaseline();
 let cached = null;
 const measure = () => {
   if (cached) return cached;
   const env = buildContext();
-  return (cached = SAMPLE.map((id) => GA.run(env, id)));
+  return (cached = ROSTER.map((id) => GA.run(env, id)));
 };
 
 test("baseline names every check and only real circuits", () => {
@@ -50,13 +59,15 @@ test("baseline names every check and only real circuits", () => {
   }
 });
 
-test("sampled circuits stay within the scenery-audit baseline", () => {
+test("every (scoped) circuit stays within the scenery-audit baseline", () => {
+  assert.ok(ROSTER.length > 0, `APEX_CIRCUITS=${process.env.APEX_CIRCUITS} names no circuit`);
+  assert.equal(measure().length, ROSTER.length, "the sweep dropped a circuit");
   const over = GA.overBaseline(measure(), base);
   assert.deepEqual(over, [], "scenery audits grew — `node tools/track/ground-audit.cjs <id> --why` " +
     "names the source line:\n  " + over.join("\n  "));
 });
 
-test("no stale cap on the sampled circuits — a cap above the measured count is a lie", () => {
+test("no stale cap on the measured circuits — a cap above the measured count is a lie", () => {
   const slack = [];
   for (const r of measure())
     for (const c of GA.CHECKS) {
@@ -66,8 +77,9 @@ test("no stale cap on the sampled circuits — a cap above the measured count is
   assert.deepEqual(slack, [], "lower with `node tools/track/ground-audit.cjs --all --update`:\n  " + slack.join("\n  "));
 });
 
-test("anti-vacuity: every check finds something on the sample", () => {
-  const r = measure();
+test("anti-vacuity: every check finds something on the sample", (t) => {
+  const r = measure().filter((x) => SAMPLE.includes(x.id));
+  if (r.length < SAMPLE.length) return t.skip(`APEX_CIRCUITS scopes out part of ${SAMPLE.join("/")}`);
   for (const c of GA.CHECKS)
     assert.ok(r.some((x) => x.counts[c] > 0), `${c} reads 0 on ${SAMPLE.join("/")} — the audit went blind`);
   assert.ok(r.every((x) => x.props > 5000), "the harness built bare circuits (no scenery)");
