@@ -17,6 +17,9 @@
     lengthKm: 5.3,
     baseHW: 8,
     sceneryCoordinates: "racing",
+    // The pit straight is authored in scenery/abudhabi.js (stands, garages, fascia, screens at
+    // the real line). Without this the engine's generic 7-box grandstand fallback also stands at nodes 0-28.
+    ownPitStraight: true,
     dressingExclusions: [
       { kinds: ["city", "foliage"], s0: 0.50, s1: 0.76 },
       { kinds: ["city", "foliage"], s0: 0.76, s1: 0.92 },
@@ -27,13 +30,15 @@
     ],
     // Yas palette: pale sand + paved run-off (not muddy brown); marina water is scenery.
     pal: { horizon: [0.62, 0.48, 0.34], zenith: [0.10, 0.06, 0.24], sunColor: [0.95, 0.78, 0.48], ambientSky: [0.42, 0.36, 0.32], ambientGround: [0.55, 0.46, 0.34], fogColor: [0.42, 0.34, 0.26], fogDensity: 0.0016, sunDir: [0.55, 0.15, 0.32], runoff: [0.58, 0.59, 0.60], grass: [0.82, 0.74, 0.58] },
+    // bankZones fracs are in the SCENERY frame (+0.1015 lap to racing, sceneryStartFrac above);
+    // racing frac / corner in brackets, from the measured corner table (survey 2026-10-15).
     bankZones: [
-      { frac: 0.0425, angleDeg: 3.0, widthM: 180 },   // T1 opening right
-      { frac: 0.1509, angleDeg: 3.0, widthM: 120 },   // T2 left
-      { frac: 0.5777, angleDeg: 5.0, widthM: 240 },   // the banked long left
-      { frac: 0.7453, angleDeg: 3.0, widthM: 110 },   // hotel-section left
-      { frac: 0.8446, angleDeg: 3.0, widthM: 100 },   // marina right
-      { frac: 0.9500, angleDeg: 2.5, widthM: 90 },    // final left onto the straight
+      { frac: 0.0425, angleDeg: 3.0, widthM: 180 },   // [racing 0.144] mid-straight T2 -> hairpin, no apex within 60 m (engine re-seat rule; unmeasured)
+      { frac: 0.1509, angleDeg: 3.0, widthM: 120 },   // [racing 0.252] T3-T4 north hairpin (left)
+      { frac: 0.5777, angleDeg: 5.0, widthM: 240 },   // [racing 0.679] T7-T9 banked long left (4 deg measured)
+      { frac: 0.7453, angleDeg: 3.0, widthM: 110 },   // [racing 0.847] T14 left
+      { frac: 0.8446, angleDeg: 3.0, widthM: 100 },   // [racing 0.946] T16 right (reads -2.1 deg: right-hander)
+      { frac: 0.9500, angleDeg: 2.5, widthM: 90 },    // [racing 1.052 = 0.052] T1 left (2.4 deg measured)
     ],
     elevations: [
       { s: 0.230, halfM: 460, rise: 3.5 },

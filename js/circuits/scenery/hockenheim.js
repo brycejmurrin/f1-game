@@ -29,6 +29,10 @@
       const CONC = [0.68, 0.68, 0.66];
 
       const inStadium = (s) => s >= 0.78 || s <= 0.06;
+      // T4 (Ostkurve, apex 0.2175, left-hander) runoff on its OUTSIDE (+1): the
+      // forest is held back here so the gravel, tyre wall and post read.
+      const T4 = [0.203, 0.237];
+      const inT4 = (s) => s > T4[0] && s < T4[1];
       // THE HARDTWALD WALL. Hockenheim is the forest circuit and was one of the
       // only ones in the fleet never calling forestEdge() — its trees were four
       // scattered every() passes, which gives a wood you can see daylight
@@ -37,24 +41,31 @@
       // forest section. That wall is the reason this circuit felt fast, and it
       // is what the scattered ranks below then add depth and variation to.
       // Deferred like every treeline, so it sees the finished barrier set.
-      for (const [s0, s1] of [[0.065, 0.315], [0.345, 0.430], [0.495, 0.775]]) {
+      // 0.315-0.345 was a clearing for the Ostkurve furniture that stood on a
+      // 600 m-radius straight; that furniture now sits at T4, so the wall
+      // closes here and opens at T4 on the outside instead.
+      const runs = (s0, s1, side) => side === 1 && s0 < T4[0] && s1 > T4[1]
+        ? [[s0, T4[0]], [T4[1], s1]] : [[s0, s1]];
+      for (const [s0, s1] of [[0.065, 0.430], [0.495, 0.775]]) {
         for (const side of [-1, 1]) {
-          forestEdge(s0, s1, side, 7.5, {
-            density: 0.86, hMin: 16, hMax: 30, pineFrac: 0.82,
-            col: PINE, col2: LEAF_D,
-          });
-          forestEdge(s0, s1, side, 26, {
-            density: 0.62, hMin: 22, hMax: 36, pineFrac: 0.9,
-            col: PINE_D, col2: PINE_D,
-          });
+          for (const [r0, r1] of runs(s0, s1, side)) {
+            forestEdge(r0, r1, side, 7.5, {
+              density: 0.86, hMin: 16, hMax: 30, pineFrac: 0.82,
+              col: PINE, col2: LEAF_D,
+            });
+            forestEdge(r0, r1, side, 26, {
+              density: 0.62, hMin: 22, hMax: 36, pineFrac: 0.9,
+              col: PINE_D, col2: PINE_D,
+            });
+          }
         }
       }
       // The 42 m belt is split at 0.615-0.620: on the +1 side it reaches back
       // to within 13 m of the frac-0.324 leg, where the road cull kept only
       // the top two crown tiers of one pine — 23 m in the air (float-audit).
-      for (const [s0, s1, sides] of [[0.075, 0.305, [-1, 1]], [0.505, 0.765, [-1]],
-                                     [0.505, 0.615, [1]], [0.620, 0.765, [1]]]) {
-        for (const side of sides) {
+      for (const [s0, s1, side] of [[0.075, 0.203, 1], [0.237, 0.305, 1], [0.075, 0.305, -1],
+                                    [0.505, 0.765, -1], [0.505, 0.615, 1], [0.620, 0.765, 1]]) {
+        {
           forestEdge(s0, s1, side, 42, {
             density: 0.2, hMin: 26, hMax: 42, pineFrac: 0.96,
             col: PINE_D, col2: PINE_D,
@@ -67,6 +78,7 @@
         const h = hash(k * 31);
         if (h < 0.10) return;
         const side = h < 0.5 ? -1 : 1;
+        if (inT4(s)) return;
         // Not the first pine at 0.465-0.480: its anchor is the Spitzkehre's
         // inside, 10.8 m off the frac-0.456 leg, and the road cull stripped
         // its trunk and lower tiers, leaving a crown 18 m up (float-audit).
@@ -77,7 +89,7 @@
         const s = k / n;
         if (inStadium(s)) return;
         const h = hash(k * 53 + 9);
-        if (h < 0.22) return;
+        if (h < 0.22 || inT4(s)) return;
         tree(k, h < 0.5 ? -1 : 1, 14 + h * 10, 11 + h * 8, h < 0.45 ? LEAF_D : LEAF);
         if (h > 0.62) pine(k, h > 0.82 ? -1 : 1, 28 + h * 14, 20 + h * 12, PINE_D);
       });
@@ -86,7 +98,7 @@
         const s = k / n;
         if (inStadium(s)) return;
         const h = hash(k * 67 + 17);
-        if (h < 0.30) return;
+        if (h < 0.30 || inT4(s)) return;
         pine(k, h < 0.5 ? -1 : 1, 44 + h * 26, 22 + h * 14, PINE_D);
         if (h > 0.70) tree(k, h > 0.85 ? -1 : 1, 58 + h * 20, 13 + h * 8, LEAF_D);
       });
@@ -95,7 +107,7 @@
         const s = k / n;
         if (inStadium(s)) return;
         const h = hash(k * 97 + 23);
-        if (h < 0.55) return;
+        if (h < 0.55 || inT4(s)) return;
         bush(k, h < 0.78 ? -1 : 1, 6.5 + h * 4, [0.16, 0.34, 0.16]);
       });
 
@@ -110,7 +122,7 @@
       function motodromTerrace(s0, s1, side, gap, rows, step) {
         let i = 0;
         along(s0, s1, step, (k, spacing) => {
-          const seg = Math.min(spacing * 0.78, spacing - 1.2);
+          const seg = Math.min(spacing * 0.93, spacing - 0.7);
           for (let t = 0; t < rows; t++) {
             const a = anchor(k, side, gap + t * 4.6);
             const b = [a.r, a.u, a.t];
@@ -398,19 +410,22 @@
       for (const s of [0.435, 0.470]) billboard(K(s), -1, 14, 12, 4.5, [0.88, 0.84, 0.78]);
 
       // Ostkurve / forest-loop corner furniture.
-      groundPatch(K(0.335), 1, 5, [26, 0.18, 34], GRAVEL,
-        { id: "hockenheim-ostkurve-gravel", samples: 6 });
-      tyreWall(0.325, 0.350, 1, 4, [0.20, 0.40, 0.85]);
-      grandstandEx(0.340, -1, 18, 54, null, null, { livery: "concrete" });
-      marshalPost(K(0.345), -1, 9);
+      // Re-seated from 0.335 (a 550-640 m-radius straight, survey defect 1) to
+      // T4, the Ostkurve proper (apex 0.2175, left-hander): runoff on the
+      // outside (+1). The concrete stand that stood there is dropped: the real
+      // East-stand position is unconfirmed (docs/tracks/hockenheim.md).
+      groundPatch(K(0.220), 1, 5, [18, 0.18, 24], GRAVEL,
+        { id: "hockenheim-ostkurve-gravel", samples: 8 });
+      tyreWall(0.208, 0.232, 1, 4, [0.20, 0.40, 0.85]);
+      marshalPost(K(0.234), 1, 9);
 
       groundPatch(K(0.62), 1, 5, [24, 0.18, 30], GRAVEL,
         { id: "hockenheim-forest-exit-gravel", samples: 5 });
       marshalPost(K(0.60), 1, 9);
 
-      for (const [s0, s1] of [[0.06, 0.32], [0.36, 0.43], [0.49, 0.60], [0.64, 0.78]]) {
+      for (const [s0, s1] of [[0.06, 0.43], [0.49, 0.60], [0.64, 0.78]]) {
         guardrail(s0, s1, -1, 7, [0.80, 0.81, 0.83]);
-        guardrail(s0, s1,  1, 7, [0.80, 0.81, 0.83]);
+        for (const [r0, r1] of runs(s0, s1, 1)) guardrail(r0, r1, 1, 7, [0.80, 0.81, 0.83]);
       }
       guardrail(0.78, 0.06, 1, 4.0, [0.85, 0.85, 0.88]);
       fence(0.80, 0.05, -1, 9, 4, [0.74, 0.76, 0.80]);

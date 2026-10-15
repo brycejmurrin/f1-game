@@ -1352,3 +1352,46 @@ test("C8: a restored standalone season re-arms SeasonCal, so its next save is no
   const res = h.SeasonCal.save(stale);
   assert.notEqual(res.reason, "conflict", "SeasonCal still holds the pre-import revision");
 });
+
+// #2165: a Daily class key is Ghost.contextKey() — JSON of the car/tune config,
+// full of `{`, `"` and `,`. cleanDayEntry ran it through ID_RE and dropped every
+// class on import, so a fresh-device restore's share line read "NO LAP".
+test("import keeps the Daily per-class bests keyed by a JSON records context (#2165)", () => {
+  const context = JSON.stringify({ car: ["mclaren"], tune: [0.84] });
+  const a = loadHarness();
+  a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));
+  a.disk.set("apex26.daily.v1", JSON.stringify({
+    days: { "2026-10-15": { best: 80, laps: 1, classes: { [context]: { best: 80, laps: 1 } } } },
+  }));
+  a.Career.load();
+  const envelope = JSON.parse(JSON.stringify(a.CareerBackup.build()));
+  assert.equal(a.CareerBackup.validate(envelope).ok, true);
+
+  const b = loadHarness();
+  b.Career.load();
+  assert.equal(b.CareerBackup.apply(envelope, { focusFlavour: "driver" }).ok, true);
+  const daily = JSON.parse(b.disk.get("apex26.daily.v1"));
+  assert.deepEqual(daily.days["2026-10-15"].classes, { [context]: { best: 80, laps: 1 } }, "the class entry survives import");
+
+  vm.runInContext(src("js/race/daily-challenge.js"), b.ctx);
+  const d = vm.runInContext("DailyChallenge", b.ctx).create({
+    store: b.store, fmtTime: (t) => t.toFixed(3), startRace() {}, ttDistance: 3,
+    records: { key: () => context, restoreDaily() {}, prepareDaily() {} },
+  });
+  d.open("2026-10-15");
+  const line = d.shareText(null);
+  assert.match(line, / · 80\.000/, "the share line shows the restored lap");
+  assert.doesNotMatch(line, /NO LAP/);
+
+  // Hostile or oversized class keys still drop; the 8-per-day cap holds.
+  const classes = { constructor: { best: 1, laps: 1 }, prototype: { best: 1, laps: 1 }, ["x".repeat(4097)]: { best: 1, laps: 1 } };
+  for (let i = 0; i < 12; i++) classes[JSON.stringify({ car: ["c" + i] })] = { best: 70 + i, laps: 1 };
+  const c = loadHarness();
+  c.Career.load();
+  const env2 = JSON.parse(JSON.stringify(envelope));
+  env2.daily = { days: { "2026-10-15": { best: 70, laps: 12, classes } } };
+  assert.equal(c.CareerBackup.apply(env2, { focusFlavour: "driver" }).ok, true);
+  const kept = Object.keys(JSON.parse(c.disk.get("apex26.daily.v1")).days["2026-10-15"].classes);
+  assert.equal(kept.length, 8);
+  assert.ok(kept.every((k) => k.startsWith("{")), "no constructor / prototype / oversized key");
+});

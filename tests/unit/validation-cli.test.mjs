@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import { selectionReceipt, validateSelectionArgs } from "../../tools/ci/pick-tests.mjs";
-import { cachedPlan, returnTo } from "../../tools/ci/sync-pr.mjs";
+import { cachedPlan, returnTo, verifyStages, runStages, VERIFY_MODES } from "../../tools/ci/sync-pr.mjs";
 import { sessionId, main as whoMain } from "../../tools/ci/who-is-on-it.mjs";
 import { episodeLeaks } from "../../tools/check/episode-diff.mjs";
 import { update, updateReceipt, DATA } from "../../tools/check/ratchets.mjs";
@@ -334,4 +334,34 @@ test("WGX diagnostic invokes lastFailure and serializes the returned record", ()
   assert.equal(calls, 1);
   assert.deepEqual(JSON.parse(record), { lastFailure: { reason: "adapter denied", at: 42 } });
   assert.match(source, /lastFailure: state\.lastFailure/, "final report must expose the collected reason");
+});
+
+// #2186: sync-pr ran tooling-fast at --jobs=1 and every ci.yml node suite with
+// no timeout, and outran a 30-min background ceiling.
+test("#2186: sync-pr's fast verify of a docs-only diff skips the VM suites, runs tooling-fast --jobs=3, and times every stage", () => {
+  const suites = ["test:game-vm-a", "test:net-unit", "test:vm-page", "test:node-slow", "test:game-vm-b1", "test:game-vm-b2"];
+  const fast = verifyStages({ verify: "fast", changed: ["docs/README.md"], circuits: [], suites });
+  const names = fast.map((s) => s.name);
+  assert.deepEqual(fast[0].args, ["tools/ci/tooling-fast.mjs", "--jobs=3"]);
+  assert.ok(!names.some((n) => /^test:game-vm-/.test(n)), names.join(" "));
+  assert.ok(names.includes("test:net-unit"), "a cheap unscoped suite still runs");
+  for (const st of fast) assert.ok(st.timeoutMs > 0 && st.timeoutMs <= 20 * 60e3, `${st.name} has a timeout inside the 30-min ceiling`);
+  const full = verifyStages({ verify: "full", changed: ["docs/README.md"], circuits: ["spa"], suites });
+  assert.deepEqual(full.map((s) => s.name), ["tooling-fast", ...suites, "verify-track:spa"], "full runs every suite");
+  assert.deepEqual(verifyStages({ verify: "fast", changed: null, circuits: [], suites }).map((s) => s.name), ["tooling-fast", ...suites], "unknown diff runs every suite");
+  assert.deepEqual(verifyStages({ verify: "none", changed: [], circuits: [], suites }), []);
+  assert.deepEqual(VERIFY_MODES, ["none", "fast", "full"]);
+});
+
+test("#2186: runStages stops at the first failure or timeout, names the stage, and resumes from it", () => {
+  const stages = ["a", "b", "c"].map((name) => ({ name, cmd: "x", args: [], timeoutMs: 60e3 }));
+  const ran = [];
+  const r = runStages(stages, { run: (st) => { ran.push(st.name); return st.name === "b" ? 124 : 0; } });
+  assert.deepEqual(ran, ["a", "b"]);
+  assert.deepEqual({ ok: r.ok, failedAt: r.failedAt }, { ok: false, failedAt: "b" });
+  assert.match(r.error, /b timed out after 1 min/);
+  const again = [];
+  assert.equal(runStages(stages, { from: "b", run: (st) => { again.push(st.name); return 0; } }).ok, true);
+  assert.deepEqual(again, ["b", "c"], "--from skips the stages that passed");
+  assert.match(runStages(stages, { from: "zz", run: () => 0 }).error, /no stage named zz/);
 });

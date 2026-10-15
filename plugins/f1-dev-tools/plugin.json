@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "f1-dev-tools",
+  "version": "0.1.1",
+  "description": "Reproduce, inspect, compare and validate Apex 26 camera and replay changes using the game's existing developer interface.",
+  "author": { "name": "F1 Game" },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "F1 Dev Tools",
+        "shortDescription": "Camera and replay workflows",
+        "longDescription": "Five development workflows for brycejmurrin/f1-game: scene reproduction, camera inspection, before/after comparisons, WATCH replay transition checks, and camera preset preview/export. Includes browser helpers and a report generator; uses the existing Apex and browser tooling in a game checkout.",
+        "developerName": "F1 Game",
+        "category": "Developer Tools",
+        "capabilities": [],
+        "defaultPrompt": "Use F1 Dev Tools to reproduce and inspect a camera or replay problem in f1-game, then validate the change with matching render traces."
+      }
+    }
+  }
+}

@@ -16,8 +16,8 @@
     11  s=0.420 +1  Double Droite de Villeroy: armco, tyre wall, timing boxes
     12  s=0.545 +1  esses: limestone spoil, hedge run, marshal, armco, gravel
     13  s=0.645 +1  Virage de la Bretelle: tyre wall, armco, camera tower
-    14  s=0.725 -1  Parabolique outside: deep armco, tyre wall, hoarding, hill
-    15  s=0.760 +1  Parabolique infield — deliberately empty
+    14  s=0.846 -1  Parabolique outside (long right s 0.805-0.887): armco, tyre wall, hoarding, bank
+    15  s=0.760 +1  inside of the s 0.716-0.748 right — deliberately empty
     16  s=0.880 +1  paddock entrance: apron, truck park, buildings, hedge, gate
     17  s=0.950 -1  approach to the line: second grandstand, support paddock
     18  lap-wide  continuous armco, marshal chain, ISOLATED hillside trees,
@@ -35,7 +35,7 @@
         tree, bush, hedge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower,
         billboard, sponsorHoarding, groundPatch, ridge,
-        modelGroup, seat, vadd, MAT, addPrism } = api;
+        modelGroup, seat, vadd, MAT, addPrism, floodMast } = api;
 
       // 1. PALETTE — dry summer Burgundy. Pale limestone, bleached grass,
       //    hedgerow much darker than the open slope. Nothing here is glossy:
@@ -264,6 +264,14 @@
       field(0.038, -1, 40, 30, 54, GRAVEL);                        // car park
       fenceRun(0.004, 0.058, -1, 52, 2.0, STEEL);
       hedgeRun(0.000, 0.052, -1, 60, 1.9, HEDGE2);
+      // Permanent-facility floods: def furniture.lamp is "none", so night relies on
+      // registered masts at the pit straight and main grandstand (catalunya idiom).
+      if (typeof floodMast === "function") {
+        for (const [s, side, gap] of [
+          [0.012, 1, 30], [0.034, 1, 34], [0.018, -1, 26], [0.042, -1, 30],
+          [0.958, -1, 28], [0.972, -1, 32],
+        ]) floodMast(K(s), side, gap, { h: 36, cool: true, pool: false, arms: 2 });
+      }
 
       // 4. PADDOCK BEHIND THE GARAGES (s 0.055, +1, 32) — service boxes on a
       //    pale gravel hardstanding, plus one camera tower overlooking the
@@ -336,8 +344,8 @@
       guardrail(0.194, 0.272, -1, 13, ARMCO);
       spectatorHill(0.214, 0.266, -1, 30,
         { rows: 5, rise: 1.3, depth: 2.4, density: 0.45, grass: SLOPE });
-      ridgeAt(0.244, -1, 230, 0.55, 300, 54, 17, SLOPE);
-      ridgeAt(0.168, -1, 340, 1.90, 340, 62, 20, [0.30, 0.35, 0.23]);
+      ridgeAt(0.244, -1, 230, 0.55, 230, 50, 12, SLOPE);
+      ridgeAt(0.168, -1, 340, 1.90, 250, 56, 13, [0.30, 0.35, 0.23]);
       fenceRun(0.208, 0.276, -1, 44, 1.8, WOOD);
       buildAt(0.252, -1, 74, 8, 4.6, 18,
         { kind: "hall", wall: STONE, window: GLASS, floor: 1 });
@@ -409,8 +417,8 @@
       }
       bush(K(0.358), -1, 50, FOL_D);
       bush(K(0.398), -1, 66, FOL_D);
-      ridgeAt(0.368, -1, 300, 0.15, 380, 70, 21, [0.31, 0.36, 0.23]);
-      ridgeAt(0.336, -1, 360, 2.10, 340, 66, 18, [0.32, 0.37, 0.24]);
+      ridgeAt(0.368, -1, 300, 0.15, 270, 60, 14, [0.31, 0.36, 0.23]);
+      ridgeAt(0.336, -1, 360, 2.10, 250, 58, 12, [0.32, 0.37, 0.24]);
       field(0.348, -1, 58, 34, 48, WHEAT);
       field(0.372, -1, 62, 38, 54, PLOUGH);
       field(0.398, -1, 56, 32, 50, STUB);
@@ -470,20 +478,24 @@
       treeAt(0.354, -1, 102, 7.8, FOL_D);
       treeAt(0.420, -1, 84, 9.0, FOL_Y);
 
-      // 11. DOUBLE DROITE DE VILLEROY (s 0.420, +1, 12) — the paired rights
-      //     climbing away; armco through both, tyre wall on the second apex,
-      //     marshal between them, a small timing box set back on the inside.
+      // 11. VILLEROY (s 0.420, +1, 12) — the centreline measures LEFT-handed
+      //     here (+k, R 52-75 m, falling), so +1 is the OUTSIDE: armco through
+      //     both peaks, tyre walls and marshal on the outside, gravel run-off
+      //     outside, the timing box set back on the INSIDE (-1). The brief's
+      //     "paired rights climbing away" matches the valley rights at
+      //     s 0.341-0.370 instead (grade +2.5 %); dressing is NOT moved there
+      //     (handedness unverifiable from osm-circuits.json, which holds only a bbox).
       guardrail(0.392, 0.474, 1, 12, ARMCO);
       guardrail(0.392, 0.474, -1, 13, ARMCO);
       tyreWall(0.406, 0.420, 1, 11, CAP);
       tyreWall(0.442, 0.464, 1, 11, CAP);
       marshalPost(K(0.430), 1, 15);
-      building(K(0.424), 1, 26, 9, 4.2, 8,
+      building(K(0.424), -1, 30, 9, 4.2, 8,
         { kind: "hall", wall: WALL, window: GLASS, floor: 1 });
       buildAt(0.448, 1, 28, 7, 3.8, 7,
         { kind: "hall", wall: STONE, window: GLASS, floor: 1 });
       groundPatch(K(0.436), 1, 22, [12, 0.14, 56], GRAVEL);
-      groundPatch(K(0.430), -1, 19, [16, 0.15, 72], GRAVEL);   // outside run-off
+      groundPatch(K(0.430), -1, 19, [16, 0.15, 72], GRAVEL);   // inside apron
       fenceRun(0.390, 0.478, 1, 34, 1.6, WOOD);
       fenceRun(0.390, 0.478, -1, 26, 1.6, WOOD);
       marshalPost(K(0.466), -1, 16);
@@ -536,18 +548,23 @@
       bushAt(0.658, 1, 36, FOL_D);
       field(0.644, 1, 72, 38, 50, STUB);
 
-      // 14. OUTSIDE OF THE PARABOLIQUE (s 0.725, -1, 18) — deep armco with a
-      //     tyre wall at the fastest point, hoarding behind it. The Parabolique
+      // 14. OUTSIDE OF THE PARABOLIQUE (s 0.846, -1, 18) — deep armco with a
+      //     tyre wall at the fastest point, hoarding behind it. Anchored on the
+      //     longest sustained RIGHT (R 110-143 m, s 0.805-0.887, measured) that
+      //     closes the lap; the shorter right at s 0.716-0.748 keeps its armco only (tri
+      //     budget: the tyre wall moved with the corner). The Parabolique
       //     is the 1976–77 extension corner (official history; Wikipedia
       //     3.801 km GP layout); max slope 14 % (circuit site). Docs §4:
-      //     spectator hill beyond following the curve. Wave-6: required
+      //     spectator hill beyond following the curve. The bank sits at s 0.830:
+      //     0.846+ leaves its tiers 2-6 m above falling terrain (ground-audit). Wave-6: required
       //     positive-rake bank modelGroup (spectatorHill alone had no id).
       guardrail(0.684, 0.796, -1, 12, ARMCO);
-      tyreWall(0.714, 0.744, -1, 14, CAP);
-      sponsorHoarding(0.690, 0.792, -1, 18, { h: 1.7, step: 8 });
+      guardrail(0.838, 0.852, -1, 12, ARMCO);
+      tyreWall(0.830, 0.862, -1, 14, CAP);
+      sponsorHoarding(0.806, 0.886, -1, 18, { h: 1.7, step: 8 });
       {
         const side = -1;
-        const a = anchor(K(0.742), side, 27);
+        const a = anchor(K(0.830), side, 27);
         const foot = a.c.slice();
         const gy = terrainYAt(foot[0], foot[2]);
         if (gy != null) foot[1] = Math.max(foot[1], gy - 0.15);
@@ -571,16 +588,17 @@
           stage._mat = 0;
         }, { required: true });
       }
-      fenceRun(0.692, 0.792, -1, 40, 1.8, WOOD);
-      buildAt(0.736, -1, 66, 8, 4.0, 15,
+      fenceRun(0.806, 0.890, -1, 40, 1.8, WOOD);
+      buildAt(0.850, -1, 66, 8, 4.0, 15,
         { kind: "hall", wall: STONE2, window: GLASS, floor: 1 });
       treeAt(0.704, -1, 56, 9.2, FOL);
       treeAt(0.752, -1, 60, 10.0, FOL_L);
-      treeAt(0.784, -1, 54, 7.8, FOL_D);
+      treeAt(0.874, -1, 54, 7.8, FOL_D);
       field(0.722, -1, 92, 44, 62, WHEAT);
       field(0.768, -1, 86, 38, 54, MEADOW);
       hedgeRun(0.700, 0.760, -1, 74, 1.8, HEDGE);
       marshalPost(K(0.730), -1, 20);
+      marshalPost(K(0.850), -1, 20);
 
       // 15. PARABOLIQUE INFIELD (s 0.760, +1, 24) — DELIBERATELY EMPTY. The
       //     sweep has to read as width and speed, so this is open grass with

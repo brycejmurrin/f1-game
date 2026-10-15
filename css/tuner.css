@@ -1428,5 +1428,7 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
 #flyby-inner :is(#fb-in-ease, [id^="fb-in-eye"][id$="-at"], [id^="fb-in-look"][id$="-at"]) {
   min-height: var(--tap-paint);
 }
+/* GARAGE ANGLE's plan of the bay (js/garage/arrival.js angleMap): under the
+   selector, the chosen eye lit. currentColor so it follows the panel's ink. */
+#ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
 }
-

@@ -17,6 +17,16 @@
  * Run: node tools/car/logo-authored-sweep.mjs
  */
 import { loadCrests } from "./crest-sweep.mjs";
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
+// It takes no arguments: --help answers and anything else is refused (#1708).
+exitIfHelp(process.argv.slice(2), `usage: node tools/car/logo-authored-sweep.mjs
+  Scores LiveryTex.markPalette over team x livery x 8 picked colours: is the
+  TEAM LOGO (and LOGO DETAIL) colour painted as chosen? Offline, no browser.`);
+parseFlags(process.argv.slice(2), []);
+if (process.argv.slice(2).length) {
+  console.error(`logo-authored-sweep: takes no arguments (got ${process.argv.slice(2).join(" ")})`);
+  process.exit(1);
+}
 const { LiveryTex: LT, Teams, Liveries } = loadCrests();
 const fieldsFor = (liv, bare) =>
   bare ? [(liv && liv.fin) || (liv && liv.c2)] : [liv && liv.c1, liv && liv.c2];

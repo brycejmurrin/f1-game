@@ -101,6 +101,14 @@ var RadioVoice = (function () {
   const LEAD_RESERVE_S = 0.25;
   const SPOTTER_DECODE_LEAD_S = 0.6;   // lead behind a spotter clip whose decode has not settled (remaining() = Infinity)
   const WORDS_PER_S = 2.4;   // deliberately SLOW: under-estimating speech is the safe direction
+  // js/game.js showAnnounce: announceT = max(ANN_CARD_MIN_S, (dur || 1.6) + ANN_CARD_PAD_S).
+  const ANN_CARD_PAD_S = 0.5;
+  const ANN_CARD_MIN_S = 3;
+  // Courtesy-figure length from js/audio/radio-fx.js RADIO_CH (same sums as GameAudio.radioLeadS).
+  const RADIO_LEAD_S = 0.03 + 0.105 + 0.09 + 0.09 + 0.11;
+  const CONTROL_LEAD_S = 0.03 + 0.10 + 0.12;
+  // Recorded voice hard-stop slack (speakPack deadline, ms).
+  const PACK_STOP_TAIL_S = 0.4;
   // Tokens that must keep their capitals. Everything else is lowercased before
   // speaking, because several engines spell a short all-caps token letter by
   // letter — "B-O-X" instead of "box". Invisible on Chrome/Windows and ruinous
@@ -258,6 +266,21 @@ var RadioVoice = (function () {
     return out;
   }
 
+  /** Minimum announce card life (`announceT` in js/game.js) for a line to speak whole. */
+  function cardLifeS(o) {
+    const kind = o.kind || "race";
+    const lead = Math.max(0, o.lead != null ? +o.lead : (kind === "comm" ? 0 : (SPEAKERS[kind] === "control" ? CONTROL_LEAD_S : RADIO_LEAD_S)));
+    const text = speakable(o.msg);
+    if (!text) return ANN_CARD_MIN_S;
+    const budgetNeed = estimate(text, RATE_MAX);
+    return Math.max(ANN_CARD_MIN_S, lead + LEAD_RESERVE_S + budgetNeed);
+  }
+
+  /** `dur` for announce() so max(ANN_CARD_MIN_S, dur + ANN_CARD_PAD_S) fits plan(). */
+  function cardDurS(o) {
+    return cardLifeS(o) - ANN_CARD_PAD_S;
+  }
+
   /** A live instance's shape, with every method a no-op. */
   function inert() {
     return Object.freeze({
@@ -335,7 +358,7 @@ var RadioVoice = (function () {
      * outside. The audio panel prints the verdict; see js/audio/panel.js. */
     let asked = 0, started = 0;
     let lastSquelch = null, squelchOpenT = null, squelchCloseT = null;
-    let ownCtx = null, noiseBuf = null, poolCtx = null;
+    let noiseBuf = null, poolCtx = null, poolDest = null;
     const squelchPool = [];   // reused bandpass+gain; BufferSource is one-shot
     function stopSquelch(cut) {
       if (squelchOpenT != null) { clearTimeout(squelchOpenT); squelchOpenT = null; }
@@ -349,28 +372,32 @@ var RadioVoice = (function () {
         v.busyUntil = t;
       }
     }
+    // GameAudio's own context and SFX bus (#2189): master, limiter, SFX volume
+    // and hide-time suspend all apply, on every device. No second AudioContext —
+    // with GameAudio still the title stub (null) the card sting stands alone.
     function audioCtx() {
       const w = typeof window !== "undefined" ? window : null;
-      if (w && w.RadioSquelchCtx) return w.RadioSquelchCtx;
-      if (typeof GameAudio !== "undefined" && GameAudio && typeof GameAudio.context === "function") {
-        try { const c = GameAudio.context(); if (c) return c; } catch (e) { /* stub or mid-teardown */ }
-      }
-      if (isMobile()) return null;   // no second graph on a phone; the card sting stays
-      if (ownCtx) return ownCtx;
-      const AC = (typeof window !== "undefined" && (window.AudioContext || window.webkitAudioContext))
-        || (typeof AudioContext !== "undefined" ? AudioContext : null);
-      if (!AC) return null;
-      try { ownCtx = new AC(); } catch (e) { return null; }
-      return ownCtx;
+      if (w && w.RadioSquelchCtx) return w.RadioSquelchCtx;   // unit-test hook
+      if (typeof GameAudio === "undefined" || !GameAudio || typeof GameAudio.context !== "function") return null;
+      try { return GameAudio.context() || null; } catch (e) { return null; }   // mid-teardown
+    }
+    function squelchDest(ctx) {
+      let bus = null;
+      try {
+        if (GameAudio.context() === ctx && typeof GameAudio.sfxBus === "function") bus = GameAudio.sfxBus();
+      } catch (e) { /* stub or hook context */ }
+      return bus || ctx.destination || null;
     }
     function ensureSquelchPool(ctx) {
-      if (poolCtx === ctx && squelchPool.length) return;
+      const dest = squelchDest(ctx);
+      if (poolCtx === ctx && poolDest === dest && squelchPool.length) return;
       for (const v of squelchPool) {
         try { v.g.disconnect(); } catch (e) { /* gone */ }
         try { v.filt.disconnect(); } catch (e) { /* gone */ }
       }
       squelchPool.length = 0;
       poolCtx = ctx;
+      poolDest = dest;
       noiseBuf = null;
       const n = isMobile() ? 1 : SQUELCH_POOL;
       for (let i = 0; i < n; i++) {
@@ -379,7 +406,7 @@ var RadioVoice = (function () {
         const g = ctx.createGain();
         g.gain.value = 0.0001;
         filt.connect(g);
-        if (ctx.destination) g.connect(ctx.destination);
+        if (dest) g.connect(dest);
         squelchPool.push({ filt, g, src: null, busyUntil: 0 });
       }
     }
@@ -905,8 +932,9 @@ var RadioVoice = (function () {
     };
   }
 
-  return { create, inert, plan, speakable, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
+  return { create, inert, plan, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
            PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S,
+           ANN_CARD_PAD_S, ANN_CARD_MIN_S, RADIO_LEAD_S, CONTROL_LEAD_S, PACK_STOP_TAIL_S,
            radioBand, squelchPlan, hashSeed, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };
 })();
 Object.freeze(RadioVoice);
