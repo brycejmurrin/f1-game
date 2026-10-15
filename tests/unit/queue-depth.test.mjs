@@ -35,7 +35,7 @@ test("jobs split by runner label; completed and environment-waiting jobs hold no
     job("in_progress"), job("queued"), job("pending"), job("requested"), job("completed"), job("waiting"),
     job("in_progress", "macos-latest"), job("queued", "macos-14"), null,
   ]);
-  assert.deepEqual(c, { linux: { running: 1, queued: 3, oldestQueuedAt: null }, macos: { running: 1, queued: 1, oldestQueuedAt: null } });
+  assert.deepEqual(c, { linux: { running: 1, queued: 2, oldestQueuedAt: null }, macos: { running: 1, queued: 1, oldestQueuedAt: null }, laneWaiting: 1 });
 });
 
 test("ok under every threshold; the line names jobs in flight, queued and macOS", () => {
@@ -216,9 +216,21 @@ test("#2266: running, queued and the oldest-queued age are reported; a starved q
   assert.match(reportLine(mac), /; 5 Linux running\)$/);
 });
 
-test("#2266: a run in status `waiting` is listed too (its pending jobs are queued work)", () => {
-  const f = fakeApi({ waiting: [{ id: 77, status: "waiting" }] }, () => many(3, "pending"));
+test("#2266: a run in status `waiting` is listed too (its queued jobs count)", () => {
+  const f = fakeApi({ waiting: [{ id: 77, status: "waiting" }] }, () => many(3, "queued"));
   const v = measure({ request: f.request });
   assert.ok(f.calls.includes("actions/runs?status=waiting&per_page=100&page=1"));
   assert.equal(v.queued, 3);
+});
+
+test("a `pending` job waits in a CI lane, not for a runner: counted apart, never a hold", () => {
+  // 2026-10-15 22:23Z: 30 lane-waiting legs since 20:42 read as starved runners while 7 of 40 ran.
+  const old = Date.parse("2026-10-15T20:42:00Z"), now = Date.parse("2026-10-15T22:23:00Z");
+  const lane = Array.from({ length: 30 }, () => ({ status: "pending", labels: ["ubuntu-latest"], created_at: new Date(old).toISOString() }));
+  const v = evaluate(countJobs([...lane, ...many(7, "in_progress")]), { now });
+  assert.equal(v.verdict, "ok");
+  assert.equal(v.queued, 0);
+  assert.equal(v.laneWaiting, 30);
+  assert.equal(v.linux.oldestQueuedMin, null, "a lane wait is not a runner wait");
+  assert.equal(reportLine(v), "= queue ok (7 Linux jobs in flight / 40, 0 queued, 0 macOS / 5; 7 Linux running, 30 waiting in CI lanes)");
 });
