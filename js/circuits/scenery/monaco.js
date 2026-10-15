@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monaco"] =
   function (api) {
-      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, bakedModel, seat, motorhome } = api;
+      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, night, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, bakedModel, seat, motorhome } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (15 per build here,
@@ -94,6 +94,11 @@
       const ARMCO  = [0.70, 0.72, 0.74];
       // Warm emissive window colour — reads as lit interior at dusk/night
       const WINLIT = [0.95, 0.88, 0.55];
+      // Night build only: pale daytime albedo on far blocks reads as glowing
+      // paper against a black sky (survey #2), so the unlit body is dimmed and
+      // the lit windows (WINLIT bands) carry the read. `night` is the BUILD's
+      // flag (track._night); dusk shares the day build, see the PR's DEFERRED.
+      const nightDim = (c, f) => (night ? [c[0] * f, c[1] * f, c[2] * f] : c);
       // Street lamp sodium-yellow cap
       const LAMP   = [1.0, 0.90, 0.60];
       const PALMGRN = [0.25, 0.45, 0.22];
@@ -195,7 +200,7 @@
         const k = KRACE(0.0655), a = anchor(k, racingSide(1), 18);
         const b = [a.r, a.u, a.t];
         modelGroup("monaco-sainte-devote", {
-          center: vadd(a.c, a.u, 6.2), size: [11.2, 14.5, 13.5], basis: b,
+          center: vadd(vadd(a.c, a.r, -0.5), a.u, 9.9), size: [13.2, 20.2, 13.5], basis: b,   // top = campanile cross at 18.7 + margin
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 4.2), [9.2, 8.4, 11.4], CREAM, b);
@@ -262,7 +267,7 @@
         const a = anchor(k, -1, tDist);
         if (!onTrack(a.c[0], a.c[2], 10)) {
           tower(k, -1, tDist, 14 + hash(k * 3) * 4, ht,
-            { col: PASTELS[K(sf) % PASTELS.length], cap: true, capCol: [0.55, 0.58, 0.56], mast: 5 });
+            { col: nightDim(PASTELS[K(sf) % PASTELS.length], 0.4), cap: true, capCol: [0.55, 0.58, 0.56], mast: 5 });
           const bW = 14 + hash(k * 3) * 4;
           addBox(out, vadd(a.c, a.u, ht * 0.62), [bW * 1.15, ht * 0.14, bW * 1.15],
                  WINLIT, [a.r, a.u, a.t]);
@@ -396,7 +401,7 @@
           const b = [a.r, a.u, a.t];
           // Lower, longer belle-époque pavilion + red/white awning terrace.
           modelGroup("monaco-cafe-de-paris", {
-            center: vadd(vadd(a.c, a.u, 10.5), a.r, -1.75), size: [19.5, 24, 44], basis: b,
+            center: vadd(vadd(a.c, a.u, 10.5), a.r, -1.75), size: [20.4, 24, 44], basis: b,
           }, (stage) => {
             stage._mat = MAT.STONE;
             addBox(stage, vadd(a.c, a.u, 7.5), [15, 15, 40], CAFE, b);
@@ -986,7 +991,7 @@
         // the 15.5 m frontage sags into the inside of the r 21 m bend.
         const k = KRACE(0.712), a = anchor(k, racingSide(-1), 9), b = [a.r, a.u, a.t];
         modelGroup("monaco-tabac-shop", {
-          center: vadd(a.c, a.u, 5.2), size: [11.5, 10.8, 15.5], basis: b,
+          center: vadd(a.c, a.u, 5.2), size: [14.2, 10.8, 15.5], basis: b,
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 4.5), [10.5, 9, 14], CREAM, b);
@@ -1092,7 +1097,7 @@
         const RASCASSE_WALL = [0.86, 0.80, 0.62];
         const a = faceRoadRight(anchor(k, racingSide(1), 9)), b = [a.r, a.u, a.t];
         modelGroup("monaco-rascasse-bar", {
-          center: vadd(vadd(a.c, a.r, 0.2), a.u, 5.0), size: [12, 10.5, 10.5], basis: b,
+          center: vadd(vadd(a.c, a.r, 0.2), a.u, 5.0), size: [13.4, 10.5, 10.5], basis: b,
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(a.c, a.u, 4.0), [11, 8.0, 9], RASCASSE_WALL, b);
@@ -1226,7 +1231,7 @@
         if (!onTrack(a.c[0], a.c[2], 10)) {
           const bW = 14 + hash(k * 3) * 5;
           tower(k, sd, tDist, bW, ht, {
-            col: PASTELS[K(sf) % PASTELS.length], cap: true,
+            col: nightDim(PASTELS[K(sf) % PASTELS.length], 0.45), cap: true,
             capCol: [0.55, 0.58, 0.56], mast: 6
           });
           addBox(out, vadd(a.c, a.u, ht * 0.60), [bW * 1.2, ht * 0.14, bW * 1.2],
@@ -1338,7 +1343,7 @@
       // and its exit road; the complex's wall stands there now.)
       guardrail(0.62, 0.68, -1, 0.4, ARMCO);
 
-      const harbourStations = [0.365, 0.545, 0.59]; // racing fractions
+      const harbourStations = [0.365, 0.545, 0.59]; // AUTHORED (source-frame) fracs, passed to K(); the basin they land on was measured in the Node build (x -400..-80, z 160..430), not by racing frac
       for (let station = 0; station < harbourStations.length; station++) {
         waterField(K(harbourStations[station]), 1, 16, 300, 72, 12, SEA,
           { id: `monaco-harbour-water-${station}`, required: true });
@@ -1695,10 +1700,17 @@
           if (g == null || !Number.isFinite(g)) g = FLOOR;
           const base = g - 1;
           out._mat = MAT.CONCRETE;
-          addBox(out, [x, base + h / 2, z], [w, h, d], FILL[(((ix * 3 + iz * 5) % FILL.length) + FILL.length) % FILL.length], null);
+          addBox(out, [x, base + h / 2, z], [w, h, d], nightDim(FILL[(((ix * 3 + iz * 5) % FILL.length) + FILL.length) % FILL.length], 0.3), null);
           if (!tall && h2 > 0.35) {
             out._mat = MAT.BRICK;
-            addPrism(out, [x, base + h, z], [w, 2.6, d], ROOF, null);
+            addPrism(out, [x, base + h, z], [w, 2.6, d], nightDim(ROOF, 0.4), null);
+          }
+          if (night && (tall || h2 > 0.5)) {
+            // Sparse lit floors, night build only (the day build is unchanged).
+            out._mat = 0;
+            for (let f = 0; f < (tall ? 3 : 1); f++) {
+              addBox(out, [x, base + h * (0.35 + 0.22 * f + 0.1 * h2), z], [w + 0.2, 1.3, d + 0.2], WINLIT, null);
+            }
           }
         }
         out._mat = 0;
