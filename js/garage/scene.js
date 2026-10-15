@@ -3,7 +3,7 @@ const GarageScene = (function () {
   "use strict";
 
 let _gfx = null;            // renderer handle, set once by init()
-function init(gfx) { Log.info("game", "GarageScene.init"); _gfx = gfx; }
+function init(gfx) { Log.info("game", "GarageScene.init"); _gfx = gfx; if (typeof GarageCrew !== "undefined") GarageCrew.init(gfx); }
 
 // The frame clear colour (gfx reads fogColor as the clear) — the "outside" the
 // bay is silhouetted against, and what the apron disc's rim fades into.
@@ -553,6 +553,19 @@ function live(liv, now, ctx) {
     rig[o + 3] = GANTRY_TINT[0] * ge; rig[o + 4] = GANTRY_TINT[1] * ge; rig[o + 5] = GANTRY_TINT[2] * ge;
     rig[o + 14] = nightNow ? 1.2 : 0;
   }
+  // THE SHUTTER SWELL: the two team-colour dado uplights rise to ~3x and fall
+  // back as the door lifts on an arrival or the RACE! drive-out (ctx.door, 0..1;
+  // absent or 1 on every other frame), so the team's colour floods the bay at
+  // the moment it opens. Written in place: the rig is rebuilt only on a new c1.
+  {
+    const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]), m = Math.max(c1[0], c1[1], c1[2]) || 1;
+    const d = ctx && Number.isFinite(ctx.door) ? Math.max(0, Math.min(1, ctx.door)) : 1;
+    const ue = (3.0 / m) * E * (1 + 2.2 * Math.sin(d * Math.PI));
+    for (let k = 0; k < 2; k++) {
+      const o = (FIXTURES.length + k) * 15;
+      rig[o + 3] = c1[0] * ue; rig[o + 4] = c1[1] * ue; rig[o + 5] = c1[2] * ue;
+    }
+  }
   // TOP hides the ceiling housings, so their glare orbs must go with them.
   for (let i = 0; i < FIXTURES.length; i++)
     rig[i * 15 + 14] = spotName === "top" ? 0 : FIXTURES[i][12];
@@ -613,15 +626,32 @@ function mk(out, tx, ty, tz, ay, az) {
   out[12] = tx;      out[13] = ty;      out[14] = tz;      out[15] = 1;
   return out;
 }
-let fanMesh = null, lampMesh = null, lampFace = null, passMesh = null;
+let fanMesh = null, lampMesh = null, lampFace = null, passMesh = null, mirrorFadeMesh = null;
 const _mFan = new Float32Array(16), _mLamp = new Float32Array(16), _mPass = new Float32Array(16);
 const MAT_MIRROR = new Float32Array([-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-// Planar floor ghost: the car again, faint, with no depth test, straight after
-// the floor. #1025 swapped this for an opaque+depthBias resolve + fade quad so
-// close-ups would self-occlude, but polygon offset cannot pull a mesh metres
-// below y=0 in front of the slab — the contact sheen vanished on the live bay.
-// The ghost (helmet/wheels through each other on fwLow) is the accepted look.
-const MIRROR_OPTS = { alpha: 0.26, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, noDepthTest: true };
+// Floor reflection: noDepthTest + alpha drew the mirrored car into empty pixels
+// below the bay slab (side/rear views showed a second car under the floor).
+// Draw the room first, resolve the mirror opaque with depth bias so it depth-tests
+// against floor/props, then composite a bay fade quad for contact sheen.
+const MIRROR_BIAS = [-2, -120];
+const MIRROR_RESOLVE = { alpha: 1, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, depthBias: MIRROR_BIAS };
+const MIRROR_SHEEN_PEAK = 0.14;
+const _mirrorFadeOpts = { alpha: 0.86, roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0 };
+function mirrorSheen(eye, carMat) {
+  const cx = carMat ? carMat[12] : 0, cz = carMat ? carMat[14] : 0;
+  const ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 1.6, ez = eye ? eye[2] : 5;
+  const d = Math.hypot(ex - cx, ez - cz);
+  const lateral = 1 / (1 + Math.max(0, d - 2.2) * 0.18);
+  const height = 1 / (1 + Math.max(0, ey - 2.5) * 0.25);
+  return MIRROR_SHEEN_PEAK * lateral * height;
+}
+function ensureMirrorFade() {
+  if (mirrorFadeMesh || !_gfx) return;
+  const out = acc();
+  // Bay box only — apron / pit lane stay opaque so a fade pass cannot open them.
+  tile(out, -BOX_HW, BOX_HW, BOX_ZB, BOX_ZF, [0.115, 0.118, 0.126], 0.002, MAT.ASPHALT);
+  mirrorFadeMesh = _gfx.createMesh(out);
+}
 function ensureDynamic() {
   if (fanMesh) return;
   // Fan blades in the XY plane about the origin, turned about Z per frame.
@@ -1564,24 +1594,14 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   const now = ctx && Number.isFinite(ctx.sceneNow) ? ctx.sceneNow : typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
   const studio = !!(ctx && ctx.studio);
-  // THE FLOOR REFLECTION: the car again, mirrored in y = 0, drawn faint and
-  // without a depth test straight after the floor. It writes no depth, so the
-  // shell, the props and the real car all paint over it wherever they pass
-  // against the floor's depth — which is exactly the clip a planar reflection
-  // needs, with no stencil and no second floor pass. MAT_MIRROR reflects X as
-  // the preview does (MAT_REFLECT_X) and Y for the floor; det +1, no cull flip.
-  if (carMesh) {
-    if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
-    else arrivalMirror.set(MAT_MIRROR);
-    _gfx.draw(carMesh, arrivalMirror, MIRROR_OPTS);
-  }
-  if (studio) return;   // car studio: floor + ghost, no room dressing
-  // Room after the ghost so props/shell depth-write over it.
+  // Room first so its depth is in the buffer: the reflection then depth-tests
+  // against props/shell (they win) and only needs bias to clear the floor.
   const ex = eye ? eye[0] : 0, ez = eye ? eye[2] : 0;
   const inside = _inside;
   inside.nx = ex > -HALF_W; inside.px = ex < HALF_W; inside.back = ez > Z_BACK;
   inside.door = ez < Z_DOOR; inside.mid = true; inside.shutter = ez < Z_DOOR;
   inside.barrier = ez < Z_DOOR && !arrival;
+  if (!studio) {
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
   // TOP looks down through the ceiling: hide the truss and the ceiling LED
   // housings so their beams do not stripe the car. Other presets restore them.
@@ -1608,6 +1628,8 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
   // The moving props. Fan on the back wall (its housing is in propMesh.back);
   // the lamp wherever the preset put it; the pit-lane pass every half minute.
   if (inside.back && fanMesh) _gfx.draw(fanMesh, mk(_mFan, FAN[0], FAN[1], Z_BACK + 0.17, 0, now * 0.0065), SHELL_OPTS);
+  // The crew (js/garage/scene-crew.js), only while an arrival or drive-out plays.
+  if (arrival && typeof GarageCrew !== "undefined") GarageCrew.draw(liv, eye, arrival, SHELL_OPTS);
   if (lampMesh) {
     mk(_mLamp, lampAim[0], 0, lampAim[1], lampAim[2], 0);
     _gfx.draw(lampMesh, _mLamp, SHELL_OPTS);
@@ -1640,6 +1662,25 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
       Log.warn("game", `GarageScene live trace failed: ${e && e.message}`);
     }
   }
+  }
+  // THE FLOOR REFLECTION: car again through MAT_MIRROR (X as the preview's
+  // MAT_REFLECT_X, Y for the floor; det +1, no cull flip). Opaque resolve with
+  // depthBias so under-floor fragments clear the floor and self-occlude; bay
+  // fade quad restores contact sheen. After the room so props/shell clip it.
+  if (carMesh) {
+    if (carMat) { arrivalMirror.set(carMat); arrivalMirror[1] = -carMat[1]; arrivalMirror[5] = -carMat[5]; arrivalMirror[9] = -carMat[9]; arrivalMirror[13] = -carMat[13]; }
+    else arrivalMirror.set(MAT_MIRROR);
+    const sheen = mirrorSheen(eye, carMat);
+    if (sheen > 0.02) {
+      _gfx.draw(carMesh, arrivalMirror, MIRROR_RESOLVE);
+      ensureMirrorFade();
+      if (mirrorFadeMesh) {
+        _mirrorFadeOpts.alpha = 1 - sheen;
+        _gfx.draw(mirrorFadeMesh, MAT_I, _mirrorFadeOpts);
+      }
+    }
+  }
+  if (studio) return;   // car studio: floor + resolved reflection, no room dressing
   if (liveTex) {
     if (liveMesh.floor) _gfx.drawDecal(liveMesh.floor, MAT_I, liveTex, FLOOR_DECAL_OPTS);
     for (let i = 0; i < LIVE_DECAL_SIDES.length; i++) {
