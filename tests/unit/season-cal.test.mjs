@@ -74,7 +74,7 @@ function load(stored0, tracks0) {
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
   vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx);
   return {
-    S: vm.runInContext("SeasonCal", ctx), stored, tracks,
+    S: vm.runInContext("SeasonCal", ctx), stored, tracks, store: ctx.GameStore.store,
     writes: (key) => revisions.get(key) || 0,   // how many times `key` was written (bumps count too)
     foreign: (key) => {
       if (key == null) clearRevision++;
@@ -232,6 +232,95 @@ test("setup apply refuses a foreign season before changing active rules", () => 
   assert.equal(S.track(0).id, "monza");
   assert.equal(stored.get("season"), winner);
   assert.equal(stored.get("seasonCfg").points, "modern");
+});
+
+test("unchanged setup preserves the first qualifying grid without writing the save", () => {
+  const { S, stored, writes } = load();
+  S.engage("season");
+  const season = S.restart();
+  Object.assign(season, { seed: 42, qualiTrack: "bahrain", qualiMode: "season", qualiSeat: "t0:d0",
+    qualiOrder: [{ id: "d0", t: 80, human: true }, { id: "d1", t: 81 }] });
+  S.save(season);
+  const before = JSON.stringify(stored.get("season")), revision = writes("season");
+  const result = S.applyConfig({ ...S.config(), trackIds: [...S.config().trackIds] });
+  assert.equal(result.ok, true);
+  assert.equal(result.season, season);
+  assert.equal(JSON.stringify(stored.get("season")), before);
+  assert.equal(writes("season"), revision, "no-op APPLY does not write or advance the revision");
+  assert.equal(S.hasProgress(season), false, "qualifying alone must not unlock scored standings");
+  const changed = S.applyConfig({ ...S.config(), laps: 10 });
+  assert.equal(changed.season.qualiOrder, undefined, "an intentional changed setup still starts fresh");
+  assert.equal(changed.season.config.laps, 10);
+});
+
+test("unchanged setup preserves round and sprint progress, and session-only save status", () => {
+  for (const progress of [{ round: 2 }, { round: 0, stage: "race" }]) {
+    const { S, writes, store } = load({ seasonCfg: { sprint: true } });
+    S.engage("season");
+    const season = Object.assign(S.restart(), progress, { pts: { d0: 8 }, seed: 42 });
+    const write = store.write;
+    store.write = (key, value) => { write(key, value); return { ok: true, durable: false, reason: "QuotaExceededError" }; };
+    S.save(season);
+    const revision = writes("season");
+    const result = S.applyConfig(S.config());
+    assert.equal(result.season, season);
+    assert.equal(result.season.pts.d0, 8);
+    assert.equal(result.durable, false, "a no-op must not announce a failed save as durable");
+    assert.equal(result.reason, "QuotaExceededError");
+    assert.equal(writes("season"), revision);
+  }
+});
+
+test("unchanged setup starts a new championship after every round is complete", () => {
+  const { S, stored, writes } = load({ seasonCfg: { trackIds: ["monza", "monaco"] } });
+  S.engage("season");
+  const completed = Object.assign(S.restart(), { round: 2, pts: { d0: 50 }, seed: 42 });
+  S.save(completed);
+  const revision = writes("season");
+  assert.equal(S.canRace(completed), false);
+  const result = S.applyConfig(S.config());
+  assert.equal(result.ok, true);
+  assert.notEqual(result.season, completed);
+  assert.equal(result.season.round, 0);
+  assert.deepEqual(Object.keys(result.season.pts), []);
+  assert.equal(result.season.seed, undefined);
+  assert.equal(S.canRace(result.season), true);
+  assert.equal(S.trackIndex(result.season.round), 7, "new season selects Monza, not an invalid final-round index");
+  assert.equal(writes("season"), revision + 1);
+  assert.equal(stored.get("season"), result.season);
+});
+
+test("setup comparison uses saved rules, not mutable preferences, and compares every setup field", () => {
+  const { S, stored, writes } = load();
+  S.engage("season");
+  const season = S.restart();
+  S.save(season);
+  const saved = season.config;
+  for (const change of [{ trackIds: [...saved.trackIds].reverse() }, { quali: false }, { sprint: true },
+    { sprintIds: ["monza"] }, { laps: 10 }, { points: "classic" }, { flPoint: true }, { drop: 2 }]) {
+    assert.equal(S.matchesConfig(season, { ...saved, ...change }), false, JSON.stringify(change));
+  }
+  S.setConfig({ ...saved, laps: 10 });
+  assert.equal(S.matchesConfig(season, S.config()), false, "APPLY of different preferences restarts the saved rules");
+  const revision = writes("season");
+  assert.equal(S.applyConfig(saved).season, season, "choosing the saved setup keeps its progress");
+  assert.equal(writes("season"), revision);
+  assert.equal(stored.get("seasonCfg").laps, saved.laps, "preferences follow the applied setup");
+});
+
+test("unchanged setup still refuses a foreign save, then preserves the reloaded winner", () => {
+  const { S, stored, foreign, writes } = load();
+  S.engage("season");
+  const local = S.load();
+  const winner = { ...local, round: 2, pts: { d0: 25 } };
+  stored.set("season", winner); foreign("season");
+  const revision = writes("season");
+  assert.equal(S.applyConfig(S.config()).reason, "conflict");
+  assert.equal(stored.get("season"), winner);
+  assert.equal(writes("season"), revision);
+  const reloaded = S.load();
+  assert.equal(S.applyConfig(S.config()).season, reloaded);
+  assert.equal(reloaded.round, 2);
 });
 
 // ── the calendar gate ─────────────────────────────────────────────────────────

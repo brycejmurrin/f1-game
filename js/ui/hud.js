@@ -251,8 +251,11 @@ function paintHudDelta(player, timeTrial) {
   const ghostT = ref && (!ghost || (player.lap | 0) >= 1) ? ref.timeAt(player.s) : null;
   if (ghostT == null || !(player.lapTime >= 0)) {
     hData(box, "pending", "");
+    if (_deltaShown && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just lost a box (TT restart, lap 0, lost ghost)
+    _deltaShown = false;
     return;
   }
+  _deltaShown = true;
   const wasPending = box.dataset ? box.dataset.pending != null : box.hasAttribute && box.hasAttribute("data-pending");
   hData(box, "pending", null);
   if (wasPending && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just grew a box
@@ -441,6 +444,7 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
+let _fitPending = false;   // invalidateFit mid-tick: do not publish --hud-fit-stamp until the next fitHud
 // _fitStamped: a stamp is published and no clash has voided it since.
 // _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
 let _fitStamped = false, _fitClashRun = 0;
@@ -491,6 +495,10 @@ function syncComputedRootVars() {
   _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
 }
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
+// LEFT-HANDED (body.mirror-controls) flips #hud-dock (row-reverse), so #dock-right paints on the LEFT. The fit
+// reasons in screen sides, so pick each handle by the side it is painted on (re-picked at every fit).
+let _dockMir = null, _deltaShown = false;   // _deltaShown: DELTA has painted a number since it last went pending
+function pickDocks() { const m = document.body.classList.contains("mirror-controls"); if (_dockL && m === _dockMir) return; _dockMir = m; const a = document.getElementById("dock-left"), b = document.getElementById("dock-right"); _dockL = m ? b : a; _dockR = m ? a : b; }
 // THE BUDGET IS THE UN-MOVED LAYOUT. MOVE & SIZE (js/ui/hud-layout.js) paints a
 // player offset on top of each element with `translate` / `scale` (data-hl,
 // --hl-x/-y in screen %, --hl-s, origin --hl-o), and getBoundingClientRect
@@ -847,9 +855,36 @@ function _boostOnRightHalf() {
   if ((br.left + br.right) / 2 < window.innerWidth / 2) return null;
   return boost;
 }
+/** True when the gap plate is painted beside the map and still rects onto the tower. */
+function towerGapsPaintedClash() {
+  if (document.body.classList.contains("desktop")) return false;
+  if (document.documentElement.dataset.gapDrop) return false;
+  const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
+  const gaps = typeof document !== "undefined" ? document.querySelector(".hud-gaps") : null;
+  if (!tower || !gaps || gaps.hidden) return false;
+  try {
+    const gs = getComputedStyle(gaps);
+    if (gs.display === "none" || gs.visibility === "hidden") return false;
+  } catch (_) { return false; }
+  const gr = gaps.getBoundingClientRect();
+  if (!(gr.width && gr.height)) return false;
+  const tr = tower.getBoundingClientRect();
+  if (!(tr.width && tr.height)) return false;
+  return _hudRectsHit(tr, gr);
+}
+/** Drop the gap strip under the tower when the painted boxes still overlap (hud-layout: .hud-top+.hud-gaps). */
+function gapPaintedDrop() {
+  if (!towerGapsPaintedClash()) return false;
+  _gapDrop = true;
+  document.documentElement.dataset.gapDrop = "1";
+  const gaps = document.querySelector(".hud-gaps");
+  if (gaps) void gaps.offsetHeight;
+  return true;
+}
 /** Painted phone readout-on-control clashes the spec measures (not budget math). */
 function phonePaintedClash() {
   if (document.body.classList.contains("desktop")) return false;
+  if (towerGapsPaintedClash()) return true;
   const sectors = els.hudSectors;
   const boost = _boostOnRightHalf();
   if (sectors && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
@@ -882,9 +917,8 @@ function phoneFitStampSync(scale, force) {
   if (!_hudTop) {
     _hudTop = document.querySelector(".hud-top");
     _hudBottom = document.querySelector(".hud-bottom");
-    _dockL = document.getElementById("dock-left");
-    _dockR = document.getElementById("dock-right");
   }
+  pickDocks();
   const bumpDock = () => {
     const boost = _boostOnRightHalf();
     if (!boost) return false;
@@ -925,6 +959,7 @@ function phoneFitStampSync(scale, force) {
   };
   if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
   for (let pass = 0; pass < 8 && phonePaintedClash(); pass++) {
+    if (gapPaintedDrop()) continue;
     if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
     bumpDock();
     shrinkSectors();
@@ -933,7 +968,7 @@ function phoneFitStampSync(scale, force) {
   // wakes sheet-shape's watchScale observer, so the 10 Hz tick must not rewrite
   // it while nothing changed. A new stamp means "a clash cleared" (or a probe
   // asked via syncPhoneFit, whose waiters need a fresh value each call).
-  if (!phonePaintedClash()) {
+  if (!phonePaintedClash() && !_fitPending) {
     if (force || !_fitStamped) {
       _fitClearSeq = (_fitClearSeq + 1) | 0;
       hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
@@ -1031,6 +1066,7 @@ function fitHud() {
   // tick ≈ 3 s between forced layout reads while nothing changed.
   if (key !== _fitKey) _fitClashRun = 0;
   _fitKey = key; _fitWait = 30;
+  _fitPending = false;
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css:
   // 0.82, 0.92 on the narrow tier), so the base the cap is judged against and
   // the divisor for its measured widths are that floor, not 1 — a flat 1 here
@@ -1074,7 +1110,8 @@ function fitHud() {
     }
     return hi > lo ? (hi - lo) / zoomDiv(el, pub) : wide(el, pub);
   };
-  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
+  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); }
+  pickDocks();
   const top = wide(_hudTop, zTopPub);
   // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
   // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)
@@ -2240,6 +2277,7 @@ function updateHud(force, dtMs) {
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
+      if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
       if (_secFlash[i] > 0) {
         _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
         hToggle(_secRows[i].parentElement, "sec-flash", _secFlash[i] > 0);
@@ -2312,6 +2350,7 @@ function updateHud(force, dtMs) {
       }
     }
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
+    if (_ro && _ro.paintFlag) _ro.paintFlag(els.flag, show ? (caution ? { caution: cn } : blueCar ? { blue: true } : null) : null);
     // A flag chip appearing or going re-picks the radio slot (radioUnderRight steps right of it).
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; if (_invalidateFit) _invalidateFit(); }
   }
@@ -2609,6 +2648,7 @@ function resetRace() {
 // for the tick.
 function invalidateFit() {
   _fitKey = ""; _fitRetry = 0;
+  _fitPending = true;
   invalidateLaneRects();   // MOVE & SIZE / HUD ELEMENTS / scale — clippers moved
   if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;

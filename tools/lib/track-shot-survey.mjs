@@ -6,6 +6,7 @@ import path from "node:path";
 
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 const TODS = new Set(["day", "dusk", "dawn", "night"]);
+const WEATHERS = new Set(["dry", "wet", "rain", "overcast", "fog", "storm"]);
 const NAME_RE = /^[A-Za-z0-9._-]{1,80}$/;
 export const MAX_SURVEY_SHOTS = 32;
 export const MAX_SURVEY_TRACKS = 12;
@@ -111,11 +112,14 @@ export function buildTrackShotSurveyPlan(args = {}) {
       if (!(frac >= 0 && frac <= 1)) throw new Error(`shots[${i}].frac must be 0..1`);
       const tod = String(s.tod || "day");
       if (!TODS.has(tod)) throw new Error(`shots[${i}].tod invalid`);
+      const weather = s.weather == null || s.weather === "" ? null : String(s.weather);
+      if (weather && !WEATHERS.has(weather)) throw new Error(`shots[${i}].weather invalid`);
       return {
         name,
         frac,
         cam,
         tod,
+        weather,
         az: s.az == null ? 45 : Number(s.az),
         el: s.el == null ? 22 : Number(s.el),
         dist: s.dist == null ? 45 : Number(s.dist),
@@ -145,6 +149,8 @@ export function buildTrackShotSurveyPlan(args = {}) {
   const cams = normCam(args.cam ?? args.cams ?? presetDef?.cam);
   const tod = String(args.tod ?? presetDef?.tod ?? "day");
   if (!TODS.has(tod)) throw new Error("tod invalid");
+  const weather = args.weather == null || args.weather === "" ? null : String(args.weather);
+  if (weather && !WEATHERS.has(weather)) throw new Error(`weather must be one of ${[...WEATHERS].join("|")}`);
 
   const shots = [];
   for (const frac of fracs) {
@@ -155,6 +161,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
         frac,
         cam,
         tod,
+        weather,
         az: args.az == null ? (presetDef?.az ?? 45) : Number(args.az),
         el: args.el == null ? (presetDef?.el ?? 22) : Number(args.el),
         dist: args.dist == null ? (presetDef?.dist ?? 45) : Number(args.dist),
@@ -258,7 +265,7 @@ export function writeSurveyIndex(outDir, meta) {
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
   const rows = (meta.shots || []).map((s) => {
     const file = `${esc(s.name)}.png`;
-    const cap = `${s.name} · ${s.track || meta.track} · frac ${s.frac} · ${s.cam} · ${s.tod}`;
+    const cap = `${s.name} · ${s.track || meta.track} · frac ${s.frac} · ${s.cam} · ${s.tod}${s.weather ? " · " + s.weather : ""}`;
     return `<figure><a href="${file}"><img src="${file}" loading="lazy" alt="${esc(cap)}"></a><figcaption>${esc(cap)}</figcaption></figure>`;
   }).join("\n");
   const panel = meta.panelPng ? `<p>Panel: <a href="${esc(path.basename(meta.panelPng))}">${esc(path.basename(meta.panelPng))}</a></p>` : "";
