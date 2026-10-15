@@ -25,10 +25,11 @@ Algarve interior **montado** (cork oak, olive grids), red-earth runoff, lime whi
 
 | Batch | Count | Status |
 |--------|------:|--------|
-| Sector + landmark tour (`day` / `dry`) | **32** | Committed as `artifacts/shots/tracks/portimao/*.jpg` (JPEG q80, ≤1280 px, ≤300 KB) |
-| Weather / TOD variants (5 heroes × ~6 conditions) | **~24** | **Blocked** until rebase on shared PR *tools: shared shot tooling for circuit surveys* (`weather` batch field, retries, `artifacts/shots/tracks/**` gitignore exception) |
+| Sector + landmark tour (`day` / `dry`) | **30** | `artifacts/shots/tracks/portimao/s*.jpg` (JPEG q80, ≤1280 px, ≤300 KB) |
+| Weather / TOD hero variants (6 views) | **6** | `wx-*.jpg` via shared `shot.mjs` batch (`--weather`, `--tod`, retries) |
+| **Total committed** | **36** | `git add -f` under `artifacts/shots/tracks/portimao/` |
 
-**Game weather API (for follow-up):** `__apex.weather("dry"|"wet"|"rain"|"overcast"|"fog")` + `setTimeOfDay("dawn"|"day"|"dusk"|"night")` (`js/game.js` `raceWeather`, `js/lighting/presets.js`).
+**Capture flags (Bahrain tip):** `--jpeg --present-timeout 90 --capture-retries 4 --wait 120`, SwiftShader default, no `APEX_GL=llvmpipe`.
 
 ### Sector 1 — start / T1 / esses / T3 / T5 (s ≈ 0–0.33)
 
@@ -38,8 +39,8 @@ Algarve interior **montado** (cork oak, olive grids), red-earth runoff, lime whi
 | *t1 braking · day · dry* | *t1 stands · day · dry* | *amphitheatre · day · dry* |
 | ![esses](../../../artifacts/shots/tracks/portimao/s1-esses__day__dry.jpg) | ![t3 crest](../../../artifacts/shots/tracks/portimao/s1-t3-crest__day__dry.jpg) | ![t5 gravel](../../../artifacts/shots/tracks/portimao/s1-t5-gravel__day__dry.jpg) |
 | *esses · day · dry* | *t3 crest · day · dry* | *t5 gravel · day · dry* |
-| ![t1 kerb](../../../artifacts/shots/tracks/portimao/s1-t1-kerb__day__dry.jpg) | ![t2 complex](../../../artifacts/shots/tracks/portimao/s1-t2-complex__day__dry.jpg) | |
-| *t1 kerb · day · dry* | *t2 complex · day · dry* | |
+| ![t1 kerb](../../../artifacts/shots/tracks/portimao/s1-t1-kerb__day__dry.jpg) | | |
+| *t1 kerb · day · dry* | | |
 
 ### Sector 2 — moinho / plunge / T11 (s ≈ 0.33–0.66)
 
@@ -49,8 +50,8 @@ Algarve interior **montado** (cork oak, olive grids), red-earth runoff, lime whi
 | *mid plunge · day · dry* | *mid trackside · day · dry* | *chicane · day · dry* |
 | ![mid crest](../../../artifacts/shots/tracks/portimao/s2-mid-crest__day__dry.jpg) | ![t10 approach](../../../artifacts/shots/tracks/portimao/s2-t10-approach__day__dry.jpg) | ![t11](../../../artifacts/shots/tracks/portimao/s2-t11__day__dry.jpg) |
 | *mid crest · day · dry* | *t10 approach · day · dry* | *t11 · day · dry* |
-| ![terrace left](../../../artifacts/shots/tracks/portimao/s2-terrace-left__day__dry.jpg) | ![quinta south](../../../artifacts/shots/tracks/portimao/s2-quinta-south__day__dry.jpg) | ![late sector](../../../artifacts/shots/tracks/portimao/s2-late-sector__day__dry.jpg) |
-| *terrace left · day · dry* | *quinta south · day · dry* | *late sector · day · dry* |
+| ![terrace left](../../../artifacts/shots/tracks/portimao/s2-terrace-left__day__dry.jpg) | ![quinta south](../../../artifacts/shots/tracks/portimao/s2-quinta-south__day__dry.jpg) | |
+| *terrace left · day · dry* | *quinta south · day · dry* | |
 
 ### Sector 3 — final / paddock (s ≈ 0.66–1.0)
 
@@ -61,21 +62,14 @@ Algarve interior **montado** (cork oak, olive grids), red-earth runoff, lime whi
 | ![apartments](../../../artifacts/shots/tracks/portimao/s3-apartments__day__dry.jpg) | ![pit gantry](../../../artifacts/shots/tracks/portimao/s3-pit-gantry__day__dry.jpg) | ![overview](../../../artifacts/shots/tracks/portimao/s3-overview__day__dry.jpg) |
 | *apartments · day · dry* | *pit gantry · day · dry* | *overview · day · dry* |
 
-### Weather / lighting (planned — not captured on this branch)
+### Weather / lighting — six hero views
 
-Repeat **five** hero views after shared tooling lands:
+Portimão is `night: false` (sky/TOD only; no dedicated night scenery lamps). Labels match each frame’s `weather` + `tod` job.
 
-| Hero | Frac | Planned conditions |
-|------|------|-------------------|
-| `wx-sf` | 0.0 | dusk/dry, night/dry, day/overcast, day/rain, day/fog, day/wet |
-| `wx-t1` | 0.055 | dusk/dry, night/dry, day/rain |
-| `wx-t3` | 0.20 | dusk/dry, day/overcast, day/fog |
-| `wx-mid` | 0.50 | dusk/dry, night/dry, day/fog, day/rain |
-| `wx-final` | 0.90 | dusk/dry, night/dry, day/wet |
-
-| Panel A | Panel B | Panel C |
-|---------|---------|---------|
-| `wx-sf__*` (pending) | `wx-t1__*` (pending) | `wx-t3__*` (pending) |
+| ![sf paddock](../../../artifacts/shots/tracks/portimao/wx-sf-paddock__dusk__dry.jpg) | ![t1 downhill](../../../artifacts/shots/tracks/portimao/wx-t1-downhill__night__dry.jpg) | ![t3 crest](../../../artifacts/shots/tracks/portimao/wx-t3-crest__day__rain.jpg) |
+| *sf paddock · dusk · dry* | *t1 downhill · night · dry* | *t3 crest · day · rain* |
+| ![mid plunge](../../../artifacts/shots/tracks/portimao/wx-mid-plunge__day__storm.jpg) | ![final](../../../artifacts/shots/tracks/portimao/wx-final__dusk__wet.jpg) | ![moinho](../../../artifacts/shots/tracks/portimao/wx-moinho__dawn__dry.jpg) |
+| *mid plunge · day · storm* | *final · dusk · wet* | *moinho · dawn · dry* |
 
 ## Findings (geometry / scenery)
 
