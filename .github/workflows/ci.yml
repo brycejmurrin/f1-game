@@ -326,35 +326,14 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  reuse-draft:
-    name: Reuse draft fast-tier?
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      actions: read
-    outputs:
-      reuse: ${{ steps.r.outputs.reuse }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          sparse-checkout: tools/ci
-      - name: Was this head already green as a draft?
-        id: r
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_EVENT_ACTION: ${{ github.event.action }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
-
   guards-a:
     name: Structural guards (tooling A)
-    needs: reuse-draft
     runs-on: ubuntu-latest
     timeout-minutes: 12
     if: ${{ inputs.fast_tier_run == '' }}
+    permissions:
+      contents: read
+      actions: read
     steps:
       # BLOB-LESS FULL HISTORY (2026-10-14, Actions audit C6: 25 s -> 9 s).
       # Every history read in guards-a/-b/guards, unit-plan and xr-filter is a
@@ -371,66 +350,65 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
           filter: blob:none
-        if: needs.reuse-draft.outputs.reuse != 'true'
+      # READY-FOR-REVIEW ON A GREEN DRAFT HEAD REUSES THE DRAFT (2026-10-15):
+      # this was a job of its own (`reuse-draft`) that every fast-tier job
+      # waited on — one queue hop (p50 13 min on 2026-10-15) and a runner for
+      # 6 s of API. Each job asks the question itself now; the script answers
+      # `reuse=false` without an API call on every event but ready_for_review.
+      - name: Was this head already green as a draft?
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_ACTION: ${{ github.event.action }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
-        if: needs.reuse-draft.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true'
       - name: Tooling-fast shard 1/2
-        if: needs.reuse-draft.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true'
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
         run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/2
       - name: Reused draft
-        if: needs.reuse-draft.outputs.reuse == 'true'
+        if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED tooling A — draft fast-tier already green on this head SHA"
 
   guards-b:
     name: Structural guards (tooling B)
-    needs: reuse-draft
     runs-on: ubuntu-latest
     timeout-minutes: 12
     if: ${{ inputs.fast_tier_run == '' }}
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
           filter: blob:none
-        if: needs.reuse-draft.outputs.reuse != 'true'
+      # The same reuse question as guards-a (2026-10-15): a step, not a job hop.
+      - name: Was this head already green as a draft?
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_ACTION: ${{ github.event.action }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
-        if: needs.reuse-draft.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true'
       - name: Tooling-fast shard 2/2
-        if: needs.reuse-draft.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true'
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
         run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/2
-      - name: Reused draft
-        if: needs.reuse-draft.outputs.reuse == 'true'
-        run: echo "SKIPPED tooling B — draft fast-tier already green on this head SHA"
-
-  guards:
-    name: Structural guards
-    needs: [reuse-draft, guards-a, guards-b]
-    runs-on: ubuntu-latest
-    if: ${{ !cancelled() && inputs.fast_tier_run == '' }}
-    timeout-minutes: 10
-    steps:
-      - name: Tooling halves must be green
-        env:
-          A: ${{ needs.guards-a.result }}
-          B: ${{ needs.guards-b.result }}
-        run: |
-          set -u
-          echo "guards-a=$A guards-b=$B"
-          [ "$A" = success ] && [ "$B" = success ]
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
-      - uses: ./.github/actions/setup-apex
-        if: needs.reuse-draft.outputs.reuse != 'true'
+      # RATCHETS, AUDIT, COVERAGE AND BEHIND-SHIP (moved from the `Structural
+      # guards` aggregator 2026-10-15): the same tree and node_modules, no
+      # second checkout + npm ci, and the aggregator needs no runner time.
       - name: Ratchet ceilings vs the base
-        if: needs.reuse-draft.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true'
         env:
           RATCHET_BASE: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && github.event.before) || (inputs.concurrency_key != '' && github.sha) || 'origin/claude/f1-game-project-26h3ng' }}
           RATCHET_MODE: ${{ (github.event_name == 'push' || inputs.concurrency_key != '') && '--advisory' || '' }}
@@ -445,13 +423,13 @@ jobs:
           echo "ratchet base: $base ${RATCHET_MODE:+(advisory)}"
           node tools/check/ratchets.mjs --base "$base" $RATCHET_MODE
       - name: Every test file belongs to a topical group
-        if: needs.reuse-draft.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true'
         run: npm run test:audit
       - name: What does this gate cover?
-        if: needs.reuse-draft.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true'
         run: node tools/ci/ci-coverage.mjs
       - name: How far behind ship?
-        if: github.event_name == 'pull_request' && needs.reuse-draft.outputs.reuse != 'true'
+        if: github.event_name == 'pull_request' && steps.reuse.outputs.reuse != 'true'
         env:
           BEHIND_SHIP_HEAD: ${{ github.event.pull_request.head.sha }}
           BEHIND_SHIP_SHIP: origin/claude/f1-game-project-26h3ng
@@ -459,102 +437,39 @@ jobs:
           git fetch --no-tags --depth=1 origin claude/f1-game-project-26h3ng 2>/dev/null || true
           node tools/ci/behind-ship.mjs
       - name: Reused draft
-        if: needs.reuse-draft.outputs.reuse == 'true'
-        run: echo "SKIPPED ratchet/audit — draft fast-tier already green on this head SHA"
+        if: steps.reuse.outputs.reuse == 'true'
+        run: echo "SKIPPED tooling B — draft fast-tier already green on this head SHA"
 
-# pick-unit-slices github-output: assert via temp GITHUB_OUTPUT (2026-09-29)
-  # retrigger: 36644334828 + 36645018392 cancelled queued node slices (zero failures)
-  # WHICH NODE SLICES DOES THIS DIFF NEED? (2026-09-29 follow-up). Browser
-  # selection is change-aware; the node matrix was not — every PR paid for all
-  # six node slices (#508) + driving-model. tools/ci/pick-unit-slices.mjs maps
-  # paths → runners with FAIL-SAFE → all; node-plan.mjs skips scripts inside a
-  # spun runner. A scenery-only diff keeps guards + vm-a1/vm-a2 and skips the
-  # rest; editing a file owned by a skipped slice still selects that slice.
-  # Schedule and dispatch run --all. Every slice row is always emitted
-  # (needed true|false), so fromJSON never sees an empty matrix and
-  # node-suites always runs: branch protection requires all six check names,
-  # and an unneeded row reports green in seconds (see node-suites' `if:`).
-  unit-plan:
-    name: Plan node unit slices
+  guards:
+    name: Structural guards
+    needs: [guards-a, guards-b]
     runs-on: ubuntu-latest
-    if: ${{ inputs.fast_tier_run == '' }}
-    # actions:read for base-green.sh on a deploy push (same contract as
-    # node-suites' plan step). A job that names permissions gets ONLY what
-    # it names, hence contents too.
-    permissions:
-      contents: read
-      actions: read
+    if: ${{ !cancelled() && inputs.fast_tier_run == '' }}
     timeout-minutes: 5
-    outputs:
-      slices: ${{ steps.plan.outputs.slices }}
-      any_node: ${{ steps.plan.outputs.any_node }}
-      driving: ${{ steps.plan.outputs.driving }}
-      reason: ${{ steps.plan.outputs.reason }}
+    # NO CHECKOUT, NO npm ci (2026-10-15): the ratchet / audit / coverage /
+    # behind-ship steps run at the end of tooling B, where the tree and the
+    # dependencies already are. This job only joins the halves under the
+    # required check name (ready-gate.mjs reads it; the halves are its fallback).
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-      - name: Plan node unit slices
-        id: plan
+      - name: Tooling halves must be green
         env:
-          EVENT: ${{ github.event_name }}
-          PUSH_BEFORE: ${{ github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          CALLED: ${{ inputs.concurrency_key != '' }}
-          LIVE_BEFORE: ${{ inputs.before_sha }}
-          GH_TOKEN: ${{ github.token }}
+          A: ${{ needs.guards-a.result }}
+          B: ${{ needs.guards-b.result }}
         run: |
           set -u
-          # Schedule / dispatch: no meaningful diff — run every slice.
-          case "$EVENT" in
-            schedule|workflow_dispatch)
-              node tools/ci/pick-unit-slices.mjs --all --github-output
-              exit 0
-              ;;
-          esac
-          # Same delta-gate base as node-suites' plan step (base-green.sh):
-          # Pages call → live commit; PR → event base; push → before only when
-          # that tip was gated green (else fail-safe --all).
-          BASE=""
-          if [ "$CALLED" = "true" ]; then
-            BASE="${LIVE_BEFORE:-}"
-          elif [ "$EVENT" = "pull_request" ]; then
-            # The test commit's first parent, not the event's base.sha, which lags
-            # one sync behind (tools/ci/ci-pr-base.sh; 15-F3, 2026-10-10).
-            BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
-          elif [ "$EVENT" = "push" ]; then
-            if [ "$(bash tools/ci/base-green.sh "${PUSH_BEFORE:-}")" = green ]; then
-              BASE="${PUSH_BEFORE:-}"
-            else
-              echo "the previous tip ${PUSH_BEFORE:-?} is not known green: every slice runs" >&2
-              node tools/ci/pick-unit-slices.mjs --all --github-output
-              exit 0
-            fi
-          fi
-          case "${BASE}" in
-            ""|0000000000000000000000000000000000000000)
-              echo "no base SHA — fail-safe --all" >&2
-              node tools/ci/pick-unit-slices.mjs --all --github-output
-              exit 0
-              ;;
-          esac
-          if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-            echo "base $BASE unreachable — fail-safe --all" >&2
-            node tools/ci/pick-unit-slices.mjs --all --github-output
-            exit 0
-          fi
-          node tools/ci/pick-unit-slices.mjs --since "$BASE" --github-output
+          echo "guards-a=$A guards-b=$B"
+          [ "$A" = success ] && [ "$B" = success ]
 
   node-suites:
-    # Name MUST be exactly `Pure-node unit suites (<slice>)` — those six
-    # strings are the deploy branch's required checks. Do not interpolate
-    # matrix.needed (or any other matrix key) into the name, or branch
-    # protection never sees the expected check (#454 a9a805839).
+    # Name `Pure-node unit suites (<slice>)`: the six strings WERE the deploy
+    # branch's required checks until 2026-10-15, when Bryce made `CI` the one
+    # required check (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §4 C). They are
+    # still what pages-train.mjs, ready-gate.mjs and the tests read, so keep
+    # them stable; a rename is a tool edit now, not a settings round. Do not
+    # interpolate matrix.needed (or any other matrix key) into the name
+    # (#454 a9a805839: the expected check never appeared).
     name: Pure-node unit suites (${{ matrix.slice }})
-    needs: [unit-plan, reuse-draft]
+    needs: [select]
     runs-on: ubuntu-latest
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
     # NEVER skipped for any_node=false (2026-09-30, PR #522): a job skipped at
@@ -564,7 +479,12 @@ jobs:
     # runs; an unneeded row (matrix.needed=false) skips checkout / npm ci /
     # plan below and reports green in seconds.
     # ready_for_review on the same head SHA: reuse-draft skips the work; names still report.
-    if: ${{ inputs.fast_tier_run == '' }}
+    # A PULL REQUEST emits only the needed rows (select's --needed-only), and
+    # when none is needed the job skips here (2026-10-15: `CI` is the deploy
+    # branch's one required check, so the six names no longer have to report
+    # on a ready PR either). A deploy push and the train keep all six rows:
+    # pages-train.mjs's reuse check wants at least one expanded node row.
+    if: ${{ inputs.fast_tier_run == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request') }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -597,9 +517,10 @@ jobs:
         # shards (APEX_CIRCUIT_SHARD=i/2), game-vm-b is two time-balanced
         # partitions, and vm-page / node-slow stand alone. The ≈ 3 min wall that
         # split promised no longer holds: vm-b1 and page are the floor now.
-        # The slice names are the deploy branch's REQUIRED CHECKS
-        # ("Pure-node unit suites (<slice>)"): renaming one means editing the
-        # branch-protection rule in the same breath, or every PR blocks.
+        # The slice names ("Pure-node unit suites (<slice>)") were the deploy
+        # branch's REQUIRED CHECKS until 2026-10-15; `CI` alone is required
+        # now, so a rename is a tooling change (pick-unit-slices SLICES,
+        # pages-train, ready-gate, the tests), not a settings round.
         # Job wall, MEDIAN of 12 green ship pushes (38522092373..38580219820,
         # 2026-10-14; setup included; a skipped row's ~0.1 min is in the sample):
         #   vm-a1  game-vm-a, circuits 1,3,5,…      2.4 min
@@ -608,12 +529,23 @@ jobs:
         #   vm-b2  game-vm-b2                       4.0 min
         #   page   vm-page                          9.1 min
         #   slow   node-slow                        3.3 min
-        # Matrix rows come from unit-plan / pick-unit-slices. Every NODE_SLICE
-        # name is ALWAYS present (needed true|false): branch protection pins
-        # those six check names, and a subset left vm-a1/vm-a2 unreported on
-        # #454 (BLOCKED with an otherwise green CI). Unneeded rows exit 0.
+        # RE-BALANCED 2026-10-15 from per-script log timings of three green ship
+        # pushes (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §7): game-vm-b1 alone
+        # was 437 s against game-vm-b2's 220 s, and the ten "seconds each" riders
+        # had grown to 180 s (garage-unit 94, net-unit 33, audio-unit 33). The
+        # riders moved to vm-a1 / vm-a2 / slow and game-vm-b1/b2 were re-cut by
+        # per-file medians. Projected job wall (setup ~16 s included):
+        #   vm-a1 ~200 s, vm-a2 ~220 s, vm-b1 ~320 s, vm-b2 ~320 s, slow ~200 s,
+        #   page ~520 s — vm-page is the floor now (one TAP test, no per-spec
+        #   breakdown in the log); runner-minutes per push unchanged.
+        # Matrix rows come from select's plan step / pick-unit-slices. On a
+        # deploy push and the train every NODE_SLICE name is present (needed
+        # true|false) for pages-train.mjs's reuse check; a pull request lists
+        # only the needed rows (2026-10-15: `CI` is the one required check —
+        # until then a subset left vm-a1/vm-a2 unreported on #454, BLOCKED
+        # with an otherwise green CI). Unneeded rows exit 0.
         # node-plan.mjs (step below) still skips scripts INSIDE a needed runner.
-        include: ${{ fromJSON(needs.unit-plan.outputs.slices) }}
+        include: ${{ fromJSON(needs.select.outputs.slices) }}
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
     # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
@@ -622,15 +554,25 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: matrix.needed != 'false' && needs.reuse-draft.outputs.reuse != 'true'   # an unneeded row reports green with no setup (the job's `if:`)
+        if: matrix.needed != 'false'   # an unneeded row reports green with no setup (the job's `if:`)
         with:
           persist-credentials: false
           # The plan step below diffs a pull request against its base sha,
           # which a depth-1 clone cannot show. Same trade as sweeps-parts.
           fetch-depth: 0
           filter: blob:none
+      # The same reuse question as guards-a (2026-10-15): a step, not a job hop.
+      - name: Was this head already green as a draft?
+        id: reuse
+        if: matrix.needed != 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_ACTION: ${{ github.event.action }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-        if: matrix.needed != 'false' && needs.reuse-draft.outputs.reuse != 'true'
+        if: matrix.needed != 'false' && steps.reuse.outputs.reuse != 'true'
       # WHICH SCRIPTS DOES THIS PR NEED? (2026-09-30) On a pull request the
       # four multi-minute scripts (game-vm-a, game-vm-b, vm-page, node-slow)
       # run only when tools/ci/pick-tests.mjs routes the PR's diff to a group
@@ -650,7 +592,7 @@ jobs:
       # unknown previous tip, a first push, a force push or a nightly run
       # everything, as before.
       - name: Plan the slices for this diff
-        if: matrix.needed != 'false' && needs.reuse-draft.outputs.reuse != 'true'
+        if: matrix.needed != 'false' && steps.reuse.outputs.reuse != 'true'
         env:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
@@ -689,9 +631,10 @@ jobs:
           # line: deploy.mjs and twinned-specs.mjs read this step's text.
           # `planned <script>` is the plan step's predicate (true on every
           # non-PR event); a skip prints SKIPPED <script> and the reason.
-          # matrix.needed=false: check name still reports (branch protection)
-          # but no work runs for a slice this diff does not select.
-          if [ "${{ needs.reuse-draft.outputs.reuse }}" = "true" ]; then
+          # matrix.needed=false (deploy push / train rows): the name still
+          # reports for pages-train.mjs's reuse check, but no work runs for a
+          # slice this diff does not select.
+          if [ "${{ steps.reuse.outputs.reuse }}" = "true" ]; then
             echo "SKIPPED slice ${{ matrix.slice }} — draft fast-tier already green on this head SHA"
             exit 0
           fi
@@ -711,11 +654,49 @@ jobs:
               if planned test:game-vm-a; then
               npm run test:game-vm-a
               fi
+              unset APEX_CIRCUIT_SHARD   # the shard scopes the elevation twin only; riders see the whole roster
+              # RIDERS (2026-10-15): the ten former `fast`-slice scripts used to
+              # ride vm-b1, "the shorter half" of 2026-09-30. Measured on three
+              # green ship pushes 2026-10-15 (docs/notes/CI-CLOG-SURVEY-2026-10-15.md
+              # §7) they were 180 s on top of a game-vm-b1 that alone is 437 s, so
+              # vm-b1 set the wall at 10–12 min. They now sit on the three light
+              # rows, greedy by median: here net-unit 33 s, audio-unit 33 s,
+              # state-unit 5 s, desktop-unit 0.5 s beside a 112 s shard. Still
+              # always-on (never guarded by planned()); on a matched PR plan
+              # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;
+              # the `npm run` else-branch stays for gateNodeSuites / deploy.
+              # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).
+              # tools/ci/pick-unit-slices.mjs SLICE_SCRIPTS mirrors these arms and
+              # its test pins the two in step.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:net-unit --skip-tf; else
+              npm run test:net-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:audio-unit --skip-tf; else
+              npm run test:audio-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:state-unit --skip-tf; else
+              npm run test:state-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:desktop-unit --skip-tf; else
+              npm run test:desktop-unit
+              fi
               ;;
             vm-a2)
               export APEX_CIRCUIT_SHARD=2/2
               if planned test:game-vm-a; then
               npm run test:game-vm-a
+              fi
+              unset APEX_CIRCUIT_SHARD   # as in vm-a1
+              # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
+              # livery-contrast, body-split, cover-legibility, helmets) and three
+              # steering files (digital-steer, key-binds, settings-export) were in
+              # their groups and in NO gate — not tooling-fast, not this step, so
+              # deploy.mjs (which derives its node list from here) never ran them
+              # either. garage-unit is the heaviest rider (94 s median on a runner,
+              # 2026-10-15: the livery rasters), so it rides the 110 s shard alone;
+              # steering-unit (6 s) rides `slow`.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:garage-unit --skip-tf; else
+              npm run test:garage-unit
               fi
               ;;
             page)
@@ -729,29 +710,16 @@ jobs:
               if planned test:node-slow; then
               npm run test:node-slow
               fi
-              ;;
-            vm-b1)
-              # First of two time-balanced partitions of test:game-vm-b
-              # (tests/groups.json; test:game-vm-b is still the whole list locally).
-              # NODE_PLAN_SKIP_TF=1 drops the five VM files Structural guards
-              # already runs (tooling-fast: real-replay-vm 121 s, game-vm,
-              # physics-characterization-vm, red-flag-fuel-vm, session-entry-vm)
-              # — both jobs share one `if:`, so a matched plan ran them twice
-              # (test audit T5, 2026-10-05). --all / fail-safe keep npm run.
-              if planned test:game-vm-b1; then
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else
-              npm run test:game-vm-b1
+              # Riders (see vm-a1): steering-unit 6 s, mcp 5 s, service-worker 4 s,
+              # lifecycle-unit and agent-contract < 1 s, beside 168 s of node-slow.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:steering-unit --skip-tf; else
+              npm run test:steering-unit
               fi
-              fi
-              # The former `fast` slice: seconds each, so they ride with vm-b1, the
-              # shorter half (measured 2026-09-30 on a runner: b1 2.2 min, b2 3.9
-              # min WITH them — moved here to bring the wall to ~3 min).
-              # Always-on riders (seconds each). On a matched PR plan
-              # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;
-              # the `npm run` else-branch stays for gateNodeSuites / deploy.
-              # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:net-unit --skip-tf; else
-              npm run test:net-unit
+              # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
+              # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
+              # their fast-gate half is mcp-cli. environment-json stays gated here.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:mcp --skip-tf; else
+              npm run test:mcp
               fi
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:service-worker --skip-tf; else
               npm run test:service-worker
@@ -759,37 +727,25 @@ jobs:
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:lifecycle-unit --skip-tf; else
               npm run test:lifecycle-unit
               fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:state-unit --skip-tf; else
-              npm run test:state-unit
-              fi
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:agent-contract --skip-tf; else
               npm run test:agent-contract
               fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:audio-unit --skip-tf; else
-              npm run test:audio-unit
+              ;;
+            vm-b1)
+              # First of two time-balanced partitions of test:game-vm-b
+              # (tests/groups.json; test:game-vm-b is still the whole list locally).
+              # Re-cut 2026-10-15 by per-file runner medians (LPT over 59 files,
+              # ~850 s of serial test time each; survey note §7): the 2026-09-30
+              # cut measured 437 s vs 220 s on a runner. NODE_PLAN_SKIP_TF=1 drops
+              # the VM files Structural guards already runs (tooling-fast:
+              # real-replay-vm 98 s, game-vm, red-flag-fuel-vm here;
+              # physics-characterization-vm, session-entry-vm on b2) — both jobs
+              # share one `if:`, so a matched plan ran them twice (test audit T5,
+              # 2026-10-05). --all / fail-safe keep npm run.
+              if planned test:game-vm-b1; then
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else
+              npm run test:game-vm-b1
               fi
-              # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
-              # livery-contrast, body-split, cover-legibility, helmets) and three
-              # steering files (digital-steer, key-binds, settings-export) were in
-              # these two groups and in NO gate — not tooling-fast, not this step,
-              # so deploy.mjs (which derives its node list from here) never ran
-              # them either. Measured 2026-09-10: garage-unit 39 s, steering-unit
-              # 0.5 s. The sub-5 s files are in tooling-fast too; the two slow
-              # livery rasters (7-10 s each) run only here.
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:garage-unit --skip-tf; else
-              npm run test:garage-unit
-              fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:steering-unit --skip-tf; else
-              npm run test:steering-unit
-              fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:desktop-unit --skip-tf; else
-              npm run test:desktop-unit
-              fi
-              # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
-              # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
-              # their fast-gate half is mcp-cli. environment-json stays gated below.
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:mcp --skip-tf; else
-              npm run test:mcp
               fi
               ;;
             vm-b2)
@@ -803,8 +759,10 @@ jobs:
 
   sweeps-parts:
     name: Parts option-resolution census
-    needs: reuse-draft
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     # NOT tree-only, so NOT skipped by `fast_tier_run` (2026-09-24). Its filter
     # diffs a BASE (the push's `before`, or the train's live `before_sha`), so a
     # green fast tier only proves the census for the LAST push's diff: push A
@@ -828,13 +786,21 @@ jobs:
       # Pages caller's before_sha, neither of which is in a depth-1 clone. Same
       # trade as the sweeps job: a few seconds against the 106 s it decides.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.reuse-draft.outputs.reuse != 'true'
         with:
           persist-credentials: false
           fetch-depth: 0
           filter: blob:none
+      # The same reuse question as guards-a (2026-10-15): a step, not a job hop.
+      - name: Was this head already green as a draft?
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_ACTION: ${{ github.event.action }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-        if: needs.reuse-draft.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true'
       # DOES THIS DIFF TOUCH THE CAR THE CENSUS PHOTOGRAPHS?
       #
       # This census builds the CAR and never a circuit, so it has nothing to do
@@ -855,7 +821,7 @@ jobs:
       # push, an unreadable pattern, a git error — RUNS the census.
       - name: Does this diff touch the car parts?
         id: filter
-        if: needs.reuse-draft.outputs.reuse != 'true'
+        if: steps.reuse.outputs.reuse != 'true'
         env:
           BEFORE: ${{ inputs.before_sha != '' && inputs.before_sha || github.event.before }}
           EVENT: ${{ github.event_name }}
@@ -893,10 +859,10 @@ jobs:
             echo "parts=false" >> "$GITHUB_OUTPUT"
             echo "SKIPPING THE PARTS CENSUS: nothing in this diff reaches the car the sweep photographs"
           fi
-      - if: needs.reuse-draft.outputs.reuse != 'true' && steps.filter.outputs.parts == 'true'
+      - if: steps.reuse.outputs.reuse != 'true' && steps.filter.outputs.parts == 'true'
         run: npm run test:sweeps-parts
       - name: Reused draft
-        if: needs.reuse-draft.outputs.reuse == 'true'
+        if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED parts census — draft fast-tier already green on this head SHA"
 
   sweeps:
@@ -1169,37 +1135,764 @@ jobs:
       - name: Every sweep shard succeeded
         run: test "${{ needs.sweeps.result }}" = "success"
 
-  ship-filter:
-    name: Does this diff change anything that ships?
+  smoke:
+    name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # ONE ANSWER, ONCE — not the same answer computed four times behind four
-    # `npm ci`s (2026-09-22). This filter lived inside the smoke job, which is a
-    # FOUR-SHARD matrix, so every shard did a full-history checkout and a
-    # dependency install (3m32s-5m02s measured) BEFORE asking a question whose
-    # answer might be "do not run" — and then each asked the deployments API for
-    # the live SHA and walked its statuses, up to 21 round-trips per shard, four
-    # times over, for one identical string. `renderer-filter` below has been a
-    # separate cheap job all along; this is the same shape.
-    #
-    # Checkout only: no setup-apex, because the script needs `git`, `curl` and
-    # the runner's preinstalled `node`, and none of the repo's dependencies.
-    #
-    # THE SAME `if:` AS SMOKE, deliberately. When smoke does not run, this must
-    # not either, and smoke's `needs: ship-filter` then skips it with this one —
-    # the behaviour the inline filter had by construction.
+    # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
     if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
-    outputs:
-      ships: ${{ steps.shipfilter.outputs.ships }}
+    # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
+    # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
+    # branch and PR push: `inputs` is empty on a plain push, null coerces like
+    # false, and `null != false` is FALSE (measured 2026-08-14, runs 31765883905
+    # and 31766287790 — smoke and selected both `skipped` with completed_at
+    # before started_at). Its replacement, `github.event_name != 'workflow_call'
+    # || inputs.smoke`, could never skip: in a called workflow `github.event_name`
+    # is the CALLER's event (`push`), so the first operand was always true and
+    # the input was inert. A guard that either always or never fires is not a
+    # switch — the smoke gate simply runs on every push, PR and deploy.
+    # TWO SHARDS, TWO RUNNER VMs — NOT two workers on one VM. The measured rule
+    # below (two concurrent SwiftShader contexts on one shared runner blow the
+    # per-test timeout) still binds: each shard keeps APEX_WORKERS=1 and runs
+    # its half of the spec list alone on its own machine. Sharding exists to
+    # shrink WALL-CLOCK, because this job's ~14-18 min serial length is the
+    # window in which a run gets superseded and cancelled by the next push —
+    # measured 2026-08-14: run 1407 was cancelled at 29 min, ONE spec from
+    # green, after two 240 s runner-starvation timeouts stretched the serial
+    # pass. Half the specs per VM ≈ half the window.
+    # FOUR shards, not two (SwiftShader era; since 2026-09-29 only the wide
+    # nightly / dispatch run keeps four — see the matrix). MEASURED per-spec on 2026-08-14 after the render-loop
+    # and direct-boot changes (509.5 s of serial work across the 9 specs), against
+    # how `--shard` actually divides them — contiguous chunks in declaration order:
+    #     2 shards   232 / 277 s          pole 277 s
+    #     3 shards   123 / 165 / 222 s    pole 222 s
+    #     4 shards   123 / 110 / 87 / 190 pole 190 s
+    # Beyond four the pole stops moving, because `--shard` balances COUNT and the
+    # cost is lumpy: the two HUD specs at the end (speed readout 109 s, minimap
+    # 81 s) are the pole on their own, and no count-based split separates them
+    # from each other without reordering the file. Runners are free on a public
+    # repo and the per-job overhead is ~38 s (less now that Chromium is cached),
+    # so four is where this stops paying.
+    strategy:
+      fail-fast: false
+      matrix:
+        # FOUR, SwiftShader era. smoke.spec.js unsharded measured 30-37 min on a shared
+        # runner (Pages runs 1873/1876, 2026-09-01/02) — at this job's 30-minute
+        # cap. The 2026-09-01 slimming collapsed the push gate to ONE shard by
+        # mistake; the nightly's four shards are the boot group, the push gate's
+        # four are smoke.spec.js (~8 min wall). Shards are separate runners.
+        #
+        # ONE SHARD FOR smoke.spec.js ON LLVMPIPE (2026-09-29). The 30-37 min
+        # above was SwiftShader. On llvmpipe (2026-09-16) the four shards
+        # measured 0.3-0.9 min of test work each against ~0.5 min of setup
+        # apiece, and smoke.spec.js as a whole medians 67 s for 10 tests
+        # (tests/data/spec-timings.json) — four runners for about a minute of
+        # work, each holding one of the account's 20 concurrent slots
+        # (docs/notes/CI-CAPACITY-2026-09-29.md). PRs and the Pages call now run
+        # it as one shard (`--shard=1/1`); the nightly and dispatched WIDE run
+        # — a whole browser group, 70-150 tests — keeps four.
+        shard: ${{ fromJSON((inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && '[1, 2, 3, 4]' || '[1]') }}
+    # 30, not 20. MEASURED on run 31023778264, the first green one: 14m24s.
+    # That fit the old cap, but with 5.5 minutes to spare on a SHARED runner
+    # whose per-test cost is the very thing that varies — and the last time a
+    # margin here was thin it produced a `cancelled` nobody read as a failure.
+    # The serial single-worker run below is slower per pass by design, so the
+    # budget has to reflect that rather than the 2-worker figure it replaced.
+    # The cap stays at the whole-suite figure even though a shard runs half the
+    # specs: the starvation tail this job has actually measured (334 s for one
+    # spec) is per-runner luck, not per-spec arithmetic.
+    #
+    # 30 -> 50. SIX consecutive deploys failed here (Pages #1848-#1854, three
+    # authors), every one a wall-clock timeout and not one assertion mismatch.
+    # In-page timestamps on run #1854 show the same shard, same commit, booting
+    # 37-55x slower between two attempts: `[car] build mercedes` 3,956 ms then
+    # 147,612 ms; `[assets] pack loaded` 5,008 ms then 276,476 ms. Shard 4 was
+    # not even failing — it was CANCELLED at 29.5 min still running, so this cap
+    # was the binding constraint as much as the per-test one below, and a
+    # cancelled job is exactly the silent-failure mode the header warns about.
+    # 50 covers a shard whose every spec lands in the starvation tail, with the
+    # per-test cap below as the real hang detector.
+    #
+    # …but 50 was measured for what a PUSH runs here: smoke.spec.js sharded four
+    # ways. The same job also runs the WIDE step — the boot group nightly, or on
+    # dispatch whichever group `group` names — and that is a different size of
+    # job wearing the same cap. Measured 2026-09-08 on the `ui` dispatch (run
+    # 34279958405): the group is 150 tests, --shard splits them 38/38/37/37 by
+    # COUNT, and APEX_WORKERS is 1. Shard 2 drew the cheap specs and finished
+    # its group in 11.5 min; shards 1, 3 and 4 drew the race-building ones and
+    # were still running at exactly 50:00 when the cap killed them. At the ~94 s
+    # race boot this file already records for a starved runner, 37 race-shaped
+    # tests is ~58 min of BOOT before a single assertion — the cap could not be
+    # met, and it is the fourth `ui` dispatch to die this way.
+    #
+    # A TIMED-OUT JOB REPORTS `cancelled`, which is why this kept being read as
+    # someone clicking cancel (docs/notes/TESTING-FIELD-NOTES.md, and the plan
+    # file recorded the wrong cause three times). The dispatch and the nightly
+    # get their own number; the per-test cap below is still the hang detector,
+    # so a genuinely stuck spec goes red at 15 min rather than burning the 120.
+    # A Pages call reports the CALLER's event — `schedule` for a train tick,
+    # `workflow_dispatch` for "deploy now" — and runs smoke.spec.js, so it
+    # takes the smoke cap, never the wide run's 120. concurrency_key is the tell.
+    #
+    # 50 -> 20 for the ONE-shard smoke.spec.js run (2026-10-14). The 50 above
+    # was the SwiftShader starvation tail; on llvmpipe a ready PR's or the
+    # Pages call's single shard measured p50 2.9 / p90 3.1 / max 3.2 min over
+    # 35 jobs (pages.yml + pull_request runs, 2026-10-14), and the slowest
+    # llvmpipe smoke.spec.js in tests/data/spec-timings.json is 153 s. 20 is
+    # >6x that job wall. A spec that hangs to its 900 s per-test timeout AND
+    # its retry now meets this cap first: the job reads `cancelled`, which
+    # ci-verdict.mjs fails exactly like `failure` — red either way, never green.
+    timeout-minutes: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && 120 || 20 }}
+    # ONE LANE PER SHARD INDEX on pull requests (2026-10-15; same rule as the
+    # selected legs): ready PRs' smoke shards run one at a time fleet-wide and
+    # wait FIFO without a runner; the train / nightly / dispatch keep a group
+    # of their own.
+    concurrency:
+      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('smoke-lane-{0}', matrix.shard) || format('smoke-run-{0}-{1}', github.run_id, matrix.shard) }}
+      queue: max
+    # The ship filter is ONE job now, not one copy per shard. `needs:` alone does
+    # not skip this job — it must still RUN and report, because pages.yml's
+    # `deploy: needs: ci` reads the aggregate of the jobs that ran and a skipped
+    # smoke is not the same thing as a passed one. So every step below carries
+    # the condition instead, checkout and the dependency install included: on a
+    # diff that ships nothing this job starts, does nothing, and reports success
+    # in seconds, exactly as it did when the filter was its first step.
+    needs: [select]
     steps:
-      # fetch-depth: 0 — the filter diffs against the SHA that is currently live
-      # on Pages, which is arbitrarily far back. Same reason the sweeps job takes
-      # the full history.
+      # fetch-depth: 1 is enough now. The full history was here for the filter,
+      # which diffed against an arbitrarily old live SHA; that work moved to the
+      # ship-filter job, and the specs themselves only need the tree.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.select.outputs.ships != 'false'
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+        if: needs.select.outputs.ships != 'false'
+      # Chromium only — the suite never targets firefox/webkit, and installing
+      # all three triples the step for nothing. The cache-then-install-on-miss
+      # contract (apt only on a cold cache) lives in the composite action, once
+      # for the five browser jobs (2026-09-22); ci-coverage.test.mjs pins it there.
+      - name: Playwright Chromium (cached)
+        if: needs.select.outputs.ships != 'false'
+        uses: ./.github/actions/playwright-chromium
+      # MESA LLVMPIPE, NOT SWIFTSHADER, FOR THE SMOKE GATE (2026-09-16): the
+      # measurements and the why are on the composite action. Shard walls
+      # 1.1-1.6 min against 1.8-4.8 min on the SwiftShader push run of the same
+      # commit. The dispatched wide run is llvmpipe too since 2026-09-16;
+      # `gl: swiftshader` is the opt-OUT that skips this step and the env
+      # below, so a spec can still be measured on both.
+      - name: Mesa llvmpipe + Xvfb
+        if: needs.select.outputs.ships != 'false' && inputs.gl != 'swiftshader'
+        uses: ./.github/actions/mesa-xvfb
+      # test:smoke, NOT test:tiny. This step said `test:tiny` against a
+      # 20-minute cap and a "~3 min" estimate, and the arithmetic never worked:
+      # test:tiny is smoke + dev-tools + logging = 71 tests, CI pins
+      # `workers: 2` (playwright.config.js), and a SwiftShader test on a shared
+      # runner measured 90-115 s. That is ~53 minutes of work in a 20-minute
+      # box. Run 31016070670 got to 30/71 before the timeout killed it — dead on
+      # that trajectory, and with `0 failed` the whole way, so the job was never
+      # telling us anything about the code.
+      #
+      # A gate that is always killed provides no coverage, so this is not a
+      # reduction in what CI checks — it is the difference between nine specs
+      # that report and seventy-one that never finish. dev-tools and logging
+      # belong in a local `tools/ci/test-bg.mjs` run, which is where the workflow
+      # header already says the full suite lives.
+      # ONE WORKER, AND A PER-TEST TIMEOUT THAT FITS THE RUNNER. With the spec
+      # count fixed, run 31019857052 still failed — but as `failure` rather than
+      # `cancelled`, which is the first time this gate reported anything real.
+      # Both failures were `Test timeout of 120000ms exceeded`, neither was an
+      # assertion, and both were the two SwiftShader RENDERING specs (grid start
+      # 175.7 s, corner approach 150.6 s).
+      #
+      # The log contains its own controlled experiment. `speed readout updates
+      # after jump()` timed out at 125.2 s while a second worker was busy, then
+      # PASSED on retry at 110.6 s in the window where the status line shows w8
+      # running alone. Same test, same commit, same machine: two concurrent
+      # SwiftShader contexts blow the limit and one does not. That is the
+      # oversubscription signature CLAUDE.md describes — every failure a timeout,
+      # not one of them an expectation that did not hold — and it is measuring
+      # the runner, not the game.
+      #
+      # `workers: 2` is right for a 4-core dev box and wrong here, so APEX_WORKERS
+      # (playwright.config.js's documented override) pins it to 1. The timeout
+      # goes to 240 s because even uncontended the runner needed 110.6 s against
+      # a 120 s limit — margin that thin is a coin flip, and a coin flip in a
+      # deploy gate is what this whole exercise has been about.
+      #
+      # Serial and slower per pass is still far cheaper than the retries and the
+      # false red: 9 specs, no contention, well inside the 20-minute cap.
+      #
+      # 240 -> 420 s, SAME ARGUMENT AS THE 120 -> 240 RAISE ABOVE, RE-MEASURED.
+      # The reasoning that set 240 ("even uncontended the runner needed 110.6 s
+      # against a 120 s limit") held until the runner pool got slower than the
+      # pool it was measured on. MEASURED 2026-08-14, three separate runs, one
+      # worker, no contention from our side:
+      #   run 1407  grid start renders a non-blank frame   334 s (retry passed)
+      #   run 1407  the select screen is a circuit picker  240 s (retry passed)
+      #   run 1412  corner approach renders a non-blank    309 s, RETRY ALSO
+      #             timed out -> terminal FAIL, deploy blocked
+      # The third one is the reason this is not "just flakiness to retry past":
+      # both attempts exceeded the cap, so the gate reported failure for a suite
+      # that passes 9/9 locally on the same commit.
+      #
+      # The cap is now measured against the RUNNER, not the test: the same log
+      # records `race bahrain` taking 94.3 s to boot where a dev box takes ~4 s,
+      # so the spec was doing correct work ~20x slower than it costs anywhere
+      # else. 420 s clears tonight's worst observed pass (334 s) with the same
+      # ~25 % margin the 240 s figure was chosen to give over its own 110.6 s
+      # worst case. If a spec ever genuinely hangs, the job's own
+      # job's `timeout-minutes` is the real backstop — a per-test cap set below
+      # the machine's noise floor only converts slow into red.
+      #
+      # 420000 -> 900000, for the reason the job cap moved: measured on Pages
+      # #1854, `minimap canvas has content` needed 640.6 s and `grid start
+      # renders a non-blank frame` 488.0 s on a starved runner, both against a
+      # 420 s cap, while the SAME specs pass in seconds locally. 900 s clears
+      # the 640.6 s worst observed with ~40 % margin — the same kind of margin
+      # 420 was chosen to give over its own 334 s worst case, re-measured
+      # against a runner that has since got slower. This raises a BUDGET, not a
+      # tolerance: no assertion changed, and a spec that genuinely hangs still
+      # goes red, just later.
+      - name: Smoke
+        # A Pages call (concurrency_key set) is ALWAYS this step, whatever the
+        # caller's event: the train ticks on `schedule` and "deploy now" is a
+        # `workflow_dispatch`, and neither means the wide run below.
+        if: needs.select.outputs.ships != 'false' && (inputs.concurrency_key != '' || (github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'))
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+          # llvmpipe (the step above): ~10x on the rendering tests, measured.
+          APEX_GL: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: 1
+        # --shard splits smoke.spec.js's tests across the matrix VMs (four in
+        # the SwiftShader era, when unsharded this step took 30-37 min); the
+        # flag passes through tools/ci/run-playwright.mjs verbatim (it forwards
+        # argv to `playwright test`).
+        # --shard=1/1 on PRs and the Pages call (one runner, see the matrix);
+        # the flag stays so a return to more shards is one number.
+        run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/1
+      # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
+      # whichever browser group the `group` input names (default tiny). On
+      # llvmpipe since 2026-09-16, for the smoke numbers measured above (corner
+      # approach 17.8 s vs 214, grid start 21.4 vs 138, shard walls 1.1-1.6 min
+      # vs 1.8-4.8); `gl: swiftshader` is the opt-OUT below.
+      # TONIGHT'S GROUP ROTATES. Pinning the nightly to `tiny` gave 4 of 118
+      # browser specs any scheduled coverage at all — the gate runs `smoke`
+      # unconditionally and everything else only when a change SELECTS it, so a
+      # spec could sit red indefinitely with nothing to notice. One did
+      # (docs/notes/DEFECT-LEDGER.md, 2026-09-16: physics-fixes was red on the
+      # deploy branch and a benchmarking run found it, not a gate). Rotating one
+      # group a night covers them all in ~11 nights for the minutes the nightly
+      # already spent. Deterministic by UTC day so a red night reproduces from
+      # its date; tests/unit/nightly-group.test.mjs proves the cycle covers
+      # every group and that a new browser group cannot silently skip it.
+      - name: Pick tonight's rotating group
+        id: rota
+        # The ship-filter clause is not decoration: without it this runs on a
+        # ships-nothing nightly, where the checkout step above was skipped and
+        # the script it calls is not on disk.
+        if: needs.select.outputs.ships != 'false' && github.event_name == 'schedule'
+        run: node tools/ci/nightly-group.mjs >> "$GITHUB_OUTPUT"
+      - name: Boot group (nightly) / dispatched group
+        if: needs.select.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.gl != 'swiftshader'
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+          GROUP: ${{ (github.event_name == 'workflow_dispatch' && inputs.group) || steps.rota.outputs.GROUP || 'tiny' }}
+          # A dispatched group runs its browser copies of the VM-twinned specs
+          # too (locally run-playwright skips them; this is where they still run).
+          APEX_WITH_TWINNED: 1
+          # Mesa llvmpipe + Xvfb, installed by the step above (it is skipped
+          # with `gl: swiftshader`, and so is this step).
+          APEX_GL: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: 1
+        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
+      # The same run on ANGLE's SwiftShader (dispatch input `gl: swiftshader`):
+      # the opt-out, for measuring a spec on both rasterisers or for a renderer
+      # verdict that must match the pre-2026-09-16 history. Its own step so the
+      # step above keeps the exact command line tests/unit/ci-coverage.test.mjs
+      # pins; read the shard times and the WEBGL_debug_renderer_info string in
+      # the log against an llvmpipe run.
+      - name: Dispatched group on SwiftShader (opt-out)
+        if: needs.select.outputs.ships != 'false' && github.event_name == 'workflow_dispatch' && inputs.gl == 'swiftshader'
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+          APEX_WITH_TWINNED: 1
+          GROUP: ${{ inputs.group || 'tiny' }}
+        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
+      # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
+      # Every per-test duration this job measures is written to junit.xml by
+      # playwright.config.js, and the only step that uploaded it ran
+      # `if: failure()` — so a PASSING run, which is the run whose timings you
+      # actually want, discarded them. tools/ci/spec-timings.mjs has existed to
+      # merge exactly this and had nothing to merge: 0 of 119 specs carry three
+      # samples, and select-budget.mjs still bills the whole tree from one
+      # 2026-08-07 measurement of one spec.
+      #
+      # Its own upload, not a widened failure one: junit.xml is a few KB, while
+      # the failure artifacts beside it are traces and screenshots worth tens of
+      # MB. `always()` so a timed-out or failed run still contributes the tests
+      # that did finish. `if-no-files-found: ignore` because a job whose steps
+      # were all skipped (the ship filter) legitimately produces none.
+      # `always()` AND the ship filter: always() is here to catch a run that
+      # timed out or failed partway, which still measured the tests that did
+      # finish. A ships-nothing diff is the other thing entirely — every step
+      # above was skipped, so there is no junit and nothing to say.
+      - name: Spec timings (junit — a green run's durations are the point)
+        if: always() && needs.select.outputs.ships != 'false'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: spec-timings-junit-smoke-${{ matrix.shard }}
+          path: artifacts/test-results-*/junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          # Shard-scoped name: same-named artifacts from parallel matrix jobs
+          # collide on upload-artifact@v4 (it hard-fails on duplicates).
+          name: playwright-artifacts-smoke-${{ matrix.shard }}
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  driving-model:
+    name: Driving model (characterization traces)
+    needs: [select]
+    runs-on: ubuntu-latest
+    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
+    # Also skipped when unit-plan says this diff does not need the characterization
+    # (ci-verdict treats that skip as a pass).
+    if: ${{ inputs.fast_tier_run == '' && needs.select.outputs.driving == 'true' }}
+    # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
+    # consumed entirely by an uncached Chromium install on run 32083395969, so
+    # the characterization never started and Pages was blocked. Keep the same
+    # lockfile-keyed browser cache as smoke and leave enough room for a genuine
+    # cold install on a slow shared runner.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The same reuse question as guards-a (2026-10-15): a step, not a job hop.
+      - name: Was this head already green as a draft?
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_EVENT_ACTION: ${{ github.event.action }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+        if: steps.reuse.outputs.reuse != 'true'
+      - name: Playwright Chromium (cached)
+        if: steps.reuse.outputs.reuse != 'true'
+        uses: ./.github/actions/playwright-chromium
+      # THE DRIVING MODEL'S OWN GATE, which nothing was running.
+      #
+      # tests/specs/physics-characterization.spec.js pins six-sample traces of four
+      # scenarios and fails if the driving model's numbers move. It is not in
+      # guards (browser spec, not node), not in sweeps (geometry only), and not
+      # in smoke's spec list — so it had never run in CI, and locally it had
+      # never passed either. The result: 175 commits of deliberate physics work
+      # (geometric RACE PACE, the PACE regrid, the SPEED STEER taper, the
+      # wheelbase recentre) drifted past it with nothing to say so, and the
+      # baseline was ~9 % stale before anyone looked. A gate nobody runs is not
+      # a gate.
+      #
+      # ITS OWN JOB, NOT A STEP IN SMOKE — and it landed as a step first, which
+      # is the mistake worth recording. Appending it to smoke was the cheap
+      # move: smoke is the only job that installs the browser binaries, so it
+      # cost nothing extra. But a step inherits its job's fate in both
+      # directions. It ran only AFTER smoke's twelve minutes, so a red smoke
+      # meant the driving-model gate never executed at all — a gate that
+      # silently does not run is the exact failure class the header above
+      # documents. And GitHub's checks list reports JOBS, not steps, so a
+      # failure surfaced as "Smoke (page boots, __apex responds)" — defeating
+      # the stated reason for making it a separate step in the first place.
+      #
+      # The cost argument was also weaker than it looked. The gate's critical
+      # path is sweeps (~15 min) and smoke (13m21s measured); a job that takes
+      # ~40 s of setup plus 42 s of test runs alongside them and adds ZERO
+      # wall-clock. One runner is the whole price of an independent verdict.
+      #
+      # No `needs:` — this is orthogonal to whether the page boots. It answers
+      # one question, in its own name: did the driving model's numbers move?
+      - name: Characterization traces
+        if: steps.reuse.outputs.reuse != 'true'
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+        run: npm test -- tests/specs/physics-characterization.spec.js --timeout=240000
+      - name: Reused draft
+        if: steps.reuse.outputs.reuse == 'true'
+        run: echo "SKIPPED driving-model — draft fast-tier already green on this head SHA"
+      # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
+      # Every per-test duration this job measures is written to junit.xml by
+      # playwright.config.js, and the only step that uploaded it ran
+      # `if: failure()` — so a PASSING run, which is the run whose timings you
+      # actually want, discarded them. tools/ci/spec-timings.mjs has existed to
+      # merge exactly this and had nothing to merge: 0 of 119 specs carry three
+      # samples, and select-budget.mjs still bills the whole tree from one
+      # 2026-08-07 measurement of one spec.
+      #
+      # Its own upload, not a widened failure one: junit.xml is a few KB, while
+      # the failure artifacts beside it are traces and screenshots worth tens of
+      # MB. `always()` so a timed-out or failed run still contributes the tests
+      # that did finish. `if-no-files-found: ignore` because a job whose steps
+      # were all skipped (the ship filter) legitimately produces none.
+      - name: Spec timings (junit — a green run's durations are the point)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: spec-timings-junit-driving-model
+          path: artifacts/test-results-*/junit.xml
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-artifacts-driving-model
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # RENDERER SPECS ON A REAL GPU. Every other browser job in this file runs on
+  # ubuntu-latest, whose only WebGPU/WebGL adapter is SwiftShader, and the
+  # renderer group (`gfx`: 240-480 s budgets under software rasterisation) has
+  # never been in CI at all — the header's "deliberately NOT here" clause.
+  # docs/research/CI-RENDERING-PERFORMANCE.md §"There IS a real GPU" measured
+  # the runner images: macos-latest (Apple silicon) reports a HARDWARE Metal
+  # adapter on STOCK flags, and the two defects that real GPU has found so far
+  # were invisible to every software test. So the renderer specs get their own
+  # macOS job (PROCESS-SPEEDUP-2026-09 §1.4 / §4.5).
+  #
+  # THE FILTER IS A STEP OF `select` (2026-10-15; a job of its own before).
+  # A macOS runner is one of the account's FIVE macOS slots
+  # (the repo is public, so minutes are free; the slot is the cost), so the "does this diff touch
+  # the renderer?" question is answered on a ubuntu runner first (seconds, no
+  # npm ci) and the macOS runner is only ever allocated when the answer is
+  # yes. A step-level skip inside the macOS job — the sweeps pattern — would
+  # still pay for the macOS checkout and npm ci on every push.
+  renderer-macos:
+    name: Renderer specs on a real GPU (macos-latest, Metal)
+    needs: select
+    # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
+    # comment forbids it, because this job is already outside the deploy gate
+    # (renderer-filter is skipped on the Pages call, so this is too). The
+    # "skipped reads as passed" hazard the sweeps avoid is about a job whose
+    # verdict the deploy consumes; nothing consumes this one but the checks list.
+    # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
+    # ready PR whose filter said the diff touches the renderer. Never a
+    # draft PR or a bare topic-branch push — see the filter's header.
+    if: ${{ !inputs.concurrency_key && needs.select.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
+    runs-on: macos-latest
+    # 30 is a GUESS, and the header says what to do about that: the six specs
+    # declare 240-480 s budgets measured under SwiftShader, where a boot is
+    # 11-33 s; the census measured a ~4 s boot on this image's Metal adapter.
+    # Re-time on the first green run and replace this number and the header's.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # Same lockfile-keyed cache as smoke / driving-model, at macOS's browser
+      # path (~/Library/Caches, not ~/.cache). The key already carries
+      # runner.os, so it never collides with the Linux entries.
+      # The FULL browser, the way gpu-census.yml installs it — not the headless
+      # shell, which ships without navigator.gpu. `install chromium` fetches
+      # both; playwright.gpu.config.js selects the full one. No `--with-deps`:
+      # that is apt, and this is not Linux.
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
+        with:
+          browsers-path: ~/Library/Caches/ms-playwright
+          with-deps: "false"
+      # PROVE THE GPU BEFORE TRUSTING THE RUN. The whole point of this job is
+      # the hardware adapter; if the image ever loses it (a runner-image
+      # change, a Chromium that stops seeing Metal) the specs would silently
+      # run on SwiftShader and this job would become a slower ubuntu job that
+      # still says "macOS". AGENTS.md: a software run is not evidence about a
+      # player's machine. The tri-state census (tools/gfx/gpu-census.mjs) is the
+      # same one gpu-census.yml gates on; `=== true` on purpose, so a census
+      # that measured nothing (null) fails rather than passing vacuously.
+      - name: Adapter census — is the Metal adapter still there?
+        run: |
+          node tools/gfx/gpu-census.mjs --json census-macos.json
+          node -e '
+            const r = require("./census-macos.json");
+            if (r.anyHardware !== true) {
+              console.error("::error::renderer-macos: the census found NO hardware adapter (anyHardware=" + r.anyHardware + ") — this run would measure SwiftShader on a Mac, not the GPU");
+              process.exit(1);
+            }
+          '
+      # playwright.gpu.config.js is playwright.config.js with ONE difference:
+      # the launch drops the `--use-angle=swiftshader` pin every other run
+      # carries and selects the full Chromium (`channel: "chromium"`). The
+      # shared config is untouched — it is a protected contract file — and the
+      # --config flag passes through tools/ci/run-playwright.mjs verbatim. NEVER
+      # add --use-angle=vulkan anywhere on this job: on macOS that one flag
+      # forces ANGLE onto SwiftShader and requestAdapter() returns null
+      # (CI-RENDERING-PERFORMANCE.md §There IS a real GPU, trap 1). Two
+      # workers: a real GPU does not have SwiftShader's ~1.9x second-worker
+      # penalty (docs/TESTING.md), and the budget is the image's to measure.
+      # --timeout=600000 is a CEILING for the first runs, not a tolerance: the
+      # specs keep their own budgets, and the job cap is the real backstop.
+      - name: Renderer specs (test:gfx)
+        # ONE worker on the Metal box. Two Chromium instances on one shared GPU
+        # wedged Playwright's "Create context" twice in four runs (3500, 3509),
+        # both times while the other worker was inside M9's env probe, and each
+        # sat 27 min on the 30 min per-test budget until a hand cancel. One
+        # worker costs ~8 min of wall time; a wedge costs the run.
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+        run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000
+      # ALWAYS, not failure(): a spec that fails its first attempt and passes
+      # the retry leaves the job green and its report — the attached frames
+      # image-grade "shadows" compares, the retry's diag — unretrievable. Run
+      # 3495 (2026-09-10) was exactly that; the pictures are the whole point.
+      - name: Run artifacts (report, traces, attached frames)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-artifacts-renderer-macos
+          path: |
+            census-macos.json
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # EMULATED-VR (IWER) — path-gated. The xr-emulated Playwright project and
+  # `npm run test:xr` existed but sat in no CI job; a js/xr/ change only ran
+  # the Node xr-phase0 suite under steering-unit. Two jobs like renderer-*:
+  # a cheap ubuntu filter, then the IWER suite only when the diff reaches XR
+  # (or on dispatch). Skipped on the Pages call and on the nightly schedule
+  # (the rotation excludes test:xr for the same reason gfx is excluded).
+  xr:
+    name: Emulated VR (IWER / xr-emulated)
+    needs: select
+    if: ${{ !inputs.concurrency_key && needs.select.outputs.xr == 'true' }}
+    runs-on: ubuntu-latest
+    # Unmeasured on CI; local IWER suite is minutes. Cap generously.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-apex
+      - name: Playwright Chromium (cached)
+        uses: ./.github/actions/playwright-chromium
+      - name: Emulated VR (test:xr)
+        env:
+          APEX_WORKERS: 1
+          APEX_FAIL_ON_FLAKY: 1
+        run: npm run test:xr -- --timeout=600000
+      - name: Failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-artifacts-xr
+          path: |
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # THE CHANGE-AWARE GATE, in two jobs (2026-09-10): `select` plans, `selected`
+  # runs the plan as a matrix. It used to be one job that ran on branch pushes
+  # and PRs only. Three things about it were wrong, all fixed here:
+  #
+  #   1. It could drop the spec you edited. The cut was smallest-first with the
+  #      priority applied AFTER it, so a changed 10-test spec lost to smaller
+  #      routed ones. tools/ci/select-specs.mjs now fills the budget affected-
+  #      first, and an affected spec that still does not fit runs in its own
+  #      matrix shard (bounded at MAX_OVERSIZE_SHARDS; the rest named as skipped).
+  #   2. A tracked-path change (the shell, package.json, a fixture every spec
+  #      imports) EMPTIED the selection. It now narrows it to the edited and
+  #      imported specs and says so; the fixed gates own the rest.
+  #   3. It was skipped on the deploy gate (`inputs.concurrency_key == ''`).
+  #      pages.yml now publishes exactly the commit it tested, which makes
+  #      "did we test what this commit changed?" a deploy question too, so the
+  #      job runs on the Pages call as well. Pages run 2215 (2026-09-10) once
+  #      went red on this job's newContext() hang while deploying an unrelated
+  #      change; if that shape recurs the answer is a fix or an exclusion by
+  #      name in the selector, never skipping the gate again.
+  #
+  # A PR's event.before is not its comparison base, so the selector uses
+  # pull_request.base.sha; pushes (direct or via the Pages call, whose github
+  # context is the caller's push) use event.before, with HEAD~1 as the fallback.
+  select:
+    name: Select specs for this change
+    runs-on: ubuntu-latest
+    # A Pages call (the train) is a gate too: it carries a concurrency_key and
+    # its before_sha is the live commit, so the plan reads "what changed since
+    # what is live". The caller's event is `schedule` there, hence the third
+    # clause rather than an event test.
+    # `schedule` is the nightly's CHANGE-AWARE lane (tools/ci/ci-resolve-before.sh):
+    # every spec the last day of merges routed, with room for more overflow
+    # shards than one change gets — so a spec a 15-minute per-change budget
+    # squeezes out runs within a day, not on its group's night in 11.
+    # THE PLAN JOB (2026-10-15). Also plans the node slices (was `unit-plan`),
+    # answers the ship / renderer / xr path questions (were three filter jobs)
+    # and asks nothing a draft fast tier does not need. One runner, one
+    # checkout, one npm ci, one queue hop in front of node rows, selected legs,
+    # smoke, renderer-macos and xr alike — five job starts and a hop fewer per
+    # run (docs/notes/CI-CLOG-SURVEY-2026-10-15.md). The slice plan runs
+    # whenever the node matrix does (`fast_tier_run == ''`), so a dispatch
+    # without a diff still gets its --all plan; the spec selection keeps its
+    # own event test on the step.
+    if: ${{ inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '' }}
+    # actions:read on top of the workflow default — the base-verdict step at the
+    # end lists this workflow's runs on the deploy branch. A job that names
+    # permissions gets ONLY what it names, hence contents too.
+    permissions:
+      contents: read
+      actions: read
+    timeout-minutes: 10
+    outputs:
+      shards: ${{ steps.sel.outputs.shards }}
+      any: ${{ steps.sel.outputs.any }}
+      # How many routed specs the plan could NOT run, and why the plan exists at
+      # all. poke-train needs both to tell an empty plan from an unaffordable one.
+      dropped: ${{ steps.sel.outputs.dropped }}
+      reason: ${{ steps.sel.outputs.reason }}
+      # The node-slice plan (was unit-plan's).
+      slices: ${{ steps.plan.outputs.slices }}
+      any_node: ${{ steps.plan.outputs.any_node }}
+      driving: ${{ steps.plan.outputs.driving }}
+      plan_reason: ${{ steps.plan.outputs.reason }}
+      # The three path filters (were ship-filter / renderer-filter / xr-filter).
+      # Empty when the step did not run; every consumer reads empty as its
+      # own job `if:` decides (smoke runs on != 'false'; renderer/xr on == 'true').
+      ships: ${{ steps.shipfilter.outputs.ships }}
+      renderer: ${{ steps.renderer.outputs.renderer }}
+      xr: ${{ steps.xrfilter.outputs.xr }}
+    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
           filter: blob:none
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+      # WHICH NODE SLICES DOES THIS DIFF NEED? (2026-09-29; a job of its own,
+      # `unit-plan`, until 2026-10-15 — one more queue hop before any node
+      # row could start, p50 11.7 min on 2026-10-15.) pick-unit-slices.mjs
+      # maps paths → runners, FAIL-SAFE → all; schedule / dispatch run --all.
+      # On a deploy push and the train every slice row is emitted (needed
+      # true|false) so the train's reuse check sees expanded node rows; a PULL
+      # REQUEST lists only the needed rows (--needed-only; `CI` is the one
+      # required check since 2026-10-15) and node-suites skips at the job
+      # level when none is (its `if:`).
+      - name: Plan node unit slices
+        id: plan
+        if: ${{ inputs.fast_tier_run == '' }}
+        env:
+          NEEDED_ONLY: ${{ github.event_name == 'pull_request' }}
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+          LIVE_BEFORE: ${{ inputs.before_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          FLAG=""; [ "${NEEDED_ONLY:-}" = "true" ] && FLAG="--needed-only"
+          # Schedule / dispatch: no meaningful diff — run every slice.
+          case "$EVENT" in
+            schedule|workflow_dispatch)
+              node tools/ci/pick-unit-slices.mjs --all --github-output
+              exit 0
+              ;;
+          esac
+          # Same delta-gate base as node-suites' plan step (base-green.sh):
+          # Pages call → live commit; PR → event base; push → before only when
+          # that tip was gated green (else fail-safe --all).
+          BASE=""
+          if [ "$CALLED" = "true" ]; then
+            BASE="${LIVE_BEFORE:-}"
+          elif [ "$EVENT" = "pull_request" ]; then
+            # The test commit's first parent, not the event's base.sha, which lags
+            # one sync behind (tools/ci/ci-pr-base.sh; 15-F3, 2026-10-10).
+            BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
+          elif [ "$EVENT" = "push" ]; then
+            if [ "$(bash tools/ci/base-green.sh "${PUSH_BEFORE:-}")" = green ]; then
+              BASE="${PUSH_BEFORE:-}"
+            else
+              echo "the previous tip ${PUSH_BEFORE:-?} is not known green: every slice runs" >&2
+              node tools/ci/pick-unit-slices.mjs --all --github-output
+              exit 0
+            fi
+          fi
+          case "${BASE}" in
+            ""|0000000000000000000000000000000000000000)
+              echo "no base SHA — fail-safe --all" >&2
+              node tools/ci/pick-unit-slices.mjs --all --github-output
+              exit 0
+              ;;
+          esac
+          if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "base $BASE unreachable — fail-safe --all" >&2
+            node tools/ci/pick-unit-slices.mjs --all --github-output
+            exit 0
+          fi
+          node tools/ci/pick-unit-slices.mjs --since "$BASE" $FLAG --github-output
+
+      # PREVIOUSLY-FAILING SPECS, carried across runs. Fowler's TIA survey
+      # records Microsoft's TIA and Google's Testar both re-running the last
+      # run's failures unconditionally — a test that just failed is the single
+      # best predictor of failing again, and a fresh runner otherwise forgets.
+      # restore-keys makes a miss harmless: the file is simply absent and the
+      # selector proceeds without it.
+      - name: Restore last run's failing specs
+        if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .selected-failed.txt
+          key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
+          # A PR also inherits the DEPLOY BRANCH's last failures: only the train
+          # used to promote a spec that just failed there to rank 1, so a PR
+          # touching the same routes could skip it and merge onto the red.
+          restore-keys: |
+            selected-failed-${{ github.ref_name }}-
+            selected-failed-claude/f1-game-project-26h3ng-
+      # tools/ci/ci-select-specs-step.sh: base via ci-resolve-before.sh, then
+      # select-specs.mjs --json; it fails closed on "unmatched" and writes the
+      # `shards` matrix (one budgeted shard plus one per oversize affected spec,
+      # each with its derived cap) and `any` to $GITHUB_OUTPUT.
+      - name: Select specs for this change
+        id: sel
+        if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '' }}
+        env:
+          # On a Pages call the resolver is handed the train's base as a push:
+          # EVENT=push with PUSH_BEFORE = the live commit. EMPTY when the live
+          # site was unreadable — and CALLED makes that select EVERYTHING (the
+          # empty tree), like the sweeps/parts/ship filters, never HEAD~1: a
+          # one-commit slice of a tip carrying every unpublished commit.
+          EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
+          PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+          # The nightly lane (tools/ci/ci-resolve-before.sh): a day's union diff
+          # routes ~70 specs, so 60-minute shards and 12 overflow shards, stale
+          # first. Simulated on 2026-09-29's 85 merges: 19 shards, 606 tests,
+          # no routed spec left skipped (menu-traversal, ui-redesign and
+          # time-trial — the day's latent reds — all run). Once a night.
+          BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || '' }}
+          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
+        run: bash tools/ci/ci-select-specs-step.sh
       # DOES THIS DIFF CHANGE ANYTHING THAT ACTUALLY SHIPS?
       #
       # pages.yml stages a fixed list of runtime paths into _site/. A commit that
@@ -1239,6 +1932,7 @@ jobs:
       # ship on a run whose smoke never booted it. Unknown -> ships=true.
       - name: Does this diff change anything that ships?
         id: shipfilter
+        if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
         env:
           EVENT: ${{ github.event_name }}
           GH_TOKEN: ${{ github.token }}
@@ -1357,474 +2051,6 @@ jobs:
           if HIT="$(shipped_hit "$CHANGED")"; then run_all "the diff touches a shipped path ($HIT)"; fi
           echo "ships=false" >> "$GITHUB_OUTPUT"
           echo "SKIPPING SMOKE: nothing in this diff reaches _site/ — the deployed bytes are unchanged since $LIVE"
-  smoke:
-    name: Smoke (page boots, __apex responds)
-    runs-on: ubuntu-latest
-    # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
-    if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
-    # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
-    # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
-    # branch and PR push: `inputs` is empty on a plain push, null coerces like
-    # false, and `null != false` is FALSE (measured 2026-08-14, runs 31765883905
-    # and 31766287790 — smoke and selected both `skipped` with completed_at
-    # before started_at). Its replacement, `github.event_name != 'workflow_call'
-    # || inputs.smoke`, could never skip: in a called workflow `github.event_name`
-    # is the CALLER's event (`push`), so the first operand was always true and
-    # the input was inert. A guard that either always or never fires is not a
-    # switch — the smoke gate simply runs on every push, PR and deploy.
-    # TWO SHARDS, TWO RUNNER VMs — NOT two workers on one VM. The measured rule
-    # below (two concurrent SwiftShader contexts on one shared runner blow the
-    # per-test timeout) still binds: each shard keeps APEX_WORKERS=1 and runs
-    # its half of the spec list alone on its own machine. Sharding exists to
-    # shrink WALL-CLOCK, because this job's ~14-18 min serial length is the
-    # window in which a run gets superseded and cancelled by the next push —
-    # measured 2026-08-14: run 1407 was cancelled at 29 min, ONE spec from
-    # green, after two 240 s runner-starvation timeouts stretched the serial
-    # pass. Half the specs per VM ≈ half the window.
-    # FOUR shards, not two (SwiftShader era; since 2026-09-29 only the wide
-    # nightly / dispatch run keeps four — see the matrix). MEASURED per-spec on 2026-08-14 after the render-loop
-    # and direct-boot changes (509.5 s of serial work across the 9 specs), against
-    # how `--shard` actually divides them — contiguous chunks in declaration order:
-    #     2 shards   232 / 277 s          pole 277 s
-    #     3 shards   123 / 165 / 222 s    pole 222 s
-    #     4 shards   123 / 110 / 87 / 190 pole 190 s
-    # Beyond four the pole stops moving, because `--shard` balances COUNT and the
-    # cost is lumpy: the two HUD specs at the end (speed readout 109 s, minimap
-    # 81 s) are the pole on their own, and no count-based split separates them
-    # from each other without reordering the file. Runners are free on a public
-    # repo and the per-job overhead is ~38 s (less now that Chromium is cached),
-    # so four is where this stops paying.
-    strategy:
-      fail-fast: false
-      matrix:
-        # FOUR, SwiftShader era. smoke.spec.js unsharded measured 30-37 min on a shared
-        # runner (Pages runs 1873/1876, 2026-09-01/02) — at this job's 30-minute
-        # cap. The 2026-09-01 slimming collapsed the push gate to ONE shard by
-        # mistake; the nightly's four shards are the boot group, the push gate's
-        # four are smoke.spec.js (~8 min wall). Shards are separate runners.
-        #
-        # ONE SHARD FOR smoke.spec.js ON LLVMPIPE (2026-09-29). The 30-37 min
-        # above was SwiftShader. On llvmpipe (2026-09-16) the four shards
-        # measured 0.3-0.9 min of test work each against ~0.5 min of setup
-        # apiece, and smoke.spec.js as a whole medians 67 s for 10 tests
-        # (tests/data/spec-timings.json) — four runners for about a minute of
-        # work, each holding one of the account's 20 concurrent slots
-        # (docs/notes/CI-CAPACITY-2026-09-29.md). PRs and the Pages call now run
-        # it as one shard (`--shard=1/1`); the nightly and dispatched WIDE run
-        # — a whole browser group, 70-150 tests — keeps four.
-        shard: ${{ fromJSON((inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && '[1, 2, 3, 4]' || '[1]') }}
-    # 30, not 20. MEASURED on run 31023778264, the first green one: 14m24s.
-    # That fit the old cap, but with 5.5 minutes to spare on a SHARED runner
-    # whose per-test cost is the very thing that varies — and the last time a
-    # margin here was thin it produced a `cancelled` nobody read as a failure.
-    # The serial single-worker run below is slower per pass by design, so the
-    # budget has to reflect that rather than the 2-worker figure it replaced.
-    # The cap stays at the whole-suite figure even though a shard runs half the
-    # specs: the starvation tail this job has actually measured (334 s for one
-    # spec) is per-runner luck, not per-spec arithmetic.
-    #
-    # 30 -> 50. SIX consecutive deploys failed here (Pages #1848-#1854, three
-    # authors), every one a wall-clock timeout and not one assertion mismatch.
-    # In-page timestamps on run #1854 show the same shard, same commit, booting
-    # 37-55x slower between two attempts: `[car] build mercedes` 3,956 ms then
-    # 147,612 ms; `[assets] pack loaded` 5,008 ms then 276,476 ms. Shard 4 was
-    # not even failing — it was CANCELLED at 29.5 min still running, so this cap
-    # was the binding constraint as much as the per-test one below, and a
-    # cancelled job is exactly the silent-failure mode the header warns about.
-    # 50 covers a shard whose every spec lands in the starvation tail, with the
-    # per-test cap below as the real hang detector.
-    #
-    # …but 50 was measured for what a PUSH runs here: smoke.spec.js sharded four
-    # ways. The same job also runs the WIDE step — the boot group nightly, or on
-    # dispatch whichever group `group` names — and that is a different size of
-    # job wearing the same cap. Measured 2026-09-08 on the `ui` dispatch (run
-    # 34279958405): the group is 150 tests, --shard splits them 38/38/37/37 by
-    # COUNT, and APEX_WORKERS is 1. Shard 2 drew the cheap specs and finished
-    # its group in 11.5 min; shards 1, 3 and 4 drew the race-building ones and
-    # were still running at exactly 50:00 when the cap killed them. At the ~94 s
-    # race boot this file already records for a starved runner, 37 race-shaped
-    # tests is ~58 min of BOOT before a single assertion — the cap could not be
-    # met, and it is the fourth `ui` dispatch to die this way.
-    #
-    # A TIMED-OUT JOB REPORTS `cancelled`, which is why this kept being read as
-    # someone clicking cancel (docs/notes/TESTING-FIELD-NOTES.md, and the plan
-    # file recorded the wrong cause three times). The dispatch and the nightly
-    # get their own number; the per-test cap below is still the hang detector,
-    # so a genuinely stuck spec goes red at 15 min rather than burning the 120.
-    # A Pages call reports the CALLER's event — `schedule` for a train tick,
-    # `workflow_dispatch` for "deploy now" — and runs smoke.spec.js, so it
-    # takes the smoke cap, never the wide run's 120. concurrency_key is the tell.
-    #
-    # 50 -> 20 for the ONE-shard smoke.spec.js run (2026-10-14). The 50 above
-    # was the SwiftShader starvation tail; on llvmpipe a ready PR's or the
-    # Pages call's single shard measured p50 2.9 / p90 3.1 / max 3.2 min over
-    # 35 jobs (pages.yml + pull_request runs, 2026-10-14), and the slowest
-    # llvmpipe smoke.spec.js in tests/data/spec-timings.json is 153 s. 20 is
-    # >6x that job wall. A spec that hangs to its 900 s per-test timeout AND
-    # its retry now meets this cap first: the job reads `cancelled`, which
-    # ci-verdict.mjs fails exactly like `failure` — red either way, never green.
-    timeout-minutes: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && 120 || 20 }}
-    # The ship filter is ONE job now, not one copy per shard. `needs:` alone does
-    # not skip this job — it must still RUN and report, because pages.yml's
-    # `deploy: needs: ci` reads the aggregate of the jobs that ran and a skipped
-    # smoke is not the same thing as a passed one. So every step below carries
-    # the condition instead, checkout and the dependency install included: on a
-    # diff that ships nothing this job starts, does nothing, and reports success
-    # in seconds, exactly as it did when the filter was its first step.
-    needs: [ship-filter]
-    steps:
-      # fetch-depth: 1 is enough now. The full history was here for the filter,
-      # which diffed against an arbitrarily old live SHA; that work moved to the
-      # ship-filter job, and the specs themselves only need the tree.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.ship-filter.outputs.ships != 'false'
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-        if: needs.ship-filter.outputs.ships != 'false'
-      # Chromium only — the suite never targets firefox/webkit, and installing
-      # all three triples the step for nothing. The cache-then-install-on-miss
-      # contract (apt only on a cold cache) lives in the composite action, once
-      # for the five browser jobs (2026-09-22); ci-coverage.test.mjs pins it there.
-      - name: Playwright Chromium (cached)
-        if: needs.ship-filter.outputs.ships != 'false'
-        uses: ./.github/actions/playwright-chromium
-      # MESA LLVMPIPE, NOT SWIFTSHADER, FOR THE SMOKE GATE (2026-09-16): the
-      # measurements and the why are on the composite action. Shard walls
-      # 1.1-1.6 min against 1.8-4.8 min on the SwiftShader push run of the same
-      # commit. The dispatched wide run is llvmpipe too since 2026-09-16;
-      # `gl: swiftshader` is the opt-OUT that skips this step and the env
-      # below, so a spec can still be measured on both.
-      - name: Mesa llvmpipe + Xvfb
-        if: needs.ship-filter.outputs.ships != 'false' && inputs.gl != 'swiftshader'
-        uses: ./.github/actions/mesa-xvfb
-      # test:smoke, NOT test:tiny. This step said `test:tiny` against a
-      # 20-minute cap and a "~3 min" estimate, and the arithmetic never worked:
-      # test:tiny is smoke + dev-tools + logging = 71 tests, CI pins
-      # `workers: 2` (playwright.config.js), and a SwiftShader test on a shared
-      # runner measured 90-115 s. That is ~53 minutes of work in a 20-minute
-      # box. Run 31016070670 got to 30/71 before the timeout killed it — dead on
-      # that trajectory, and with `0 failed` the whole way, so the job was never
-      # telling us anything about the code.
-      #
-      # A gate that is always killed provides no coverage, so this is not a
-      # reduction in what CI checks — it is the difference between nine specs
-      # that report and seventy-one that never finish. dev-tools and logging
-      # belong in a local `tools/ci/test-bg.mjs` run, which is where the workflow
-      # header already says the full suite lives.
-      # ONE WORKER, AND A PER-TEST TIMEOUT THAT FITS THE RUNNER. With the spec
-      # count fixed, run 31019857052 still failed — but as `failure` rather than
-      # `cancelled`, which is the first time this gate reported anything real.
-      # Both failures were `Test timeout of 120000ms exceeded`, neither was an
-      # assertion, and both were the two SwiftShader RENDERING specs (grid start
-      # 175.7 s, corner approach 150.6 s).
-      #
-      # The log contains its own controlled experiment. `speed readout updates
-      # after jump()` timed out at 125.2 s while a second worker was busy, then
-      # PASSED on retry at 110.6 s in the window where the status line shows w8
-      # running alone. Same test, same commit, same machine: two concurrent
-      # SwiftShader contexts blow the limit and one does not. That is the
-      # oversubscription signature CLAUDE.md describes — every failure a timeout,
-      # not one of them an expectation that did not hold — and it is measuring
-      # the runner, not the game.
-      #
-      # `workers: 2` is right for a 4-core dev box and wrong here, so APEX_WORKERS
-      # (playwright.config.js's documented override) pins it to 1. The timeout
-      # goes to 240 s because even uncontended the runner needed 110.6 s against
-      # a 120 s limit — margin that thin is a coin flip, and a coin flip in a
-      # deploy gate is what this whole exercise has been about.
-      #
-      # Serial and slower per pass is still far cheaper than the retries and the
-      # false red: 9 specs, no contention, well inside the 20-minute cap.
-      #
-      # 240 -> 420 s, SAME ARGUMENT AS THE 120 -> 240 RAISE ABOVE, RE-MEASURED.
-      # The reasoning that set 240 ("even uncontended the runner needed 110.6 s
-      # against a 120 s limit") held until the runner pool got slower than the
-      # pool it was measured on. MEASURED 2026-08-14, three separate runs, one
-      # worker, no contention from our side:
-      #   run 1407  grid start renders a non-blank frame   334 s (retry passed)
-      #   run 1407  the select screen is a circuit picker  240 s (retry passed)
-      #   run 1412  corner approach renders a non-blank    309 s, RETRY ALSO
-      #             timed out -> terminal FAIL, deploy blocked
-      # The third one is the reason this is not "just flakiness to retry past":
-      # both attempts exceeded the cap, so the gate reported failure for a suite
-      # that passes 9/9 locally on the same commit.
-      #
-      # The cap is now measured against the RUNNER, not the test: the same log
-      # records `race bahrain` taking 94.3 s to boot where a dev box takes ~4 s,
-      # so the spec was doing correct work ~20x slower than it costs anywhere
-      # else. 420 s clears tonight's worst observed pass (334 s) with the same
-      # ~25 % margin the 240 s figure was chosen to give over its own 110.6 s
-      # worst case. If a spec ever genuinely hangs, the job's own
-      # job's `timeout-minutes` is the real backstop — a per-test cap set below
-      # the machine's noise floor only converts slow into red.
-      #
-      # 420000 -> 900000, for the reason the job cap moved: measured on Pages
-      # #1854, `minimap canvas has content` needed 640.6 s and `grid start
-      # renders a non-blank frame` 488.0 s on a starved runner, both against a
-      # 420 s cap, while the SAME specs pass in seconds locally. 900 s clears
-      # the 640.6 s worst observed with ~40 % margin — the same kind of margin
-      # 420 was chosen to give over its own 334 s worst case, re-measured
-      # against a runner that has since got slower. This raises a BUDGET, not a
-      # tolerance: no assertion changed, and a spec that genuinely hangs still
-      # goes red, just later.
-      - name: Smoke
-        # A Pages call (concurrency_key set) is ALWAYS this step, whatever the
-        # caller's event: the train ticks on `schedule` and "deploy now" is a
-        # `workflow_dispatch`, and neither means the wide run below.
-        if: needs.ship-filter.outputs.ships != 'false' && (inputs.concurrency_key != '' || (github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'))
-        env:
-          APEX_WORKERS: 1
-          APEX_FAIL_ON_FLAKY: 1
-          # llvmpipe (the step above): ~10x on the rendering tests, measured.
-          APEX_GL: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: 1
-        # --shard splits smoke.spec.js's tests across the matrix VMs (four in
-        # the SwiftShader era, when unsharded this step took 30-37 min); the
-        # flag passes through tools/ci/run-playwright.mjs verbatim (it forwards
-        # argv to `playwright test`).
-        # --shard=1/1 on PRs and the Pages call (one runner, see the matrix);
-        # the flag stays so a return to more shards is one number.
-        run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/1
-      # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
-      # whichever browser group the `group` input names (default tiny). On
-      # llvmpipe since 2026-09-16, for the smoke numbers measured above (corner
-      # approach 17.8 s vs 214, grid start 21.4 vs 138, shard walls 1.1-1.6 min
-      # vs 1.8-4.8); `gl: swiftshader` is the opt-OUT below.
-      # TONIGHT'S GROUP ROTATES. Pinning the nightly to `tiny` gave 4 of 118
-      # browser specs any scheduled coverage at all — the gate runs `smoke`
-      # unconditionally and everything else only when a change SELECTS it, so a
-      # spec could sit red indefinitely with nothing to notice. One did
-      # (docs/notes/DEFECT-LEDGER.md, 2026-09-16: physics-fixes was red on the
-      # deploy branch and a benchmarking run found it, not a gate). Rotating one
-      # group a night covers them all in ~11 nights for the minutes the nightly
-      # already spent. Deterministic by UTC day so a red night reproduces from
-      # its date; tests/unit/nightly-group.test.mjs proves the cycle covers
-      # every group and that a new browser group cannot silently skip it.
-      - name: Pick tonight's rotating group
-        id: rota
-        # The ship-filter clause is not decoration: without it this runs on a
-        # ships-nothing nightly, where the checkout step above was skipped and
-        # the script it calls is not on disk.
-        if: needs.ship-filter.outputs.ships != 'false' && github.event_name == 'schedule'
-        run: node tools/ci/nightly-group.mjs >> "$GITHUB_OUTPUT"
-      - name: Boot group (nightly) / dispatched group
-        if: needs.ship-filter.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.gl != 'swiftshader'
-        env:
-          APEX_WORKERS: 1
-          APEX_FAIL_ON_FLAKY: 1
-          GROUP: ${{ (github.event_name == 'workflow_dispatch' && inputs.group) || steps.rota.outputs.GROUP || 'tiny' }}
-          # A dispatched group runs its browser copies of the VM-twinned specs
-          # too (locally run-playwright skips them; this is where they still run).
-          APEX_WITH_TWINNED: 1
-          # Mesa llvmpipe + Xvfb, installed by the step above (it is skipped
-          # with `gl: swiftshader`, and so is this step).
-          APEX_GL: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: 1
-        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
-      # The same run on ANGLE's SwiftShader (dispatch input `gl: swiftshader`):
-      # the opt-out, for measuring a spec on both rasterisers or for a renderer
-      # verdict that must match the pre-2026-09-16 history. Its own step so the
-      # step above keeps the exact command line tests/unit/ci-coverage.test.mjs
-      # pins; read the shard times and the WEBGL_debug_renderer_info string in
-      # the log against an llvmpipe run.
-      - name: Dispatched group on SwiftShader (opt-out)
-        if: needs.ship-filter.outputs.ships != 'false' && github.event_name == 'workflow_dispatch' && inputs.gl == 'swiftshader'
-        env:
-          APEX_WORKERS: 1
-          APEX_FAIL_ON_FLAKY: 1
-          APEX_WITH_TWINNED: 1
-          GROUP: ${{ inputs.group || 'tiny' }}
-        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
-      # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
-      # Every per-test duration this job measures is written to junit.xml by
-      # playwright.config.js, and the only step that uploaded it ran
-      # `if: failure()` — so a PASSING run, which is the run whose timings you
-      # actually want, discarded them. tools/ci/spec-timings.mjs has existed to
-      # merge exactly this and had nothing to merge: 0 of 119 specs carry three
-      # samples, and select-budget.mjs still bills the whole tree from one
-      # 2026-08-07 measurement of one spec.
-      #
-      # Its own upload, not a widened failure one: junit.xml is a few KB, while
-      # the failure artifacts beside it are traces and screenshots worth tens of
-      # MB. `always()` so a timed-out or failed run still contributes the tests
-      # that did finish. `if-no-files-found: ignore` because a job whose steps
-      # were all skipped (the ship filter) legitimately produces none.
-      # `always()` AND the ship filter: always() is here to catch a run that
-      # timed out or failed partway, which still measured the tests that did
-      # finish. A ships-nothing diff is the other thing entirely — every step
-      # above was skipped, so there is no junit and nothing to say.
-      - name: Spec timings (junit — a green run's durations are the point)
-        if: always() && needs.ship-filter.outputs.ships != 'false'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: spec-timings-junit-smoke-${{ matrix.shard }}
-          path: artifacts/test-results-*/junit.xml
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Failure artifacts
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          # Shard-scoped name: same-named artifacts from parallel matrix jobs
-          # collide on upload-artifact@v4 (it hard-fails on duplicates).
-          name: playwright-artifacts-smoke-${{ matrix.shard }}
-          path: |
-            artifacts/test-results-*/
-            artifacts/report-*/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  driving-model:
-    name: Driving model (characterization traces)
-    needs: [unit-plan, reuse-draft]
-    runs-on: ubuntu-latest
-    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
-    # Also skipped when unit-plan says this diff does not need the characterization
-    # (ci-verdict treats that skip as a pass).
-    if: ${{ inputs.fast_tier_run == '' && needs.unit-plan.outputs.driving == 'true' }}
-    # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
-    # consumed entirely by an uncached Chromium install on run 32083395969, so
-    # the characterization never started and Pages was blocked. Keep the same
-    # lockfile-keyed browser cache as smoke and leave enough room for a genuine
-    # cold install on a slow shared runner.
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.reuse-draft.outputs.reuse != 'true'
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-        if: needs.reuse-draft.outputs.reuse != 'true'
-      - name: Playwright Chromium (cached)
-        if: needs.reuse-draft.outputs.reuse != 'true'
-        uses: ./.github/actions/playwright-chromium
-      # THE DRIVING MODEL'S OWN GATE, which nothing was running.
-      #
-      # tests/specs/physics-characterization.spec.js pins six-sample traces of four
-      # scenarios and fails if the driving model's numbers move. It is not in
-      # guards (browser spec, not node), not in sweeps (geometry only), and not
-      # in smoke's spec list — so it had never run in CI, and locally it had
-      # never passed either. The result: 175 commits of deliberate physics work
-      # (geometric RACE PACE, the PACE regrid, the SPEED STEER taper, the
-      # wheelbase recentre) drifted past it with nothing to say so, and the
-      # baseline was ~9 % stale before anyone looked. A gate nobody runs is not
-      # a gate.
-      #
-      # ITS OWN JOB, NOT A STEP IN SMOKE — and it landed as a step first, which
-      # is the mistake worth recording. Appending it to smoke was the cheap
-      # move: smoke is the only job that installs the browser binaries, so it
-      # cost nothing extra. But a step inherits its job's fate in both
-      # directions. It ran only AFTER smoke's twelve minutes, so a red smoke
-      # meant the driving-model gate never executed at all — a gate that
-      # silently does not run is the exact failure class the header above
-      # documents. And GitHub's checks list reports JOBS, not steps, so a
-      # failure surfaced as "Smoke (page boots, __apex responds)" — defeating
-      # the stated reason for making it a separate step in the first place.
-      #
-      # The cost argument was also weaker than it looked. The gate's critical
-      # path is sweeps (~15 min) and smoke (13m21s measured); a job that takes
-      # ~40 s of setup plus 42 s of test runs alongside them and adds ZERO
-      # wall-clock. One runner is the whole price of an independent verdict.
-      #
-      # No `needs:` — this is orthogonal to whether the page boots. It answers
-      # one question, in its own name: did the driving model's numbers move?
-      - name: Characterization traces
-        if: needs.reuse-draft.outputs.reuse != 'true'
-        env:
-          APEX_WORKERS: 1
-          APEX_FAIL_ON_FLAKY: 1
-        run: npm test -- tests/specs/physics-characterization.spec.js --timeout=240000
-      - name: Reused draft
-        if: needs.reuse-draft.outputs.reuse == 'true'
-        run: echo "SKIPPED driving-model — draft fast-tier already green on this head SHA"
-      # THE TIMINGS OF A GREEN RUN ARE THE DATA, and they were being thrown away.
-      # Every per-test duration this job measures is written to junit.xml by
-      # playwright.config.js, and the only step that uploaded it ran
-      # `if: failure()` — so a PASSING run, which is the run whose timings you
-      # actually want, discarded them. tools/ci/spec-timings.mjs has existed to
-      # merge exactly this and had nothing to merge: 0 of 119 specs carry three
-      # samples, and select-budget.mjs still bills the whole tree from one
-      # 2026-08-07 measurement of one spec.
-      #
-      # Its own upload, not a widened failure one: junit.xml is a few KB, while
-      # the failure artifacts beside it are traces and screenshots worth tens of
-      # MB. `always()` so a timed-out or failed run still contributes the tests
-      # that did finish. `if-no-files-found: ignore` because a job whose steps
-      # were all skipped (the ship filter) legitimately produces none.
-      - name: Spec timings (junit — a green run's durations are the point)
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: spec-timings-junit-driving-model
-          path: artifacts/test-results-*/junit.xml
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Failure artifacts
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: playwright-artifacts-driving-model
-          path: |
-            artifacts/test-results-*/
-            artifacts/report-*/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  # RENDERER SPECS ON A REAL GPU. Every other browser job in this file runs on
-  # ubuntu-latest, whose only WebGPU/WebGL adapter is SwiftShader, and the
-  # renderer group (`gfx`: 240-480 s budgets under software rasterisation) has
-  # never been in CI at all — the header's "deliberately NOT here" clause.
-  # docs/research/CI-RENDERING-PERFORMANCE.md §"There IS a real GPU" measured
-  # the runner images: macos-latest (Apple silicon) reports a HARDWARE Metal
-  # adapter on STOCK flags, and the two defects that real GPU has found so far
-  # were invisible to every software test. So the renderer specs get their own
-  # macOS job (PROCESS-SPEEDUP-2026-09 §1.4 / §4.5).
-  #
-  # TWO JOBS, NOT ONE. A macOS runner is one of the account's FIVE macOS slots
-  # (the repo is public, so minutes are free; the slot is the cost), so the "does this diff touch
-  # the renderer?" question is answered on a ubuntu runner first (seconds, no
-  # npm ci) and the macOS runner is only ever allocated when the answer is
-  # yes. A step-level skip inside the macOS job — the sweeps pattern — would
-  # still pay for the macOS checkout and npm ci on every push.
-  renderer-filter:
-    name: Does this diff touch the renderer?
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # NOT IN THE DEPLOY GATE — a decision, not an omission. pages.yml reaches
-    # this file through `ci: uses: ./.github/workflows/ci.yml` and then
-    # `publishable: needs: ci`, so the called workflow's conclusion is the
-    # AGGREGATE of every job in it: there is no `needs:` list to leave a job
-    # out of, and any new job that RUNS on a Pages call joins the gate by
-    # itself. The gate's whole recorded history in this header is a job that
-    # was never measured, timed out on a starved runner, and blocked deploys
-    # while reporting "0 failures". A brand-new job on an image nothing here
-    # has ever run a Playwright spec on is exactly that risk, and §4.5 of the
-    # plan puts the gate at guards + driving-model + one smoke shard +
-    # conditional sweeps (~5 min) with the GPU work on the nightly cron. So:
-    # skipped on the Pages call (a skipped job does not fail the aggregate),
-    # run nightly, on dispatch, and on READY (non-draft) PRs. Draft PRs stay
-    # on the fast tier without a macOS runner (2026-09-02 Actions-minutes cut
-    # still applies to drafts and branch pushes); a ready PR whose diff
-    # touches js/render/** must not claim green without Metal — the path
-    # filter below is what decides, and a skipped filter skips renderer-macos
-    # through `needs:`.
-    #
-    # The Pages call is recognised by `inputs.concurrency_key`, which pages.yml
-    # ALWAYS forwards and nothing else sets — not by `github.event_name`, which
-    # a reusable workflow reports as the CALLER's event ("push"), which is why
-    # the sweeps and smoke filters accept `push` alone. Promoting this
-    # job into the gate once it has a measured green history is one line:
-    # delete this `if:`.
-    if: ${{ !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
-    outputs:
-      renderer: ${{ steps.filter.outputs.renderer }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
       # Same shape as the sweeps filter, same rule: FAIL SAFE, NEVER FAIL OPEN.
       # Any path that cannot resolve a diff RUNS the job. A pull request is
       # diffed against its own base (pull_request.base.sha) rather than
@@ -1833,7 +2059,8 @@ jobs:
       # and on the strength of that claim the sweeps filter went on
       # fail-safing every PR into the full fleet until 2026-09-22.
       - name: Does this diff touch the renderer?
-        id: filter
+        id: renderer
+        if: ${{ !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
         env:
           BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           EVENT: ${{ github.event_name }}
@@ -1879,121 +2106,9 @@ jobs:
             echo "SKIPPING RENDERER SPECS: nothing in this diff reaches the renderer"
           fi
 
-  renderer-macos:
-    name: Renderer specs on a real GPU (macos-latest, Metal)
-    needs: renderer-filter
-    # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
-    # comment forbids it, because this job is already outside the deploy gate
-    # (renderer-filter is skipped on the Pages call, so this is too). The
-    # "skipped reads as passed" hazard the sweeps avoid is about a job whose
-    # verdict the deploy consumes; nothing consumes this one but the checks list.
-    # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
-    # ready PR whose filter said the diff touches the renderer. Never a
-    # draft PR or a bare topic-branch push — see the filter's header.
-    if: needs.renderer-filter.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))
-    runs-on: macos-latest
-    # 30 is a GUESS, and the header says what to do about that: the six specs
-    # declare 240-480 s budgets measured under SwiftShader, where a boot is
-    # 11-33 s; the census measured a ~4 s boot on this image's Metal adapter.
-    # Re-time on the first green run and replace this number and the header's.
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-      # Same lockfile-keyed cache as smoke / driving-model, at macOS's browser
-      # path (~/Library/Caches, not ~/.cache). The key already carries
-      # runner.os, so it never collides with the Linux entries.
-      # The FULL browser, the way gpu-census.yml installs it — not the headless
-      # shell, which ships without navigator.gpu. `install chromium` fetches
-      # both; playwright.gpu.config.js selects the full one. No `--with-deps`:
-      # that is apt, and this is not Linux.
-      - name: Playwright Chromium (cached)
-        uses: ./.github/actions/playwright-chromium
-        with:
-          browsers-path: ~/Library/Caches/ms-playwright
-          with-deps: "false"
-      # PROVE THE GPU BEFORE TRUSTING THE RUN. The whole point of this job is
-      # the hardware adapter; if the image ever loses it (a runner-image
-      # change, a Chromium that stops seeing Metal) the specs would silently
-      # run on SwiftShader and this job would become a slower ubuntu job that
-      # still says "macOS". AGENTS.md: a software run is not evidence about a
-      # player's machine. The tri-state census (tools/gfx/gpu-census.mjs) is the
-      # same one gpu-census.yml gates on; `=== true` on purpose, so a census
-      # that measured nothing (null) fails rather than passing vacuously.
-      - name: Adapter census — is the Metal adapter still there?
-        run: |
-          node tools/gfx/gpu-census.mjs --json census-macos.json
-          node -e '
-            const r = require("./census-macos.json");
-            if (r.anyHardware !== true) {
-              console.error("::error::renderer-macos: the census found NO hardware adapter (anyHardware=" + r.anyHardware + ") — this run would measure SwiftShader on a Mac, not the GPU");
-              process.exit(1);
-            }
-          '
-      # playwright.gpu.config.js is playwright.config.js with ONE difference:
-      # the launch drops the `--use-angle=swiftshader` pin every other run
-      # carries and selects the full Chromium (`channel: "chromium"`). The
-      # shared config is untouched — it is a protected contract file — and the
-      # --config flag passes through tools/ci/run-playwright.mjs verbatim. NEVER
-      # add --use-angle=vulkan anywhere on this job: on macOS that one flag
-      # forces ANGLE onto SwiftShader and requestAdapter() returns null
-      # (CI-RENDERING-PERFORMANCE.md §There IS a real GPU, trap 1). Two
-      # workers: a real GPU does not have SwiftShader's ~1.9x second-worker
-      # penalty (docs/TESTING.md), and the budget is the image's to measure.
-      # --timeout=600000 is a CEILING for the first runs, not a tolerance: the
-      # specs keep their own budgets, and the job cap is the real backstop.
-      - name: Renderer specs (test:gfx)
-        # ONE worker on the Metal box. Two Chromium instances on one shared GPU
-        # wedged Playwright's "Create context" twice in four runs (3500, 3509),
-        # both times while the other worker was inside M9's env probe, and each
-        # sat 27 min on the 30 min per-test budget until a hand cancel. One
-        # worker costs ~8 min of wall time; a wedge costs the run.
-        env:
-          APEX_WORKERS: 1
-          APEX_FAIL_ON_FLAKY: 1
-        run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000
-      # ALWAYS, not failure(): a spec that fails its first attempt and passes
-      # the retry leaves the job green and its report — the attached frames
-      # image-grade "shadows" compares, the retry's diag — unretrievable. Run
-      # 3495 (2026-09-10) was exactly that; the pictures are the whole point.
-      - name: Run artifacts (report, traces, attached frames)
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: playwright-artifacts-renderer-macos
-          path: |
-            census-macos.json
-            artifacts/test-results-*/
-            artifacts/report-*/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  # EMULATED-VR (IWER) — path-gated. The xr-emulated Playwright project and
-  # `npm run test:xr` existed but sat in no CI job; a js/xr/ change only ran
-  # the Node xr-phase0 suite under steering-unit. Two jobs like renderer-*:
-  # a cheap ubuntu filter, then the IWER suite only when the diff reaches XR
-  # (or on dispatch). Skipped on the Pages call and on the nightly schedule
-  # (the rotation excludes test:xr for the same reason gfx is excluded).
-  xr-filter:
-    name: Does this diff touch WebXR?
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # Draft PRs stay on the fast tier (2026-09-30): emulated XR is a heavy
-    # Chromium suite — same draft skip as renderer-filter / smoke / sweeps.
-    # Ready PRs, topic pushes, and dispatch still path-gate it.
-    if: ${{ !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
-    outputs:
-      xr: ${{ steps.filter.outputs.xr }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
       - name: Does this diff touch WebXR?
-        id: filter
+        id: xrfilter
+        if: ${{ !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
         env:
           BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           EVENT: ${{ github.event_name }}
@@ -2023,133 +2138,6 @@ jobs:
             echo "SKIPPING test:xr: nothing in this diff reaches WebXR"
           fi
 
-  xr:
-    name: Emulated VR (IWER / xr-emulated)
-    needs: xr-filter
-    if: needs.xr-filter.outputs.xr == 'true'
-    runs-on: ubuntu-latest
-    # Unmeasured on CI; local IWER suite is minutes. Cap generously.
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-apex
-      - name: Playwright Chromium (cached)
-        uses: ./.github/actions/playwright-chromium
-      - name: Emulated VR (test:xr)
-        env:
-          APEX_WORKERS: 1
-          APEX_FAIL_ON_FLAKY: 1
-        run: npm run test:xr -- --timeout=600000
-      - name: Failure artifacts
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: playwright-artifacts-xr
-          path: |
-            artifacts/test-results-*/
-            artifacts/report-*/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  # THE CHANGE-AWARE GATE, in two jobs (2026-09-10): `select` plans, `selected`
-  # runs the plan as a matrix. It used to be one job that ran on branch pushes
-  # and PRs only. Three things about it were wrong, all fixed here:
-  #
-  #   1. It could drop the spec you edited. The cut was smallest-first with the
-  #      priority applied AFTER it, so a changed 10-test spec lost to smaller
-  #      routed ones. tools/ci/select-specs.mjs now fills the budget affected-
-  #      first, and an affected spec that still does not fit runs in its own
-  #      matrix shard (bounded at MAX_OVERSIZE_SHARDS; the rest named as skipped).
-  #   2. A tracked-path change (the shell, package.json, a fixture every spec
-  #      imports) EMPTIED the selection. It now narrows it to the edited and
-  #      imported specs and says so; the fixed gates own the rest.
-  #   3. It was skipped on the deploy gate (`inputs.concurrency_key == ''`).
-  #      pages.yml now publishes exactly the commit it tested, which makes
-  #      "did we test what this commit changed?" a deploy question too, so the
-  #      job runs on the Pages call as well. Pages run 2215 (2026-09-10) once
-  #      went red on this job's newContext() hang while deploying an unrelated
-  #      change; if that shape recurs the answer is a fix or an exclusion by
-  #      name in the selector, never skipping the gate again.
-  #
-  # A PR's event.before is not its comparison base, so the selector uses
-  # pull_request.base.sha; pushes (direct or via the Pages call, whose github
-  # context is the caller's push) use event.before, with HEAD~1 as the fallback.
-  select:
-    name: Select specs for this change
-    runs-on: ubuntu-latest
-    # A Pages call (the train) is a gate too: it carries a concurrency_key and
-    # its before_sha is the live commit, so the plan reads "what changed since
-    # what is live". The caller's event is `schedule` there, hence the third
-    # clause rather than an event test.
-    # `schedule` is the nightly's CHANGE-AWARE lane (tools/ci/ci-resolve-before.sh):
-    # every spec the last day of merges routed, with room for more overflow
-    # shards than one change gets — so a spec a 15-minute per-change budget
-    # squeezes out runs within a day, not on its group's night in 11.
-    if: ${{ (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}
-    # actions:read on top of the workflow default — the base-verdict step at the
-    # end lists this workflow's runs on the deploy branch. A job that names
-    # permissions gets ONLY what it names, hence contents too.
-    permissions:
-      contents: read
-      actions: read
-    timeout-minutes: 10
-    outputs:
-      shards: ${{ steps.sel.outputs.shards }}
-      any: ${{ steps.sel.outputs.any }}
-      # How many routed specs the plan could NOT run, and why the plan exists at
-      # all. poke-train needs both to tell an empty plan from an unaffordable one.
-      dropped: ${{ steps.sel.outputs.dropped }}
-      reason: ${{ steps.sel.outputs.reason }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-      # PREVIOUSLY-FAILING SPECS, carried across runs. Fowler's TIA survey
-      # records Microsoft's TIA and Google's Testar both re-running the last
-      # run's failures unconditionally — a test that just failed is the single
-      # best predictor of failing again, and a fresh runner otherwise forgets.
-      # restore-keys makes a miss harmless: the file is simply absent and the
-      # selector proceeds without it.
-      - name: Restore last run's failing specs
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .selected-failed.txt
-          key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
-          # A PR also inherits the DEPLOY BRANCH's last failures: only the train
-          # used to promote a spec that just failed there to rank 1, so a PR
-          # touching the same routes could skip it and merge onto the red.
-          restore-keys: |
-            selected-failed-${{ github.ref_name }}-
-            selected-failed-claude/f1-game-project-26h3ng-
-      # tools/ci/ci-select-specs-step.sh: base via ci-resolve-before.sh, then
-      # select-specs.mjs --json; it fails closed on "unmatched" and writes the
-      # `shards` matrix (one budgeted shard plus one per oversize affected spec,
-      # each with its derived cap) and `any` to $GITHUB_OUTPUT.
-      - name: Select specs for this change
-        id: sel
-        env:
-          # On a Pages call the resolver is handed the train's base as a push:
-          # EVENT=push with PUSH_BEFORE = the live commit. EMPTY when the live
-          # site was unreadable — and CALLED makes that select EVERYTHING (the
-          # empty tree), like the sweeps/parts/ship filters, never HEAD~1: a
-          # one-commit slice of a tip carrying every unpublished commit.
-          EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
-          PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          CALLED: ${{ inputs.concurrency_key != '' }}
-          # The nightly lane (tools/ci/ci-resolve-before.sh): a day's union diff
-          # routes ~70 specs, so 60-minute shards and 12 overflow shards, stale
-          # first. Simulated on 2026-09-29's 85 merges: 19 shards, 606 tests,
-          # no routed spec left skipped (menu-traversal, ui-redesign and
-          # time-trial — the day's latent reds — all run). Once a night.
-          BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || '' }}
-          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
-        run: bash tools/ci/ci-select-specs-step.sh
       # WHOSE RED IS IT? A gate that goes red asks two different questions
       # depending on a fact nobody has to hand: was the base already red?
       # Train #2348 (2026-09-16) failed on the sweeps and on `selected` while
@@ -2219,6 +2207,20 @@ jobs:
     # albert-park-foundation 110.1 s on an IDLE box (2026-09-04), so the first
     # failed every time the selector picked it and the second failed on any
     # contention. See tools/ci/select-specs.mjs SELECTED_GATE for the numbers.
+    # LANES (2026-10-15): on a PULL REQUEST every leg joins one of LANES
+    # (tools/ci/select-specs.mjs) fleet-wide concurrency groups with
+    # `queue: max`, so at most that many selected legs run at once across every
+    # ready PR and the rest wait FIFO without holding a runner or being
+    # cancelled (the workflow-level per-PR cancel still replaces a superseded
+    # run's queued legs). A run's own legs cycle through the lanes, so they
+    # never queue behind each other. The train, the nightly and a dispatch get
+    # a group of their own per leg (`run_id` + job index): a gate never waits
+    # behind PR legs. `queue: max` cannot be combined with cancel-in-progress
+    # in one block, and none is set here.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
+    concurrency:
+      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
+      queue: max
     timeout-minutes: ${{ matrix.timeout }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -2583,7 +2585,7 @@ jobs:
     name: Poke the release train
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [guards, unit-plan, node-suites, sweeps-parts, driving-model, select, selected]
+    needs: [guards, node-suites, sweeps-parts, driving-model, select, selected]
     # Fast tier only (a deploy-branch push, never a Pages call), and only when
     # every fast-tier job passed. A red fast tier pokes nothing; the cron
     # backstop still gates the tip later and fails it visibly.
@@ -2614,7 +2616,7 @@ jobs:
     # SKIPPED node-suites / driving-model ARE a pass when unit-plan said the
     # slice was not needed (path-filtered). A skip for any other reason (cancelled
     # parent, plan failure) is not a poke.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.unit-plan.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.unit-plan.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.unit-plan.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) && needs.select.outputs.dropped == '0' }}
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.select.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.select.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) && needs.select.outputs.dropped == '0' }}
     permissions:
       actions: write
       contents: read
@@ -2694,8 +2696,9 @@ jobs:
   # needed job skipped by its `if:` is a pass here too, so each needed job
   # owns the rule for when skipping is honest (selected-verdict owns the
   # selected gate's — an empty or dropped plan — which is why it is needed
-  # here, not just `selected`). Branch protection should require `CI`: it is
-  # the only check that also carries smoke, the sweeps, renderer-macos and xr.
+  # here, not just `selected`). Branch protection requires `CI` and nothing
+  # else (Bryce, 2026-10-15; it was twelve names): it is the only check that
+  # also carries smoke, the sweeps, renderer-macos and xr.
   # tools/ci/ci-verdict.mjs.
   #
   # EVERY JOB BUT ONE: poke-train is not a verdict, it is the train's
@@ -2714,21 +2717,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs:
-      - reuse-draft
       - guards-a
       - guards-b
       - guards
-      - unit-plan
       - node-suites
       - sweeps-parts
       - sweeps
       - sweeps-roll-up
-      - ship-filter
       - smoke
       - driving-model
-      - renderer-filter
       - renderer-macos
-      - xr-filter
       - xr
       - select
       - selected

@@ -117,6 +117,7 @@ const GameStore = (function () {
     // boot. Removal is what a get() of that key then answered anyway (the
     // default), and it is what the mirror below already did with it.
     write(k, v, options) {
+      schemaNoteWrite(k, "json");
       const key = "apex26." + k;
       // STRINGIFY ONCE, BEFORE ANYTHING IS TOUCHED. It ran twice (inside the try
       // and again for the mirror), so a BigInt or cyclic value threw out of
@@ -197,6 +198,7 @@ const GameStore = (function () {
       catch (e) { noteBroken(e, "read " + k); return def(); }
     },
     rawSet(k, v) {
+      schemaNoteWrite(k, "raw");
       const key = fullKey(k);
       this._cache.delete(key);   // a key lives in one lane; if one ever strays, the disk wins
       this.rawRev++;
@@ -273,6 +275,10 @@ const GameStore = (function () {
 
   function shortKey(k) { return k.indexOf("apex26.") === 0 ? k.slice("apex26.".length) : k; }
   function fullKey(k) { return "apex26." + shortKey(k); }
+  function schemaNoteWrite(k, lane) {
+    if (typeof SaveSchemaRegistry === "undefined" || !SaveSchemaRegistry.noteWrite) return;
+    SaveSchemaRegistry.noteWrite(shortKey(k), lane);
+  }
   // A FULL QUOTA MUST NOT COST A SAVE: the data hub's response cache
   // (apex26.api.*, js/data/api.js) and its real-race scripts (apex26.realrace.*,
   // js/data/real-race-tab.js) are disposable and could fill the whole 5 MiB
@@ -573,8 +579,7 @@ const GameStore = (function () {
   // repeated. v2 is {v:2, classes:[ctx…], laps:[{t,teamId,code,name,ts,c}]}
   // with `c` indexing classes (absent = the unversioned legacy class). Both
   // shapes read; the next write stores v2. Callers only ever see v1 rows.
-  function ttRead(trackId) {
-    const b = store.get("ttlb." + trackId, []);
+  function ttParseBoard(b) {
     let laps = [];
     if (Array.isArray(b)) laps = b;
     else if (b && b.v === 2 && Array.isArray(b.laps)) {
@@ -588,6 +593,9 @@ const GameStore = (function () {
       });
     }
     return laps.filter(e => e && Number.isFinite(e.t) && e.t > 0);
+  }
+  function ttRead(trackId) {
+    return ttParseBoard(store.get("ttlb." + trackId, []));
   }
   function ttWrite(trackId, laps) {
     const classes = [], at = new Map();
@@ -639,7 +647,7 @@ const GameStore = (function () {
     return SaveMigrate.migrateSeasonPoints(store, season);
   }
 
-  return { store, ttBoard, ttBoardAdd,
+  return { store, ttBoard, ttBoardAdd, ttRead, ttParseBoard,
            hexToRgb, rgbToHex, seasonDriverId,
            migrateSeasonPoints,
            migrateCareer: SaveMigrate.migrateCareer,

@@ -7,10 +7,10 @@ topic file. User preferences and corrections only — a measured lesson belongs 
 code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [PR auto-merge](pr-auto-merge.md) — never arm or merge on my own; Merge Desk arms MERGE-commit only (squash retired 2026-10-13); `MERGE-HOLD:` is the only veto line, never paste "do not merge"
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
-- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — default never merge (mark ready at tip-green when asked to expedite); only on Bryce's explicit in-session "merge it asap": MERGE-commit via MCP, never squash, 1 h gate skipped and said so
+- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — default never merge (mark ready at tip-green when asked to expedite); only on Bryce's explicit in-session "merge it asap" / "push and merge asap override": MERGE-commit via MCP, never squash, 1 h gate (and the push hold, `APEX_PUSH_HOLD=0`) skipped and said so
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews: one Sonnet subagent per skill, never grouped
 - [GitHub Pro: 40 concurrent jobs](github-plan-pro-40-jobs.md) — account upgraded 2026-09-30; size CI against 40 standard / 5 macOS slots, not 20
-- [Stacked PRs land bottom-up](stacked-prs-land-bottom-up.md) — retarget by hand after each merge (no branch auto-delete), sync-pr on ratchets conflicts, ready one at a time (CI Watch arms, never the agent)
+- [Stacked PRs land bottom-up](stacked-prs-land-bottom-up.md) — since 2026-10-15 branches auto-delete on merge and GitHub retargets the stack (verify the base, no hand retarget); sync-pr on ratchets conflicts, ready one at a time (never arm)
 - [PR push with no CI run → dispatch ci.yml](pr-push-no-run-dispatch-ci.md) — a head pushed while the previous run is live may start no run; dispatch by hand, watch by sha
 - [Killed background task: no marker, child gate dies](background-task-kill-no-marker.md) — 2 h ceiling; chain ≤ 3 gates, wait only on process liveness, never on a dead task's output file
 - [Foreground browser run killed (137)](foreground-browser-run-killed.md) — launch Chromium/long node suites in the background only; a foreground one restarts the worker
