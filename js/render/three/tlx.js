@@ -76,7 +76,9 @@ const TLX = (function () {
         for (let i = 0; i < names.length; i++) gl.pixelStorei(names[i], pack[i]);
       }
       await new Promise((resolve, reject) => {
-        const deadline = performance.now() + 20000;
+        // A valid full-resolution software frame exceeded 20 s; keep waiting
+        // asynchronously instead of forcing Photo's synchronous canvas fallback.
+        const deadline = performance.now() + 120000;
         const poll = () => {
           try {
             if (gl.isContextLost()) throw new Error("capture context lost");

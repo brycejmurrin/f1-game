@@ -501,12 +501,23 @@ test('TLX WebGL capture snapshots now, waits without blocking, restores GL state
   assert.deepEqual([...shot.data], held, 'later shots do not overwrite a held image');
 });
 
+test('TLX WebGL capture accepts a slow valid GPU fence beyond twenty seconds', async () => {
+  const h = captureHarness(), result = h.capture().then((shot) => ({ shot }), (error) => ({ error }));
+  h.advance(20001); await h.tick();
+  assert.equal(h.copied(), 0);
+  assert.equal(h.buffers[0].deleted, 0, 'slow work stays pending rather than forcing a canvas fallback');
+  h.opts.ready = true; await h.tick();
+  const { shot, error } = await result;
+  assert.equal(error, undefined); assert.equal(shot.width, 2); assert.equal(shot.height, 3);
+  assert.equal(h.buffers[0].deleted, 1); assert.equal(h.fences[0].deleted, 1); assert.equal(h.jobs.length, 0);
+});
+
 for (const fault of ['refuseBuffer', 'refuseAllocation', 'submitThrows', 'refuseFence', 'waitFailed', 'lost', 'copyThrows', 'timeout']) {
   test(`TLX WebGL capture releases owned resources on ${fault}`, async () => {
     const opts = { ready: fault === 'copyThrows' }, h = captureHarness(opts);
     if (fault !== 'timeout') opts[fault] = true;
     const p = h.capture(), rejected = assert.rejects(p, /capture|submit|copy/);
-    if (h.jobs.length) { if (fault === 'timeout') h.advance(20001); await h.tick(); }
+    if (h.jobs.length) { if (fault === 'timeout') h.advance(120001); await h.tick(); }
     await rejected;
     assert.equal(h.state.get(h.gl.PIXEL_PACK_BUFFER_BINDING), h.binding);
     assert.deepEqual(h.names.map((n) => h.state.get(n)), [8, 7, 2, 1]);
