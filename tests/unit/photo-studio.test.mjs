@@ -42,7 +42,7 @@ function boot(options = {}) {
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
     Log: { warn: () => {} }, Tracks: { sample: (_t, s, out) => {
-      out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, 0, -1];
+      out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
     } }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
@@ -56,7 +56,7 @@ function boot(options = {}) {
 test("Home circuit photo borrows a subject, places its complete pose, and returns ownership", () => {
   const prior = { px: 88 }, subject = {};
   let released = 0;
-  const { api, G, dom } = boot({ player: prior, borrowCar: (G) => {
+  const { api, G, dom, restored } = boot({ player: prior, borrowCar: (G) => {
     G.player = subject;
     return () => { G.player = prior; released++; };
   } });
@@ -64,12 +64,14 @@ test("Home circuit photo borrows a subject, places its complete pose, and return
   assert.equal(api.hasCar(), true);
   const values = [["ps-car-position", "25"], ["ps-car-offset", "3"], ["ps-car-rotation", "90"]];
   for (const [id, value] of values) {
+    const view = JSON.stringify(restored());
     dom.byId(id).value = value;
     dom.byId(id).dispatchEvent({ type: "input" });
+    if (id === "ps-car-rotation") assert.equal(JSON.stringify(restored()), view, "rotating the car preserves the composed camera");
   }
   assert.equal(subject.s, 250); assert.equal(subject.x, 3);
-  assert.equal(subject.px, 250); assert.equal(subject.pz, -3);
-  assert.equal(subject.head, Math.PI); assert.equal(subject.yawVis, Math.PI / 2);
+  assert.equal(subject.px, 250); assert.equal(subject.pz, 3);
+  assert.equal(subject.head, 0); assert.equal(subject.yawVis, Math.PI / 2);
   for (const [a, b] of [["rPrevS", "s"], ["rPrevX", "x"], ["rPrevPx", "px"], ["rPrevPz", "pz"], ["rPrevYawVis", "yawVis"], ["rPrevHead", "head"]]) {
     assert.equal(subject[a], subject[b], "no interpolation from a stale " + b);
   }

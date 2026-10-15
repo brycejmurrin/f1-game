@@ -46,6 +46,9 @@ async function evidence(page, info, name) {
 }
 
 test("Title circuit photo provides a car to place without starting a race", async ({ page, pageErrors }, info) => {
+  // Three scene switches, capture and native pixel readbacks measured 113 s
+  // on idle SwiftShader. This full lifecycle needs ~1.8x that, not a boot budget.
+  test.setTimeout(210000);
   await boot(page);
   await page.evaluate(() => __apex.agentHelp());
   await clickLive(page, "mb-photo");
@@ -58,7 +61,12 @@ test("Title circuit photo provides a car to place without starting a race", asyn
   const start = await page.evaluate(() => __apex.physState());
   await page.locator("#ps-car-position").fill("25");
   await page.locator("#ps-car-offset").fill("3");
+  const view = await page.evaluate(() => __apex.freeCam());
+  expect(view.eye).toHaveLength(3);
   await page.locator("#ps-car-rotation").fill("90");
+  const rotatedView = await page.evaluate(() => __apex.freeCam());
+  expect(rotatedView.eye).toEqual(view.eye);
+  expect(rotatedView.target).toEqual(view.target);
   const placed = await page.evaluate(() => __apex.physState());
   expect(placed.s).toBeGreaterThan(start.s + 100);
   expect(placed.x).toBeCloseTo(3);

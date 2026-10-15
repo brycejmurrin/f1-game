@@ -120,7 +120,7 @@ function create(G, deps) {
   const placement = (label, id, min, max, step, unit) => {
     const out = mk("output", { id: id + "-value", textContent: "0" + unit });
     const input = mk("input", { id, type: "range", min: String(min), max: String(max), step: String(step), value: "0" });
-    input.addEventListener("input", () => { out.textContent = input.value + unit; placeCar(); });
+    input.addEventListener("input", () => { out.textContent = input.value + unit; placeCar(id !== "ps-car-rotation"); });
     return mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: label }), input, out]);
   };
   const carGroup = group("PLACE YOUR CAR", [
@@ -176,20 +176,20 @@ function create(G, deps) {
   function camera() { return deps.freeCam || (typeof FreeCam !== "undefined" ? FreeCam : null); }
   function isGarage() { return st.source === "home" || st.source === "garage"; }
   function hasCar() { return st.open && !!releaseCar; }
-  function placeCar() {
+  function placeCar(reframe = true) {
     if (!hasCar() || !G.player || !G.track) return;
     const c = G.player, sample = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
     c.s = (+E["ps-car-position"].value % 100) * G.track.total / 100;
     c.x = c.xVis = +E["ps-car-offset"].value;
     Tracks.sample(G.track, c.s, sample);
-    const len = Math.hypot(...sample.r) || 1;
+    const len = Math.hypot(sample.r[0], sample.r[2]) || 1; // horizontal metres, as worldFromTrack
     c.px = sample.p[0] + sample.r[0] / len * c.x;
     c.pz = sample.p[2] + sample.r[2] / len * c.x;
     c.yawVis = +E["ps-car-rotation"].value * Math.PI / 180;
-    c.head = Math.atan2(sample.t[0], sample.t[2]) + c.yawVis;
+    c.head = Math.atan2(sample.t[0], sample.t[2]) - c.yawVis;
     c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
     c.rPrevHead = c.head; c.rPrevYawVis = c.yawVis; c.speed = 0;
-    setShot("car");
+    if (reframe) setShot("car");
   }
   function setShot(id) {
     if (isGarage()) { if (deps.garage && deps.garage.shot) deps.garage.shot(id); }
