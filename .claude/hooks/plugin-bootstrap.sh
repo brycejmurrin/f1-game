@@ -39,6 +39,27 @@ for p in "${PLUGINS[@]}"; do
   if claude plugin install "$p" --scope user >>"$LOG" 2>&1; then ok=$((ok + 1)); else fail=$((fail + 1)); fi
 done
 
+# Drop bundled MCP servers that cannot work here (OAuth-only connectors, empty urls,
+# servers that exit on start). Plugins re-extract on install, so patch after it.
+# Takes effect on the next session start or /reload-plugins.
+python3 - <<'PY' >>"$LOG" 2>&1 || true
+import glob, json
+DROP = {
+    "design": ["slack", "figma", "linear", "asana", "atlassian", "notion", "intercom", "google calendar", "gmail"],
+    "axe-accessibility": ["axe-mcp-server"],
+    "parallax-threejs": ["spector"],
+}
+base = glob.glob("/root/.claude/plugins/cache/*/")
+for plugin, names in DROP.items():
+    for f in [f for b in base for f in glob.glob(b + plugin + "/*/.mcp.json")]:
+        d = json.load(open(f))
+        srv = d.get("mcpServers", {})
+        gone = [n for n in names if srv.pop(n, None) is not None]
+        if gone:
+            json.dump(d, open(f, "w"), indent=2)
+            print("pruned", f, gone)
+PY
+
 # typescript-lsp is a thin wrapper; it needs the server binary on PATH.
 command -v typescript-language-server >/dev/null 2>&1 \
   || npm install -g typescript-language-server >>"$LOG" 2>&1 || true
