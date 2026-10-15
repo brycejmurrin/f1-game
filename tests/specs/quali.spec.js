@@ -16,14 +16,15 @@
 // SCREENS, because screen state is the thing the shared-page reset cannot
 // restore. Count the locator() calls before converting, not the goto()s.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS, RACE_BUILD_MS } from "../helpers/fixtures.js";
+import { RACE_BUILD_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function boot(page) {
   await page.goto("/");
-  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  // Hot CI shards: cold __apex boot can exceed BOOT_MS (45 s); race builds use
+  // raceFrom()'s RACE_BUILD_MS. Title boot gets the same build margin here.
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
 }
 
 // A RACE STARTED FROM THE UI IS A BUILD, NOT A BOOT (R3-CI-HEALTH-5). Every

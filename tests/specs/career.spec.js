@@ -6,7 +6,7 @@
 //
 // DELIBERATELY ON THE VIRGIN-PAGE FIXTURE. Shared helpers: tests/helpers/career-boot.js
 import { test, expect } from "@playwright/test";
-import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
+import { LANDSCAPE, RACE_BUILD_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 
 // Parallel so Playwright can schedule tests across workers. Default-mode
 // describes are ONE shard group (Pages 37420997285: career 1/5 ran ~101 tests
@@ -71,7 +71,7 @@ test.describe.parallel("Career — save", () => {
     await startCareer(page);
     const before = await page.evaluate(() => window.__apex.careerState());
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
     const after = await page.evaluate(() => window.__apex.careerState());
     expect(after.team).toBe(before.team);
     expect(after.money).toBe(before.money);
@@ -104,7 +104,7 @@ test.describe.parallel("Career — save", () => {
     const legacy = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")));
     expect(legacy).toBeNull();
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")))).toBeNull();
     expect(await page.evaluate(() => window.__apex.career().team)).toBe("williams");
   });
@@ -227,7 +227,7 @@ test.describe.parallel("Career — isolation", () => {
     expect(plain, "no mercedes car on the grid").not.toBeNull();
 
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
     await page.evaluate(() => {
       window.__apex.career({ teamId: "haas", seat: 1, seed: 7 });
       window.__apex.career().tdev.mercedes = 8;

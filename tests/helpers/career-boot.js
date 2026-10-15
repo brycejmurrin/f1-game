@@ -1,14 +1,14 @@
 // @ts-check
 // Shared boot helpers for the career Playwright specs (virgin-page fixture).
 import { expect } from "@playwright/test";
-import { BOOT_MS, awaitTrackBuild } from "./fixtures.js";
+import { BOOT_MS, RACE_BUILD_MS, awaitTrackBuild } from "./fixtures.js";
 
-export { BOOT_MS };
+export { BOOT_MS, RACE_BUILD_MS };
 export const LANDSCAPE = { width: 844, height: 390 };
 
 export async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
   await page.evaluate(() => window.__apex.headless(true));
 }
 
@@ -19,7 +19,7 @@ export async function armRace(page, setup, arg) {
       const st = window.__apex.info().state;
       return (st === "race" || st === "count") && !!window.__apex.carAt(0);
     } catch (_) { return false; }
-  }, null, { polling: 100, timeout: BOOT_MS });
+  }, null, { polling: 100, timeout: RACE_BUILD_MS });
 }
 
 export async function selectPartCategory(page) {

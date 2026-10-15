@@ -4,7 +4,14 @@
 // randomised design passes the WYSIWYG validator, SAVE appends it to
 // Tracks.LIST as a custom entry, RACE hands it to the ordinary picker flow,
 // __apex.race() builds and drives it, and a reload resolves the stored id.
-import { test, expect, BOOT_MS, TRACK_MS, clickLive } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, RACE_BUILD_MS, awaitTrackBuild, clickLive } from "../helpers/fixtures.js";
+
+/** __apex.race(id) on a loaded CI runner — stall-aware build wait, not TRACK_MS. */
+async function raceAndBuild(page, id) {
+  await page.evaluate((tid) => window.__apex.race(tid), id);
+  await awaitTrackBuild(page);
+  await expect.poll(() => page.evaluate(() => window.__apex.info().track), { timeout: 15_000 }).toBe(id);
+}
 
 const LANDSCAPE = { width: 1180, height: 720 };
 
@@ -18,7 +25,7 @@ async function bootClean(page) {
     for (const k of Object.keys(localStorage)) if (k === "apex26.customTracks" || k === "apex26.customTrackDraft" || k === "apex26.customTrackDraftPrev" || k === "apex26.trackId" || k === "apex26.track") localStorage.removeItem(k);
   });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+  await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
   await page.evaluate(() => window.__apex.headless(true));
 }
 
@@ -143,8 +150,7 @@ test.describe("Track designer", () => {
     expect(picked.id).toMatch(/^custom-/);
 
     // The engine builds it like any shipped circuit, and the AI drives it.
-    await page.evaluate((id) => window.__apex.race(id), picked.id);
-    await page.waitForFunction((id) => window.__apex.info().track === id, picked.id, { polling: 100, timeout: TRACK_MS });
+    await raceAndBuild(page, picked.id);
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.total).toBeGreaterThanOrEqual(2500);
     expect(info.turns).toBeGreaterThanOrEqual(3);
@@ -179,8 +185,7 @@ test.describe("Track designer", () => {
     const def = await page.evaluate((id) => { const t = Tracks.LIST.find((x) => x.id === id); return t ? { night: t.night, terrainMat: t.terrainMat } : null; }, saved.id);
     expect(def).toEqual({ night: true, terrainMat: "SNOW" });
     await page.evaluate(() => TrackDesigner.close());
-    await page.evaluate((id) => window.__apex.race(id), saved.id);
-    await page.waitForFunction((id) => window.__apex.info().track === id, saved.id, { polling: 100, timeout: TRACK_MS });
+    await raceAndBuild(page, saved.id);
     expect((await page.evaluate(() => window.__apex.info())).total).toBeGreaterThanOrEqual(2500);
   });
 
@@ -276,7 +281,7 @@ test.describe("Track designer", () => {
     await page.evaluate(() => TrackDesigner.close());
     // Reload: CustomTracks syncs props into the def scenery closure.
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
     const stored = await page.evaluate((id) => {
       const it = CustomTracks.get(id);
       const t = Tracks.LIST.find((x) => x.id === id);
@@ -293,8 +298,7 @@ test.describe("Track designer", () => {
     expect(stored.side).toBe(-1);
     expect(stored.gap).toBe(20);
     expect(stored.look).toEqual({ time: "night", trees: "normal", crowd: "packed" });
-    await page.evaluate((id) => window.__apex.race(id), saved.id);
-    await page.waitForFunction((id) => window.__apex.info().track === id, saved.id, { polling: 100, timeout: TRACK_MS });
+    await raceAndBuild(page, saved.id);
     expect((await page.evaluate(() => window.__apex.info())).total).toBeGreaterThanOrEqual(2500);
   });
 
@@ -306,7 +310,7 @@ test.describe("Track designer", () => {
     expect(saved.ok).toBe(true);
     await page.evaluate((id) => { CustomTracks.select(id); }, saved.id);
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
     const after = await page.evaluate((id) => ({
       listed: Tracks.LIST.some((t) => t.id === id && t.custom),
       customs: Tracks.LIST.filter((t) => t.custom).length,
@@ -331,8 +335,8 @@ test.describe("Track designer", () => {
     expect(url).toMatch(/#track=APXT1\./);
     // The link, cold: a fresh navigation carrying only the fragment.
     await page.goto(url);
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen(), null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
+    await page.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen(), null, { polling: 100, timeout: RACE_BUILD_MS });
     await page.waitForFunction(() => !TrackDesigner.state().pending, null, { polling: 100, timeout: 15_000 });
     const opened = await page.evaluate(() => ({ hash: location.hash, pts: TrackDesigner.state().design.pts, ok: TrackDesigner.state().ok }));
     expect(opened.hash).toBe("");
@@ -616,7 +620,7 @@ test.describe("Track designer", () => {
       return true;
     });
     expect(pressed).toBe(true);
-    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: TRACK_MS });
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: RACE_BUILD_MS });
     const run = await page.evaluate(() => ({ info: window.__apex.info(), ph: window.__apex.physState(), open: TrackDesigner.isOpen(), id: TrackDesigner.state().design.originId }));
     expect(run.open).toBe(false);
     expect(run.info.timeTrial).toBe(true);

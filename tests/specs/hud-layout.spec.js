@@ -1184,7 +1184,9 @@ test.describe("speed readouts", () => {
   async function bootCockpitMonza(page) {
     // Last test on the oversize-hud-layout shard (2 workers, 46 cases): the box
     // is hot and cold __apex boot measured 50.8 s on Pages 38660546141 while
-    // BOOT_MS is 45 s. RACE_BUILD_MS is the same ~1.8× margin rule as BOOT_MS.
+    // BOOT_MS is 45 s. GP track builds on CI (bahrain-class, 49–54 s measured on
+    // loaded llvmpipe) are waited out via awaitTrackBuild below, not a 45 s cap.
+    // RACE_BUILD_MS is the same ~1.8× margin rule as BOOT_MS for title boot only.
     const bootMs = RACE_BUILD_MS;
     await page.addInitScript(PIN_PREVIOUS_LOOK);
     await page.goto("/");
