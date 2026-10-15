@@ -447,10 +447,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Garage before pack: recipe, MANIFEST, fetch --help / no-pack, workflow is
   // not Car shot. Pure + spawn, no network / Chromium.
   "tests/unit/garage-before.test.mjs",
+  // The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.
+  "tests/unit/garage-crew.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
+  // The garage personality: shutter swell, drive-out engine, rain light, pit-exit radio line.
+  "tests/unit/garage-personality.test.mjs",
   // The garage pre-built while the title idles (js/garage/prebuild.js): the gate,
   // the keyed car/room/frames sequence and the tap-to-first-frame measure. VM, ~0.3 s.
   "tests/unit/garage-prebuild.test.mjs",
@@ -717,6 +721,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pin of game.js's snap loop + red-flag first-gear restart + coast estimate.
   // ~instant.
   "tests/unit/race-step-snap.test.mjs",
+  // Race-radio card life vs RadioVoice speech budget (phrasebook, longest slots).
+  "tests/unit/radio-duration.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.

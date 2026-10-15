@@ -720,12 +720,41 @@ test("standalone season migration yields to recovery but an explicit replacement
     const disk = new Map([[key, JSON.stringify({ round: 0, pts: {} })]]);
     const h = loadCareerMirrored({ disk, seed: [[key, JSON.stringify({ round: 1, pts: { "haas:0": 25 } }), false]] });
     h.SeasonCal.load();
-    if (explicit) h.SeasonCal.applyConfig(h.SeasonCal.config());
+    // An unchanged APPLY now preserves the championship. Change a normalized
+    // rule to exercise an intentional replacement while recovery is pending.
+    if (explicit) {
+      const result = h.SeasonCal.applyConfig({ ...h.SeasonCal.config(), laps: 10 });
+      assert.equal(result.ok, true);
+      assert.equal(result.season.config.laps, 10);
+    }
     await h.store.mirror.ready;
     await h.store.mirrorFlush();
     assert.equal(JSON.parse(disk.get(key)).round, explicit ? 0 : 1);
     assert.equal(JSON.parse(h.idb.rows.get(key)).round, explicit ? 0 : 1);
+    if (explicit) {
+      assert.equal(JSON.parse(disk.get(key)).config.laps, 10);
+      assert.equal(JSON.parse(h.idb.rows.get(key)).config.laps, 10);
+    }
   }
+});
+
+test("unchanged standalone setup APPLY still recovers a newer mirror save", async () => {
+  const key = "apex26.season";
+  const recovered = JSON.stringify({ round: 1, pts: { "haas:0": 25 } });
+  const disk = new Map([[key, JSON.stringify({ round: 0, pts: {} })]]);
+  const h = loadCareerMirrored({ disk, seed: [[key, recovered, false]] });
+  const season = h.SeasonCal.load();
+  const revision = h.store.keyRevision("season");
+  const result = h.SeasonCal.applyConfig(h.SeasonCal.config());
+  assert.equal(result.ok, true);
+  assert.equal(result.season, season, "unchanged setup preserves the current championship object");
+  assert.equal(h.store.keyRevision("season"), revision, "no explicit replacement is queued");
+  await h.store.mirror.ready;
+  await h.store.mirrorFlush();
+  assert.equal(disk.get(key), recovered, "disk keeps the recovered round and its points");
+  assert.equal(h.idb.rows.get(key), recovered, "IDB must not be overwritten by the older no-op setup");
+  assert.equal(h.store.get("season").round, 1, "the session reads the recovered championship too");
+  assert.equal(h.store.get("season").pts["haas:0"], 25);
 });
 
 test("a stale deletion cannot remove a peer's newer mirror-only career", async () => {
