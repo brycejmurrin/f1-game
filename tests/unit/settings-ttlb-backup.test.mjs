@@ -1,4 +1,5 @@
-// data-export.test.mjs — time-trial leaderboards in the SETTINGS file (ttlb).
+// settings-ttlb-backup.test.mjs — optional `ttlb` section in apex26-settings-v1
+// (js/ui/settings-export.js): export, merge import, validation — not Data Hub export ZIP.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
