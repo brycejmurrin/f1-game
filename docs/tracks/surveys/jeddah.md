@@ -2,7 +2,7 @@
 
 **Circuit id:** `jeddah` · **Theme:** `street_night` · **Live:** https://brycejmurrin.github.io/f1-game/
 
-**Capture status:** **36 JPEGs** at `artifacts/shots/tracks/jeddah/` (≤1280 px, q≈80, <300 KB). Includes **6 hero weather frames** (wet, rain, fog, overcast, storm, dawn+wet) plus day/dusk/night dry sector coverage.
+**Capture status:** **36 JPEGs** at `artifacts/shots/tracks/jeddah/` (≤1280 px, q≈80, <300 KB). **10 non-dry** weather/lighting frames (day/night/dawn wet·rain·fog·storm·overcast) plus dry sector coverage.
 
 ## Code map
 
@@ -15,16 +15,37 @@
 
 ## Survey panels — by sector
 
-### Banked T13
+### Start/finish
 
-| ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_day_dry.jpg) | ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_dusk_dry.jpg) | ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_night_dry.jpg) |
-| **Banked T13 orbit** · day · dry | **Banked T13 orbit** · dusk · dry | **Banked T13 orbit** · night · dry |
-| `s50-t13_orbit_day_dry.jpg` | `s50-t13_orbit_dusk_dry.jpg` | `s50-t13_orbit_night_dry.jpg` |
+| ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_day_dry.jpg) | ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_day_wet.jpg) | ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_night_dry.jpg) |
+| **Start/finish orbit** · day · dry | **Start/finish orbit** · day · wet | **Start/finish orbit** · night · dry |
+| `s00-sf_orbit_day_dry.jpg` | `s00-sf_orbit_day_wet.jpg` | `s00-sf_orbit_night_dry.jpg` |
 
-| ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_night_fog.jpg) |
-| **Banked T13 orbit** · night · fog |
-| `s50-t13_orbit_night_fog.jpg` |
+| ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_night_wet.jpg) |
+| **Start/finish orbit** · night · wet |
+| `s00-sf_orbit_night_wet.jpg` |
 
+### T1 complex
+
+| ![T1 complex orbit](../../../artifacts/shots/tracks/jeddah/s05-t1_orbit_day_dry.jpg) | ![T1 complex orbit](../../../artifacts/shots/tracks/jeddah/s05-t1_orbit_night_dry.jpg) |
+| **T1 complex orbit** · day · dry | **T1 complex orbit** · night · dry |
+| `s05-t1_orbit_day_dry.jpg` | `s05-t1_orbit_night_dry.jpg` |
+
+### Red Sea corridor
+
+| ![Red Sea corridor orbit](../../../artifacts/shots/tracks/jeddah/s15-sea_orbit_day_dry.jpg) | ![Red Sea corridor orbit](../../../artifacts/shots/tracks/jeddah/s15-sea_orbit_night_dry.jpg) |
+| **Red Sea corridor orbit** · day · dry | **Red Sea corridor orbit** · night · dry |
+| `s15-sea_orbit_day_dry.jpg` | `s15-sea_orbit_night_dry.jpg` |
+
+### King Fahd Fountain
+
+| ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_day_dry.jpg) | ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_day_rain.jpg) | ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_night_dry.jpg) |
+| **King Fahd Fountain orbit** · day · dry | **King Fahd Fountain orbit** · day · rain | **King Fahd Fountain orbit** · night · dry |
+| `s20-fountain_orbit_day_dry.jpg` | `s20-fountain_orbit_day_rain.jpg` | `s20-fountain_orbit_night_dry.jpg` |
+
+| ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_night_rain.jpg) |
+| **King Fahd Fountain orbit** · night · rain |
+| `s20-fountain_orbit_night_rain.jpg` |
 
 ### Blue Sail skyline
 
@@ -32,20 +53,21 @@
 | **Blue Sail skyline orbit** · day · dry | **Blue Sail skyline orbit** · night · dry |
 | `s28-skyline_orbit_day_dry.jpg` | `s28-skyline_orbit_night_dry.jpg` |
 
+### Flowing esses
 
-### Corniche lagoon
+| ![Flowing esses park](../../../artifacts/shots/tracks/jeddah/s35-esses_park_day_dry.jpg) | ![Flowing esses park](../../../artifacts/shots/tracks/jeddah/s35-esses_park_night_dry.jpg) |
+| **Flowing esses park** · day · dry | **Flowing esses park** · night · dry |
+| `s35-esses_park_day_dry.jpg` | `s35-esses_park_night_dry.jpg` |
 
-| ![Corniche lagoon orbit](../../../artifacts/shots/tracks/jeddah/s62-lagoon_orbit_day_dry.jpg) |
-| **Corniche lagoon orbit** · day · dry |
-| `s62-lagoon_orbit_day_dry.jpg` |
+### Marina
 
+| ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_day_dry.jpg) | ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_day_storm.jpg) | ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_dusk_storm.jpg) |
+| **Marina orbit** · day · dry | **Marina orbit** · day · storm | **Marina orbit** · dusk · storm |
+| `s45-marina_orbit_day_dry.jpg` | `s45-marina_orbit_day_storm.jpg` | `s45-marina_orbit_dusk_storm.jpg` |
 
-### DRS straight
-
-| ![DRS straight orbit](../../../artifacts/shots/tracks/jeddah/s96-drs_orbit_day_dry.jpg) | ![DRS straight orbit](../../../artifacts/shots/tracks/jeddah/s96-drs_orbit_night_dry.jpg) |
-| **DRS straight orbit** · day · dry | **DRS straight orbit** · night · dry |
-| `s96-drs_orbit_day_dry.jpg` | `s96-drs_orbit_night_dry.jpg` |
-
+| ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_night_dry.jpg) |
+| **Marina orbit** · night · dry |
+| `s45-marina_orbit_night_dry.jpg` |
 
 ### Floating mosque
 
@@ -57,63 +79,27 @@
 | **Floating mosque orbit** · night · dry |
 | `s50-mosque_orbit_night_dry.jpg` |
 
+### Banked T13
 
-### Flowing esses
+| ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_day_dry.jpg) | ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_day_fog.jpg) | ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_night_dry.jpg) |
+| **Banked T13 orbit** · day · dry | **Banked T13 orbit** · day · fog | **Banked T13 orbit** · night · dry |
+| `s50-t13_orbit_day_dry.jpg` | `s50-t13_orbit_day_fog.jpg` | `s50-t13_orbit_night_dry.jpg` |
 
-| ![Flowing esses park](../../../artifacts/shots/tracks/jeddah/s35-esses_park_day_dry.jpg) | ![Flowing esses park](../../../artifacts/shots/tracks/jeddah/s35-esses_park_dusk_dry.jpg) | ![Flowing esses park](../../../artifacts/shots/tracks/jeddah/s35-esses_park_night_dry.jpg) |
-| **Flowing esses park** · day · dry | **Flowing esses park** · dusk · dry | **Flowing esses park** · night · dry |
-| `s35-esses_park_day_dry.jpg` | `s35-esses_park_dusk_dry.jpg` | `s35-esses_park_night_dry.jpg` |
+| ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_night_fog.jpg) |
+| **Banked T13 orbit** · night · fog |
+| `s50-t13_orbit_night_fog.jpg` |
 
+### Corniche lagoon
+
+| ![Corniche lagoon orbit](../../../artifacts/shots/tracks/jeddah/s62-lagoon_orbit_day_dry.jpg) |
+| **Corniche lagoon orbit** · day · dry |
+| `s62-lagoon_orbit_day_dry.jpg` |
 
 ### Hotel cluster
 
 | ![Hotel cluster orbit](../../../artifacts/shots/tracks/jeddah/s70-hotels_orbit_day_dry.jpg) |
 | **Hotel cluster orbit** · day · dry |
 | `s70-hotels_orbit_day_dry.jpg` |
-
-
-### King Fahd Fountain
-
-| ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_day_dry.jpg) | ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_dusk_dry.jpg) | ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_night_dry.jpg) |
-| **King Fahd Fountain orbit** · day · dry | **King Fahd Fountain orbit** · dusk · dry | **King Fahd Fountain orbit** · night · dry |
-| `s20-fountain_orbit_day_dry.jpg` | `s20-fountain_orbit_dusk_dry.jpg` | `s20-fountain_orbit_night_dry.jpg` |
-
-| ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_night_rain.jpg) |
-| **King Fahd Fountain orbit** · night · rain |
-| `s20-fountain_orbit_night_rain.jpg` |
-
-
-### Marina
-
-| ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_day_dry.jpg) | ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_dusk_dry.jpg) | ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_dusk_storm.jpg) |
-| **Marina orbit** · day · dry | **Marina orbit** · dusk · dry | **Marina orbit** · dusk · storm |
-| `s45-marina_orbit_day_dry.jpg` | `s45-marina_orbit_dusk_dry.jpg` | `s45-marina_orbit_dusk_storm.jpg` |
-
-| ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_night_dry.jpg) |
-| **Marina orbit** · night · dry |
-| `s45-marina_orbit_night_dry.jpg` |
-
-
-### Red Sea corridor
-
-| ![Red Sea corridor orbit](../../../artifacts/shots/tracks/jeddah/s15-sea_orbit_day_dry.jpg) | ![Red Sea corridor orbit](../../../artifacts/shots/tracks/jeddah/s15-sea_orbit_night_dry.jpg) |
-| **Red Sea corridor orbit** · day · dry | **Red Sea corridor orbit** · night · dry |
-| `s15-sea_orbit_day_dry.jpg` | `s15-sea_orbit_night_dry.jpg` |
-
-
-### Start/finish
-
-| ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_day_dry.jpg) | ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_night_dry.jpg) | ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_night_wet.jpg) |
-| **Start/finish orbit** · day · dry | **Start/finish orbit** · night · dry | **Start/finish orbit** · night · wet |
-| `s00-sf_orbit_day_dry.jpg` | `s00-sf_orbit_night_dry.jpg` | `s00-sf_orbit_night_wet.jpg` |
-
-
-### T1 complex
-
-| ![T1 complex orbit](../../../artifacts/shots/tracks/jeddah/s05-t1_orbit_day_dry.jpg) | ![T1 complex orbit](../../../artifacts/shots/tracks/jeddah/s05-t1_orbit_night_dry.jpg) |
-| **T1 complex orbit** · day · dry | **T1 complex orbit** · night · dry |
-| `s05-t1_orbit_day_dry.jpg` | `s05-t1_orbit_night_dry.jpg` |
-
 
 ### Technical sector
 
@@ -125,10 +111,16 @@
 | **Technical sector park** · night · overcast |
 | `s81-technical_park_night_overcast.jpg` |
 
+### DRS straight
+
+| ![DRS straight orbit](../../../artifacts/shots/tracks/jeddah/s96-drs_orbit_day_dry.jpg) | ![DRS straight orbit](../../../artifacts/shots/tracks/jeddah/s96-drs_orbit_night_dry.jpg) |
+| **DRS straight orbit** · day · dry | **DRS straight orbit** · night · dry |
+| `s96-drs_orbit_day_dry.jpg` | `s96-drs_orbit_night_dry.jpg` |
+
 
 ## Survey panels — by weather & lighting
 
-### Weather: dry · lighting: day
+### dry · day
 
 | ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_day_dry.jpg) | ![T1 complex orbit](../../../artifacts/shots/tracks/jeddah/s05-t1_orbit_day_dry.jpg) | ![Red Sea corridor orbit](../../../artifacts/shots/tracks/jeddah/s15-sea_orbit_day_dry.jpg) |
 | **Start/finish orbit** · day · dry | **T1 complex orbit** · day · dry | **Red Sea corridor orbit** · day · dry |
@@ -150,19 +142,13 @@
 | **DRS straight orbit** · day · dry |
 | `s96-drs_orbit_day_dry.jpg` |
 
+### dry · dusk
 
-### Weather: dry · lighting: dusk
+| ![Floating mosque orbit](../../../artifacts/shots/tracks/jeddah/s50-mosque_orbit_dusk_dry.jpg) | ![Technical sector park](../../../artifacts/shots/tracks/jeddah/s81-technical_park_dusk_dry.jpg) |
+| **Floating mosque orbit** · dusk · dry | **Technical sector park** · dusk · dry |
+| `s50-mosque_orbit_dusk_dry.jpg` | `s81-technical_park_dusk_dry.jpg` |
 
-| ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_dusk_dry.jpg) | ![Flowing esses park](../../../artifacts/shots/tracks/jeddah/s35-esses_park_dusk_dry.jpg) | ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_dusk_dry.jpg) |
-| **King Fahd Fountain orbit** · dusk · dry | **Flowing esses park** · dusk · dry | **Marina orbit** · dusk · dry |
-| `s20-fountain_orbit_dusk_dry.jpg` | `s35-esses_park_dusk_dry.jpg` | `s45-marina_orbit_dusk_dry.jpg` |
-
-| ![Floating mosque orbit](../../../artifacts/shots/tracks/jeddah/s50-mosque_orbit_dusk_dry.jpg) | ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_dusk_dry.jpg) | ![Technical sector park](../../../artifacts/shots/tracks/jeddah/s81-technical_park_dusk_dry.jpg) |
-| **Floating mosque orbit** · dusk · dry | **Banked T13 orbit** · dusk · dry | **Technical sector park** · dusk · dry |
-| `s50-mosque_orbit_dusk_dry.jpg` | `s50-t13_orbit_dusk_dry.jpg` | `s81-technical_park_dusk_dry.jpg` |
-
-
-### Weather: dry · lighting: night
+### dry · night
 
 | ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_night_dry.jpg) | ![T1 complex orbit](../../../artifacts/shots/tracks/jeddah/s05-t1_orbit_night_dry.jpg) | ![Red Sea corridor orbit](../../../artifacts/shots/tracks/jeddah/s15-sea_orbit_night_dry.jpg) |
 | **Start/finish orbit** · night · dry | **T1 complex orbit** · night · dry | **Red Sea corridor orbit** · night · dry |
@@ -180,43 +166,61 @@
 | **Technical sector park** · night · dry | **DRS straight orbit** · night · dry |
 | `s81-technical_park_night_dry.jpg` | `s96-drs_orbit_night_dry.jpg` |
 
+### fog · day
 
-### Weather: fog · lighting: night
+| ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_day_fog.jpg) |
+| **Banked T13 orbit** · day · fog |
+| `s50-t13_orbit_day_fog.jpg` |
+
+### fog · night
 
 | ![Banked T13 orbit](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_night_fog.jpg) |
 | **Banked T13 orbit** · night · fog |
 | `s50-t13_orbit_night_fog.jpg` |
 
-
-### Weather: overcast · lighting: night
+### overcast · night
 
 | ![Technical sector park](../../../artifacts/shots/tracks/jeddah/s81-technical_park_night_overcast.jpg) |
 | **Technical sector park** · night · overcast |
 | `s81-technical_park_night_overcast.jpg` |
 
+### rain · day
 
-### Weather: rain · lighting: night
+| ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_day_rain.jpg) |
+| **King Fahd Fountain orbit** · day · rain |
+| `s20-fountain_orbit_day_rain.jpg` |
+
+### rain · night
 
 | ![King Fahd Fountain orbit](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_night_rain.jpg) |
 | **King Fahd Fountain orbit** · night · rain |
 | `s20-fountain_orbit_night_rain.jpg` |
 
+### storm · day
 
-### Weather: storm · lighting: dusk
+| ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_day_storm.jpg) |
+| **Marina orbit** · day · storm |
+| `s45-marina_orbit_day_storm.jpg` |
+
+### storm · dusk
 
 | ![Marina orbit](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_dusk_storm.jpg) |
 | **Marina orbit** · dusk · storm |
 | `s45-marina_orbit_dusk_storm.jpg` |
 
-
-### Weather: wet · lighting: dawn
+### wet · dawn
 
 | ![Floating mosque orbit](../../../artifacts/shots/tracks/jeddah/s50-mosque_orbit_dawn_wet.jpg) |
 | **Floating mosque orbit** · dawn · wet |
 | `s50-mosque_orbit_dawn_wet.jpg` |
 
+### wet · day
 
-### Weather: wet · lighting: night
+| ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_day_wet.jpg) |
+| **Start/finish orbit** · day · wet |
+| `s00-sf_orbit_day_wet.jpg` |
+
+### wet · night
 
 | ![Start/finish orbit](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_night_wet.jpg) |
 | **Start/finish orbit** · night · wet |
@@ -228,12 +232,17 @@
 
 | File | View | TOD | Weather |
 |------|------|-----|---------|
+| `s00-sf_orbit_day_wet.jpg` | Start/finish orbit | day | wet |
 | `s00-sf_orbit_night_wet.jpg` | Start/finish orbit | night | wet |
-| `s20-fountain_orbit_night_rain.jpg` | Fountain orbit | night | rain |
-| `s50-t13_orbit_night_fog.jpg` | T13 orbit | night | fog |
-| `s81-technical_park_night_overcast.jpg` | Technical park | night | overcast |
+| `s20-fountain_orbit_day_rain.jpg` | King Fahd Fountain orbit | day | rain |
+| `s20-fountain_orbit_night_rain.jpg` | King Fahd Fountain orbit | night | rain |
+| `s45-marina_orbit_day_storm.jpg` | Marina orbit | day | storm |
 | `s45-marina_orbit_dusk_storm.jpg` | Marina orbit | dusk | storm |
 | `s50-mosque_orbit_dawn_wet.jpg` | Floating mosque orbit | dawn | wet |
+| `s50-t13_orbit_day_fog.jpg` | Banked T13 orbit | day | fog |
+| `s50-t13_orbit_night_fog.jpg` | Banked T13 orbit | night | fog |
+| `s81-technical_park_night_overcast.jpg` | Technical sector park | night | overcast |
+
 
 ## Fixes (scenery)
 
