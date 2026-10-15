@@ -40,6 +40,25 @@
   async function restore(scene) {
     if (scene?.schema !== "f1-dev-scene/v1" || !scene.repro?.track) throw new Error("Invalid scene document.");
     const a = api(), b = scene.repro, current = a.repro();
+    const fail = () => { throw new Error("Invalid scene document. No scene applied."); };
+    if (b.v !== 1 || typeof b.track !== "string" || !Tracks.LIST.some(t => t.id === b.track) ||
+        !Array.isArray(b.cars) || !b.cars.length || b.cars.filter(c => c?.me === true).length !== 1 ||
+        !Number.isInteger(b.teamIdx) || b.teamIdx < 0 || typeof b.teamId !== "string" || typeof b.halo !== "boolean" ||
+        !["default", "dawn", "day", "dusk", "night"].includes(b.tod) ||
+        !WeatherArc.VALID.includes(b.wx)) fail();
+    const indices = new Set();
+    for (const c of b.cars) {
+      if (!c || !Number.isInteger(c.i) || c.i < 0 || indices.has(c.i) || typeof c.me !== "boolean" ||
+          typeof c.team !== "string" || ![c.s, c.x, c.prog, c.speed].every(Number.isFinite)) fail();
+      indices.add(c.i);
+    }
+    if (b.cars.find(c => c.me).team !== b.teamId || !b.cam || !a.camera().modes.includes(b.cam.mode) ||
+        !b.cam.tune || typeof b.cam.tune !== "object" || Array.isArray(b.cam.tune)) fail();
+    const defs = a.camTune().defs;
+    for (const [key, value] of Object.entries(b.cam.tune)) {
+      const d = defs.find(def => def.id === key);
+      if (!d || !Number.isFinite(value) || value < d.min || value > d.max) fail();
+    }
     if (current.teamIdx !== b.teamIdx || current.halo !== b.halo) {
       throw new Error("Team/halo differ. In a disposable browser profile seed apex26.team and apex26.cockpitHalo from the scene, reload, then retry. No scene applied.");
     }
@@ -63,9 +82,13 @@
     return clone({ label, wallTime: performance.now(), damping, frame,
       replay: replay()?.status() || null });
   }
-  async function trace({ label = "trace", frames = 12, timeoutMs = 30000 } = {}) {
+  function traceSettings({ label = "trace", frames = 12, timeoutMs = 30000 } = {}) {
     if (!Number.isInteger(frames) || frames < 2 || frames > 240) throw new Error("frames must be 2..240");
     if (!Number.isFinite(timeoutMs) || timeoutMs < 100 || timeoutMs > 120000) throw new Error("timeoutMs must be 100..120000");
+    return { label, frames, timeoutMs };
+  }
+  async function trace(options = {}) {
+    const { label, frames, timeoutMs } = traceSettings(options);
     const before = inspect(), samples = [];
     await new Promise((resolve, reject) => {
       let raf;
@@ -88,6 +111,9 @@
     if (!Array.isArray(actions) || !actions.length || actions.length > 12) throw new Error("Supply 1..12 replay actions.");
     // Validate the whole batch before any replay mutation.
     const initial = r.status(), drivers = r.describe().drivers.map(d => d.code);
+    const { timeoutMs } = traceSettings(traceOptions);
+    if (initial.finished || initial.reel) throw new Error("Replay checks require an unfinished full replay, not a highlight reel.");
+    let projectedT = initial.T, projectedSpeed = initial.speed, projectedPaused = initial.paused;
     for (const action of actions) {
       if (!action || Object.keys(action).length !== 1) throw new Error("Each action needs exactly one operation.");
       const [op, value] = Object.entries(action)[0];
@@ -96,13 +122,27 @@
         : op === "pause" ? typeof value === "boolean"
         : op === "speed" ? r.describe().speeds.includes(value) : false;
       if (!valid) throw new Error("Invalid replay action: " + op);
+      if (op === "seek") projectedT = value;
+      if (op === "speed") projectedSpeed = value;
+      if (op === "pause") projectedPaused = value;
+      // Normal page playback advances no faster than wall time * replay speed.
+      // Keep one second of scheduling/fixed-step margin per action and stop
+      // before duration, without relying on the native finish grace period.
+      if (!projectedPaused) {
+        projectedT += (timeoutMs / 1000 + 1) * projectedSpeed;
+        if (projectedT >= initial.duration) throw new Error("Replay action budget could reach the finish. Pause first or use a shorter trace timeout.");
+      }
     }
     const results = [];
     try {
       for (const action of actions) {
         const [op, value] = Object.entries(action)[0];
+        if (op === "follow" && !r.describe()?.drivers.some(d => d.code === value && d.available)) {
+          throw new Error("Replay driver is unavailable: " + value);
+        }
         const before = sample("before-" + op);
         ({ seek: v => r.seek(v), follow: v => r.follow(v), pause: v => r.setPaused(v), speed: v => r.setSpeed(v) })[op](value);
+        if (op === "follow" && r.status()?.follow !== value) throw new Error("Replay follow did not select: " + value);
         // Observe the production seek/follow path. Do not snap/reset camera history here.
         results.push({ action, before, trace: await trace({ ...traceOptions, label: op }) });
       }

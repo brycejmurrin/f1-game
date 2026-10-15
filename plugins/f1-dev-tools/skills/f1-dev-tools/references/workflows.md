@@ -8,6 +8,8 @@ Enter the reported race and call `F1Dev.capture()`. Save the returned document a
 
 Restore in a disposable browser profile at the same viewport and renderer. If team or halo differ, set ONLY `apex26.team` to `String(scene.repro.teamIdx)` and `apex26.cockpitHalo` to `scene.repro.halo ? "1" : "0"`, skipping null values, then reload and load the helper again. The helper refuses a mismatch before applying anything. Call `await F1Dev.restore(scene)`; partial car placement or a wrong team is an error. Review build differences explicitly. Restore freezes the scene, as the native repro hook does.
 
+Restore validates the native v1 scene fields before calling any mutating API: finite car positions/progress/speeds, unique nonnegative car indices, one identified player, matching player/team identity, a known track and camera, and tuner values within the current registry bounds. Malformed JSON is rejected before it can apply camera settings or car state. Valid cross-session grids can still produce native partial-placement errors; use a disposable profile for those compatibility failures.
+
 For cockpit evidence, read the header of `tools/shot/repro-shot.mjs`: its frozen cockpit capture has a documented incorrect-frame history. Use the documented live `race → go → camera → tune → jump` route in the isolated profile and allow real render frames. Do not label frozen cockpit repro output a validated player view.
 
 ## 2. Inspection and motion
@@ -44,6 +46,10 @@ await F1Dev.replayCheck([
 ```
 
 The helper validates the whole batch, invokes the production replay API, records camera history BEFORE each action and distinct render frames after it, and restores clock/driver/speed/pause on success or failure. It never calls `snapCam()` or a camera reset to hide a discontinuity. It does not restore the director's entire internal shot history: run in the disposable profile.
+
+Driver availability is checked immediately before each follow action, including after seeks, and the resulting followed code must match. A retired/unavailable driver or a no-op follow rejects the check.
+
+Checks require an unfinished full replay; highlight reels are rejected because automatic cuts can finish independently of elapsed playback time. Before any action, the helper budgets the entire batch using each trace's timeout plus a one-second scheduling/fixed-step margin, multiplied by the current projected replay speed. Seeks reset the projected clock; pause and speed actions update the budget. An unpaused action that could reach duration is rejected before any batch mutation. Shorten `timeoutMs` or pause first near the end; paused traces do not consume playback time. This intentionally overestimates ordinary rendered playback, whose native fixed-step simulation does not run faster than wall time. Do not run concurrent transport controls, `__apex.step()`/accelerated simulation, or another replay-check operation during a check. The budget assumes normal browser scheduling; it cannot promise restoration after an external lifecycle change, arbitrary main-thread stalls, or another caller finishing/exiting WATCH. The helper cannot undo a completed WATCH lifecycle.
 
 Also exercise the actual WATCH controls via the browser: `[data-wt="play"]` for pause, `[data-wt="driver"]` for driver and `[data-wt="seek"]` for the timeline (check current DOM before using selectors). Test backward and forward seeks, mid-race start, paused follow changes, speed changes, skip where relevant, exit and re-entry. Confirm saved driving camera settings and reduced-motion behavior across exit. A hook trace alone is not user-control or lifecycle coverage.
 

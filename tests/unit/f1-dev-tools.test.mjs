@@ -26,6 +26,20 @@ test('real game API: capture/restore, raw preset inheritance, invalid inputs and
     assert.equal(dev.inspect().renderer.software,true,'device identifies SwiftShader even if backend software flag is false');
     g.apex.diag=originalDiag;g.apex.gpuTimer=originalTimer;
     const scene = plain(dev.capture());
+    const baseline = JSON.stringify(g.apex.repro());
+    const savedBeforeInvalid = vm.runInContext('JSON.stringify(CamTune.exportPack()) + localStorage.getItem("apex26.camTune")',g.ctx);
+    for (const corrupt of [
+      b => { b.cars[0].x = null; }, b => { delete b.cars[0].speed; },
+      b => { b.cars[0].prog = '12'; }, b => { b.cars.push({...b.cars[0]}); },
+      b => { b.cars.forEach(c => {c.me=false;}); }, b => { b.cars.find(c=>c.me).team='wrong'; },
+      b => { b.cam.mode='missing'; }, b => { b.cam.tune.height=1e8; },
+      b => { b.cam.tune.unknown=1; },
+    ]) {
+      const malformed=structuredClone(scene);corrupt(malformed.repro);
+      await assert.rejects(dev.restore(JSON.parse(JSON.stringify(malformed))),/Invalid scene/);
+      assert.equal(JSON.stringify(g.apex.repro()),baseline,'invalid JSON must not partly apply a scene');
+      assert.equal(vm.runInContext('JSON.stringify(CamTune.exportPack()) + localStorage.getItem("apex26.camTune")',g.ctx),savedBeforeInvalid);
+    }
     g.apex.jump(0.5,10,1);
     const restored = await dev.restore(scene);
     assert.equal(restored.result.restored,true);
@@ -77,6 +91,24 @@ test('production WATCH API: batch validation is atomic and timeout restores repl
     const r=vm.runInContext('RealRace.replay()',g.ctx), initial=plain(r.status());
     await assert.rejects(g.ctx.F1Dev.replayCheck([{seek:20},{follow:'NO_SUCH_DRIVER'}]),/Invalid replay action/);
     assert.equal(r.status().T,initial.T);
+    const beforeUnsafe=JSON.stringify(r.status());
+    await assert.rejects(g.ctx.F1Dev.replayCheck([{pause:true},{seek:initial.duration-0.5},{pause:false}],{frames:2,timeoutMs:100}),/budget could reach the finish/);
+    assert.equal(JSON.stringify(r.status()),beforeUnsafe,'whole unsafe batch rejected before pause or seek');
+    assert.equal(g.G.state,'race');
+    const unavailable=r.describe().drivers.find(d=>d.code!==initial.follow);
+    const unavailableCar=g.G.cars.find(c=>c.code===unavailable.code);
+    unavailableCar.retired=true;
+    assert.equal(r.describe().drivers.find(d=>d.code===unavailable.code).available,false);
+    await assert.rejects(g.ctx.F1Dev.replayCheck([{follow:unavailable.code}],{frames:2,timeoutMs:100}),/driver is unavailable/);
+    assert.equal(r.status().follow,initial.follow);
+    // The production seek re-poses cars; use its live availability after cleanup.
+    const other=r.describe().drivers.find(d=>d.code!==initial.follow && d.available);
+    assert.ok(other);
+    const nativeFollow=r.follow;
+    r.follow=()=>null;
+    try {
+      await assert.rejects(g.ctx.F1Dev.replayCheck([{follow:other.code}],{frames:2,timeoutMs:100}),/follow did not select/);
+    } finally {r.follow=nativeFollow;}
     // Deliberately provide NO render frames. The tool must reject this VM as motion evidence.
     const hostTimers=new Set();
     g.ctx.setTimeout=(fn,ms,...args)=>{const timer=setTimeout(()=>{hostTimers.delete(timer);fn(...args);},ms);hostTimers.add(timer);return timer;};
