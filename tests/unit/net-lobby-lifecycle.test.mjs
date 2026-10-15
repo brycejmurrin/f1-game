@@ -315,6 +315,124 @@ test("MAKE ANSWER during a join still fetching relay credentials waits for the t
   } finally { h.lobby.cancel(); }
 });
 
+// An answer waiting for JOIN owns that attempt, not whichever transport a
+// later JOIN/HOST happens to create before the old relay promise settles.
+for (const route of ["close", "reopen", "join", "host"]) {
+  test(`MAKE ANSWER waiting on ICE cannot cross ${route}`, async () => {
+    const ice = deferred(), calls = [];
+    const h = harness({ prefetchIce: () => ice.promise,
+      handshake: { acceptInvite: async (transport, code) => {
+        calls.push({ transport, code }); return { ok: true, code: "answer" };
+      } },
+    });
+    try {
+      h.lobby.open();
+      const joining = h.lobby.join();
+      const answering = h.lobby.makeAnswer("obsolete-invite");
+      let replacement;
+      if (route === "close" || route === "reopen") h.lobby.cancel();
+      if (route === "reopen") { h.lobby.open(); replacement = h.lobby.join(); }
+      if (route === "join" || route === "host") replacement = h.lobby[route]();
+      ice.resolve();
+      await Promise.all([joining, replacement]);
+      const status = h.status.textContent;
+      assert.equal((await answering).error, "cancelled");
+      assert.equal(calls.length, 0, "the abandoned invite never reaches a transport");
+      assert.equal(h.status.textContent, status, "no obsolete prompt replaces the new route");
+      await h.lobby.join();
+      assert.equal((await h.lobby.makeAnswer("fresh-invite")).ok, true, "a fresh retry works");
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].code, "fresh-invite");
+    } finally { h.lobby.cancel(); }
+  });
+}
+
+for (const kind of ["invite", "answer"]) {
+  for (const outcome of ["code", "empty", "denied"]) {
+    test(`pending ${kind} clipboard ${outcome} cannot enter a replacement lobby attempt`, async () => {
+      const read = deferred(), calls = [];
+      const h = harness({ handshake: {
+        acceptInvite: async (_transport, code) => { calls.push(code); return { ok: true, code: "answer" }; },
+        acceptAnswer: async (_transport, code) => { calls.push(code); return { ok: true }; },
+      } });
+      const button = "vs-paste-" + kind;
+      const input = "vs-" + kind + "-in";
+      h.elements.set(button, {});
+      h.elements.set(input, { value: "", addEventListener() {} });
+      h.context.navigator.clipboard.readText = async () => {
+        await read.promise;
+        if (outcome === "denied") throw new Error("clipboard permission denied");
+        return outcome === "code" ? "obsolete-code" : "";
+      };
+      h.lobby.wire();
+      try {
+        h.lobby.open();
+        await h.lobby[kind === "invite" ? "join" : "host"]();
+        const pasting = h.click(button);
+        h.lobby.cancel();
+        h.lobby.open();
+        await h.lobby[kind === "invite" ? "join" : "host"]();
+        h.elements.get(input).value = "new input";
+        const status = h.status.textContent;
+        read.resolve();
+        assert.equal((await pasting).error, "cancelled");
+        assert.deepEqual(calls, []);
+        assert.equal(h.elements.get(input).value, "new input");
+        assert.equal(h.status.textContent, status, "late errors are silent too");
+        h.context.navigator.clipboard.readText = async () => "fresh-code";
+        assert.equal((await h.click(button)).ok, true);
+        assert.deepEqual(calls, ["fresh-code"]);
+      } finally { h.lobby.cancel(); }
+    });
+  }
+}
+
+for (const route of ["join", "host", "code-picker"]) {
+  test(`changing directly to ${route} invalidates an outstanding clipboard read`, async () => {
+    const read = deferred(), calls = [];
+    const h = harness({ handshake: { acceptInvite: async (_t, code) => {
+      calls.push(code); return { ok: true, code: "answer" };
+    } } });
+    h.elements.set("vs-paste-invite", {});
+    h.context.navigator.clipboard.readText = () => read.promise;
+    h.lobby.wire();
+    try {
+      h.lobby.open();
+      await h.lobby.join();
+      const pasting = h.click("vs-paste-invite");
+      if (route === "code-picker") h.click("vs-code-join");
+      else await h.lobby[route]();
+      const status = h.status.textContent;
+      read.resolve("obsolete-invite");
+      assert.equal((await pasting).error, "cancelled");
+      assert.deepEqual(calls, []);
+      assert.equal(h.status.textContent, status);
+    } finally { h.lobby.cancel(); }
+  });
+}
+
+test("a newer clipboard request wins when reads finish out of order", async () => {
+  const old = deferred(), calls = [];
+  const h = harness({ handshake: { acceptInvite: async (_t, code) => {
+    calls.push(code); return { ok: true, code: "answer" };
+  } } });
+  h.elements.set("vs-paste-invite", {});
+  h.context.navigator.clipboard.readText = () => old.promise;
+  h.lobby.wire();
+  try {
+    await h.lobby.join();
+    const pasting = h.click("vs-paste-invite");
+    // The second read is empty, so it does not start a handshake generation.
+    h.context.navigator.clipboard.readText = async () => "";
+    assert.equal((await h.click("vs-paste-invite")).error, "empty");
+    const status = h.status.textContent;
+    old.resolve("obsolete-invite");
+    assert.equal((await pasting).error, "cancelled");
+    assert.deepEqual(calls, []);
+    assert.equal(h.status.textContent, status);
+  } finally { h.lobby.cancel(); }
+});
+
 test("scanner completion is guarded by scanner identity and generation", async () => {
   const starts = [deferred(), deferred()];
   const scanners = starts.map((start) => ({
