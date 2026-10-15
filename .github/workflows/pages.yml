@@ -372,7 +372,7 @@ jobs:
   # The live check the container cannot do: this runner reaches github.io. A
   # deploy is not done until the Pages CDN serves the build just stamped.
   verify-live:
-    name: Live version.json equals the stamped build
+    name: Live shell matches the published commit and build
     needs: deploy
     # Same transitive-skip rule as deploy: run exactly when deploy succeeded.
     if: ${{ !cancelled() && needs.deploy.result == 'success' }}
@@ -382,21 +382,41 @@ jobs:
     permissions:
       issues: write
     steps:
-      - name: Poll the live version.json
+      - name: Poll the live build and commit
         env:
           PAGE_URL: ${{ needs.deploy.outputs.page_url }}
           BUILD: ${{ needs.deploy.outputs.build }}
         run: |
-          set -u
+          set -eu
+          responses=$(mktemp -d)
+          trap 'rm -rf "$responses"' EXIT
           for i in $(seq 1 24); do
-            LIVE=$(curl -fsS "${PAGE_URL%/}/version.json?_=${GITHUB_RUN_ID}-$i" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{process.stdout.write(String(JSON.parse(s).build))}catch(_){}})' || true)
-            echo "attempt $i: live=${LIVE:-?} expected=$BUILD"
-            if [ "${LIVE:-}" = "$BUILD" ]; then
-              curl -fsS "${PAGE_URL%/}/index.html?_=${GITHUB_RUN_ID}" | grep -q "name=\"apex-build\" content=\"$BUILD\"" && echo "live shell carries build $BUILD" && exit 0
+            # Complete both downloads before checking them: grep -q on a curl
+            # pipe can close early (curl 23) and still report a matching prefix.
+            if curl -fsS --output "$responses/version.json" "${PAGE_URL%/}/version.json?_=${GITHUB_RUN_ID}-$i" &&
+               curl -fsS --output "$responses/index.html" "${PAGE_URL%/}/index.html?_=${GITHUB_RUN_ID}-$i" &&
+               node -e '
+                 const fs = require("node:fs");
+                 try {
+                   const version = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+                   const html = fs.readFileSync(process.argv[2], "utf8");
+                   const build = Number(process.env.BUILD);
+                   const sha = process.env.GITHUB_SHA;
+                   const metas = [...html.matchAll(/<meta\s+name="(apex-build|apex-sha)"\s+content="([^"]*)"\s*\/?\s*>/g)];
+                   const values = name => metas.filter(m => m[1] === name).map(m => m[2]);
+                   const builds = values("apex-build"), shas = values("apex-sha");
+                   if (!Number.isInteger(build) || build < 1 || version.build !== build ||
+                       !/^[0-9a-f]{40}$/.test(sha || "") || builds.length !== 1 ||
+                       shas.length !== 1 || builds[0] !== String(build) || shas[0] !== sha) process.exit(1);
+                 } catch (_) { process.exit(1); }
+               ' "$responses/version.json" "$responses/index.html"; then
+              echo "live shell carries build $BUILD and commit $GITHUB_SHA"
+              exit 0
             fi
+            echo "attempt $i: waiting for build $BUILD and commit $GITHUB_SHA"
             sleep 10
           done
-          echo "::error::live version.json never reached build $BUILD within 4 minutes"
+          echo "::error::live version.json never reached build $BUILD with matching shell commit $GITHUB_SHA within 4 minutes"
           exit 1
       # A BROKEN-BUT-LIVE BUILD MUST NOT BE SILENT (2026-09-22). deploy-pages
       # succeeded, so the environment records a deployment and the CDN may be
@@ -415,7 +435,7 @@ jobs:
             --body "$(printf '%s\n' \
               "Pages run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} deployed commit ${GITHUB_SHA} as build ${BUILD}, but ${PAGE_URL} never served that build within 4 minutes." \
               "" \
-              "Either the CDN is lagging (re-run verify-live) or the published shell is broken. Check \`version.json\` and the \`apex-build\` meta on the live site before redeploying (AGENTS.md §Watching CI and Pages; deploy-research)." \
+              "Either the CDN is lagging (re-run verify-live) or the published shell is broken. Check \`version.json\` and the \`apex-build\` / \`apex-sha\` metas on the live site before redeploying (AGENTS.md §Watching CI and Pages; deploy-research)." \
               "" \
               "Opened automatically by pages.yml verify-live.")" \
             --label ci || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"
