@@ -215,7 +215,9 @@ const STRIP = {
   // → marshalPost seat/pole brace (2026-10-07): +144 emitted / +118 survive
   // → generic green-theme grey shed removed (2026-10-14): −480 emitted (40
   //   sheds × 12); the guardrail/fence runs they enclosed survive, +716
-  monza: { before: 336648, after: 304163 },
+  // → monza survey fix PR #2027 (2026-10-15): the circuit's own scenery re-pitch
+  //   moves emission 336648/304163 → 325542/294892
+  monza: { before: 325542, after: 294892 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

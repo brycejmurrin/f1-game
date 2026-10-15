@@ -1099,11 +1099,13 @@ test.describe("plan()", () => {
     expect(r.far).toBeGreaterThanOrEqual(r.near);
   });
 
-  test("errors before a track is loaded", async ({ page }) => {
+  // Boot builds the menu flyby, so this takes the payload branch; the forced
+  // no-track NoTrackError is asserted in tests/unit/agent-view-vm.test.mjs (#2173).
+  test("map never returns null — a grid, or NoTrackError with no track", async ({ page }) => {
     await boot(page);
     const pl = await page.evaluate(() => window.__apex.render({ what: "map" }));
     expect(pl).toBeTruthy();
-    if (pl.ok === false) expect(pl.fix).toContain("race");
+    if (pl.ok === false) { expect(pl.error).toBe("NoTrackError"); expect(pl.fix).toContain("race"); }
     else expect(pl.grid).toBeTruthy();
   });
 });
@@ -1268,11 +1270,12 @@ test.describe("survey()", () => {
     expect(r.with[0].samples.length).toBeGreaterThan(4);
   });
 
-  test("errors before a track is loaded", async ({ page }) => {
+  // Payload branch at boot; NoTrackError is forced in the VM twin (#2173).
+  test("survey never returns null — a summary, or NoTrackError with no track", async ({ page }) => {
     await boot(page);
     const s = await page.evaluate(() => window.__apex.survey());
     expect(s).toBeTruthy();
-    if (s.ok === false) expect(s.fix).toContain("race");
+    if (s.ok === false) { expect(s.error).toBe("NoTrackError"); expect(s.fix).toContain("race"); }
     else expect(s.summary).toBeTruthy();
   });
 });
@@ -1842,11 +1845,12 @@ test.describe("scene()", () => {
     }
   });
 
-  test("errors before a track is loaded, never returns null", async ({ page }) => {
+  // Payload branch at boot; NoTrackError is forced in the VM twin (#2173).
+  test("scene never returns null — a registry, or NoTrackError with no track", async ({ page }) => {
     await boot(page);
     const s = await page.evaluate(() => window.__apex.scene());
     expect(s).toBeTruthy();
-    if (s.ok === false) expect(s.fix).toBeTruthy();
+    if (s.ok === false) { expect(s.error).toBe("NoTrackError"); expect(s.fix).toContain("race"); }
     else expect(s.registry).toBeTruthy();
   });
 });
