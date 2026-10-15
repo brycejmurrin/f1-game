@@ -2810,10 +2810,14 @@ async function startRaceBody() {
   setState("count", "race-start"); countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   // TLX links programs on first draw — warm during LIGHTS only when the pack is
   // already settled (or unsupported/off), else createTextureArray owns the thread.
+  // EXCEPT TLX itself (apex26.tlxWarmBeforePack, default on; "0" = the pack gate): its programs never read the pack
+  // (setMaterialMaps swaps uniform values), and a skipped warm made the first present link every program at once —
+  // census 491/492/502/503/505/507: one 11-13 s task, then 6-7 s for the mirror (PERF-HUNT-4 follow-up, hunt 5 A).
   {
     const settled = loadingScreen.packSettled || LoadingScreen.packSettled;
     const packState = (typeof Assets !== "undefined" && Assets.state) ? Assets.state() : null;
-    if (!settled || settled(packState)) {
+    const tlxEarly = gfx.backend === "three" && (() => { try { return localStorage.getItem("apex26.tlxWarmBeforePack") !== "0"; } catch (_) { return true; } })();
+    if (!settled || settled(packState) || tlxEarly) {
       try { RaceEntryProfile.requestWarm(gfx, _warmKey === menuKey(trackIdx)); } catch (_) { /* as above */ }
     }
   }
