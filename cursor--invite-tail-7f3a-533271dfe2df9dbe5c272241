@@ -1,0 +1,1 @@
+1792082456	Bryce Murrin	Audit issue 8: short final wrapped invite fragment. OWNED js/net/lobby-codes.js tests/unit/lobby-codes.test.mjs tests/specs/multiplayer-lobby.spec.js. lobby.js integration pending limited handoff from #2237; no lifecycle edits.  [cursor/invite-tail-7f3a; session 533271dfe2df9dbe5c272241]
