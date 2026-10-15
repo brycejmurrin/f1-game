@@ -108,6 +108,22 @@ test("the pkill guard blocks -f however the flags are spelled (M36)", () => {
     assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
 });
 
+test("pkill -f blocks whatever its pattern names: it always matches its own shell (#2125)", () => {
+  // `pkill -f "serve -l 3456"` passed the old browser-word filter and killed its
+  // own shell (exit 144) in two census siblings on 2026-10-15.
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  for (const cmd of [
+    'pkill -f "serve -l 3456"', "pkill -f serve ; sleep 1", "pkill -f 'http.server'",
+    "pkill -f zzz-census-nonexistent-pattern", "timeout 5 pkill --full apex-tools-mcp",
+  ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
+  // killall matches process names, not command lines: unrelated names stay allowed
+  for (const cmd of ["killall sleep", "pkill -x serve", 'echo "pkill -f serve"'])
+    assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});
+
 test("settings.json denies a force push or a deploy-branch push however it is spelled (M36)", () => {
   const deny = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8")).permissions.deny
     .filter((d) => d.startsWith("Bash(git push")).map((d) => d.slice("Bash(".length, -1));
