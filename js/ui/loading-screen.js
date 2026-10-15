@@ -90,7 +90,7 @@ const LoadingScreen = (function () {
    * and from lap 1 the grid: your slot, pole, what you start on. The numbers
    * are RealRace.situation()'s (info.real.story), so card and voice agree.
    * Pure: info in, [label, value] rows out. */
-  const WX = { dry: "DRY", wet: "WET", rain: "RAIN", overcast: "CLOUDY", fog: "FOG" };
+  const WX = { dry: "DRY", wet: "WET", rain: "RAIN", storm: "STORM", overcast: "CLOUDY", fog: "FOG" };
   const TOD = { dawn: "DAWN", day: "DAY", dusk: "DUSK", night: "NIGHT" };
   const TYRE = { soft: "SOFT", medium: "MEDIUM", hard: "HARD", intermediate: "INTER", "full wet": "WET" };
   function gapStr(g) { return !g ? "" : g.lapsDown > 0 ? "+" + g.lapsDown + " LAP" + (g.lapsDown > 1 ? "S" : "") : g.s > 0 ? "+" + g.s.toFixed(1) + "s" : ""; }
