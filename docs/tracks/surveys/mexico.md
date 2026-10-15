@@ -1,109 +1,72 @@
 # Mexico City (Hermanos Rodríguez) — circuit survey
 
-**Date:** 2026-10-14  
-**Branch:** `cursor/mexico-survey-76c5`  
-**Live:** https://brycejmurrin.github.io/f1-game/  
-**Brief:** `docs/tracks/mexico.md`  
-**Shots:** 31 frames (`artifacts/shots/tracks/mexico/`, dry only; wet/rain/overcast/fog blocked until shared survey shot tooling lands).
+**Branch:** `cursor/mexico-survey-76c5` · **Brief:** `docs/tracks/mexico.md`  
+**Shots:** 35 JPEGs (`artifacts/shots/tracks/mexico/`, `git add -f`). Captured with shared `shot.mjs` (`--weather`, `--jpeg`, `--present-timeout 90`, `--capture-retries 4`).
 
-Relative image root: `../../../artifacts/shots/tracks/mexico/`
+### Code map & fixes
 
-## Code map
+| Layer | Path |
+|-------|------|
+| Def | `js/circuits/mexico.js` |
+| Scenery | `js/circuits/scenery/mexico.js` — Horquilla `SOLID` 0.38–0.46; Peraltada terrace gap 16 / 3 rows |
 
-| Layer | Path | Role |
-|-------|------|------|
-| Circuit def | `js/circuits/mexico.js` | OSM centreline, `startFrac` 0, `theme: modern`, thin-air fog, Peraltada `bankZones`, `dressingExclusions` for park vs city |
-| Scenery | `js/circuits/scenery/mexico.js` | Foro Sol bowls, paddock suites, volcanoes, airliner, `avenue` planting, `cityFront` |
-| Landmarks | `tests/data/landmarks/mexico.json` | Foro entry/exit, Peraltada stand, scoreboard, paddock suite, Palacio |
+**Lighting / weather notes:** Night Foro reads dim (generic lamps excluded 0.70–0.89). Fog/overcast thicken authored `fogDensity`; rain particles visible on hero wet/rain frames. Storm frame is S/F orbit only.
 
-## Findings (summary)
+## Sector tour (day · dry)
 
-| Severity | Topic | Notes |
-|----------|-------|-------|
-| Low | Airliner floaters | 2 clusters @ cap (`s≈0.20`, intentional hero) |
-| Low | Buried papel-picado | `place()` strips on steep verges (~0.3 m) |
-| Fixed | Peraltada terrace | `gap` 16, 3 rows — unsupported back rows cleared |
-| Fixed | Horquilla clip | `SOLID` 0.38–0.46 blocks avenue vs `cityFront` (severe 5→4) |
-| Low | Night Foro | `dressingExclusions` suppress generic lamps 0.70–0.89; local masts only — stadium reads dim at night |
-| Deferred | Weather matrix | `__apex.race(_, tod, wx)` batch capture waits on shared `tools/shot` PR |
-
-**Verification:** `node tools/track/verify-track.cjs mexico` OK; `node tools/track/audit-circuit.cjs mexico --json` all checks OK (float 2/2, clip severe 4/5, ground within baseline).
-
----
-
-## Sector 1 — start / T1 / esses (day, dry)
-
-| Start / S-F orbit · day · dry | Main straight · park · day · dry | Paddock suites · eye · day · dry |
+| Start / S-F · orbit · day · dry | Main straight · park · day · dry | Turn 1 · orbit · day · dry |
 |:---:|:---:|:---:|
-| ![S/F orbit](../../../artifacts/shots/tracks/mexico/s1-00-start-orbit__day-dry.jpg) | ![S/F park](../../../artifacts/shots/tracks/mexico/s1-00-start-park__day-dry.jpg) | ![Paddock](../../../artifacts/shots/tracks/mexico/s1-03-paddock-eye__day-dry.jpg) |
+| ![Start orbit day dry](../../../artifacts/shots/tracks/mexico/s1-00-start-orbit__day-dry.jpg) | ![Start park day dry](../../../artifacts/shots/tracks/mexico/s1-00-start-park__day-dry.jpg) | ![T1 orbit day dry](../../../artifacts/shots/tracks/mexico/s1-12-t1-orbit__day-dry.jpg) |
 
-| DRS park belt · orbit · day · dry | Turn 1 · orbit · day · dry | Esses · eye · day · dry |
+| Esses · eye · day · dry | Volcanoes · orbit · day · dry | Horquilla · trackside · day · dry |
 |:---:|:---:|:---:|
-| ![DRS park](../../../artifacts/shots/tracks/mexico/s1-08-drs-park-orbit__day-dry.jpg) | ![T1](../../../artifacts/shots/tracks/mexico/s1-12-t1-orbit__day-dry.jpg) | ![Esses](../../../artifacts/shots/tracks/mexico/s1-20-esses-eye__day-dry.jpg) |
+| ![Esses eye day dry](../../../artifacts/shots/tracks/mexico/s1-20-esses-eye__day-dry.jpg) | ![Volcanoes orbit day dry](../../../artifacts/shots/tracks/mexico/s2-34-volcanoes-orbit__day-dry.jpg) | ![Horquilla trackside day dry](../../../artifacts/shots/tracks/mexico/s2-42-horquilla-trackside__day-dry.jpg) |
 
-| Airliner approach · orbit · day · dry | | |
+| Palacio · orbit · day · dry | Foro entry · eye · day · dry | Inside Foro · park · day · dry |
 |:---:|:---:|:---:|
-| ![Airliner](../../../artifacts/shots/tracks/mexico/s1-20-airliner-orbit__day-dry.jpg) | | |
+| ![Palacio orbit day dry](../../../artifacts/shots/tracks/mexico/s2-58-palacio-orbit__day-dry.jpg) | ![Foro entry eye day dry](../../../artifacts/shots/tracks/mexico/s3-72-foro-entry-eye__day-dry.jpg) | ![Foro park day dry](../../../artifacts/shots/tracks/mexico/s3-78-foro-park__day-dry.jpg) |
 
----
-
-## Sector 2 — mid-park / Horquilla (day, dry)
-
-| Mid-park · orbit · day · dry | Esses mid · orbit · day · dry | Volcano horizon · orbit · day · dry |
+| Foro exit · eye · day · dry | Peraltada · orbit · day · dry | Final corner · park · day · dry |
 |:---:|:---:|:---:|
-| ![Mid park](../../../artifacts/shots/tracks/mexico/s2-26-mid-orbit__day-dry.jpg) | ![Esses mid](../../../artifacts/shots/tracks/mexico/s2-30-esses-mid-orbit__day-dry.jpg) | ![Volcanoes](../../../artifacts/shots/tracks/mexico/s2-34-volcanoes-orbit__day-dry.jpg) |
+| ![Foro exit eye day dry](../../../artifacts/shots/tracks/mexico/s3-85-foro-exit-eye__day-dry.jpg) | ![Peraltada orbit day dry](../../../artifacts/shots/tracks/mexico/s3-92-peraltada-orbit__day-dry.jpg) | ![Final park day dry](../../../artifacts/shots/tracks/mexico/s3-97-final-park__day-dry.jpg) |
 
-| Horquilla · trackside · day · dry | Hairpin · orbit · day · dry | Sports belt · orbit · day · dry |
+## Time of day (dry)
+
+| foro · dusk · dry · park | foro · night · dry · park | horquilla · night · dry · trackside |
 |:---:|:---:|:---:|
-| ![Horquilla](../../../artifacts/shots/tracks/mexico/s2-42-horquilla-trackside__day-dry.jpg) | ![Hairpin](../../../artifacts/shots/tracks/mexico/s2-45-hairpin-orbit__day-dry.jpg) | ![Sports](../../../artifacts/shots/tracks/mexico/s2-51-sports-orbit__day-dry.jpg) |
+| ![foro · dusk · dry · park](../../../artifacts/shots/tracks/mexico/lm-foro__dusk-dry-park.jpg) | ![foro · night · dry · park](../../../artifacts/shots/tracks/mexico/lm-foro__night-dry-park.jpg) | ![horquilla · night · dry · trackside](../../../artifacts/shots/tracks/mexico/lm-horquilla__night-dry-trackside.jpg) |
 
-| Palacio de los Deportes · orbit · day · dry | Mid-lap · orbit · day · dry | |
+| peraltada · night · dry · orbit | start · dusk · dry · orbit | start · night · dry · orbit |
 |:---:|:---:|:---:|
-| ![Palacio](../../../artifacts/shots/tracks/mexico/s2-58-palacio-orbit__day-dry.jpg) | ![Mid-lap](../../../artifacts/shots/tracks/mexico/s2-62-midlap-orbit__day-dry.jpg) | |
+| ![peraltada · night · dry · orbit](../../../artifacts/shots/tracks/mexico/lm-peraltada__night-dry-orbit.jpg) | ![start · dusk · dry · orbit](../../../artifacts/shots/tracks/mexico/lm-start__dusk-dry-orbit.jpg) | ![start · night · dry · orbit](../../../artifacts/shots/tracks/mexico/lm-start__night-dry-orbit.jpg) |
 
----
+## Weather on hero views (day)
 
-## Sector 3 — Foro Sol / Peraltada (day, dry)
-
-| Lucha statue · orbit · day · dry | Stadium approach · orbit · day · dry | Foro entry · eye · day · dry |
+| foro · day · fog · park | foro · day · overcast · park | foro · day · rain · park |
 |:---:|:---:|:---:|
-| ![Lucha](../../../artifacts/shots/tracks/mexico/s3-66-lucha-orbit__day-dry.jpg) | ![Stadium approach](../../../artifacts/shots/tracks/mexico/s3-70-stadium-approach-orbit__day-dry.jpg) | ![Foro entry](../../../artifacts/shots/tracks/mexico/s3-72-foro-entry-eye__day-dry.jpg) |
+| ![foro · day · fog · park](../../../artifacts/shots/tracks/mexico/lm-foro__day-fog-park.jpg) | ![foro · day · overcast · park](../../../artifacts/shots/tracks/mexico/lm-foro__day-overcast-park.jpg) | ![foro · day · rain · park](../../../artifacts/shots/tracks/mexico/lm-foro__day-rain-park.jpg) |
 
-| Inside Foro Sol · park · day · dry | Foro exit · eye · day · dry | Peraltada approach · orbit · day · dry |
+| foro · day · wet · park | horquilla · day · fog · trackside | horquilla · day · overcast · trackside |
 |:---:|:---:|:---:|
-| ![Foro interior](../../../artifacts/shots/tracks/mexico/s3-78-foro-park__day-dry.jpg) | ![Foro exit](../../../artifacts/shots/tracks/mexico/s3-85-foro-exit-eye__day-dry.jpg) | ![Peraltada approach](../../../artifacts/shots/tracks/mexico/s3-90-peraltada-approach-orbit__day-dry.jpg) |
+| ![foro · day · wet · park](../../../artifacts/shots/tracks/mexico/lm-foro__day-wet-park.jpg) | ![horquilla · day · fog · trackside](../../../artifacts/shots/tracks/mexico/lm-horquilla__day-fog-trackside.jpg) | ![horquilla · day · overcast · trackside](../../../artifacts/shots/tracks/mexico/lm-horquilla__day-overcast-trackside.jpg) |
 
-| Peraltada banking · orbit · day · dry | Final corner · park · day · dry | |
+| horquilla · day · rain · trackside | horquilla · day · wet · trackside | peraltada · day · fog · orbit |
 |:---:|:---:|:---:|
-| ![Peraltada](../../../artifacts/shots/tracks/mexico/s3-92-peraltada-orbit__day-dry.jpg) | ![Final corner](../../../artifacts/shots/tracks/mexico/s3-97-final-park__day-dry.jpg) | |
+| ![horquilla · day · rain · trackside](../../../artifacts/shots/tracks/mexico/lm-horquilla__day-rain-trackside.jpg) | ![horquilla · day · wet · trackside](../../../artifacts/shots/tracks/mexico/lm-horquilla__day-wet-trackside.jpg) | ![peraltada · day · fog · orbit](../../../artifacts/shots/tracks/mexico/lm-peraltada__day-fog-orbit.jpg) |
 
----
-
-## Time-of-day variants (dry) — key landmarks
-
-| S/F · dusk · dry · orbit | S/F · dawn · dry · orbit | S/F · night · dry · orbit |
+| peraltada · day · overcast · orbit | peraltada · day · rain · orbit | peraltada · day · wet · orbit |
 |:---:|:---:|:---:|
-| ![S/F dusk](../../../artifacts/shots/tracks/mexico/lm-start__dusk-dry-orbit.jpg) | ![S/F dawn](../../../artifacts/shots/tracks/mexico/lm-start__dawn-dry-orbit.jpg) | ![S/F night](../../../artifacts/shots/tracks/mexico/lm-start__night-dry-orbit.jpg) |
+| ![peraltada · day · overcast · orbit](../../../artifacts/shots/tracks/mexico/lm-peraltada__day-overcast-orbit.jpg) | ![peraltada · day · rain · orbit](../../../artifacts/shots/tracks/mexico/lm-peraltada__day-rain-orbit.jpg) | ![peraltada · day · wet · orbit](../../../artifacts/shots/tracks/mexico/lm-peraltada__day-wet-orbit.jpg) |
 
-| Foro Sol · dusk · dry · park | Foro Sol · night · dry · park | Horquilla · night · dry · trackside |
+| start · day · fog · orbit | start · day · overcast · orbit | start · day · rain · orbit |
 |:---:|:---:|:---:|
-| ![Foro dusk](../../../artifacts/shots/tracks/mexico/lm-foro__dusk-dry-park.jpg) | ![Foro night](../../../artifacts/shots/tracks/mexico/lm-foro__night-dry-park.jpg) | ![Horquilla night](../../../artifacts/shots/tracks/mexico/lm-horquilla__night-dry-trackside.jpg) |
+| ![start · day · fog · orbit](../../../artifacts/shots/tracks/mexico/lm-start__day-fog-orbit.jpg) | ![start · day · overcast · orbit](../../../artifacts/shots/tracks/mexico/lm-start__day-overcast-orbit.jpg) | ![start · day · rain · orbit](../../../artifacts/shots/tracks/mexico/lm-start__day-rain-orbit.jpg) |
 
-| Peraltada · dusk · dry · orbit | Peraltada · night · dry · orbit | |
+| start · day · storm · orbit | start · day · wet · orbit |  |
 |:---:|:---:|:---:|
-| ![Peraltada dusk](../../../artifacts/shots/tracks/mexico/lm-peraltada__dusk-dry-orbit.jpg) | ![Peraltada night](../../../artifacts/shots/tracks/mexico/lm-peraltada__night-dry-orbit.jpg) | |
+| ![start · day · storm · orbit](../../../artifacts/shots/tracks/mexico/lm-start__day-storm-orbit.jpg) | ![start · day · wet · orbit](../../../artifacts/shots/tracks/mexico/lm-start__day-wet-orbit.jpg) |  |
 
-### Lighting notes
 
-- **Night Foro:** bowl seat colours read; overhead lighting sparse vs real baseball stadium (generic lamp pass excluded in def).
-- **Dusk/dawn:** thin-air palette + `fogDensity` 0.0022 keep volcanoes subtle; golden hour readable on main straight fascia.
-- **Weather (wet / rain / overcast / fog):** not captured this PR — re-run after rebasing on shared shot tooling with `__apex.weather()` batch support.
+## Verification
 
----
-
-## Ranked follow-ups
-
-1. Weather panel grid (wet, rain, overcast, fog) on S/F, Foro, Horquilla, Peraltada after tooling PR.
-2. Papel-picado footing without `place()` sink on slopes.
-3. Night flood pass inside Foro Sol corridor (local `lightMast` density vs exclusion band).
-4. Mid-lap left treeline extension `s 0.28–0.50` without city towers.
+`node tools/track/verify-track.cjs mexico` + `audit-circuit.cjs mexico --json` on tip.
