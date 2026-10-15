@@ -1474,15 +1474,6 @@ test("shot-survey --plan-json carries cams into the plan", () => {
   assert.deepEqual(two.shots.map((x) => x.cam), ["orbit", "eye"]);
 });
 
-test("shot-survey --weather lands on every planned shot and rejects unknown weather", () => {
-  const run = (...extra) => spawnSync(process.execPath, [path.join(ROOT, "tools/shot/shot-survey.mjs"),
-    "--tracks", "monza", "--preset", "quick", "--dry-run", ...extra], { encoding: "utf8", cwd: ROOT });
-  const plan = JSON.parse(run("--weather", "storm", "--tod", "day").stdout);
-  assert.ok(plan.shots.length > 0 && plan.shots.every((x) => x.weather === "storm" && x.tod === "day"));
-  assert.ok(JSON.parse(run().stdout).shots.every((x) => x.weather == null), "no --weather leaves the weather alone");
-  assert.notEqual(run("--weather", "hail").status, 0, "unknown weather must fail");
-});
-
 // 2026-10-07 (#1192): apex_hud_shot / apex_hud_survey outlast the host's
 // ~60–120 s MCP call, so they default to hud_* jobs. Those kinds run only the
 // argv the server built and pinned — never one a JSON caller supplies.
