@@ -19,5 +19,5 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [User timezone: Pacific](user-timezone-pacific.md) — schedule Routines as CRON_TZ=America/Los_Angeles; quote times in Pacific
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
 - [Foreground wait loop killed (137)](foreground-wait-loop-killed.md) — never block a foreground Bash on a multi-minute background run; end the turn and take the notification
-- [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch cancels the first; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps
+- [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch queues, a third replaces it; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps
 - [Merge method: verify parents](merge-method-verify-parents.md) — a "merge" merge_pull_request landed as a squash (#1743); check two parents after every merge
