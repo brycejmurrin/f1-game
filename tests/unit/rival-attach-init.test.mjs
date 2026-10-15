@@ -177,3 +177,38 @@ test("lazy first-bind: init before rivals.js still attaches once the module land
   assert.equal(landed.length, 4, "lazy bind connects every voice");
   void dest;
 });
+
+// #2187: the pool runs for the life of the context and only collect() — the
+// race step — aimed its gains, so stopEngine() (pause, finish, quit, scrub
+// exit) left a nearby rival's whoosh hissing at its last gain under the pause
+// menu, results and title. stopEngine must silence it like ErsLayer.
+test("stopEngine silences every pass-by voice (#2187)", () => {
+  const { A, RivalAudio } = boot();
+  A.init();
+  A.setEnabled(true);
+  A.startEngine();
+  const me = { s: 500, x: 0, speed: 50, rpm: 5000, retired: false };
+  const rival = { s: 504, x: 0, speed: 50, rpm: 5000, retired: false };
+  const R = RivalAudio().create({ track: { total: 1000 }, cars: [me, rival] });
+  R.collect(me);
+  assert.ok(R.passByState().some((v) => v.gain > 0), "a rival 4 m ahead opens a voice");
+  A.stopEngine();
+  assert.deepEqual([...R.passByState().map((v) => v.gain)], [0, 0, 0, 0], "every voice ramps to 0");
+});
+
+test("RivalAudio.silence(t) zeroes the pool; the title stub has it too (#2187)", () => {
+  const { A, RivalAudio } = boot();
+  A.init();
+  const RA = RivalAudio();
+  const me = { s: 500, x: 0, speed: 50, rpm: 5000, retired: false };
+  const R = RA.create({ track: { total: 1000 }, cars: [me, { ...me, s: 504 }] });
+  R.collect(me);
+  assert.equal(typeof RA.silence, "function");
+  assert.equal(typeof R.silence, "function", "the instance exposes it as well");
+  RA.silence(0);
+  assert.deepEqual([...R.passByState().map((v) => v.gain)], [0, 0, 0, 0]);
+  const stub = fs.readFileSync(path.join(ROOT, "js/audio/stub.js"), "utf8");
+  const sc = vm.createContext({});
+  vm.runInContext(stub, sc);
+  assert.doesNotThrow(() => vm.runInContext("RivalAudio.create({}).silence(); RivalAudio.silence()", sc));
+});

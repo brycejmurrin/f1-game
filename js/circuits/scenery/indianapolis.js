@@ -46,17 +46,24 @@
       // stretch, gap 18 behind the outer wall and catch fence. Skips the
       // start/finish window that indy-main-stands owns. Navy/crimson/concrete
       // with bucket-seat crowd bands — grey alu bars read as placeholders.
-      const BAY_LEN = 38, BAY_F = 40 / 4073;
+      // Roof slabs are len+2 wide, so BAY_LEN 38 on the 40 m walk pitch makes
+      // the roofline one continuous slab run (any wider overlaps and z-fights,
+      // coplanar-audit). End walls close only the ends of each run, not every
+      // bay: the 2 m slots between shells no longer read as separate boxes
+      // (survey 2026-10-15).
+      const BAY_F = 40 / 4073, BAY_LEN = 38;
       const OVAL_LIV = ["navy", "crimson", "concrete"];
+      const inSF = (s01) => s01 > 0.986 || s01 < 0.014;
       for (let s = 0.770, i = 0; s < 1.150; s += BAY_F, i++) {
         const s01 = s % 1;
-        if (s01 > 0.986 || s01 < 0.014) continue;
+        if (inSF(s01)) continue;
         const g = i % 6;
         grandstandEx(s01, OUT, 18, BAY_LEN, null, SEAT[g % 3], {
           livery: OVAL_LIV[g % 3],
           tiers: s01 > 0.90 || s01 < 0.10 ? 3 : 2,
           roof: g % 3 === 0 ? "cantilever" : (g % 3 === 1 ? "flat" : "cantilever"),
-          endWalls: true, pylons: g % 2 === 0,
+          endWalls: s + BAY_F >= 1.150 || s - BAY_F < 0.770 || inSF((s + BAY_F) % 1) || inSF((s - BAY_F + 1) % 1),
+          pylons: g % 2 === 0,
           fasciaCol: g % 3 === 0 ? IMS_NAVY : (g % 3 === 1 ? IMS_RED : SHELL2),
         });
       }
@@ -349,13 +356,13 @@
 
       every(40, (k) => {
         const s = k / n;
-        if (s < 0.28 || s > 0.72) return;
+        if (s < 0.27 || s > 0.74) return;
         const h = hash(k * 31);
-        if (h < 0.55) return;
-        // After the sparseness guard h is in [0.55, 1), so an h<0.5 selector
+        if (h < 0.40) return;
+        // After the sparseness guard h is in [0.40, 1), so an h<0.5 selector
         // is dead (every clump right, always LEAF, LEAF_D never rendered).
-        // 0.775 is the live range's midpoint.
-        tree(k, h < 0.775 ? -1 : 1, 34 + h * 20, 10 + h * 6, h < 0.775 ? LEAF_D : LEAF);
+        // 0.70 is the live range's midpoint.
+        tree(k, h < 0.70 ? -1 : 1, 34 + h * 20, 10 + h * 6, h < 0.70 ? LEAF_D : LEAF);
       });
 
       for (const [s0, s1] of [[0.24, 0.70]]) {
@@ -386,8 +393,8 @@
 
       const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
-        [110, 46, 150, 34, 11, 4, [0.20, 0.40, 0.19]],
-        [200, 36, 200, 44, 14, 5, [0.17, 0.35, 0.17]],
+        [110, 46, 110, 30, 5, 3, [0.22, 0.42, 0.20]],
+        [200, 36, 160, 40, 8, 4, [0.19, 0.38, 0.18]],
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
@@ -405,15 +412,15 @@
       // Speedway (docs/tracks/indianapolis.md §4; IMS facility / OSM views).
       // The #928 side rewrite kept the import but dropped the ring; without
       // them the outer bank reads as a grey terrace, not a stadium. Sit
-      // OUTSIDE behind the stand bank (gap 18), cool day banks, no night
-      // pool (this circuit is day-only).
+      // OUTSIDE behind the stand bank (gap 18), cool day banks; the lens
+      // lights at dusk/night (the picker offers them) with no visible pool slab.
       for (let i = 0; i < 10; i++) {
         const s = (0.780 + i * 0.038) % 1;
         if (s > 0.985 || s < 0.015) continue;   // SF window: Pagoda / main stands
-        floodMast(K(s), OUT, 48, { h: 34, cool: true, arms: 3, light: false, pool: false });
+        floodMast(K(s), OUT, 48, { h: 34, cool: true, arms: 3, light: true, pool: false });
       }
-      // Infield viewing mound at the banked oval Turn 1 sector (OSM spectator
-      // mounds; Stand H / South Vista road-course seating).
+      // Infield viewing mound along the F1 Turn 1 run-in (0.085-0.145; the banked
+      // oval Turn 1 is at 0.88, not here) — OSM spectator mounds / Stand H.
       spectatorHill(0.085, 0.145, IN, 28,
         { rows: 4, rise: 1.2, depth: 2.0, density: 0.66, step: 8 });
 
@@ -519,12 +526,12 @@
 
       // The town of Speedway, IN: low-rise blocks OUTSIDE the outer wall and
       // well behind the stand bank (gap >= 120), never at trackside.
-      every(70, (k) => {
+      every(46, (k) => {
         const s = k / n;
         if (!(s > 0.775 || s < 0.130)) return;
         const h = hash(k * 13 + 7);
-        if (h < 0.35) return;
-        building(k, OUT, 120 + h * 50, 14 + h * 8, 6 + h * 6, 18 + h * 10,
+        if (h < 0.20) return;
+        building(k, OUT, 120 + h * 34, 14 + h * 8, 6 + h * 6, 18 + h * 10,
           { wall: h < 0.6 ? [0.62, 0.44, 0.36] : [0.80, 0.78, 0.74] });
       });
 

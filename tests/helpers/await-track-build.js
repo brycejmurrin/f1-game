@@ -77,3 +77,57 @@ export async function awaitTrackBuild(page, stallMs = TRACK_STALL_MS, hardMs = T
     await page.waitForTimeout(100);
   }
 }
+
+/* The same trade for the BOOT wait: `window.__apex != null` behind a fixed
+ * BOOT_MS. hud-layout's speed-readouts test went red on Pages 38660546141
+ * (2026-10-15, oversize-hud-layout, 2 workers on llvmpipe): the first goto's
+ * 45 s wait expired while the page was still logging its build at 53 s. A busy
+ * box, not a dead boot (#1956).
+ *
+ * The stall window IS the old deadline (45 s, fixtures.js BOOT_MS; a literal
+ * here because fixtures.js imports this module). A boot that goes quiet for
+ * that long still fails, with the same budget as before. Only a boot that keeps
+ * fetching scripts or logging may run past it, up to the hard cap. Progress is
+ * the newest Log record id plus the resource-timing count, which also covers
+ * the script-fetch phase before the first Log line. */
+export const BOOT_STALL_MS = 45000;
+
+const nodeDelay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Wait for `window.__apex` to bind, failing on a STALL rather than on a deadline.
+ * The pause between polls is a Node timer (`opts.delay`, injectable for the
+ * unit test), not page.waitForTimeout: that call is a shrink-only tree ratchet. */
+export async function awaitApexBoot(page, stallMs = BOOT_STALL_MS, hardMs = TRACK_HARD_MS, opts = {}) {
+  const delay = opts.delay || nodeDelay;
+  const started = Date.now();
+  let lastSeen = -1, lastMoved = started;
+  for (;;) {
+    let s;
+    try {
+      s = await page.evaluate(() => {
+        let id = 0, res = 0;
+        // Log is a top-level const in a classic script: a lexical global, not window.Log.
+        try { const r = Log.records({ limit: 1 }); id = (r.length && r[0].id) || 0; } catch (_) { id = 0; }
+        try { res = performance.getEntriesByType("resource").length; } catch (_) { res = 0; }
+        return { ready: window.__apex != null, n: id + res };
+      });
+    } catch (_) {
+      // A navigation in flight destroys the execution context: that is progress.
+      s = { ready: false, n: lastSeen + 1 };
+    }
+    if (s.ready) return;
+    const now = Date.now();
+    if (s.n !== lastSeen) { lastSeen = s.n; lastMoved = now; }
+    else if (now - lastMoved > stallMs) {
+      throw new Error(
+        `boot STALLED: window.__apex still null after ${stallMs}ms with no new Log record or ` +
+        `resource fetch (progress ${s.n}). A dead boot, not a slow box.`);
+    }
+    if (now - started > hardMs) {
+      throw new Error(
+        `boot exceeded the ${hardMs}ms hard cap while still reporting progress ` +
+        `(progress ${s.n}). Not a stall: something is booting without ever binding __apex.`);
+    }
+    await delay(100);
+  }
+}

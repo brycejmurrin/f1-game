@@ -68,3 +68,14 @@ open PR, every clone and fork, and the deploy checks that look up the live
 `apex-sha` would have to be rebuilt. Blobless clones get nearly all of the
 benefit for none of that, so the rewrite stays parked unless full-clone size
 causes a concrete problem they do not solve.
+
+## 2026-10-15: survey images off the deploy branch
+
+The deploy branch's tree was ~328 MB (`git ls-tree -r -l` sum). 146 survey and
+screenshot images under `docs/archive/slider-effect/`, `docs/look-survey/` and
+`artifacts/shots/` (~123 MB) were already byte-identical on
+`track-survey-assets` (commit `cb0cb2c3`), so they were removed from the deploy
+branch and their doc links pinned to that commit. History is not rewritten:
+this shrinks the tip and every shallow or blobless clone, not a full clone.
+`tests/unit/committed-images.test.mjs` now refuses a new image under `docs/` or
+`artifacts/` outside a shrink-only allow-list.

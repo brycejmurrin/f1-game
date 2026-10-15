@@ -46,6 +46,9 @@ export function captureGpuOptions({ env = process.env, gpu = glStack(env),
     if (!Number.isInteger(threads) || threads < 1 || threads > 256) throw new Error("capture: LP_NUM_THREADS must be an integer 1-256");
     launchEnv.LP_NUM_THREADS = String(threads);
     if (gpu === "llvmpipe") {
+      // Mesa's GL llvmpipe loads through a DRM node; without one Chromium silently
+      // falls back to SwiftShader (docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe).
+      if (!exists("/dev/dri") && !env.GITHUB_ACTIONS) throw new Error("capture: llvmpipe needs /dev/dri (CI only); this container has none — use --gpu swiftshader or unset APEX_GL");
       launchEnv.LIBGL_ALWAYS_SOFTWARE = "1";
       launchEnv.GALLIUM_DRIVER = "llvmpipe";
       return { args: captureChromiumArgs(launchEnv), env: launchEnv };
