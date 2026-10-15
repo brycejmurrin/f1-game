@@ -269,6 +269,25 @@
       // Three bands, each stepping back, lighter and taller, all in pine and
       // ridge so the depth is free in prop verts (see COST MODEL above).
 
+      // NEAR rank: trunks at arm's length behind the armco on the OUTFIELD (-1)
+      // only — the brief's identity (rows 0.090 / 0.115). The infield stays
+      // clear (blocksOrbitView keeps the orbit/eye wedge open) and every
+      // built row keeps its own room. Tri-neutral: Band B below gives up the
+      // same number of canopy pines.
+      every(10, (k) => {
+        if (blocked(k, -1)) return;
+        if (within(k, 0.390, 0.536) || within(k, 0.299, 0.347)) return;   // lake strip, the Hump
+        if (within(k, 0.196, 0.252) || within(k, 0.765, 0.791)) return;   // esses cutting, T1 inside
+        if (within(k, 0.574, 0.645)) return;                              // Bridge abutments, Namerow bank + fence
+        const h = hash(k * 331 + 17);
+        if (h < 0.62) return;
+        const dist = 9 + h * 5;
+        const a = anchor(k, -1, dist);
+        if (onTrack(a.c[0], a.c[2], 5.0)) return;
+        if (minEdge(a.c[0], a.c[2]) < dist * 0.85) return;
+        pine(k, -1, dist, 14 + h * 8, h < 0.75 ? PINE : PINE2);
+      });
+
       // Band A, 22-50 m: the body of the wood, still legible as trunks.
       every(11, (k) => {
         for (const side of [-1, 1]) {
@@ -308,7 +327,7 @@
           if (side === -1 && within(k, 0.390, 0.530)) continue;
           const h = hash(k * 131 + (side + 2) * 37);
           if (h < 0.10) continue;
-          for (let r = 0; r < 3; r++) {
+          for (let r = 0; r < 2; r++) {
             const g = hash(k * 191 + r * 59 + (side + 2) * 13);
             if (g < 0.15) continue;
             const dist = 62 + r * 24 + g * 18; // past orbit wedge on hot +1
@@ -375,9 +394,11 @@
           const a = anchor(k, side, 7.5 + h * 3.2);
           const y = terrainYAt(a.c[0], a.c[2]);
           if (y === null) continue;
-          addBox(out, [a.c[0], y + 1.1 + h * 1.4, a.c[2]],
-                 [2.6 + h * 2.2, 2.4 + h * 2.6, 5.0 + h * 4.0],
-                 h < 0.5 ? ROCK : ROCK2, [a.r, a.u, a.t]);
+          // Low, wide slabs sunk into the bank (the tall 2.4-5 m boxes read as
+          // loose primitives on the dirt, survey #04), in the bank's own tones.
+          addBox(out, [a.c[0], y + 0.55 + h * 0.5, a.c[2]],
+                 [2.6 + h * 2.2, 1.3 + h * 1.0, 5.0 + h * 4.0],
+                 h < 0.5 ? ROCK2 : [0.34, 0.31, 0.26], [a.r, a.u, a.t]);
         }
       }
       // every(13) and CAM_NEAR out: past the chase corridor, not on the rail.
@@ -584,16 +605,8 @@
       marshalPost(K(0.770), -1, 6);
       tyreWall(0.771, 0.786, -1, 5, TYRE);
       billboard(K(0.765), -1, 8, 6, 1.8, [0.18, 0.34, 0.72]);
-      // Nothing tall on the crest itself: the exit stays blind. Scrub only.
-      every(9, (k) => {
-        if (!within(k, 0.773, 0.791)) return;
-        const h = hash(k * 233);
-        if (h < 0.45) return;
-        const d = 5.0 + h * 2.0;
-        const a = anchor(k, -1, d);
-        if (onTrack(a.c[0], a.c[2], 2.0)) return;
-        bush(k, -1, d, h > 0.78 ? FERN : SCRUB);
-      });
+      // Nothing tall on the crest itself: the exit stays blind. (Scrub there clipped
+      // the wall's own undergrowth by 1.1 m, so the apex is left to the tyre wall.)
 
       // --------------------------------------------------------------- 11.
       // ESSES EXIT (row 0.255). Dirt and gravel spill on the inside where cars
