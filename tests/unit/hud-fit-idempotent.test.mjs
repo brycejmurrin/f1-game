@@ -548,3 +548,26 @@ test("HUD viewport cache: a resize re-fits from the new size, and fit results ma
   for (let i = 0; i < 30; i++) reads += cached.frame().vpReads;
   assert.equal(reads, 0, "settled: no viewport reads per tick");
 });
+
+
+test("publishing a changed top-control zoom requests one subsequent full fit", () => {
+  const source = read("js/ui/hud.js");
+  const start = source.indexOf('  set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));');
+  const end = source.indexOf("  // Publish --dock-r-w in the FINAL", start);
+  const publish = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  for (const [before, requested, cap, expected] of [
+    [3, 3, 1.25, true], [1.25, 3, 1.25, false], [3, 3, 2, false],
+    [1.25, 3, Infinity, true], [1.25, 3, 1.2504, false],
+  ]) {
+    let painted = String(before);
+    const ctx = vm.createContext({ Math, zDockPub: before, btnFloor: 1, btnScale: requested, capDock: cap,
+      _fitKey: "settled", _fitWait: 30,
+      root: { style: { getPropertyValue: () => painted } },
+      set(prop, value, base) { painted = value >= base ? "" : String(Math.max(.4, Math.round(value * 1000) / 1000)); },
+    });
+    vm.runInContext(publish, ctx);
+    assert.equal(ctx._fitKey, expected ? "" : "settled", `published top zoom ${before} → ${painted || requested}`);
+    assert.equal(ctx._fitWait, expected ? 0 : 30, "unchanged clamped zoom keeps steady-state backoff");
+  }
+});

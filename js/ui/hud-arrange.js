@@ -230,7 +230,16 @@ const HudArrange = (() => {
     function dragOrig(id) {
       const orig = current(id), el = id === "announce" ? elOf(id) : null;
       const r = el && el.getBoundingClientRect();
-      return r ? placedOrig(orig, r.left, r.top, window.innerWidth, window.innerHeight) : orig;
+      if (r) return placedOrig(orig, r.left, r.top, window.innerWidth, window.innerHeight);
+      // The first real map edit adopts its temporary screen-pixel clearance.
+      const map = id === "map" ? elOf(id) : null;
+      if (map && !map.hasAttribute("data-hl-user") && map.style.getPropertyValue) {
+        return Object.assign({}, orig, {
+          x: orig.x + (parseFloat(map.style.getPropertyValue("--hud-clear-x")) || 0) / window.innerWidth * 100,
+          y: orig.y + (parseFloat(map.style.getPropertyValue("--hud-clear-y")) || 0) / window.innerHeight * 100,
+        });
+      }
+      return orig;
     }
     function flush() {
       if (raf) {
@@ -243,6 +252,7 @@ const HudArrange = (() => {
     }
     /* Bind queued edits to the layout visible when the gesture started. */
     function queue(id, v) {
+      if (id === "map" && v.s != null) { const orig = dragOrig(id); v = Object.assign({ x: orig.x, y: orig.y }, v); }
       if (pending && pending.id !== id) flush();
       pending = { id, set: context.set, profile: context.profile,
         v: Object.assign(pending ? pending.v : {}, v) };
@@ -279,7 +289,8 @@ const HudArrange = (() => {
     function size(dir) {
       if (!selected) return;
       flush();
-      HudLayout.set(selected, { s: stepSize(current(selected).s, dir) }, context.set, context.profile);
+      const orig = selected === "map" ? dragOrig(selected) : current(selected);
+      HudLayout.set(selected, Object.assign({}, orig, { s: stepSize(orig.s, dir) }), context.set, context.profile);
       after();
     }
 

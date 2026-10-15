@@ -36,6 +36,34 @@ test("rotation never resurfaces the pause card over an active photo camera", () 
   }
 });
 
+test("rotation keeps foreground Settings above Pause until Settings closes", () => {
+  const source = src("js/game.js");
+  const fn = source.slice(source.indexOf("function syncRotateBlocker("), source.indexOf("if (rotateBlockMql.addEventListener)"));
+  let portrait = true;
+  const box = { setAttribute() {} }, pausemenu = { hidden: true }, pmsettings = { hidden: false };
+  const garage = { hidden: true };
+  const ctx = vm.createContext({ $: id => id === "carsetup" ? garage : box,
+    getComputedStyle: () => ({ display: portrait ? "flex" : "none" }),
+    rotateBlockMql: { matches: true }, paused: true, photoMode: false,
+    els: { pausemenu, pmsettings }, garageReturn: "select" });
+  vm.runInContext(fn, ctx);
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, true, "portrait keeps Pause away from foreground Settings");
+  portrait = false;
+  ctx.syncRotateBlocker(false);
+  assert.equal(pmsettings.hidden, false);
+  assert.equal(pausemenu.hidden, true, "landscape cannot open a second modal above Settings");
+  pmsettings.hidden = true;
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, false, "closing Settings restores the ordinary pause card");
+  ctx.photoMode = true;
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, true, "photo camera retains its existing pause ownership");
+  ctx.photoMode = false; ctx.garageReturn = "pit"; garage.hidden = false;
+  ctx.syncRotateBlocker(false);
+  assert.equal(pausemenu.hidden, true, "pit work retains its existing pause ownership");
+});
+
 test('online Photo camera input integrates while shared physics continues; solo Photo holds physics', () => {
   const source = src('js/game.js');
   const tick = source.slice(source.indexOf('function tickBody(now) {'), source.indexOf('// ---------- car setup panel ----------'));

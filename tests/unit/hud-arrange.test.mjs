@@ -108,7 +108,7 @@ function editor(pieceId = "piece", options = {}) {
   const ids = new Map(), listeners = {}, frames = new Map(), writes = [], observers = [];
   let frame = 0, set = 'chase', profile = 'standard';
   class El {
-    constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.hidden = false; this.style = { removeProperty(k) { delete this[k]; } }; this.isConnected = true; }
+    constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.hidden = false; this.style = { removeProperty(k) { delete this[k]; }, setProperty(k,v) { this[k]=v; }, getPropertyValue(k) { return this[k] || ""; } }; this.isConnected = true; }
     set id(v) { this._id = v; ids.set(v, this); } get id() { return this._id; }
     setAttribute(k, v) { this.attrs[k] = v; } getAttribute(k) { return this.attrs[k] ?? null; }
     hasAttribute(k) { return k in this.attrs; } removeAttribute(k) { delete this.attrs[k]; }
@@ -138,7 +138,12 @@ function editor(pieceId = "piece", options = {}) {
   const key = (sn = set, pn = profile) => sn + ':' + pn;
   const get = (id, sn, pn) => ({ x: 0, y: 0, s: 100, ...values.get(key(sn, pn)) });
   const layout = { ELEMENTS: [[pieceId, 'Piece', '#' + pieceId]], shown: () => set, profile: () => profile, get,
-    set(id, v, sn, pn) { writes.push({ id, v: { ...v }, sn, pn }); values.set(key(sn, pn), { ...get(id, sn, pn), ...v }); }, resetEl() {} };
+    set(id, v, sn, pn) {
+      writes.push({ id, v: { ...v }, sn, pn });
+      const stored = options.snap ? Object.fromEntries(Object.entries(v).map(([k,n]) => [k, Math.round(n)])) : v;
+      values.set(key(sn, pn), { ...get(id, sn, pn), ...stored });
+      if (id === 'map') { const el = ids.get(pieceId); el.setAttribute('data-hl-user', ''); el.style.removeProperty('--hud-clear-x'); el.style.removeProperty('--hud-clear-y'); }
+    }, resetEl() {} };
   const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
   if (options.hidden) ids.get(pieceId).hidden = true;
   if (options.rect) ids.get(pieceId).getBoundingClientRect = () => options.rect;
@@ -333,4 +338,37 @@ test('editor: toolbar uses the clear middle when every edge covers HUD content',
   assert.equal(bar.style.transform, 'translate(-50%, -50%)');
   const painted = { top: (500 - bar.offsetHeight) / 2, bottom: (500 + bar.offsetHeight) / 2 };
   assert.ok(painted.top > top.bottom && painted.bottom < bottom.top, 'neither edge readout is obscured');
+});
+
+
+test('editor: first cleared-map edits adopt its painted origin on the whole-percent grid', () => {
+  for (const kind of ['keyboard', 'drag', 'size', 'pinch']) {
+    const e = editor('map', { snap: true }), map = e.ids.get('map');
+    map.style.setProperty('--hud-clear-x', '117px'); map.style.setProperty('--hud-clear-y', '25px');
+    map.getBoundingClientRect = () => {
+      const cur=e.get('map'), left=10+cur.x*10+parseFloat(map.style.getPropertyValue('--hud-clear-x')||0);
+      const top=10+cur.y*5+parseFloat(map.style.getPropertyValue('--hud-clear-y')||0);
+      return {left,top,right:left+20,bottom:top+20,width:20,height:20};
+    };
+    e.api.setEditing(true);
+    e.ids.get('hud-arrange-element').onchange();
+    assert.equal(e.writes.length,0,'opening and selecting the map never saves an offset');
+    if(kind==='keyboard')e.fire('keydown',{key:'ArrowRight',target:e.ids.get('hud-arrange-move')});
+    if(kind==='drag') {e.fire('pointerdown');e.fire('pointermove',{clientX:120});e.tick();e.fire('pointermove',{clientX:130});e.tick();}
+    if(kind==='size')e.ids.get('hud-arrange-larger').onclick();
+    if(kind==='pinch') {e.fire('pointerdown');e.fire('pointerdown',{pointerId:2,clientX:200});e.fire('pointermove',{pointerId:2,clientX:300});e.tick();}
+    const cur=e.get('map');
+    assert.equal(cur.x,kind==='keyboard'?13:kind==='drag'?15:12,kind+' retains the temporary horizontal correction');
+    assert.equal(cur.y,5,kind+' retains the temporary vertical correction');
+    if(kind==='size')assert.equal(cur.s,110);
+    if(kind==='pinch')assert.equal(cur.s,200);
+    assert.equal(map.getBoundingClientRect().top,35);
+  }
+});
+
+test('editor: explicit custom maps never adopt stale automatic clearance', () => {
+  const e=editor('map',{snap:true}),map=e.ids.get('map');
+  map.setAttribute('data-hl-user','');map.style.setProperty('--hud-clear-x','117px');
+  e.api.setEditing(true);e.ids.get('hud-arrange-larger').onclick();
+  assert.equal(e.get('map').x,0);assert.equal(e.get('map').y,0);assert.equal(e.get('map').s,110);
 });
