@@ -505,6 +505,9 @@
         [0.655, -1, 18, 6.8, 1], [0.666, -1, 22, 7.4, 0], [0.677, -1, 17, 6.2, 1],
         [0.905, -1, 20, 7.0, 0], [0.914, -1, 24, 6.4, 1],
       ]) {
+        // The Esses trio (0.163-0.181) read as a bare trunk with a crown fragment (survey eye 0.17):
+        // draw those with the generic tree() in the same autumn colours.
+        if (s < 0.19) { tree(Math.round(n * s) % n, side, gap, h, red ? MOMIJI_R : MOMIJI_G); continue; }
         broadleafFall(Math.round(n * s) % n, side, gap, h,
                       red ? MOMIJI_R : MOMIJI_G,
                       { lobes: 4, spread: 1.25, barkCol: [0.32, 0.26, 0.22] });
