@@ -1,1 +1,0 @@
-1791999424	Cursor Agent	#hud-desk broadcast phoneL flag vs limits clash @150% (OWNED: css/hud.css broadcast phoneL status-stack + js/ui/hud-layout.js flag/limits + tests/specs/hud-layout.spec.js broadcast phoneL cases; FORBIDDEN: speed readouts, portrait radio card, #1756 radio slot, portrait fitHud, CI workflows)  [claude/f1-game-project-26h3ng; session 0bff1dba01a452da2e607525]

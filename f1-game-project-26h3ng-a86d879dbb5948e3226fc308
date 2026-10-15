@@ -1,1 +1,0 @@
-1791999314	Cursor Agent	Job 4: slip-driven tyre squeal + speed-scaled wind (OWNED: setSkid + wind in js/audio/engine.js; tests/unit/tyre-squeal-*.test.mjs wind-*.test.mjs)  [claude/f1-game-project-26h3ng; session a86d879dbb5948e3226fc308]
