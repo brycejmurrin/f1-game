@@ -33,6 +33,21 @@ var StartLights = (function () {
   // drawn as one disc: the same lamp at 60 Hz, and at every other rate too.
   const GAIN = 2.84;
   const NEAR = 0.03;        // the start gantry is within this fraction of a lap of the line
+  const CATCHUP_S = 1;      // most wall time one frame may hand the countdown (a lamp's worth)
+
+  /* The countdown's WALL-CLOCK top-up for one frame (#1882). countT advances
+     inside update(), i.e. on the fixed physics steps, and tickBody clamps a
+     frame to 0.25 s and keeps at most 5 steps (83 ms): a frame slower than
+     12 fps lost the rest, so the five lights stretched with the frame time —
+     at 1 fps a 6 s sequence took ~70 s of 0 KPH, and a phone's first-frame
+     hitches ate tenths off every start. Real lights run on the clock, and on
+     the grid nothing is integrated that a long step could destabilise, so the
+     countdown gets back what the clamp (`wallS` vs `dtS`) and the dropped
+     backlog (`droppedS`) took — capped, so a resumed tab steps one lamp. */
+  function countCredit(wallS, dtS, droppedS) {
+    const wall = Math.min(CATCHUP_S, wallS > 0 ? wallS : 0);
+    return Math.max(0, wall - (dtS > 0 ? dtS : 0)) + (droppedS > 0 ? droppedS : 0);
+  }
 
   function create(G, deps) {
     const P = (deps && deps.Particles) || (typeof Particles !== "undefined" ? Particles : null);
@@ -98,9 +113,9 @@ var StartLights = (function () {
       }
     }
 
-    return { update, lampsFor };
+    return { update, lampsFor, countCredit };
   }
 
-  return { create };
+  return { create, countCredit };
 })();
 Object.freeze(StartLights);

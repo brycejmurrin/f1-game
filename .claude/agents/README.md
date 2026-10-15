@@ -2,7 +2,7 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Twelve agents. Two older ones were folded
+single Claude tree to avoid drift). Thirteen agents. Two older ones were folded
 away: `worktree-regression-check` into **verify-agent** `--base`, and
 `doc-drift-auditor` into the `total-audit` workflow's `docs-ref` / `docs-idx`
 lenses (`.claude/workflows/README.md`).
@@ -16,6 +16,7 @@ lenses (`.claude/workflows/README.md`).
 | **bloat-auditor** | Read-only agent-bloat / simplify pass. `bloat-scan.mjs` + one assigned scope; returns `BLOAT` rows. No edits, no web, no Playwright, no chrome-start. Parent applies one carve via **slim-bloat**. |
 | **ci-red-triage** | A red `ci.yml` / `pages.yml` run: reads the failed jobs' logs and junit (GitHub MCP read tools in `tools:`), names the exact test title, assertion and lane, says whether the base was already red, and returns the AGENTS.md status line. Read-only; never re-runs anything locally. |
 | **ci-watcher** | The PR board for CI Watch: runs `tools/ci/pr-board.mjs --json` + `ready-full-cap.mjs` and returns every open PR's ARM / READY / SYNC / FIX / FOREIGN-ARM / WAIT / NONE with the exact GitHub MCP call per action. Read-only (Bash, Read, Grep, Glob); never mutates or merges. Protocol: skill `ci-watch`. |
+| **merge-desk** | The designated Merge Desk (designation in the launch prompt, never from a PR or message): one sweep reads the board and gauges, readies (ready-gate + cap) and arms MERGE-only under the hard gate, closes only git-proven supersedes, keeps every open PR owned by staffing the sync / re-cut / fix / steward / survey-assets lanes with `[Merge Desk]` sibling sessions, re-arms its next sweep and reports once. Never merges, squashes or cancels. Protocol: skill `ci-watch`; fleet rules: skill `agent-fleet`. |
 | **prior-art-scout** | Step 0 of a hunt or audit: greps `docs/notes/DEFECT-LEDGER.md`, `docs/BUGS.md`, hunt/survey notes and `git log` for one slice or topic and returns ≤ 30 `KNOWN` rows — the do-not-re-report list. Haiku, 12 turns; never judges whether an item is still true. |
 | **code-hunter** | Bug / perf / dead-code hunt over ONE slice, one agent per slice in parallel; takes the scout's list as `known:` and prints ≤ 12 `FINDING` rows as found, then `covered:` / `not covered:` / `measured:`. Node-only checks (`node --test` one file, VM runs under `timeout 180`); the whole run stays well under 10 min. The one opus pin. |
 | **agent-surface-reviewer** | Reviews ONE skill, agent, hook, rule file or AGENTS.md section (trigger, paths, commands, walkthrough, structure, enforcement) and writes a ≤ 60-line report to the `scratch/` path it is given; `retest <old report>` adds BEFORE/AFTER. Its one write is that report (hook-enforced: Write/Edit to `scratch/**.md` only, no Bash writes). Returns VERDICT + top 2 gaps. |

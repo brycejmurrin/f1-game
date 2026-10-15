@@ -28,7 +28,7 @@
       const CONCRETE    = [0.30, 0.30, 0.34];
       const ARMCO       = [0.74, 0.76, 0.82];        // steel guardrail
       const FENCE_COL   = [0.55, 0.58, 0.66];        // catch-fence mesh
-      const SEA         = [0.04, 0.06, 0.12];        // dark Caspian water
+      const SEA         = [0.07, 0.10, 0.20];        // dark Caspian water (lifted: night frames read as a black void at 0.04/0.06/0.12)
       const TARMAC_AD   = [0.85, 0.20, 0.18];        // red ad accent
       const AZ_BLUE     = [0.10, 0.45, 0.78];        // Azerbaijan flag blue
       const LAMP_WARM   = [1.00, 0.96, 0.70];        // sodium lamp glow
@@ -147,7 +147,7 @@
       });
 
       // Continuous civic facade — L side of start straight
-      cityFront(0.0, 0.12, -1, 14, {
+      cityFront(0.06, 0.12, -1, 14, {   // starts past the Absheron stands (0.99/0.04, side -1)
         minH: 12, maxH: 24, depth: 16, step: 20,
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
       });
@@ -182,7 +182,7 @@
 
         // Uplit wash at Government House base (warm stone courtyard glow)
         const aGov = anchor(k, 1, 64);
-        addBox(out, vadd(aGov.c, aGov.u, 0.1), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
+        addBox(out, vadd(aGov.c, aGov.u, 0.35), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
       }
 
       // (The five pit halls and the 1 m pit wall at .94-.02 are the engine's
@@ -273,7 +273,7 @@
               const rAtY = 16 * (1 - yFr) + 3.0 * yFr;
               const col  = FIRE_BANDS[band % FIRE_BANDS.length];
               addFrustum(stage, vadd(tc, aF.u, yFr * H - (H / nBands) * 0.45),
-                rAtY * 1.08, rAtY * 0.96, (H / nBands) * 0.88, col, 8, b);
+                rAtY * 1.08, rAtY * 0.96, (H / nBands) * 0.84, col, 8, b);
               if (band % 2 === 0) {
                 const hot = vadd(vadd(tc, aF.u, yFr * H), aF.r, -rAtY * 1.10);
                 addBox(stage, hot, [0.7, (H / nBands) * 0.62, 4.2],
@@ -335,7 +335,9 @@
         }
       }
 
-      wall(0.36, 0.537, 1, 20, 9, SAND, 1.2);
+      // Split around T7 (apex 0.4005, r 18 m): on the inside of that bend the 6-node slabs at gap 20 interpenetrate (1.2 m clip), so the rampart pauses there.
+      wall(0.36, 0.389, 1, 20, 9, SAND, 1.2);
+      wall(0.4129, 0.537, 1, 20, 9, SAND, 1.2);   // 0.4129 = node 609: keeps the 6-node slab grid of the original run
       wall(0.553, 0.56, 1, 20, 9, SAND, 1.2);
 
       // Crenellations — placed at y = wall height (9m top), so they sit
@@ -357,6 +359,7 @@
           if (j % 2 === 0) {
             const kj = k + Math.round(((j - 6.5) * 3.8) / ds);
             if (kj < wallLoK || kj > wallHiK) continue;
+            if (kj > K(0.389) - 8 && kj < K(0.412) + 8) continue;   // T7 pause in the wall above
             if (kj >= squeezeLoK && kj <= squeezeHiK) continue;
             const aj = anchor(kj, 1, 20);
             addBox(out, vadd(aj.c, aj.u, 9.9), [2.4, 1.8, 2.2], SAND, [aj.r, aj.u, aj.t]);
@@ -367,14 +370,15 @@
       for (let i = 0; i < 22; i++) {
         const s = 0.362 + i * 0.0082;
         if (s > 0.535 && s < 0.556) continue;   // the terracing gap carved above
-        const a = anchor(K(s), 1, 19.3), b = [a.r, a.u, a.t];
+        if (s > 0.386 && s < 0.415) continue;   // T7 pause in the rampart: nothing to hang on
+        const a = anchor(K(s), 1, 19.55), b = [a.r, a.u, a.t];
         const col = (i % 2) ? AZ_TEAL : AZ_ORANGE;
         addBox(out, vadd(a.c, a.u, 5.4), [0.14, 6.4, 1.9], col, b);
         addBox(out, vadd(a.c, a.u, 8.2), [0.18, 0.7, 2.1], [0.86, 0.72, 0.26], b);
       }
 
       for (const s of [0.365, 0.385, 0.405, 0.555]) {
-        const a = anchor(K(s), 1, 19.4);
+        const a = anchor(K(s), 1, 17.6);   // 3.4 m plinth must clear the wall face at gap 19.4 (was 19.4: 1.2 m inside it)
         const b = [a.r, a.u, a.t];
         addBox(out, vadd(a.c, a.u, 4.4), [2.6, 9.2, 3.2], SAND_DARK, b);   // foot 0.2 under the plinth's
         addBox(out, vadd(a.c, a.u, 0.18), [3.4, 0.34, 3.8], SAND_LIT, b);
@@ -568,7 +572,7 @@
             // Slim plinth — a fat one buried into the castle slope
             addBox(stage, vadd(c0, a.u, 0.8), [16, 0.9, 36], PD, b);
             // Portal proud of the hall face (avoids flatCoplanar with the niche)
-            addBox(stage, vadd(vadd(c0, a.r, -9.8), a.u, 5.5), [2.4, 11, 9], PL, b);
+            addBox(stage, vadd(vadd(c0, a.r, -9.9), a.u, 5.7), [2.4, 11, 9], PL, b);
             addBox(stage, vadd(vadd(c0, a.r, -11.0), a.u, 4), [0.8, 7, 4.5], PD, b);
             const mau = vadd(vadd(c0, a.t, 28), a.r, 2);
             addBox(stage, vadd(mau, a.u, 5), [11, 10, 11], PAL, b);
@@ -629,6 +633,12 @@
       }
 
       wall(0.58, 0.96, -1, 5, 1.4, [0.76, 0.72, 0.64], 0.6);
+      // Flame-orange emissive strip on the road face of the Caspian rail so the sea edge reads at night (survey #2).
+      along(0.58, 0.96, 6, (k, spacing) => {
+        const q = anchor(k, -1, 4.85);
+        if (onTrack(q.c[0], q.c[2], 0.5)) return;
+        addBox(out, vadd(q.c, q.u, 0.15), [0.5, 1.5, spacing * 0.9], [1.1, 0.62, 0.18], [q.r, q.u, q.t]);
+      });
       // Sparse decorative balusters (thinned — was 32)
       for (let i = 0; i < 12; i++) {
         const s = 0.58 + i * 0.031;
@@ -749,12 +759,21 @@
       waterBand(0.762, 0.93, -1, 16, 236, 12, SEA, { id: "baku-caspian-c" });
 
       // ── BAKU EYE — Ferris wheel pushed to far silhouette (sea void mid culled)
-      ferrisWheel(K(0.80), -1, 88, 28);
+      ferrisWheel(K(0.80), -1, 60, 28);   // 88 m left the wheel's lowest member 2.2 m clear of the shelf
       {
-        const a = anchor(K(0.80), -1, 88);
+        const a = anchor(K(0.80), -1, 60);
         const b = [a.r, a.u, a.t];
-        addBox(out, vadd(a.c, a.u, 0.2), [32, 0.4, 32], [0.14, 0.12, 0.18], b);
-        addCyl(out, vadd(a.c, a.u, 28), 3.0, 2.8, AZ_TEAL, 14, b);
+        // Seat the plinth on the real terrain (as ferrisWheel does for its legs), not the road-level anchor.
+        const t0 = terrainYAt(a.c[0], a.c[2]);
+        const gy = t0 != null ? t0 : a.c[1];
+        let gHi = gy, gLo = gy;
+        for (const [to, ro] of [[-16, -16], [-16, 16], [16, -16], [16, 16]]) {
+          const g = terrainYAt(a.c[0] + a.t[0] * to + a.r[0] * ro, a.c[2] + a.t[2] * to + a.r[2] * ro);
+          if (g != null) { gHi = Math.max(gHi, g); gLo = Math.min(gLo, g); }
+        }
+        const pc = [a.c[0], gy, a.c[2]];
+        addBox(out, vadd(pc, a.u, (gHi + 0.22 + gLo - 0.3) / 2 - gy), [32, gHi - gLo + 0.52, 32], [0.14, 0.12, 0.18], b);
+        addCyl(out, vadd(pc, a.u, 28), 3.0, 2.8, AZ_TEAL, 14, b);
       }
 
       // ── CASPIAN MARINA — sparse far yachts only (near marina culled)
