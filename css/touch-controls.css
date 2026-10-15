@@ -778,7 +778,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
    plate, which stands off --dock-r-w (0 before the first fit: the arm goes negative and PAUSE keeps the band).
    Broadcast keeps the band (#bc-pip hangs under PAUSE). At or under 150 % --tap-btn IS --tap-hud. */
 body:not(.desktop):not(.bc-on) {
-  --hud-btn-zt: clamp(1, var(--hud-btn-scale, 1), 2);
+  --hud-btn-zt: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2);
   --tap-btn: max(var(--tap-hud), min(calc(var(--tap-hud) / var(--hud-btn-z) * var(--hud-btn-zt)), calc((10px + var(--dock-r-w, 0px)) * var(--hud-z-top, var(--hud-scale)) - 14px)));
 }
 /* CAM mode button sits just left of the pause button (top-right). */

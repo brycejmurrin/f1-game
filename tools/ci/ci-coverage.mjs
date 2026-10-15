@@ -134,9 +134,10 @@ const outsideFixedGates = ALL_SPECS.filter((s) => !executed.has(s));
 // is untouched — a parser defect that reads as a CI regression, in the one
 // report that says whether the deploy is gated (first fixed 2026-09-10 on the
 // single `selected` job; the two-job gate re-introduced it).
+const planJobBody = jobs.find((j) => j.name === "plan")?.body || "";
 const selectAt = ci.indexOf("\n  select:\n");
-const selectJob = (jobs.find((j) => j.name === "select")?.body || "") + "\n" + (jobs.find((j) => j.name === "selected")?.body || "");
-const selectIf = selectJob.match(/^    if:\s*(.+)$/m)?.[1] || "";
+const selectJob = planJobBody + "\n" + (jobs.find((j) => j.name === "select")?.body || "") + "\n" + (jobs.find((j) => j.name === "selected")?.body || "");
+const selectIf = (jobs.find((j) => j.name === "select")?.body || planJobBody).match(/^    if:\s*(.+)$/m)?.[1] || "";
 const selectStep = /ci-select-specs-step\.sh/.test(selectJob)
   ? fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8") : "";
 const selectAll = selectJob + "\n" + selectStep;
