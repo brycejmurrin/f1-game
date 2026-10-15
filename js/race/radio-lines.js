@@ -8,12 +8,12 @@
  * Ruskin, GDC 2012): the rule knows the situation, the pool knows the ways of
  * saying it, and a writer adds a variant without touching a rule.
  *
- * ANTI-REPETITION IS A DECK, NOT A DICE ROLL. A pool is dealt like cards: every
- * variant is said once before any is said twice, and the first card of a fresh
- * deal is never the last card of the previous one. A random pick with five
- * variants repeats the previous line one time in five, and a repeated sentence is
- * what makes a radio sound canned. The shuffle draws from its OWN seeded stream,
- * never Math.random and never the sim RNG, so a replay says the same things.
+ * ANTI-REPETITION IS MEMORY, NOT A DICE ROLL. Each pool keeps the last N variant
+ * indices it spoke (N = min(3, variants − 1)) and `pick` never reuses one of
+ * them until it falls off the window. A random pick with five variants repeats
+ * the previous line one time in five, and a repeated sentence is what makes a
+ * radio sound canned. The draw uses its OWN seeded stream, never Math.random and
+ * never the sim RNG, so a replay says the same things.
  *
  * STYLE. Terse, capitalised, numbers where a real engineer gives numbers ("GAP
  * 1.2 TO HAMILTON"), surnames rather than three-letter codes because the voice
@@ -40,10 +40,12 @@ var RadioLines = (function () {
     "eng.lap1Same": ["P{pos} AFTER LAP ONE. SETTLE IN", "CLEAN START. P{pos}"],
     // ── ENGINEER: the car ahead ────────────────────────────────────────────
     "eng.attack": ["{gap} TO {ahead}. YOU'RE IN RANGE", "WITHIN A SECOND OF {ahead}. GO FOR IT",
-      "{ahead} IS {gap} AHEAD. ATTACK", "{gap} TO {ahead}. LINE IT UP"],
+      "{ahead} IS {gap} AHEAD. ATTACK", "{gap} TO {ahead}. LINE IT UP",
+      "CLOSING ON {ahead}. {gap} BACK"],
     "eng.attackOt": ["OVERTAKE IS ARMED. {gap} TO {ahead}", "USE THE OVERTAKE ON {ahead}", "{ahead} {gap} AHEAD. OVERTAKE IS YOURS"],
     "eng.closing": ["GAP TO {ahead} {gap}. CLOSING {rate} A LAP", "{ahead} {gap} AHEAD, YOU'RE {rate} QUICKER",
-      "KEEP PUSHING. {gap} TO {ahead}, CLOSING"],
+      "KEEP PUSHING. {gap} TO {ahead}, CLOSING", "YOU'RE {rate} A LAP ON {ahead}. {gap} NOW",
+      "{gap} TO {ahead}. KEEP THE PRESSURE ON"],
     "eng.catchIn": ["YOU'LL CATCH {ahead} IN {laps} LAPS", "AT THIS PACE, {ahead} IN {laps} LAPS"],
     "eng.pulling": ["{ahead} IS PULLING AWAY. {gap} NOW", "LOSING {rate} A LAP TO {ahead}. DIG IN"],
     "eng.outOfReach": ["{ahead} IS {gap} AHEAD. HOLD P{pos}", "TOO FAR TO {ahead}. BRING HOME P{pos}"],
@@ -52,8 +54,11 @@ var RadioLines = (function () {
       "MIRRORS. {behind} IS {gap} BACK", "{behind} WITHIN A SECOND. STAY TIGHT"],
     "eng.threat": ["{behind} IS CLOSING, {rate} A LAP", "{behind} {gap} BEHIND AND QUICKER. PUSH"],
     "eng.clear": ["GOOD DEFENDING. {behind} DROPPING BACK", "{behind} FALLING AWAY, {gap} NOW. NICE"],
-    "eng.manage": ["GAP {gap} TO {behind}. MANAGE IT", "{gap} IN HAND. NO RISKS", "COMFORTABLE, {gap} BEHIND. KEEP IT CLEAN"],
-    "eng.status": ["P{pos}. {gapA} AHEAD, {gapB} BEHIND", "GAP AHEAD {gapA}, BEHIND {gapB}"],
+    "eng.manage": ["GAP {gap} TO {behind}. MANAGE IT", "{gap} IN HAND. NO RISKS", "COMFORTABLE, {gap} BEHIND. KEEP IT CLEAN",
+      "{behind} IS {gap} BACK. HOLD THE GAP", "MIRRORS. {behind} IS {gap} BACK"],
+    "eng.status": ["P{pos}. {gapA} AHEAD, {gapB} BEHIND", "GAP AHEAD {gapA}, BEHIND {gapB}",
+      "P{pos}. {gapA} TO THE CAR AHEAD, {gapB} BACK", "YOU'RE P{pos}. {gapA} AHEAD, {gapB} BEHIND",
+      "P{pos}. AHEAD BY {gapA}, BEHIND BY {gapB}"],
     // ── ENGINEER: pace ─────────────────────────────────────────────────────
     "eng.pb": ["PERSONAL BEST, {time}", "GOOD LAP. {time}, YOUR BEST", "THAT'S A {time}. PERSONAL BEST"],
     "eng.fastest": ["FASTEST LAP OF THE RACE! {time}", "PURPLE! FASTEST LAP, {time}", "{time}. THAT'S FASTEST LAP"],
@@ -82,7 +87,11 @@ var RadioLines = (function () {
     "eng.red": ["RED FLAG, RED FLAG. SLOW DOWN", "RED FLAG. BACK OFF, THE RACE IS STOPPED"],
     "eng.hit": ["BIG HIT. ARE YOU OKAY?", "THAT WAS A BIG ONE. CHECK THE CAR", "CONTACT. KEEP IT CALM"],
     "eng.rivalOut": ["{name} IS OUT. THAT'S P{pos}", "{name} HAS RETIRED. UP TO P{pos}"],
-    "eng.rivalPit": ["{name} HAS PITTED. PUSH NOW", "{name} IN THE PITS. CLEAR AIR, GO"],
+    "eng.rivalPit": ["{name} HAS PITTED. PUSH NOW", "{name} IN THE PITS. CLEAR AIR, GO",
+      "THAT'S {name} IN THE PITS. PUSH", "{name} IN THE PITS. GO NOW",
+      "PUSH NOW. {name} HAS PITTED"],
+    "eng.tyres": ["MANAGE THE TYRES, {left} TO GO", "SAVE THE TYRES. P{pos}",
+      "PLAN THE STOP, P{pos}", "{ahead} IS QUICKER. MANAGE THE TYRES", "LIFT AND COAST, P{pos}"],
     // A visible AI mistake near the player — push window. Phrasing stays inside
     // the recorded voice pack (assets/voice/george.json); regenerating clips
     // needs kokoro-js offline. TV lines below may use freer wording.
@@ -94,7 +103,8 @@ var RadioLines = (function () {
     // ── COMMENTARY ─────────────────────────────────────────────────────────
     "tv.start": ["AND IT'S LIGHTS OUT AND AWAY WE GO!", "LIGHTS OUT! {leader} LEADS THEM AWAY"],
     "tv.leadChange": ["{a} TAKES THE LEAD FROM {b}!", "AND {a} IS THROUGH INTO THE LEAD!", "CHANGE AT THE FRONT. {a} LEADS"],
-    "tv.pass": ["{a} GETS PAST {b} FOR P{pos}", "{a} MAKES THE MOVE ON {b}", "GREAT MOVE FROM {a} ON {b}. P{pos}"],
+    "tv.pass": ["{a} GETS PAST {b} FOR P{pos}", "{a} MAKES THE MOVE ON {b}", "GREAT MOVE FROM {a} ON {b}. P{pos}",
+      "{a} TAKES P{pos} FROM {b}", "{a} MAKES THE MOVE ON {b} FOR P{pos}"],
     "tv.repass": ["{a} TAKES P{pos} BACK FROM {b}", "{a} RETURNS THE FAVOUR ON {b}"],
     "tv.battle": ["{a} AND {b}, {gap} APART FOR P{pos}", "WHAT A SCRAP FOR P{pos}. {a} AND {b}", "{b} HUNTING {a} FOR P{pos}"],
     "tv.charge": ["{a} IS ON A CHARGE. P{pos} FROM P{grid}", "{a} CARVING THROUGH, UP TO P{pos}"],
@@ -103,7 +113,9 @@ var RadioLines = (function () {
     // Pack-safe (assets/voice/fable.json): no "runs wide"/"locks up" clips yet —
     // "OH" + surname is the closest committed reaction without regenerating the pack.
     "tv.mistake": ["OH! {a}", "{a}. OH!", "OH! {a}!"],
-    "tv.pit": ["{a} PITS FROM P{pos}", "PIT STOP FOR {a}, RUNNING P{pos}"],
+    "tv.pit": ["{a} PITS FROM P{pos}", "PIT STOP FOR {a}, RUNNING P{pos}",
+      "PIT STOP FOR {a} FROM P{pos}", "AND {a} PITS FROM P{pos}",
+      "PIT STOP FOR {a}, P{pos}"],
     "tv.sc": ["THE SAFETY CAR IS OUT!", "SAFETY CAR! THE FIELD BUNCHES UP"],
     "tv.vsc": ["VIRTUAL SAFETY CAR. THE FIELD SLOWS", "VSC DEPLOYED"],
     "tv.green": ["GREEN FLAG, WE'RE RACING AGAIN!", "AND WE ARE GREEN AGAIN"],
@@ -165,46 +177,64 @@ var RadioLines = (function () {
     };
   }
 
-  /** A dealer over POOLS (or `pools`), with its own per-pool decks. */
+  function recentWindow(poolLen) {
+    return poolLen > 1 ? Math.min(3, poolLen - 1) : 0;
+  }
+
+  /** A phrasebook dealer over POOLS (or `pools`), with per-pool recent history. */
   function create(seed, pools) {
     const P = pools || POOLS;
     const rand = rng(seed);
-    const decks = new Map();   // key -> { order: [idx…], at, last }
-    function deal(key) {
-      const pool = P[key];
-      if (!pool || !pool.length) return -1;
-      let d = decks.get(key);
-      if (!d) { d = { order: [], at: 0, last: -1 }; decks.set(key, d); }
-      if (d.at >= d.order.length) {
-        d.order = pool.map((_, i) => i);
-        for (let i = d.order.length - 1; i > 0; i--) {
-          const j = Math.floor(rand() * (i + 1));
-          const t = d.order[i]; d.order[i] = d.order[j]; d.order[j] = t;
-        }
-        // Never the same line twice in a row across a reshuffle.
-        if (d.order.length > 1 && d.order[0] === d.last) {
-          const t = d.order[0]; d.order[0] = d.order[1]; d.order[1] = t;
-        }
-        d.at = 0;
-      }
-      const i = d.order[d.at++];
-      d.last = i;
-      return i;
+    const recent = new Map();   // key -> [idx…] oldest first
+
+    function banned(key, poolLen) {
+      const n = recentWindow(poolLen);
+      const h = recent.get(key);
+      return n && h ? new Set(h.slice(-n)) : new Set();
     }
+
+    function remember(key, idx, poolLen) {
+      const n = recentWindow(poolLen);
+      if (!n) return;
+      let h = recent.get(key);
+      if (!h) { h = []; recent.set(key, h); }
+      h.push(idx);
+      while (h.length > n) h.shift();
+    }
+
+    function chooseIndex(key, poolLen, tried) {
+      const ban = banned(key, poolLen);
+      const open = [];
+      for (let i = 0; i < poolLen; i++) {
+        if (tried.has(i)) continue;
+        if (!ban.has(i)) open.push(i);
+      }
+      if (!open.length) {
+        for (let i = 0; i < poolLen; i++) if (!tried.has(i)) open.push(i);
+      }
+      if (!open.length) return -1;
+      return open[Math.floor(rand() * open.length)];
+    }
+
     /** The next line for `key` with `vars` filled, or "". A variant that cannot
      *  be filled (a slot missing) is skipped for one that can. */
     function pick(key, vars) {
       const pool = P[key];
-      if (!pool) return "";
+      if (!pool || !pool.length) return "";
+      const tried = new Set();
       for (let tries = 0; tries < pool.length; tries++) {
-        const i = deal(key);
+        const i = chooseIndex(key, pool.length, tried);
         if (i < 0) return "";
+        tried.add(i);
         const line = fill(pool[i], vars);
-        if (line) return line;
+        if (line) {
+          remember(key, i, pool.length);
+          return line;
+        }
       }
       return "";
     }
-    return { pick, reset() { decks.clear(); } };
+    return { pick, reset() { recent.clear(); } };
   }
 
   return Object.freeze({ POOLS, WHY, create, fill, gapText, timeText, surname });
