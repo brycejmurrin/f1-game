@@ -293,7 +293,7 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   // on 2026-10-14 to test nothing new, one job start per PR event. Its required
   // status context was removed from the deploy branch's protection first (a
   // required check that never reports blocks every merge), then the file.
-  assert.ok(!fs.existsSync(new URL("../../.github/workflows/docs-guards.yml", import.meta.url)),
+  assert.ok(!fs.existsSync(path.join(process.cwd(), ".github/workflows/docs-guards.yml")),
     "docs-guards.yml is back — tooling-fast already runs every file it ran, and a second workflow is a job start per PR event");
   const listAfter = (text, key, from = 0) => {
     const at = text.indexOf(`\n    ${key}:\n`, from);
