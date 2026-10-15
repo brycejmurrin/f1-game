@@ -152,8 +152,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // GL-aware capture / remote-group worker defaults (llvmpipe vs SwiftShader).
   "tests/unit/browser-workers.test.mjs",
   "tests/unit/build-client-drop.test.mjs",
-  // Circuit survey gallery: filename parsing, Pages stage pin, build smoke.
-  "tests/unit/build-gallery.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/cam-motion.test.mjs",
@@ -821,8 +819,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/sheetshape-registry.test.mjs",
   "tests/unit/shell-ids.test.mjs",
   "tests/unit/ship-filter-paths.test.mjs",
-  // The free cameras step round a hill, building or tree between eye and car (js/agent/shot-clear.js).
-  "tests/unit/shot-clear.test.mjs",
   // shot.mjs --batch / --jpeg / --raster parse (no Chromium).
   "tests/unit/shot-jobs.test.mjs",
   // The physics step's functions (update, updateCar…) compile under 48 KB of bytecode — TurboFan's
