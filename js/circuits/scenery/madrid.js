@@ -1078,8 +1078,11 @@
 
       // Sierra de Guadarrama — N/NW only (bearing ~280° at s≈0.40); south/east
       // stay flat Castilian plain. Six slots on the W→N arc (i/16×360°).
-      const SIERRA = [0.50, 0.56, 0.62];
-      const SIERRA_FAR = [0.56, 0.62, 0.68];
+      // Two hazed layers: a far, pale, tall massif behind a nearer, darker, narrower
+      // one with offset spans, so the skyline breaks into overlapping peaks
+      // rather than one flat-topped slab repeated (survey defect 3).
+      const SIERRA = [0.46, 0.53, 0.62];
+      const SIERRA_FAR = [0.58, 0.65, 0.75];
       const { cx, cz, radius } = lapBounds();
       const sierraArc = [0, 1, 2, 3, 4, 5];
       for (let j = 0; j < sierraArc.length; j++) {
@@ -1087,15 +1090,15 @@
         const angle = i / 16 * Math.PI * 2;
         const R = radius + 1150 + hash(i * 3) * 180;
         const along = angle + Math.PI / 2 + (hash(i * 7) - 0.5) * 0.45;
-        ridge(
-          cx + Math.cos(angle) * R,
-          cz + Math.sin(angle) * R,
-          pyMin - 1,
-          along,
-          540 + hash(i * 5) * 260,
-          170,
-          90 + hash(i * 11) * 60,
-          j % 2 ? SIERRA : SIERRA_FAR,
-        );
+        const len = 420 + hash(i * 5) * 240;
+        const h = 120 + hash(i * 11) * 90;
+        ridge(cx + Math.cos(angle) * R, cz + Math.sin(angle) * R, pyMin - 1,
+          along, len, 110, h, SIERRA);
+        // Far layer: 260 m further out, shifted half a span along, taller + paler.
+        const R2 = R + 260;
+        const shift = (hash(i * 13) - 0.5) * len;
+        ridge(cx + Math.cos(angle) * R2 - Math.sin(angle) * shift,
+          cz + Math.sin(angle) * R2 + Math.cos(angle) * shift, pyMin - 1,
+          along + (hash(i * 17) - 0.5) * 0.2, len * 1.3, 150, h * 1.35, SIERRA_FAR);
       }
     };
