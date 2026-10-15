@@ -309,7 +309,7 @@
       // https://www.planetf1.com/news/first-look-revamped-lusail-international-circuit-qatar
       (function mainGrandstand() {
         for (let i = 0; i < 5; i++) {
-          const s = 0.950 + i * 0.020;
+          const s = 0.9565 + i * (82 / 5400); // 82 m pitch for 80 m stands: no 28 m gaps
           qatarStand(`qatar-main-stand-${i}`, sl(s % 1), 1, 15, 80,
             [0.86, 0.86, 0.84], [0.18, 0.18, 0.22], i === 0);
         }
@@ -495,7 +495,8 @@
         const BRONZE = [0.20, 0.15, 0.10];
         const GOLD = [0.58, 0.46, 0.20], GOLD_ROOF = [0.66, 0.54, 0.26];
         // Real bearings from the OSM centre (Wikipedia 25.49°N 51.454°E): Katara
-        // ~153° / 16 km, Lusail Stadium ~155° / 8.5 km, Aspire ~182° / 25 km
+        // ~153° / 16 km, Lusail Stadium ~155° / 8.5 km (real distances; the props
+        // sit at 740 / 720 m so they stay inside the fog and far plane), Aspire ~182° / 25 km
         // (Aspire deliberately omitted — not on the Lusail horizon).
         // PLACED BY COMPASS from the lap centroid (the Fuji pattern), NOT by a
         // road-normal anchor: the normal tracks the road's heading, and Qatar's
@@ -520,7 +521,7 @@
           }, (stage) => {
             addBox(stage, vadd(a.c, a.u, 1.0), [34, 2.0, 34], BRONZE, b); // shared podium
             for (const dz of [-14, 14]) {
-              const lean = dz > 0 ? -0.14 : 0.14; // opposing lean = bowed pair
+              const lean = dz > 0 ? 0.05 : -0.05; // tops splay apart (a bowed pair), not an A-frame
               const tiltU = [b[1][0] + b[2][0] * lean, b[1][1], b[1][2] + b[2][2] * lean];
               const base = vadd(a.c, a.t, dz);
               addFrustum(stage, base, 8.5, 4.0, 110, BRONZE, 4, [b[0], tiltU, b[2]]);
@@ -641,14 +642,17 @@
         const SAND_W = 8.0, SAND_COL = [0.72, 0.58, 0.38];
         const SAND_GAP = GREEN_GAP + GREEN_W * 0.5 + SAND_W * 0.5 + 0.6; // ~8.3 m
         const bays = [
-          // [s0, s1, side, step]
-          [0.10, 0.22, 1, 16],   // T2/T3 outer
+          // [s0, s1, side, step] — AUTHORED-frame fracs (racing = authored - 0.3047).
+        // Re-keying them through sl() was tried: it moves bays onto inside curves and
+        // flatCoplanar rises 2 -> 9 (ground-audit), so the windows stay where they
+        // are and the labels below name where they really land.
+          [0.10, 0.22, 1, 16],   // racing 0.795-0.915 (T14-T16 approach, S/F)
           [0.10, 0.22, -1, 16],
-          [0.26, 0.38, 1, 16],   // flowing mid-lap outer
+          [0.26, 0.38, 1, 16],   // racing 0.955-0.075 (pit straight, T1)
           [0.26, 0.38, -1, 16],
-          [0.52, 0.66, 1, 16],
+          [0.52, 0.66, 1, 16],   // racing 0.215-0.355 (T4-T6)
           [0.52, 0.66, -1, 16],
-          [0.78, 0.90, 1, 16],   // late complex → T16 approach
+          [0.78, 0.90, 1, 16],   // racing 0.475-0.595 (T10-T11)
           [0.78, 0.90, -1, 16],
         ];
         for (const [s0, s1, side, step] of bays) {
