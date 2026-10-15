@@ -295,6 +295,8 @@ test("docs-guards.yml and ci.yml both run on every pull request; the prose list 
     "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required checks");
   const docsOn = docsWorkflow.slice(docsWorkflow.indexOf("\non:"), docsWorkflow.indexOf("\npermissions:"));
   assert.match(docsWorkflow, /^on:\n  pull_request:\n/m, "docs-guards runs on pull requests");
+  assert.match(docsWorkflow, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "marking a draft ready must re-run docs-guards on the same head");
   assert.doesNotMatch(docsOn, /\n    paths(-ignore)?:/, "docs-guards must report on every PR too (it is a required check)");
   assert.match(docsWorkflow, /- name: Is every changed path prose\?/);
   assert.match(docsWorkflow, /readFileSync\("\.github\/workflows\/ci\.yml", "utf8"\)/, "the prose list is READ from ci.yml, never retyped");
@@ -1347,10 +1349,10 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
   // Appended last: every earlier input keeps its name, position and default.
-  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam"]);
+  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry"]);
   assert.equal(inputs.track.default, "montreal"); assert.equal(inputs.clock.default, "12"); assert.equal(inputs.tod.default, "");
   assert.equal(inputs.cam.type, "choice");
-  assert.deepEqual(inputs.cam.options, ["helmet", "chase"]);
+  assert.deepEqual(inputs.cam.options, ["helmet", "chase", "chase>cockpit"]);
   assert.equal(inputs.cam.default, "helmet", "the default is the game's own camera, so a default dispatch measures what it did before");
   assert.ok(Object.keys(inputs).length <= 25, "GitHub caps workflow_dispatch at 25 inputs");
   const plan = wf.jobs.plan;
@@ -1371,6 +1373,8 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const chase = camOf({ INPUT_CAM: "chase" });
   if (chase !== null) {
     assert.equal(chase, "chase");
+    assert.equal(camOf({ INPUT_CAM: "chase>cockpit" }), "chase>cockpit");
+    assert.equal(camOf({ INPUT_CAM: "chase>drone" }), "helmet", "only the listed switch is allowed");
     assert.equal(camOf({}), "helmet");
     assert.equal(camOf({ INPUT_CAM: "drone\nimages=[\"x\"]" }), "helmet", "anything off the allowlist falls back, newline and all");
   }
@@ -1378,6 +1382,127 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   assert.match(ggc, /--cam ID {2,}player camera/, "gpu-game-check --help documents --cam");
   assert.match(ggc, /out\.cam = await bounded\(\(\) => page\.evaluate\(/);
   assert.ok(ggc.indexOf("out.cam = await bounded") < ggc.indexOf("out.raceCall = await bounded"), "the camera is set BEFORE race(), so race entry never draws through another one");
+  assert.ok(ggc.indexOf("out.cam = await bounded") < ggc.indexOf("out.menu = await enterViaMenu("), "…and before the menu entry, whose car prep reads the camera");
+});
+
+test("gpu-census threads an entry input (api default; menu / menu-full = the player's RACE!) to every game check (hunt 5 E)", () => {
+  const wf = parseYAML(gpuWorkflow);
+  const inputs = wf.on.workflow_dispatch.inputs;
+  assert.equal(Object.keys(inputs).at(-1), "entry", "appended LAST: every earlier input keeps its position");
+  assert.equal(inputs.entry.type, "choice");
+  assert.deepEqual(inputs.entry.options, ["api", "menu", "menu-full"]);
+  assert.equal(inputs.entry.default, "api", "a default dispatch and the nightly enter as every earlier census did");
+  assert.ok(Object.keys(inputs).length <= 25, "GitHub caps workflow_dispatch at 25 inputs");
+  const plan = wf.jobs.plan, split = plan.steps.find((s) => s.id === "split");
+  assert.equal(plan.outputs.entry, "${{ steps.split.outputs.entry }}");
+  assert.equal(split.env.INPUT_ENTRY, "${{ inputs.entry || 'api' }}", "a scheduled run (no inputs) gets the default");
+  assert.equal(wf.jobs.census.env.CENSUS_ENTRY, "${{ needs.plan.outputs.entry }}");
+  const uses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"[^\n]*--entry "\$\{CENSUS_ENTRY:-api\}"/g) || [];
+  assert.equal(uses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must enter the plan-resolved way");
+  // The plan's allowlist, executed, for a PUSH request too (the request JSON bypasses the choice list).
+  const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-plan-"));
+  const outOf = (env, req) => {
+    if (req) { fs.mkdirSync(path.join(dir, ".github"), { recursive: true }); fs.writeFileSync(path.join(dir, ".github/gpu-census-request.json"), JSON.stringify(req)); }
+    const r = cp.spawnSync("python3", ["-c", py], { cwd: dir, encoding: "utf8",
+      env: { PATH: process.env.PATH, EVENT: req ? "push" : "workflow_dispatch", ...env } });
+    if (r.error) return null;   // no python3: the static checks above still hold
+    assert.equal(r.status, 0, r.stderr);
+    return Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+  };
+  try {
+    const d = outOf({ INPUT_ENTRY: "menu" });
+    if (d !== null) {
+      assert.equal(d.entry, "menu");
+      assert.equal(outOf({}).entry, "api");
+      assert.equal(outOf({ INPUT_ENTRY: "menu-full" }).entry, "menu-full");
+      assert.equal(outOf({ INPUT_ENTRY: "garage\nimages=[\"x\"]" }).entry, "api", "anything off the allowlist falls back, newline and all");
+      const pushed = outOf({}, { images: "macos-latest", entry: "menu", cam: "chase>cockpit", ls: "apex26.tlxMirWarmLazy=1" });
+      assert.equal(pushed.entry, "menu"); assert.equal(pushed.cam, "chase>cockpit"); assert.equal(pushed.ls, "apex26.tlxMirWarmLazy=1");
+      assert.equal(pushed.images, '["macos-latest"]');
+      assert.equal(outOf({}, { entry: "teleport" }).entry, "api", "a pushed request is allowlisted too");
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  // The tool records the entry and threads it.
+  const ggc = fs.readFileSync(new URL("../../tools/gfx/gpu-game-check.mjs", import.meta.url), "utf8");
+  assert.match(ggc, /--entry api\|menu\|menu-full {2,}how the race starts/, "--help documents --entry");
+  assert.match(ggc, /glErrDrain: glErrDrainEveryPresent \? "present" : "beat", entry \}/, "the game JSON records which entry ran");
+  assert.match(ggc, /if \(entry === "api"\) \{\n\s+out\.raceCall = await bounded/, "api keeps race() exactly as before");
+  assert.match(ggc, /page\.waitForFunction\(menuPrepReady, null, \{ polling: 100, timeout: menuTimeout \}\)/, "the menu entry waits on the game's own prep signal");
+  assert.ok(ggc.indexOf('locator("#rs-go").click') > ggc.indexOf("waitForFunction(menuPrepReady"), "START RACE only after the prep wait");
+  assert.match(ggc, /out\.warmEnd = await bounded\(/, "memState().warm is read again after the window (the lazy mirror warm lands there)");
+  // LoAF script attribution beside the longtask window, and the gap rows' callback count.
+  assert.match(ggc, /\.observe\(\{ type: "long-animation-frame", buffered: true \}\)/);
+  assert.match(ggc, /loaf: window\.__apexLoaf \|\| \[\], loafObserver: window\.__apexLoafObserver/, "the dump carries the LoAF series");
+  assert.match(ggc, /out\.raceEntry\.loaf = _loaf;/, "written as raceEntry.loaf in the game JSON");
+  assert.match(ggc, /prevFrameMs: _gFrameDur, prevCallbacks: _gFrameCb,/);
+});
+
+test("census-entry parses --entry / --cam A>B and gates START RACE on the menu prep (hunt 5 E)", async () => {
+  const E = await import("../../tools/lib/census-entry.mjs");
+  assert.deepEqual(E.ENTRIES, ["api", "menu", "menu-full"]);
+  assert.equal(E.parseEntry(undefined), "api"); assert.equal(E.parseEntry(""), "api");
+  assert.equal(E.parseEntry("menu"), "menu"); assert.equal(E.parseEntry(" menu-full "), "menu-full");
+  assert.equal(E.parseEntry("garage"), null, "an unknown entry is refused, never silently api");
+  assert.deepEqual(E.parseCam(null), { start: null, switchTo: null }, "no --cam = the game's default camera");
+  assert.deepEqual(E.parseCam("chase"), { start: "chase", switchTo: null });
+  assert.deepEqual(E.parseCam("chase>cockpit"), { start: "chase", switchTo: "cockpit" });
+  for (const bad of ["chase>", ">cockpit", "a>b>c"]) assert.equal(E.parseCam(bad), null, bad);
+  assert.equal(E.switchBeat(20), 10); assert.equal(E.switchBeat(15), 7);
+  assert.equal(E.switchBeat(1), 1, "never the first beat: the switch lands inside the window");
+  // menuPrepReady reads window.__apex.menuPrep() — run it against stand-in pages.
+  const ready = { state: "menu", world: true, done: true, warmFrames: 0, warming: false };
+  const at = (p) => { globalThis.window = { __apex: p === undefined ? undefined : { menuPrep: () => p } }; try { return E.menuPrepReady(); } finally { delete globalThis.window; } };
+  assert.equal(at(ready), true);
+  assert.equal(at(undefined), false, "a build with no __apex is not ready");
+  assert.equal(at(null), false, "a build with no menuPrep hook is not ready");
+  for (const [k, v] of [["state", "count"], ["world", false], ["done", false], ["warmFrames", 2], ["warming", true]])
+    assert.equal(at({ ...ready, [k]: v }), false, `${k}=${v} is not ready`);
+  assert.equal(at({ ...ready, warmable: false, warmed: false }), true, "GLX/WGX have no program warm: done is enough");
+  // Serializable: Playwright ships the function's source, so it must not close over module scope.
+  assert.doesNotMatch(String(E.menuPrepReady), /\bE\.|import|require/);
+});
+
+test("the census race gate passes an entry that requested NO warm instead of waiting for warm.done (hunt 5 E)", async () => {
+  // Runs 491/492/502/503/505/507 read RACE NOT REACHED: the pack gate skipped
+  // requestWarm, so no warm:* mark, no entry warm, and memState().warm.done never came.
+  const { raceGate } = await import("../../tools/lib/census-entry.mjs");
+  const run = ({ state = "race", warming = false, warm = { done: false }, tlx = true, marks = [{ n: "begin:startRace", t: 0 }], hook = true }, gate) => {
+    globalThis.window = { __apex: { info: () => ({ state }), ...(hook ? { raceEntryProfile: () => ({ marks }) } : {}) } };
+    if (gate) globalThis.window.__raceGate = gate;
+    globalThis.GLX = tlx ? { __tlx: { memState: () => ({ warm }), warming: () => warming } } : {};
+    try { return { ok: raceGate(), g: globalThis.window.__raceGate }; } finally { delete globalThis.window; delete globalThis.GLX; }
+  };
+  const begin = { n: "begin:startRace", t: 0 };
+  // No warm mark at all (pack gate): passes once racing and not compiling, and records it.
+  let r = run({ marks: [begin, { n: "debrisPrime:end", t: 900 }] });
+  assert.equal(r.ok, true, "no warm requested: warm.done is not awaited");
+  assert.equal(r.g.warmRequested, false); assert.equal(r.g.warmMark, null);
+  // skipped-menu / noop: same, with the mark named.
+  r = run({ marks: [begin, { n: "warm:skipped-menu", t: 900 }] });
+  assert.equal(r.ok, true); assert.equal(r.g.warmMark, "warm:skipped-menu");
+  r = run({ marks: [begin, { n: "warm:noop", t: 900 }], tlx: false, warm: null });
+  assert.equal(r.ok, true); assert.equal(r.g.warmMark, "warm:noop");
+  // ...but never while something compiles, nor before the race state.
+  assert.equal(run({ marks: [begin], warming: true }).ok, false);
+  assert.equal(run({ marks: [begin], state: "count" }).ok, false);
+  // warm:request: the entry's warm must FINISH, exactly as before.
+  const req = [begin, { n: "warm:request", t: 900 }];
+  r = run({ marks: req, warm: { done: false } });
+  assert.equal(r.ok, false, "a requested warm that has not finished holds the gate");
+  assert.equal(r.g.warmRequested, true); assert.equal(r.g.warmMark, "warm:request");
+  assert.equal(run({ marks: req, warm: { done: true } }).ok, true);
+  // A build with no raceEntryProfile hook keeps the older rule: timeline done, or 5 s of race.
+  assert.equal(run({ hook: false, warm: { done: false } }).ok, false);
+  assert.equal(run({ hook: false, warm: { done: true } }).ok, true);
+  // An unprofiled window (no begin: mark) does not count as "no warm requested".
+  assert.equal(run({ marks: [], warm: { done: false } }).ok, false);
+  assert.equal(run({ hook: false, warm: null }, { t0: performance.now() - 6000, saw: false }).ok, true, "no timeline: 5 s of race with none");
+  assert.doesNotMatch(String(raceGate), /\bimport\b|require\(/, "serializable for page.waitForFunction");
+  const ggc = fs.readFileSync(new URL("../../tools/gfx/gpu-game-check.mjs", import.meta.url), "utf8");
+  assert.match(ggc, /await page\.waitForFunction\(raceGate, null, \{ polling: 100, timeout:/);
+  assert.match(ggc, /out\.raceEntry\.warmRequested = out\.race \? out\.race\.warmRequested : null;/, "raceEntry.warmRequested in the game JSON");
+  assert.match(ggc, /out\.raceEntry\.warmMark = out\.race \? out\.race\.warmMark : null;/);
 });
 
 test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpuErrors)", () => {
@@ -1461,6 +1586,15 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
     const head = job.slice(0, job.indexOf("\n    steps:"));
     assert.ok(!head.includes(fastTier), `${name} is part of the fast tier and must not opt out`);
   }
+});
+
+test("desktop pack-smoke is full-tier only (ready PRs, not drafts)", () => {
+  const desktop = fs.readFileSync(new URL("../../.github/workflows/desktop.yml", import.meta.url), "utf8");
+  assert.match(desktop, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "marking a draft ready must start pack-smoke when paths match");
+  const pack = desktop.slice(desktop.indexOf("\n  pack-smoke:\n"), desktop.indexOf("\n  release-build:\n"));
+  assert.match(pack, /github\.event\.pull_request\.draft == false/,
+    "pack-smoke must skip draft PRs so Electron work stays on the full tier");
 });
 
 test("a green fast-tier run pokes the train; a red or called one never does", () => {
