@@ -45,13 +45,21 @@ test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-fo
     git("commit", "-q", "--allow-empty", "-m", "a"); const a = git("rev-parse", "HEAD");
     git("commit", "-q", "--allow-empty", "-m", "b"); const b = git("rev-parse", "HEAD");
     git("checkout", "-q", "-b", "side", a); git("commit", "-q", "--allow-empty", "-m", "c"); const c = git("rev-parse", "HEAD");
-    const push = (line) => spawnSync("bash", [path.join(ROOT, ".githooks/pre-push"), "origin", "x"], { cwd: dir, input: line + "\n", encoding: "utf8" });
+    const push = (line, extra = {}) => { const env = { ...process.env, ...extra }; if (!("GITHUB_ACTIONS" in extra)) delete env.GITHUB_ACTIONS; return spawnSync("bash", [path.join(ROOT, ".githooks/pre-push"), "origin", "x"], { cwd: dir, input: line + "\n", encoding: "utf8", env }); };
     assert.equal(push(`refs/heads/x ${b} refs/heads/cursor/t-1 ${a}`).status, 0, "fast-forward");
     assert.equal(push(`refs/heads/x ${b} refs/heads/cursor/t-1 ${ZERO}`).status, 0, "new branch");
     assert.equal(push(`refs/heads/x ${c} refs/heads/cursor/t-1 ${b}`).status, 1, "rewrite (force push)");
     assert.equal(push(`(delete) ${ZERO} refs/heads/cursor/t-1 ${b}`).status, 1, "delete");
     assert.equal(push(`refs/heads/x ${b} refs/heads/claude/f1-game-project-26h3ng ${a}`).status, 1, "deploy branch");
     assert.equal(push(`refs/heads/x ${b} refs/heads/cursor/t-1 ${"f".repeat(40)}`).status, 1, "remote moved, not fetched");
+    // spec-timings.yml's rolling force-push: exact ref, GitHub Actions only.
+    const CI = { GITHUB_ACTIONS: "true" };
+    assert.equal(push(`refs/heads/x ${c} refs/heads/bot/spec-timings ${b}`, CI).status, 0, "bot/spec-timings rewrite in Actions");
+    assert.equal(push(`refs/heads/x ${c} refs/heads/bot/spec-timings ${b}`).status, 1, "bot/spec-timings rewrite outside Actions");
+    assert.equal(push(`refs/heads/x ${c} refs/heads/cursor/t-1 ${b}`, CI).status, 1, "other branch rewrite in Actions");
+    assert.equal(push(`refs/heads/x ${c} refs/heads/bot/spec-timings-x ${b}`, CI).status, 1, "near-miss ref in Actions");
+    assert.equal(push(`(delete) ${ZERO} refs/heads/bot/spec-timings ${b}`, CI).status, 1, "bot/spec-timings delete in Actions");
+    assert.equal(push(`refs/heads/x ${b} refs/heads/claude/f1-game-project-26h3ng ${a}`, CI).status, 1, "deploy branch in Actions");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
