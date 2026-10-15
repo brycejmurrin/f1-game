@@ -10,8 +10,10 @@
  * the index row; required for every non-JSON file; the long story stays in the
  * header below it), `@skill` (the paired skill or skills, omitted → "—") and
  * `@section` (`runner` places the row in the two-column "Test runner &
- * coverage" table). An over-length `@doc` is truncated to the cap with a
- * warning on stderr, so one long line cannot turn the whole index red.
+ * coverage" table). An over-length `@doc` is a defect like a missing one: the
+ * generator refuses it, so `--check` exits non-zero and names the file and its
+ * length. It used to be truncated with a stderr warning while `--check` still
+ * said "up to date", and four tools sat over the cap unnoticed (#1709).
  *
  * JSON files carry no comment, so their row is DERIVED: "read by" lists the
  * tools and tests that name the file. Underscore-prefixed files are agent
@@ -107,11 +109,22 @@ export function liveSkills() {
     .map((e) => e.name));
 }
 
-/** Collect every row; throws with the full list of problems on any defect. */
-export function collect() {
-  const files = walkTools();
+/** The over-length defect for one `@doc`, or null when it fits the cap. */
+export function docLengthProblem(rel, doc) {
+  return doc.length > DOC_MAX
+    ? `${rel}: @doc is ${doc.length} chars (max ${DOC_MAX}) — trim the header line`
+    : null;
+}
+
+/** Collect every row; throws with the full list of problems on any defect.
+ *  `files` and `read` default to the real tools/ tree; a test passes an
+ *  in-memory pair so it can prove a defect fails without touching a tool. */
+export function collect({
+  files = walkTools(),
+  read = (rel) => fs.readFileSync(path.join(ROOT, "tools", rel), "utf8"),
+} = {}) {
   const SKILLS = liveSkills();
-  const problems = [], warnings = [];
+  const problems = [];
   const main = [], runner = [], data = [];
   for (const rel of files) {
     if (rel.endsWith(".json")) {
@@ -122,16 +135,14 @@ export function collect() {
       problems.push(`${rel}: unknown extension — teach gen-tools-readme.mjs about it or move the file`);
       continue;
     }
-    const tags = parseHeader(fs.readFileSync(path.join(ROOT, "tools", rel), "utf8"));
+    const tags = parseHeader(read(rel));
     if (!tags.doc) {
       problems.push(`${rel}: no \`@doc\` line in its first ${HEADER_LINES} lines`);
       continue;
     }
-    let doc = tags.doc;
-    if (doc.length > DOC_MAX) {
-      warnings.push(`${rel}: @doc is ${doc.length} chars (max ${DOC_MAX}) — truncated in the index; trim the header line`);
-      doc = doc.slice(0, DOC_MAX - 1).replace(/\s+\S*$/, "") + "…";
-    }
+    const doc = tags.doc;
+    const tooLong = docLengthProblem(rel, doc);
+    if (tooLong) problems.push(tooLong);
     if (/undefined/.test(doc)) problems.push(`${rel}: @doc contains "undefined"`);
     if (tags.skill && SKILLS) {
       for (const name of tags.skill.split("/").map((x) => x.trim()).filter(Boolean))
@@ -147,7 +158,7 @@ export function collect() {
     else main.push(row);
   }
   if (problems.length) throw new Error("tools/ header tags:\n  " + problems.join("\n  "));
-  return { main, runner, data, warnings };
+  return { main, runner, data };
 }
 
 /** The tools/ subdirectories, in reading order, with the one line that says
@@ -220,8 +231,7 @@ const CONVENTIONS = `## Conventions
 `;
 
 export function render() {
-  const { main, runner, data, warnings } = collect();
-  for (const w of warnings) process.stderr.write(`gen-tools-readme: ${w}\n`);
+  const { main, runner, data } = collect();
   const out = [INTRO];
   out.push("## The tools, by what they do\n");
   for (const [dir, blurb] of GROUPS) {
