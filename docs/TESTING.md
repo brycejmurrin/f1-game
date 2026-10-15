@@ -1088,10 +1088,11 @@ CI check-run named `Structural guards` — the aggregator after the
 full-suite stamp) and `node tools/ci/ready-full-cap.mjs` (refuse when ≥3
 ready PRs already have in-progress or queued full-tier `ci.yml`; draft
 fast-tier stays uncapped). On top of that desk cap, GitHub bounds the LEGS
-(2026-10-15): a ready PR's `selected` legs each join one of 12 fleet-wide
+(2026-10-15): a ready PR's `selected` legs each join one of LANES fleet-wide
 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a
-field of every matrix row, `tools/ci/select-specs.mjs` LANES) and its smoke
-shard one lane per shard index, so at most 12 selected legs and one smoke run
+field of every matrix row, `tools/ci/select-specs.mjs` LANES, its start
+rotated by run number) and its smoke shard one lane per shard index, so at
+most LANES selected legs and one smoke run
 across every ready PR at once and the rest wait FIFO without holding a runner
 or being cancelled; the train, the nightly and a dispatch get a group of
 their own per leg and never wait behind PR work. Sync with
