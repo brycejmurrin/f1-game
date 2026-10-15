@@ -1,11 +1,9 @@
 {
   "buried": {
-    "abudhabi": 0,
     "albert_park": 3,
     "anderstorp": 2,
     "bahrain": 19,
     "baku": 1,
-    "brands_hatch": 3,
     "buenos_aires": 1,
     "catalunya": 5,
     "cota": 11,
@@ -39,12 +37,11 @@
     "suzuka": 2,
     "watkins_glen": 1,
     "zandvoort": 4,
-    "zolder": 7
+    "zolder": 5
   },
   "unsupported": {
     "bahrain": 1,
     "baku": 1,
-    "brands_hatch": 1,
     "imola": 2,
     "jeddah": 4,
     "mexico": 3,
@@ -58,7 +55,7 @@
     "anderstorp": 4,
     "bahrain": 1,
     "baku": 1,
-    "brands_hatch": 4,
+    "brands_hatch": 3,
     "buddh": 2,
     "buenos_aires": 4,
     "cota": 3,
