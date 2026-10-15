@@ -330,7 +330,14 @@ const RealReplay = (function () {
     function seekTo(t, highlight) {
       if (!run || !Number.isFinite(t)) return;
       const T = clamp(t, run.startT, run.duration);
-      if (run.reel) { const i = run.reel.findIndex((h) => h.t + HOLD_S >= T); run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i; }
+      if (run.reel) {
+        // NEXT/PREV names its item: findIndex would land on an earlier one still in its hold, and its skip() rewinds.
+        const k = highlight ? run.reel.indexOf(highlight) : -1;
+        const i = k >= 0 ? k : run.reel.findIndex((h) => h.t + HOLD_S >= T);
+        run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i;
+        // A scrub keeps its clock but cuts to the item ahead, so its event is on camera (#2196).
+        if (!highlight && i >= 0) highlight = run.reel[i];
+      }
       reposition(T, highlight, true);
     }
     // Scrubbing and reel cuts cross the same timeline boundary. Release all
