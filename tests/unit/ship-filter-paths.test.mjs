@@ -50,8 +50,9 @@ test("stage-files.mjs allow-list is non-empty and has the expected 14 names", ()
 });
 
 test("ship-filter reads stage-files.mjs and fails loudly on an empty list", () => {
-  const ship = (CI.split("\n  ship-filter:")[1] || "").split("\n  smoke:")[0];
-  assert.ok(ship, "ship-filter job missing");
+  // A step of the `select` plan job since 2026-10-15 (its own job before).
+  const ship = (CI.split("      - name: Does this diff change anything that ships?\n")[1] || "").split("\n      - name: ")[0];
+  assert.ok(ship, "ship filter step missing");
   assert.match(ship, /tools\/desktop\/stage-files\.mjs/);
   assert.match(ship, /stagedNames/);
   assert.doesNotMatch(ship, /matchAll\(\/\^\\s\*cp/);
