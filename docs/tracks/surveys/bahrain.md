@@ -7,8 +7,8 @@
 
 | Item | Detail |
 |------|--------|
-| **Committed shots** | **10** JPEGs under `artifacts/shots/tracks/bahrain/` (night, dry) — full batch re-capture blocked in this VM by `black-scene-with-edge-content`; expand to 34-frame TOD + weather matrix after shared shot tooling PR |
-| **Weather API** | `__apex.weather("dry"\|"wet"\|"rain"\|"overcast"\|"fog")` + `setTimeOfDay` — weather rows not captured yet |
+| **Committed shots** | **34** JPEGs under `artifacts/shots/tracks/bahrain/` (`git add -f`) — night sector pass + day/dawn/dusk on six hero views + wet/rain/overcast/fog on four landmarks |
+| **Capture** | Rebased on shared shot tooling (#1862): `shot.mjs --batch capture-jobs.jsonl --jpeg --present-timeout 90 --capture-retries 4 --wait 120` (SwiftShader / TLX default; no `APEX_GL=llvmpipe`) |
 
 ## Code map
 
@@ -18,33 +18,76 @@
 | Scenery | `js/circuits/scenery/bahrain.js` |
 | Landmarks | `tests/data/landmarks/bahrain.json` |
 
-## Panel grids — all committed shots (night · dry)
+## Panel grids — all 34 committed shots
 
-Relative image paths resolve from this file.
+Relative paths from this file.
 
-### Row 1 — Sector 1
-
-| | | |
-|:---:|:---:|:---:|
-| ![S1 pit straight](../../../artifacts/shots/tracks/bahrain/s1-pit-straight-night-dry.jpg) **S1 pit straight** · dry · night | ![S1 T1](../../../artifacts/shots/tracks/bahrain/s1-t1-schumacher-night-dry.jpg) **S1 T1 Schumacher** · dry · night | ![Sakhir Tower](../../../artifacts/shots/tracks/bahrain/s1-sakhir-tower-night-dry.jpg) **S1 Sakhir Tower** · dry · night |
-
-### Row 2 — Sector 2
+### Night · dry (sector pass)
 
 | | | |
 |:---:|:---:|:---:|
-| ![S2 T4](../../../artifacts/shots/tracks/bahrain/s2-t4-university-night-dry.jpg) **S2 T4 University** · dry · night | ![S2 sweep](../../../artifacts/shots/tracks/bahrain/s2-t567-sweep-night-dry.jpg) **S2 T5–T7 sweep** · dry · night | ![S2 T8](../../../artifacts/shots/tracks/bahrain/s2-t8-hairpin-night-dry.jpg) **S2 T8 hairpin** · dry · night |
-
-### Row 3 — Sector 3
+| ![S1 chase](../../../artifacts/shots/tracks/bahrain/s1-pit-chase-night-dry.jpg) **S1 chase** · dry · night | ![S1 pit straight](../../../artifacts/shots/tracks/bahrain/s1-pit-straight-night-dry.jpg) **S1 pit straight** · dry · night | ![S1 Sakhir Tower](../../../artifacts/shots/tracks/bahrain/s1-sakhir-tower-night-dry.jpg) **S1 Sakhir Tower** · dry · night |
 
 | | | |
 |:---:|:---:|:---:|
-| ![S3 T10](../../../artifacts/shots/tracks/bahrain/s3-t10-beyon-night-dry.jpg) **S3 T9–10 Beyon** · dry · night | ![S3 final](../../../artifacts/shots/tracks/bahrain/s3-final-corner-night-dry.jpg) **S3 final corner** · dry · night | ![S3 midfield](../../../artifacts/shots/tracks/bahrain/s3-midfield-dunes-night-dry.jpg) **S3 midfield dunes** · dry · night |
-
-### Row 4 — Driving view
+| ![S1 T1](../../../artifacts/shots/tracks/bahrain/s1-t1-schumacher-night-dry.jpg) **S1 T1** · dry · night | ![S2 T4](../../../artifacts/shots/tracks/bahrain/s2-t4-university-night-dry.jpg) **S2 T4** · dry · night | ![S2 sweep](../../../artifacts/shots/tracks/bahrain/s2-t567-sweep-night-dry.jpg) **S2 sweep** · dry · night |
 
 | | | |
 |:---:|:---:|:---:|
-| ![S1 chase](../../../artifacts/shots/tracks/bahrain/s1-pit-chase-night-dry.jpg) **S1 pit chase cam** · dry · night | | |
+| ![S2 T8](../../../artifacts/shots/tracks/bahrain/s2-t8-hairpin-night-dry.jpg) **S2 T8** · dry · night | ![S3 final](../../../artifacts/shots/tracks/bahrain/s3-final-corner-night-dry.jpg) **S3 final** · dry · night | ![S3 midfield](../../../artifacts/shots/tracks/bahrain/s3-midfield-dunes-night-dry.jpg) **S3 midfield** · dry · night |
+
+| | | |
+|:---:|:---:|:---:|
+| ![S3 T10](../../../artifacts/shots/tracks/bahrain/s3-t10-beyon-night-dry.jpg) **S3 T10** · dry · night |  |  |
+
+
+### Day · dry
+
+| | | |
+|:---:|:---:|:---:|
+| ![S1 pit straight](../../../artifacts/shots/tracks/bahrain/s1-pit-straight-day-dry.jpg) **S1 pit straight** · dry · day | ![S1 Sakhir Tower](../../../artifacts/shots/tracks/bahrain/s1-sakhir-tower-day-dry.jpg) **S1 Sakhir Tower** · dry · day | ![S1 T1](../../../artifacts/shots/tracks/bahrain/s1-t1-schumacher-day-dry.jpg) **S1 T1** · dry · day |
+
+| | | |
+|:---:|:---:|:---:|
+| ![S2 T4](../../../artifacts/shots/tracks/bahrain/s2-t4-university-day-dry.jpg) **S2 T4** · dry · day | ![S2 sweep](../../../artifacts/shots/tracks/bahrain/s2-t567-sweep-day-dry.jpg) **S2 sweep** · dry · day | ![S2 T8](../../../artifacts/shots/tracks/bahrain/s2-t8-hairpin-day-dry.jpg) **S2 T8** · dry · day |
+
+| | | |
+|:---:|:---:|:---:|
+| ![S3 final](../../../artifacts/shots/tracks/bahrain/s3-final-corner-day-dry.jpg) **S3 final** · dry · day | ![S3 T10](../../../artifacts/shots/tracks/bahrain/s3-t10-beyon-day-dry.jpg) **S3 T10** · dry · day |  |
+
+
+### Dawn · dry
+
+| | | |
+|:---:|:---:|:---:|
+| ![S1 pit straight](../../../artifacts/shots/tracks/bahrain/s1-pit-straight-dawn-dry.jpg) **S1 pit straight** · dry · dawn | ![S1 T1](../../../artifacts/shots/tracks/bahrain/s1-t1-schumacher-dawn-dry.jpg) **S1 T1** · dry · dawn | ![S2 T4](../../../artifacts/shots/tracks/bahrain/s2-t4-university-dawn-dry.jpg) **S2 T4** · dry · dawn |
+
+| | | |
+|:---:|:---:|:---:|
+| ![S2 sweep](../../../artifacts/shots/tracks/bahrain/s2-t567-sweep-dawn-dry.jpg) **S2 sweep** · dry · dawn | ![S2 T8](../../../artifacts/shots/tracks/bahrain/s2-t8-hairpin-dawn-dry.jpg) **S2 T8** · dry · dawn | ![S3 T10](../../../artifacts/shots/tracks/bahrain/s3-t10-beyon-dawn-dry.jpg) **S3 T10** · dry · dawn |
+
+
+### Dusk · dry
+
+| | | |
+|:---:|:---:|:---:|
+| ![S1 pit straight](../../../artifacts/shots/tracks/bahrain/s1-pit-straight-dusk-dry.jpg) **S1 pit straight** · dry · dusk | ![S1 T1](../../../artifacts/shots/tracks/bahrain/s1-t1-schumacher-dusk-dry.jpg) **S1 T1** · dry · dusk | ![S2 T4](../../../artifacts/shots/tracks/bahrain/s2-t4-university-dusk-dry.jpg) **S2 T4** · dry · dusk |
+
+| | | |
+|:---:|:---:|:---:|
+| ![S2 sweep](../../../artifacts/shots/tracks/bahrain/s2-t567-sweep-dusk-dry.jpg) **S2 sweep** · dry · dusk | ![S2 T8](../../../artifacts/shots/tracks/bahrain/s2-t8-hairpin-dusk-dry.jpg) **S2 T8** · dry · dusk | ![S3 T10](../../../artifacts/shots/tracks/bahrain/s3-t10-beyon-dusk-dry.jpg) **S3 T10** · dry · dusk |
+
+
+### Weather variants (day)
+
+| | | |
+|:---:|:---:|:---:|
+| ![S1 pit straight](../../../artifacts/shots/tracks/bahrain/s1-pit-straight-day-wet.jpg) **S1 pit straight** · wet · day | ![S1 T1](../../../artifacts/shots/tracks/bahrain/s1-t1-schumacher-day-rain.jpg) **S1 T1** · rain · day | ![S2 sweep](../../../artifacts/shots/tracks/bahrain/s2-t567-sweep-day-overcast.jpg) **S2 sweep** · overcast · day |
+
+| | | |
+|:---:|:---:|:---:|
+| ![S3 T10](../../../artifacts/shots/tracks/bahrain/s3-t10-beyon-day-fog.jpg) **S3 T10** · fog · day |  |  |
+
 
 ## Audit & fix (this branch)
 
