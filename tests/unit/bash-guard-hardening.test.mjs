@@ -108,6 +108,35 @@ test("the pkill guard blocks -f however the flags are spelled (M36)", () => {
     assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
 });
 
+test("settings.json turns the merge prompts off for every session, and squash/rebase stay denied (Bryce 2026-10-15)", () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  assert.equal(settings.env.APEX_MERGE_DESK, "1", "merging, arming and draft→ready run without a tap");
+  const run = (tool_name, tool_input) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/github-mcp-guard.sh")], {
+    input: JSON.stringify({ tool_name, tool_input }), encoding: "utf8",
+    env: { ...process.env, APEX_MERGE_DESK: settings.env.APEX_MERGE_DESK },
+  }).stdout.trim();
+  assert.equal(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge" }), "", "a merge-commit merge passes silently");
+  assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), "", "draft→ready passes silently");
+  for (const m of ["squash", "rebase"])
+    assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m }), /"deny"/, `${m} stays denied`);
+});
+
+test("pkill -f blocks whatever its pattern names: it always matches its own shell (#2125)", () => {
+  // `pkill -f "serve -l 3456"` passed the old browser-word filter and killed its
+  // own shell (exit 144) in two census siblings on 2026-10-15.
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  for (const cmd of [
+    'pkill -f "serve -l 3456"', "pkill -f serve ; sleep 1", "pkill -f 'http.server'",
+    "pkill -f zzz-census-nonexistent-pattern", "timeout 5 pkill --full apex-tools-mcp",
+  ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
+  // killall matches process names, not command lines: unrelated names stay allowed
+  for (const cmd of ["killall sleep", "pkill -x serve", 'echo "pkill -f serve"'])
+    assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});
+
 test("settings.json denies a force push or a deploy-branch push however it is spelled (M36)", () => {
   const deny = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8")).permissions.deny
     .filter((d) => d.startsWith("Bash(git push")).map((d) => d.slice("Bash(".length, -1));
@@ -616,7 +645,7 @@ test("a PASSING commit tells the model which guard path ran: additionalContext +
     fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "import { test } from 'node:test'; test('ok', () => {});\n");
     repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
     const commit = (command = "git commit -m x") => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }),
-      { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
+      { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_MERGE_DESK: "" } });   // the gh ask below needs a non-desk session
     const out = (r) => { assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout); };
     fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note ctx\n");
     repo.g("add", "docs/PHYSICS.md");
