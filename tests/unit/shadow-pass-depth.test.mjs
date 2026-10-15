@@ -123,3 +123,38 @@ test("propTop counts the instanced placements a real backend withholds from prop
   assert.ok(fused > 30, `zolder's fused prop top ${fused.toFixed(2)} m — the fixture moved; re-measure`);
   assert.ok(Math.abs(inst - fused) < 1, `instanced build ${inst.toFixed(2)} m vs fused ${fused.toFixed(2)} m`);
 });
+
+// #2180: reset() (every track load) must also forget the car map. The cadence
+// keep on an odd, speed-0 frame re-armed whatever the map held — the previous
+// session's cars — because only a pass ever wrote _carMapEmpty.
+test("reset() stops the cadence keep re-arming the previous session's car map", () => {
+  const ctx = vm.createContext({ Math, Float32Array, Array, Object, Number, Infinity });
+  seedLog(ctx);
+  vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: "mat4.js" });
+  vm.runInContext(`var LightTune = { LT: { shadowRange: 80, carShadow: true, moonShadow: 0, lampShadow: false } };
+    var PerfGov = { tier: () => 0 };`, ctx);
+  vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx,
+    { filename: "shadow-pass.js" });
+  const noop = () => {};
+  const calls = { begin: 0, keep: 0 };
+  const G = {
+    track: { meshes: { terrainChunked: null, roadChunked: null, terrain: {}, road: {}, props: {} } },
+    gfx: {
+      shadowBegin: noop, shadowEnd: noop, castShadow: noop, castShadowChunked: noop,
+      carShadowBegin: () => { calls.begin++; }, carShadowEnd: noop, carShadowKeep: () => { calls.keep++; },
+    },
+    camEye: [0, 3, -8], camTgt: [0, 0, 0], player: { speed: 0, head: 0, team: 0 }, state: "race",
+  };
+  const sp = ctx.ShadowPass.create(G, { vStd: v => v, teamMesh: () => ({}) });
+  const frame = { sunDir: [0, 0.8, 0.6], sunColor: [1, 1, 1] };
+  sp.sunPass(frame, 0, true);                 // even frame: the player is drawn into the car map
+  assert.equal(calls.begin, 1, "the even frame ran the car pass");
+  sp.sunPass(frame, 1, true);                 // odd, parked: keep the still-valid map
+  assert.equal(calls.keep, 1, "same session: the cadence keep re-arms the map");
+  sp.reset();                                 // track load
+  sp.sunPass(frame, 3, true);                 // odd, speed 0: first frame of the new session
+  assert.equal(calls.keep, 1, "after reset() the old map is never re-armed");
+  sp.sunPass(frame, 4, true);
+  sp.sunPass(frame, 5, true);
+  assert.equal(calls.keep, 2, "a pass of the new session re-enables the keep");
+});

@@ -591,3 +591,46 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     assert.equal(p.penalty, penalty, "WATCH must never accrue a simulated safety-car overtake penalty");
   } finally { g.G.quitToMenu(); }
 });
+
+// #2164: a VS FRIEND rival is POSED from its owner's packets, so the straight
+// rear-end path must treat it as immovable, exactly as orientedResponse does
+// (invMass 0). It used to split the impulse by the human:human masses, give the
+// local car half the change and write the other half onto the remote's speed —
+// which the next packet discards — leaving the pair closing ("welded" push).
+function netRearEnd(localBehind) {
+  const f = replayContactFixture(); f.replay.stop();
+  const solver = f.create(() => false);
+  const [local, remote] = f.G.cars;
+  f.G.netPlay = { owns: (c) => c === remote };
+  for (const c of [local, remote]) Object.assign(c, { human: true, yawVis: 0, x: 0, contactT: 0 });
+  const [rear, front] = localBehind ? [local, remote] : [remote, local];
+  Object.assign(rear, { prog: 100, s: 100, speed: 50 });
+  Object.assign(front, { prog: 104.6, s: 104.6, speed: 40 });
+  solver.resolveCollisions([], DT);   // binds track / netPlay for pairContact
+  const ct = solver.pairContact(local, remote);
+  assert.ok(ct && !ct.oriented && !ct.sideContact, "the scenario must take the straight rear-end path");
+  const remoteBefore = { speed: remote.speed, contactT: remote.contactT };
+  const localV0 = local.speed;
+  solver.resolveCollisions(f.G.cars, DT);
+  const e = vm.runInContext("AiDrive", f.ctx).bumpRestitution(10);
+  return { dv: local.speed - localV0, e, remote, remoteBefore };
+}
+
+test("a straight rear-end into a net-owned rival gives the local car the full (1+e)·relV", () => {
+  const { dv, e, remote, remoteBefore } = netRearEnd(true);
+  assert.ok(Math.abs(dv + (1 + e) * 10) < 1e-6, `local Δv ${dv.toFixed(3)} m/s, want ${(-(1 + e) * 10).toFixed(3)}`);
+  assert.equal(remote.speed, remoteBefore.speed, "the remote car's speed belongs to its owner");
+  assert.equal(remote.contactT, remoteBefore.contactT, "the remote car's contact flag belongs to its owner");
+});
+
+test("rear-ended by a net-owned rival, the local car is punted no further than the full correction", () => {
+  const { dv, e, remote, remoteBefore } = netRearEnd(false);
+  // The punt cap (AiDrive.humanPuntCap() = 8 at PACE 1) still bounds each
+  // relaxation pass; an immovable rear car keeps closing after the first, so
+  // the later passes top the local car up until the pair stops closing.
+  const capV = 8;
+  assert.ok(dv >= (1 + e) * capV - 1e-6 && dv <= (1 + e) * 10 + 1e-6,
+    `local Δv ${dv.toFixed(3)} m/s, want within [${((1 + e) * capV).toFixed(2)}, ${((1 + e) * 10).toFixed(2)}]`);
+  assert.equal(remote.speed, remoteBefore.speed);
+  assert.equal(remote.contactT, remoteBefore.contactT);
+});
