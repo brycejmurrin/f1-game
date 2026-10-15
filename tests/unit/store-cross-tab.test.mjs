@@ -505,6 +505,8 @@ test("BLOCKED storage: a throwing global getter does not abort boot when Indexed
   assert.doesNotThrow(() => vm.runInContext(SRC + ";this.GS=GameStore;", ctx),
     "store.js must finish boot even when the global storage getter throws");
   assert.equal(await ctx.GS.store.mirror.ready, 0);
+  assert.equal(ctx.GS.store.mirror.settled, true,
+    "denied storage must settle recovery before career boot checks the mirror");
   assert.equal(idb.opens, 0, "restore cannot write into blocked localStorage");
   assert.equal(ctx.GS.store.get("career.driver.0", null), null,
     "the live store still answers defaults while storage is blocked");
