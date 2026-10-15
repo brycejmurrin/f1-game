@@ -50,12 +50,12 @@ test("every workflow step that diffs a pull request resolves its base through th
   const job = (from, to) => ci.slice(ci.indexOf(`\n  ${from}:\n`), ci.indexOf(`\n  ${to}:\n`));
   const CALL = /\[ "\$EVENT" = pull_request \] && BEFORE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{BEFORE:-\}"\)"/;
   assert.match(job("sweeps-parts", "sweeps"), CALL, "the parts census filter");
-  assert.match(job("sweeps", "ship-filter"), CALL, "the geometry sweeps filter");
-  assert.match(job("renderer-filter", "renderer-macos"), CALL, "the renderer filter");
+  assert.match(job("sweeps", "sweeps-roll-up"), CALL, "the geometry sweeps filter");
+  // The three path filters and the node-slice plan are steps of `select` since 2026-10-15.
+  assert.match(job("select", "selected"), CALL, "the renderer / xr filter steps");
   assert.match(job("node-suites", "sweeps-parts"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the node-suites plan step");
   // 15-F3: the two steps #1292 missed. xr-filter's regex names ci.yml, so a stale base re-ran the VR job.
-  assert.match(job("xr-filter", "xr"), CALL, "the xr filter");
-  assert.match(job("unit-plan", "node-suites"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the unit-plan step");
+  assert.match(job("select", "selected"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the node-slice plan step");
   assert.match(docs, /PR_BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "docs-guards' prose check");
   assert.match(resolver, /\[ "\$EVENT" = pull_request \] && BEFORE="\$\(bash "\$\(dirname "\$0"\)\/ci-pr-base\.sh" "\$BEFORE"\)"/,
     "the selected gate's resolver");
@@ -137,5 +137,5 @@ test("15-F5: a green draft run is reused only while the base branch has not move
     assert.match(reuse("2026-10-10T09:00:00Z", { PR_BASE_REF: "" }).stdout, /reuse=false/);
     assert.match(reuse("").stdout, /reuse=false/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  assert.match(ci, /PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/, "the reuse-draft job passes the base ref");
+  assert.match(ci, /PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/, "the reuse step passes the base ref");
 });
