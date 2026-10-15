@@ -14,6 +14,8 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- Data Hub: a session with no data yet (Results on a race weekend, WATCH & DRIVE, Telemetry, Live) now says nothing is published yet instead of showing a load failure with a RETRY that never works (#2185).
+- Data Hub: a tab served from the stored copy after a failed refresh shows that copy's age and "offline copy" instead of "updated just now"; the Schedule's NEXT marker moves on once a race ends; large telemetry downloads are no longer fetched again on every visit (#2190).
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
