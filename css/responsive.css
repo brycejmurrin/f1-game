@@ -305,7 +305,7 @@
 :root[data-tl-edit] #tl-editor {
   position: fixed; z-index: 44;
   left: 0; right: 0; bottom: var(--safe-b); margin-inline: auto;
-  width: max-content; max-width: calc(100vw - 16px);
+  width: max-content; max-width: min(var(--safe-w), calc(100vw - 16px));
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
   gap: calc(var(--gap) * 0.5); padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
   background: var(--panel); border: 1px solid var(--plate-line); border-radius: 10px;
