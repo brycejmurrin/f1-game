@@ -618,7 +618,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `fogClip` | FOG GLOW CLIP | 0 … 1.75 | 0.7 | `uLampFogClip` | ✓ | glx.js×2 |
 | `fogSunCore` | FOG SUN CORE | 0 … 1.5 | 0.6 | `uFogSunCore` |   | glx.js×2 |
 | `overcastFogMul` | OVERCAST FOG BOOST | 1 … 2.75 | 1.7 | — |   | atmosphere.js×2 |
-| `fogWxMul` | FOG BOOST | 1 … 6 | 1.5 | — |   | atmosphere.js×2 |
+| `fogWxMul` | FOG BOOST | 1 … 2.75 | 1.5 | — |   | atmosphere.js×2 |
 | `lampVolBase` | BEAMS (CLEAR) | 0 … 0.7 | 0.05 | — | ✓ | game.js |
 | `lampVolHaze` | BEAMS (HAZE) | 0 … 1.5 | 0.65 | — | ✓ | game.js |
 | `lampVolCap` | BEAM CEILING | 0 … 1.5 | 0.7 | — | ✓ | game.js |

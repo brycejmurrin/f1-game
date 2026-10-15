@@ -443,7 +443,7 @@ test("FOG BOOST still scales fog: the band follows the knob, so pea-soup stays r
     ltStore.set("fogWxMul", boost); atmo.applyRaceSettings();
     return G.frame.fogDensity * LT.fogDensityMul;
   };
-  assert.ok(eff(6) > eff(1.5) * 3, `FOG BOOST 6 must thicken well past the default (${eff(6)} vs ${eff(1.5)})`);
+  assert.ok(eff(2.75) > eff(1.5) * 1.6, `FOG BOOST max must thicken well past the default (${eff(2.75)} vs ${eff(1.5)})`);
 });
 
 test("dawn/dusk FOG: horizon IS the fog colour and the zenith is pulled to it (#2257)", () => {
