@@ -66,3 +66,21 @@ test("knob-ab: args — --knob required, numbers checked, --wet feeds wetness, -
   assert.equal(o.desktop, false);
   assert.throws(() => parseSet("a=x"), /bad pair/);
 });
+
+test("ci-cancel-on-close.yml joins ci.yml's PR concurrency group exactly", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  const ci = fs.readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8");
+  const wf = fs.readFileSync(path.join(root, ".github/workflows/ci-cancel-on-close.yml"), "utf8");
+  // ci.yml's group, for a pull_request event, falls through to `github.event.pull_request.head.ref`
+  // after the `ci-` prefix; the cancel workflow must name that exact group or it cancels nothing.
+  const ciGroup = /^\s+group: (ci-\$\{\{.*\}\})\s*$/m.exec(ci)?.[1] || "";
+  assert.match(ciGroup, /^ci-\$\{\{ /, "ci.yml's top-level group still starts `ci-${{`");
+  assert.match(ciGroup, /\|\| github\.event\.pull_request\.head\.ref \|\|/, "ci.yml still resolves a PR run to head.ref");
+  assert.match(wf, /^\s+group: ci-\$\{\{ github\.event\.pull_request\.head\.ref \}\}\s*$/m);
+  assert.match(wf, /^\s+cancel-in-progress: true\s*$/m);
+  assert.match(wf, /types: \[closed\]/);
+  assert.match(wf, /actions: write/);
+});
