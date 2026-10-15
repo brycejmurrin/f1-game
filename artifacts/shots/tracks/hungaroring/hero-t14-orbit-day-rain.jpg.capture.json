@@ -1,0 +1,356 @@
+{
+  "job": {
+    "trackId": "hungaroring",
+    "frac": 0.882,
+    "cam": "orbit",
+    "az": 300,
+    "el": 20,
+    "dist": 100,
+    "side": 1,
+    "tod": "day",
+    "weather": "rain",
+    "showHud": false,
+    "team": null,
+    "out": "/workspace/artifacts/shots/tracks/hungaroring/hero-t14-orbit-day-rain.jpg",
+    "backend": "three",
+    "capture": {
+      "profile": "custom",
+      "width": null,
+      "height": null,
+      "viewport": null,
+      "dpr": 1,
+      "type": null,
+      "quality": null,
+      "scope": "scene",
+      "gpu": "swiftshader",
+      "gpuExplicit": false,
+      "browser": "auto",
+      "trace": false,
+      "tracePath": null,
+      "cacheAssets": false,
+      "reuse": true,
+      "isolated": false,
+      "seed": null,
+      "positionals": []
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "type": "jpeg",
+    "quality": 85,
+    "raster": false
+  },
+  "browser": {
+    "requested": {
+      "gpu": "swiftshader",
+      "flavor": "auto"
+    },
+    "executable": {
+      "requestedFlavor": "auto",
+      "executablePath": "/usr/local/bin/google-chrome",
+      "source": "PATH:google-chrome",
+      "flavor": "chromium",
+      "pid": 174055
+    },
+    "version": "154.0.8037.92",
+    "actual": {
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+      "vendor": "Google Inc. (Google)",
+      "software": true,
+      "devices": [
+        {
+          "vendorId": 65535,
+          "deviceId": 65535,
+          "vendorString": "Google Inc. (Google)",
+          "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+          "driverVendor": "SwANGLE",
+          "driverVersion": "5.0.0"
+        }
+      ],
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "enabled",
+        "webgpu": "unavailable_software",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "diag": {
+      "env": {
+        "backend": "three",
+        "backendState": {
+          "api": "webgpu",
+          "forceWebGL": false,
+          "pin": null,
+          "autoStayGL": false,
+          "hasGpu": true,
+          "gpuAdapterOk": true,
+          "gpuCanvasOk": true,
+          "canvasAlpha": null,
+          "isMobile": false,
+          "mobileTier": false,
+          "isWebKit": false,
+          "liteGpu": true,
+          "softwareGL": true,
+          "softAdapter": true,
+          "headless": true,
+          "forceHw": false,
+          "forceBatches": false,
+          "skipBatches": true,
+          "skipBatchesPin": false,
+          "gpuErrFrames": 0,
+          "envFail": 0,
+          "envFailMsg": "",
+          "softBlit": true,
+          "capPref": null,
+          "fx": {
+            "shadows": 22,
+            "marks": 0,
+            "skidVerts": 0,
+            "glow": 0,
+            "particles": 520,
+            "decals": 3,
+            "lineVerts": 3494
+          },
+          "line": {
+            "meshes": 1,
+            "visible": 1,
+            "inScene": 1,
+            "geo": {
+              "index": 12282,
+              "indexType": "Uint32Array",
+              "range": 10476,
+              "pos": 4096,
+              "attrs": [
+                "position",
+                "lineAcross",
+                "lineSpeed",
+                "lineZone",
+                "lineAlong"
+              ],
+              "renderOrder": 8,
+              "bs": [
+                617.1
+              ]
+            }
+          },
+          "softRead": {
+            "gen": 31,
+            "lastMs": 4556,
+            "fails": 0,
+            "lastErr": null,
+            "abandoned": 0,
+            "pending": true
+          },
+          "gpuErrors": 0,
+          "gpuFirstError": null,
+          "gpuRecentErrors": [],
+          "presents": 8413,
+          "healed": false,
+          "ctxLost": false,
+          "calls": 0,
+          "arrayNearest": false,
+          "hasMaterialMaps": true,
+          "packLive": true,
+          "drawMatMode": 0
+        }
+      }
+    },
+    "seed": 1,
+    "renderClock": 140.79450000001845,
+    "render": {
+      "scale": 1,
+      "fps": 60,
+      "floorMs": 16.6,
+      "auto": true,
+      "tier": 0,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 600,
+        "maxMs": 6299.7,
+        "slow": 10
+      },
+      "frameTimes": {
+        "frames": 2048,
+        "p50": 16.699999999982538,
+        "p95": 16.70000000001164,
+        "p99": 16.800000000017462,
+        "maxMs": 33.29999999998836,
+        "droppedSimS": 0.36666666666666664,
+        "physicsSteps": 17,
+        "windowFrames": 2048
+      },
+      "userTier": 0,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": false,
+      "tierFutile": false,
+      "tierHold": false
+    },
+    "camera": {
+      "eye": [
+        -101.01639781494846,
+        37.08070955875936,
+        -644.981481813644
+      ],
+      "target": [
+        -73.86611573791455,
+        2.8786952261924936,
+        -555.091979492188
+      ],
+      "fov": 64.00000000000009,
+      "previousAnchor": [
+        -73.86611573791455,
+        -555.091979492188
+      ],
+      "nextAnchor": [
+        -73.86611573791455,
+        -555.091979492188
+      ],
+      "renderFrame": 8413,
+      "simulationTime": 2.066666666666663,
+      "renderTime": 140.79450000001845
+    },
+    "info": {
+      "state": "race",
+      "track": "hungaroring",
+      "n": 1091,
+      "total": 4364.486579004022,
+      "timeTrial": false,
+      "seasonMode": false,
+      "flow": "gp",
+      "session": "race",
+      "career": false,
+      "practice": false,
+      "duel": false,
+      "raceQuali": false,
+      "raceGrid": "random",
+      "lapsTarget": 3,
+      "sectors": [
+        0.32,
+        0.68
+      ],
+      "turns": 14
+    }
+  },
+  "renderer": {
+    "requested": "three",
+    "matchesRequested": true,
+    "actual": "three",
+    "api": "webgpu",
+    "state": {
+      "api": "webgpu",
+      "forceWebGL": false,
+      "pin": null,
+      "autoStayGL": false,
+      "hasGpu": true,
+      "gpuAdapterOk": true,
+      "gpuCanvasOk": true,
+      "canvasAlpha": null,
+      "isMobile": false,
+      "mobileTier": false,
+      "isWebKit": false,
+      "liteGpu": true,
+      "softwareGL": true,
+      "softAdapter": true,
+      "headless": true,
+      "forceHw": false,
+      "forceBatches": false,
+      "skipBatches": true,
+      "skipBatchesPin": false,
+      "gpuErrFrames": 0,
+      "envFail": 0,
+      "envFailMsg": "",
+      "softBlit": true,
+      "capPref": null,
+      "fx": {
+        "shadows": 22,
+        "marks": 0,
+        "skidVerts": 0,
+        "glow": 0,
+        "particles": 520,
+        "decals": 3,
+        "lineVerts": 3494
+      },
+      "line": {
+        "meshes": 1,
+        "visible": 1,
+        "inScene": 1,
+        "geo": {
+          "index": 12282,
+          "indexType": "Uint32Array",
+          "range": 10476,
+          "pos": 4096,
+          "attrs": [
+            "position",
+            "lineAcross",
+            "lineSpeed",
+            "lineZone",
+            "lineAlong"
+          ],
+          "renderOrder": 8,
+          "bs": [
+            617.1
+          ]
+        }
+      },
+      "softRead": {
+        "gen": 31,
+        "lastMs": 4556,
+        "fails": 0,
+        "lastErr": null,
+        "abandoned": 0,
+        "pending": true
+      },
+      "gpuErrors": 0,
+      "gpuFirstError": null,
+      "gpuRecentErrors": [],
+      "presents": 8413,
+      "healed": false,
+      "ctxLost": false,
+      "calls": 0,
+      "arrayNearest": false,
+      "hasMaterialMaps": true,
+      "packLive": true,
+      "drawMatMode": 0
+    },
+    "positive": true,
+    "signal": "live-backend-state-and-presented-scene-pixels"
+  },
+  "readiness": {
+    "mode": "source-generation",
+    "required": 32,
+    "shown": 32
+  },
+  "pixels": {
+    "brightFraction": 0.9181315104166666,
+    "centerBrightFraction": 0.905016447368421,
+    "variance": 935.1038893918442,
+    "black": false,
+    "blackHudOnly": false,
+    "meaningful": true,
+    "classification": "scene-content"
+  },
+  "image": {
+    "path": "/workspace/artifacts/shots/tracks/hungaroring/hero-t14-orbit-day-rain.jpg",
+    "bytes": 87834,
+    "via": "game-soft",
+    "scope": "scene"
+  }
+}

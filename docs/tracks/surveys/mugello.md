@@ -1,6 +1,7 @@
-# Mugello — circuit survey (2026-10-14)
+# Mugello — circuit survey (2026-10-15)
 
-**Circuit id:** `mugello` · **Shots:** 36 committed JPEGs in `artifacts/shots/tracks/mugello/`.
+**Circuit id:** `mugello` · **Shots:** **36** JPEGs in `artifacts/shots/tracks/mugello/` (`git add -f`).  
+**Batch:** `node tools/shot/shot.mjs --batch docs/tracks/surveys/mugello-capture-jobs.json --jpeg --present-timeout 120 --capture-retries 6 --wait 150` (PR #1862).
 
 ## Dry day — sector coverage (12)
 

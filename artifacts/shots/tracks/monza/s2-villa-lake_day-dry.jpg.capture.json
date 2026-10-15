@@ -1,0 +1,356 @@
+{
+  "job": {
+    "trackId": "monza",
+    "frac": 0.4,
+    "cam": "orbit",
+    "az": 40,
+    "el": 20,
+    "dist": 78,
+    "side": 1,
+    "tod": "day",
+    "weather": "dry",
+    "showHud": false,
+    "team": null,
+    "out": "/workspace/artifacts/shots/tracks/monza/s2-villa-lake_day-dry.jpg",
+    "backend": "three",
+    "capture": {
+      "profile": "custom",
+      "width": null,
+      "height": null,
+      "viewport": null,
+      "dpr": 1,
+      "type": null,
+      "quality": null,
+      "scope": "scene",
+      "gpu": "swiftshader",
+      "gpuExplicit": false,
+      "browser": "auto",
+      "trace": false,
+      "tracePath": null,
+      "cacheAssets": false,
+      "reuse": true,
+      "isolated": false,
+      "seed": null,
+      "positionals": []
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "type": "jpeg",
+    "quality": 85,
+    "raster": false
+  },
+  "browser": {
+    "requested": {
+      "gpu": "swiftshader",
+      "flavor": "auto"
+    },
+    "executable": {
+      "requestedFlavor": "auto",
+      "executablePath": "/usr/local/bin/google-chrome",
+      "source": "PATH:google-chrome",
+      "flavor": "chromium",
+      "pid": 183714
+    },
+    "version": "154.0.8037.92",
+    "actual": {
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+      "vendor": "Google Inc. (Google)",
+      "software": true,
+      "devices": [
+        {
+          "vendorId": 65535,
+          "deviceId": 65535,
+          "vendorString": "Google Inc. (Google)",
+          "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+          "driverVendor": "SwANGLE",
+          "driverVersion": "5.0.0"
+        }
+      ],
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "enabled",
+        "webgpu": "unavailable_software",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "diag": {
+      "env": {
+        "backend": "three",
+        "backendState": {
+          "api": "webgpu",
+          "forceWebGL": false,
+          "pin": null,
+          "autoStayGL": false,
+          "hasGpu": true,
+          "gpuAdapterOk": true,
+          "gpuCanvasOk": true,
+          "canvasAlpha": null,
+          "isMobile": false,
+          "mobileTier": false,
+          "isWebKit": false,
+          "liteGpu": true,
+          "softwareGL": true,
+          "softAdapter": true,
+          "headless": true,
+          "forceHw": false,
+          "forceBatches": false,
+          "skipBatches": true,
+          "skipBatchesPin": false,
+          "gpuErrFrames": 0,
+          "envFail": 0,
+          "envFailMsg": "",
+          "softBlit": true,
+          "capPref": null,
+          "fx": {
+            "shadows": 1,
+            "marks": 0,
+            "skidVerts": 0,
+            "glow": 0,
+            "particles": 0,
+            "decals": 1,
+            "lineVerts": 4624
+          },
+          "line": {
+            "meshes": 1,
+            "visible": 1,
+            "inScene": 1,
+            "geo": {
+              "index": 13866,
+              "indexType": "Uint32Array",
+              "range": 13866,
+              "pos": 4624,
+              "attrs": [
+                "position",
+                "lineAcross",
+                "lineSpeed",
+                "lineZone",
+                "lineAlong"
+              ],
+              "renderOrder": 8,
+              "bs": [
+                1207.5
+              ]
+            }
+          },
+          "softRead": {
+            "gen": 6,
+            "lastMs": 3629,
+            "fails": 0,
+            "lastErr": null,
+            "abandoned": 0,
+            "pending": true
+          },
+          "gpuErrors": 0,
+          "gpuFirstError": null,
+          "gpuRecentErrors": [],
+          "presents": 4199,
+          "healed": false,
+          "ctxLost": false,
+          "calls": 1,
+          "arrayNearest": false,
+          "hasMaterialMaps": true,
+          "packLive": true,
+          "drawMatMode": 0
+        }
+      }
+    },
+    "seed": 1,
+    "renderClock": 70.16370000000286,
+    "render": {
+      "scale": 1,
+      "fps": 60,
+      "floorMs": 16.6,
+      "auto": true,
+      "tier": 0,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 600,
+        "maxMs": 316.7,
+        "slow": 2
+      },
+      "frameTimes": {
+        "frames": 2048,
+        "p50": 16.69999999999709,
+        "p95": 16.70000000001164,
+        "p99": 16.80000000000291,
+        "maxMs": 50,
+        "droppedSimS": 0.03333333333333333,
+        "physicsSteps": 5,
+        "windowFrames": 2048
+      },
+      "userTier": 0,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": false,
+      "tierFutile": false,
+      "tierHold": false
+    },
+    "camera": {
+      "eye": [
+        -571.5892524806402,
+        27.132540394795225,
+        883.3417996797888
+      ],
+      "target": [
+        -613.191357421875,
+        0.45496921539306223,
+        943.6836791992191
+      ],
+      "fov": 64,
+      "previousAnchor": [
+        -613.191357421875,
+        943.6836791992191
+      ],
+      "nextAnchor": [
+        -613.191357421875,
+        943.6836791992191
+      ],
+      "renderFrame": 4200,
+      "simulationTime": 1.3333333333333321,
+      "renderTime": 70.16370000000286
+    },
+    "info": {
+      "state": "race",
+      "track": "monza",
+      "n": 1444,
+      "total": 5777.158737362079,
+      "timeTrial": false,
+      "seasonMode": false,
+      "flow": "gp",
+      "session": "race",
+      "career": false,
+      "practice": false,
+      "duel": false,
+      "raceQuali": false,
+      "raceGrid": "random",
+      "lapsTarget": 3,
+      "sectors": [
+        0.26536876,
+        0.58048447
+      ],
+      "turns": 11
+    }
+  },
+  "renderer": {
+    "requested": "three",
+    "matchesRequested": true,
+    "actual": "three",
+    "api": "webgpu",
+    "state": {
+      "api": "webgpu",
+      "forceWebGL": false,
+      "pin": null,
+      "autoStayGL": false,
+      "hasGpu": true,
+      "gpuAdapterOk": true,
+      "gpuCanvasOk": true,
+      "canvasAlpha": null,
+      "isMobile": false,
+      "mobileTier": false,
+      "isWebKit": false,
+      "liteGpu": true,
+      "softwareGL": true,
+      "softAdapter": true,
+      "headless": true,
+      "forceHw": false,
+      "forceBatches": false,
+      "skipBatches": true,
+      "skipBatchesPin": false,
+      "gpuErrFrames": 0,
+      "envFail": 0,
+      "envFailMsg": "",
+      "softBlit": true,
+      "capPref": null,
+      "fx": {
+        "shadows": 1,
+        "marks": 0,
+        "skidVerts": 0,
+        "glow": 0,
+        "particles": 0,
+        "decals": 1,
+        "lineVerts": 4624
+      },
+      "line": {
+        "meshes": 1,
+        "visible": 1,
+        "inScene": 1,
+        "geo": {
+          "index": 13866,
+          "indexType": "Uint32Array",
+          "range": 13866,
+          "pos": 4624,
+          "attrs": [
+            "position",
+            "lineAcross",
+            "lineSpeed",
+            "lineZone",
+            "lineAlong"
+          ],
+          "renderOrder": 8,
+          "bs": [
+            1207.5
+          ]
+        }
+      },
+      "softRead": {
+        "gen": 6,
+        "lastMs": 3629,
+        "fails": 0,
+        "lastErr": null,
+        "abandoned": 0,
+        "pending": true
+      },
+      "gpuErrors": 0,
+      "gpuFirstError": null,
+      "gpuRecentErrors": [],
+      "presents": 4199,
+      "healed": false,
+      "ctxLost": false,
+      "calls": 1,
+      "arrayNearest": false,
+      "hasMaterialMaps": true,
+      "packLive": true,
+      "drawMatMode": 0
+    },
+    "positive": true,
+    "signal": "live-backend-state-and-presented-scene-pixels"
+  },
+  "readiness": {
+    "mode": "source-generation",
+    "required": 9,
+    "shown": 9
+  },
+  "pixels": {
+    "brightFraction": 0.9972330729166666,
+    "centerBrightFraction": 0.9962993421052632,
+    "variance": 490.8103700538577,
+    "black": false,
+    "blackHudOnly": false,
+    "meaningful": true,
+    "classification": "scene-content"
+  },
+  "image": {
+    "path": "/workspace/artifacts/shots/tracks/monza/s2-villa-lake_day-dry.jpg",
+    "bytes": 124992,
+    "via": "game-soft",
+    "scope": "scene"
+  }
+}

@@ -261,13 +261,13 @@
     {
       "trackId": "mugello",
       "frac": 0.88,
-      "cam": "trackside",
+      "cam": "orbit",
       "tod": "dawn",
       "weather": "dry",
       "out": "artifacts/shots/tracks/mugello/sector3-bucine__dry-dawn.jpg",
-      "el": 10,
-      "dist": 35,
-      "side": -1
+      "az": 200,
+      "el": 22,
+      "dist": 55
     },
     {
       "trackId": "mugello",

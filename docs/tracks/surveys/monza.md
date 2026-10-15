@@ -1,4 +1,4 @@
-# Monza — circuit survey (2026-10-14)
+# Monza — circuit survey (2026-10-15)
 
 End-to-end survey of **MONZA** (`js/circuits/monza.js` + `js/circuits/scenery/monza.js`) against
 `docs/tracks/monza.md`, node-VM audits, and headless TLX captures (`node tools/shot/shot.mjs --batch
@@ -8,7 +8,7 @@ for `weather` (wet, rain, overcast, fog, storm) and `tod` (dusk, night); JPEGs a
 
 ## Capture plan (36 frames)
 
-Rebased on `cursor/shared-shot-tooling-5b45`. Batch: `node tools/shot/shot.mjs --batch docs/tracks/surveys/monza-capture-jobs.json --jpeg --present-timeout 90 --capture-retries 4 --wait 120` (SwiftShader, no `APEX_GL=llvmpipe`).
+**Batch (re-shot 2026-10-15):** `node tools/shot/shot.mjs --batch docs/tracks/surveys/monza-capture-jobs.json --jpeg --present-timeout 120 --capture-retries 6 --wait 150` (shared shot tooling, PR #1862).
 
 - **8** sector landmarks (day / dry)
 - **4** hero views (start, Roggia, flyover, Parabolica): day × wet/rain/overcast/fog/storm + dusk/night dry

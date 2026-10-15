@@ -1,8 +1,8 @@
-# Nürburgring GP-Strecke — circuit survey (2026-10-14)
+# Nürburgring GP-Strecke — circuit survey (2026-10-15)
 
 **Scope:** Modern **Grand-Prix-Strecke** (`id: nurburgring`) only — not the Nordschleife.  
-**Evidence:** Headless TLX captures (`node tools/shot/shot.mjs --batch scratch/nurburgring-survey-final.json --jpeg --present-timeout 90 --capture-retries 4 --wait 120`), node VM audits (`audit-circuit.cjs`).  
-**Shot storage:** `artifacts/shots/tracks/nurburgring/` — **35 JPEGs** (`git add -f`, ≤1280px, q≈80, &lt;300 KB each).
+**Shots:** **35** JPEGs in `artifacts/shots/tracks/nurburgring/` (`git add -f`).  
+**Batch:** `node tools/shot/shot.mjs --batch docs/tracks/surveys/nurburgring-capture-jobs.json --jpeg --present-timeout 120 --capture-retries 6 --wait 150` (PR #1862).
 
 ## Code map
 

@@ -1,4 +1,4 @@
-# Imola circuit survey (2026-10-14)
+# Imola circuit survey (2026-10-15)
 
 Autodromo Enzo e Dino Ferrari — parkland ribbon along the Santerno, anticlockwise,
 `classic: true`, DAY / green theme. This note maps the implementation, records
@@ -6,10 +6,8 @@ visual findings, and ranks follow-ups.
 
 **Reference brief:** `docs/tracks/imola.md` (FIA 2025 corner table, palette, landmarks).
 
-**Survey shots:** **36** committed JPEGs in `artifacts/shots/tracks/imola/` (`git add -f`;
-repo `artifacts/` remains gitignored). Captured with `shot.mjs --batch` (shared tooling
-PR #1862) so filename `tod` / `weather` tags match the frame. Raw URL base:
-`https://raw.githubusercontent.com/brycejmurrin/f1-game/cursor/imola-survey-f9bd/artifacts/shots/tracks/imola/`.
+**Survey shots:** **36** JPEGs in `artifacts/shots/tracks/imola/` (`git add -f`).  
+**Batch:** `node tools/shot/shot.mjs --batch docs/tracks/surveys/imola-capture-jobs.json --jpeg --present-timeout 120 --capture-retries 6 --wait 150` (shared shot tooling, PR #1862).
 
 ---
 

@@ -1,0 +1,356 @@
+{
+  "job": {
+    "trackId": "hockenheim",
+    "frac": 0.15,
+    "cam": "orbit",
+    "az": 90,
+    "el": 16,
+    "dist": 100,
+    "side": 1,
+    "tod": "day",
+    "weather": "fog",
+    "showHud": false,
+    "team": null,
+    "out": "/workspace/artifacts/shots/tracks/hockenheim/wx-forest-fog-day.jpg",
+    "backend": "three",
+    "capture": {
+      "profile": "custom",
+      "width": null,
+      "height": null,
+      "viewport": null,
+      "dpr": 1,
+      "type": null,
+      "quality": null,
+      "scope": "scene",
+      "gpu": "swiftshader",
+      "gpuExplicit": false,
+      "browser": "auto",
+      "trace": false,
+      "tracePath": null,
+      "cacheAssets": false,
+      "reuse": true,
+      "isolated": false,
+      "seed": null,
+      "positionals": []
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "type": "jpeg",
+    "quality": 85,
+    "raster": false
+  },
+  "browser": {
+    "requested": {
+      "gpu": "swiftshader",
+      "flavor": "auto"
+    },
+    "executable": {
+      "requestedFlavor": "auto",
+      "executablePath": "/usr/local/bin/google-chrome",
+      "source": "PATH:google-chrome",
+      "flavor": "chromium",
+      "pid": 184263
+    },
+    "version": "154.0.8037.92",
+    "actual": {
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+      "vendor": "Google Inc. (Google)",
+      "software": true,
+      "devices": [
+        {
+          "vendorId": 65535,
+          "deviceId": 65535,
+          "vendorString": "Google Inc. (Google)",
+          "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+          "driverVendor": "SwANGLE",
+          "driverVersion": "5.0.0"
+        }
+      ],
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "enabled",
+        "webgpu": "unavailable_software",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "diag": {
+      "env": {
+        "backend": "three",
+        "backendState": {
+          "api": "webgpu",
+          "forceWebGL": false,
+          "pin": null,
+          "autoStayGL": false,
+          "hasGpu": true,
+          "gpuAdapterOk": true,
+          "gpuCanvasOk": true,
+          "canvasAlpha": null,
+          "isMobile": false,
+          "mobileTier": false,
+          "isWebKit": false,
+          "liteGpu": true,
+          "softwareGL": true,
+          "softAdapter": true,
+          "headless": true,
+          "forceHw": false,
+          "forceBatches": false,
+          "skipBatches": true,
+          "skipBatchesPin": false,
+          "gpuErrFrames": 0,
+          "envFail": 0,
+          "envFailMsg": "",
+          "softBlit": true,
+          "capPref": null,
+          "fx": {
+            "shadows": 1,
+            "marks": 0,
+            "skidVerts": 0,
+            "glow": 0,
+            "particles": 0,
+            "decals": 1,
+            "lineVerts": 3634
+          },
+          "line": {
+            "meshes": 1,
+            "visible": 1,
+            "inScene": 1,
+            "geo": {
+              "index": 12282,
+              "indexType": "Uint32Array",
+              "range": 10896,
+              "pos": 4096,
+              "attrs": [
+                "position",
+                "lineAcross",
+                "lineSpeed",
+                "lineZone",
+                "lineAlong"
+              ],
+              "renderOrder": 7,
+              "bs": [
+                784.6
+              ]
+            }
+          },
+          "softRead": {
+            "gen": 44,
+            "lastMs": 11992,
+            "fails": 0,
+            "lastErr": null,
+            "abandoned": 0,
+            "pending": true
+          },
+          "gpuErrors": 0,
+          "gpuFirstError": null,
+          "gpuRecentErrors": [],
+          "presents": 20104,
+          "healed": false,
+          "ctxLost": false,
+          "calls": 1,
+          "arrayNearest": false,
+          "hasMaterialMaps": true,
+          "packLive": true,
+          "drawMatMode": 0
+        }
+      }
+    },
+    "seed": 1,
+    "renderClock": 336.0194000000632,
+    "render": {
+      "scale": 1,
+      "fps": 60,
+      "floorMs": 16.6,
+      "auto": true,
+      "tier": 0,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 600,
+        "maxMs": 833.4,
+        "slow": 2
+      },
+      "frameTimes": {
+        "frames": 2048,
+        "p50": 16.699999999953434,
+        "p95": 16.79999999998836,
+        "p99": 16.800000000046566,
+        "maxMs": 3033.2000000000116,
+        "droppedSimS": 0.21666666666666667,
+        "physicsSteps": 10,
+        "windowFrames": 2048
+      },
+      "userTier": 0,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": false,
+      "tierFutile": false,
+      "tierHold": false
+    },
+    "camera": {
+      "eye": [
+        422.3034390374306,
+        29.02051861514167,
+        276.13138451022286
+      ],
+      "target": [
+        491.7120971679691,
+        1.4567830334417504,
+        342.6346054077145
+      ],
+      "fov": 64.00000000000003,
+      "previousAnchor": [
+        491.7120971679691,
+        342.6346054077145
+      ],
+      "nextAnchor": [
+        491.7120971679691,
+        342.6346054077145
+      ],
+      "renderFrame": 20104,
+      "simulationTime": 2.6666666666666607,
+      "renderTime": 336.0194000000632
+    },
+    "info": {
+      "state": "race",
+      "track": "hockenheim",
+      "n": 1135,
+      "total": 4539.928609921743,
+      "timeTrial": false,
+      "seasonMode": false,
+      "flow": "gp",
+      "session": "race",
+      "career": false,
+      "practice": false,
+      "duel": false,
+      "raceQuali": false,
+      "raceGrid": "random",
+      "lapsTarget": 3,
+      "sectors": [
+        0.318,
+        0.69
+      ],
+      "turns": 17
+    }
+  },
+  "renderer": {
+    "requested": "three",
+    "matchesRequested": true,
+    "actual": "three",
+    "api": "webgpu",
+    "state": {
+      "api": "webgpu",
+      "forceWebGL": false,
+      "pin": null,
+      "autoStayGL": false,
+      "hasGpu": true,
+      "gpuAdapterOk": true,
+      "gpuCanvasOk": true,
+      "canvasAlpha": null,
+      "isMobile": false,
+      "mobileTier": false,
+      "isWebKit": false,
+      "liteGpu": true,
+      "softwareGL": true,
+      "softAdapter": true,
+      "headless": true,
+      "forceHw": false,
+      "forceBatches": false,
+      "skipBatches": true,
+      "skipBatchesPin": false,
+      "gpuErrFrames": 0,
+      "envFail": 0,
+      "envFailMsg": "",
+      "softBlit": true,
+      "capPref": null,
+      "fx": {
+        "shadows": 1,
+        "marks": 0,
+        "skidVerts": 0,
+        "glow": 0,
+        "particles": 0,
+        "decals": 1,
+        "lineVerts": 3634
+      },
+      "line": {
+        "meshes": 1,
+        "visible": 1,
+        "inScene": 1,
+        "geo": {
+          "index": 12282,
+          "indexType": "Uint32Array",
+          "range": 10896,
+          "pos": 4096,
+          "attrs": [
+            "position",
+            "lineAcross",
+            "lineSpeed",
+            "lineZone",
+            "lineAlong"
+          ],
+          "renderOrder": 7,
+          "bs": [
+            784.6
+          ]
+        }
+      },
+      "softRead": {
+        "gen": 44,
+        "lastMs": 11992,
+        "fails": 0,
+        "lastErr": null,
+        "abandoned": 0,
+        "pending": true
+      },
+      "gpuErrors": 0,
+      "gpuFirstError": null,
+      "gpuRecentErrors": [],
+      "presents": 20104,
+      "healed": false,
+      "ctxLost": false,
+      "calls": 1,
+      "arrayNearest": false,
+      "hasMaterialMaps": true,
+      "packLive": true,
+      "drawMatMode": 0
+    },
+    "positive": true,
+    "signal": "live-backend-state-and-presented-scene-pixels"
+  },
+  "readiness": {
+    "mode": "source-generation",
+    "required": 51,
+    "shown": 51
+  },
+  "pixels": {
+    "brightFraction": 0.9983723958333334,
+    "centerBrightFraction": 0.9983552631578947,
+    "variance": 774.0311677690725,
+    "black": false,
+    "blackHudOnly": false,
+    "meaningful": true,
+    "classification": "scene-content"
+  },
+  "image": {
+    "path": "/workspace/artifacts/shots/tracks/hockenheim/wx-forest-fog-day.jpg",
+    "bytes": 110987,
+    "via": "game-soft",
+    "scope": "scene"
+  }
+}

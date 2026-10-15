@@ -1,8 +1,8 @@
-# Hockenheimring — circuit survey (2026-10-14)
+# Hockenheimring — circuit survey (2026-10-15)
 
 **Scope:** `js/circuits/hockenheim.js` + `js/circuits/scenery/hockenheim.js` only.  
-**Base:** `claude/f1-game-project-26h3ng`.  
-**Screenshots:** `artifacts/shots/tracks/hockenheim/*.jpg` (**36** frames, `git add -f`; JPEG q≈80, max width 1280px, &lt;300 KB). Official `shot.mjs` batch (`--jpeg --present-timeout 90 --capture-retries 4 --wait 120`, SwiftShader).
+**Screenshots:** **36** JPEGs in `artifacts/shots/tracks/hockenheim/` (`git add -f`; q≈80, max width 1280px).  
+**Batch:** `node tools/shot/shot.mjs --batch docs/tracks/surveys/hockenheim-capture-jobs.json --jpeg --present-timeout 120 --capture-retries 6 --wait 150` (shared shot tooling, PR #1862).
 
 ## Code map
 

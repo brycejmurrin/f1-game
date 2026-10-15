@@ -1,6 +1,7 @@
-# Red Bull Ring (`redbull`) — circuit survey
+# Red Bull Ring (`redbull`) — circuit survey (2026-10-15)
 
-**Frames:** 36 hero matrix JPEGs · `artifacts/shots/tracks/redbull/` (1280px, q≈80, &lt;300 KB)
+**Frames:** **36** JPEGs · `artifacts/shots/tracks/redbull/` (`git add -f`).  
+**Batch:** `node tools/shot/shot.mjs --batch docs/tracks/surveys/redbull-capture-jobs.json --jpeg --present-timeout 120 --capture-retries 6 --wait 150` (PR #1862).
 
 Six anchor views × six lighting/weather combos (dry, wet, rain, overcast, fog, storm across the set).
 
