@@ -65,6 +65,7 @@ export function normalizeJob(raw, defaults = {}) {
   const tod = String(raw.tod ?? defaults.tod ?? "day");
   const weather = String(raw.weather ?? raw.wx ?? defaults.weather ?? "dry");
   const showHud = !!(raw.hud ?? raw.showHud ?? defaults.showHud);
+  const through = !!(raw.through ?? defaults.through);
   const team = raw.team ?? defaults.team ?? null;
   const baseCapture = defaults.capture || parseCaptureOptions([]);
   const captureArgs = ["--profile", String(raw.profile ?? baseCapture.profile)];
@@ -88,7 +89,7 @@ export function normalizeJob(raw, defaults = {}) {
   }
   const format = capture.type ? captureScreenshotOptions(capture) : imageFormatFor(out, { jpegFlag: jpegFlag || fmtHint.type === "jpeg" });
   return {
-    trackId, frac, cam, az, el, dist, side, tod, weather, showHud, team, out, backend, capture, viewport,
+    trackId, frac, cam, az, el, dist, side, tod, weather, showHud, through, team, out, backend, capture, viewport,
     type: format.type,
     quality: format.type === "jpeg" ? capture.quality ?? format.quality ?? 85 : undefined,
     raster: !!(raw.raster ?? defaults.raster),
@@ -138,6 +139,7 @@ export function parseShotArgv(argv, ROOT) {
     tod: flag(argv, "--tod", "day"),
     weather: flag(argv, "--weather", flag(argv, "--wx", "dry")),
     showHud: has(argv, "--hud"),
+    through: has(argv, "--through"),
     team: TEAM,
     jpeg,
     raster,
@@ -152,7 +154,7 @@ export function parseShotArgv(argv, ROOT) {
   const positionals = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) {
-      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster"
+      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster" && argv[i] !== "--through"
         && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
       continue;
     }
@@ -196,7 +198,8 @@ export const SHOT_USAGE = `usage: node tools/shot/shot.mjs <trackId> <frac> [cam
   --present-timeout S  soft-present / readiness budget per shot (default min(--wait,120); raise on GPU-less VMs)
   --capture-retries N  automatic retries per shot on black frame / present timeout (default 2)
   --trace[=path] --cache-assets --isolated --seed N
-  cam: park | eye | orbit | cinematic | trackside.
+  cam: park | eye | orbit | cinematic | trackside. orbit/cinematic/trackside step round
+  a hill, building or tree between eye and car; --through keeps the asked-for placement.
   --jpeg / .jpg → JPEG q85 (human review). --raster → __apex.render view only (no PNG).
   Failed shots are listed and exit non-zero. llvmpipe often fails the black-frame check — prefer swiftshader/default.
   Default out: scratch/captures/playwright-probe/<track>-<frac%>-<cam>.png`;

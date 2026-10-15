@@ -7,14 +7,16 @@
 //     [--az N] [--el N] [--dist N] [--side -1|1] [--hud]
 //     [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog|storm]
 //     [--present-timeout S] [--capture-retries N]
-//     [--jpeg] [--raster] [--team <id>] [--wait <s>]
+//     [--jpeg] [--raster] [--team <id>] [--wait <s>] [--through]
 //   node tools/shot/shot.mjs --batch jobs.json [--jpeg] [--raster]
 //
 // cam = park | eye | orbit | cinematic | trackside   (default: orbit)
 //
 // Free-cam modes (eye/orbit/cinematic/trackside) set G.dbgCam instantly —
 // NEVER call snapCam() after them (it clears dbgCam back to chase). Only
-// `park` uses snapCam, because the chase camera eases.
+// `park` uses snapCam, because the chase camera eases. orbit/cinematic/trackside
+// step round terrain and props between eye and car (camera.clear says how far);
+// --through keeps the asked-for placement even when it is blocked.
 //
 // When assets/pack has baked models, this waits for Assets.loadModels() and
 // rebuilds the race once they are resident so scenery()'s bakedModel() calls
@@ -96,7 +98,7 @@ async function raceTrack(page, trackId, { tod, weather }, waitMs) {
 
 async function frameCamera(page, job) {
   return mutateCaptureScene(page,
-    ({ frac, cam, az, el, dist, side, tod, weather, showHud }) => {
+    ({ frac, cam, az, el, dist, side, tod, weather, showHud, through }) => {
       const a = window.__apex;
       a.headless(false);
       a.go();
@@ -106,11 +108,15 @@ async function frameCamera(page, job) {
       if (a.weather && weather && a.weather() !== weather) a.weather(weather);
       if (a.hud) a.hud(!!showHud);
 
+      // clear: the free cams step round a hill, building or tree between eye
+      // and car (js/agent/shot-clear.js); --through keeps the asked-for placement.
+      const clear = !through;
+      let placed = null;
       if (cam === "eye") a.eyeAt(frac, 0, 2.5);
-      else if (cam === "orbit") a.orbit(frac, az, el, dist);
-      else if (cam === "cinematic") a.cinematic(frac, { dist, el });
+      else if (cam === "orbit") placed = a.orbit(frac, az, el, dist, 1.5, { clear });
+      else if (cam === "cinematic") placed = a.cinematic(frac, { dist, el, clear });
       else if (cam === "trackside")
-        a.view({ s: frac, side, dist, height: Math.max(3, el * 0.35), look: "in" });
+        placed = a.view({ s: frac, side, dist, height: Math.max(3, el * 0.35), look: "in", clear });
       else a.snapCam();
 
       a.step && a.step(1 / 60, 4);
@@ -121,6 +127,7 @@ async function frameCamera(page, job) {
       if (dbgCamActive && cam !== "park" && camera && typeof camera === "object") {
         camera.mode = cam;
         camera.freeCam = true;
+        if (placed && placed.clear) camera.clear = placed.clear;
       }
       const raster = a.render ? a.render({ what: "view", cols: 48, rows: 18 }) : null;
       return {
