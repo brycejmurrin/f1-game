@@ -123,6 +123,24 @@ test("PerformanceObserver longtask entries are recorded when supported", () => {
   assert.equal(P.armed(), false);
 });
 
+test("menu entry session stays armed through present:ready and resumes into startRace", () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t } });
+  P.beginUi("race");
+  P.mark("flyby:start");
+  P.notePresent(false);
+  P.tickFrame();
+  P.tickFrame();
+  P.tickFrame();
+  assert.equal(P.armed(), true, "present:ready must not end the menu-entry window");
+  P.continueWindow("startRace");
+  const names = P.snapshot().marks.map((m) => m.n);
+  assert.ok(names.includes("entry:race"));
+  assert.ok(names.includes("flyby:start"));
+  assert.ok(names.includes("begin:startRace"));
+  assert.equal(P.snapshot().entry, "race");
+});
+
 test("beginUi + afterPaint + continueWindow keep UI cover marks into startRace", async () => {
   let t = 0;
   const P = load({ performance: { now: () => t } });
@@ -386,6 +404,36 @@ test("observer callbacks are conservatively scoped to the owning generation", as
   assert.equal(h.P.snapshot().blockMs, 75);
   a.held.resolve(); await a.request;
   b.held.resolve(); await b.request; h.P.end();
+});
+
+test("stageTable and diffStages summarise span legs for probes", () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });
+  P.begin("race");
+  t = 50;
+  P.mark("awaitIntroWarm:start");
+  t = 1050;
+  P.mark("awaitIntroWarm:end");
+  P.lap("afterWarm");
+  t = 1100;
+  P.lap("loadTrack");
+  const table = P.stageTable();
+  assert.equal(table.entry, "race");
+  assert.equal(table.budgetMs, 45000);
+  assert.ok(table.stages.some((r) => r.n === "awaitIntroWarm" && r.ms === 1000));
+  assert.ok(table.stages.some((r) => r.n === "loadTrack" && r.ms === 50));
+  const other = { legs: [{ n: "loadTrack", ms: 10 }], marks: [{ n: "awaitIntroWarm:start", t: 0 }, { n: "awaitIntroWarm:end", t: 40 }] };
+  const diff = P.diffStages(P.snapshot(), other);
+  assert.ok(diff.rows.some((r) => r.n === "awaitIntroWarm" && r.deltaMs > 900));
+});
+
+test("introBudgetExpired fires after the soft budget elapses", () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });
+  P.begin("race");
+  assert.equal(P.introBudgetExpired(), false);
+  t = 45001;
+  assert.equal(P.introBudgetExpired(), true);
 });
 
 test("successful completion waits for presentation even when no handoff exists", async () => {

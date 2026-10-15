@@ -601,8 +601,87 @@ function transportReplay(extra = {}) {
     traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, 10) } },
     seats: new Map([[cars[0], drivers[0]], [cars[1], drivers[1]]]), follow: "AAA", camera: "auto" };
   replay.start(options);
-  return { replay, G, cars, snaps, drivers, options };
+  return { replay, G, cars, snaps, drivers, options, ctx };
 }
+
+test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns the picture", () => {
+  for (const owner of ["auto", "manual", "locked", "fixed"]) {
+    const { replay, G, options, drivers } = transportReplay();
+    drivers[0].dnf = true; drivers[0].outT = 10;
+    options.script.passes = [];
+    options.script.cautions = [{ tFrom: 50, from: 1, level: 3 }];
+    options.traces.cars = { 1: line(0, 50, 0, 0, 10), 2: line(0, 50, 0, 0, 100) };
+    replay.start({ ...options, reel: true, camera: owner === "fixed" ? "heli" : "auto" });
+    assert.equal(replay.status().follow, "AAA");
+    replay.tick(13);
+    if (owner === "manual") replay.takePicture();
+    if (owner === "locked") replay.setLocked(true);
+    const frames = [];
+    G.snapGameCam = () => frames.push({ code: G.player.code, retired: G.player.retired });
+    replay.tick(1);
+    assert.equal(replay.status().T, 42);
+    assert.equal(replay.status().follow, owner === "auto" ? "BBB" : "AAA", owner);
+    assert.deepEqual(frames, [{ code: owner === "auto" ? "BBB" : "AAA", retired: owner !== "auto" }],
+      "the cut snaps once, after ownership-safe subject selection");
+    replay.tick(13);
+    assert.equal(replay.status().follow, owner === "auto" ? "BBB" : "AAA", "subject survives the no-driver segment");
+    replay.stop();
+  }
+});
+
+test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, including paused reels", () => {
+  for (const reel of [false, true]) for (const paused of [false, true]) for (const outerPaused of [false, true]) {
+    const { replay, G, options, ctx } = transportReplay();
+    replay.stop();
+    const classes = new Set(), writes = [], frames = [];
+    let layout;
+    const button = { textContent: "", setAttribute() {}, addEventListener() {} };
+    ctx.window = ctx;
+    ctx.document = { body: { classList: {
+      toggle: (name, on) => on ? classes.add(name) : classes.delete(name),
+      contains: (name) => classes.has(name), remove: (name) => classes.delete(name),
+    }, toggleAttribute() {} }, addEventListener() {}, getElementById: () => null };
+    ctx.RealRace = { replay: () => replay };
+    ctx.HudLayout = { setCam: (id) => { layout = id; } };
+    ctx.CamTunerPanel = { refresh() {} };
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8"), ctx);
+    G.$ = (id) => id === "btn-cam" ? button : null;
+    G.store = { set: (...args) => writes.push(args) };
+    const modes = ctx.CamModes.CAM_MODES, cockpit = modes.findIndex((m) => m.id === "cockpit");
+    G.camMode = cockpit;
+    G.setCamMode = ctx.CamModes.create(G).setCamMode;
+    replay.start({ ...options, reel, tower: false });
+    G.setCamMode(cockpit); replay.takePicture();
+    replay.seek(5); replay.setPaused(paused);
+    assert.equal(classes.has("cockpit-cam"), true);
+    assert.equal(layout, "cockpit");
+    const before = replay.status();
+    G.paused = outerPaused;
+    G.snapGameCam = (paint) => frames.push({ paint, mode: modes[G.camMode].id, layout });
+    assert.equal(replay.setAuto(true), true);
+    const after = replay.status(), shot = modes[G.camMode].id;
+    assert.notEqual(shot, "cockpit", "director takes the picture without waiting for a tick or next reel cut");
+    assert.notEqual(shot, "tv", "WATCH uses its own broadcast director, not the live-race TV rig");
+    assert.equal(after.broadcast.shot, shot);
+    assert.equal(after.broadcast.cuts, before.broadcast.cuts + 1);
+    assert.equal(replay.autoOn(), true);
+    assert.equal(classes.has("cockpit-cam"), false);
+    assert.equal(layout, shot);
+    assert.match(button.textContent, /^AUTO · /);
+    assert.deepEqual(frames, [{ paint: outerPaused, mode: shot, layout: shot }], "normal frames render playback pause; the outer pause menu needs an explicit paint");
+    assert.equal(after.T, before.T);
+    assert.equal(after.follow, before.follow);
+    assert.equal(after.paused, paused);
+    replay.setAuto(true);
+    assert.equal(replay.status().broadcast.cuts, after.broadcast.cuts, "repeated AUTO does not cut again");
+    assert.equal(frames.length, 1);
+    replay.stop();
+    assert.equal(G.camMode, cockpit, "exit restores the saved driving camera");
+    assert.equal(classes.has("cockpit-cam"), true);
+    assert.equal(layout, "cockpit");
+    assert.deepEqual(writes, [], "WATCH camera choices never overwrite the saved preference");
+  }
+});
 
 test("WATCH transport pause holds the replay clock, and seek reposes ended and rewound drivers before snapping", () => {
   const { replay, cars, snaps } = transportReplay();
