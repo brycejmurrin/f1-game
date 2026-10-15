@@ -859,7 +859,6 @@ const DEFERRED = {
 const LAZY_AGENT = [
   "js/agent/agentview-raster.js",
   "js/agent/agentview.js",
-  "js/agent/shot-clear.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
@@ -897,6 +896,7 @@ const LAZY_RACE_SESSION = [
   "js/race/start-lights.js",
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
+  "js/race/jump-start-penalty.js",
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/race/radio-lines.js", "js/race/race-radio.js"],

@@ -97,7 +97,11 @@ async function shot(op) {
     pitch: op.el == null || op.el === "" ? null : Number(op.el),
     // metres above the road at frac: eye = eye height (eyeAt h, default 2.5),
     // orbit = aim point (orbit h, default 1.5) — frames a prop high in the air.
-    h: op.h == null || op.h === "" ? null : Number(op.h) };
+    h: op.h == null || op.h === "" ? null : Number(op.h),
+    // clear (shot.mjs parity, __apex orbit/cinematic/view): step round a building, hill
+    // or tree between eye and car instead of landing inside a pit building at frac 0.
+    // op.through keeps the asked-for placement.
+    clear: !op.through };
   for (const k of ["az", "el", "dist", "h"]) {
     if (args[k] != null && !Number.isFinite(args[k])) throw new Error(`${k} must be a finite number`);
   }
@@ -114,9 +118,9 @@ async function shot(op) {
         const yaw = Math.atan2(r.target[0] - r.eye[0], -(r.target[2] - r.eye[2])) * 180 / Math.PI;
         a.view({ eye: r.eye, yaw, pitch: o.pitch });
       }
-    } else if (o.cam === "orbit") a.orbit(o.frac, o.az, o.el, o.dist, o.h == null ? 1.5 : o.h);
-    else if (o.cam === "cinematic") a.cinematic(o.frac, { dist: o.dist, el: o.el });
-    else if (o.cam === "trackside") a.view({ s: o.frac, side: o.side, dist: o.dist, height: Math.max(3, o.el * 0.35), look: "in" });
+    } else if (o.cam === "orbit") a.orbit(o.frac, o.az, o.el, o.dist, o.h == null ? 1.5 : o.h, { clear: o.clear });
+    else if (o.cam === "cinematic") a.cinematic(o.frac, { dist: o.dist, el: o.el, clear: o.clear });
+    else if (o.cam === "trackside") a.view({ s: o.frac, side: o.side, dist: o.dist, height: Math.max(3, o.el * 0.35), look: "in", clear: o.clear });
     else a.snapCam();
     if (a.step) a.step(1 / 60, 4);
     const vs = a.viewState ? a.viewState() : null, cs = a.camState ? a.camState() : null;
