@@ -351,7 +351,7 @@
       // lake position is UNCERTAIN (no source pinned it to the OSM trace).
       {
         const { terrainYAt, indexSolid } = api;
-        const LAKE = [0.22, 0.34, 0.36], LCX = 120, LCZ = -285, RA = 42, RB = 24, C = 6;
+        const LAKE = [0.16, 0.38, 0.48], LCX = 120, LCZ = -285, RA = 42, RB = 24, C = 6;
         indexSolid(0.775, 0.825, 1, 15, 55);
         for (let x = LCX - RA; x < LCX + RA; x += C) {
           for (let z = LCZ - RB; z < LCZ + RB; z += C) {
