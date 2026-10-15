@@ -1,1 +1,0 @@
-1792018958	Claude	weather phase 2 (#1800): rain-cells.js, wind.js, tyre-model.js, weather-arc.js; game.js gripMult/aquaplane/wind lines only, landing AFTER #1776. Phase 3 visuals: road lit shaders puddles (glsl-lit/tsl-lit/wgsl lit), new js/fx/droplets.js, spray in js/fx/particles.js  [cursor/weather-phase2-9b1e; session 4622d51cd27791ff5c360c23]
