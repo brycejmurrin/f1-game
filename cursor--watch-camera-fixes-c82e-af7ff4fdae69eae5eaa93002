@@ -1,0 +1,1 @@
+1792037624	Bryce Murrin	#1963 #1964 #1966 root-delegated isolated camera fixes: OWNED js/camera/trackside.js js/race/real-replay.js js/camera/mode-switch.js and existing unit tests. Coordinated #1776 via parent comment6184240257; no peer branch edits. Parent owns browser/full gates/publish.  [cursor/watch-camera-fixes-c82e; session af7ff4fdae69eae5eaa93002]
