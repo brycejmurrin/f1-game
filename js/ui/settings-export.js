@@ -125,6 +125,7 @@ const SPEC = [
   { k: "tlxEnvProbe", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js CAR REFLECTIONS (null = OFF)" },
   { k: "xr", lane: "raw", group: "display", def: "0", src: "js/xr/xr-opts.js", oneOf: ["0", "1"] },
   { k: "xrBackend", lane: "raw", group: "display", def: "webgl2", src: "js/xr/xr-opts.js", oneOf: ["webgl2", "webgpu"] },
+  { k: "xrInput", lane: "raw", group: "display", def: "controllers", src: "js/xr/xr-opts.js", oneOf: ["controllers", "existing"] },
   // HUD (js/game.js)
   { k: "hudProfile", lane: "json", group: "hud", def: "standard", oneOf: ["minimal", "standard", "broadcast"], src: "js/game.js" },
   { k: "hudMetricsLayout", lane: "json", group: "hud", def: "full", src: "js/game.js" },
@@ -173,6 +174,21 @@ const SPEC = [
   { k: "padSaturation", lane: "json", group: "driving", def: 0, src: "js/input/steer-tuning.js (percent short of the rim that is full lock)" },
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },
   { k: "padAxes", lane: "json", group: "driving", def: null, src: "js/ui/key-binds.js wheel wizard (axis indices + signs)" },
+  { k: "padProfiles", lane: "json", group: "driving", def: { v: 1, devices: [], legacyClaimed: false }, src: "js/input/controller-profiles.js",
+    normalize: (v) => {
+      if (typeof ControllerProfiles === "undefined" || !isObj(v) || ("v" in v && v.v !== 1)
+          || (!("devices" in v) && !("legacyClaimed" in v))
+          || ("devices" in v && (!Array.isArray(v.devices) || v.devices.length > ControllerProfiles.MAX))
+          || ("v" in v && !Array.isArray(v.devices))
+          || ("legacyClaimed" in v && typeof v.legacyClaimed !== "boolean")) return undefined;
+      // CHANGED files carry only object fields off their defaults. Merge those
+      // defaults; full legacy v1 maps still let clean infer legacyClaimed.
+      const raw = Object.assign({ v: 1, devices: [], legacyClaimed: false }, v);
+      if (v.v === 1 && !("legacyClaimed" in v)) delete raw.legacyClaimed;
+      const clean = ControllerProfiles.clean(raw);
+      return clean.devices.length === raw.devices.length ? clean : undefined;
+    } },
+  { k: "conditionCues", lane: "json", group: "driving", def: false, src: "js/ui/condition-cue-controls.js" },
   { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
   { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },
@@ -348,7 +364,7 @@ function collect(mode, G) {
 // holds career saves, lap records and OAuth tokens under the same namespace,
 // and nothing outside these five shapes is ever read.
 const GARAGE_FORMAT = "apex26-garage-v1";
-const GARAGE_PREFIXES = ["parts.", "livery.", "setup."];   // + ".custom." under livery
+const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets."];   // + ".custom." under livery
 const GARAGE_SINGLES = ["customTeam", "customLogo", "team", "driver"];
 const GARAGE_EXCLUDED = "career and season saves, lap records, ghosts, settings, tuners, control bindings, accounts";
 // A key is a garage key if it is one of the four singles or begins with a
@@ -499,6 +515,18 @@ function cleanLivery(l) {
 // the lot: the player's other work is not the file's fault.
 function garageValue(k, v) {
   if (v === undefined || v === null) return undefined;
+  if (k.indexOf("setupPresets.") === 0) {
+    if (typeof SetupPresets === "undefined" || typeof SetupTune === "undefined" || !isObj(v) || v.v !== 1
+        || !Array.isArray(v.items) || v.items.length > SetupPresets.MAX
+        || Object.keys(v).some((key) => key !== "v" && key !== "items")) return undefined;
+    if (v.items.some((row) => !isObj(row) || typeof row.name !== "string" || row.name.trim().length > 32
+        || !(row.trackId === null || typeof row.trackId === "string" && row.trackId.length <= 128) || !Number.isFinite(row.at)
+        || Object.keys(row).some((key) => !["id", "name", "tune", "trackId", "at"].includes(key))
+        || !isObj(row.tune) || Object.keys(row.tune).length !== SetupTune.FIELDS.length
+        || Object.keys(row.tune).some((field) => !SetupTune.FIELDS.includes(field)))) return undefined;
+    const clean = SetupPresets.normalize(v);
+    return clean.items.length === v.items.length ? clean : undefined;
+  }
   if (k.indexOf("livery.custom.") === 0) {
     if (!Array.isArray(v)) return undefined;
     return v.slice(0, GARAGE_LIVERIES_MAX).map(cleanLivery).filter(Boolean);

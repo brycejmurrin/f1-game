@@ -182,3 +182,59 @@ test("unavailable search feedback is visible on the destination page and clears 
   const visibleStatus = panel.querySelector('[role="status"]'); assert.ok(visibleStatus); assert.match(visibleStatus.textContent, /Steering input is unavailable/); assert.equal(visibleStatus.closest("[hidden]"), null);
   leaves[0](); assert.equal(panel.querySelector('[role="status"]'), null); index.hidden = false; ui.restore(); assert.equal(ui.input.value, "steering input");
 });
+
+test("preset preview reveals proposed differences before confirmation and retains keyboard focus without applying", () => {
+  const h = presets(), current = h.tune.get("mercedes"), preset = h.api.save(h.store, "mercedes", "Phone preview", { ...current, arbF: 9, brakeBias: 58 }).row;
+  const container = h.el("section", "preset-fixture"), ui = h.api.mount(container, { teamId: "mercedes", store: h.store });
+  const pick = ui.section.querySelector("select"), differences = ui.section.querySelector("ul"), actions = ui.section.querySelector(".player-tool-row"), status = ui.section.querySelector('[role="status"]');
+  const apply = actions.querySelectorAll("button").find((b) => b.textContent === "PREVIEW APPLY");
+  pick.value = preset.id; pick.onchange(); apply.focus();
+  const scrolls = []; differences.scrollIntoView = (options) => scrolls.push(options); h.changes.length = 0;
+  apply.onclick();
+  assert.ok(ui.section.children.indexOf(differences) < ui.section.children.indexOf(actions), "the proposed values precede CONFIRM APPLY in document order");
+  assert.ok(ui.section.children.indexOf(status) < ui.section.children.indexOf(actions), "the confirmation explanation is before the action too");
+  assert.equal(differences.children.length, 2); assert.match(differences.children[0].textContent, /FRONT ANTI-ROLL BAR:.*→ 9/);
+  assert.equal(scrolls.length, 1); assert.equal(scrolls[0].block, "start"); assert.equal(h.dom.document.activeElement, apply);
+  assert.equal(apply.textContent, "CONFIRM APPLY"); assert.deepEqual(h.changes, []); assert.equal(h.tune.get("mercedes").arbF, current.arbF);
+  pick.onchange(); delete differences.scrollIntoView;
+  assert.doesNotThrow(() => apply.onclick(), "non-layout fixtures may omit the optional scroll API"); assert.deepEqual(h.changes, []);
+});
+test("inspection outlines are steady, replace the previous surface and expire with exact camera restoration", () => {
+  const h = host(), api = h.run("js/garage/surface-inspection.js", "GarageSurfaceInspection"), jobs = new Map(), highlights = [], restored = [], camera = { az: 2, el: .3, dist: 7, pan: [1, 2, 3], spin: false };
+  let serial = 0, captures = 0, changes = 0;
+  const inspection = api.create({ capture: () => { captures++; return camera; }, show() {}, restore: (s) => restored.push(s),
+    highlight: (field) => { highlights.push(field); return field === "saddleTint" || field === "sideTint"; },
+    schedule: (fn, ms) => { assert.equal(ms, 5000); jobs.set(++serial, fn); return serial; }, cancel: (id) => jobs.delete(id) });
+  inspection.onChange(() => changes++);
+  inspection.inspect("saddleTint"); assert.equal(inspection.outlined(), true); const oldTimeout = jobs.get(serial);
+  inspection.inspect("sideTint"); assert.equal(captures, 1); assert.deepEqual(highlights, [null, "saddleTint", null, "sideTint"]); assert.equal(jobs.size, 1);
+  oldTimeout(); assert.equal(inspection.field(), "sideTint", "a stale cancelled timeout cannot end the next surface");
+  jobs.get(serial)(); assert.equal(inspection.field(), null); assert.equal(inspection.outlined(), false); assert.equal(highlights.at(-1), null); assert.equal(restored[0], camera); assert.equal(restored.length, 1); assert.equal(jobs.size, 0); assert.equal(changes, 3);
+  inspection.inspect("cover"); assert.equal(inspection.outlined(), false, "camera-only applicability never pretends an outline exists"); inspection.end(); assert.equal(highlights.at(-1), null);
+});
+test("inspection timeout updates semantic controls and disposal stops detached editor updates", () => {
+  const h = host(), api = h.run("js/garage/surface-inspection.js", "GarageSurfaceInspection"); let timeout;
+  api.bind({ capture: () => ({}), show() {}, restore() {}, highlight: (field) => field === "saddleTint", schedule: (fn) => { timeout = fn; return 1; }, cancel() {} });
+  const wrap = h.el("section", "inspect"), row = h.el("label", "surface", wrap), controls = api.controls(wrap); controls.row(row, "SADDLE", "saddleTint");
+  const button = row.querySelector("button"); button.onclick(); assert.equal(button.getAttribute("aria-pressed"), "true"); assert.match(wrap.querySelector('p').textContent, /affected paint region outlined for five seconds/);
+  timeout(); assert.equal(button.getAttribute("aria-pressed"), "false"); assert.equal(wrap.querySelectorAll("button").find((b) => b.textContent === "RESTORE INSPECTION CAMERA").disabled, true); assert.match(wrap.querySelector('p').textContent, /previous camera restored/);
+  controls.dispose(); api.inspect("saddleTint"); assert.equal(button.getAttribute("aria-pressed"), "false"); api.end();
+});
+test("garage contour borrows the current decal mesh adapter for procedural and loaded-GLB body modes", () => {
+  const h = host(), game = read("js/game.js"), camera = read("js/garage/setup-camera.js");
+  const callback = game.match(/previewDecalMesh:\s*(\(team\)\s*=>\s*\{[\s\S]*?\})\s*\}\);/);
+  assert.ok(callback, "the actual SetupCamera dependency injects its mesh getter");
+  const team = { id: "mercedes" }, parts = { body: "works" }, liv = { finShape: "none", spineHeight: "dorsal" }, procMesh = {}, glbMesh = {}, model = {}, calls = [], draws = [];
+  h.sb.carDraw = { modelBuf: null }; h.sb.teamDecalState = () => ({ val: 2, parts }); h.sb.resolveLivery = () => liv;
+  h.sb.getCarDecalMesh = (...args) => { calls.push(args); return args[2] ? glbMesh : procMesh; };
+  const getter = vm.runInContext("(" + callback[1] + ")", h.sb);
+  h.sb.deps = { previewDecalMesh: getter }; h.sb.team = team; h.sb.arrivalCar = model;
+  h.sb.surfaceOutline = { draw: (mesh, matrix) => draws.push({ mesh, matrix }) }; h.sb.GarageSurfaceInspection = { field: () => "sideTint" };
+  const start = camera.indexOf('  if (surfaceOutline && typeof GarageSurfaceInspection'), end = camera.indexOf('  // AFTER the car:', start);
+  const draw = () => vm.runInContext(camera.slice(start, end), h.sb);
+  draw(); assert.equal(draws[0].mesh, procMesh); assert.equal(draws[0].matrix, model);
+  h.sb.carDraw.modelBuf = { loaded: true }; draw(); assert.equal(draws[1].mesh, glbMesh, "a runtime GLB switch uses the existing pass's legacy anchors");
+  assert.deepEqual(calls.map((args) => args.slice(2)), [[false, "mercedes", "none", "dorsal"], [true, "mercedes", "none", "dorsal"]]);
+  assert.equal(calls[1][0], 2); assert.equal(calls[1][1], parts);
+  delete h.sb.deps.previewDecalMesh; draw(); assert.equal(draws.length, 2, "no independent hardcoded mesh fallback");
+});

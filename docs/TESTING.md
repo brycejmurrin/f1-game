@@ -1235,6 +1235,7 @@ what it covers.
 | `save-durability.test.mjs` | Foreign-write retry ownership, bounded authored mirrors, restore revisions and active-career races, native recovery feedback, cache-only cleanup. |
 | `controller-profiles.test.mjs` | Per-device axes/buttons, bounded legacy adoption and source-owned remote input release. |
 | `phone-input-improvements.test.mjs` | Age-bounded phone actions, semantic activation, pointer release, input ACK freshness and negotiated touch steering. |
+| `player-tools-backup.test.mjs` | Real SettingsExport and ControllerProfiles/SetupPresets: authored defaults, ALL/CHANGED profile round-trips, bounded controller maps, strict named-setup imports, malformed-file preservation, and the reload-based import contract. |
 | `battle-earcon.test.mjs` | Finite battle-gap motif selection, readiness, context changes, cancellation and default-off request safety; audio-unit and tooling-fast. |
 | `followup-update-check.test.mjs` | Hung update fetch/body recovery, abort fallback and stale-result isolation; tooling-fast and lifecycle-unit. |
 | `followup-platform.test.mjs` | Native install guidance, desktop single-instance/crash recovery and bounded mobile file/share handling; tooling-fast, desktop-unit and mobile-unit. |

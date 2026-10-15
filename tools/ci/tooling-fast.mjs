@@ -687,6 +687,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/platform-session-install.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
+  "tests/unit/player-tools-backup.test.mjs",
   "tests/unit/player-tools-ui.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
   "tests/unit/pr-board.test.mjs",

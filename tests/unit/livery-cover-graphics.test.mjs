@@ -199,3 +199,53 @@ test("Ferrari saddleFlanks rake is feathered, not a hard fill edge", () => {
   assert.match(fn[0], /F\.fx\(0\.38\)/, "rake foot stays 0.38");
   assert.match(fn[0], /ctx\.fill\(\)/, "solid saddle fill is unchanged");
 });
+
+test("inspection contour follows changed fill boundaries only inside actual cover atlas regions", () => {
+  const outline = vm.runInNewContext(fs.readFileSync(path.join(ROOT, "js/car/surface-outline.js"), "utf8") + ";GarageSurfaceOutline");
+  const w = 16, h = 16, a = new Uint8ClampedArray(w*h*4), b = new Uint8ClampedArray(w*h*4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y*w+x)*4; a[i+3] = b[i+3] = 255;
+    if ((x >= 4 && x <= 10 && y >= 4 && y <= 10) || x >= 14) for (let c = 0; c < 3; c++) b[i+c] = 25;
+  }
+  // An adaptive ink flip on the cover is not the selected painted fill.
+  for (let c = 0; c < 3; c++) b[(3*w+3)*4+c] = 255;
+  const pixels = outline.contour(a,b,w,h,[{ x: 2, y: 2, w: 11, h: 11 }],w,h);
+  assert.ok(pixels);
+  assert.equal(pixels[(4*w+7)*4+3], 255, "real fill edge is a white contour");
+  assert.equal(pixels[(7*w+7)*4+3], 0, "surface interior stays transparent");
+  assert.equal(pixels[(3*w+3)*4+3], 0, "derived automatic lettering flip is excluded");
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (x < 2 || x >= 13 || y < 2 || y >= 13)
+    assert.equal(pixels[(y*w+x)*4+3], 0, "no whole-atlas or unrelated-surface contamination");
+  assert.equal(outline.contour(a,a,w,h,[{x:0,y:0,w,h}],w,h), null, "no changed fill means no claimed outline");
+});
+
+test("inspection probes do not mutate the draft, survive scratch canvas reuse, and retire transient textures", () => {
+  const w = 16, h = 16, raster = new Uint8ClampedArray(w*h*4), probes = [], freed = [], textures = [], draws = [];
+  const canvas = { width:w, height:h, getContext: () => ({ getImageData: () => ({ data: Uint8ClampedArray.from(raster) }) }) };
+  const atlas = {
+    SIZE:w, SIZE_H:h, REGIONS:{crest:{x:2,y:2,w:11,h:11}}, fillInert: (key, liv) => key === "bandTint2" && liv.spineLogo !== "tricolour",
+    buildAtlas(team, colors, number, player, hiRes) {
+      probes.push({ colors, player, hiRes }); raster.fill(0);
+      for (let y=4;y<=10;y++) for(let x=4;x<=10;x++) { const i=(y*w+x)*4; for(let c=0;c<3;c++) raster[i+c]=Math.round(colors.spineTint[c]*255); raster[i+3]=255; }
+      return canvas;   // the mobile path reuses this same source
+    },
+  };
+  const doc = { createElement: () => { const cv = {width:0,height:0}; cv.getContext = () => ({
+    getImageData: () => ({data:new Uint8ClampedArray(cv.width*cv.height*4)}), putImageData(image) { cv.pixels=Uint8ClampedArray.from(image.data); },
+  }); return cv; } };
+  const outline = vm.runInNewContext(fs.readFileSync(path.join(ROOT,"js/car/surface-outline.js"),"utf8")+";GarageSurfaceOutline",{LiveryTex:atlas,document:doc});
+  const api = outline.create({ createTexture(cv) { const tex={pixels:cv.pixels};textures.push(tex);return tex; },freeTexture:(t)=>freed.push(t),drawDecal:(...args)=>draws.push(args) });
+  const liv=Object.freeze({spineLogo:"stripe",spineTint:Object.freeze([1,0,0])}), before=JSON.stringify(liv), team={id:"test"};
+  assert.equal(api.set("spineTint",team,liv,7),true);
+  assert.equal(JSON.stringify(liv),before); assert.equal(probes.length,2);
+  assert.notEqual(probes[0].colors,liv); assert.equal(probes[0].player,false);assert.equal(probes[0].hiRes,false);
+  assert.ok(textures[0].pixels.some((v,i)=>i%4===3&&v>0),"scratch reuse did not erase the before snapshot");
+  const mesh={}, model=[]; assert.equal(api.draw(mesh,model),true);assert.equal(draws[0][0],mesh);assert.equal(draws[0][1],model);
+  assert.equal(api.set("bandTint2",team,liv,7),false,"inert tint is honestly camera-only");
+  assert.deepEqual(freed,[textures[0]]); assert.equal(api.draw(mesh,model),false);
+  assert.equal(api.set("cover",team,liv,7),false,"unsegmented body paint does not claim an atlas outline");
+  assert.equal(api.set("spineTint",team,liv,7),true);api.clear();api.clear();
+  assert.equal(freed.length,2,"each owned texture retires once on switch/end");assert.equal(api.active(),null);
+  atlas.buildAtlas=()=>{throw Error("tainted canvas");};
+  assert.equal(api.set("spineTint",team,liv,7),false);assert.equal(api.active(),null);
+});

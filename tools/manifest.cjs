@@ -258,6 +258,7 @@ const FULL = [
   "js/garage/scene.js",
   "js/garage/arrival.js",
   "js/garage/surface-inspection.js",
+  "js/car/surface-outline.js",
   "js/garage/setup-camera.js",
   "js/garage/prebuild.js",              // GaragePrebuild: the garage built while the title/race settings idle
   "js/garage/pit-signs.js",

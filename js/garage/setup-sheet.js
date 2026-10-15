@@ -5,6 +5,8 @@ const SetupUI = (function () {
 function create(G) {
 Log.info("ui", "SetupUI.create");
 const tuneExperiments = SetupExperiments.create(G, (team) => renderStatBars($("cs-stats-inner"), team));
+let surfaceControls = null;
+function clearSurfaceControls() { if (surfaceControls) surfaceControls.dispose(); surfaceControls = null; }
 // Stable helpers from the game.js closure.
 const { $, els, cssCol, store, arrToHex, hexToArr,
         getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
@@ -413,6 +415,7 @@ function syncGarageExitChrome() {
 }
 
 function buildSetup() {
+  clearSurfaceControls();
   if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end();
   syncGarageExitChrome();
   const team = Teams.LIST[G.teamIdx];
@@ -1003,7 +1006,7 @@ function buildLiveryCreator(container, team) {
     return replacement;
   };
 
-  const surfaceControls = typeof GarageSurfaceInspection !== "undefined" ? GarageSurfaceInspection.controls(wrap) : null;
+  surfaceControls = typeof GarageSurfaceInspection !== "undefined" ? GarageSurfaceInspection.controls(wrap) : null;
   const colorRow = (label, key, allowNone) => {
     const r = document.createElement("label"); r.className = "cs-liv-ed-row";
     if (LIV_ROW_HINT[key]) { r.title = LIV_ROW_HINT[key]; r.setAttribute("aria-description", LIV_ROW_HINT[key]); }
@@ -1261,6 +1264,8 @@ function flushLivPreview() {
   if (p) livePreviewDraft(p.team, p.d);
 }
 function livePreviewDraft(team, d) {
+  // A paint/design edit invalidates the transient contour's source atlas.
+  if (typeof GarageSurfaceInspection !== "undefined" && GarageSurfaceInspection.field()) GarageSurfaceInspection.end();
   const key = team.id + "|" + JSON.stringify(d);
   if (key === _livPreviewKey) return;
   const skipMesh = draftSkipsMesh(_livPrevDraft, d);
@@ -1329,7 +1334,7 @@ function discardLivDraft() {
 }
 if (typeof MutationObserver === "function") {
   const cs = $("carsetup");
-  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
+  if (cs) new MutationObserver(() => { if (cs.hidden) { ++csVisitGeneration; cs.removeAttribute("aria-busy"); clearSurfaceControls(); if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.end(); discardLivDraft(); tuneExperiments.close(); } })
     .observe(cs, { attributes: true, attributeFilter: ["hidden"] });
 }
 return { buildSetup, openSetup };

@@ -111,7 +111,12 @@ const SetupPresets = (function () {
         if (!pending) { feedback({ ok: false, reason: "missing" }); return; }
         for (const change of pending.changes) { const li = document.createElement("li"); li.textContent = change.label + ": " + change.before + " → " + change.after + change.unit; differences.appendChild(li); }
         note.textContent = pending.changes.length ? "Only these mechanical values will change. Confirm to apply." : "This setup already matches. Confirming makes no other changes.";
-        applyButton.textContent = "CONFIRM APPLY"; return;
+        applyButton.textContent = "CONFIRM APPLY";
+        // Put the proposed change in view before offering the second press.
+        // Scrolling never moves keyboard focus off the same action button.
+        const previewBlock = pending.changes.length ? differences : note;
+        if (previewBlock.scrollIntoView) previewBlock.scrollIntoView({ block: "start", behavior: "instant" });
+        return;
       }
       const result = apply(o.store, o.teamId, pending); feedback(result, "Mechanical setup applied"); disarm(); if (result.ok && o.refresh) o.refresh();
     });
@@ -121,7 +126,7 @@ const SetupPresets = (function () {
     });
     pick.onchange = () => { disarm(); applyButton.disabled = deleteButton.disabled = !pick.value; };
     const help = document.createElement("p"); help.className = "adv-help"; help.textContent = "Up to twelve named mechanical setups per team. Circuit labels are reminders; presets never apply automatically or change parts or paint.";
-    section.append(title, help, name, pick, row, differences, note); host.appendChild(section); render();
+    section.append(title, help, name, pick, differences, note, row); host.appendChild(section); render();
     return { section, render };
   }
   return Object.freeze({ PREFIX, MAX, normalize, list, save, remove, diff, preview, apply, mount });

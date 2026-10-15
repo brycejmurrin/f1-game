@@ -64,6 +64,7 @@ function boot(opts = {}) {
   if (opts.appearance) for (const file of ["title-layout", "screen-looks", "appearance-studio"]) {
     vm.runInContext(read("js/ui/" + file + ".js"), ctx, { filename: "js/ui/" + file + ".js" });
   }
+  vm.runInContext(read("js/input/controller-profiles.js"), ctx, { filename: "js/input/controller-profiles.js" });
   vm.runInContext(read("js/ui/settings-export.js"), ctx, { filename: "js/ui/settings-export.js" });
   const SettingsExport = vm.runInContext("SettingsExport", ctx);
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };

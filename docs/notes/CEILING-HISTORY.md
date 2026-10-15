@@ -3,9 +3,11 @@
 
 ## 2026-10-15 — new player tools and shared wiring
 
-`js/game.js` codeLines 5158 → **5172** and lines 9440 → **9454** add
+`js/game.js` codeLines 5158 → **5174** and lines 9440 → **9456** add
 bounded delivery-history lifecycle hooks, deferred settings-panel mounting,
-carbon flap surface threading and condition-cue telemetry. Persistent feature
+carbon flap surface threading and condition-cue telemetry. Two further lines
+pass the actual current decal-mesh adapter into garage surface inspection so
+procedural and loaded-GLB body modes share identical geometry. Persistent feature
 state lives in the extracted modules; existing top-level state declarations
 were reused. Tree `cssClasses` 644 → **654** admits ten scoped component classes
 for settings search, setup/audio controls, delivered messages and storage health.
