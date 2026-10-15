@@ -178,6 +178,7 @@ jobs:
           name: apex26-desktop-${{ matrix.os }}-b${{ github.run_number }}
           path: |
             desktop/dist/*.AppImage
+            desktop/dist/*.deb
             desktop/dist/*.dmg
             desktop/dist/*.zip
             desktop/dist/*.exe

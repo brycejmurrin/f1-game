@@ -381,3 +381,32 @@ test("an AI car spun round but still sliding forwards is handed back driving for
   assert.equal(IS.owns(car), false, "handed back");
   assert.ok(car.speed > 0, `handed back at ${car.speed} m/s — an AI car rolling forwards must not reverse`);
 });
+
+/* ── the ANOMALY handback shares the settled one's speed floor (#2167) ──────
+ * The degrade path restores the last validated snapshot, whose speed is
+ * Rapier's signed forward velocity — negative for a car shunted backwards. It
+ * restored it raw, so an anomaly (worldGen change, teleport guard, finish,
+ * reset()) could hand a car back reversing at full roll speed. Same floor as
+ * the settled path: REVERSE_MAX for a human, 0 for an AI (it moves on s).
+ */
+for (const [label, trip] of [
+  ["reset()", (sim) => sim.reset()],
+  ["finished mid-takeover", (sim, cars) => { cars[0].finished = cars[1].finished = true; sim.postStep(1 / 60); }],
+]) {
+  for (const human of [false, true]) {
+    test(`anomaly handback via ${label} never returns a ${human ? "human" : "AI"} reversing at speed`, () => {
+      const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 0, vz: -20 };
+      const { sim, cars } = load({ pose });
+      cars[0].human = human;
+      sim.notifyCar(cars[0], cars[1], 30);
+      sim.preStep(1 / 60);
+      sim.postStep(1 / 60);                       // one validated pose at -20 m/s
+      assert.equal(sim.status().owned, 2, "still owned after a valid tick");
+      assert.ok(cars[0].speed < -19, `validated pose carried the backward roll (${cars[0].speed})`);
+      trip(sim, cars);
+      assert.equal(sim.status().owned, 0, "handed back");
+      assert.ok(cars[0].speed >= -5, `>= REVERSE_MAX (got ${cars[0].speed})`);
+      if (!human) assert.ok(cars[0].speed >= 0, `an AI never reverses (got ${cars[0].speed})`);
+    });
+  }
+}

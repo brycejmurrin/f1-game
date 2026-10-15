@@ -30,7 +30,12 @@ const FP = require("../../tools/track/footprint-support.cjs");
 
 // Chosen to carry non-zero counts on every check, so a blind audit cannot pass:
 // monaco (harbour, hillside city), monza (bowl, banking), spa (forest).
-const SAMPLE = ["monaco", "monza", "spa"];
+// `unsupported` is the one fixes keep driving to 0 (spa's reached 0 in 2026-10),
+// so it is carried by two circuits whose baseline still has rows (miami, bahrain):
+// one more fix cannot blind the guard. When their rows reach 0, pick two that still
+// have non-zero rows in tests/data/scenery-audit-baseline.json (measured == cap, or
+// the "no stale cap" test below fails on the lowered row).
+const SAMPLE = ["monaco", "monza", "spa", "miami", "bahrain"];
 
 const base = GA.readBaseline();
 let cached = null;

@@ -343,14 +343,8 @@ const SceneryNature = (function () {
       }
       if (spotOccupied(a.c[0], a.c[2], false)) return false;
       const segments = ctx.lod(4, 3), trunkSegments = ctx.lod(5, 4);
-      // Check the same guarded primitive calls graph replay will use. Runtime
-      // dry runs write no vertices; the temporary arrays also suit VM emitters.
-      const trial = { pos: [], nrm: [], col: [], mat: [], idx: [], _dryRun: true };
-      if (addCyl(trial, o, 0.4 * s, 6.7 * s, [0.32, 0.23, 0.13], trunkSegments, b) === false) return false;
-      for (const [x, z, y, radius, lower, cap] of lobes) {
-        if (addFrustum(trial, at(x, y, z), 0.08 * s, radius * s, lower * s, col, segments, b) === false ||
-            addCone(trial, at(x, y + lower, z), radius * s, cap * s, col, segments, b) === false) return false;
-      }
+      // `whole`: graph.instance dry-runs the guarded primitives once and plants
+      // nothing unless every one passes, then reuses those verdicts (#2178).
       const landed = ctx.instance(`tree-lobed|${variant}|${segments}`, {
         o, r: a.r, u: a.u, t: a.t, s: [s, s, s], col,
       }, (rec) => {
@@ -361,7 +355,7 @@ const SceneryNature = (function () {
           rec.frustum([x, y, z], 0.08, radius, lower, TrackGraph.NODE_COLOR, segments);
           rec.cone([x, y + lower, z], radius, cap, TrackGraph.NODE_COLOR, segments);
         }
-      }, { kind: "tree", k, side, h, crown: "lobed", variant }, { roundNormals: true });
+      }, { kind: "tree", k, side, h, crown: "lobed", variant, whole: true }, { roundNormals: true });
       out._mat = 0; out._matAt = null;
       if (!landed) return false;
       spotTaken(a.c[0], a.c[2]);

@@ -1475,3 +1475,72 @@ test("navigation returns the network shell before generation lookup and consumes
   await done;
   assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}/race`).text(), shell);
 });
+
+// Secondary documents share navigation caching, but never the game's shell.
+for (const page of ["controller.html", "bench.html", "cockpit-view.html"]) {
+  for (const query of ["?code=ROOM", "?b=321", "?b=322"]) {
+    test(`offline ${page}${query} restores its own cached document`, async () => {
+      const h = settledShellHarness({ online: false, fetchImpl: () => Promise.reject(new TypeError("offline")) });
+      h.stores.get("apex26-321").set(`${ORIGIN}/${page}`, new Response(`own ${page}`));
+      const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/${page}${query}` });
+      assert.equal(await (await nav.responsePromise).text(), `own ${page}`);
+    });
+    test(`offline uncached ${page}${query} never serves the game shell`, async () => {
+      const h = settledShellHarness({ online: false, fetchImpl: () => Promise.reject(new TypeError("offline")) });
+      const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/${page}${query}` });
+      assert.equal((await nav.responsePromise).status, 0);
+    });
+  }
+}
+
+for (const failure of ["503", "quota", "interrupted"]) {
+  test(`career UI ${failure} aborts update and preserves offline prior generation`, async () => {
+    let offline = false;
+    const ordinary = lazyShellFetch({ "js/career/career-ui.js": "bbbbbbbbbbbb" });
+    const h = createHarness({
+      fetchImpl: (request) => {
+        if (offline) return Promise.reject(new TypeError("offline"));
+        if (requestKey(request).includes("/js/career/career-ui.js")) {
+          if (failure === "503") return Promise.resolve(new Response("unavailable", { status: 503 }));
+          if (failure === "interrupted") return Promise.reject(new TypeError("connection interrupted"));
+        }
+        return ordinary(request);
+      },
+      putImpl: (_name, request) => {
+        if (failure === "quota" && requestKey(request).includes("/js/career/career-ui.js")) {
+          throw new DOMException("full", "QuotaExceededError");
+        }
+      },
+    });
+    h.stores.set("apex26-321", new Map([
+      [`${ORIGIN}/`, new Response("old shell")],
+      [`${ORIGIN}/index.html`, new Response("old shell")],
+      [`${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa`, new Response("old career")],
+      [`${ORIGIN}/__apex_install_complete__`, new Response("complete")],
+      [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    ]));
+    await assert.rejects(h.lifecycleEvent("install").done());
+    assert.equal(h.skipped, 0);
+    assert.deepEqual(h.deleted, []);
+    assert.equal(h.stores.get("apex26-322").has(`${ORIGIN}/__apex_install_complete__`), false);
+    offline = true;
+    // A rejected installing worker never controls clients; the previous worker
+    // continues serving the retained generation, including after a restart.
+    const active = createHarness({ fetchImpl: () => Promise.reject(new TypeError("offline")) });
+    for (const [name, store] of h.stores) active.stores.set(name, store);
+    const nav = active.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+    assert.equal(await (await nav.responsePromise).text(), "old shell");
+    const lazy = active.fetchEvent({ method: "GET", url: `${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa` });
+    assert.equal(await (await lazy.responsePromise).text(), "old career");
+  });
+}
+
+test("career UI is required under its content-hash key before a successful update retires old caches", async () => {
+  const map = { "js/career/career-ui.js": hash12("body of js/career/career-ui.js") };
+  const h = createHarness({ fetchImpl: lazyShellFetch(map) });
+  h.stores.set("apex26-321", new Map([["old", new Response("old")]]));
+  await h.lifecycleEvent("install").done();
+  assert.ok(h.stores.get("apex26-322").has(`${ORIGIN}/js/career/career-ui.js?v=${map["js/career/career-ui.js"]}`));
+  await h.lifecycleEvent("activate").done();
+  assert.deepEqual(h.deleted, ["apex26-321"]);
+});

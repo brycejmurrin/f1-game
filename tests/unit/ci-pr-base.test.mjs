@@ -5,6 +5,7 @@
 // base's own recent commits as every PR's diff and fail-safed into running
 // everything (tools/ci/ci-pr-base.sh). Run for real in a throwaway repo, then
 // pin every workflow step that diffs a PR to the helper.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -49,7 +50,7 @@ test("every workflow step that diffs a pull request resolves its base through th
   const job = (from, to) => ci.slice(ci.indexOf(`\n  ${from}:\n`), ci.indexOf(`\n  ${to}:\n`));
   const CALL = /\[ "\$EVENT" = pull_request \] && BEFORE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{BEFORE:-\}"\)"/;
   assert.match(job("sweeps-parts", "sweeps"), CALL, "the parts census filter");
-  assert.match(job("sweeps", "sweeps-roll-up"), CALL, "the geometry sweeps filter");
+  assert.match(job("select", "selected"), CALL, "the shared geometry sweeps filter");
   // The three path filters and the node-slice plan are steps of `select` since 2026-10-15.
   assert.match(job("select", "selected"), CALL, "the renderer / xr filter steps");
   assert.match(job("node-suites", "sweeps-parts"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the node-suites plan step");
@@ -115,6 +116,7 @@ test("15-F5: a green draft run is reused only while the base branch has not move
     fs.writeFileSync(path.join(dir, "gh"), [
       "#!/usr/bin/env bash",
       'case "$2" in',
+      '  repos/o/r/actions/runs/*/jobs*) printf \'%s\' "$STUB_JOBS" ;;',
       '  repos/o/r/actions/runs*) printf \'{"workflow_runs":[{"id":77,"status":"completed","conclusion":"success","path":".github/workflows/ci.yml","event":"pull_request","run_started_at":"2026-10-10T10:00:00Z"}]}\' ;;',
       '  repos/o/r/commits/*) printf \'%s\\n\' "$STUB_TIP_DATE" ;;',
       '  *) exit 1 ;;',
@@ -123,7 +125,8 @@ test("15-F5: a green draft run is reused only while the base branch has not move
     const reuse = (tipDate, extra = {}) => cp.spawnSync("bash", [path.join(ROOT, "tools/ci/reuse-draft-fast.sh")], {
       encoding: "utf8",
       env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_EVENT_ACTION: "ready_for_review",
-        PR_HEAD_SHA: "a".repeat(40), PR_BASE_REF: "ship", GITHUB_RUN_ID: "1", STUB_TIP_DATE: tipDate, ...extra },
+        PR_HEAD_SHA: "a".repeat(40), PR_BASE_REF: "ship", GITHUB_RUN_ID: "1", STUB_TIP_DATE: tipDate,
+        STUB_JOBS: JSON.stringify({ jobs: [{ name: "Structural guards (tooling A)", conclusion: "success" }] }), ...extra },
     });
     const r1 = reuse("2026-10-10T09:00:00Z");
     assert.match(r1.stdout, /reuse=true/, r1.stderr);
@@ -134,6 +137,14 @@ test("15-F5: a green draft run is reused only while the base branch has not move
     // No base ref, or an unreadable tip date, is not "same": fail safe.
     assert.match(reuse("2026-10-10T09:00:00Z", { PR_BASE_REF: "" }).stdout, /reuse=false/);
     assert.match(reuse("").stdout, /reuse=false/);
+    // #2184: a run that concluded success with tooling A SKIPPED (a draft
+    // without run-ci, or a label-noise run) tested nothing and is never reused.
+    const skipOnly = reuse("2026-10-10T09:00:00Z", { STUB_JOBS: JSON.stringify({ jobs: [
+      { name: "Draft push (CI skipped — add run-ci label)", conclusion: "success" },
+      { name: "Structural guards (tooling A)", conclusion: "skipped" }] }) });
+    assert.match(skipOnly.stdout, /reuse=false/, "a skip-only green run must not stand in for the fast tier");
+    assert.match(skipOnly.stderr, /did not run and pass/);
+    assert.match(reuse("2026-10-10T09:00:00Z", { STUB_JOBS: "" }).stdout, /reuse=false/, "an unreadable jobs list fails safe");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   assert.match(ci, /PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/, "the reuse step passes the base ref");
 });

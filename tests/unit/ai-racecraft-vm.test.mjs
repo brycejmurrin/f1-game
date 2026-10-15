@@ -310,7 +310,7 @@ test("scripted AI pace never rubber-bands; catch-up keeps start and lapping guar
 // here: a car moving ahead of one that is running normally (not near-stopped,
 // off the road, pitting or being rescued — the cars the regs let you pass),
 // after 2 s for any move already alongside when the flag came out to finish.
-test("under VSC and safety car no pass latch engages and no queue pressure builds", async () => {
+test("under VSC and safety car no pass latch engages, no queue pressure builds and nobody covers (#2175)", async () => {
   const A = g.apex;
   const GREEN_S = 25, FLAG_S = 60;
   for (const level of [2, 3]) {
@@ -320,16 +320,16 @@ test("under VSC and safety car no pass latch engages and no queue pressure build
     A.carRole(cars.findIndex((c) => c.isPlayer), { human: false });
     restorePace(cars.findIndex((c) => c.isPlayer));
     A.go();
-    let greenLatched = 0, greenQ = 0;
+    let greenLatched = 0, greenQ = 0, greenDef = 0;
     for (let i = 0; i < Math.round(GREEN_S / DT); i++) {
       A.step(DT, 1);
-      for (const c of cars) { if (c.passOf) greenLatched++; greenQ = Math.max(greenQ, c.queueT || 0); }
+      for (const c of cars) { if (c.passOf) greenLatched++; if (c.defendSide) greenDef++; greenQ = Math.max(greenQ, c.queueT || 0); }
     }
     g.G.holdCaution(level, "test");
     A.step(DT, 1);
     try {
       assert.equal(A.caution().level, level, "the held flag is flying");
-      let latched = 0, maxQ = 0;
+      let latched = 0, maxQ = 0, defended = 0;
       const passes = [];
       const healthy = (o) => !(o.retired || o.finished || o.offroad || (o.speed || 0) < 5 || (o.rescueT || 0) > 0.25
         || (o.pitState && o.pitState !== "none"));
@@ -338,6 +338,7 @@ test("under VSC and safety car no pass latch engages and no queue pressure build
         A.step(DT, 1);
         for (const c of cars) {
           if (c.passOf) latched++;
+          if (c.defendSide) defended++;
           if (i * DT > 10) maxQ = Math.max(maxQ, c.queueT || 0);   // green-phase queueT has bled out by then (2 s per s)
         }
         const now = cars.slice().sort((a, b) => b.prog - a.prog);
@@ -351,7 +352,9 @@ test("under VSC and safety car no pass latch engages and no queue pressure build
       // Anti-vacuity: the same field DOES latch passes and queue under green.
       assert.ok(greenLatched > 0, "no pass latch engaged in the green phase either — the check below proves nothing");
       assert.ok(greenQ > 0, "no queue pressure built in the green phase either — the check below proves nothing");
+      assert.ok(greenDef > 0, "no cover move in the green phase either — the defend check below proves nothing");
       assert.equal(latched, 0, `level ${level}: a pass latch was held for ${latched} car-steps under the caution`);
+      assert.equal(defended, 0, `level ${level}: a defensive cover was held for ${defended} car-steps under the caution`);
       assert.equal(maxQ, 0, `level ${level}: queue pressure built to ${maxQ.toFixed(2)} s under the caution`);
       assert.deepEqual(passes, [], `level ${level}: cars overtook under the caution`);
     } finally {

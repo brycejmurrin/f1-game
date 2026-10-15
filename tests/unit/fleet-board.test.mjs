@@ -71,3 +71,28 @@ test(".github/labels.json carries the backlog labels AGENTS.md §Backlog names, 
   assert.doesNotMatch(wf, /^\s+push:/m, "no push trigger: a claims-board push runs the board's own tree, which has no workflow — who-is-on-it dispatches instead");
   assert.match(wf, /^\s+workflow_dispatch:/m);
 });
+
+function withLabels(t, labels) {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const root = fs.mkdtempSync(path.join(ROOT, "scratch", "fleet-labels-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, ".github"));
+  fs.writeFileSync(path.join(root, ".github/labels.json"), JSON.stringify(labels));
+  return root;
+}
+
+test("label limits accept the exact boundaries, counting Unicode characters", (t) => {
+  const labels = [{ name: "🚦".repeat(50), color: "aBc123", description: "🚦".repeat(100) }];
+  assert.deepEqual(readLabels(withLabels(t, labels)), labels);
+});
+
+for (const [field, max] of [["name", 50], ["description", 100]]) {
+  test(`label validation rejects an overlong ${field} in a later entry`, (t) => {
+    const valid = { name: "ready", color: "aBc123", description: "Available work" };
+    const invalid = { ...valid, [field]: "x".repeat(max + 1) };
+    const root = withLabels(t, [valid, invalid]);
+    assert.throws(() => readLabels(root), {
+      message: `label ${JSON.stringify(invalid.name)}: ${field} must be ${max} characters or fewer (got ${max + 1})`,
+    });
+  });
+}
