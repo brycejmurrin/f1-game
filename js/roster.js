@@ -171,7 +171,8 @@
     "js/race/race-radio.js",
     "js/race/start-lights.js",
     "js/race/marshal-panels.js",
-    "js/race/flying-start.js"
+    "js/race/flying-start.js",
+    "js/race/jump-start-penalty.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [

@@ -476,10 +476,12 @@ jobs:
     # runs; an unneeded row (matrix.needed=false) skips checkout / npm ci /
     # plan below and reports green in seconds.
     # ready_for_review on the same head SHA: reuse-draft skips the work; names still report.
-    # A DRAFT PR emits only the needed rows (select's --needed-only), and when
-    # none is needed the job skips here: a draft cannot merge, so the required
-    # names owe it nothing. Every other event keeps all six rows reporting.
-    if: ${{ inputs.fast_tier_run == '' && (needs.select.outputs.any_node == 'true' || !(github.event_name == 'pull_request' && github.event.pull_request.draft)) }}
+    # A PULL REQUEST emits only the needed rows (select's --needed-only), and
+    # when none is needed the job skips here (2026-10-15: `CI` is the deploy
+    # branch's one required check, so the six names no longer have to report
+    # on a ready PR either). A deploy push and the train keep all six rows:
+    # pages-train.mjs's reuse check wants at least one expanded node row.
+    if: ${{ inputs.fast_tier_run == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request') }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -1211,6 +1213,13 @@ jobs:
     # its retry now meets this cap first: the job reads `cancelled`, which
     # ci-verdict.mjs fails exactly like `failure` — red either way, never green.
     timeout-minutes: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && 120 || 20 }}
+    # ONE LANE PER SHARD INDEX on pull requests (2026-10-15; same rule as the
+    # selected legs): ready PRs' smoke shards run one at a time fleet-wide and
+    # wait FIFO without a runner; the train / nightly / dispatch keep a group
+    # of their own.
+    concurrency:
+      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('smoke-lane-{0}', matrix.shard) || format('smoke-run-{0}-{1}', github.run_id, matrix.shard) }}
+      queue: max
     # The ship filter is ONE job now, not one copy per shard. `needs:` alone does
     # not skip this job — it must still RUN and report, because pages.yml's
     # `deploy: needs: ci` reads the aggregate of the jobs that ran and a skipped
@@ -1753,15 +1762,16 @@ jobs:
       # `unit-plan`, until 2026-10-15 — one more queue hop before any node
       # row could start, p50 11.7 min on 2026-10-15.) pick-unit-slices.mjs
       # maps paths → runners, FAIL-SAFE → all; schedule / dispatch run --all.
-      # Every slice row is emitted (needed true|false) so the six REQUIRED
-      # check names report — except on a DRAFT PR, which cannot merge: there
-      # only the needed rows exist (--needed-only), and node-suites skips at
-      # the job level when none is (its `if:`).
+      # On a deploy push and the train every slice row is emitted (needed
+      # true|false) so the train's reuse check sees expanded node rows; a PULL
+      # REQUEST lists only the needed rows (--needed-only; `CI` is the one
+      # required check since 2026-10-15) and node-suites skips at the job
+      # level when none is (its `if:`).
       - name: Plan node unit slices
         id: plan
         if: ${{ inputs.fast_tier_run == '' }}
         env:
-          NEEDED_ONLY: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true }}
+          NEEDED_ONLY: ${{ github.event_name == 'pull_request' }}
           EVENT: ${{ github.event_name }}
           PUSH_BEFORE: ${{ github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
@@ -2168,6 +2178,20 @@ jobs:
     # albert-park-foundation 110.1 s on an IDLE box (2026-09-04), so the first
     # failed every time the selector picked it and the second failed on any
     # contention. See tools/ci/select-specs.mjs SELECTED_GATE for the numbers.
+    # LANES (2026-10-15): on a PULL REQUEST every leg joins one of LANES
+    # (tools/ci/select-specs.mjs) fleet-wide concurrency groups with
+    # `queue: max`, so at most that many selected legs run at once across every
+    # ready PR and the rest wait FIFO without holding a runner or being
+    # cancelled (the workflow-level per-PR cancel still replaces a superseded
+    # run's queued legs). A run's own legs cycle through the lanes, so they
+    # never queue behind each other. The train, the nightly and a dispatch get
+    # a group of their own per leg (`run_id` + job index): a gate never waits
+    # behind PR legs. `queue: max` cannot be combined with cancel-in-progress
+    # in one block, and none is set here.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
+    concurrency:
+      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
+      queue: max
     timeout-minutes: ${{ matrix.timeout }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

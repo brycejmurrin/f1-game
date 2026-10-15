@@ -18,6 +18,7 @@ import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverag
 // moved on, which is the drift it exists to catch pointing the wrong way. The
 // selector owns the value; this file checks ci.yml agrees with the selector.
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
+import * as selectSpecs from "../../tools/ci/select-specs.mjs";
 import { pickFastTier, treeOnlyGreen, rearmDecision, parseJobPages } from "../../tools/ci/pages-train.mjs";
 
 const SELECTED_TIMEOUT_MS = SELECTED_GATE.perTestTimeoutSec * 1000;
@@ -293,8 +294,11 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   // on 2026-10-14 to test nothing new, one job start per PR event. Its required
   // status context was removed from the deploy branch's protection first (a
   // required check that never reports blocks every merge), then the file.
-  const retiredDocsGuards = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../../.github/workflows/docs-guards.yml");
-  assert.ok(!fs.existsSync(retiredDocsGuards),
+  // (A directory listing, not a path literal: cross-file-paths.test.mjs reads
+  // every `new URL("…")` as a reference that must resolve — tooling B went red
+  // on the deploy tip 55bebd22 for exactly that.)
+  const workflowsDir = new URL("../../.github/workflows/", import.meta.url);
+  assert.ok(!fs.readdirSync(workflowsDir).includes("docs-guards.yml"),
     "docs-guards.yml is back — tooling-fast already runs every file it ran, and a second workflow is a job start per PR event");
   const listAfter = (text, key, from = 0) => {
     const at = text.indexOf(`\n    ${key}:\n`, from);
@@ -325,9 +329,8 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   const notFast = files.filter((f) => !fast.has(f) && f !== "tests/unit/environment-json.test.mjs");
   assert.deepEqual(notFast, [], "test:docs-guards is an alias over tooling-fast's prose guards, not a new home for files");
   // No other workflow may quietly take its place.
-  const dir = new URL("../../.github/workflows/", import.meta.url);
-  const others = fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n) && n !== "ci.yml")
-    .filter((n) => /npm run test:docs-guards/.test(fs.readFileSync(new URL(n, dir), "utf8")));
+  const others = fs.readdirSync(workflowsDir).filter((n) => /\.ya?ml$/.test(n) && n !== "ci.yml")
+    .filter((n) => /npm run test:docs-guards/.test(fs.readFileSync(new URL(n, workflowsDir), "utf8")));
   assert.deepEqual(others, [], "no workflow but ci.yml's guards runs the prose group on PRs");
 });
 
@@ -412,8 +415,9 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.match(plan.run, /node tools\/ci\/pick-unit-slices\.mjs/);
   assert.match(plan.run, /--github-output/);
   assert.equal(plan.if, "${{ inputs.fast_tier_run == '' }}", "the plan runs exactly when the node matrix does");
-  // A draft asks for the needed rows only; every other event keeps all six.
-  assert.match(String(plan.env.NEEDED_ONLY), /github\.event\.pull_request\.draft == true/);
+  // A pull request asks for the needed rows only (ready or draft: `CI` is the one required
+  // check since 2026-10-15); a deploy push and the train keep all six rows.
+  assert.equal(String(plan.env.NEEDED_ONLY), "${{ github.event_name == 'pull_request' }}");
   assert.match(plan.run, /FLAG="--needed-only"/);
   assert.match(plan.run, /pick-unit-slices\.mjs --since "\$BASE" \$FLAG --github-output/);
   assert.match(selectJob, /^      any_node: \$\{\{ steps\.plan\.outputs\.any_node \}\}$/m);
@@ -421,14 +425,15 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.match(selectJob, /^      slices: \$\{\{ steps\.plan\.outputs\.slices \}\}$/m);
   const node = (ciWorkflow.split("\n  node-suites:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(node, /^    needs: \[select\]$/m);
-  // The six "Pure-node unit suites (<slice>)" names are REQUIRED checks: a
-  // job-level skip on any_node=false never expands the matrix, so they never
-  // report and the PR sits BLOCKED green (#522). The job always runs on every
-  // event but a DRAFT — a draft cannot merge, so its plan lists only the
-  // needed rows and the job skips when there are none (2026-10-15).
+  // The six "Pure-node unit suites (<slice>)" names were REQUIRED checks until
+  // 2026-10-15 (a job-level skip never expands the matrix, so they never
+  // reported and the PR sat BLOCKED green, #522). `CI` is the one required
+  // check now: a pull request's plan lists only the needed rows and the job
+  // skips when there are none; a deploy push and the train keep all six so
+  // pages-train.mjs's reuse check still sees expanded node rows.
   const nodeIf = (node.match(/^    if: (.*)$/m) || [])[1] || "";
-  assert.match(nodeIf, /needs\.select\.outputs\.any_node == 'true' \|\| !\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\)/,
-    "node-suites may skip at the job level only on a draft with no needed slice");
+  assert.match(nodeIf, /needs\.select\.outputs\.any_node == 'true' \|\| github\.event_name != 'pull_request'/,
+    "node-suites may skip at the job level only on a pull request with no needed slice");
   const steps = node.split(/\n      - /).slice(1);
   const setup = steps.filter((st) => /^uses: actions\/checkout@|^uses: \.\/\.github\/actions\/setup-apex|^name: Plan the slices for this diff|^name: Was this head already green as a draft\?/.test(st));
   assert.equal(setup.length, 4, "checkout, the reuse question, setup-apex and the plan step");
@@ -2065,5 +2070,37 @@ test("ship-filter: a ready PR skips smoke only when neither its own diff nor its
     assert.equal(run(AHEAD, { EVENT: "schedule" }).ships, "true", "an uncalled nightly is not a ship question: run smoke");
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("browser-leg LANES (2026-10-15): selected legs and smoke queue per lane on pull requests, never on the train", () => {
+  // GitHub's `concurrency.queue: max` holds up to 100 jobs per group in FIFO
+  // order without a runner (workflow-syntax reference, read 2026-10-15), and
+  // a job-level group may read `matrix` and `strategy` (contexts reference).
+  const jobs = parseYAML(ciWorkflow).jobs;
+  for (const id of ["selected", "smoke"]) {
+    const c = jobs[id].concurrency;
+    assert.ok(c && c.queue === "max", `${id}: legs must queue per lane, never cancel-replace`);
+    assert.equal(c["cancel-in-progress"], undefined, `${id}: queue: max cannot be combined with cancel-in-progress`);
+    assert.match(String(c.group), /github\.event_name == 'pull_request' && inputs\.concurrency_key == ''/, `${id}: only a PR shares a lane`);
+    assert.match(String(c.group), /github\.run_id/, `${id}: the train / nightly / dispatch get a group of their own`);
+  }
+  assert.match(String(jobs.selected.concurrency.group), /format\('selected-lane-\{0\}', matrix\.lane\)/);
+  assert.match(String(jobs.selected.concurrency.group), /strategy\.job-index/, "a run's own legs never share a fallback group");
+  assert.match(String(jobs.smoke.concurrency.group), /format\('smoke-lane-\{0\}', matrix\.shard\)/);
+  // The lane is part of every selected matrix row, cycling through LANES.
+  const { fit, shards, LANES } = selectSpecs;
+  assert.ok(Number.isInteger(LANES) && LANES >= 4 && LANES <= 40, `LANES is ${LANES}`);
+  const specsDir = new URL("../specs/", import.meta.url);
+  const some = fs.readdirSync(specsDir).filter((f) => f.endsWith(".spec.js")).sort().slice(0, 16).map((f) => `tests/specs/${f}`);
+  const EMPTY = { specs: {} };
+  const rows = shards(fit(some, 10, { db: EMPTY }), EMPTY);
+  assert.ok(rows.length >= 2, `fixture: ${rows.length} legs planned`);
+  for (const [i, row] of rows.entries()) assert.equal(row.lane, i % LANES, `row ${i} (${row.name}) lane`);
+  // No other job in the file queues on a shared group: a deploy push's fast
+  // tier and the train must never wait behind PR work.
+  for (const [id, job] of Object.entries(jobs)) {
+    if (id === "selected" || id === "smoke") continue;
+    assert.equal(job.concurrency, undefined, `${id} must not carry a job-level concurrency group`);
   }
 });

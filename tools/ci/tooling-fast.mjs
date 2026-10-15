@@ -272,6 +272,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/damage.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  // Data Hub EXPORT zip: mock OpenF1 → hand-rolled ZIP, CRC-32, empty/fail. ~0.3 s.
+  "tests/unit/data-export.test.mjs",
   "tests/unit/data-hub-layout.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
   // The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).
@@ -775,6 +777,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
   "tests/unit/save-migrate.test.mjs",
+  "tests/unit/save-schema-registry.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
   // The garage LIVE atlas on a LAZY_CIRCUIT stub: paintLive skips the map instead of
   // throwing, and ctxKey re-keys on hydration. VM, ~0.3 s.
@@ -799,6 +802,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/settings-export.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
   "tests/unit/settings-tabs.test.mjs",
+  "tests/unit/settings-ttlb-backup.test.mjs",
   // R19 guards. Both belong in the EDIT LOOP rather than a slow topical group:
   // each re-derives a fact the source depends on (which livery fields move a
   // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are

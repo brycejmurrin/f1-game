@@ -17,7 +17,7 @@
  *   node tools/ci/pick-unit-slices.mjs js/circuits/scenery/monaco.js
  *   node tools/ci/pick-unit-slices.mjs --json
  *   node tools/ci/pick-unit-slices.mjs --all --github-output
- *   node tools/ci/pick-unit-slices.mjs --since <base> --needed-only --github-output   # draft PR: needed rows only
+ *   node tools/ci/pick-unit-slices.mjs --since <base> --needed-only --github-output   # a pull request: needed rows only
  *   node tools/ci/pick-unit-slices.mjs --costs
  */
 import { execFileSync } from "node:child_process";
@@ -310,10 +310,10 @@ export function costs(selected) {
  * 35e66e231: vm-b1/b2/page/slow ran, vm-a1/a2 never appeared). Unneeded rows
  * carry `needed:"false"` so the job exits 0 without work.
  *
- * EXCEPT ON A DRAFT (`--needed-only`, 2026-10-15): a draft cannot merge, so the
- * required names owe it nothing, and each unneeded row was still a job start
+ * EXCEPT ON A PULL REQUEST (`--needed-only`, 2026-10-15): `CI` is the deploy
+ * branch's one required check, so the six names owe a PR nothing, and each unneeded row was still a job start
  * waiting ~11 min for a runner on a jammed day (docs/notes/CI-CLOG-SURVEY-
- * 2026-10-15.md). The draft plan lists only the needed rows; when there are
+ * 2026-10-15.md). The PR plan lists only the needed rows; when there are
  * none, `slices` is `[]` and ci.yml's node-suites job skips on any_node=false.
  */
 export function ciOutputs(result, { neededOnly = false } = {}) {

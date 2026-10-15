@@ -197,18 +197,18 @@ test("15-F1: every other source an ADAPTED spec reads schedules the page slice (
   assert.ok(!slices("js/track/core/mesh.js").has("page"));
 });
 
-test("--needed-only (a draft PR) lists only the needed rows; every other plan keeps all six names", () => {
+test("--needed-only (a pull request) lists only the needed rows; a deploy push keeps all six names", () => {
   const scenery = pick(["js/circuits/scenery/monaco.js"]);
   const draft = ciOutputs(scenery, { neededOnly: true });
-  assert.deepEqual(draft.slices.map((r) => r.slice), ["vm-a1", "vm-a2"], "a scenery diff on a draft runs the two elevation shards only");
+  assert.deepEqual(draft.slices.map((r) => r.slice), ["vm-a1", "vm-a2"], "a scenery diff on a pull request runs the two elevation shards only");
   assert.ok(draft.slices.every((r) => r.needed === "true"));
-  assert.equal(ciOutputs(scenery).slices.length, NODE_SLICES.length, "a ready PR / push still emits every required name");
+  assert.equal(ciOutputs(scenery).slices.length, NODE_SLICES.length, "a deploy push / the train still emits every row (the reuse check wants expanded rows)");
   const docs = ciOutputs(pick(["docs/TESTING.md"]), { neededOnly: true });
   assert.deepEqual(docs.slices, [], "nothing needed → an empty matrix; ci.yml's node-suites `if:` skips the job on any_node=false");
   assert.equal(docs.any_node, "false");
   const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
-  assert.match(ci, /NEEDED_ONLY: \$\{\{ github\.event_name == 'pull_request' && github\.event\.pull_request\.draft == true \}\}/,
-    "ci.yml asks for needed rows only on a draft");
-  assert.match(ci, /needs\.select\.outputs\.any_node == 'true' \|\| !\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\)/,
-    "node-suites skips at the job level only on a draft with nothing needed");
+  assert.match(ci, /NEEDED_ONLY: \$\{\{ github\.event_name == 'pull_request' \}\}/,
+    "ci.yml asks for needed rows only on every pull request (CI is the one required check since 2026-10-15)");
+  assert.match(ci, /needs\.select\.outputs\.any_node == 'true' \|\| github\.event_name != 'pull_request'/,
+    "node-suites skips at the job level only on a pull request with nothing needed");
 });
