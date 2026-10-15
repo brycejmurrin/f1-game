@@ -788,7 +788,6 @@ var Announcer = (function () {
       if (want) {
         try { voice = (synth.getVoices() || []).find((v) => v.name === want.name) || null; } catch (_) { /* mid-teardown */ }
       }
-      const vol = volume();
       const gen = ++generation;
       const t0 = Date.now();
       // When the last line must START to finish LAND_MS before the budget ends.
@@ -807,6 +806,8 @@ var Announcer = (function () {
         say();
       };
       const say = () => {
+        const vol = volume();
+        if (!(vol > 0)) { stop(); return; }
         const u = new Utter(parts[i++]);
         u.voice = voice; u.pitch = tune.pitch; u.rate = tune.rate; u.volume = vol;
         // A terminal callback belongs to this line, even after next() hands

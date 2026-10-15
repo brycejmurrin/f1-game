@@ -327,6 +327,41 @@ test("VOICE VOLUME reaches it — one slider for everything the game speaks", ()
   assert.equal(synth.calls.find((c) => c.m === "speak").volume, 0.3);
 });
 
+test("synth reads the current voice volume for each new line", () => {
+  const { A: An, G, synth, saved } = load({ stored: { volRadio: 0.8 } });
+  const ann = An.create(G);
+  ann.preview(info());
+  const first = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  G.radio.setVolume(0.2); saved.set("volRadio", 0.2);
+  first.onend();
+  const second = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  assert.notEqual(first, second);
+  assert.equal(first.volume, 0.8, "already submitted speech is not rewritten");
+  assert.equal(second.volume, 0.2, "the next line follows the slider");
+  first.onend(); first.onerror({ error: "interrupted" });
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 2, "stale terminal callbacks cannot advance the next line");
+  assert.equal(ann.speaking(), true);
+  ann.stop(); second.onend();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 2, "stop still retires the updated chain");
+});
+
+test("zero voice volume retires the synth read instead of submitting more speech", () => {
+  const { A: An, G, synth, saved } = load({ stored: { volRadio: 0.8 } });
+  const ann = An.create(G);
+  ann.preview(info());
+  const first = synth.calls.filter((c) => c.m === "speak").at(-1).u;
+  G.radio.setVolume(0); saved.set("volRadio", 0);
+  first.onend();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 1, "no fresh utterance at zero volume");
+  assert.equal(ann.speaking(), false, "a muted read no longer holds the voice channel");
+  G.radio.setVolume(0.6); saved.set("volRadio", 0.6);
+  first.onend(); first.onerror({ error: "interrupted" });
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 1, "raising volume cannot revive retired copy");
+  ann.sample();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").at(-1).volume, 0.6, "an explicit new read remains available");
+  ann.stop();
+});
+
 // ── 5. The channel this borrows has to exist ───────────────────────────────
 
 test("`announcer` is a real RadioVoice channel, with prosody and a preview line", () => {
