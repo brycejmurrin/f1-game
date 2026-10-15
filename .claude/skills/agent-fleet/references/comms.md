@@ -40,6 +40,7 @@ message for status chatter or "are you done?" polling; read `get_session` /
 Standard first lines:
 
 ```
+SWEEP <PR> (to Merge Desk: draft green, ready-gate.mjs exits 0)
 DONE <PR> <merge sha>
 BLOCKED <PR> <what is blocked, what you need>
 HANDOFF <PR> <to session>, <state>, branch <name> @ <sha7>
