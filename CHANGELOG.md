@@ -24,6 +24,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
 - A car handed back after a heavy shunt never drives backwards at speed (#2167).
 - AI cars hold their line under the Safety Car and VSC instead of weaving to defend (#2175).
+- Importing a setup, livery or Daily share code from Settings now opens its destination without leaving Settings over it.
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
@@ -32,7 +33,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
 - Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
 - A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
-- Importing a setup, livery or Daily share code from Settings now opens its destination without leaving Settings over it.
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
