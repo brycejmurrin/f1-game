@@ -14,10 +14,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
-- Returning tabs refuse changed lazy scripts after a release, preventing mixed-version audio, race and multiplayer code.
-- Cached phone-controller links keep their own page offline, and updates preserve working offline Career access when its UI cannot be installed.
-- Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
-
 - VS FRIEND: running into the back of your friend's car is one clean bump, so you no longer stay glued to their gearbox for several frames (#2164).
 - A rival's pass-by whoosh no longer keeps hissing under the pause menu, the results sheet or the title screen (#2187).
 - The team-radio key-up squelch now plays on phones, and on desktop it follows the master and SFX volume (#2189).
@@ -34,6 +30,10 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
 - Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
 - A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
+
+- Returning tabs refuse changed lazy scripts after a release, preventing mixed-version audio, race and multiplayer code.
+- Cached phone-controller links keep their own page offline, and updates preserve working offline Career access when its UI cannot be installed.
+- Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
