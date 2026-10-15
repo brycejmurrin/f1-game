@@ -297,7 +297,7 @@ if [ -n "$GH_DECISION" ] && printf '%s' "$GH_DECISION" | grep -q '"deny"'; then 
 # user asked for the cancel.
 if [ "${APEX_RUN_CANCEL_OK:-}" != 1 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_RUN_CANCEL_OK=1'; then
   if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}gh[[:space:]]+run[[:space:]]+cancel([[:space:]]|\$)" \
-     || printf '%s' "$SCANQ" | grep -Eq 'actions/runs/[0-9]+/cancel'; then
+     || printf '%s' "$SCANQ" | grep -Eq 'actions/runs/[^/[:space:]]+/(force-)?cancel'; then
     echo "BLOCKED: cancelling an Actions run. A queued run holds no slot — a cancel only loses its queue position and buys a retrigger push (2026-10-15: 306 of 401 PR runs). Your own superseded run is replaced by your next push; a closed PR's runs are cancelled by the close. APEX_RUN_CANCEL_OK=1 <command> only when the user asked for this cancel." >&2
     exit 2
   fi

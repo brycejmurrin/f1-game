@@ -23,7 +23,9 @@ test("each host's hook config points at an executable guard that exists", () => 
   assert.match(codex.hooks.PreToolUse[0].hooks[0].command, /\.cursor\/hooks\/shell-guard\.sh/);
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   assert.match(pkg.scripts.prepare || "", /git config core\.hooksPath \.githooks/, "npm install must activate .githooks");
-  for (const f of [".cursor/hooks/shell-guard.sh", ".githooks/pre-commit", ".githooks/pre-push", ".claude/hooks/bash-guard.sh"])
+  assert.match(cursor.hooks.beforeMCPExecution[0].command, /\.cursor\/hooks\/mcp-guard\.sh/);
+  assert.equal(cursor.hooks.beforeMCPExecution[0].failClosed, true, "a crashed MCP guard must block, not pass");
+  for (const f of [".cursor/hooks/shell-guard.sh", ".cursor/hooks/mcp-guard.sh", ".githooks/pre-commit", ".githooks/pre-push", ".claude/hooks/bash-guard.sh"])
     assert.ok(fs.statSync(path.join(ROOT, f)).mode & 0o111, `${f} must be executable`);
 });
 
@@ -35,6 +37,23 @@ test("the adapter blocks what bash-guard blocks, from Cursor's and Codex's paylo
   assert.equal(guard({ tool_name: "Bash", tool_input: { command: "git push --force origin x" } }).status, 2, "Codex shape: force push");
   assert.equal(guard({ command: "git push origin claude/f1-game-project-26h3ng", cwd: ROOT }).status, 2, "deploy-branch push");
   assert.equal(guard({ command: "ls -la", cwd: ROOT }).status, 0, "an ordinary command passes");
+});
+
+// 2026-10-15: run cancels under the owner's account kept landing after both
+// Claude doors refused them; Cursor's MCP door had no guard at all.
+test("Cursor's MCP door: a run cancel is denied (exit 2), a merge asks, a read passes", () => {
+  const mcp = (tool_name, input, env = {}) => {
+    const r = spawnSync("bash", [path.join(ROOT, ".cursor/hooks/mcp-guard.sh")],
+      { input: JSON.stringify({ tool_name, tool_input: JSON.stringify(input), mcp_server_name: "github" }), encoding: "utf8",
+        env: { ...process.env, APEX_RUN_CANCEL_OK: "", APEX_MERGE_DESK: "", ...env } });
+    return { status: r.status, permission: JSON.parse(r.stdout).permission };
+  };
+  for (const method of ["cancel_workflow_run", "force_cancel_workflow_run"])
+    assert.deepEqual(mcp("actions_run_trigger", { method, run_id: 1 }), { status: 2, permission: "deny" }, method);
+  assert.equal(mcp("actions_run_trigger", { method: "cancel_workflow_run", run_id: 1 }, { APEX_RUN_CANCEL_OK: "1" }).permission, "allow");
+  assert.equal(mcp("merge_pull_request", { pullNumber: 1, merge_method: "squash" }).permission, "deny");
+  assert.deepEqual(mcp("merge_pull_request", { pullNumber: 1, merge_method: "merge" }), { status: 0, permission: "ask" });
+  assert.deepEqual(mcp("pull_request_read", { method: "get", pullNumber: 1 }), { status: 0, permission: "allow" });
 });
 
 test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-forward and a new branch", () => {
