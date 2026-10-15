@@ -68,7 +68,7 @@
       for (const side of [-1, 1]) {
         let i = 0;
         along(0.0, 1.0, 15, (k, spacing) => {
-          const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
+          const seg = spacing;   // abut stations; 1.05 overlap z-fought on long straights
           // Same order as the corner patches above: blue from the kerb out, red
           // as the deep band before the barrier.
           // Draped, not runoffApron'd: one box at one anchor height across a
@@ -222,8 +222,8 @@
         const s = k / n, h = hash(k * 71 + 31);
         // From 0.94: on the right, 0.90-0.94 is the inside of the Tour hairpin.
         if (!(s > 0.94 || s < 0.05) || h < 0.52) return;
-        // Gap bumped 58→66: at 58 eight motorhomes sat 0.04 m under grade.
-        motorhome(k, -1, 66 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
+        // Gap bumped 58→66→70: paddock apron ripple buried the worst by 0.02 m.
+        motorhome(k, -1, 70 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
       });
       broadcastCompound(K(0.908), -1, 76, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), 1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
@@ -241,9 +241,11 @@
             addCyl(out, vadd(vadd(a.c, a.r, side * back), a.u, up * 0.5),
               0.09, up + 0.4, [0.62, 0.64, 0.68], 5, b);
           }
-          // Diagonal brace — the giveaway that this is a temporary frame.
-          addBox(out, vadd(vadd(a.c, a.r, side * rows * depth * 0.55),
-            a.u, rows * rise * 0.55), [rows * depth * 1.2, 0.10, 0.10],
+          // Short diagonal — a full-span box on curved anchors read as a folded
+          // ribbon across the runoff (Mistral chicane bleachers, survey 2026-10).
+          const braceLen = Math.min(rows * depth * 0.55, 3.2);
+          addBox(out, vadd(vadd(a.c, a.r, side * rows * depth * 0.35),
+            a.u, rows * rise * 0.35), [braceLen, 0.08, 0.08],
             [0.62, 0.64, 0.68], b);
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.5 + r * rise;
@@ -328,11 +330,17 @@
         { id: "paul-ricard-taxiway", samples: 10 });
       for (let i = 0; i < 9; i++) {
         const a = anchor(K(0.40 + i * 0.025), 1, 196);
-        addBox(out, vadd(a.c, a.u, 0.22), [1.2, 0.10, 14], LINE, [a.r, a.u, a.t]);
+        const p = [a.c[0], a.c[1], a.c[2]];
+        const py = terrainYAt(p[0], p[2]);
+        if (py != null) p[1] = py;
+        addBox(out, vadd(p, a.u, 0.22), [1.2, 0.10, 14], LINE, [a.r, a.u, a.t]);
       }
       for (let i = 0; i < 10; i++) {
         const a = anchor(K(0.41 + i * 0.020), 1, 166);
-        addBox(out, vadd(a.c, a.u, 0.22), [1.0, 0.10, 8], [0.86, 0.74, 0.18], [a.r, a.u, a.t]);
+        const p = [a.c[0], a.c[1], a.c[2]];
+        const py = terrainYAt(p[0], p[2]);
+        if (py != null) p[1] = py;
+        addBox(out, vadd(p, a.u, 0.22), [1.0, 0.10, 8], [0.86, 0.74, 0.18], [a.r, a.u, a.t]);
       }
       {
         const a = anchor(K(0.50), 1, 150);
