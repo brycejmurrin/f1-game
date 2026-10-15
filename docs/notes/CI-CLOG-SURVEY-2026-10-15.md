@@ -207,4 +207,6 @@ Landed in the same change as this note (stacked on #1758, which carried the audi
 
 Later the same day Bryce moved the deploy branch's protection to the single `CI` check, dropped `Docs guards` from it and turned off squash and rebase merging; `.github/workflows/docs-guards.yml` was then deleted (one job start per PR event, 615 runs on 2026-10-14; `test:docs-guards` stays as the local alias). The job names are free to change now, so the `queue: max` browser lanes and a node-slice rebalance need no further settings round.
 
+Then (same day, once `CI` was the one required check): every pull request's node plan lists only the needed slices (`--needed-only` on ready PRs too; a deploy push and the train keep all six rows for the train's reuse check), and the ready tier's browser legs queue per lane in GitHub — `selected` legs on 12 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a field of every matrix row, `select-specs.mjs` LANES) and smoke on one lane per shard index — so at most 12 selected legs and 1 smoke run fleet-wide at once and the rest wait FIFO without a runner; the train, the nightly and a dispatch get a group of their own per leg. `ready-full-cap.mjs` still bounds ready RUNS at the desk; the lanes bound LEGS in GitHub.
+
 Re-measure with the same three numbers as §5 after a day of agent traffic.
