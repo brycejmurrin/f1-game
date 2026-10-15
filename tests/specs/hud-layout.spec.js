@@ -14,7 +14,7 @@
 // env(safe-area-inset-*) as 0, so a notched phone is otherwise untestable, and
 // the notch is exactly where a 59px inset eats the width these rules assume.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { BOOT_MS, RACE_BUILD_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 import { analyzeOverlap, probeHudElements } from "../../tools/lib/hud-geometry.mjs";
 
 const VIEWS = [
@@ -172,8 +172,13 @@ async function race(page, steer, manual, ins, opts) {
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.addStyleTag({ content:
     `:root{--sal:${ins.sal}px;--sar:${ins.sar}px;--sat:${ins.sat}px;--sab:${ins.sab}px;}` });
-  await page.evaluate(() => window.__apex.race("monza"));
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => {
+    window.__hudLayoutRace = "pending";
+    Promise.resolve(window.__apex.race("monza")).then(
+      () => { window.__hudLayoutRace = "ok"; },
+      (e) => { window.__hudLayoutRace = "err:" + ((e && e.message) || e); });
+  });
+  await awaitTrackBuild(page, undefined, undefined, { raceFlag: "__hudLayoutRace" });
   await page.evaluate(() => window.__apex.go());
   // The CAMERA decides half the adaptive rules (ONBOARD_IDS / BCAM_IDS in
   // js/ui/hud.js), so a spec that never leaves chase cannot see them.
@@ -1156,13 +1161,15 @@ test.describe("speed readouts", () => {
   async function bootCockpitMonza(page) {
     await page.addInitScript(PIN_PREVIOUS_LOOK);
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    // RACE_BUILD_MS: this case is last in a 46-test file on a hot CI worker;
+    // BOOT_MS (45 s) expired while monza was still building (Pages 38660546141).
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
     await page.evaluate(() => {
       localStorage.setItem("apex26.steerMode", JSON.stringify("tilt"));
       localStorage.setItem("apex26.manual", JSON.stringify(false));
     });
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
     await page.evaluate(() => {
       window.__spdRace = "pending";
       Promise.resolve(window.__apex.race("monza")).then(
@@ -1183,7 +1190,8 @@ test.describe("speed readouts", () => {
   test("cockpit wheel LCD and HUD speed show one number in the same frame", async ({ page }) => {
     await bootCockpitMonza(page);
     await page.evaluate(() => {
-      const a = window.__apex, gfx = window.GLX, hudN = document.getElementById("hud-speed-n");
+      const a = window.__apex, gfx = typeof GLX !== "undefined" ? GLX : window.GLX, hudN = document.getElementById("hud-speed-n");
+      if (!gfx || typeof gfx.draw !== "function") throw new Error("no GLX draw hook");
       const digitOf = new Map();
       for (let d = 0; d <= 9; d++) digitOf.set(CarMesh.getSpeedDigit(d), d);
       const pairs = window.__spdPairs = [];
