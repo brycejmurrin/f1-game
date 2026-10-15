@@ -1,15 +1,11 @@
-/* hud-dock-pack — phone HUD SIZE 150% left-column + docked-dash packing.
-   Pins: (1) DockLayout.clampXY keeps a dock between its safe-area home and MAX (a negative share parked it off screen);
-   (2) HudLayout.packPhoneRects clears the measured 844×390 / 932×430 / 390×844
-   clash shapes from the q2 before-survey (tyre×rel/strat, strat×announce,
-   gearbox×strat, sectors×inputs) without moving announce. */
+/* Phone HUD dock packing uses the same dock/fixed-obstacle domain as the runtime collector.
+   Optional readout placement belongs to clearReadouts, not this packer. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { analyzeOverlap, overlapArea } from "../../tools/lib/hud-geometry.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
@@ -47,12 +43,6 @@ function loadDockLayout() {
   return ctx.DockLayout;
 }
 
-const box = (key, role, x, y, w, h) => ({
-  key, role, visible: true, exists: true,
-  x, y, r: x + w, b: y + h, w, h,
-  round: false, cx: x + w / 2, cy: y + h / 2, rr: w / 2, contains: [],
-});
-
 test("clampXY keeps a dock between its safe-area home and MAX (no offset parks it past the edge)", () => {
   const DL = loadDockLayout();
   assert.ok(DL && DL.clampXY, "DockLayout exports clampXY");
@@ -72,111 +62,40 @@ test("HudLayout exports packPhoneRects for the 150% phone packer", () => {
     "packPhoneRects must be exported so the 150% packer is unit-testable");
 });
 
-test("packPhoneRects clears the measured 844×390 @150% left-column / dock clashes", () => {
-  const HL = loadHudLayout();
-  // From artifacts/hud-survey/q2-before/844 (chase tilt HUD 150%), plus the
-  // steer discs that cap how far TYRES can fall.
-  const W = 844, H = 390;
-  const before = [
-    { id: "map", x: 56.4, y: 7.5, w: 103.1, h: 103.1 },
-    { id: "announce", x: 230, y: 127.4, w: 223.3, h: 43.3 },
-    { id: "rel", x: 56.4, y: 159.7, w: 124.9, h: 51 },
-    { id: "strat", x: 204.4, y: 159.7, w: 85, h: 62.8 },
-    { id: "tyre", x: 59, y: 190.8, w: 179.9, h: 63.5 },
-    { id: "gearbox", x: 249, y: 220.3, w: 145.9, h: 83.8 },
-    { id: "ctrl:steerL", x: 59, y: 265.3, w: 82.9, h: 82.9, fixed: 1 },
-    { id: "ctrl:steerR", x: 148.1, y: 265.3, w: 82.9, h: 82.9, fixed: 1 },
-  ];
-  const pile = analyzeOverlap([
-    box("announce", "hud", 230, 127.4, 223.3, 43.3),
-    box("strat", "hud", 204.4, 159.7, 85, 62.8),
-    box("tyre", "hud", 59, 190.8, 179.9, 63.5),
-    box("rel", "hud", 56.4, 159.7, 124.9, 51),
-    box("gearbox", "hud", 249, 220.3, 145.9, 83.8),
-  ], W, H, { sal: 47, sar: 47, sat: 0, sab: 21 });
-  assert.ok(pile.hudClash.length >= 3, "before shape has the measured left-column clashes");
-
-  const corr = HL.packPhoneRects(before, W, H);
-  assert.ok(corr && typeof corr === "object", "packer returns a correction map");
-  assert.equal(corr.announce, undefined, "announce is not moved (queue-1 owns its stack)");
-
-  const applied = before.filter((b) => String(b.id).indexOf("ctrl:") !== 0).map((b) => {
-    const c = corr[b.id] || { dx: 0, dy: 0 };
-    return box(b.id, "hud", b.x + c.dx, b.y + c.dy, b.w, b.h);
-  });
-  const after = analyzeOverlap(applied, W, H, { sal: 47, sar: 47, sat: 0, sab: 21 });
-  const leftHits = after.hudClash.filter((p) =>
-    /strat|tyre|rel|gearbox|announce/.test(p));
-  assert.deepEqual(leftHits, [], "packed 844×390 left column + dock has no strat/tyre/rel/gearbox clashes: " + leftHits.join(","));
-  // Negative corrections are legitimate (slide toward the home edge / up).
-  const anyNeg = Object.values(corr).some((c) => c.dx < 0 || c.dy < 0);
-  assert.ok(anyNeg || Object.keys(corr).length > 0, "packer emitted at least one correction");
+test("dock packing lifts TYRES clear of BRAKE without moving the control", () => {
+  const HL = loadHudLayout(), W = 844, H = 390;
+  const tyre = { id: "tyre", x: 100, y: 260, w: 80, h: 45 };
+  const brake = { id: "ctrl:brake", x: 100, y: 280, w: 80, h: 80 };
+  const boxes = [tyre, brake], snapshot = JSON.stringify(boxes);
+  const corr = HL.packPhoneRects(boxes, W, H);
+  assert.equal(corr[brake.id], undefined, "touch targets never move");
+  assert.ok(tyre.y + corr.tyre.dy + tyre.h <= brake.y - HL.PACK_AIR);
+  assert.equal(JSON.stringify(boxes), snapshot, "measurements are read-only");
 });
 
-test("packPhoneRects clears 932×430 and portrait 390×844 measured clash classes", () => {
+test("later dock pieces yield to earlier dock pieces", () => {
   const HL = loadHudLayout();
-  // 932×430: announce×strat, tyre×strat.
-  const maxBoxes = [
-    { id: "announce", x: 288.6, y: 127.4, w: 247.2, h: 43.5 },
-    { id: "strat", x: 217.1, y: 160.3, w: 85.4, h: 63 },
-    { id: "tyre", x: 71, y: 215.5, w: 195, h: 68.3 },
-    { id: "rel", x: 68.4, y: 160.3, w: 125.4, h: 51.1 },
-  ];
-  const maxCorr = HL.packPhoneRects(maxBoxes, 932, 430);
-  assert.equal(maxCorr.announce, undefined);
-  const maxApplied = maxBoxes.map((b) => {
-    const c = maxCorr[b.id] || { dx: 0, dy: 0 };
-    return box(b.id, "hud", b.x + c.dx, b.y + c.dy, b.w, b.h);
-  });
-  const maxAfter = analyzeOverlap(maxApplied, 932, 430, { sal: 59, sar: 59, sat: 0, sab: 21 });
-  assert.deepEqual(maxAfter.hudClash.filter((p) => /strat|tyre|announce/.test(p)), [],
-    "932×430 packed: " + maxAfter.hudClash.join(","));
-
-  // Portrait: sectors×inputs, announce×strat (nudge strat/sectors/inputs only).
-  const porBoxes = [
-    { id: "announce", x: 103.9, y: 174.5, w: 182.3, h: 32 },
-    { id: "strat", x: 104.7, y: 169.5, w: 61.2, h: 43 },
-    { id: "sectors", x: 254.4, y: 151, w: 31.6, h: 42.8 },
-    { id: "inputs", x: 232.6, y: 177.8, w: 53.5, h: 23.6 },
-    { id: "flag", x: 137.5, y: 150.8, w: 115, h: 22.5 },
-  ];
-  const porCorr = HL.packPhoneRects(porBoxes, 390, 844);
-  assert.equal(porCorr.announce, undefined);
-  assert.equal(porCorr.flag, undefined, "flag stays put (status stack)");
-  const porApplied = porBoxes.map((b) => {
-    const c = porCorr[b.id] || { dx: 0, dy: 0 };
-    return box(b.id, "hud", b.x + c.dx, b.y + c.dy, b.w, b.h);
-  });
-  const porAfter = analyzeOverlap(porApplied, 390, 844, { sal: 0, sar: 0, sat: 47, sab: 34 });
-  const porHits = porAfter.hudClash.filter((p) =>
-    /strat|sectors|inputs|announce|flag/.test(p));
-  assert.deepEqual(porHits, [], "portrait packed: " + porHits.join(","));
-  assert.ok(overlapArea == null || true);
+  const tyre = { id: "tyre", x: 300, y: 280, w: 80, h: 45 };
+  const gear = { id: "gearbox", x: 300, y: 260, w: 80, h: 45 };
+  const corr = HL.packPhoneRects([gear, tyre], 844, 390);
+  assert.equal(corr.tyre, undefined, "TYRES keeps its priority independent of input order");
+  assert.ok(gear.y + corr.gearbox.dy >= tyre.y + tyre.h + HL.PACK_AIR);
 });
 
-test("packPhoneRects drops LIMITS under the CI 96c3536 broadcast phoneL @150% flag", () => {
+test("portrait keeps the dock planted even when a touch target overlaps it", () => {
   const HL = loadHudLayout();
-  const W = 844, H = 390;
-  // Exact boxes from ship CI run 38604722503 (flag+limits).
-  const before = [
-    { id: "flag", x: 309.671875, y: 166.046875, w: 224.65625, h: 40.375 },
-    { id: "limits", x: 468.5625, y: 197.6875, w: 157.296875, h: 31.1875 },
-    { id: "map", x: 62, y: 98.25, w: 165, h: 165 },
-    { id: "tyre", x: 60.796875, y: 265.28125, w: 179.515625, h: 16.015625 },
-    { id: "rel", x: 205.9375, y: 291.296875, w: 201.671875, h: 17.84375 },
-  ];
-  assert.ok(overlapArea(
-    box("flag", "hud", before[0].x, before[0].y, before[0].w, before[0].h),
-    box("limits", "hud", before[1].x, before[1].y, before[1].w, before[1].h),
-  ) > 200, "CI shape is a real flag×limits overlap");
-  const corr = HL.packPhoneRects(before, W, H);
-  assert.equal(corr.flag, undefined, "flag stays put (status stack)");
-  assert.ok(corr.limits && corr.limits.dy > 4, "LIMITS is pushed below the flag: " + JSON.stringify(corr.limits));
-  const applied = before.map((b) => {
-    const c = corr[b.id] || { dx: 0, dy: 0 };
-    return box(b.id, "hud", b.x + c.dx, b.y + c.dy, b.w, b.h);
-  });
-  const after = analyzeOverlap(applied, W, H, { sal: 47, sar: 47, sat: 0, sab: 21 });
-  const hits = after.hudClash.filter((p) => p.includes("flag") && p.includes("limits"));
-  assert.deepEqual(hits, [], "packed CI boxes: " + after.hudClash.join(","));
+  const corr = HL.packPhoneRects([
+    { id: "tyre", x: 20, y: 650, w: 100, h: 40 },
+    { id: "ctrl:brake", x: 20, y: 650, w: 90, h: 90 },
+  ], 390, 844);
+  assert.equal(Object.keys(corr).length, 0, "moving portrait margins previously pushed TYRES off-screen");
+});
+
+test("fixed plates stay put and an empty or invalid measure emits no corrections", () => {
+  const HL = loadHudLayout();
+  const fixed = ["map", "tower", "announce", "flag"].map(id => ({ id, x: 50, y: 50, w: 100, h: 50 }));
+  assert.equal(Object.keys(HL.packPhoneRects(fixed, 844, 390)).length, 0);
+  for (const [boxes, W, H] of [[[], 844, 390], [fixed, 0, 390], [fixed, 844, 0]]) {
+    assert.equal(Object.keys(HL.packPhoneRects(boxes, W, H)).length, 0);
+  }
 });

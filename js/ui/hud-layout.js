@@ -465,26 +465,21 @@ const HudLayout = (function () {
     }
   }
 
-  /* PHONE 150% PACKER. Pure: boxes → { id: {dx, dy} } in screen px. announce
-     and flag never move. Later MOVE ids yield to earlier ones and to FIXED.
-     Dock chips (tyre/gear/speed/ERS) rank BEFORE opt-in left-column chips so
-     REL/STRATEGY slide off the dash instead of asking TYRES to drop onto the
-     steer buttons (844×390 @150%: tyre can only fall ~7 px before ctrl:steer). */
+  /* PHONE 150% PACKER. Pure: dock boxes → screen-pixel corrections.
+     The map, tower, radio, flag and touch controls stay fixed. Optional
+     readouts are placed separately by clearReadouts, never by this packer. */
   const PACK_AIR = 4;
   const PACK_SCALE_MIN = 140;
   const PACK_FIXED = Object.freeze({ announce: 1, flag: 1, map: 1, tower: 1 });
   const PACK_DOCK = Object.freeze({ tyre: 1, gearbox: 1, speed: 1, energy: 1 });
-  const PACK_MOVE = Object.freeze([
-    "tyre", "gearbox", "speed", "energy",
-    "rel", "strat", "inputs", "sectors", "limits",
-  ]);
+  const PACK_MOVE = Object.freeze(Object.keys(PACK_DOCK));
   function packPhoneRects(boxes, W, H) {
     const by = Object.create(null);
     const fixed = Object.create(null);
     if (!boxes || !(W > 0) || !(H > 0)) return {};
     // Portrait: keep the dock (tyre/gear/speed/ERS) planted — moving them
     // with margin at --hud-z-bot ≈ 0.6 yeeted TYRES off the top (390×844
-    // @150%). Left-column chips still pack against the planted dock.
+    // @150%). Keep the portrait dock planted.
     const dockFixed = H > W;
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
@@ -526,48 +521,15 @@ const HudLayout = (function () {
         const left = mr.R - or.L + PACK_AIR;
         const right = or.R - mr.L + PACK_AIR;
         const up = mr.B - or.T + PACK_AIR;
-        // Escape a FIXED plate (announce/flag/touch/map): left-column chips
-        // prefer LEFT (stay under the map) or UP (off a control below).
-        // Among peers: prefer a column stack — UP when the obstacle is the
-        // dock (tyre/gear) below, DOWN when stacking under a higher chip.
         let dx = 0, dy = 0;
-        const leftCol = moverId === "strat" || moverId === "rel" || moverId === "inputs"
-          || moverId === "sectors" || moverId === "limits";
-        const dockObs = obstacleId === "tyre" || obstacleId === "gearbox"
-          || obstacleId === "speed" || obstacleId === "energy";
         if (isFixed(obstacleId)) {
-          // Map/tower sit ABOVE the left column — escape DOWN (under them) or
-          // LEFT, never UP into the map. Touch discs below: prefer UP.
-          if (obstacleId === "map" || obstacleId === "tower") {
-            if (leftCol && left > 0 && mr.L - left >= PACK_AIR && left <= down) dx = -left;
-            else dy = down;
-          } else if (String(obstacleId).indexOf("ctrl:") === 0 && up > 0 && up <= Math.min(down, left, right)) dy = -up;
-          else if (leftCol && mr.L - left >= PACK_AIR && left <= Math.min(down, up, right) + 1) dx = -left;
-          else if (leftCol && up > 0 && up <= down) dy = -up;
+          // Map/tower stay above the dock; a control below can be cleared UP.
+          if (obstacleId === "map" || obstacleId === "tower") dy = down;
+          else if (String(obstacleId).indexOf("ctrl:") === 0 && up > 0 && up <= Math.min(down, left, right)) dy = -up;
           else if (left <= down) dx = -left;
           else dy = down;
-        } else if (leftCol && dockObs) {
-          // Opt-in chips yield to the dock: slide UP (or LEFT) off TYRES/GEAR.
-          if (up <= left && mr.T - up >= PACK_AIR) dy = -up;
-          else if (mr.L - left >= PACK_AIR) dx = -left;
-          else if (up <= right) dy = -up;
-          else dx = right;
-        } else if (leftCol && (obstacleId === "rel" || obstacleId === "strat"
-          || obstacleId === "inputs" || obstacleId === "sectors")) {
-          // Two left-column chips: slide horizontally. UP climbs into the map
-          // (measured: strat×rel → strat y=69 over the minimap). Stack DOWN
-          // only when neither side fits — the dock yield above already pulled
-          // both chips off TYRES when it could.
-          const leftFits = mr.L - left >= PACK_AIR;
-          const rightFits = mr.R + right <= W - PACK_AIR;
-          if (leftFits && (!rightFits || left <= right)) dx = -left;
-          else if (rightFits) dx = right;
-          else dy = down;
-        } else if (down <= left) {
-          dy = down;
-        } else {
-          dx = -left;
-        }
+        } else if (down <= left) dy = down;
+        else dx = -left;
         m.dx += dx;
         m.dy += dy;
         clampOn(m);
@@ -591,62 +553,6 @@ const HudLayout = (function () {
         }
       }
       if (!any) break;
-    }
-    // Reserve a TRACK LIMITS strip under the map when the fit left the chip
-    // on the left column (`data-limits-left`). Limits is often hidden until
-    // the survey forces it, so the packer never sees the box — without this
-    // pad REL climbs into the strip (844×390 @150%: limits×rel 2.4 px).
-    if (by.rel && by.map && W >= H) {
-      const limH = by.limits ? by.limits.h + PACK_AIR : 24;
-      const minT = by.map.y + by.map.dy + by.map.h + PACK_AIR + limH;
-      const r = by.rel;
-      if (r.y + r.dy < minT) r.dy = minT - r.y;
-      clampOn(r);
-    }
-    // Pocket snap (landscape only): at 150% phoneL STRATEGY cannot sit beside
-    // REL under the map (announce owns the mid band) or stack under REL
-    // (TYRES owns the dock). Park it RIGHT of the map and ABOVE the radio
-    // card. Portrait keeps the iterative pass — the landscape pocket lands
-    // under the timing tower (390×844 @150% survey).
-    if (by.strat && by.map && W >= H) {
-      const s = by.strat, m = by.map, ann = by.announce, rel = by.rel;
-      const still = (o) => o && hit(rect(s), rect(o));
-      if (still(ann) || still(rel) || still(by.tyre) || still(by.gearbox) || still(m)) {
-        const mapR = m.x + m.dx + m.w;
-        const mapT = m.y + m.dy;
-        const mapB = mapT + m.h;
-        const annT = ann ? ann.y : H * 0.45;
-        const annB = ann ? ann.y + ann.h : annT;
-        let tx = mapR + PACK_AIR;
-        // Prefer the pocket ABOVE the radio when strat fits; otherwise sit
-        // under the map to its right (idle announce is high — no room above).
-        let ty = Math.max(PACK_AIR, Math.min(mapT + PACK_AIR, annT - s.h - PACK_AIR));
-        if (!(ty + s.h <= annT - 0.5)) {
-          ty = Math.max(mapB + PACK_AIR, annB + PACK_AIR);
-          // Stay left of the radio when there is width; else hug map.R.
-          if (ann && ann.x - PACK_AIR - s.w >= mapR + PACK_AIR) tx = ann.x - PACK_AIR - s.w;
-        }
-        if (tx < W - PACK_AIR && ty + s.h <= H - PACK_AIR) {
-          s.dx = tx - s.x;
-          s.dy = ty - s.y;
-          clampOn(s);
-          for (let n = 0; n < 6; n++) {
-            let any = false;
-            for (const o of Object.keys(by)) {
-              if (o === "strat") continue;
-              const oj = PACK_MOVE.indexOf(o);
-              if (!isFixed(o) && oj >= 0 && oj > PACK_MOVE.indexOf("strat")) continue;
-              if (separate("strat", o)) any = true;
-            }
-            if (rel && !isFixed("rel")) {
-              for (const o of ["tyre", "gearbox", "announce", "map", "strat"]) {
-                if (by[o] && separate("rel", o)) any = true;
-              }
-            }
-            if (!any) break;
-          }
-        }
-      }
     }
     const out = Object.create(null);
     for (const id of Object.keys(by)) {
@@ -672,11 +578,7 @@ const HudLayout = (function () {
         el.style.removeProperty("translate");
         el.style.removeProperty("margin-left");
         el.style.removeProperty("margin-top");
-        if (el.hasAttribute("data-hl-pack-pos")) {
-          el.style.removeProperty("left");
-          el.style.removeProperty("top");
-          el.removeAttribute("data-hl-pack-pos");
-        }
+
       }
     }
   }
@@ -734,12 +636,7 @@ const HudLayout = (function () {
       const el = doc.querySelector(row[2]);
       if (!el || !el.style) continue;
       const c = corr[id];
-      // Paint the correction. Zoomed absolute chips (#hud-strat/#hud-rel) do
-      // NOT move under an inline `translate` here (Chromium + CSS zoom: the
-      // computed translate stays on the [data-hl]/--hl path and getBounding
-      // ClientRect ignores our important translate). Nudge the used left/top
-      // by local px instead. Dock chips (tyre/gear/…) keep margin — their
-      // flow box has no absolute left/top to rewrite.
+      // Dock corrections are margins in local CSS pixels, preserving saved --hl-*.
       let z = 1;
       if (typeof el.currentCSSZoom === "number" && el.currentCSSZoom > 0) z = el.currentCSSZoom;
       else if (typeof getComputedStyle === "function") {
@@ -747,19 +644,8 @@ const HudLayout = (function () {
         if (zz > 0) z = zz;
       }
       const lx = c.dx / z, ly = c.dy / z;
-      const abs = id === "strat" || id === "rel" || id === "inputs"
-        || id === "sectors" || id === "limits" || id === "damage";
-      if (abs && typeof getComputedStyle === "function") {
-        const cs = getComputedStyle(el);
-        const curL = parseFloat(cs.left);
-        const curT = parseFloat(cs.top);
-        if (isFinite(curL)) el.style.setProperty("left", (curL + lx).toFixed(1) + "px", "important");
-        if (isFinite(curT)) el.style.setProperty("top", (curT + ly).toFixed(1) + "px", "important");
-        el.setAttribute("data-hl-pack-pos", "");
-      } else {
-        el.style.setProperty("margin-left", lx.toFixed(1) + "px", "important");
-        el.style.setProperty("margin-top", ly.toFixed(1) + "px", "important");
-      }
+      el.style.setProperty("margin-left", lx.toFixed(1) + "px", "important");
+      el.style.setProperty("margin-top", ly.toFixed(1) + "px", "important");
       el.setAttribute("data-hl-pack", "");
     }
   }
