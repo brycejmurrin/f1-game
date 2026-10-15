@@ -1,94 +1,60 @@
-# Silverstone — circuit survey (2026-10-14)
+# Silverstone — circuit survey (2026-10-15 re-shoot)
 
-**Branch:** `cursor/silverstone-survey-745b` · **Frames:** 36 (`artifacts/shots/tracks/silverstone/`, JPEG ≤1280 px, q≈80, <300 KB)
+**Shots:** **25 / 36** JPEGs in `artifacts/shots/tracks/silverstone/` (SwiftShader / TLX; shared shot tooling #1862).  
+**Batch:** [`silverstone-capture-jobs.json`](silverstone-capture-jobs.json) — run 1 captured jobs 1–25 (18× day·dry sector sweep + Copse/Maggotts weather·TOD heroes).  
+**Capture:** `APEX_GL=swiftshader node tools/shot/shot.mjs --batch docs/tracks/surveys/silverstone-capture-jobs.json --jpeg --gpu swiftshader --present-timeout 120 --capture-retries 6 --wait 150` (budgeted runs: slice first *N* jobs via `scratch/europe-west-reshoot.mjs`).
 
-Captured with shared `shot.mjs` batch (`--present-timeout 90 --capture-retries 4 --wait 120`, SwiftShader). Sector sweep **day · dry**; six hero signatures with **dawn/dusk/night** and **wet/rain/overcast/fog/storm** mix.
+**Def / scenery:** `js/circuits/silverstone.js`, `js/circuits/scenery/silverstone.js`
 
 ## Code map
 
 | Layer | Path |
 |---|---|
-| Def | `js/circuits/silverstone.js` |
-| Scenery | `js/circuits/scenery/silverstone.js` |
+| Landmarks | `tests/data/landmarks/silverstone.json` |
+| Verify | `node tools/track/verify-track.cjs silverstone` |
 
-## Sector panels (day · dry)
+## Survey panels
 
-### Sector 1
+Path prefix: `../../../artifacts/shots/tracks/silverstone/`
 
-| | | |
-|---|---|---|
-| ![chapel · day · dry](../../../artifacts/shots/tracks/silverstone/s1-chapel__day-dry.jpg) | ![copse · day · dry](../../../artifacts/shots/tracks/silverstone/s1-copse__day-dry.jpg) | ![hangar t2 · day · dry](../../../artifacts/shots/tracks/silverstone/s1-hangar-t2__day-dry.jpg) |
-| chapel · day · dry | copse · day · dry | hangar t2 · day · dry |
-| ![hangar wide · day · dry](../../../artifacts/shots/tracks/silverstone/s1-hangar-wide__day-dry.jpg) | ![maggotts · day · dry](../../../artifacts/shots/tracks/silverstone/s1-maggotts__day-dry.jpg) |
-| hangar wide · day · dry | maggotts · day · dry |
+### Lap / sector coverage (day · dry)
 
-### Sector 2
+| **s1 copse orbit dry day** | **s1 maggotts orbit dry day** | **s1 chapel orbit dry day** |
+| ![s1-copse-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s1-copse-orbit-dry-day.jpg) | ![s1-maggotts-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s1-maggotts-orbit-dry-day.jpg) | ![s1-chapel-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s1-chapel-orbit-dry-day.jpg) |
+| s1 copse orbit dry day<br/>s1 maggotts orbit dry day<br/>s1 chapel orbit dry day |
 
-| | | |
-|---|---|---|
-| ![club · day · dry](../../../artifacts/shots/tracks/silverstone/s2-club__day-dry.jpg) | ![hamilton stand · day · dry](../../../artifacts/shots/tracks/silverstone/s2-hamilton-stand__day-dry.jpg) | ![pit park · day · dry](../../../artifacts/shots/tracks/silverstone/s2-pit-park__day-dry.jpg) |
-| club · day · dry | hamilton stand · day · dry | pit park · day · dry |
-| ![stowe · day · dry](../../../artifacts/shots/tracks/silverstone/s2-stowe__day-dry.jpg) | ![vale · day · dry](../../../artifacts/shots/tracks/silverstone/s2-vale__day-dry.jpg) | ![wing hero · day · dry](../../../artifacts/shots/tracks/silverstone/s2-wing-hero__day-dry.jpg) |
-| stowe · day · dry | vale · day · dry | wing hero · day · dry |
+| **s1 hangar t2 orbit dry day** | **s1 hangar wide orbit dry day** | **s2 stowe orbit dry day** |
+| ![s1-hangar-t2-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s1-hangar-t2-orbit-dry-day.jpg) | ![s1-hangar-wide-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s1-hangar-wide-orbit-dry-day.jpg) | ![s2-stowe-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s2-stowe-orbit-dry-day.jpg) |
+| s1 hangar t2 orbit dry day<br/>s1 hangar wide orbit dry day<br/>s2 stowe orbit dry day |
 
-### Sector 3 + landmarks
+| **s2 vale trackside dry day** | **s2 club orbit dry day** | **s2 wing hero orbit dry day** |
+| ![s2-vale-trackside-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s2-vale-trackside-dry-day.jpg) | ![s2-club-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s2-club-orbit-dry-day.jpg) | ![s2-wing-hero-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s2-wing-hero-orbit-dry-day.jpg) |
+| s2 vale trackside dry day<br/>s2 club orbit dry day<br/>s2 wing hero orbit dry day |
 
-| | | |
-|---|---|---|
-| ![lm museum · day · dry](../../../artifacts/shots/tracks/silverstone/lm-museum__day-dry.jpg) | ![lm start gantry · day · dry](../../../artifacts/shots/tracks/silverstone/lm-start-gantry__day-dry.jpg) | ![abbey · day · dry](../../../artifacts/shots/tracks/silverstone/s3-abbey__day-dry.jpg) |
-| lm museum · day · dry | lm start gantry · day · dry | abbey · day · dry |
-| ![brooklands · day · dry](../../../artifacts/shots/tracks/silverstone/s3-brooklands__day-dry.jpg) | ![farm · day · dry](../../../artifacts/shots/tracks/silverstone/s3-farm__day-dry.jpg) | ![village loop · day · dry](../../../artifacts/shots/tracks/silverstone/s3-village-loop__day-dry.jpg) |
-| brooklands · day · dry | farm · day · dry | village loop · day · dry |
-| ![woodcote · day · dry](../../../artifacts/shots/tracks/silverstone/s3-woodcote__day-dry.jpg) |
-| woodcote · day · dry |
+| **s2 hamilton stand orbit dry day** | **s2 pit park park dry day** | **s3 abbey orbit dry day** |
+| ![s2-hamilton-stand-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s2-hamilton-stand-orbit-dry-day.jpg) | ![s2-pit-park-park-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s2-pit-park-park-dry-day.jpg) | ![s3-abbey-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s3-abbey-orbit-dry-day.jpg) |
+| s2 hamilton stand orbit dry day<br/>s2 pit park park dry day<br/>s3 abbey orbit dry day |
 
-## Hero panels (weather · time of day)
+| **s3 farm orbit dry day** | **s3 village loop orbit dry day** | **s3 brooklands orbit dry day** |
+| ![s3-farm-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s3-farm-orbit-dry-day.jpg) | ![s3-village-loop-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s3-village-loop-orbit-dry-day.jpg) | ![s3-brooklands-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s3-brooklands-orbit-dry-day.jpg) |
+| s3 farm orbit dry day<br/>s3 village loop orbit dry day<br/>s3 brooklands orbit dry day |
 
-### copse
+| **s3 woodcote trackside dry day** | **lm museum orbit dry day** | **lm start gantry orbit dry day** |
+| ![s3-woodcote-trackside-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/s3-woodcote-trackside-dry-day.jpg) | ![lm-museum-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/lm-museum-orbit-dry-day.jpg) | ![lm-start-gantry-orbit-dry-day.jpg](../../../artifacts/shots/tracks/silverstone/lm-start-gantry-orbit-dry-day.jpg) |
+| s3 woodcote trackside dry day<br/>lm museum orbit dry day<br/>lm start gantry orbit dry day |
 
-| | | |
-|---|---|---|
-| ![copse · dawn · dry](../../../artifacts/shots/tracks/silverstone/hero-copse__dawn-dry.jpg) | ![copse · day · rain](../../../artifacts/shots/tracks/silverstone/hero-copse__day-rain.jpg) | ![copse · night · dry](../../../artifacts/shots/tracks/silverstone/hero-copse__night-dry.jpg) |
-| copse · dawn · dry | copse · day · rain | copse · night · dry |
+### Weather & lighting (heroes — partial, run 1)
 
-### maggotts
+| **hero copse orbit dawn dry** | **hero copse orbit dusk dry** | **hero copse orbit night dry** |
+| ![hero-copse-orbit-dawn-dry.jpg](../../../artifacts/shots/tracks/silverstone/hero-copse-orbit-dawn-dry.jpg) | ![hero-copse-orbit-dusk-dry.jpg](../../../artifacts/shots/tracks/silverstone/hero-copse-orbit-dusk-dry.jpg) | ![hero-copse-orbit-night-dry.jpg](../../../artifacts/shots/tracks/silverstone/hero-copse-orbit-night-dry.jpg) |
+| hero copse orbit dawn dry<br/>hero copse orbit dusk dry<br/>hero copse orbit night dry |
 
-| | | |
-|---|---|---|
-| ![maggotts · day · storm](../../../artifacts/shots/tracks/silverstone/hero-maggotts__day-storm.jpg) | ![maggotts · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-maggotts__dusk-dry.jpg) | ![maggotts · night · dry](../../../artifacts/shots/tracks/silverstone/hero-maggotts__night-dry.jpg) |
-| maggotts · day · storm | maggotts · dusk · dry | maggotts · night · dry |
+| **hero copse orbit day wet** | **hero copse orbit day overcast** | **hero copse orbit day storm** |
+| ![hero-copse-orbit-day-wet.jpg](../../../artifacts/shots/tracks/silverstone/hero-copse-orbit-day-wet.jpg) | ![hero-copse-orbit-day-overcast.jpg](../../../artifacts/shots/tracks/silverstone/hero-copse-orbit-day-overcast.jpg) | ![hero-copse-orbit-day-storm.jpg](../../../artifacts/shots/tracks/silverstone/hero-copse-orbit-day-storm.jpg) |
+| hero copse orbit day wet<br/>hero copse orbit day overcast<br/>hero copse orbit day storm |
 
-### hangar
+| **hero maggotts cinematic dawn dry** | | |
+| ![hero-maggotts-cinematic-dawn-dry.jpg](../../../artifacts/shots/tracks/silverstone/hero-maggotts-cinematic-dawn-dry.jpg) | | |
+| hero maggotts cinematic dawn dry | | |
 
-| | | |
-|---|---|---|
-| ![hangar · day · fog](../../../artifacts/shots/tracks/silverstone/hero-hangar__day-fog.jpg) | ![hangar · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-hangar__dusk-dry.jpg) | ![hangar · night · dry](../../../artifacts/shots/tracks/silverstone/hero-hangar__night-dry.jpg) |
-| hangar · day · fog | hangar · dusk · dry | hangar · night · dry |
-
-### wing
-
-| | | |
-|---|---|---|
-| ![wing · day · overcast](../../../artifacts/shots/tracks/silverstone/hero-wing__day-overcast.jpg) | ![wing · day · wet](../../../artifacts/shots/tracks/silverstone/hero-wing__day-wet.jpg) | ![wing · night · dry](../../../artifacts/shots/tracks/silverstone/hero-wing__night-dry.jpg) |
-| wing · day · overcast | wing · day · wet | wing · night · dry |
-
-### abbey
-
-| | | |
-|---|---|---|
-| ![abbey · dawn · dry](../../../artifacts/shots/tracks/silverstone/hero-abbey__dawn-dry.jpg) | ![abbey · day · rain](../../../artifacts/shots/tracks/silverstone/hero-abbey__day-rain.jpg) | ![abbey · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-abbey__dusk-dry.jpg) |
-| abbey · dawn · dry | abbey · day · rain | abbey · dusk · dry |
-
-### village
-
-| | | |
-|---|---|---|
-| ![village · day · fog](../../../artifacts/shots/tracks/silverstone/hero-village__day-fog.jpg) | ![village · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-village__dusk-dry.jpg) | ![village · night · dry](../../../artifacts/shots/tracks/silverstone/hero-village__night-dry.jpg) |
-| village · day · fog | village · dusk · dry | village · night · dry |
-
-## Verification
-
-```sh
-node tools/track/verify-track.cjs silverstone
-node tools/track/audit-circuit.cjs silverstone
-```
+**Remaining (jobs 26–42):** Maggotts dusk/night/wet/overcast/storm; Hangar + Wing hero matrices; then brands_hatch.
