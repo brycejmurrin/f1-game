@@ -33,8 +33,9 @@
 #    APEX_PUSH_HOLD=0 overrides), and an Actions run cancel (`gh run cancel`,
 #    …/actions/runs/<id>/cancel) is refused (APEX_RUN_CANCEL_OK=1 overrides).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
-#    .claude/agents; never a generated doc) runs only docs-integrity — no
-#    ratchet raise, no test:guards.
+#    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
+#    and artifacts/track-survey; never a generated doc) runs only
+#    docs-integrity — no ratchet raise, no test:guards.
 #
 # Exit 2 blocks with the reason on stderr; exit 0 lets the normal permission
 # flow decide.
@@ -458,7 +459,11 @@ $p"; done
       case " $GENERATED_DOCS " in
         *" $f "*) DOCS_ONLY=0; break ;;
       esac
-      printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$' || { DOCS_ONLY=0; break; }
+      # Survey assets count as prose (2026-10-15): image/report output in the
+      # track-survey-assets dirs only (docs/notes/SURVEY-ASSETS-BRANCH.md). That
+      # branch dropped ci.yml (#2234), so test:guards is red there by
+      # construction and every image commit needed APEX_SKIP_GUARDS=1.
+      printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$|^artifacts/(shots/(tracks|gallery)|track-survey)/.+\.(png|jpe?g|webp|json|html)$' || { DOCS_ONLY=0; break; }
     done <<EOF
 $COMMITTED
 EOF

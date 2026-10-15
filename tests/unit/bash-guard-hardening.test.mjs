@@ -839,3 +839,28 @@ test("bash-guard: `git add X && git commit` in one command counts X as staged (c
     assert.equal(run("echo 'git add js/core/log.js' && git commit -m x").status, 2, "a quoted add is prose");
   } finally { repo.rm(); }
 });
+
+test("bash-guard: survey images and reports commit on the docs-only path; a code file or an image elsewhere does not", () => {
+  const repo = scratchRepo("hook-survey-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+  const put = (rel, body = "x") => { fs.mkdirSync(path.dirname(path.join(repo.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(repo.dir, rel), body); };
+  try {
+    put("artifacts/shots/tracks/spa/t1.png"); put("artifacts/shots/gallery/index.html");
+    put("artifacts/track-survey/spa-report/report.json"); put("docs/PHYSICS.md", "survey prose\n");
+    repo.g("add", "-f", "artifacts", "docs");
+    let r = run("git commit -m survey");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /probe: commit docs-only/, "survey images, reports and prose are the docs-only path");
+    put("js/core/log.js");
+    repo.g("add", "js/core/log.js");
+    r = run("git commit -m survey");
+    assert.match(r.stderr, /probe: commit code/, "a code file in the commit runs the full guards");
+    repo.g("reset", "-q", "js/core/log.js"); fs.rmSync(path.join(repo.dir, "js"), { recursive: true });
+    for (const rel of ["assets/pack/x.png", "artifacts/shots/other/x.png", "artifacts/track-survey/spa-report/run.js"]) {
+      put(rel); repo.g("add", "-f", rel);
+      r = run("git commit -m x");
+      assert.match(r.stderr, /probe: commit code/, `${rel} is not a survey asset`);
+      repo.g("reset", "-q", rel); fs.rmSync(path.join(repo.dir, rel));
+    }
+  } finally { repo.rm(); }
+});
