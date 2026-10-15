@@ -1,6 +1,6 @@
 ---
 name: who-is-on-it
-description: "Use when a harness lane starts: claim OWNED globs, refuse overlap, record claim. Deploy red → steward; merge → apex-merge-hard-gate."
+description: "Use when a harness lane starts: claim OWNED globs, refuse overlap. Deploy red → steward."
 ---
 
 # Who is on it (lane claim)

@@ -1,6 +1,6 @@
 ---
 name: apex-merge-hard-gate
-description: "Use when asked to merge or arm auto-merge: Merge Desk arms MERGE, Grok merges. Sweeps → ci-watch; workers → steward."
+description: "Use when asked to merge or arm auto-merge: Merge Desk arms, Grok merges. Sweeps → ci-watch."
 ---
 
 # Apex merge hard gate

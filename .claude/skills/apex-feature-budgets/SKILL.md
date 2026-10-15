@@ -1,6 +1,6 @@
 ---
 name: apex-feature-budgets
-description: "Use when scoping a harness lane: shot/time/message caps; Lighting ≤1. launch-policy → agent-fleet; merge → apex-merge-hard-gate."
+description: "Use when scoping a harness lane: shot/time/message caps; Lighting ≤1. Launch → agent-fleet."
 ---
 
 # Apex feature budgets (harness + cloud lanes)
