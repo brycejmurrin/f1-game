@@ -398,7 +398,11 @@ test("non-HUD menu hosts pad with the safe-area tokens", () => {
     /:where\(body\[data-density="compact"\]\) #menu-buttons/,
     "max-height",
   );
-  assert.equal(compactBtns, "100%", "compact title column caps to the padded overlay box, not raw svh");
+  assert.match(
+    compactBtns,
+    /min\(100%,\s*calc\(100\s*\*\s*var\(--svhz\)\s*-\s*var\(--safe-t\)\s*-\s*var\(--safe-b\)/,
+    "compact title column caps to the padded overlay box, not raw svh alone",
+  );
   const tk = css("css/tokens.css");
   assert.match(decl(tk, ":root", "--safe-w"), /var\(--safe-l\)/);
   assert.match(decl(tk, ":root", "--safe-h"), /var\(--safe-t\)/);

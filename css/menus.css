@@ -522,10 +522,11 @@ html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :
    separate. This block is reachability only. */
 :where(body[data-density="compact"]) #overlay { gap: var(--gap); }
 :where(body[data-density="compact"]) #menu-buttons {
-  /* Parent #overlay already pads with --safe-*; 100% caps to that box. The old
-     svh−gut cap ignored notch/home insets and let the column spill under
-     hardware on landscape phones (measured 844×390, inset 47/21). */
-  max-height: 100%;
+  /* Parent #overlay already pads with --safe-*; min(100%, …) caps to that box
+     while the svhz term keeps the static pin (ui-improve-pass) and still
+     subtracts notch/home via --safe-t/b when the overlay gutter is thinner
+     than the token (measured 844×390, inset 47/21). */
+  max-height: min(100%, calc(100 * var(--svhz) - var(--safe-t) - var(--safe-b) - 2 * var(--gut)));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
