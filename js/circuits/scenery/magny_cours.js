@@ -49,6 +49,8 @@
         // Keep the ferme yard (s≈0.34) clear of random trees — silo cones were
         // clipping forestEdge/plantTree (clip severe 12 → 13).
         if (s > 0.30 && s < 0.38) return;
+        // Open farmland + poplar rows: no random woodland on the Adelaide/bourg side.
+        if (s > 0.52 && s < 0.90) return;
         const h = hash(k * 31);
         if (h < 0.40) return;
         tree(k, h < 0.5 ? -1 : 1, 12 + h * 10, 11 + h * 7, h < 0.5 ? LEAF_D : LEAF);
@@ -56,8 +58,9 @@
       every(48, (k) => {
         const s = k / n;
         if (openArea(s)) return;
+        if (s > 0.52 && s < 0.90) return;
         const h = hash(k * 67 + 17);
-        if (h < 0.55) return;
+        if (h < 0.70) return;
         pine(k, h < 0.5 ? -1 : 1, 46 + h * 24, 16 + h * 8, [0.12, 0.30, 0.15]);
       });
       // Field hedges banding the outfield. One long run per side; the old

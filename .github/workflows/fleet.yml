@@ -5,7 +5,8 @@ name: Fleet board
 # (`Closes #n`), and rewrites the pinned "Fleet board" issue.
 # Why: docs/notes/AGENT-WORK-TRACKING-2026-10-14.md.
 #
-# Hourly at :23 (scheduled runs queue at the top of the hour,
+# Every 30 minutes at :23 and :53 (Merge Desk cadence; 2026-10-14 CI-volume cut, process-review fix 1;
+# was hourly; scheduled runs queue at the top of the hour,
 # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule),
 # and on workflow_dispatch, which `who-is-on-it.mjs --claim/--release` sends after
 # every board write. NOT `push: [claude/claims-board]`: GitHub runs a
@@ -17,7 +18,7 @@ name: Fleet board
 
 on:
   schedule:
-    - cron: "23 * * * *"
+    - cron: "23,53 * * * *"
   workflow_dispatch:
 
 permissions:
