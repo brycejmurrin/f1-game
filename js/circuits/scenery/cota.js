@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["cota"] =
   function (api) {
-      const { K, out, MAT, n, ds, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, terrace, acacia, plane, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop, terrainYAt } = api;
+      const { K, out, MAT, n, ds, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, terrace, acacia, plane, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop, terrainYAt, seat } = api;
 
       // -- Speckled crowd palette (casual Texan race-day colours) --
       const crowdCols = [
@@ -149,8 +149,39 @@
       for (const [off, gap] of [[-43.4, 22], [0, 16], [43.4, 22]])
         grandstandEx(0.02 + mFrac(off), 1, gap, 43, null, null, { livery: "darkSteel", roof: "flat" });
 
-      // long low pit garage block flanking the main straight
-      building(K(0.97), -1, 12, 24, 8, 120, { kind: "hall", wall: [0.84, 0.84, 0.86], window: glass, floor: 2 });
+      // Pit garage on the paddock straight (s≈0.02–0.08, L) — terrain-footed bays.
+      // The 0.97 end sits on the SRTM lift and buried a monolith 5+ m; the real
+      // garages run beside the start/finish straight on the infield side.
+      {
+        const pitWall = [0.84, 0.84, 0.86];
+        const bayPitch = 20, bays = 6;
+        const a0 = anchor(K(0.02 + mFrac(-50)), -1, 24);
+        const b0 = [a0.r, a0.u, a0.t];
+        modelGroup("cota-pit-garages", {
+          center: vadd(a0.c, a0.u, 5), size: [30, 12, bays * bayPitch + 8], basis: b0,
+        }, (stage) => {
+          for (let i = 0; i < bays; i++) {
+            const a = anchor(K(0.02 + mFrac(-50 + i * bayPitch)), -1, 24);
+            const foot = a.c.slice();
+            const bw = 24, bd = bayPitch - 1.5, hl = bd / 2, hw = bw / 2;
+            const gySamples = [];
+            for (const sx of [-hw, hw]) for (const sz of [-hl, hl]) {
+              const ty = terrainYAt(
+                foot[0] + a.t[0] * sx + a.r[0] * sz,
+                foot[2] + a.t[2] * sx + a.r[2] * sz);
+              if (ty != null) gySamples.push(ty);
+            }
+            if (gySamples.length) foot[1] = Math.max(foot[1], Math.max(...gySamples) - 0.12);
+            const b = [a.r, a.u, a.t];
+            stage._mat = MAT.CONCRETE;
+            seat.box(stage, foot, [24, 8, bayPitch - 1.5], pitWall, b);
+            stage._mat = MAT.GLASS;
+            seat.box(stage, vadd(vadd(foot, a.r, 12), a.u, 4.2),
+              [0.35, 2.8, bayPitch - 4], glass, b);
+            stage._mat = 0;
+          }
+        });
+      }
       motorhome(K(0.99), -1, 40, 30, 8, 60, { wall: [0.88, 0.88, 0.90], window: glass });
       motorhome(K(0.04), -1, 38, 26, 7, 44, { wall: [0.80, 0.80, 0.83], window: glass });
       // race-control / media tower at pit exit (s≈0.05, L) — set back 16m so inner face clear
@@ -225,7 +256,8 @@
         { rows: 6, rise: 1.5, depth: 2.5, step: 9, crowd: crowdCols, density: 0.58,
           conc: [0.74, 0.72, 0.68], concAlt: [0.66, 0.64, 0.60] });
 
-      spectatorHill(0.088, 0.118, -1, 58, { rows: 5, rise: 1.3, depth: 2.2, density: 0.55, grass: dryGrass });
+      // rise +0.15: outer row sat 0.19 m under terrain on the T1 climb (ground-audit).
+      spectatorHill(0.088, 0.118, -1, 58, { rows: 5, rise: 1.45, depth: 2.2, density: 0.55, grass: dryGrass });
 
       amphiStage(0.76, 1, 68);
 
