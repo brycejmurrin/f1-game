@@ -14,6 +14,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- Friend invite and answer codes keep short final fragments when copied with line wrapping.
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
