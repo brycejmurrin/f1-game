@@ -1,0 +1,356 @@
+{
+  "job": {
+    "trackId": "sepang",
+    "frac": 0.8182,
+    "cam": "trackside",
+    "az": 45,
+    "el": 14,
+    "dist": 40,
+    "side": -1,
+    "tod": "day",
+    "weather": "storm",
+    "showHud": false,
+    "team": null,
+    "out": "/workspace/artifacts/shots/tracks/sepang/wx-pit-straight-day-storm.jpg",
+    "backend": "three",
+    "capture": {
+      "profile": "custom",
+      "width": null,
+      "height": null,
+      "viewport": null,
+      "dpr": 1,
+      "type": null,
+      "quality": null,
+      "scope": "scene",
+      "gpu": "swiftshader",
+      "gpuExplicit": false,
+      "browser": "auto",
+      "trace": false,
+      "tracePath": null,
+      "cacheAssets": false,
+      "reuse": true,
+      "isolated": false,
+      "seed": null,
+      "positionals": []
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "type": "jpeg",
+    "quality": 85,
+    "raster": false
+  },
+  "browser": {
+    "requested": {
+      "gpu": "swiftshader",
+      "flavor": "auto"
+    },
+    "executable": {
+      "requestedFlavor": "auto",
+      "executablePath": "/usr/local/bin/google-chrome",
+      "source": "PATH:google-chrome",
+      "flavor": "chromium",
+      "pid": 139755
+    },
+    "version": "154.0.8037.92",
+    "actual": {
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+      "vendor": "Google Inc. (Google)",
+      "software": true,
+      "devices": [
+        {
+          "vendorId": 65535,
+          "deviceId": 65535,
+          "vendorString": "Google Inc. (Google)",
+          "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+          "driverVendor": "SwANGLE",
+          "driverVersion": "5.0.0"
+        }
+      ],
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "enabled",
+        "webgpu": "unavailable_software",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "diag": {
+      "env": {
+        "backend": "three",
+        "backendState": {
+          "api": "webgpu",
+          "forceWebGL": false,
+          "pin": null,
+          "autoStayGL": false,
+          "hasGpu": true,
+          "gpuAdapterOk": true,
+          "gpuCanvasOk": true,
+          "canvasAlpha": null,
+          "isMobile": false,
+          "mobileTier": false,
+          "isWebKit": false,
+          "liteGpu": true,
+          "softwareGL": true,
+          "softAdapter": true,
+          "headless": true,
+          "forceHw": false,
+          "forceBatches": false,
+          "skipBatches": true,
+          "skipBatchesPin": false,
+          "gpuErrFrames": 0,
+          "envFail": 0,
+          "envFailMsg": "",
+          "softBlit": true,
+          "capPref": null,
+          "fx": {
+            "shadows": 1,
+            "marks": 0,
+            "skidVerts": 0,
+            "glow": 0,
+            "particles": 1010,
+            "decals": 2,
+            "lineVerts": 4404
+          },
+          "line": {
+            "meshes": 1,
+            "visible": 1,
+            "inScene": 1,
+            "geo": {
+              "index": 13206,
+              "indexType": "Uint32Array",
+              "range": 13206,
+              "pos": 4404,
+              "attrs": [
+                "position",
+                "lineAcross",
+                "lineSpeed",
+                "lineZone",
+                "lineAlong"
+              ],
+              "renderOrder": 9,
+              "bs": [
+                580.7
+              ]
+            }
+          },
+          "softRead": {
+            "gen": 47,
+            "lastMs": 3532,
+            "fails": 0,
+            "lastErr": null,
+            "abandoned": 0,
+            "pending": true
+          },
+          "gpuErrors": 0,
+          "gpuFirstError": null,
+          "gpuRecentErrors": [],
+          "presents": 15754,
+          "healed": false,
+          "ctxLost": false,
+          "calls": 0,
+          "arrayNearest": false,
+          "hasMaterialMaps": true,
+          "packLive": true,
+          "drawMatMode": 0
+        }
+      }
+    },
+    "seed": 1,
+    "renderClock": 263.7562000000468,
+    "render": {
+      "scale": 0.9,
+      "fps": 48.3,
+      "floorMs": 17.1,
+      "auto": true,
+      "tier": 0,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 600,
+        "maxMs": 6299.7,
+        "slow": 10
+      },
+      "frameTimes": {
+        "frames": 2048,
+        "p50": 16.70000000001164,
+        "p95": 16.79999999998836,
+        "p99": 16.800000000046566,
+        "maxMs": 6299.699999999953,
+        "droppedSimS": 0.05,
+        "physicsSteps": 5,
+        "windowFrames": 2048
+      },
+      "userTier": 0,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": false,
+      "tierFutile": false,
+      "tierHold": false
+    },
+    "camera": {
+      "eye": [
+        -46.509958434867954,
+        4.899349647498503,
+        -83.17504718704221
+      ],
+      "target": [
+        -53.79526209716806,
+        0.9993496474985032,
+        -122.50600682373044
+      ],
+      "fov": 64.00004148188319,
+      "previousAnchor": [
+        -53.7952709151754,
+        -122.50600519036423
+      ],
+      "nextAnchor": [
+        -53.7952709151754,
+        -122.50600519036423
+      ],
+      "renderFrame": 15755,
+      "simulationTime": 2.6666666666666607,
+      "renderTime": 263.7562000000468
+    },
+    "info": {
+      "state": "race",
+      "track": "sepang",
+      "n": 1376,
+      "total": 5502.626254195812,
+      "timeTrial": false,
+      "seasonMode": false,
+      "flow": "gp",
+      "session": "race",
+      "career": false,
+      "practice": false,
+      "duel": false,
+      "raceQuali": false,
+      "raceGrid": "random",
+      "lapsTarget": 3,
+      "sectors": [
+        0.382,
+        0.636
+      ],
+      "turns": 15
+    }
+  },
+  "renderer": {
+    "requested": "three",
+    "matchesRequested": true,
+    "actual": "three",
+    "api": "webgpu",
+    "state": {
+      "api": "webgpu",
+      "forceWebGL": false,
+      "pin": null,
+      "autoStayGL": false,
+      "hasGpu": true,
+      "gpuAdapterOk": true,
+      "gpuCanvasOk": true,
+      "canvasAlpha": null,
+      "isMobile": false,
+      "mobileTier": false,
+      "isWebKit": false,
+      "liteGpu": true,
+      "softwareGL": true,
+      "softAdapter": true,
+      "headless": true,
+      "forceHw": false,
+      "forceBatches": false,
+      "skipBatches": true,
+      "skipBatchesPin": false,
+      "gpuErrFrames": 0,
+      "envFail": 0,
+      "envFailMsg": "",
+      "softBlit": true,
+      "capPref": null,
+      "fx": {
+        "shadows": 1,
+        "marks": 0,
+        "skidVerts": 0,
+        "glow": 0,
+        "particles": 1010,
+        "decals": 2,
+        "lineVerts": 4404
+      },
+      "line": {
+        "meshes": 1,
+        "visible": 1,
+        "inScene": 1,
+        "geo": {
+          "index": 13206,
+          "indexType": "Uint32Array",
+          "range": 13206,
+          "pos": 4404,
+          "attrs": [
+            "position",
+            "lineAcross",
+            "lineSpeed",
+            "lineZone",
+            "lineAlong"
+          ],
+          "renderOrder": 9,
+          "bs": [
+            580.7
+          ]
+        }
+      },
+      "softRead": {
+        "gen": 47,
+        "lastMs": 3532,
+        "fails": 0,
+        "lastErr": null,
+        "abandoned": 0,
+        "pending": true
+      },
+      "gpuErrors": 0,
+      "gpuFirstError": null,
+      "gpuRecentErrors": [],
+      "presents": 15754,
+      "healed": false,
+      "ctxLost": false,
+      "calls": 0,
+      "arrayNearest": false,
+      "hasMaterialMaps": true,
+      "packLive": true,
+      "drawMatMode": 0
+    },
+    "positive": true,
+    "signal": "live-backend-state-and-presented-scene-pixels"
+  },
+  "readiness": {
+    "mode": "source-generation",
+    "required": 52,
+    "shown": 52
+  },
+  "pixels": {
+    "brightFraction": 0.8924153645833334,
+    "centerBrightFraction": 0.8601973684210527,
+    "variance": 588.1064285348862,
+    "black": false,
+    "blackHudOnly": false,
+    "meaningful": true,
+    "classification": "scene-content"
+  },
+  "image": {
+    "path": "/workspace/artifacts/shots/tracks/sepang/wx-pit-straight-day-storm.jpg",
+    "bytes": 73002,
+    "via": "game-soft",
+    "scope": "scene"
+  }
+}

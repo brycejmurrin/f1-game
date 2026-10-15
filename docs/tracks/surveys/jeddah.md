@@ -226,31 +226,49 @@
 | **Start/finish orbit** · night · wet |
 | `s00-sf_orbit_night_wet.jpg` |
 
+**Re-capture (2026-10-15):** **36** JPEGs — `node tools/shot/shot.mjs --batch artifacts/shots/tracks/jeddah/capture-jobs.jsonl --jpeg --present-timeout 90 --capture-retries 4 --wait 120` (shared shot tooling #1862, SwiftShader).
 
+## Panel grid (36 frames)
 
-## Weather hero frames
+| ![s00 sf](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_day_dry.jpg) | ![s00 sf](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_day_wet.jpg) | ![s00 sf](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_night_dry.jpg) |
+| **s00 sf** · wx=dry · tod=day | **s00 sf** · wx=wet · tod=day | **s00 sf** · wx=dry · tod=night |
 
-| File | View | TOD | Weather |
-|------|------|-----|---------|
-| `s00-sf_orbit_day_wet.jpg` | Start/finish orbit | day | wet |
-| `s00-sf_orbit_night_wet.jpg` | Start/finish orbit | night | wet |
-| `s20-fountain_orbit_day_rain.jpg` | King Fahd Fountain orbit | day | rain |
-| `s20-fountain_orbit_night_rain.jpg` | King Fahd Fountain orbit | night | rain |
-| `s45-marina_orbit_day_storm.jpg` | Marina orbit | day | storm |
-| `s45-marina_orbit_dusk_storm.jpg` | Marina orbit | dusk | storm |
-| `s50-mosque_orbit_dawn_wet.jpg` | Floating mosque orbit | dawn | wet |
-| `s50-t13_orbit_day_fog.jpg` | Banked T13 orbit | day | fog |
-| `s50-t13_orbit_night_fog.jpg` | Banked T13 orbit | night | fog |
-| `s81-technical_park_night_overcast.jpg` | Technical sector park | night | overcast |
+| ![s00 sf](../../../artifacts/shots/tracks/jeddah/s00-sf_orbit_night_wet.jpg) | ![s05 t1](../../../artifacts/shots/tracks/jeddah/s05-t1_orbit_day_dry.jpg) | ![s05 t1](../../../artifacts/shots/tracks/jeddah/s05-t1_orbit_night_dry.jpg) |
+| **s00 sf** · wx=wet · tod=night | **s05 t1** · wx=dry · tod=day | **s05 t1** · wx=dry · tod=night |
 
+| ![s15 sea](../../../artifacts/shots/tracks/jeddah/s15-sea_orbit_day_dry.jpg) | ![s15 sea](../../../artifacts/shots/tracks/jeddah/s15-sea_orbit_night_dry.jpg) | ![s20 fountain](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_day_dry.jpg) |
+| **s15 sea** · wx=dry · tod=day | **s15 sea** · wx=dry · tod=night | **s20 fountain** · wx=dry · tod=day |
 
-## Fixes (scenery)
+| ![s20 fountain](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_day_rain.jpg) | ![s20 fountain](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_night_dry.jpg) | ![s20 fountain](../../../artifacts/shots/tracks/jeddah/s20-fountain_orbit_night_rain.jpg) |
+| **s20 fountain** · wx=rain · tod=day | **s20 fountain** · wx=dry · tod=night | **s20 fountain** · wx=rain · tod=night |
 
-1. Floating mosque → s≈0.498. 2. Technical `cityFront` gap 64 m. 3. Mosque plinth coplanar.
+| ![s28 skyline](../../../artifacts/shots/tracks/jeddah/s28-skyline_orbit_day_dry.jpg) | ![s28 skyline](../../../artifacts/shots/tracks/jeddah/s28-skyline_orbit_night_dry.jpg) | ![s35 esses](../../../artifacts/shots/tracks/jeddah/s35-esses_park_day_dry.jpg) |
+| **s28 skyline** · wx=dry · tod=day | **s28 skyline** · wx=dry · tod=night | **s35 esses** · wx=dry · tod=day |
+
+| ![s35 esses](../../../artifacts/shots/tracks/jeddah/s35-esses_park_night_dry.jpg) | ![s45 marina](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_day_dry.jpg) | ![s45 marina](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_day_storm.jpg) |
+| **s35 esses** · wx=dry · tod=night | **s45 marina** · wx=dry · tod=day | **s45 marina** · wx=storm · tod=day |
+
+| ![s45 marina](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_dusk_storm.jpg) | ![s45 marina](../../../artifacts/shots/tracks/jeddah/s45-marina_orbit_night_dry.jpg) | ![s50 mosque](../../../artifacts/shots/tracks/jeddah/s50-mosque_orbit_dawn_wet.jpg) |
+| **s45 marina** · wx=storm · tod=dusk | **s45 marina** · wx=dry · tod=night | **s50 mosque** · wx=wet · tod=dawn |
+
+| ![s50 mosque](../../../artifacts/shots/tracks/jeddah/s50-mosque_orbit_day_dry.jpg) | ![s50 mosque](../../../artifacts/shots/tracks/jeddah/s50-mosque_orbit_dusk_dry.jpg) | ![s50 mosque](../../../artifacts/shots/tracks/jeddah/s50-mosque_orbit_night_dry.jpg) |
+| **s50 mosque** · wx=dry · tod=day | **s50 mosque** · wx=dry · tod=dusk | **s50 mosque** · wx=dry · tod=night |
+
+| ![s50 t13](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_day_dry.jpg) | ![s50 t13](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_day_fog.jpg) | ![s50 t13](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_night_dry.jpg) |
+| **s50 t13** · wx=dry · tod=day | **s50 t13** · wx=fog · tod=day | **s50 t13** · wx=dry · tod=night |
+
+| ![s50 t13](../../../artifacts/shots/tracks/jeddah/s50-t13_orbit_night_fog.jpg) | ![s62 lagoon](../../../artifacts/shots/tracks/jeddah/s62-lagoon_orbit_day_dry.jpg) | ![s70 hotels](../../../artifacts/shots/tracks/jeddah/s70-hotels_orbit_day_dry.jpg) |
+| **s50 t13** · wx=fog · tod=night | **s62 lagoon** · wx=dry · tod=day | **s70 hotels** · wx=dry · tod=day |
+
+| ![s81 technical](../../../artifacts/shots/tracks/jeddah/s81-technical_park_day_dry.jpg) | ![s81 technical](../../../artifacts/shots/tracks/jeddah/s81-technical_park_dusk_dry.jpg) | ![s81 technical](../../../artifacts/shots/tracks/jeddah/s81-technical_park_night_dry.jpg) |
+| **s81 technical** · wx=dry · tod=day | **s81 technical** · wx=dry · tod=dusk | **s81 technical** · wx=dry · tod=night |
+
+| ![s81 technical](../../../artifacts/shots/tracks/jeddah/s81-technical_park_night_overcast.jpg) | ![s96 drs](../../../artifacts/shots/tracks/jeddah/s96-drs_orbit_day_dry.jpg) | ![s96 drs](../../../artifacts/shots/tracks/jeddah/s96-drs_orbit_night_dry.jpg) |
+| **s81 technical** · wx=overcast · tod=night | **s96 drs** · wx=dry · tod=day | **s96 drs** · wx=dry · tod=night |
+
 
 ## Verification
 
-```sh
+```text
 node tools/track/verify-track.cjs jeddah
-node tools/track/audit-circuit.cjs jeddah
 ```

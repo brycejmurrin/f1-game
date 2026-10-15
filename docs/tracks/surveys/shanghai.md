@@ -3,105 +3,47 @@
 **Circuit id:** `shanghai` · **Captures:** 36 JPEGs in `artifacts/shots/tracks/shanghai/` (1280px, q≈80, &lt;300 KB).  
 **Batch:** `scratch/shanghai-survey-36.json` via shared `shot.mjs` (`--weather`, `--tod`, `--jpeg`, `--present-timeout 90`, `--capture-retries 4`).
 
-## Sector anchors — dry · day
+## Panel grid (36 frames)
 
-| | | |
-|:---:|:---:|:---:|
-| ![Pit orbit](../../../artifacts/shots/tracks/shanghai/sec-pit-day-dry-orbit.jpg) | ![Snail trackside](../../../artifacts/shots/tracks/shanghai/sec-snail-day-dry-trackside.jpg) | ![Pudong orbit](../../../artifacts/shots/tracks/shanghai/sec-pudong-day-dry-orbit.jpg) |
-| **View:** orbit · s≈0.00 · **Wx:** dry · **TOD:** day | **View:** trackside · s≈0.08 · **Wx:** dry · **TOD:** day | **View:** orbit · s≈0.30 · **Wx:** dry · **TOD:** day |
-| ![Hairpin trackside](../../../artifacts/shots/tracks/shanghai/sec-hairpin-day-dry-trackside.jpg) | | |
-| **View:** trackside · s≈0.90 · **Wx:** dry · **TOD:** day | | |
+| ![sec hairpin day dry trackside](../../../artifacts/shots/tracks/shanghai/sec-hairpin-day-dry-trackside.jpg) | ![sec pit day dry orbit](../../../artifacts/shots/tracks/shanghai/sec-pit-day-dry-orbit.jpg) | ![sec pudong day dry orbit](../../../artifacts/shots/tracks/shanghai/sec-pudong-day-dry-orbit.jpg) |
+| **sec hairpin day dry trackside** · wx=dry · tod=day | **sec pit day dry orbit** · wx=dry · tod=day | **sec pudong day dry orbit** · wx=dry · tod=day |
 
-## Weather · day (hero views)
+| ![sec snail day dry trackside](../../../artifacts/shots/tracks/shanghai/sec-snail-day-dry-trackside.jpg) | ![tod bridge dawn dry trackside](../../../artifacts/shots/tracks/shanghai/tod-bridge-dawn-dry-trackside.jpg) | ![tod bridge dusk dry trackside](../../../artifacts/shots/tracks/shanghai/tod-bridge-dusk-dry-trackside.jpg) |
+| **sec snail day dry trackside** · wx=dry · tod=day | **tod bridge dawn dry trackside** · wx=dry · tod=day | **tod bridge dusk dry trackside** · wx=dry · tod=day |
 
-### Pit straight (s≈0.00 · orbit)
+| ![tod bridge night dry trackside](../../../artifacts/shots/tracks/shanghai/tod-bridge-night-dry-trackside.jpg) | ![tod hairpin dawn dry trackside](../../../artifacts/shots/tracks/shanghai/tod-hairpin-dawn-dry-trackside.jpg) | ![tod hairpin dusk dry trackside](../../../artifacts/shots/tracks/shanghai/tod-hairpin-dusk-dry-trackside.jpg) |
+| **tod bridge night dry trackside** · wx=dry · tod=day | **tod hairpin dawn dry trackside** · wx=dry · tod=day | **tod hairpin dusk dry trackside** · wx=dry · tod=day |
 
-| | | |
-|:---:|:---:|:---:|
-| ![wet](../../../artifacts/shots/tracks/shanghai/wx-pit-day-wet-orbit.jpg) | ![rain](../../../artifacts/shots/tracks/shanghai/wx-pit-day-rain-orbit.jpg) | ![overcast](../../../artifacts/shots/tracks/shanghai/wx-pit-day-overcast-orbit.jpg) |
-| **View:** orbit · **Wx:** wet · **TOD:** day | **View:** orbit · **Wx:** rain · **TOD:** day | **View:** orbit · **Wx:** overcast · **TOD:** day |
-| ![fog](../../../artifacts/shots/tracks/shanghai/wx-pit-day-fog-orbit.jpg) | ![storm](../../../artifacts/shots/tracks/shanghai/wx-pit-day-storm-orbit.jpg) | |
-| **View:** orbit · **Wx:** fog · **TOD:** day | **View:** orbit · **Wx:** storm · **TOD:** day | |
+| ![tod hairpin night dry trackside](../../../artifacts/shots/tracks/shanghai/tod-hairpin-night-dry-trackside.jpg) | ![tod lotus dusk dry orbit](../../../artifacts/shots/tracks/shanghai/tod-lotus-dusk-dry-orbit.jpg) | ![tod lotus night dry orbit](../../../artifacts/shots/tracks/shanghai/tod-lotus-night-dry-orbit.jpg) |
+| **tod hairpin night dry trackside** · wx=dry · tod=day | **tod lotus dusk dry orbit** · wx=dry · tod=day | **tod lotus night dry orbit** · wx=dry · tod=day |
 
-### Lotus stand (s≈0.075 · orbit)
+| ![tod pit dawn dry orbit](../../../artifacts/shots/tracks/shanghai/tod-pit-dawn-dry-orbit.jpg) | ![tod pit dusk dry orbit](../../../artifacts/shots/tracks/shanghai/tod-pit-dusk-dry-orbit.jpg) | ![tod pit night dry cinematic](../../../artifacts/shots/tracks/shanghai/tod-pit-night-dry-cinematic.jpg) |
+| **tod pit dawn dry orbit** · wx=dry · tod=day | **tod pit dusk dry orbit** · wx=dry · tod=day | **tod pit night dry cinematic** · wx=dry · tod=day |
 
-| | | |
-|:---:|:---:|:---:|
-| ![wet](../../../artifacts/shots/tracks/shanghai/wx-lotus-day-wet-orbit.jpg) | ![rain](../../../artifacts/shots/tracks/shanghai/wx-lotus-day-rain-orbit.jpg) | ![overcast](../../../artifacts/shots/tracks/shanghai/wx-lotus-day-overcast-orbit.jpg) |
-| **View:** orbit · **Wx:** wet · **TOD:** day | **View:** orbit · **Wx:** rain · **TOD:** day | **View:** orbit · **Wx:** overcast · **TOD:** day |
-| ![fog](../../../artifacts/shots/tracks/shanghai/wx-lotus-day-fog-orbit.jpg) | | |
-| **View:** orbit · **Wx:** fog · **TOD:** day | | |
+| ![wx bridge day fog trackside](../../../artifacts/shots/tracks/shanghai/wx-bridge-day-fog-trackside.jpg) | ![wx bridge day overcast trackside](../../../artifacts/shots/tracks/shanghai/wx-bridge-day-overcast-trackside.jpg) | ![wx bridge day rain trackside](../../../artifacts/shots/tracks/shanghai/wx-bridge-day-rain-trackside.jpg) |
+| **wx bridge day fog trackside** · wx=dry · tod=day | **wx bridge day overcast trackside** · wx=dry · tod=day | **wx bridge day rain trackside** · wx=dry · tod=day |
 
-### T1 snail (s≈0.08 · trackside)
+| ![wx bridge day wet trackside](../../../artifacts/shots/tracks/shanghai/wx-bridge-day-wet-trackside.jpg) | ![wx hairpin day fog trackside](../../../artifacts/shots/tracks/shanghai/wx-hairpin-day-fog-trackside.jpg) | ![wx hairpin day overcast trackside](../../../artifacts/shots/tracks/shanghai/wx-hairpin-day-overcast-trackside.jpg) |
+| **wx bridge day wet trackside** · wx=dry · tod=day | **wx hairpin day fog trackside** · wx=dry · tod=day | **wx hairpin day overcast trackside** · wx=dry · tod=day |
 
-| | | |
-|:---:|:---:|:---:|
-| ![wet](../../../artifacts/shots/tracks/shanghai/wx-snail-day-wet-trackside.jpg) | ![rain](../../../artifacts/shots/tracks/shanghai/wx-snail-day-rain-trackside.jpg) | ![overcast](../../../artifacts/shots/tracks/shanghai/wx-snail-day-overcast-trackside.jpg) |
-| **View:** trackside · **Wx:** wet · **TOD:** day | **View:** trackside · **Wx:** rain · **TOD:** day | **View:** trackside · **Wx:** overcast · **TOD:** day |
-| ![fog](../../../artifacts/shots/tracks/shanghai/wx-snail-day-fog-trackside.jpg) | | |
-| **View:** trackside · **Wx:** fog · **TOD:** day | | |
+| ![wx hairpin day rain trackside](../../../artifacts/shots/tracks/shanghai/wx-hairpin-day-rain-trackside.jpg) | ![wx hairpin day wet trackside](../../../artifacts/shots/tracks/shanghai/wx-hairpin-day-wet-trackside.jpg) | ![wx lotus day fog orbit](../../../artifacts/shots/tracks/shanghai/wx-lotus-day-fog-orbit.jpg) |
+| **wx hairpin day rain trackside** · wx=dry · tod=day | **wx hairpin day wet trackside** · wx=dry · tod=day | **wx lotus day fog orbit** · wx=dry · tod=day |
 
-### Arena bridge (s≈0.472 · trackside)
+| ![wx lotus day overcast orbit](../../../artifacts/shots/tracks/shanghai/wx-lotus-day-overcast-orbit.jpg) | ![wx lotus day rain orbit](../../../artifacts/shots/tracks/shanghai/wx-lotus-day-rain-orbit.jpg) | ![wx lotus day wet orbit](../../../artifacts/shots/tracks/shanghai/wx-lotus-day-wet-orbit.jpg) |
+| **wx lotus day overcast orbit** · wx=dry · tod=day | **wx lotus day rain orbit** · wx=dry · tod=day | **wx lotus day wet orbit** · wx=dry · tod=day |
 
-| | | |
-|:---:|:---:|:---:|
-| ![wet](../../../artifacts/shots/tracks/shanghai/wx-bridge-day-wet-trackside.jpg) | ![rain](../../../artifacts/shots/tracks/shanghai/wx-bridge-day-rain-trackside.jpg) | ![overcast](../../../artifacts/shots/tracks/shanghai/wx-bridge-day-overcast-trackside.jpg) |
-| **View:** trackside · **Wx:** wet · **TOD:** day | **View:** trackside · **Wx:** rain · **TOD:** day | **View:** trackside · **Wx:** overcast · **TOD:** day |
-| ![fog](../../../artifacts/shots/tracks/shanghai/wx-bridge-day-fog-trackside.jpg) | | |
-| **View:** trackside · **Wx:** fog · **TOD:** day | | |
+| ![wx pit day fog orbit](../../../artifacts/shots/tracks/shanghai/wx-pit-day-fog-orbit.jpg) | ![wx pit day overcast orbit](../../../artifacts/shots/tracks/shanghai/wx-pit-day-overcast-orbit.jpg) | ![wx pit day rain orbit](../../../artifacts/shots/tracks/shanghai/wx-pit-day-rain-orbit.jpg) |
+| **wx pit day fog orbit** · wx=dry · tod=day | **wx pit day overcast orbit** · wx=dry · tod=day | **wx pit day rain orbit** · wx=dry · tod=day |
 
-### T14 hairpin (s≈0.90 · trackside)
+| ![wx pit day storm orbit](../../../artifacts/shots/tracks/shanghai/wx-pit-day-storm-orbit.jpg) | ![wx pit day wet orbit](../../../artifacts/shots/tracks/shanghai/wx-pit-day-wet-orbit.jpg) | ![wx snail day fog trackside](../../../artifacts/shots/tracks/shanghai/wx-snail-day-fog-trackside.jpg) |
+| **wx pit day storm orbit** · wx=dry · tod=day | **wx pit day wet orbit** · wx=dry · tod=day | **wx snail day fog trackside** · wx=dry · tod=day |
 
-| | | |
-|:---:|:---:|:---:|
-| ![wet](../../../artifacts/shots/tracks/shanghai/wx-hairpin-day-wet-trackside.jpg) | ![rain](../../../artifacts/shots/tracks/shanghai/wx-hairpin-day-rain-trackside.jpg) | ![overcast](../../../artifacts/shots/tracks/shanghai/wx-hairpin-day-overcast-trackside.jpg) |
-| **View:** trackside · **Wx:** wet · **TOD:** day | **View:** trackside · **Wx:** rain · **TOD:** day | **View:** trackside · **Wx:** overcast · **TOD:** day |
-| ![fog](../../../artifacts/shots/tracks/shanghai/wx-hairpin-day-fog-trackside.jpg) | | |
-| **View:** trackside · **Wx:** fog · **TOD:** day | | |
+| ![wx snail day overcast trackside](../../../artifacts/shots/tracks/shanghai/wx-snail-day-overcast-trackside.jpg) | ![wx snail day rain trackside](../../../artifacts/shots/tracks/shanghai/wx-snail-day-rain-trackside.jpg) | ![wx snail day wet trackside](../../../artifacts/shots/tracks/shanghai/wx-snail-day-wet-trackside.jpg) |
+| **wx snail day overcast trackside** · wx=dry · tod=day | **wx snail day rain trackside** · wx=dry · tod=day | **wx snail day wet trackside** · wx=dry · tod=day |
 
-## Time of day — dry weather
-
-### Pit (s≈0.00)
-
-| | | |
-|:---:|:---:|:---:|
-| ![dawn orbit](../../../artifacts/shots/tracks/shanghai/tod-pit-dawn-dry-orbit.jpg) | ![dusk orbit](../../../artifacts/shots/tracks/shanghai/tod-pit-dusk-dry-orbit.jpg) | ![night cinematic](../../../artifacts/shots/tracks/shanghai/tod-pit-night-dry-cinematic.jpg) |
-| **View:** orbit · **Wx:** dry · **TOD:** dawn | **View:** orbit · **Wx:** dry · **TOD:** dusk | **View:** cinematic · **Wx:** dry · **TOD:** night |
-
-### Lotus (s≈0.075)
-
-| | | |
-|:---:|:---:|:---:|
-| ![dusk orbit](../../../artifacts/shots/tracks/shanghai/tod-lotus-dusk-dry-orbit.jpg) | ![night orbit](../../../artifacts/shots/tracks/shanghai/tod-lotus-night-dry-orbit.jpg) | |
-| **View:** orbit · **Wx:** dry · **TOD:** dusk | **View:** orbit · **Wx:** dry · **TOD:** night | |
-
-### Bridge (s≈0.472)
-
-| | | |
-|:---:|:---:|:---:|
-| ![dawn trackside](../../../artifacts/shots/tracks/shanghai/tod-bridge-dawn-dry-trackside.jpg) | ![dusk trackside](../../../artifacts/shots/tracks/shanghai/tod-bridge-dusk-dry-trackside.jpg) | ![night trackside](../../../artifacts/shots/tracks/shanghai/tod-bridge-night-dry-trackside.jpg) |
-| **View:** trackside · **Wx:** dry · **TOD:** dawn | **View:** trackside · **Wx:** dry · **TOD:** dusk | **View:** trackside · **Wx:** dry · **TOD:** night |
-
-### Hairpin (s≈0.90)
-
-| | | |
-|:---:|:---:|:---:|
-| ![dawn trackside](../../../artifacts/shots/tracks/shanghai/tod-hairpin-dawn-dry-trackside.jpg) | ![dusk trackside](../../../artifacts/shots/tracks/shanghai/tod-hairpin-dusk-dry-trackside.jpg) | ![night trackside](../../../artifacts/shots/tracks/shanghai/tod-hairpin-night-dry-trackside.jpg) |
-| **View:** trackside · **Wx:** dry · **TOD:** dawn | **View:** trackside · **Wx:** dry · **TOD:** dusk | **View:** trackside · **Wx:** dry · **TOD:** night |
-
-## Weather / lighting notes
-
-| Issue | Frames | Backlog |
-|-------|--------|---------|
-| **Storm** only on pit (engine maps storm→rain elsewhere) | `wx-pit-day-storm-orbit.jpg` | document in PR |
-| **Fog** thickens palette haze on pit straight | `wx-pit-day-fog-orbit.jpg` | OK |
-| **Rain** particles + wet road readable on straight/bridge | `wx-bridge-day-rain-trackside.jpg` | |
-| **Night** sparse lamps on wings/lotus | `tod-pit-night-dry-cinematic.jpg`, `tod-lotus-night-dry-orbit.jpg` | lighting-tuner |
-| **Overcast** lowers contrast vs dry sector anchors | compare `sec-pit` vs `wx-pit-day-overcast` | |
 
 ## Verification
 
-```sh
+```text
 node tools/track/verify-track.cjs shanghai
-node tools/track/audit-circuit.cjs shanghai
 ```

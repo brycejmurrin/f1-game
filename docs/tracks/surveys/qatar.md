@@ -12,68 +12,49 @@
 
 Pit / T1 props use `sl(f)` (racing fraction); mid-lap tables use authored `s`.
 
-## Capture
+**Re-capture (2026-10-15):** **36** JPEGs — `node tools/shot/shot.mjs --batch artifacts/shots/tracks/qatar/capture-jobs.jsonl --jpeg --present-timeout 90 --capture-retries 4 --wait 120` (shared shot tooling #1862, SwiftShader).
 
-- **36 JPEGs** — `shot.mjs --batch` with `--jpeg --present-timeout 90 --capture-retries 4 --wait 120` (SwiftShader).
-- **Six hero views** × lighting/weather matrix (dry + wet/rain/overcast/fog/storm; dawn/dusk/night).
-- Filenames: `<view>__<tod>-<weather>.jpg` — captions match `__apex` `setTimeOfDay` + `weather()`.
+## Panel grid (36 frames)
 
-## All shots (36)
+| ![s1 lusail hill](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__dawn-dry.jpg) | ![s1 lusail hill](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__day-fog.jpg) | ![s1 lusail hill](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__day-overcast.jpg) |
+| **s1 lusail hill** · wx=dry · tod=dawn | **s1 lusail hill** · wx=fog · tod=day | **s1 lusail hill** · wx=overcast · tod=day |
 
-| | | |
-|:---:|:---:|:---:|
-| ![lusail hill · dry · dawn](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__dawn-dry.jpg)<br>*lusail hill · dry · dawn* | ![lusail hill · fog · day](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__day-fog.jpg)<br>*lusail hill · fog · day* | ![lusail hill · overcast · day](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__day-overcast.jpg)<br>*lusail hill · overcast · day* |
-| ![lusail hill · wet · day](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__day-wet.jpg)<br>*lusail hill · wet · day* | ![lusail hill · dry · dusk](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__dusk-dry.jpg)<br>*lusail hill · dry · dusk* | ![lusail hill · dry · night](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__night-dry.jpg)<br>*lusail hill · dry · night* |
-| ![pit straight · dry · dawn](../../../artifacts/shots/tracks/qatar/s1-pit-straight__dawn-dry.jpg)<br>*pit straight · dry · dawn* | ![pit straight · fog · day](../../../artifacts/shots/tracks/qatar/s1-pit-straight__day-fog.jpg)<br>*pit straight · fog · day* | ![pit straight · overcast · day](../../../artifacts/shots/tracks/qatar/s1-pit-straight__day-overcast.jpg)<br>*pit straight · overcast · day* |
-| ![pit straight · wet · day](../../../artifacts/shots/tracks/qatar/s1-pit-straight__day-wet.jpg)<br>*pit straight · wet · day* | ![pit straight · dry · dusk](../../../artifacts/shots/tracks/qatar/s1-pit-straight__dusk-dry.jpg)<br>*pit straight · dry · dusk* | ![pit straight · dry · night](../../../artifacts/shots/tracks/qatar/s1-pit-straight__night-dry.jpg)<br>*pit straight · dry · night* |
-| ![t1 park · dry · dawn](../../../artifacts/shots/tracks/qatar/s1-t1-park__dawn-dry.jpg)<br>*t1 park · dry · dawn* | ![t1 park · rain · day](../../../artifacts/shots/tracks/qatar/s1-t1-park__day-rain.jpg)<br>*t1 park · rain · day* | ![t1 park · wet · day](../../../artifacts/shots/tracks/qatar/s1-t1-park__day-wet.jpg)<br>*t1 park · wet · day* |
-| ![t1 park · dry · dusk](../../../artifacts/shots/tracks/qatar/s1-t1-park__dusk-dry.jpg)<br>*t1 park · dry · dusk* | ![t1 park · dry · night](../../../artifacts/shots/tracks/qatar/s1-t1-park__night-dry.jpg)<br>*t1 park · dry · night* | ![t1 park · storm · night](../../../artifacts/shots/tracks/qatar/s1-t1-park__night-storm.jpg)<br>*t1 park · storm · night* |
-| ![horizon landmarks · fog · day](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__day-fog.jpg)<br>*horizon landmarks · fog · day* | ![horizon landmarks · overcast · day](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__day-overcast.jpg)<br>*horizon landmarks · overcast · day* | ![horizon landmarks · rain · day](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__day-rain.jpg)<br>*horizon landmarks · rain · day* |
-| ![horizon landmarks · dry · dusk](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__dusk-dry.jpg)<br>*horizon landmarks · dry · dusk* | ![horizon landmarks · dry · night](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__night-dry.jpg)<br>*horizon landmarks · dry · night* | ![horizon landmarks · storm · night](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__night-storm.jpg)<br>*horizon landmarks · storm · night* |
-| ![t456 sweep · dry · dawn](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__dawn-dry.jpg)<br>*t456 sweep · dry · dawn* | ![t456 sweep · overcast · day](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__day-overcast.jpg)<br>*t456 sweep · overcast · day* | ![t456 sweep · rain · day](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__day-rain.jpg)<br>*t456 sweep · rain · day* |
-| ![t456 sweep · wet · day](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__day-wet.jpg)<br>*t456 sweep · wet · day* | ![t456 sweep · dry · dusk](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__dusk-dry.jpg)<br>*t456 sweep · dry · dusk* | ![t456 sweep · dry · night](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__night-dry.jpg)<br>*t456 sweep · dry · night* |
-| ![t16 entry · dry · dawn](../../../artifacts/shots/tracks/qatar/s3-t16-entry__dawn-dry.jpg)<br>*t16 entry · dry · dawn* | ![t16 entry · fog · day](../../../artifacts/shots/tracks/qatar/s3-t16-entry__day-fog.jpg)<br>*t16 entry · fog · day* | ![t16 entry · storm · day](../../../artifacts/shots/tracks/qatar/s3-t16-entry__day-storm.jpg)<br>*t16 entry · storm · day* |
-| ![t16 entry · wet · day](../../../artifacts/shots/tracks/qatar/s3-t16-entry__day-wet.jpg)<br>*t16 entry · wet · day* | ![t16 entry · dry · dusk](../../../artifacts/shots/tracks/qatar/s3-t16-entry__dusk-dry.jpg)<br>*t16 entry · dry · dusk* | ![t16 entry · dry · night](../../../artifacts/shots/tracks/qatar/s3-t16-entry__night-dry.jpg)<br>*t16 entry · dry · night* |
+| ![s1 lusail hill](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__day-wet.jpg) | ![s1 lusail hill](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__dusk-dry.jpg) | ![s1 lusail hill](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__night-dry.jpg) |
+| **s1 lusail hill** · wx=wet · tod=day | **s1 lusail hill** · wx=dry · tod=dusk | **s1 lusail hill** · wx=dry · tod=night |
 
-## By sector
+| ![s1 pit straight](../../../artifacts/shots/tracks/qatar/s1-pit-straight__dawn-dry.jpg) | ![s1 pit straight](../../../artifacts/shots/tracks/qatar/s1-pit-straight__day-fog.jpg) | ![s1 pit straight](../../../artifacts/shots/tracks/qatar/s1-pit-straight__day-overcast.jpg) |
+| **s1 pit straight** · wx=dry · tod=dawn | **s1 pit straight** · wx=fog · tod=day | **s1 pit straight** · wx=overcast · tod=day |
 
-### Sector 1
+| ![s1 pit straight](../../../artifacts/shots/tracks/qatar/s1-pit-straight__day-wet.jpg) | ![s1 pit straight](../../../artifacts/shots/tracks/qatar/s1-pit-straight__dusk-dry.jpg) | ![s1 pit straight](../../../artifacts/shots/tracks/qatar/s1-pit-straight__night-dry.jpg) |
+| **s1 pit straight** · wx=wet · tod=day | **s1 pit straight** · wx=dry · tod=dusk | **s1 pit straight** · wx=dry · tod=night |
 
-| | | |
-|:---:|:---:|:---:|
-| ![lusail hill · dry · dawn](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__dawn-dry.jpg)<br>*lusail hill · dry · dawn* | ![lusail hill · fog · day](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__day-fog.jpg)<br>*lusail hill · fog · day* | ![lusail hill · overcast · day](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__day-overcast.jpg)<br>*lusail hill · overcast · day* |
-| ![lusail hill · wet · day](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__day-wet.jpg)<br>*lusail hill · wet · day* | ![lusail hill · dry · dusk](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__dusk-dry.jpg)<br>*lusail hill · dry · dusk* | ![lusail hill · dry · night](../../../artifacts/shots/tracks/qatar/s1-lusail-hill__night-dry.jpg)<br>*lusail hill · dry · night* |
-| ![pit straight · dry · dawn](../../../artifacts/shots/tracks/qatar/s1-pit-straight__dawn-dry.jpg)<br>*pit straight · dry · dawn* | ![pit straight · fog · day](../../../artifacts/shots/tracks/qatar/s1-pit-straight__day-fog.jpg)<br>*pit straight · fog · day* | ![pit straight · overcast · day](../../../artifacts/shots/tracks/qatar/s1-pit-straight__day-overcast.jpg)<br>*pit straight · overcast · day* |
-| ![pit straight · wet · day](../../../artifacts/shots/tracks/qatar/s1-pit-straight__day-wet.jpg)<br>*pit straight · wet · day* | ![pit straight · dry · dusk](../../../artifacts/shots/tracks/qatar/s1-pit-straight__dusk-dry.jpg)<br>*pit straight · dry · dusk* | ![pit straight · dry · night](../../../artifacts/shots/tracks/qatar/s1-pit-straight__night-dry.jpg)<br>*pit straight · dry · night* |
-| ![t1 park · dry · dawn](../../../artifacts/shots/tracks/qatar/s1-t1-park__dawn-dry.jpg)<br>*t1 park · dry · dawn* | ![t1 park · rain · day](../../../artifacts/shots/tracks/qatar/s1-t1-park__day-rain.jpg)<br>*t1 park · rain · day* | ![t1 park · wet · day](../../../artifacts/shots/tracks/qatar/s1-t1-park__day-wet.jpg)<br>*t1 park · wet · day* |
-| ![t1 park · dry · dusk](../../../artifacts/shots/tracks/qatar/s1-t1-park__dusk-dry.jpg)<br>*t1 park · dry · dusk* | ![t1 park · dry · night](../../../artifacts/shots/tracks/qatar/s1-t1-park__night-dry.jpg)<br>*t1 park · dry · night* | ![t1 park · storm · night](../../../artifacts/shots/tracks/qatar/s1-t1-park__night-storm.jpg)<br>*t1 park · storm · night* |
+| ![s1 t1 park](../../../artifacts/shots/tracks/qatar/s1-t1-park__dawn-dry.jpg) | ![s1 t1 park](../../../artifacts/shots/tracks/qatar/s1-t1-park__day-rain.jpg) | ![s1 t1 park](../../../artifacts/shots/tracks/qatar/s1-t1-park__day-wet.jpg) |
+| **s1 t1 park** · wx=dry · tod=dawn | **s1 t1 park** · wx=rain · tod=day | **s1 t1 park** · wx=wet · tod=day |
 
-### Sector 2
+| ![s1 t1 park](../../../artifacts/shots/tracks/qatar/s1-t1-park__dusk-dry.jpg) | ![s1 t1 park](../../../artifacts/shots/tracks/qatar/s1-t1-park__night-dry.jpg) | ![s1 t1 park](../../../artifacts/shots/tracks/qatar/s1-t1-park__night-storm.jpg) |
+| **s1 t1 park** · wx=dry · tod=dusk | **s1 t1 park** · wx=dry · tod=night | **s1 t1 park** · wx=storm · tod=night |
 
-| | | |
-|:---:|:---:|:---:|
-| ![horizon landmarks · fog · day](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__day-fog.jpg)<br>*horizon landmarks · fog · day* | ![horizon landmarks · overcast · day](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__day-overcast.jpg)<br>*horizon landmarks · overcast · day* | ![horizon landmarks · rain · day](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__day-rain.jpg)<br>*horizon landmarks · rain · day* |
-| ![horizon landmarks · dry · dusk](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__dusk-dry.jpg)<br>*horizon landmarks · dry · dusk* | ![horizon landmarks · dry · night](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__night-dry.jpg)<br>*horizon landmarks · dry · night* | ![horizon landmarks · storm · night](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__night-storm.jpg)<br>*horizon landmarks · storm · night* |
-| ![t456 sweep · dry · dawn](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__dawn-dry.jpg)<br>*t456 sweep · dry · dawn* | ![t456 sweep · overcast · day](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__day-overcast.jpg)<br>*t456 sweep · overcast · day* | ![t456 sweep · rain · day](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__day-rain.jpg)<br>*t456 sweep · rain · day* |
-| ![t456 sweep · wet · day](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__day-wet.jpg)<br>*t456 sweep · wet · day* | ![t456 sweep · dry · dusk](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__dusk-dry.jpg)<br>*t456 sweep · dry · dusk* | ![t456 sweep · dry · night](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__night-dry.jpg)<br>*t456 sweep · dry · night* |
+| ![s2 horizon landmarks](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__day-fog.jpg) | ![s2 horizon landmarks](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__day-overcast.jpg) | ![s2 horizon landmarks](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__day-rain.jpg) |
+| **s2 horizon landmarks** · wx=fog · tod=day | **s2 horizon landmarks** · wx=overcast · tod=day | **s2 horizon landmarks** · wx=rain · tod=day |
 
-### Sector 3
+| ![s2 horizon landmarks](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__dusk-dry.jpg) | ![s2 horizon landmarks](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__night-dry.jpg) | ![s2 horizon landmarks](../../../artifacts/shots/tracks/qatar/s2-horizon-landmarks__night-storm.jpg) |
+| **s2 horizon landmarks** · wx=dry · tod=dusk | **s2 horizon landmarks** · wx=dry · tod=night | **s2 horizon landmarks** · wx=storm · tod=night |
 
-| | | |
-|:---:|:---:|:---:|
-| ![t16 entry · dry · dawn](../../../artifacts/shots/tracks/qatar/s3-t16-entry__dawn-dry.jpg)<br>*t16 entry · dry · dawn* | ![t16 entry · fog · day](../../../artifacts/shots/tracks/qatar/s3-t16-entry__day-fog.jpg)<br>*t16 entry · fog · day* | ![t16 entry · storm · day](../../../artifacts/shots/tracks/qatar/s3-t16-entry__day-storm.jpg)<br>*t16 entry · storm · day* |
-| ![t16 entry · wet · day](../../../artifacts/shots/tracks/qatar/s3-t16-entry__day-wet.jpg)<br>*t16 entry · wet · day* | ![t16 entry · dry · dusk](../../../artifacts/shots/tracks/qatar/s3-t16-entry__dusk-dry.jpg)<br>*t16 entry · dry · dusk* | ![t16 entry · dry · night](../../../artifacts/shots/tracks/qatar/s3-t16-entry__night-dry.jpg)<br>*t16 entry · dry · night* |
+| ![s2 t456 sweep](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__dawn-dry.jpg) | ![s2 t456 sweep](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__day-overcast.jpg) | ![s2 t456 sweep](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__day-rain.jpg) |
+| **s2 t456 sweep** · wx=dry · tod=dawn | **s2 t456 sweep** · wx=overcast · tod=day | **s2 t456 sweep** · wx=rain · tod=day |
 
-## Findings & fixes
+| ![s2 t456 sweep](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__day-wet.jpg) | ![s2 t456 sweep](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__dusk-dry.jpg) | ![s2 t456 sweep](../../../artifacts/shots/tracks/qatar/s2-t456-sweep__night-dry.jpg) |
+| **s2 t456 sweep** · wx=wet · tod=day | **s2 t456 sweep** · wx=dry · tod=dusk | **s2 t456 sweep** · wx=dry · tod=night |
 
-| In PR | Backlog |
-|-------|---------|
-| Dune `terrainYAt` seating | Bleacher coplanar (baseline) |
-| RC roof mast (unsupported→0) | Horizon landmark distance |
+| ![s3 t16 entry](../../../artifacts/shots/tracks/qatar/s3-t16-entry__dawn-dry.jpg) | ![s3 t16 entry](../../../artifacts/shots/tracks/qatar/s3-t16-entry__day-fog.jpg) | ![s3 t16 entry](../../../artifacts/shots/tracks/qatar/s3-t16-entry__day-storm.jpg) |
+| **s3 t16 entry** · wx=dry · tod=dawn | **s3 t16 entry** · wx=fog · tod=day | **s3 t16 entry** · wx=storm · tod=day |
+
+| ![s3 t16 entry](../../../artifacts/shots/tracks/qatar/s3-t16-entry__day-wet.jpg) | ![s3 t16 entry](../../../artifacts/shots/tracks/qatar/s3-t16-entry__dusk-dry.jpg) | ![s3 t16 entry](../../../artifacts/shots/tracks/qatar/s3-t16-entry__night-dry.jpg) |
+| **s3 t16 entry** · wx=wet · tod=day | **s3 t16 entry** · wx=dry · tod=dusk | **s3 t16 entry** · wx=dry · tod=night |
+
 
 ## Verification
 
 ```text
-node tools/track/verify-track.cjs qatar → OK
-node tools/track/audit-circuit.cjs qatar → ok
+node tools/track/verify-track.cjs qatar
 ```
