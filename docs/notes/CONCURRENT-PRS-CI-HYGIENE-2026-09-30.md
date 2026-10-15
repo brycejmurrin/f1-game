@@ -24,6 +24,12 @@ docs/TESTING.md §Merge train, §CI aggregator, §What runs on PRs versus nightl
 - Report the head SHA and check counts; do not merge the PR from the agent.
   On an expired / failed token, stop and report — do not invent a workaround.
 - Do not add auto-update-branch bots or a require-up-to-date protection rule.
+  Never press GitHub's "Update branch" (the update-branch API) either: on
+  2026-10-15, 107 of 312 PR CI runs in 3.5 h were its `Merge branch
+  'claude/f1-game-project-26h3ng' into cursor/…` commits (committer `GitHub`),
+  11 in one minute, each cancelling a half-run. `.claude/settings.json` denies
+  `mcp__github__update_pull_request_branch`; sync with `sync-pr.mjs` only when
+  GitHub reports DIRTY or a required tip check is red.
 
 ## Flaky tests (full)
 
