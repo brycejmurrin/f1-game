@@ -83,8 +83,8 @@ export const MAX_COUNTED = 60;
 /** Pages of 100 runs read per status. */
 export const MAX_PAGES = 3;
 /** Run statuses listed, waiting-for-a-runner first: that is where queued jobs live (#2181). */
-export const RUN_STATUSES = ["queued", "pending", "requested", "in_progress"];
-const QUEUED_RUN = new Set(["queued", "pending", "requested"]);
+export const RUN_STATUSES = ["queued", "pending", "requested", "waiting", "in_progress"];
+const QUEUED_RUN = new Set(["queued", "pending", "requested", "waiting"]);
 export const DEFAULT_OUT = "apex-status/queue-depth.json";
 
 /** Job statuses that wait for a runner; `waiting` (an environment gate) holds no slot. */

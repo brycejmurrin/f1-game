@@ -215,3 +215,10 @@ test("#2266: running, queued and the oldest-queued age are reported; a starved q
   assert.ok(!mac.reasons.some((r) => /oldest queued/.test(r)));
   assert.match(reportLine(mac), /; 5 Linux running\)$/);
 });
+
+test("#2266: a run in status `waiting` is listed too (its pending jobs are queued work)", () => {
+  const f = fakeApi({ waiting: [{ id: 77, status: "waiting" }] }, () => many(3, "pending"));
+  const v = measure({ request: f.request });
+  assert.ok(f.calls.includes("actions/runs?status=waiting&per_page=100&page=1"));
+  assert.equal(v.queued, 3);
+});
