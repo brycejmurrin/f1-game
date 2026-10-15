@@ -29,7 +29,7 @@ on:
     # Packaging machinery only. Staged game/shell bytes stay on ci.yml (and
     # pages.yml's ship-filter); a js/ or css/ PR must not spend an Electron
     # runner. Draft PRs still skip the job (see pack-smoke's `if`).
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "desktop/**"
       - "tools/desktop/**"
@@ -64,8 +64,7 @@ jobs:
     name: Pack smoke (${{ matrix.os }})
     # Skip draft PRs (draft→ready gets a fresh run). Dispatch keeps the matrix.
     if: >
-      (github.event_name == 'pull_request' && !github.event.pull_request.draft)
-      || (github.event_name == 'pull_request' && github.event.pull_request.draft && contains(github.event.pull_request.labels.*.name, 'run-ci'))
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
       || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45

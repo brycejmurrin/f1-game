@@ -295,7 +295,11 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   // on 2026-10-14 to test nothing new, one job start per PR event. Its required
   // status context was removed from the deploy branch's protection first (a
   // required check that never reports blocks every merge), then the file.
-  assert.ok(!fs.existsSync(new URL("../../.github/workflows/docs-guards.yml", import.meta.url)),
+  // (A directory listing, not a path literal: cross-file-paths.test.mjs reads
+  // every `new URL("…")` as a reference that must resolve — tooling B went red
+  // on the deploy tip 55bebd22 for exactly that.)
+  const workflowsDir = new URL("../../.github/workflows/", import.meta.url);
+  assert.ok(!fs.readdirSync(workflowsDir).includes("docs-guards.yml"),
     "docs-guards.yml is back — tooling-fast already runs every file it ran, and a second workflow is a job start per PR event");
   const listAfter = (text, key, from = 0) => {
     const at = text.indexOf(`\n    ${key}:\n`, from);
@@ -1651,12 +1655,11 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
 
 test("desktop pack-smoke is full-tier only (ready PRs, not drafts)", () => {
   const desktop = fs.readFileSync(new URL("../../.github/workflows/desktop.yml", import.meta.url), "utf8");
-  assert.match(desktop, /types: \[opened, synchronize, reopened, ready_for_review, labeled\]/,
-    "labeled run-ci must be able to opt draft PRs into pack-smoke");
+  assert.match(desktop, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "marking a draft ready must start pack-smoke when paths match");
   const pack = desktop.slice(desktop.indexOf("\n  pack-smoke:\n"), desktop.indexOf("\n  release-build:\n"));
-  assert.match(pack, /!github\.event\.pull_request\.draft/,
-    "pack-smoke runs on ready PRs; draft only with run-ci label");
-  assert.match(pack, /run-ci/);
+  assert.match(pack, /github\.event\.pull_request\.draft == false/,
+    "pack-smoke must skip draft PRs so Electron work stays on the full tier");
 });
 
 test("a green fast-tier run pokes the train; a red or called one never does", () => {
