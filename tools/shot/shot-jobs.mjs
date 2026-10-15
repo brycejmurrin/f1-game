@@ -54,6 +54,7 @@ export function normalizeJob(raw, defaults = {}) {
   const side = parseInt(raw.side ?? defaults.side ?? 1, 10) || 1;
   const tod = String(raw.tod ?? defaults.tod ?? "day");
   const showHud = !!(raw.hud ?? raw.showHud ?? defaults.showHud);
+  const through = !!(raw.through ?? defaults.through);
   const team = raw.team ?? defaults.team ?? null;
   const baseCapture = defaults.capture || parseCaptureOptions([]);
   const captureArgs = ["--profile", String(raw.profile ?? baseCapture.profile)];
@@ -76,7 +77,7 @@ export function normalizeJob(raw, defaults = {}) {
   }
   const format = capture.type ? captureScreenshotOptions(capture) : imageFormatFor(out, { jpegFlag: jpegFlag || fmtHint.type === "jpeg" });
   return {
-    trackId, frac, cam, az, el, dist, side, tod, showHud, team, out, backend, capture, viewport,
+    trackId, frac, cam, az, el, dist, side, tod, showHud, through, team, out, backend, capture, viewport,
     type: format.type,
     quality: format.type === "jpeg" ? capture.quality ?? format.quality ?? 85 : undefined,
     raster: !!(raw.raster ?? defaults.raster),
@@ -120,6 +121,7 @@ export function parseShotArgv(argv, ROOT) {
     side: flag(argv, "--side", "1"),
     tod: flag(argv, "--tod", "day"),
     showHud: has(argv, "--hud"),
+    through: has(argv, "--through"),
     team: TEAM,
     jpeg,
     raster,
@@ -134,7 +136,7 @@ export function parseShotArgv(argv, ROOT) {
   const positionals = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) {
-      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster"
+      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster" && argv[i] !== "--through"
         && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
       continue;
     }
@@ -174,6 +176,7 @@ export const SHOT_USAGE = `usage: node tools/shot/shot.mjs <trackId> <frac> [cam
   --profile preview|comparison --width N --height N --dpr N --scope scene|page
   --gpu swiftshader|llvmpipe|hardware|lavapipe --browser auto|chromium|shell
   --backend three|webgl2|webgpu --trace[=path] --cache-assets --isolated --seed N
-  cam: park | eye | orbit | cinematic | trackside.
+  cam: park | eye | orbit | cinematic | trackside. orbit/cinematic/trackside step round
+  a hill, building or tree between eye and car; --through keeps the asked-for placement.
   --jpeg / .jpg → JPEG q85 (human review). --raster → __apex.render view only (no PNG).
   Default out: scratch/captures/playwright-probe/<track>-<frac%>-<cam>.png`;
