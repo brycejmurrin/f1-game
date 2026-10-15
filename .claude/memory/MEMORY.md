@@ -24,3 +24,5 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Merge method: verify parents](merge-method-verify-parents.md) — a "merge" merge_pull_request landed as a squash (#1743); check two parents after every merge
 - [Merge Desk session](merge-desk-session.md) — persistent Claude Merge Desk session_01WQY3pk…; workers send `SWEEP <PR#>`; it never merges
 - [MCP allow rules, measured](mcp-allow-rules-measured.md) — read `permission_decision` in list_events; a repo can't approve its own .mcp.json servers (auto mode's classifier does); auto siblings need an auto parent + `source_url`; MDN/BrowserStack prompt regardless (claude.ai connector setting)
+- [Survey PRs merge to assets; cap 5](survey-prs-merge-to-assets-cap5.md) — 2026-10-15: green survey PRs merge into track-survey-assets; full-tier cap 5 while queue ok, 3 on hold
+- [Standing Merge Desk](standing-merge-desk.md) — since 2026-10-15 a Sonnet `[Merge Desk]` sibling (agent merge-desk.md) runs sweeps and spawns Sonnet lane workers, woken hourly; send SWEEP there
