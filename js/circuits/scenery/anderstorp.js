@@ -120,8 +120,10 @@
       // 2.4 deep; spectatorHill = 4 rows x 2.0 + 1 (plus a tread).
       const FOOT_SPAN = [
         [0.955, 0.982, -1, 20, 38.4],   // block 17 terrace (T8 outside)
-        [0.900, 0.925, -1, 26, 36.0],   // block 17 spectatorHill
+        [0.890, 0.935, -1, 20, 58.0],   // block 17 grandstandEx pair (crowd cones)
         [0.172, 0.212,  1, 28, 38.0],   // block 7 spectatorHill (Sodra)
+        [0.018, 0.075,  1, 12, 125.0],  // block 2 S/F timber banks + press row
+        [0.972, 0.998,  1, 12, 125.0],  // block 2 pit-straight grandstandEx(0.988)
       ];
       // Boxes: [s, side, centre gap, across, along] — building() centres at
       // gap + w/2; place() centres at gap.
@@ -376,7 +378,7 @@
       }
       groundPatch(K(0.005), 1, 3, [11, 0.18, 44], SAND);
       groundPatch(K(0.025), 1, 3, [11, 0.16, 44], SAND);
-      groundPatch(K(0.984), 1, 28, [22, 0.20, 36], HARDSTAND);
+      // 0.984 hardstand dropped: same pad as 0.008 after lap wrap (flatCoplanar).
       groundPatch(K(0.008), 1, 28, [22, 0.17, 36], HARDSTAND);
       groundPatch(K(0.032), 1, 28, [22, 0.20, 36], CONC_D);
       marshalPost(K(0.0), 1, 12);
@@ -917,7 +919,8 @@
       grandstandEx(0.925, -1, 22, 110, null, null);
       grandstandEx(0.898, -1, 24, 52, null, null);
       terrace(0.955, 0.982, -1, 20, {});
-      spectatorHill(0.900, 0.925, -1, 26, {});
+      // spectatorHill omitted: crowdBank from grandstandEx already fills the bank;
+      // the extra hill co-planed with terrace cones (flatCoplanar @0.920).
       billboard(K(0.908), -1, 17, 9, 3.6, [0.84, 0.82, 0.76]);
       billboard(K(0.944), -1, 17, 9, 3.6, [0.30, 0.42, 0.66]);
       billboard(K(0.968), -1, 17, 9, 3.6, [0.84, 0.82, 0.76]);
