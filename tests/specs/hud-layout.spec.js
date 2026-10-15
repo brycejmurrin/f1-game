@@ -1182,11 +1182,16 @@ test.describe("speed readouts", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
 
-  // ONE boot, waited on progress (#1956). Pages 38660546141 timed out the
-  // FIRST of two boots (goto, then reload to apply the keys) at 45 s while the
-  // page was still logging its build at 53 s. Seeding the boot keys from an
-  // init script drops the second boot; awaitApexBoot fails a boot that goes
-  // quiet for BOOT_MS, as before, but lets a busy one finish.
+  // ONE boot, waited on progress (#1956). Last test on the oversize-hud-layout
+  // shard (2 workers, 46 cases): the box is hot, and Pages 38660546141 timed
+  // out the FIRST of two boots (goto, then reload to apply the keys) at 45 s
+  // while the page was still logging its build at 53 s (cold __apex boot
+  // measured 50.8 s). 39b45576/4a1039c0 raised both waits to RACE_BUILD_MS;
+  // this replaces that with one boot (keys seeded from an init script, no
+  // reload) and awaitApexBoot, which fails a boot that goes quiet for BOOT_MS,
+  // as before, but lets a visibly working one finish. The GP build itself
+  // (bahrain-class, 49-54 s on loaded llvmpipe) is waited out by
+  // awaitTrackBuild below, not by a clock.
   async function bootCockpitMonza(page) {
     await page.addInitScript(PIN_PREVIOUS_LOOK);
     await page.addInitScript(() => {
