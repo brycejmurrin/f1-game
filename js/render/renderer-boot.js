@@ -88,7 +88,12 @@ async function gpuAdapterAvailable() {
 // GLX. A step that outlives BOOT_STEP_MS resolves to TIMED_OUT and the caller
 // treats the backend as unavailable and falls through to GLX. Logged once, where
 // it fires; a step that settles in time costs one cleared timer.
-const BOOT_STEP_MS = 8000;
+// 8 s was fine on an idle box; Pages 38660546141 (oversize-hud-layout shard +
+// track-switch-memory on the same gate, loadavg hot) saw TLX import/init finish
+// just after the cap — track-switch-memory got GLX.backend undefined and a
+// false GLX fallback. 15 s is still below the spec backstops and only bounds
+// hung steps, not slow-but-real inits.
+const BOOT_STEP_MS = 15000;
 const TIMED_OUT = { timedOut: true };
 function withTimeout(promise, ms, label) {
   if (typeof setTimeout !== "function") return Promise.resolve(promise);   // some VM harnesses: await it alone
