@@ -10,6 +10,13 @@
    sun-bleached pale concrete — the defaults are northern-European and read
    flatly wrong under this sun.
 
+   FRAME NOTE (2026-10-15 survey): the authored fracs below sit on built turns
+   exactly, but the block NAMES run one to two corners off the built lap order
+   (racing = authored + 0.8736): the "Expo '92" block lands on built T13, "Dry
+   Sack" on T5 (y~11 m) while the crest (y~17.5 m) is T6/T7 (the "Turn 7"
+   block). The names are labels only; the geometry is unchanged until the
+   start-line / corner order is re-verified against the OSM trace.
+
    Block -> brief §4 row map (s, side, dist):
      1  palette + helpers                      (§2 palette, §6 modelling notes)
      2  0.005  -1 20  main start/finish terracing, roofless but one covered bay
@@ -102,7 +109,7 @@
 
       // A single olive: short, wide, never in a rank — and never in the orbit wedge.
       const olive = (k, side, dist, h) => {
-        if (blocksOrbitView(side, dist, k)) return;
+        if (blocksOrbitView(side, dist, k) || !clear(k, side, dist, 14)) return;
         tree(k, side, dist, h, hash(k * 7 + dist) < 0.5 ? OLIVE : OLIVE_D);
       };
 
@@ -242,7 +249,7 @@
         const a = anchor(k, side, gap);
         if (!a || onTrack(a.c[0], a.c[2], 10)) return false;
         const gy = terrainYAt(a.c[0], a.c[2]);
-        return !(gy != null && Math.abs(gy - a.c[1]) > 0.55);
+        return !(gy != null && Math.abs(gy - a.c[1]) > 0.1);
       };
       for (let i = 0; i < 8; i++) {                         // paddock motorhomes
         const kk = K(sl(0.9730 + i * 0.0068));
@@ -325,7 +332,7 @@
       // Lead Michelin bay. Was 0.1447/23/150: crowdBank hit the neighbouring
       // leg fold → hollow suppress. s=0.130 gap=28 len=90 clears with positive
       // rake (probe HIT 600 prims, slope ~1.73).
-      grandstandEx(0.1300, -1, 28, 70, null, null,
+      grandstandEx(0.1500, -1, 28, 40, null, null,
         { roof: "cantilever", roofCol: CONC, fasciaCol: CONC_ALT, h: 12 });
       grandstandEx(0.1800, -1, 23, 130, null, null,
         { roof: "none", fasciaCol: CONC_ALT, h: 12 });
@@ -420,8 +427,8 @@
         const a = anchor(K(0.3600 + i * 0.0140), -1, 146);
         if (onTrack(a.c[0], a.c[2], 37)) continue;
         const ang = Math.atan2(a.t[2], a.t[0]);
-        ridge(a.c[0], a.c[2], terrainYAt(a.c[0], a.c[2]) - 1.6, ang,
-          62, 26, 6 + hash(i * 17) * 4, DUST);
+        ridge(a.c[0], a.c[2], terrainYAt(a.c[0], a.c[2]) - 2.2, ang,
+          62, 26, 4 + hash(i * 17) * 2.5, DUST);
       }
 
       // 11. DESCENT AWAY FROM DRY SACK  (0.460, +1, 50)
@@ -438,8 +445,8 @@
         // hole, so pre-check with the same margin and simply skip.
         if (onTrack(a.c[0], a.c[2], 37)) continue;
         const ang = Math.atan2(a.t[2], a.t[0]);
-        ridge(a.c[0], a.c[2], terrainYAt(a.c[0], a.c[2]) - 1.2, ang,
-          58, 24, 7 + hash(i * 13) * 5, DUST);
+        ridge(a.c[0], a.c[2], terrainYAt(a.c[0], a.c[2]) - 2.0, ang,
+          58, 24, 4.5 + hash(i * 13) * 3, DUST);
       }
       // Descent scrub past orbit (was 38–68 m on +1).
       for (let i = 0; i < 10; i++)
@@ -570,7 +577,7 @@
       // steps do not share faces with the stand's crowdBank (coplanar /
       // flatCoplanar).
       terrace(0.8120, 0.8280, -1, 26, TERR);
-      terrace(0.8600, 0.8780, -1, 26, TERR);
+      terrace(0.8600, 0.8780, -1, 27, TERR);
       // Peluqui high bank. Was gap=36 len=140: hollow suppress on the bowl
       // fold. gap=42 len=70 clears with positive rake.
       grandstandEx(0.8417, -1, 42, 70, null, null,
