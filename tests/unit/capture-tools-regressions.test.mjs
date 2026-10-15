@@ -742,7 +742,8 @@ test('Chromium capture trace rejects oversized or absent streams and removes par
         return {};
       };
       const output = resolve(dir, mode + '.json');
-      const trace = await startCaptureTrace({ newBrowserCDPSession: async () => session }, { path: output, maxBytes: 3, stopTimeoutMs: 10 });
+      // Only the timeout mode needs a tiny budget: the other modes run mkdir/open inside it, which a loaded runner can stretch past 10 ms.
+      const trace = await startCaptureTrace({ newBrowserCDPSession: async () => session }, { path: output, maxBytes: 3, stopTimeoutMs: mode === 'timeout' ? 10 : 5000 });
       await assert.rejects(trace.stop(), mode === 'oversized' ? /exceeded 3 bytes/ : mode === 'no-stream' ? /without an IO stream/ : /timed out/);
       assert.equal(existsSync(output), false);
       assert.equal(detached, 1);
@@ -841,6 +842,15 @@ test('atomic WGX mutations invalidate exactly once and a renderer reset rebases 
   await mutateCaptureScene(page, () => null);
   state.seq = state.shown = 1; state.epoch = 2;
   assert.equal((await awaitCaptureReady(page)).required, 2); assert.equal(invalidated, 3); assert.equal(waits, 1);
+});
+
+test('an env-chosen GPU stack is explicit, so a SwiftShader fallback fails fast', () => {
+  assert.equal(parseCaptureOptions([], {}).gpuExplicit, false);
+  assert.equal(parseCaptureOptions([], { APEX_GL: 'llvmpipe' }).gpuExplicit, true);
+  assert.equal(parseCaptureOptions([], { APEX_GPU: 'hardware' }).gpuExplicit, true);
+  assert.equal(parseCaptureOptions(['--gpu', 'swiftshader'], {}).gpuExplicit, true);
+  const opts = parseCaptureOptions([], { APEX_GL: 'llvmpipe' });
+  assert.throws(() => assertCaptureGpuCapability({ actual: { renderer: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))' } }, opts), /requested GPU profile llvmpipe, actual renderer is .*SwiftShader/);
 });
 
 test('WebGPU capture launch uses the verified software adapter pins and refuses WebGL-only llvmpipe', () => {

@@ -111,6 +111,7 @@ function bootImportUI(opts = {}) {
       picker.files = [opts.fileReader ? { pending: promise } : { text: () => promise }]; picker.onchange();
     },
     reloads: () => reloads,
+    flushTimers() { for (const [id, t] of timers) { timers.delete(id); t.fn(); } },
     flushReloads() { for (const [id, t] of timers) if (t.ms === 600) { timers.delete(id); t.fn(); } },
   };
 }
@@ -122,6 +123,47 @@ test("backup controls mount once in their own settings page, outside renderer op
   }
   b.SettingsExport.create(b.G);
   assert.equal(b.dom.document.querySelectorAll("#pm-settings-load").length, 1);
+});
+
+test("Files share feedback stays visible and accessible with Undo instructions", () => {
+  const b = bootImportUI();
+  const input = b.dom.byId("pm-share-code-in"), status = b.dom.byId("pm-share-code-status");
+  assert.equal(status.parentElement.id, "pm-panel-files");
+  assert.equal(status.hidden, false);
+  assert.equal(status.getAttribute("role"), "status");
+  assert.equal(status.getAttribute("aria-live"), "polite");
+  assert.equal(status.getAttribute("aria-atomic"), "true");
+  assert.equal(status.getAttribute("data-help"), "keep");
+  assert.equal(input.getAttribute("aria-describedby"), "pm-share-code-help pm-share-code-status");
+  assert.match(b.dom.byId("pm-share-code-help").textContent, /paste UNDO here to restore it/);
+  assert.match(b.dom.byId("pm-share-code-help").textContent, /APXG1 \/ #ghost=/);
+});
+
+for (const [label, decoded, applied, message] of [
+  ["invalid code", { ok: false, reason: "corrupt" }, null, "That share code is incomplete or corrupt."],
+  ["empty Undo", { ok: true, kind: "undo" }, { ok: false, reason: "nothing-to-undo" }, "There is no share code import to undo."],
+  ["setup success", { ok: true, kind: "setup", team: "mercedes" }, { ok: true, kind: "setup", team: "mercedes" }, "Setup loaded — MERCEDES. Your previous one is kept: paste UNDO in SETTINGS › FILES to restore it."],
+  ["full livery collection", { ok: true, kind: "livery" }, { ok: false, reason: "livery-full", team: "mercedes" }, "Livery not added — MERCEDES is at the 32-livery limit for share codes. Delete one in GARAGE › TEAM first."],
+  ["storage failure", { ok: true, kind: "setup" }, { ok: false, reason: "undo-save-failed" }, "Previous setup could not be kept. Free browser storage and retry."],
+]) test(`Files paste displays messageFor's persistent ${label} feedback`, () => {
+  let pasted, result, applications = 0;
+  const b = bootImportUI({ globals: { ShareCode: {
+    decode(text) { pasted = text; return decoded; },
+    apply(value) { assert.equal(value, decoded); applications++; return applied; },
+    messageFor(value) { result = value; return message; },
+  } } });
+  const input = b.dom.byId("pm-share-code-in"), button = b.dom.byId("pm-share-code-import");
+  const status = b.dom.byId("pm-share-code-status");
+  input.value = label === "empty Undo" ? "UNDO" : "pasted share code";
+  input.focus(); button.click();
+  assert.equal(pasted, input.value);
+  assert.equal(applications, decoded.ok ? 1 : 0);
+  assert.equal(result, decoded.ok ? applied : decoded, "forward the complete result, including storage reasons");
+  assert.equal(status.textContent, message);
+  b.flushTimers();
+  assert.equal(status.textContent, message, "feedback survives button reset timers");
+  assert.equal(button.textContent, "IMPORT SHARE CODE");
+  assert.equal(b.dom.document.activeElement, input, "announcing status must not steal focus");
 });
 
 test("ensureMounted remounts after the files panel was emptied", () => {
@@ -1136,4 +1178,37 @@ test("SEC2-2: a career file with more than 16 bag keys is refused", () => {
   const ok = {};
   for (let i = 0; i < 16; i++) ok["junk" + i] = i;
   assert.equal(b.loadCareer({ format: "apex26-career-v1", careers: ok }).ok, true, "16 keys is within the cap (all skipped as non-career)");
+});
+
+// #2191: the legacy motion branch did `(groups.a11y ||= {}).motion = …`, which
+// throws in strict mode on a truthy primitive a11y; through pick() → done() →
+// apply() that became an unhandled rejection and the red error overlay.
+test("a malformed settings / a11y group never throws — it is refused or skipped (#2191)", () => {
+  const b = boot();
+  const F = b.SettingsExport.FORMAT;
+  for (const a11y of [1, "x", true, [1]]) {
+    const r = b.loadSettings({ format: F, settings: { appearance: { motion: true }, a11y } });
+    assert.equal(typeof r.ok, "boolean", "a11y " + JSON.stringify(a11y));
+  }
+  for (const settings of ["x", 5, [1, 2], null]) {
+    const r = b.loadSettings({ format: F, settings });
+    assert.equal(typeof r.ok, "boolean", "settings " + JSON.stringify(settings));
+    assert.equal(r.applied, 0);
+  }
+});
+
+test("LOAD SETTINGS FILE shows a result, not an unhandled rejection, for a malformed a11y group (#2191)", async () => {
+  const b = bootImportUI();
+  const rejections = [];
+  const onRej = (e) => rejections.push(e);
+  process.on("unhandledRejection", onRej);
+  try {
+    const text = JSON.stringify({ format: b.SettingsExport.FORMAT, settings: { appearance: { motion: true }, a11y: "x" } });
+    assert.notEqual(b.choose(Promise.resolve(text)), false);
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+    assert.deepEqual(rejections.map(String), []);
+    assert.match(b.button.textContent, /LOAD SETTINGS FILE — /);
+  } finally {
+    process.off("unhandledRejection", onRej);
+  }
 });

@@ -174,7 +174,7 @@ var Announcer = (function () {
    *  circuit whose row says nothing about either. */
   function conditionsLine(weather, night, lore) {
     const wx = String(weather || "dry");
-    if (wx === "rain") return lore.wet || "Heavy rain, and it is going to decide this one.";
+    if (wx === "rain" || wx === "storm") return lore.wet || "Heavy rain, and it is going to decide this one.";
     if (wx === "wet") return lore.wet || "A wet track, and the racing line is the only dry part of it.";
     if (wx === "fog") return "Fog across the circuit — you will not see the corner until you are in it.";
     if (wx === "overcast") return "Grey overhead, cool track, and the tyres will take their time.";
@@ -456,12 +456,14 @@ var Announcer = (function () {
     const add = (t) => { if (t) out.push(t); };
     const event = broadcast(sum.event) || "the race";
     const w = sum.winner, you = sum.you;
-    if (you && you.pos === 1) {
+    if (you && !you.dsq && you.pos === 1) {
       add("And you win " + event + (sum.margin > 0 ? ", " + secs(sum.margin) + " seconds clear." : "!"));
     } else {
       add(w.name + " wins " + event + (sum.margin > 0 && sum.second ? ", " + secs(sum.margin) + " seconds ahead of " + surnameOf(sum.second) + "." : "."));
     }
-    if (you && you.pos > 1) {
+    if (you && you.dsq) {
+      add("You have been disqualified.");
+    } else if (you && you.pos > 1) {
       const d = you.grid > 0 ? you.grid - you.pos : 0;
       const tail = d >= 3 ? ", up " + d + " places from " + ordinal(you.grid) + " on the grid."
         : d <= -3 ? ", down from " + ordinal(you.grid) + " on the grid." : ".";
@@ -689,12 +691,12 @@ var Announcer = (function () {
       const sum = {
         event: info && info.sprint ? "the sprint" : ((info && info.gp) || t.gp) ? "the " + ((info && info.gp) || t.gp) : "", n: order.length,
         winner: { name: w.name || w.code || "" },
-        second: s2 && !s2.retired ? s2.name : "",
+        second: s2 && !s2.retired && !s2.dsq ? s2.name : "",
         // On the corrected clock, as the results sheet classifies: a +5 s penalty
         // is part of the margin, not seven seconds of daylight.
-        margin: s2 && !s2.retired && s2.finishT > 0 && w.finishT > 0 && (s2.lap | 0) >= (w.lap | 0)
+        margin: s2 && !s2.retired && !s2.dsq && s2.finishT > 0 && w.finishT > 0 && (s2.lap | 0) >= (w.lap | 0)
           ? (s2.finishT + (s2.penalty || 0)) - (w.finishT + (w.penalty || 0)) : 0,
-        you: you ? { pos: you.retired ? 0 : (you.finPos || order.indexOf(you) + 1), grid: you.gridPos || 0, dnf: !!you.retired } : null,
+        you: you ? { pos: you.retired || you.dsq ? 0 : (you.finPos || order.indexOf(you) + 1), grid: you.gridPos || 0, dnf: !!you.retired, dsq: !!you.dsq } : null,
         fastest: fast ? { name: fast.name || "", time: fast.best, you: !!fast.isPlayer } : null,
       };
       const lines = wrapRows(sum);

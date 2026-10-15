@@ -28,15 +28,25 @@
     baseHW: 7,
     terrainOuter: 120,
     dressingExclusions: [
-      // Bespoke parkland and selective lamps below own the full circuit.
-      { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
+      // Bespoke parkland owns the full circuit. The hand-placed lamp runs own racing
+      // 0.84–0.05 (pit straight) and 0.30–0.68; engine masts light 0.05–0.30 and 0.68–0.84.
+      // Windows are SCENERY-frame (racing frac + 0.4906, i.e. scenery sl()).
+      { kinds: ["foliage"], s0: 0, s1: 1 },
+      { kinds: ["lighting"], s0: 0.3306, s1: 0.5406 },
+      { kinds: ["lighting"], s0: 0.7906, s1: 0.1706 },
     ],
     pal: { zenith: [0.24, 0.44, 0.74], horizon: [0.80, 0.72, 0.56], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36], sunDir: [0.7874615506676528, 0.5468482990747588, 0.2843611155188746], sun: [1, 0.9, 0.65], sunColor: [1, 0.88, 0.62] },
+    // Keys are AUTHORED-frame (fmap'd to racing by def.js, ≈ +0.014 here); the racing-lap
+    // targets are in the comments (docs/tracks/imola.md §3: first third near-flat, Piratella
+    // crest, Acque Minerali hollow, Variante Alta crest, Rivazza descent). The old keys
+    // put +16 m at Tamburello and +14 m at Rivazza and left 0.40–0.75 flat. No bump goes below
+    // the start line: water sits at the lap's lowest road Y (build-props waterSurface), so a
+    // deep trough buried the Santerno ribbon under the start straight's terrain.
     elevations: [
-      { s: 0.835, halfM: 380, rise: 14 },
-      { s: 0.975, halfM: 260, rise: -10 },
-      { s: 0.135, halfM: 360, rise: 16 },
-      { s: 0.295, halfM: 320, rise: -14 },
+      { s: 0.456, halfM: 320, rise: 12 },     // racing ≈0.47: Piratella blind crest
+      { s: 0.546, halfM: 240, rise: -7 },    // racing ≈0.56: Acque Minerali hollow
+      { s: 0.661, halfM: 520, rise: 21 },    // racing ≈0.675: Variante Alta crest, falling away towards Rivazza
+      { s: 0.786, halfM: 200, rise: 5 },     // racing ≈0.80: Rivazza shoulder, then the plunge to the line
     ],
     // Soft banks: terrain fade (1−t) at the 10 m foundation shoulder left
     // centreline `gap` at 0.22–0.40 under 3–4° (foundation assert ≤ 0.18).

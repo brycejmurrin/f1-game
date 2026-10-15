@@ -40,30 +40,32 @@
 
       const FALL = [MAPLE, SCARLET, AMBER, OAK];
       const maple = (k, side, dist, h, col) => {
-        const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+        // Level basis, not the road's: the Esses bank and fall, and a road-basis
+        // crown read as a tilted slab. A maple stands plumb whatever the road does.
+        const a = anchor(k, side, dist), up = [0, 1, 0], b = [[1, 0, 0], up, [0, 0, 1]];
         out._mat = MAT.WOOD;
         seat.cyl(out, a.c, 0.22 + h * 0.012, h * 0.42, BARK, 5, b);
         out._mat = MAT.FOLIAGE;
         for (let i = 0; i < 3; i++) {
           const ang = i * 2.094 + hash(k + i) * 1.2, rr = h * 0.16;
-          const p = vadd(vadd(vadd(a.c, a.u, h * (0.40 + i * 0.09)),
-            a.r, Math.cos(ang) * rr), a.t, Math.sin(ang) * rr);
+          const p = vadd(vadd(vadd(a.c, up, h * (0.40 + i * 0.09)),
+            [1, 0, 0], Math.cos(ang) * rr), [0, 0, 1], Math.sin(ang) * rr);
           seat.frustum(out, p, h * (0.30 - i * 0.06), h * (0.34 - i * 0.09), h * 0.26, col, 6, b);
         }
-        seat.cone(out, vadd(a.c, a.u, h * 0.76), h * 0.24, h * 0.30, col, 6, b);
+        seat.cone(out, vadd(a.c, up, h * 0.76), h * 0.24, h * 0.30, col, 6, b);
         out._mat = 0;
       };
       // WAT-M1: the shared foliage pass is intentionally excluded through the
       // Esses. Replace it with a close, explicitly lobed maple rank; cheap
       // generic hardwood and conifer silhouettes remain in the deeper woods.
-      for (let s = 0.24, i = 0; s <= 0.34 + 1e-9; s += 0.0075, i++) {
+      for (let s = 0.13, i = 0; s <= 0.25 + 1e-9; s += 0.0085, i++) {
         for (const side of [-1, 1]) {
           const h = hash(i * 43 + side * 17 + 91);
           maple(K(s), side, 13 + h * 4.5, 15 + h * 5,
             (i + (side > 0 ? 1 : 0)) % 3 === 0 ? AMBER : SCARLET);
         }
       }
-      const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= 0.24 && s <= 0.34);
+      const openArea = (s) => (s >= 0.93 || s <= 0.08) || (s >= 0.13 && s <= 0.25);
       every(20, (k) => {
         const s = k / n;
         if (openArea(s)) return;
@@ -106,7 +108,8 @@
           stage._mat = MAT.CONCRETE;
           seat.box(stage, a.c, [11, 5.6, len], [0.76, 0.75, 0.72], b);
           for (let i = 0; i < bays; i++) {
-            const p = vadd(vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch), a.r, inw * 5.4);
+            // Door skin sits 0.35 m proud of the 11 m body (half-width 5.5): was ~7 cm, flush in every frame.
+            const p = vadd(vadd(a.c, a.t, (i - (bays - 1) / 2) * pitch), a.r, inw * 5.85);
             // Roll-up door: a corrugated shutter with its guide rails either side.
             seat.box(stage, p, [0.35, 4.2, 5.0], [0.34, 0.36, 0.38], b);
             for (const dz of [-2.7, 2.7])
@@ -222,7 +225,8 @@
       // Paddock RVs removed — they buried into the hillside (~8 prims). Tech
       // sheds already read as the paddock.
       // OB compound pushed past the tech sheds so vans clear the slope.
-      broadcastCompound(K(0.918), 1, 110, { vans: 2, dishes: 2, mastH: 9 });
+      // Was 110: one van chassis skirt buried 0.10 m (ground-audit 2026-10-14).
+      broadcastCompound(K(0.918), 1, 125, { vans: 2, dishes: 2, mastH: 9 });
       // Was 6.5: after the closing-chord centerline fix the default panel face
       // sat 9.5 mm off the generic crowdBank riser (gap 6.55) at the start seam.
       // 6.0 leaves ~24 cm clear of the riser's trackward face (MIN_SEP = 3 cm).
@@ -281,24 +285,24 @@
       tyreWall(0.074, 0.108, 1, 5, [0.86, 0.20, 0.18]);
       marshalPost(K(0.084), -1, 10);
 
-      groundPatch(K(0.245), -1, 6, [30, 0.18, 42], GRAVEL,
+      groundPatch(K(0.228), -1, 6, [30, 0.18, 42], GRAVEL,
         { id: "watkins-esses-gravel", samples: 7 });
-      tyreWall(0.230, 0.262, -1, 5, [0.20, 0.40, 0.85]);
+      tyreWall(0.212, 0.244, -1, 5, [0.20, 0.40, 0.85]);
       // Sahlen Esses GA hillside + stand: rows climb away from the ribbon
       // (positive slope). Gap nudged off the prior flatCoplanar pair with the
       // crowdBank riser. Sources: theglen.com facility maps / TheGlenRace.com.
-      spectatorHill(0.20, 0.30, 1, 16.2, {
+      spectatorHill(0.145, 0.235, 1, 16.2, {
         rows: 4, rise: 1.3, depth: 1.95, density: 0.38, step: 10,
         grass: [0.22, 0.40, 0.18], riser: [0.32, 0.30, 0.26],
       });
       {
         // Compact timber marker on the Esses bank — denser bleachers blew the
         // props-tris ratchet; spectatorHill carries the crowd mass.
-        const a0 = anchor(K(0.255), 1, 28);
+        const a0 = anchor(K(0.190), 1, 28);
         const a = liftToTerrain(a0, 4, 10), b = [a.r, a.u, a.t], inw = -1;
         const bays = 5, pitch = 5.5, rows = 4, len = bays * pitch;
         const topH = 0.9 + rows * 0.7;
-        indexSolid(0.235, 0.275, 1, 24, 10);
+        indexSolid(0.170, 0.210, 1, 24, 10);
         modelGroup("glen-esses-hill", {
           center: vadd(a.c, a.u, topH * 0.55), size: [10, topH + 3, len + 2], basis: b,
         }, (stage) => {
@@ -332,7 +336,7 @@
           stage._mat = 0;
         }, { required: true });
       }
-      marshalPost(K(0.250), 1, 9);
+      marshalPost(K(0.205), 1, 9);
 
       groundPatch(K(0.615), 1, 5, [26, 0.18, 34], GRAVEL,
         { id: "watkins-boot-gravel", samples: 6 });
@@ -417,13 +421,13 @@
         ];
         for (const [id, clearance, thickness, depth, span, color] of spans) {
           api.overheadSpan({
-            id, frac: 0.365, clearance, thickness, depth, span,
+            id, frac: 0.248, clearance, thickness, depth, span,
             supports: false, color, required: id === "watkins-footbridge",
           });
         }
         // Timber trestle bents and the gabled portal at each abutment.
         for (const side of [-1, 1]) {
-          const a = anchor(K(0.365), side, 4.2), b = [a.r, a.u, a.t];
+          const a = anchor(K(0.248), side, 4.2), b = [a.r, a.u, a.t];
           modelGroup(`watkins-footbridge-pier-${side < 0 ? "left" : "right"}`, {
             center: vadd(a.c, a.u, (deck + 6) / 2),
             size: [4.0, deck + 6, 7.0],
@@ -496,15 +500,19 @@
           seat.box(stage, vadd(vadd(a.c, a.t, -15.2), a.u, 6.5), [4.0, 1.4, 0.4], [0.36, 0.32, 0.28], b);
           stage._mat = MAT.CONCRETE;
           const silo = vadd(a.c, a.r, 10);
-          seat.cyl(stage, silo, 2.6, 15, [0.30, 0.40, 0.34], 10, b);   // glazed tile
+          // Footing sunk 1 m: the pasture falls away under the silo, so a flush base hung 0.7 m off the grass.
+          seat.cyl(stage, vadd(silo, a.u, -1), 2.6, 16, [0.30, 0.40, 0.34], 10, b);   // glazed tile
           stage._mat = MAT.METAL;
           seat.cone(stage, vadd(silo, a.u, 15), 2.9, 2.4, [0.66, 0.66, 0.64], 10, b);
           stage._mat = MAT.WOOD;
           // Split-rail fence running off along the pasture edge.
           for (let i = 0; i < 8; i++) {
-            const p = vadd(vadd(a.c, a.r, -10), a.t, (i - 3.5) * 5);
-            seat.box(stage, p, [0.2, 1.3, 0.2], [0.44, 0.38, 0.30], b);
-            addBox(stage, vadd(p, a.u, 0.95), [0.14, 0.14, 5], [0.44, 0.38, 0.30], b);
+            const p0 = vadd(vadd(a.c, a.r, -10), a.t, (i - 3.5) * 5);
+            // Posts follow the pasture, which rises toward the road here; seat each one on the grass.
+            const g = terrainYAt(p0[0], p0[2]);
+            const p = g == null ? p0 : [p0[0], g - 0.3, p0[2]];
+            seat.box(stage, p, [0.2, 1.7, 0.2], [0.44, 0.38, 0.30], b);
+            addBox(stage, vadd(p, a.u, 1.35), [0.14, 0.14, 5], [0.44, 0.38, 0.30], b);
           }
           stage._mat = 0;
         });

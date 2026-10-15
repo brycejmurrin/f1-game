@@ -1048,6 +1048,36 @@ test("a margin that rounds up to ten is read as '10', never '10.0 seconds'", () 
     you: { pos: 5, grid: 5 } }).join(" "), /9\.9 seconds ahead/);
 });
 
+for (const retired of [false, true]) {
+  test(`the public wrap-up reports player disqualification instead of a finish or retirement (retired=${retired})`, () => {
+    const { A: An, G, synth } = load();
+    const ann = An.create(G);
+    const winner = { name: "Lando Norris", finishT: 100, lap: 5, finPos: 1, best: 80 };
+    const you = { name: "Oscar Piastri", isPlayer: true, dsq: "two dry compounds not used", retired,
+      finishT: 104, lap: 5, finPos: 2, gridPos: 7, best: 79 };
+    // endRace appends DSQ rows and still assigns finPos; dsq does not imply retired.
+    ann.wrapUp([winner, you], info());
+    for (let i = 0; i < 8; i++) finishLine(synth);
+    const text = spoken(synth).join(" ");
+    assert.match(text, /you have been disqualified/i);
+    assert.doesNotMatch(text, /you finish|podium|up 5 places|retirement|fastest lap to you/i);
+    assert.doesNotMatch(text, /seconds ahead of piastri/i, "DSQ is not a classified runner-up");
+    ann.stop();
+  });
+}
+
+test("the public wrap-up omits a DSQ runner-up margin when the player wins", () => {
+  const { A: An, G, synth } = load();
+  const ann = An.create(G);
+  const you = { name: "You", isPlayer: true, finishT: 100, lap: 5, finPos: 1 };
+  const dsq = { name: "Oscar Piastri", dsq: "real race classification", retired: false, finishT: 104, lap: 5, finPos: 2 };
+  ann.wrapUp([you, dsq], info());
+  for (let i = 0; i < 8; i++) finishLine(synth);
+  assert.match(spoken(synth)[0], /you win/i);
+  assert.doesNotMatch(spoken(synth).join(" "), /seconds clear|ahead of/i);
+  ann.stop();
+});
+
 test("the wrap-up reads the result the stewards gave: a penalty is part of the margin, and a sprint is the sprint", async () => {
   const { A: An, G, synth } = load();
   G.state = "results";
@@ -1282,4 +1312,13 @@ test("the read is fitted at the PLAYER'S announcer rate: a slow voice is trimmed
   const slow = count(0.6), dflt = count(0), fast = count(1.35);
   assert.ok(slow < dflt, `a slow voice keeps fewer lines (${slow} vs ${dflt}) — fitted at the default it was cut mid-read at 24 s`);
   assert.ok(fast > dflt, `a fast voice keeps more (${fast} vs ${dflt})`);
+});
+
+
+test("storm introductions warn of heavy rain and preserve the existing wet circuit read", () => {
+  const plain = info({ track: { name: "Test circuit", lengthKm: 5 }, weather: "storm" });
+  assert.match(said(plain), /heavy rain/i, "storm is wet weather, not an unmentioned dry default");
+  const spa = info({ track: { id: "spa", name: "Spa", lengthKm: 7.004 }, weather: "storm" });
+  assert.match(said(spa), /rain on one half of this circuit/i, "reuse the authored wet read and its recorded coverage");
+  assert.equal(said(spa), said({ ...spa, weather: "rain" }), "storm keeps the established heavy-rain narration");
 });

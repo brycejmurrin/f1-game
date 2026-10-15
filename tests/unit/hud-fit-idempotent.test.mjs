@@ -548,3 +548,46 @@ test("HUD viewport cache: a resize re-fits from the new size, and fit results ma
   for (let i = 0; i < 30; i++) reads += cached.frame().vpReads;
   assert.equal(reads, 0, "settled: no viewport reads per tick");
 });
+
+
+test("publishing a changed top-control zoom requests one subsequent full fit", () => {
+  const source = read("js/ui/hud.js");
+  const start = source.indexOf('  set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));');
+  const end = source.indexOf("  // Publish --dock-r-w in the FINAL", start);
+  const publish = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  for (const [before, requested, cap, expected] of [
+    [3, 3, 1.25, true], [1.25, 3, 1.25, false], [3, 3, 2, false],
+    [1.25, 3, Infinity, true], [1.25, 3, 1.2504, false], [1.6, 3, 1.8, true],
+  ]) {
+    let painted = String(before);
+    const ctx = vm.createContext({ Math, zDockPub: before, btnFloor: 1, btnScale: requested, capDock: cap,
+      _fitKey: "settled", _fitWait: 30, _fitPending: false,
+      root: { style: { getPropertyValue: () => painted } },
+      set(prop, value, base) { painted = value >= base ? "" : String(Math.max(.4, Math.round(value * 1000) / 1000)); },
+    });
+    vm.runInContext(publish, ctx);
+    assert.equal(ctx._fitKey, expected ? "" : "settled", `published top zoom ${before} → ${painted || requested}`);
+    assert.equal(ctx._fitWait, expected ? 0 : 30, "unchanged clamped zoom keeps steady-state backoff");
+    assert.equal(ctx._fitPending, expected, "changed effective zoom keeps the full fit pending");
+    const stampStart = source.indexOf("function phoneFitStampSync(");
+    const stampEnd = source.indexOf("\nfunction fitHud()", stampStart);
+    assert.ok(stampStart >= 0 && stampEnd > stampStart);
+    const styles = new Map();
+    Object.assign(ctx, {
+      document: { body: { classList: { contains: () => false } }, documentElement: ctx.root },
+      _hudTop: {}, _hudBottom: {}, _fitStamped: false, _fitClearSeq: 0,
+      pickDocks() {}, els: {}, phonePaintedClash: () => false,
+      hStyle(root, key, value) { styles.set(key, value); },
+    });
+    vm.runInContext(source.slice(stampStart, stampEnd), ctx);
+    vm.runInContext("phoneFitStampSync(1)", ctx);
+    assert.equal(styles.get("--hud-fit-stamp"), expected ? "" : "1",
+      "clash-free geometry cannot publish settled while a full fit is pending");
+    if (expected) {
+      ctx._fitPending = false;
+      vm.runInContext("phoneFitStampSync(1)", ctx);
+      assert.equal(styles.get("--hud-fit-stamp"), "1", "completed full fit permits the stamp");
+    }
+  }
+});
