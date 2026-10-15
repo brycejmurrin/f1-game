@@ -358,6 +358,8 @@
     "tests/unit/flyby-pose-inverse.test.mjs",
     "tests/unit/flyby-shots.test.mjs",
     "tests/unit/flying-start.test.mjs",
+    "tests/unit/followup-platform.test.mjs",
+    "tests/unit/followup-update-check.test.mjs",
     "tests/unit/font-digits.test.mjs",
     "// The weather FORECAST (js/race/forecast.js): timeline off the arc's own road lag (drift-guarded against",
     "// weather-arc.js), bounded seeded uncertainty, and the engineer's early / 2-lap / 1-lap / here / drying calls. VM, < 0.5 s.",
@@ -1185,7 +1187,8 @@
         "tests/unit/desktop-notices.test.mjs",
         "tests/unit/desktop-stage.test.mjs",
         "tests/unit/desktop-unpacked-bin.test.mjs",
-        "tests/unit/desktop-version.test.mjs"
+        "tests/unit/desktop-version.test.mjs",
+        "tests/unit/followup-platform.test.mjs"
       ],
       "kind": "node"
     },
@@ -1554,6 +1557,7 @@
       "files": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs",
+        "tests/unit/followup-update-check.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "kind": "node"
@@ -1567,6 +1571,7 @@
     },
     "test:mobile-unit": {
       "files": [
+        "tests/unit/followup-platform.test.mjs",
         "tests/unit/mobile-config.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/mobile-sync-web.test.mjs"

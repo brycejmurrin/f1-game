@@ -12,7 +12,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { outcomeOf, outcome, aliveRun, procStart } from "../../tools/ci/test-bg.mjs";
+import { outcomeOf, outcome, aliveRun, procStart, procInfo } from "../../tools/ci/test-bg.mjs";
 
 test("a non-zero exit wins over an earlier passing summary", () => {
   const log = "[tooling-fast] = run passed (249 passed, 0 failed)\n…sweeps…\n# pass 3\n# fail 1\n= bg exit 1\n";
@@ -51,6 +51,30 @@ test("a recycled pid is not the run: liveness needs the recorded start time and 
   assert.equal(outcome({ ...stale, starttime: st }), "running");
 });
 
+
+test("proc stat zombie identity does not keep a completed background run alive", () => {
+  // Captured /proc/820854/stat: completed physics-core wrapper, PPID 1.
+  // Its matching start time and successful kill(0) previously left --wait/cap stuck.
+  const captured = "820854 (sh) Z 1 820854 820854 0 -1 4227340 304 3304017 0 0 0 0 19298 1983 20 0 1 0 7855793 0 0";
+  const read = (path, encoding) => {
+    assert.equal(path, "/proc/820854/stat"); assert.equal(encoding, "utf8"); return captured;
+  };
+  const info = procInfo(820854, read);
+  assert.deepEqual(info, { state: "Z", starttime: "7855793" });
+  const run = { pid: 820854, starttime: info.starttime, bootId: "same-boot" };
+  const deps = { kill() {}, start: () => info.starttime, state: () => info.state, boot: "same-boot" };
+  assert.equal(aliveRun(run, deps), false);
+  assert.equal(aliveRun({ pid: run.pid }, deps), false, "legacy records also reject zombies");
+  for (const state of ["X", "x"]) assert.equal(aliveRun(run, { ...deps, state: () => state }), false);
+  for (const state of ["S", "R", "D", "T", undefined]) {
+    assert.equal(aliveRun(run, { ...deps, state: () => state }), true, "live states and unavailable proc state retain identity checks");
+    assert.equal(aliveRun({ ...run, starttime: "other" }, { ...deps, state: () => state }), false);
+    assert.equal(aliveRun({ ...run, bootId: "other" }, { ...deps, state: () => state }), false);
+  }
+  assert.equal(procInfo(820854, () => { throw new Error("proc unavailable"); }), null);
+  const named = captured.replace("(sh)", "(wrapper (with) spaces)");
+  assert.deepEqual(procInfo(820854, () => named), info, "command parentheses do not shift stat fields");
+});
 
 test("a zombie supervisor is not a live run (#1921)", async () => {
   /* A finished wrapper whose parent has not reaped it stays in /proc as state

@@ -97,9 +97,14 @@ const mergeByPid = (disk, mine) => {
  * 22 — the identity .claude/hooks/live-run.py prints) and the kernel boot id,
  * and is alive only while both still match. An old record without them falls
  * back to the pid test. */
+export function procInfo(pid, read = fs.readFileSync) {
+  try {
+    const fields = read(`/proc/${pid}/stat`, "utf8").split(")").pop().trim().split(/\s+/);
+    return { state: fields[0], starttime: fields[19] || null };
+  } catch (_) { return null; }
+}
 export function procStart(pid) {
-  try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim().split(/\s+/)[19] || null; }
-  catch (_) { return null; }
+  return procInfo(pid)?.starttime || null;
 }
 /* A ZOMBIE IS NOT A RUN (#1921). A finished wrapper its parent has not reaped
  * stays in /proc as Z with the same start time, and kill(pid, 0) still
@@ -110,11 +115,13 @@ export function procState(pid) {
   catch (_) { return null; }
 }
 const BOOT_ID = (() => { try { return fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim(); } catch (_) { return null; } })();
-export function aliveRun(run, { kill = (p) => process.kill(p, 0), start = procStart, boot = BOOT_ID, state = procState } = {}) {
+export function aliveRun(run, { kill = (p) => process.kill(p, 0), start = procStart, state = (p) => procInfo(p)?.state, boot = BOOT_ID } = {}) {
   const pid = run && +run.pid;
   if (!(pid > 0)) return false;
   try { kill(pid); } catch (_) { return false; }
-  if (/^[ZXx]$/.test(state(pid) || "")) return false;
+  // A detached wrapper can remain unreaped under PID 1 after its group finishes.
+  // kill(pid, 0) and identity still match a zombie; it must not occupy the cap.
+  if (["Z", "X", "x"].includes(state(pid))) return false;
   if (run.bootId && boot && run.bootId !== boot) return false;
   if (run.starttime && start(pid) !== String(run.starttime)) return false;
   return true;
