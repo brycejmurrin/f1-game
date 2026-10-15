@@ -408,3 +408,28 @@ test("tick: a settled phone layout is fitted once, not forced to layout every 10
   doc.body.className = "hud-touch"; R.tick(G, p);
   assert.ok(reads > before, "a changed layout input refits at once");
 });
+
+test("refit: the phone stamp sync's per-tick call skips a settled REL, refits when forced (#2151)", () => {
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "", style: { setProperty() {}, removeProperty() {} },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute() {}, appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk();
+  root.clientHeight = 160; root.scrollHeight = 160; root.currentCSSZoom = 1;
+  let reads = 0;
+  root.getBoundingClientRect = () => { reads++; return { left: 50, right: 220, top: 100, bottom: 260, width: 170, height: 160 }; };
+  const doc = { body: { className: "", classList: { contains: () => false } }, getElementById: (id) => (id === "hud-rel" ? root : null), createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const G = { cars: [p, car("A1", 1100, 3, { rank: 1 })], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  R.tick(G, p);
+  const settled = reads;
+  for (let i = 0; i < 9; i++) R.refit();
+  assert.equal(reads, settled, "an unchanged key reads no layout");
+  R.refit(true);
+  assert.ok(reads > settled, "a forced recheck (syncPhoneFit) refits");
+  const before = reads;
+  doc.body.className = "hud-touch"; R.refit();
+  assert.ok(reads > before, "a changed layout input refits");
+});

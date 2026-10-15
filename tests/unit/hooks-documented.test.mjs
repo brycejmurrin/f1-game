@@ -44,7 +44,7 @@ function hookNames() {
   const body = src.slice(src.indexOf("const api = {"));
   const names = new Set();
   // `async foo(` is a hook too — without the optional prefix the three async
-  // methods (assetLoad, lobbyPairs, fetchTrackOutline) were invisible to the ratchet.
+  // methods (assetLoad, lobbyPairs) were invisible to the ratchet.
   for (const m of body.matchAll(/^ {2}(?:async\s+)?([a-zA-Z_$][\w$]*)\s*[(:]/gm)) names.add(m[1]);
   return names;
 }
