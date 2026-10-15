@@ -18,7 +18,7 @@
     terrainOuter: 100,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.94, s1: 0.10 },  // pit straight + Arena
-      { kind: "foliage", s0: 0.60, s1: 0.68 },              // Dunlop-Kehre runoff
+      { kind: "foliage", s0: 0.56, s1: 0.64 },              // Dunlop-Kehre (T12 .6025) runoff
     ],
     pal: {
       zenith:        [0.38, 0.48, 0.60],
@@ -30,6 +30,7 @@
       fogColor:      [0.62, 0.66, 0.68],
       fogDensity:    0.0030,
       grass:         [0.16, 0.36, 0.17],
+      runoff:        [0.22, 0.31, 0.18],  // Eifel grass/asphalt apron; the green-theme default is tan (survey defect 4)
       sunDir:        [0.50, 0.52, 0.42],
     },
     // Elevation comes from the surveyed SRTM bake in

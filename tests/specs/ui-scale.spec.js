@@ -33,6 +33,25 @@ const LANDSCAPE = { width: 852, height: 393 };   // iPhone 15 Pro — primary pl
 // floor made phones read as "zoomed in".
 const SCALES = [50, 100, 115, 130, 150, 200];
 
+async function waitHudControlsStable(page) {
+  await page.evaluate(async () => {
+    const ids = ["btn-brake", "btn-throttle", "btn-boost", "btn-ot", "btn-aero", "pausebtn", "btn-cam", "minimap"];
+    const snapshot = () => JSON.stringify(ids.map(id => {
+      const r = document.getElementById(id).getBoundingClientRect();
+      return [r.x, r.y, r.width, r.height];
+    }));
+    let previous = snapshot(), stable = 0;
+    for (let frame = 0; frame < 60; frame++) {
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      const current = snapshot();
+      stable = current === previous ? stable + 1 : 0;
+      if (stable >= 2) return;
+      previous = current;
+    }
+    throw new Error("HUD controls did not settle across rendered frames");
+  });
+}
+
 // The screens reachable from the title without starting a session. Each is
 // [name, root selector, ids to click in order].
 //
@@ -253,6 +272,44 @@ test.describe("UI scale", () => {
     await page.evaluate(() => __apex.btnScale(80));
     const smaller = await sizes();
     expect(smaller[0][1]).toBeLessThan(before[0][1]);
+  });
+
+  test("larger BUTTON SIZE plateaus without shrinking pedals or covering CAM/PAUSE", async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.addInitScript(() => localStorage.setItem("apex26.steerMode", JSON.stringify("buttons")));
+    await boot(page);
+    await page.evaluate(() => { __apex.headless(true); __apex.race("monza"); });
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => { __apex.go(); __apex.park(.18); __apex.hudScale(100); });
+    let previous = null;
+    for (const pct of [125, 150, 200, 300]) {
+      await page.evaluate(pct => { __apex.btnScale(pct); __apex.jump(.18, 60, 0); GameHud.invalidateFit(); }, pct);
+      await waitHudControlsStable(page);
+      const sample = await page.evaluate(() => {
+        GameHud.syncPhoneFit();
+        const rect = id => { const e = document.getElementById(id), r = e.getBoundingClientRect();
+          return { id, x: r.x, y: r.y, w: r.width, h: r.height }; };
+        return { controls: ["btn-brake", "btn-throttle", "btn-boost", "btn-ot", "btn-aero"].map(rect),
+          top: ["pausebtn", "btn-cam"].map(rect) };
+      });
+      if (pct === 125) expect(Math.abs(sample.controls[0].w - 90), "default-sized pedals retain their 90px painted footprint").toBeLessThan(.5);
+      for (let i = 0; i < sample.controls.length; i++) {
+        const r = sample.controls[i];
+        expect(r.w, r.id + " remains visible").toBeGreaterThan(0);
+        expect(r.x).toBeGreaterThanOrEqual(0); expect(r.y).toBeGreaterThanOrEqual(0);
+        expect(r.x + r.w).toBeLessThanOrEqual(844); expect(r.y + r.h).toBeLessThanOrEqual(390);
+        if (previous) {
+          expect(r.w, r.id + " width at BUTTON " + pct).toBeGreaterThanOrEqual(previous.controls[i].w - .5);
+          expect(r.h, r.id + " height at BUTTON " + pct).toBeGreaterThanOrEqual(previous.controls[i].h - .5);
+        }
+        for (const b of sample.top) {
+          const overlap = Math.max(0, Math.min(r.x + r.w, b.x + b.w) - Math.max(r.x, b.x)) *
+            Math.max(0, Math.min(r.y + r.h, b.y + b.h) - Math.max(r.y, b.y));
+          expect(overlap, r.id + " clears " + b.id).toBe(0);
+        }
+      }
+      previous = sample;
+    }
   });
 
   // Reset restores the independent button default, even after HUD SIZE changes.
@@ -765,5 +822,50 @@ test.describe("UI scale", () => {
     // touch context and every tap assertion above was vacuous — the silent
     // skip this sweep used to allow. Fail loudly instead.
     expect(dockSeen, "the touch dock was never visible in a hasTouch context").toBe(true);
+  });
+});
+
+
+test.describe("Broadcast map control clearance", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test("unplaced map clears tall left pedals while custom placement and dimensions survive", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.steerMode", JSON.stringify("tilt"));
+      localStorage.setItem("apex26.hudProfile", JSON.stringify("broadcast"));
+      localStorage.removeItem("apex26.hudLayout");
+    });
+    await boot(page);
+    await page.evaluate(() => { __apex.headless(true); __apex.race("bahrain"); });
+    await page.waitForFunction(() => __apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      __apex.go(); __apex.park(.18);
+      for (const [key,value] of [["--sal","47px"],["--sar","0px"],["--sab","21px"]]) document.documentElement.style.setProperty(key,value);
+    });
+    for (const hud of [70, 200]) for (const btn of [125, 150, 300]) {
+      await page.evaluate(({hud,btn}) => { __apex.hudScale(hud); __apex.btnScale(btn); __apex.camera("chase"); __apex.jump(.18,60,0); }, {hud,btn});
+      await waitHudControlsStable(page);
+      const result = await page.evaluate(() => {
+        const rect = e => { const r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}; };
+        const map=document.getElementById("minimap"), before=rect(map), stored=localStorage.getItem("apex26.hudLayout");
+        const controls=Array.from(document.querySelectorAll(".touchbtn, #pausebtn, #btn-cam")).filter(e=>!e.hidden&&getComputedStyle(e).display!=="none"&&e.getBoundingClientRect().width);
+        const original=controls.map(rect);HudLayout.clearReadouts();const after=rect(map), obstacles=controls.map(rect);
+        const overlap=(a,b)=>Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x))*Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y));
+        const collisions=obstacles.map((r,i)=>({id:controls[i].id,area:overlap(after,r)})).filter(r=>r.area>.5);
+        const tower=rect(document.querySelector(".hud-top"));
+        HudLayout.clearReadouts();const repeated=rect(map);
+        return {before,after,repeated,original,obstacles,collisions,towerOverlap:overlap(after,tower),stored,storedAfter:localStorage.getItem("apex26.hudLayout")};
+      });
+      expect(result.collisions, `HUD${hud}/BTN${btn}`).toEqual([]);expect(result.towerOverlap).toBe(0);
+      expect(result.after.w).toBe(result.before.w);expect(result.after.h).toBe(result.before.h);
+      expect(result.after.x).toBeGreaterThanOrEqual(47);expect(result.after.y).toBeGreaterThanOrEqual(0);
+      expect(result.after.x+result.after.w).toBeLessThanOrEqual(844);expect(result.after.y+result.after.h).toBeLessThanOrEqual(369);
+      expect(result.repeated).toEqual(result.after);expect(result.obstacles).toEqual(result.original);expect(result.storedAfter).toBe(result.stored);
+    }
+    const custom=await page.evaluate(()=>{
+      HudLayout.set("map",{x:20,y:0,s:110});const e=document.getElementById("minimap");
+      const snap=()=>({x:e.style.getPropertyValue("--hl-x"),y:e.style.getPropertyValue("--hl-y"),s:e.style.getPropertyValue("--hl-s"),saved:localStorage.getItem("apex26.hudLayout")});
+      const before=snap();HudLayout.clearReadouts();return {before,after:snap(),cx:e.style.getPropertyValue("--hud-clear-x"),cy:e.style.getPropertyValue("--hud-clear-y")};
+    });
+    expect(custom.after).toEqual(custom.before);expect(custom.cx).toBe("");expect(custom.cy).toBe("");
   });
 });
