@@ -97,6 +97,12 @@ export function api(pathQs, { run = spawnSync, env = process.env, gh, etags = ET
   } catch { return { error: "bad JSON" }; }
 }
 
+/** A ci.yml run started by a label other than run-ci on a draft (#2184): its
+ *  jobs all skip, so it concludes success while testing nothing. ci.yml's
+ *  `run-name` titles it `CI ignored: label <name>`; as the newest run on the
+ *  head it would hide the real verdict, so it never counts. Pure. */
+export const labelNoiseRun = (r) => /^CI ignored: label /.test(String(r?.display_title || ""));
+
 /** One run per workflow: the NEWEST by creation. A push run the PR run on the
  *  same head_sha cancelled seconds in (AGENTS.md rule 8's designed dedupe) is
  *  superseded, not a red. `created_at` has one-second resolution and the two
@@ -262,7 +268,7 @@ export async function watchSha(sha, { interval, deadline, once, request = api, n
   for (;;) {
     const r = request(`actions/runs?head_sha=${sha}&per_page=50`);
     if (r?.error || !Array.isArray(r?.json?.workflow_runs)) return unknown(r?.error || "workflow runs lookup returned no run array");
-    const runs = latestPerWorkflow(r.json.workflow_runs);
+    const runs = latestPerWorkflow(r.json.workflow_runs.filter((x) => !labelNoiseRun(x)));
     const jobsByRun = {};
     for (const run of runs) {
       if (!announced.has(run.id)) { announced.add(run.id); report(`${run.name} #${run.id} (${run.event}) ${run.status} ${run.html_url}`); }
@@ -311,7 +317,7 @@ export async function watchSha(sha, { interval, deadline, once, request = api, n
       }
       if (nv === "none") { report(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
       if (nv === "blocked") { report(`= ci blocked — PR #${pr.number} has merge conflicts, so GitHub starts no run for ${sha.slice(0, 7)}; merge the base (sync-pr.mjs) and push`); return 1; }
-      if (nv === "late") { report(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min; re-arm, or check the Actions tab`); return 124; }
+      if (nv === "late") { report(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min (mergeable_state ${pr.mergeable_state || "unknown"}: "unknown" is GitHub still computing, "dirty" starts no run); re-arm, or check the Actions tab`); return 124; }
     }
     // `running` and `none` are NOT green: under --once a scripted `&& next`
     // used to proceed on a run still in flight (2026-09-24).
