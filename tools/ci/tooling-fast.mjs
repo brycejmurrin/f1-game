@@ -356,8 +356,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
-  // The Cloud Agent bootstrap contract (.cursor/environment.json). The one docs-guards
-  // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5), ~0.3 s.
+  // The Cloud Agent bootstrap contract (.cursor/environment.json). The last docs-guards
+  // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5; the workflow retired 2026-10-15), ~0.3 s.
   "tests/unit/environment-json.test.mjs",
   // Job 6: MGU-K electric deploy/harvest + overtake boost cue (fake-audio VM).
   "tests/unit/ers-audio-layer.test.mjs",
