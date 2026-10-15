@@ -1332,3 +1332,48 @@ test("engineer lines and a BOX call survive a saturated announce queue; announce
   assert.match(box, /BOX BOX BOX/, `pit call on the stop lap: ${box}`);
   assert.ok(r.said.some((s) => s.kind === "box" && /BOX/.test(s.msg)), `box priority reached the card: ${JSON.stringify(r.said.filter((s) => s.kind === "box"))}`);
 });
+
+test("engineer OFF permanently invalidates accepted last-lap copy, including OFF then ON", () => {
+  const r = race(), accepted = [];
+  r.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, kind, still }); return true; };
+  r.step(.1);
+  r.G.player.prog = 19 * LAP + 340; r.G.player.lap = 20; r.step(.1);
+  const card = accepted.find(c => c.kind === "race");
+  assert.ok(card && /LAST|ONE TO GO|ONE MORE|EVERYTHING|HOLD/.test(card.msg), "last-lap call was accepted");
+  assert.equal(card.still(), true);
+  assert.equal(r.radio.setChat("off"), "off");
+  assert.equal(r.store.get("radioChat"), "off");
+  assert.equal(card.still(), false, "accepted copy waiting in the card queue obeys OFF immediately");
+  r.radio.setChat("normal");
+  assert.equal(card.still(), false, "re-enabling must not resurrect discarded engineer copy");
+  r.G._caution = 3; r.step(.1);
+  const fresh = accepted.find(c => /SAFETY CAR/.test(c.msg));
+  assert.ok(fresh); assert.equal(fresh.still(), true, "new engineer news remains available");
+});
+
+test("engineer OFF clears refused pending urgent copy before chatter is re-enabled", () => {
+  const r = race(), accepted = [];
+  r.G.announce = (msg, dur, kind) => { if (kind === "race") return false; accepted.push(msg); return true; };
+  r.step(.1); r.G.player.prog = 19 * LAP + 340; r.G.player.lap = 20; r.step(.1);
+  assert.ok(r.radio.debug().pending.eng.includes("last"), "refused urgent last lap remains pending");
+  r.radio.setChat("off");
+  assert.equal(r.radio.debug().pending.eng.length, 0, "OFF discards internal engineer queue");
+  r.radio.setChat("normal");
+  r.G.announce = msg => { accepted.push(msg); return true; }; r.step(.1, 5);
+  assert.ok(!accepted.some(msg => /LAST LAP|ONE TO GO|ONE MORE|LAST ONE/.test(msg)), "old last-lap offer stays discarded");
+});
+
+test("engineer chatter changes preserve accepted WATCH commentary and valid non-OFF modes", () => {
+  const w = watch(), accepted = [];
+  w.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, still }); return true; };
+  w.step(.1); w.radio.replayEvent({ kind: "sc", level: 3 }); w.step(.1);
+  const tv = accepted[0]; assert.ok(tv); assert.equal(tv.still(), true);
+  w.radio.setChat("off"); w.radio.setChat("chatty");
+  assert.equal(tv.still(), true, "TV and race-control commentary retain their own setting/generation");
+  const r = race(), cards = [];
+  r.G.announce = (msg, dur, kind, still) => { cards.push({ msg, still }); return true; };
+  r.step(.1); r.G._caution = 3; r.step(.1);
+  const engineer = cards.find(c => /SAFETY CAR/.test(c.msg)); assert.ok(engineer);
+  r.radio.setChat("chatty"); assert.equal(engineer.still(), true);
+  assert.equal(r.radio.setChat("bogus"), "chatty"); assert.equal(engineer.still(), true);
+});
