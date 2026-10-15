@@ -422,7 +422,7 @@ const FULL = [
 // Stylesheet <link> order in index.html.
 const CSS = [
   "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
-  "css/settings-controls.css", "css/save-health.css", "css/dialog-platform.css", "css/tuner.css",
+  "css/settings-controls.css", "css/dialog-platform.css", "css/save-health.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
   "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
   "css/loading.css", "css/responsive.css",

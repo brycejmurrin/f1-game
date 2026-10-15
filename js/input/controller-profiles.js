@@ -62,3 +62,4 @@ const ControllerProfiles = (function () {
   }
   return { create, clean, KEY, MAX, idOf };
 })();
+Object.freeze(ControllerProfiles);

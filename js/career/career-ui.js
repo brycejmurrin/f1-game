@@ -1311,8 +1311,8 @@ function create(G) {
       if (preview.fitted[cat] !== id) card.appendChild(el("p", "cg-p", "Works research retained: " + label(preview.fitted[cat]) + "; current regulations substitute " + label(id) + " on the car."));
     }
     if (preview.lostResearch.length) card.appendChild(el("p", "cg-p", "Research relinquished: " + preview.lostResearch.map(label).join(", ")));
-    const sign = el("button", "cr-buy", "SIGN CONTRACT"); sign.type = "button";
-    const cancel = el("button", "cr-buy", "CANCEL"); cancel.type = "button";
+    const sign = el("button", "sel-edit", "SIGN CONTRACT"); sign.type = "button";
+    const cancel = el("button", "sel-edit", "CANCEL"); cancel.type = "button";
     const status = el("p", "cg-p"); status.setAttribute("role", "status");
     sign.onclick = () => { if (!Career.acceptOffer(index, preview)) { status.textContent = "The offer changed. Cancel and compare it again."; sign.disabled = true; return; } closeOffers(); G.openCareer(); };
     cancel.onclick = () => buildOffers();

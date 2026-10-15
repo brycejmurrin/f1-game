@@ -1110,7 +1110,7 @@ const DataRealRace = (function () {
           traces = null; slot.textContent = ""; paint(next, slot);
         }, () => { if (generation === bodyGen && slot.isConnected !== false) { refresh.disabled = false; status.textContent = "Refresh failed. The previous replay is still available."; } });
       };
-      source.append(refresh, status); slot.appendChild(source);
+      source.appendChild(refresh); source.appendChild(status); slot.appendChild(source);
     }
 
     function jumpIn(script, code) {

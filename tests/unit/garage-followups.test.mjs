@@ -115,28 +115,54 @@ test('deferred garage builds cannot run after hide or clear a newer visit busy s
   queue.shift()(); queue.shift()(); assert.equal(builds, 1); assert.equal(dom.byId('carsetup').getAttribute('aria-busy'), null);
 });
 test('palette rebuild preserves only palette-owned focus, including repeated matches and a new colour', () => {
-  const dom = makeDom(), document = dom.document, d = { c1: '#ff0000', c2: '#0000ff' };
-  const palette = document.createElement('span'); document.body.appendChild(palette);
-  // mini-dom deliberately does not detach textContent children. Model that DOM
-  // operation here so the production focus-restoration path is exercised.
-  Object.defineProperty(palette, 'textContent', { set() {
-    if (palette.contains(document.activeElement)) document.activeElement = document.body;
-    for (const child of [...palette.children]) palette.removeChild(child);
-  }, get: () => '' });
-  const c = vm.createContext({ document, d, prev: document.createElement('span'), team: {},
-    paletteColours: () => [...new Set(Object.values(d))], palRows: [],
-    syncDeps() {}, scheduleLivPreview() {}, livePreviewDraft() {},
+  const dom = makeDom(), document = dom.document, saved = new Map();
+  // Exercise the complete editor with its actual inserted surface controls.
+  // The minimal DOM omits native textContent detachment; model that operation
+  // for all created nodes so an old focused palette chip really leaves the tree.
+  const create = document.createElement;
+  document.createElement = tag => {
+    const el = create(tag); let text = '';
+    Object.defineProperty(el, 'textContent', { get: () => text, set(value) {
+      text = String(value);
+      if (el.contains(document.activeElement)) document.activeElement = document.body;
+      for (const child of [...el.children]) el.removeChild(child);
+    } });
+    return el;
+  };
+  document.createTextNode = text => { const node = document.createElement('span'); node.textContent = text; return node; };
+  const store = { get: (k, d) => k === 'garageTab' ? 'livery' : saved.has(k) ? saved.get(k) : d, set: (k, v) => saved.set(k, v) };
+  const context = vm.createContext({ document, Log: { info() {}, warn() {} }, setTimeout: () => 0, clearTimeout() {},
+    GameStore: { store }, addEventListener() {}, removeEventListener() {},
+    GameAudio: {}, ScrollFade: { refresh() {} }, Car3D: { FINISH_SURFACE: {} },
+    LiveryTex: { NUM_FONT_IDS: ['default'], SPONSOR_PACK_IDS: ['default'], FILL_SURFACES: [] },
   });
-  const a = sheet.indexOf('  const applyPreview = (defer3d) =>'), ae = sheet.indexOf('\n\n  // MATCHING PALETTE', a);
-  const r = sheet.indexOf('  const refreshPalettes = () =>'), re = sheet.indexOf('\n\n  const colorRow', r);
-  vm.runInContext(sheet.slice(a, ae) + sheet.slice(r, re) + ';globalThis.preview=applyPreview;', c);
-  c.palRows.push({ el: palette, key: 'c1', label: 'PRIMARY', set: hex => { d.c1 = hex; c.preview(); } });
-  c.preview(); let chip = palette.children[0]; chip.focus(); chip.onclick();
+  context.window = context;
+  const run = path => vm.runInContext(read(path), context, { filename: path });
+  for (const path of ['js/core/mat4.js', 'js/physics/consts.js', 'js/car/parts.js', 'js/data/teams.js',
+    'js/garage/experience.js', 'js/garage/setup-tune.js', 'js/garage/setup-experiments.js', 'js/garage/surface-inspection.js']) run(path);
+  const team = vm.runInContext('Teams.LIST[1]', context); team.color = [1, 0, 0]; team.color2 = [0, 0, 1];
+  const G = { $: id => dom.byId(id), els: { select: dom.byId('select'), overlay: dom.byId('overlay') }, store,
+    cssCol: () => '#fff', arrToHex: rgb => '#' + rgb.map(n => Math.round(n * 255).toString(16).padStart(2, '0')).join(''),
+    hexToArr: hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255),
+    getTeamParts: () => ({}), saveTeamParts() {}, getLiveryId: () => 'default', saveLiveryId() {},
+    getCustomLiveries: () => [], setCustomLiveries() {}, getLiveries: () => [], invalidateDecalTextures() {},
+    teamIdx: 1, driverIdx: 0, soundOn: false, careerOwned: () => false, unlimitedBudget: false, peerSeats: () => [],
+    teamSwatch: () => document.createElement('span'), setTeamPicker() {}, openCustomize() {}, livDraftOverride: null, _spMeshKey: '',
+  };
+  context.G = G; run('js/garage/setup-sheet.js');
+  const ui = vm.runInContext('SetupUI.create(G)', context); ui.buildSetup(); dom.byId('cs-options').querySelector('.cs-liv-create').onclick();
+  const editor = dom.byId('cs-options').querySelector('.cs-liv-editor');
+  assert.ok(editor.querySelector('.cs-liv-ed-inspect'), 'actual inserted surface helper participates in the full editor');
+  const row = editor.querySelectorAll('.cs-liv-ed-row').find(r => r.querySelector('.cs-liv-ed-lbl')?.textContent === 'PRIMARY');
+  const palette = row.querySelector('.cs-liv-pal');
+  let chip = palette.children[0]; chip.focus(); chip.onclick();
   assert.equal(document.activeElement.dataset.csColour, '#ff0000'); assert.equal(chip.isConnected, false);
   chip = palette.children[1]; chip.focus(); chip.onclick(); assert.equal(document.activeElement.dataset.csColour, '#0000ff');
-  d.c1 = '#00ff00'; c.preview(); assert.equal(document.activeElement.dataset.csColour, '#0000ff');
+  const colour = row.querySelector('input'); colour.value = '#00ff00'; colour.oninput(); colour.onchange();
+  assert.equal(document.activeElement.dataset.csColour, '#0000ff', 'the same matching colour retains focus when another colour appears');
+  assert.ok(palette.children.some(b => b.dataset.csColour === '#00ff00'), 'the newly edited colour becomes matchable');
   const native = document.createElement('input'); document.body.appendChild(native); native.focus();
-  d.c1 = '#ff00ff'; c.preview(); assert.equal(document.activeElement, native);
+  colour.value = '#ff00ff'; colour.oninput(); colour.onchange(); assert.equal(document.activeElement, native);
 });
 test('research-only purchase keeps fitted part and explains the exact cap shortfall', () => {
   const dom = makeDom(), row = dom.document.createElement('button'), main = dom.document.createElement('div');

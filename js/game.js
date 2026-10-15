@@ -4371,8 +4371,8 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 // A quit from under the pit garage (WORK ON CAR, then any path to quitToMenu) takes the garage down
 // with the race: left open, the title showed RETURN TO RACE, whose closePitWork charged a dead race.
 function quitToMenu() {
-  if (raceMessageHistory) raceMessageHistory.clear();
   Ghost.flush(); resultsCam.reset(); replayBuf.clear(); cancelIntro();
+  if (raceMessageHistory) raceMessageHistory.clear();
   if (typeof InputGhost !== "undefined") InputGhost.flush();
   if (photoStudio) photoStudio.close(false); if (uiExperience) uiExperience.stopHome();
   sessionEntry.cancel();

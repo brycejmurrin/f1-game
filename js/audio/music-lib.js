@@ -189,7 +189,7 @@ window.MusicLib = (function () {
       return b;
     };
     const failure = health.get(pid(meta.id));
-    if (failure) { size.textContent += " · Skipped: " + failure.reason; el.classList.add("music-failed"); }
+    if (failure) { size.textContent += " · Skipped: " + failure.reason; }
     el.append(name, size,
       btn("music-play", failure ? "RETRY" : "▶", failure ? "Retry" : "Play", () => { if (failure) retry(pid(meta.id)); else { call("playTrackId", pid(meta.id)); refresh(); } }),
       btn("music-del", "✕", "Remove", () => remove(meta.id)));
