@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HOOK = path.join(ROOT, ".claude/hooks/bash-guard.sh");
@@ -746,6 +746,44 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   assert.ok(new RegExp(g.matcher).test("mcp__github__actions_run_trigger"), "the matcher must route actions_run_trigger through the guard");
 });
 
+// #2182: the hold refused handoff pushes that start no CI (a topic branch with
+// no PR, a draft without run-ci) while the queue was jammed, so a reclaimed
+// container could lose unpushed work. The fake gauge runs the REAL pushVerdict
+// with a faked PR lookup and holds otherwise.
+test("#2182: the push hold lets a push that starts no CI through; a ready PR or run-ci draft still holds", () => {
+  const repo = scratchRepo("hook-push-noci-");
+  try {
+    repo.g("remote", "add", "origin", "https://github.com/brycejmurrin/f1-game.git");
+    repo.g("checkout", "-qb", "cursor/no-pr-1");
+    fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });
+    const real = pathToFileURL(path.join(ROOT, "tools/ci/queue-depth.mjs")).href;
+    fs.writeFileSync(path.join(repo.dir, "tools/ci/queue-depth.mjs"), `import { execSync } from "node:child_process";
+import { pushVerdict } from ${JSON.stringify(real)};
+const PRS = { "cursor/draft-1": [{ number: 1, draft: true, labels: [] }], "cursor/runci-1": [{ number: 2, draft: true, labels: [{ name: "run-ci" }] }],
+  "cursor/ready-1": [{ number: 3, draft: false, labels: [] }] };
+const req = (q) => ({ json: PRS[decodeURIComponent(q).match(/head=brycejmurrin:([^&]+)/)[1]] || [] });
+const i = process.argv.indexOf("--push");
+if (i >= 0) {
+  const p = pushVerdict(process.argv[i + 1], execSync("git branch --show-current", { encoding: "utf8" }).trim(), req);
+  if (p.skip) { console.log(p.line); process.exit(0); }
+}
+console.log("= queue hold (99 Linux jobs in flight / 40, 50 queued, 0 macOS / 5)"); process.exit(1);
+`);
+    const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_PUSH_HOLD: "" } });
+    for (const c of ["git push -u origin cursor/no-pr-1", "git push", "git push origin HEAD", "git push -u origin cursor/draft-1"]) {
+      const r = run(c);
+      assert.equal(r.status, 0, `starts no CI, must pass: ${c} (${r.stderr})`);
+      assert.match(r.stderr, /bash-guard: = queue skip — push starts no CI \((cursor\/no-pr-1: no open PR|cursor\/draft-1: PR #1 is a draft without run-ci)\)/, c);
+    }
+    for (const c of ["git push -u origin cursor/ready-1", "git push origin HEAD:cursor/runci-1", "git push --tags origin",
+      "git push origin cursor/no-pr-1 cursor/ready-1"]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `starts CI or unknown, must hold: ${c} (${r.stderr})`);
+      assert.match(r.stderr, /BLOCKED: = queue hold/);
+    }
+  } finally { repo.rm(); }
+});
+
 test("2026-10-15: git push holds while queue-depth says hold; a silent gauge or APEX_PUSH_HOLD=0 lets it through", () => {
   const repo = scratchRepo("hook-push-hold-");
   try {
@@ -777,5 +815,101 @@ test("2026-10-15: git push holds while queue-depth says hold; a silent gauge or 
     repo.g("remote", "set-url", "origin", "https://github.com/someone/else.git");
     gauge(1, "= queue hold");
     assert.equal(run("git push -u origin cursor/topic-1234").status, 0, "another origin is not held");
+  } finally { repo.rm(); }
+});
+
+// ── BLOCKER CENSUS (2026-10-15, docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md §Blocker census) ──
+test("protect-files: a git conflict-side or committed-source restore of a generated file passes; any other ref still blocks", () => {
+  const repo = scratchRepo("hook-resolve-");
+  const run = (command) => hook("protect-files.sh", { tool_name: "Bash", tool_input: { command }, cwd: repo.dir }, { cwd: repo.dir });
+  try {
+    fs.mkdirSync(path.join(repo.dir, "tests/data"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "js"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "tests/data/ratchets.json"), "{}\n");
+    fs.writeFileSync(path.join(repo.dir, "js/roster.js"), "x\n");
+    fs.writeFileSync(path.join(repo.dir, "version.json"), "{}\n");
+    // Outside a merge --ours/--theirs restore from the INDEX, which can hold a
+    // staged hand edit: the side flags are only conflict resolution mid-merge.
+    const SIDES = ["git checkout --theirs tests/data/ratchets.json", "git checkout --ours -- js/roster.js",
+      "git checkout -m version.json", "git restore --theirs tests/data/ratchets.json"];
+    for (const c of SIDES) {
+      const r = run(c);
+      assert.equal(r.status, 2, `no merge in progress, so not a resolution: ${c}`);
+      assert.match(r.stderr, /GENERATED/, c);
+    }
+    fs.writeFileSync(path.join(repo.dir, ".git/MERGE_HEAD"), repo.g("rev-parse", "HEAD").stdout);
+    for (const c of [...SIDES,
+      "git checkout --theirs docs/PHYSICS.md tests/data/ratchets.json",
+      "git checkout MERGE_HEAD -- tests/data/ratchets.json",
+      "git checkout origin/claude/f1-game-project-26h3ng -- js/roster.js",
+      "git restore --source=MERGE_HEAD version.json",
+      "git restore -s origin/claude/f1-game-project-26h3ng tests/data/ratchets.json",
+      "git restore -sMERGE_HEAD js/roster.js"]) {
+      const r = run(c);
+      assert.equal(r.status, 0, `conflict resolution is not a hand edit: ${c} (${r.stderr})`);
+    }
+    // R4-SUPPLY-4 holds: content from an arbitrary ref is still a write the generated rule refuses
+    for (const c of ["git checkout origin/x -- version.json", "git restore --source=evil tests/data/ratchets.json",
+      "git checkout HEAD -- version.json", "git restore --source=HEAD~3 js/roster.js",
+      "git restore -sfeature js/roster.js", "cp /tmp/r.json tests/data/ratchets.json"]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `must still block: ${c}`);
+      assert.match(r.stderr, /GENERATED/, c);
+    }
+  } finally { repo.rm(); }
+});
+
+test("bash-guard: `git add X && git commit` in one command counts X as staged (census: 7 false blocks)", () => {
+  const repo = scratchRepo("hook-addcommit-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+  try {
+    fs.mkdirSync(path.join(repo.dir, "js/core"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "1\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "code");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
+    let r = run("git add docs/PHYSICS.md && git commit -m x");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /probe: commit docs-only/, "the added doc is the whole commit");
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "2\n");
+    r = run("git add js/core/log.js && git commit -m x");
+    assert.equal(r.status, 2, "docs/PHYSICS.md is still unstaged");
+    assert.match(r.stderr, /unstaged changes[\s\S]*docs\/PHYSICS\.md/);
+    assert.doesNotMatch(r.stderr, /^\s+js\/core\/log\.js$/m, "the added file is not reported as unstaged");
+    r = run("git add js/core/log.js docs/PHYSICS.md && git commit -m x");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /probe: commit code/, "a code path in the add makes it a code commit");
+    for (const c of ["git add -A && git commit -m x", "git add . && git commit -m x", "git add -u; git commit -m x"]) {
+      r = run(c);
+      assert.equal(r.status, 0, `${c}: ${r.stderr}`);
+      assert.match(r.stderr, /probe: commit code/, `${c} stages everything, so it is never docs-only`);
+    }
+    // no add in the command: the unstaged rule is unchanged
+    assert.equal(run("git commit -m x").status, 2);
+    assert.equal(run("echo 'git add js/core/log.js' && git commit -m x").status, 2, "a quoted add is prose");
+  } finally { repo.rm(); }
+});
+
+test("bash-guard: survey images and reports commit on the docs-only path; a code file or an image elsewhere does not", () => {
+  const repo = scratchRepo("hook-survey-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+  const put = (rel, body = "x") => { fs.mkdirSync(path.dirname(path.join(repo.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(repo.dir, rel), body); };
+  try {
+    put("artifacts/shots/tracks/spa/t1.png"); put("artifacts/shots/gallery/index.html");
+    put("artifacts/track-survey/spa-report/report.json"); put("docs/PHYSICS.md", "survey prose\n");
+    repo.g("add", "-f", "artifacts", "docs");
+    let r = run("git commit -m survey");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /probe: commit docs-only/, "survey images, reports and prose are the docs-only path");
+    put("js/core/log.js");
+    repo.g("add", "js/core/log.js");
+    r = run("git commit -m survey");
+    assert.match(r.stderr, /probe: commit code/, "a code file in the commit runs the full guards");
+    repo.g("reset", "-q", "js/core/log.js"); fs.rmSync(path.join(repo.dir, "js"), { recursive: true });
+    for (const rel of ["assets/pack/x.png", "artifacts/shots/other/x.png", "artifacts/track-survey/spa-report/run.js"]) {
+      put(rel); repo.g("add", "-f", rel);
+      r = run("git commit -m x");
+      assert.match(r.stderr, /probe: commit code/, `${rel} is not a survey asset`);
+      repo.g("reset", "-q", rel); fs.rmSync(path.join(repo.dir, rel));
+    }
   } finally { repo.rm(); }
 });

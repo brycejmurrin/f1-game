@@ -2227,7 +2227,7 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
   // re-render gate, so a new track whose first snapped cell + sunDir happen to
   // match the old track's last values would keep the PREVIOUS track's shadow
   // silhouette until the camera moved a cell (~16 m).
-  shadowPass.reset();
+  shadowPass.reset(); FrameLights.release();   // a day track never re-enters setFrameLights: drop the old lamp set here
   // Buildings light up for the chosen SESSION time, not the track's default:
   // night/dusk/dawn (or a night-default track in "default") → lit windows. Props
   // are rebuilt when this flips so a day-default circuit raced at night gets a
@@ -3404,13 +3404,6 @@ const G = {
   setupPan: (...a) => setupCam.setupPan(...a),
   nudgeSetupCam: (...a) => setupCam.nudgeSetupCam(...a),
   nudgeSetupZoom: (mul) => setupCam.nudgeSetupCam(0, 0, mul),
-  // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
-  // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
-  // a null style tests a car nobody is driving.
-  setupFlapArgs: () => {
-    const aSt = teamDecalState(Teams.LIST[teamIdx], true);
-    return { aLvl: aSt.val, style: aSt.aero || null };
-  },
   setSetupAero: (on, opts) => setupCam.setSetupAero(on, opts),
   get setupPreviewXOn() { return setupCam.xOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
