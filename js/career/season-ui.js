@@ -193,6 +193,13 @@ function create(G) {
     }
   }
 
+  function restartsProgress() {
+    const season = G.season;
+    // Qualifying is work to protect, but not scored standings (hasProgress).
+    return !(SeasonCal.canRace(season) && SeasonCal.matchesConfig(season, draft)) && (SeasonCal.hasProgress(season)
+      || !!(season && Array.isArray(season.qualiOrder) && season.qualiOrder.length));
+  }
+
   function build() {
     if (!draft) return;
     // Every chip, preset and "Add" button repaints both panes and destroys
@@ -201,7 +208,7 @@ function create(G) {
     const panes = () => { buildCalendar(); buildPool(); };
     if (window.TopModal && TopModal.keepFocus) TopModal.keepFocus($("season-setup"), panes);
     else panes();
-    const live = SeasonCal.hasProgress(G.season);
+    const live = restartsProgress();
     // #ss-apply is a STATIC shell node — unlike the rebuilt-per-paint confirm
     // buttons, node replacement never disarms it, so an armed RESTART could
     // survive close/reopen and fire without its warning. Every path repaints
@@ -274,17 +281,16 @@ function create(G) {
       }
       G.season = result.season;
       if (!result.durable && G.announce) G.announce("SEASON IS SESSION ONLY — STORAGE IS FULL", 4, "race");
-      G.trackIdx = SeasonCal.trackIndex(0);
+      G.trackIdx = SeasonCal.trackIndex(G.season.round);
       close();
       G.buildSelect();
       G.refreshCareerButton();
       if (G.soundOn) GameAudio.uiSelect();
     };
-    // Mid-season, APPLY wipes the standings — up to 23 raced rounds — and the
-    // label was the entire warning. Arm-then-confirm (the career DELETE?
-    // idiom) only when there is progress to lose; a fresh config applies
-    // directly. build() repaints the label, which is also the disarm.
-    if (SeasonCal.hasProgress(G.season)) {
+    // Changed rules restart both scored rounds and an unscored qualifying
+    // session. Unchanged unfinished setups preserve either; completed seasons restart.
+    // build() repaints the label and disarms any previous confirmation.
+    if (restartsProgress()) {
       if (G.soundOn) GameAudio.uiTick();
       G.armConfirm($("ss-apply"), "RESTART? — SEASON IS LOST", apply);
     } else apply();
