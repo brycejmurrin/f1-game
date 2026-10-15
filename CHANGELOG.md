@@ -14,7 +14,13 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- A rival's pass-by whoosh no longer keeps hissing under the pause menu, the results sheet or the title screen (#2187).
+- The team-radio key-up squelch now plays on phones, and on desktop it follows the master and SFX volume (#2189).
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
+- Blue flags: letting one lapping car through no longer counts toward a penalty for the next one in the queue (#2163).
+- Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
+- A car handed back after a heavy shunt never drives backwards at speed (#2167).
+- AI cars hold their line under the Safety Car and VSC instead of weaving to defend (#2175).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
