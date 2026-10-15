@@ -63,6 +63,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // colourblind S/M/H/I/W cues. VM + shell pins, < 0.2 s.
   "tests/unit/a11y-opts.test.mjs",
   "tests/unit/a11y-pwa-pass.test.mjs",
+  // css/a11y-text.css: data-text-scale multiplies menu/settings --fs-*.
+  "tests/unit/a11y-text.test.mjs",
   // 2026 aero defaults for catalog options that omit beam/drs/board (item 4).
   "tests/unit/aero-defaults-2026.test.mjs",
   "tests/unit/aero-flap-travel.test.mjs",

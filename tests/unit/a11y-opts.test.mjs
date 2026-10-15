@@ -116,10 +116,15 @@ test("shell declares ACCESSIBILITY door + empty panel; MOTION left Appearance", 
   assert.ok(MANIFEST.includes("js/ui/a11y-opts.js"));
 });
 
-test("export SPEC lists motion/focusRing/cbCues under a11y", () => {
+test("export SPEC lists motion/a11yTextScale/focusRing/cbCues under a11y", () => {
   assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"a11y"/);
+  assert.match(EXPORT, /k:\s*"a11yTextScale"[\s\S]*?group:\s*"a11y"/);
   assert.match(EXPORT, /k:\s*"focusRing"[\s\S]*?group:\s*"a11y"/);
   assert.match(EXPORT, /k:\s*"cbCues"[\s\S]*?group:\s*"a11y"/);
+});
+
+test("shell links a11y-text.css for menu/settings type scale", () => {
+  assert.match(SHELL, /href="css\/a11y-text\.css\?v=dev"/);
 });
 
 test("high focus is the default and stamps data-focus", () => {
@@ -128,6 +133,16 @@ test("high focus is the default and stamps data-focus", () => {
   assert.equal(html.dataset.focus, "high");
   A.setFocus("standard");
   assert.equal(html.dataset.focus, undefined);
+});
+
+test("text scale 100% by default; 150% stamps data-text-scale", () => {
+  const { html, A } = load({ readyState: "loading" });
+  assert.equal(A.textScale(), "100");
+  assert.equal(html.dataset.textScale, undefined);
+  A.setTextScale("150");
+  assert.equal(html.dataset.textScale, "150");
+  A.setTextScale("100");
+  assert.equal(html.dataset.textScale, undefined);
 });
 
 test("colourblind cues off by default; on stamps data-cb-cues", () => {
@@ -151,15 +166,18 @@ test("REDUCE MOTION AUTO follows OS; ON always; OFF overrides OS", () => {
   assert.equal(load({ stored: { motion: "on" } }).T.choice(), "auto", "legacy MOTION: ON → AUTO");
 });
 
-test("panel mounts three rows and wires them", () => {
+test("panel mounts four rows and wires them", () => {
   const { wired, ids, A, T } = load();
   assert.ok(ids.get("pm-motion"));
+  assert.ok(ids.get("pm-textscale"));
   assert.ok(ids.get("pm-focus"));
   assert.ok(ids.get("pm-cbcues"));
   const idsWired = wired.map((w) => w.id).sort();
-  assert.deepEqual(idsWired, ["pm-cbcues", "pm-focus", "pm-motion"]);
+  assert.deepEqual(idsWired, ["pm-cbcues", "pm-focus", "pm-motion", "pm-textscale"]);
   ids.get("pm-motion")._spec.write("reduce");
   assert.equal(T.choice(), "reduce");
+  ids.get("pm-textscale")._spec.write("125");
+  assert.equal(A.textScale(), "125");
   ids.get("pm-focus")._spec.write("standard");
   assert.equal(A.focusRing(), "standard");
   ids.get("pm-cbcues")._spec.write("on");

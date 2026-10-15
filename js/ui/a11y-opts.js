@@ -1,8 +1,10 @@
 /* Apex 26 — A11yOpts: SETTINGS › ACCESSIBILITY.
 
-   Three player preferences that are not "look" (Appearance) and not HUD:
+   Four player preferences that are not "look" (Appearance) and not HUD:
      * REDUCE MOTION — Auto / On / Off (TitleFx owns storage + html[data-motion];
        this module builds the row and wires it).
+     * TEXT SIZE — 100% / 125% / 150% (html[data-text-scale]); scales menu and
+       settings type via css/a11y-text.css without touching HUD digits.
      * KEYBOARD FOCUS — Standard / High (html[data-focus]); High thickens the
        :focus-visible ring on menus and settings.
      * COLOURBLIND CUES — Off / On (html[data-cb-cues]); adds S/M/H/I/W letters
@@ -16,9 +18,11 @@ const A11yOpts = (function () {
 
   const K_FOCUS = "focusRing";     // apex26.focusRing — "standard" | "high"
   const K_CB = "cbCues";           // apex26.cbCues — "off" | "on"
+  const K_TEXT_SCALE = "a11yTextScale"; // apex26.a11yTextScale — "100" | "125" | "150"
 
   const FOCUS = [["standard", "STANDARD"], ["high", "HIGH"]];
   const CB = [["off", "OFF"], ["on", "ON"]];
+  const TEXT_SCALE = [["100", "100%"], ["125", "125%"], ["150", "150%"]];
   // REDUCE MOTION labels (values are TitleFx's stored tokens).
   const MOTION = [["auto", "AUTO"], ["reduce", "ON"], ["off", "OFF"]];
 
@@ -33,7 +37,14 @@ const A11yOpts = (function () {
 
   let focusRing = oneOf(store.get(K_FOCUS, "high"), FOCUS, "high");
   let cbCues = oneOf(store.get(K_CB, "off"), CB, "off");
+  let textScale = oneOf(store.get(K_TEXT_SCALE, "100"), TEXT_SCALE, "100");
 
+  function applyTextScale() {
+    const el = root();
+    if (!el || !el.dataset) return;
+    if (textScale === "100") delete el.dataset.textScale;
+    else el.dataset.textScale = textScale;
+  }
   function applyFocus() {
     const el = root();
     if (!el || !el.dataset) return;
@@ -46,8 +57,15 @@ const A11yOpts = (function () {
     if (cbCues === "on") el.dataset.cbCues = "on";
     else delete el.dataset.cbCues;
   }
-  function apply() { applyFocus(); applyCb(); }
+  function apply() { applyTextScale(); applyFocus(); applyCb(); }
 
+  function setTextScale(v) {
+    textScale = oneOf(v, TEXT_SCALE, "100");
+    store.set(K_TEXT_SCALE, textScale);
+    applyTextScale();
+    if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint("pm-textscale", textScale);
+    return textScale;
+  }
   function setFocus(v) {
     focusRing = oneOf(v, FOCUS, "high");
     store.set(K_FOCUS, focusRing);
@@ -103,6 +121,13 @@ const A11yOpts = (function () {
     panel.appendChild(help("pm-motion-help",
       "AUTO follows your system preference. ON always reduces menu motion, camera shake and the pre-race flyby. OFF keeps motion even when the system asks to reduce it."));
 
+    const textSz = SettingRow.build("pm-textscale", "TEXT SIZE", TEXT_SCALE);
+    const textSel = textSz.row.querySelector("select");
+    if (textSel) textSel.setAttribute("aria-describedby", "pm-textscale-help");
+    panel.appendChild(textSz.row);
+    panel.appendChild(help("pm-textscale-help",
+      "Enlarges menu and settings text. Race HUD size is still under DISPLAY › HUD SIZE and APPEARANCE › TEXT SIZE."));
+
     const focus = SettingRow.build("pm-focus", "KEYBOARD FOCUS", FOCUS);
     const focusSel = focus.row.querySelector("select");
     if (focusSel) focusSel.setAttribute("aria-describedby", "pm-focus-help");
@@ -131,6 +156,9 @@ const A11yOpts = (function () {
         },
       });
     }
+    if (document.getElementById("pm-textscale")) {
+      SettingRow.wire("pm-textscale", { values: TEXT_SCALE, read: () => textScale, write: (v) => setTextScale(v) });
+    }
     if (document.getElementById("pm-focus")) {
       SettingRow.wire("pm-focus", { values: FOCUS, read: () => focusRing, write: (v) => setFocus(v) });
     }
@@ -151,11 +179,12 @@ const A11yOpts = (function () {
   }
 
   return Object.freeze({
-    K_FOCUS, K_CB, FOCUS, CB, MOTION,
+    K_FOCUS, K_CB, K_TEXT_SCALE, FOCUS, CB, TEXT_SCALE, MOTION,
     focusRing: () => focusRing,
     cbCues: () => cbCues,
+    textScale: () => textScale,
     cuesOn, compoundLetter,
-    setFocus, setCb, apply, applyFocus, applyCb,
+    setTextScale, setFocus, setCb, apply, applyTextScale, applyFocus, applyCb,
     initUI, wireRows, mountPanel,
   });
 })();

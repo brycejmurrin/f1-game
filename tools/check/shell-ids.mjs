@@ -73,6 +73,7 @@ export const RUNTIME_IDS = {
   "pm-halo":           "cockpit-opts builds its rows from a table whose entries carry `id`",
   "pm-looklatch":      "CamFeel SettingRow.build LOOK BACK LATCH; getElementById is the mount-once guard",
   "pm-motion":         "a11y-opts SettingRow.build REDUCE MOTION; getElementById is the mount-once guard",
+  "pm-textscale":      "a11y-opts SettingRow.build TEXT SIZE; getElementById is the mount-once guard",
   "pm-focus":          "a11y-opts SettingRow.build KEYBOARD FOCUS; getElementById is the mount-once guard",
   "pm-cbcues":         "a11y-opts SettingRow.build COLOURBLIND CUES; getElementById is the mount-once guard",
   "pm-xr-mode":        "xr-opts SettingRow.build creates VR MODE / VR RENDERER rows; the getElementById is the mount-once guard",

@@ -411,7 +411,7 @@ const CSS = [
   "css/settings-controls.css", "css/dialog-platform.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
   "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
-  "css/loading.css", "css/responsive.css",
+  "css/loading.css", "css/responsive.css", "css/a11y-text.css",
   "css/track-detail.css",   // link order == original style.css source order (cascade-preserving)
   "css/career.css",
   "css/data.css",
@@ -443,6 +443,7 @@ const CSS_DEFERRED = [
   "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css",
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
   "css/dialog-platform.css", "css/select.css", "css/race-setup.css",
+  "css/a11y-text.css",
 ];
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.

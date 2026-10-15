@@ -1,0 +1,77 @@
+@layer components {
+/* Apex 26 — Accessibility TEXT SIZE (js/ui/a11y-opts.js). */
+
+:root[data-text-scale="125"] { --a11y-text-mul: 1.25; }
+:root[data-text-scale="150"] { --a11y-text-mul: 1.5; }
+
+:root[data-text-scale] #overlay,
+:root[data-text-scale] #pmsettings {
+  --fs-micro: calc(var(--fs-micro) * var(--a11y-text-mul));
+  --fs-2: calc(var(--fs-2) * var(--a11y-text-mul));
+  --fs-3: calc(var(--fs-3) * var(--a11y-text-mul));
+  --fs-4: calc(var(--fs-4) * var(--a11y-text-mul));
+  --fs-5: calc(var(--fs-5) * var(--a11y-text-mul));
+  --fs-6: calc(var(--fs-6) * var(--a11y-text-mul));
+}
+:root[data-text-scale] #select,
+:root[data-text-scale] #carsetup,
+:root[data-text-scale] #race-settings {
+  --fs-micro: calc(var(--fs-micro) * var(--a11y-text-mul));
+  --fs-2: calc(var(--fs-2) * var(--a11y-text-mul));
+  --fs-3: calc(var(--fs-3) * var(--a11y-text-mul));
+  --fs-4: calc(var(--fs-4) * var(--a11y-text-mul));
+  --fs-5: calc(var(--fs-5) * var(--a11y-text-mul));
+  --fs-6: calc(var(--fs-6) * var(--a11y-text-mul));
+}
+:root[data-text-scale] #howtoplay,
+:root[data-text-scale] #pausemenu,
+:root[data-text-scale] #datahub {
+  --fs-micro: calc(var(--fs-micro) * var(--a11y-text-mul));
+  --fs-2: calc(var(--fs-2) * var(--a11y-text-mul));
+  --fs-3: calc(var(--fs-3) * var(--a11y-text-mul));
+  --fs-4: calc(var(--fs-4) * var(--a11y-text-mul));
+  --fs-5: calc(var(--fs-5) * var(--a11y-text-mul));
+  --fs-6: calc(var(--fs-6) * var(--a11y-text-mul));
+}
+:root[data-text-scale] #customize,
+:root[data-text-scale] #teampicker,
+:root[data-text-scale] #career {
+  --fs-micro: calc(var(--fs-micro) * var(--a11y-text-mul));
+  --fs-2: calc(var(--fs-2) * var(--a11y-text-mul));
+  --fs-3: calc(var(--fs-3) * var(--a11y-text-mul));
+  --fs-4: calc(var(--fs-4) * var(--a11y-text-mul));
+  --fs-5: calc(var(--fs-5) * var(--a11y-text-mul));
+  --fs-6: calc(var(--fs-6) * var(--a11y-text-mul));
+}
+:root[data-text-scale] #advanced,
+:root[data-text-scale] #vsfriend,
+:root[data-text-scale] #audioset {
+  --fs-micro: calc(var(--fs-micro) * var(--a11y-text-mul));
+  --fs-2: calc(var(--fs-2) * var(--a11y-text-mul));
+  --fs-3: calc(var(--fs-3) * var(--a11y-text-mul));
+  --fs-4: calc(var(--fs-4) * var(--a11y-text-mul));
+  --fs-5: calc(var(--fs-5) * var(--a11y-text-mul));
+  --fs-6: calc(var(--fs-6) * var(--a11y-text-mul));
+}
+:root[data-text-scale] #lighting,
+:root[data-text-scale] #camtune,
+:root[data-text-scale] #track-detail {
+  --fs-micro: calc(var(--fs-micro) * var(--a11y-text-mul));
+  --fs-2: calc(var(--fs-2) * var(--a11y-text-mul));
+  --fs-3: calc(var(--fs-3) * var(--a11y-text-mul));
+  --fs-4: calc(var(--fs-4) * var(--a11y-text-mul));
+  --fs-5: calc(var(--fs-5) * var(--a11y-text-mul));
+  --fs-6: calc(var(--fs-6) * var(--a11y-text-mul));
+}
+:root[data-text-scale] #quali,
+:root[data-text-scale] #standings,
+:root[data-text-scale] #results,
+:root[data-text-scale] #photomode {
+  --fs-micro: calc(var(--fs-micro) * var(--a11y-text-mul));
+  --fs-2: calc(var(--fs-2) * var(--a11y-text-mul));
+  --fs-3: calc(var(--fs-3) * var(--a11y-text-mul));
+  --fs-4: calc(var(--fs-4) * var(--a11y-text-mul));
+  --fs-6: calc(var(--fs-6) * var(--a11y-text-mul));
+  --fs-5: calc(var(--fs-5) * var(--a11y-text-mul));
+}
+}
