@@ -55,7 +55,7 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
-  "kerbSndT", "kerbHapT",
+  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking",
   // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
   // the node window; refilled lazily by updateCarBrakePlan, so a cold car is
   // simply without it (CarFields predeclares it undefined).
