@@ -61,8 +61,9 @@ export const SCOPED = {
   "test:vm-page": null,   // derived: adaptedGroups()
 };
 
-/** Always-on riders on the vm-b1 arm (ci.yml). Not guarded by `planned()` —
- *  seconds each — but ~55 of their files also sit in tooling-fast (guards),
+/** Always-on riders on the vm-a1 / vm-a2 / slow arms (ci.yml; on vm-b1 until
+ *  2026-10-15 — pick-unit-slices SLICE_SCRIPTS says which arm runs which).
+ *  Not guarded by `planned()` — but ~55 of their files also sit in tooling-fast (guards),
  *  so a PR billed them twice (docs/notes/CI-CAPACITY-2026-09-29.md). On a
  *  matched PR plan those tooling-fast files are dropped via run-group.mjs
  *  `--skip-tf`; onlyHere files and every deploy/Pages/nightly run stay. */
