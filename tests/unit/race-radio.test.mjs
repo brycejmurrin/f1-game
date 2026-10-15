@@ -1437,7 +1437,7 @@ test("engineer OFF clears refused pending urgent copy before chatter is re-enabl
 test("engineer chatter changes preserve accepted WATCH commentary and valid non-OFF modes", () => {
   const w = watch(), accepted = [];
   w.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, still }); return true; };
-  w.step(.1); w.radio.replayEvent({ kind: "sc", level: 3 }); w.step(.1);
+  w.G._caution = 3; w.step(.1); w.radio.replayEvent({ kind: "sc", level: 3 }); w.step(.1);
   const tv = accepted[0]; assert.ok(tv); assert.equal(tv.still(), true);
   w.radio.setChat("off"); w.radio.setChat("chatty");
   assert.equal(tv.still(), true, "TV and race-control commentary retain their own setting/generation");
