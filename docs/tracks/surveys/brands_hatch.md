@@ -18,7 +18,7 @@
 
 ## Capture method
 
-36 headless JPEG frames (1280 px wide, q≈80) under `artifacts/shots/tracks/brands_hatch/`, captured via `scratch/brands-hatch-capture.mjs` + `track-session.mjs`. Weather via `__apex.race(track, tod, wx)`.
+36 JPEG frames (`shot.mjs --batch`, SwiftShader, `--jpeg --present-timeout 90 --capture-retries 4 --wait 120`), 1280 px wide, ≤300 KB each. Weather via `--weather` (`dry`, `wet`, `rain`, `overcast`, `fog`, `storm`); time via `--tod` (`day`, `dawn`, `dusk`, `night`).
 
 ---
 
@@ -38,7 +38,7 @@ Sector splits from def: S1 `s` 0–27%, S2 27–70.3%, S3 70.3–100%.
 | | | |
 |---|---|---|
 | ![Graham Hill — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-01-graham-hill-day-dry.jpg)<br>**Graham Hill** · trackside · day · dry | ![Cooper — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-02-cooper-day-dry.jpg)<br>**Cooper Straight** · orbit · day · dry | ![Surtees — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-03-surtees-day-dry.jpg)<br>**Surtees exit** · trackside · day · dry |
-| ![Pilgrims bridge — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-04-pilgrims-bridge-day-dry.jpg)<br>**Pilgrims Drop** · orbit · day · dry | ![Hawthorn — eye, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-05-hawthorn-day-dry.jpg)<br>**Hawthorns (woods)** · eye · day · dry | ![Westfield — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-06-westfield-day-dry.jpg)<br>**Westfield** · trackside · day · dry |
+| ![Pilgrims — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-04-pilgrims-bridge-day-dry.jpg)<br>**Pilgrims Drop** · orbit · day · dry | ![Hawthorn — eye, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-05-hawthorn-day-dry.jpg)<br>**Hawthorns** · eye · day · dry | ![Westfield — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-06-westfield-day-dry.jpg)<br>**Westfield** · trackside · day · dry |
 | ![Dingle Dell — cinematic, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-07-dingle-dell-day-dry.jpg)<br>**Dingle Dell** · cinematic · day · dry | | |
 
 ### Sector 3 — Sheene, Stirlings, Clark
@@ -52,35 +52,36 @@ Sector splits from def: S1 `s` 0–27%, S2 27–70.3%, S3 70.3–100%.
 
 ## Weather & lighting (hero views)
 
-Hero landmarks with alternate **time of day** and **weather**. Circuit `night: false`, `lamp: "none"` — night frames use default sky only.
+Hero landmarks: pit straight, Paddock Hill, Druids, Dingle Dell, Clark. Circuit `night: false`, `lamp: "none"` — night is sky-only (no floodlit stands).
 
 ### Pit straight / Brabham
 
 | | | |
 |---|---|---|
-| ![Pit — orbit, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-pit-dusk-dry.jpg)<br>**Pit straight** · orbit · dusk · dry | ![Pit — orbit, dawn, dry](../../../artifacts/shots/tracks/brands_hatch/hero-pit-dawn-dry.jpg)<br>**Pit straight** · orbit · dawn · dry | ![Pit — orbit, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-pit-night-dry.jpg)<br>**Pit straight** · orbit · night · dry |
-| ![Pit — orbit, day, overcast](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-overcast.jpg)<br>**Pit straight** · orbit · day · overcast | ![Pit — orbit, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-rain.jpg)<br>**Pit straight** · orbit · day · rain | ![Pit — orbit, day, fog](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-fog.jpg)<br>**Pit straight** · orbit · day · fog |
+| ![Pit — orbit, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-pit-dusk-dry.jpg)<br>**Pit straight** · orbit · dusk · dry | ![Pit — orbit, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-pit-night-dry.jpg)<br>**Pit straight** · orbit · night · dry | ![Pit — orbit, day, overcast](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-overcast.jpg)<br>**Pit straight** · orbit · day · overcast |
+| ![Pit — orbit, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-rain.jpg)<br>**Pit straight** · orbit · day · rain | ![Pit — orbit, day, fog](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-fog.jpg)<br>**Pit straight** · orbit · day · fog | ![Pit — orbit, day, wet](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-wet.jpg)<br>**Pit straight** · orbit · day · wet |
+| ![Pit — orbit, day, storm](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-storm.jpg)<br>**Pit straight** · orbit · day · storm | | |
 
 ### Paddock Hill
 
 | | | |
 |---|---|---|
-| ![Paddock Hill — trackside, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-dusk-dry.jpg)<br>**Paddock Hill** · trackside · dusk · dry | ![Paddock Hill — trackside, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-night-dry.jpg)<br>**Paddock Hill** · trackside · night · dry | ![Paddock Hill — trackside, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-day-rain.jpg)<br>**Paddock Hill** · trackside · day · rain |
-| ![Paddock Hill — trackside, day, overcast](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-day-overcast.jpg)<br>**Paddock Hill** · trackside · day · overcast | | |
+| ![Paddock — trackside, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-dusk-dry.jpg)<br>**Paddock Hill** · trackside · dusk · dry | ![Paddock — trackside, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-night-dry.jpg)<br>**Paddock Hill** · trackside · night · dry | ![Paddock — trackside, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-day-rain.jpg)<br>**Paddock Hill** · trackside · day · rain |
+| ![Paddock — trackside, day, overcast](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-day-overcast.jpg)<br>**Paddock Hill** · trackside · day · overcast | | |
 
 ### Druids & Dingle Dell
 
 | | | |
 |---|---|---|
 | ![Druids — orbit, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-druids-dusk-dry.jpg)<br>**Druids** · orbit · dusk · dry | ![Druids — orbit, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-druids-night-dry.jpg)<br>**Druids** · orbit · night · dry | ![Druids — orbit, day, fog](../../../artifacts/shots/tracks/brands_hatch/hero-druids-day-fog.jpg)<br>**Druids** · orbit · day · fog |
-| ![Dingle Dell — cinematic, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-dusk-dry.jpg)<br>**Dingle Dell** · cinematic · dusk · dry | ![Dingle Dell — cinematic, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-night-dry.jpg)<br>**Dingle Dell** · cinematic · night · dry | ![Dingle Dell — cinematic, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-day-rain.jpg)<br>**Dingle Dell** · cinematic · day · rain |
-| ![Dingle Dell — cinematic, day, overcast](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-day-overcast.jpg)<br>**Dingle Dell** · cinematic · day · overcast | | |
+| ![Dingle — cinematic, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-dusk-dry.jpg)<br>**Dingle Dell** · cinematic · dusk · dry | ![Dingle — cinematic, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-night-dry.jpg)<br>**Dingle Dell** · cinematic · night · dry | ![Dingle — cinematic, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-day-rain.jpg)<br>**Dingle Dell** · cinematic · day · rain |
+| ![Dingle — cinematic, day, storm](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-day-storm.jpg)<br>**Dingle Dell** · cinematic · day · storm | | |
 
 ### Clark Curve
 
 | | | |
 |---|---|---|
-| ![Clark — trackside, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-clark-dusk-dry.jpg)<br>**Clark Curve** · trackside · dusk · dry | ![Clark — trackside, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-clark-day-rain.jpg)<br>**Clark Curve** · trackside · day · rain | |
+| ![Clark — trackside, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-clark-day-rain.jpg)<br>**Clark Curve** · trackside · day · rain | | |
 
 ---
 
@@ -88,40 +89,39 @@ Hero landmarks with alternate **time of day** and **weather**. Circuit `night: f
 
 | ID | Severity | Topic | Evidence |
 |---|---|---|---|
-| F1 | Low | Car park cars buried on steep banking | `ground-audit` had 2× buried @ `carPark` line 113 (≤1.3 m); tightened `terrainYAt` skip to 0.28 m |
+| F1 | Low | Car park cars buried on steep banking | `ground-audit` had 2× buried @ `carPark` line 113; tightened `terrainYAt` skip to 0.28 m |
 | F2 | Low | Kentagon terrace hut buried | `house` @ `sl(0.008)`; added grade check before emit |
-| F3 | Low | Chalk/worn patch overlap | Duplicate chalk @ `s=0.030` overlapped worn path @ 0.030/22 m; removed chalk row |
-| F4 | Baseline | Prop clip ≥1 m | `clip-audit`: 1 severe @ frac ~0.943 (`addFrustum` pair) — at retail/entrance frontage; unchanged (at cap) |
-| F5 | Baseline | Coplanar ground patches | 3 flatCoplanar spots (worn vs bar decking); within baseline |
-| F6 | Info | Tree guard drops | `verify-track`: 339 trees + 1 mountain suppressed (tight bowl / cross-loop clearance) |
-| F7 | Weather | Night lighting | `night: false`, no lamp furniture — night shots read as unlit bowl; expected until lighting pass |
-| F8 | Weather | Rain/fog | Wet road + particles OK; no circuit-specific night lamps to validate |
-| F9 | Perf | Prop budget | ~326k prop tris post-strip; heavy but within fleet ratchet; SwiftShader ~15–25 s/frame |
+| F3 | Low | Chalk/worn patch overlap | Removed duplicate chalk @ `s=0.030` |
+| F4 | Baseline | Prop clip ≥1 m | `clip-audit`: 1 severe @ frac ~0.943; unchanged (at cap) |
+| F5 | Baseline | Coplanar ground patches | 3 flatCoplanar spots; within baseline |
+| F6 | Info | Tree guard drops | `verify-track`: 339 trees + 1 mountain suppressed |
+| F7 | Weather | Night lighting | `night: false`, no lamps — night frames unlit bowl |
+| F8 | Weather | Storm/wet | `hero-pit-day-storm`, `hero-pit-day-wet`, `hero-dingle-day-storm` via `shot.mjs --weather` |
 
-**Visual read (day dry):** Bowl amphitheatre, named stands, Kentagon silhouette, woods contrast on GP loop, Paddock Hill drop reads well. No road surface folds. Minor z-fight risk on overlapping asphalt patches at Paddock Hill bar (F5).
+**Visual read (day dry):** Bowl amphitheatre, named stands, Kentagon, woods contrast, Paddock Hill drop. No surface folds.
 
 ---
 
 ## Ranked improvements (backlog)
 
-1. **Clip at Clark/pit frontage (~0.943)** — triage severe pair; likely trim tree belt or shift entrance `building` @ `sl(1.014)` (engine-safe spacing).
-2. **Night / lamps** — if MSV night events matter, enable `night: true` + targeted `lampPost` on pit straight only (needs lighting-tuner; def change).
-3. **Coplanar worn vs decking** — merge `groundPatch` spans @ Paddock Hill bar (`0.030`/`0.042`) into one patch.
-4. **Woods thinning at Stirlings** — optional density tweak in `every(14)` fourth rank as bowl reopens (visual only).
+1. Clip at Clark/pit frontage (~0.943) — baseline cap; spacing tweak on entrance row.
+2. Night lamps if MSV night events matter (`night: true` + lighting-tuner).
+3. Coplanar worn vs decking at Paddock Hill bar.
+4. Woods thinning at Stirlings reopening.
 
 ---
 
 ## Fixes applied (this PR)
 
-- `carPark`: stricter slope filter (`0.35` → `0.28` m) — **buried/unsupported car clusters 0**.
+- `carPark`: stricter slope filter — buried/unsupported **0**.
 - Kentagon terrace `house`: `terrainYAt` footing guard.
-- Removed redundant chalk `groundPatch` at `s=0.030` (overlap with worn path).
+- Removed overlapping chalk `groundPatch` at `s=0.030`.
 
 ## Verification
 
 ```
 node tools/track/verify-track.cjs brands_hatch   → OK
-node tools/track/audit-circuit.cjs brands_hatch → ok (6 checks); ground buried 0 unsupported 0
+node tools/track/audit-circuit.cjs brands_hatch → ok (6 checks)
 ```
 
-Foundation spec not run this session (scenery-only); run `node tools/ci/pick-tests.mjs` before ready.
+Foundation spec not run; run `pick-tests` before ready.
