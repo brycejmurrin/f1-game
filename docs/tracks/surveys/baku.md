@@ -1,6 +1,7 @@
 # Baku City Circuit — survey (2026-10-14)
 
-**Branch:** `cursor/baku-survey-e759` (rebased on shared shot tooling) · **Shots:** 36 JPEGs in `artifacts/shots/tracks/baku/`
+**Branch:** `cursor/baku-survey-e759` (on shared shot tooling) · **Live:** https://brycejmurrin.github.io/f1-game/  
+**Theme:** `street_night` · **Shots:** 36 JPEGs in `artifacts/shots/tracks/baku/`
 
 ## Audits
 
@@ -53,14 +54,13 @@ node tools/track/audit-circuit.cjs baku
 | ![castle night](../../../artifacts/shots/tracks/baku/lt-castle-night-dry-park.jpg)<br>**Castle squeeze** · dry · **night** · park | ![straight dusk](../../../artifacts/shots/tracks/baku/lt-straight-dusk-dry-park.jpg)<br>**Mid straight** · dry · **dusk** · park | ![straight night](../../../artifacts/shots/tracks/baku/lt-straight-night-dry-park.jpg)<br>**Mid straight** · dry · **night** · park |
 | ![straight dawn](../../../artifacts/shots/tracks/baku/lt-straight-dawn-dry-park.jpg)<br>**Mid straight** · dry · **dawn** · park | | |
 
-## Weather / lighting notes (from frames)
+## Weather / lighting notes
 
 | Issue | Where | Notes |
 |--------|--------|--------|
 | Wet sheen on tarmac | `wx-*-wet`, `wx-*-rain` | Readable on straight; castle walls stay matte |
 | Fog / storm horizon | `wx-*-fog`, `wx-*-storm` | Caspian void collapses to flat grey; Flame LED bands still visible |
 | Forced **day** on `street_night` | `sec-*-day` | Lamps/neon subdued vs **night** / **dusk** panels |
-| Night park camera | `lt-*-night` park | Chase cam; orbit used where park timed out previously |
 
 ## Scenery fixes (branch)
 
