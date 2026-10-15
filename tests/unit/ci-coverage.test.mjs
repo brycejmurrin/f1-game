@@ -187,7 +187,7 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // so an event test alone would skip the plan on every deploy.
   // `schedule` too: the nightly's change-aware lane (every spec the last day
   // of merges routed; tools/ci/ci-resolve-before.sh).
-  assert.match(selectJob, /if: \$\{\{ inputs\.smoke_only != true && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| github\.event_name == 'merge_group' \|\| inputs\.concurrency_key != ''\) \}\}/);
+  assert.match(selectJob, /if: \$\{\{ \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| inputs\.concurrency_key != ''\) \}\}/);
   assert.doesNotMatch(selectJob, /inputs\.concurrency_key == ''/, "the plan must never exclude the deploy gate");
   assert.doesNotMatch(selectJob + selectedJob, /^    continue-on-error:/m);
   // The runner consumes the plan as a matrix and takes its cap per shard.
@@ -205,7 +205,7 @@ test("selection resolves the event-specific base and fails closed when it cannot
   // A direct push still resolves against the push's before; a Pages call
   // substitutes the train's live commit (asserted in the Pages-call test).
   assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/);
-  assert.match(selectJob, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.merge_group\.base_sha \}\}/);
+  assert.match(selectJob, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   // Base resolution is delegated to ci-select-specs-step.sh -> ci-resolve-before.sh (HEAD~1 fallback).
   assert.match(selectJob, /ci-select-specs-step\.sh/);
   assert.match(selectStep, /ci-resolve-before\.sh/);
@@ -252,7 +252,9 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
     assert.equal(resolve({ EVENT: "push", PUSH_BEFORE: "" }).stdout, first, "CALLED unset is not a Pages call");
     assert.notEqual(resolve({ EVENT: "push", PUSH_BEFORE: bogus }).status, 0);
     assert.equal(resolve({ EVENT: "pull_request", PR_BASE: first }).stdout, first);
-    assert.equal(resolve({ EVENT: "merge_group", PR_BASE: first }).stdout, first);
+    // merge_group left with the trigger (2026-10-14): an event the resolver
+    // does not know fails CLOSED, never resolves to a guess.
+    assert.notEqual(resolve({ EVENT: "merge_group", PR_BASE: first }).status, 0, "an unknown event fails closed");
     // The empty tree is a base the selector can diff against: every tracked file changed.
     assert.equal(g("diff", "--name-only", EMPTY_TREE), "a");
   } finally {
@@ -289,7 +291,8 @@ test("docs-guards.yml and ci.yml both run on every pull request; the prose list 
   const pushIgnore = listAfter(onBlock, "paths-ignore");
   assert.ok(pushIgnore.list.length >= 3, `ci.yml push paths-ignore parsed to ${pushIgnore.list.length} entries`);
   assert.ok(pushIgnore.at < onBlock.indexOf("  pull_request:"), "the one paths-ignore list must be the push one");
-  const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  merge_group:"));
+  const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
+  assert.ok(prBlock.includes("types: [opened, synchronize, reopened, ready_for_review]"), "the pull_request block was sliced whole");
   assert.doesNotMatch(prBlock, /paths(-ignore)?:/,
     "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required checks");
   const docsOn = docsWorkflow.slice(docsWorkflow.indexOf("\non:"), docsWorkflow.indexOf("\npermissions:"));
@@ -322,7 +325,7 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
   assert.match(body, /run: node tools\/ci\/ci-verdict\.mjs/);
   assert.match(body, /NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
-  for (const j of ["guards", "unit-plan", "node-suites", "smoke", "selected", "baseline-trial", "poke-train"]) {
+  for (const j of ["guards", "unit-plan", "node-suites", "smoke", "selected", "baseline-trial"]) {
     assert.match(body, new RegExp(`- ${j}\\b`), `ci-verdict must need ${j}`);
   }
   // 2026-10-04: CI needed `selected` and not `selected-verdict`, so a plan
@@ -333,10 +336,27 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   // loses no rule (the API showed 12 fast-tier names on 2026-10-04).
   const parsed = parseYAML(ciWorkflow);
   const needs = new Set(parsed.jobs["ci-verdict"].needs);
+  // ONE exemption, by name and with its reason (Actions audit C2, 2026-10-14):
+  // poke-train is the train's dispatcher, not a verdict. It runs only on a
+  // deploy-branch push (whose CI check gates no merge) and itself needs the
+  // verdict jobs; CI waiting on it delayed the run's `completed` that the
+  // poked train's reuse check looks for. Its red still fails the RUN.
+  const NOT_A_VERDICT = new Set(["poke-train"]);
   for (const [id, job] of Object.entries(parsed.jobs)) {
     if (id === "ci-verdict") continue;
+    if (NOT_A_VERDICT.has(id)) {
+      assert.ok(!needs.has(id), `${id} is exempt because CI must not wait on it`);
+      continue;
+    }
     assert.ok(needs.has(id), `job ${id} (${job.name || id}) does not feed CI — a red there would pass the required check`);
   }
+  // The exemption stays honest: poke-train gates on the same verdicts CI reads,
+  // and only ever runs on a deploy-branch push.
+  const poke = parsed.jobs["poke-train"];
+  for (const j of ["guards", "node-suites", "sweeps-parts", "driving-model", "select", "selected"]) {
+    assert.ok(poke.needs.includes(j), `poke-train must still need ${j}`);
+  }
+  assert.match(poke.if, /github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && inputs\.concurrency_key == ''/);
 });
 
 test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once per run", () => {
@@ -397,23 +417,6 @@ test("unit-plan feeds the node-suites matrix and can skip unused slices", () => 
   const driving = (ciWorkflow.split("\n  driving-model:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(driving, /needs: \[unit-plan, reuse-draft\]/);
   assert.match(driving, /needs\.unit-plan\.outputs\.driving == 'true'/);
-});
-
-test("gallery:tracks is path-gated (gallery-filter → gallery-build) and feeds ci-verdict", () => {
-  const filter = (ciWorkflow.split("\n  gallery-filter:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.ok(filter, "gallery-filter job missing");
-  assert.match(filter, /artifacts\/shots\/tracks\//);
-  assert.match(filter, /docs\/tracks\//);
-  assert.match(filter, /outputs:\s*\n\s*gallery:/);
-  const build = (ciWorkflow.split("\n  gallery-build:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.ok(build, "gallery-build job missing");
-  assert.match(build, /needs: gallery-filter/);
-  assert.match(build, /needs\.gallery-filter\.outputs\.gallery == 'true'/);
-  assert.match(build, /npm run gallery:tracks/);
-  assert.match(build, /circuit-survey-gallery/);
-  const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.match(body, /- gallery-filter\b/);
-  assert.match(body, /- gallery-build\b/);
 });
 
 test("test:xr is path-gated (xr-filter → xr) and feeds ci-verdict", () => {
@@ -598,7 +601,8 @@ test("a Pages run reuses a gate that already passed on the SAME tree, and only t
   assert.match(verdict, /fetch-depth: 0/, "the parents' trees are the question; a shallow clone has no parents");
   assert.match(verdict, /tools\/ci\/pages-reuse-verdict\.sh "\$GITHUB_SHA" >> "\$GITHUB_OUTPUT"/);
   assert.match(ciJob, /needs: verdict/);
-  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && \(needs\.verdict\.outputs\.reuse != 'true' \|\| needs\.verdict\.outputs\.ship_only == 'true'\)/, "the gate runs unless nothing is new, or ship_only reuses the exact-SHA fast tier with smoke");
+  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && needs\.verdict\.outputs\.reuse != 'true'$/m, "the gate runs unless nothing is new or an earlier gate on this tree is reused");
+  assert.doesNotMatch(pagesWorkflow, /ship_only|smoke_only/, "the smoke-only ship path is gone (always false since 2026-10-07)");
   assert.match(preflight, /needs: \[verdict, ci\]/);
   assert.match(preflight, /needs\.ci\.result == 'success' \|\| \(needs\.ci\.result == 'skipped' && needs\.verdict\.outputs\.reuse == 'true'\)/,
     "a skipped gate is acceptable only when the verdict reused an earlier pass; failed or cancelled must still stop the run");
@@ -646,7 +650,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   ].map(([name, conclusion]) => ({ name: prefix + name, status: "completed", conclusion: name in over ? over[name] : conclusion }));
   const fullJobs = {
     7: gateJobs(),
-    // Pages run 3112 (37689226760): ship_only smoke, sweeps/selection/guards skipped.
+    // Pages run 3112 (37689226760): smoke-only, sweeps/selection/guards skipped.
     9: gateJobs("ci / ", { "Per-circuit geometry sweeps": "skipped", "Selected specs (verdict)": "skipped", "Structural guards": "skipped" }),
     // A Pages run that itself reused an earlier pass: no ci jobs at all.
     10: [{ name: "Anything new, and was this exact tree already gated?", conclusion: "success" }, { name: "publishable", conclusion: "success" }, { name: "deploy", conclusion: "success" }],
@@ -669,29 +673,30 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), ...env },
   }).trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
 
-  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "", ship_only: "false" },
+  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
-  assert.equal(verdict(M2, { [D]: [run({ event: "merge_group" })] }).reuse, "true", "a merge_group run is a full gate");
+  // ci.yml has no merge_group trigger (2026-10-14), so such a run is not one of its gates.
+  assert.equal(verdict(M2, { [D]: [run({ event: "merge_group" })] }).reuse, "false", "a merge_group run is not a ci.yml gate any more");
   // A DRAFT PR's run is the fast tier (sweeps and smoke skipped) and concludes
   // success all the same: never a gate, and a real gate after it still counts.
   assert.equal(verdict(M2, { [D]: [run({ id: 8 })] }).reuse, "false", "a draft PR run (sweeps skipped) is not a gate");
-  assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "", ship_only: "false" },
+  assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
     "…the ready run beside it is");
   // THE FAST TIER IS NOT A GATE. Run 2237 reused the merge commit's own
   // deploy-branch push run (guards + node suites only) as if it were the full
   // gate; the head_sha candidate is checked first, so this must be rejected
   // before the parent's real run is even looked at.
   assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })], [D]: [run()] }),
-    { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "7", ship_only: "false" },
+    { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "7" },
     "a deploy-branch push run (fast tier) must be skipped in favour of the parent's full run — and remembered as fast_run");
   // Pages run 3112 (37689226760, 2026-10-07) published 61e0a6442 on its own
   // green ship fast tier as smoke-only, after dispatch 3110 (37687308660) had
   // FAILED the full gate on that tree. The fast tier is never a gate: the
   // full gate runs, reusing only the fast tier's tree-only jobs.
   assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })] }),
-    { reuse: "false", source: "", run: "", fast_run: "7", ship_only: "false" },
-    "an exact-SHA ship fast tier alone runs the gate (fast_run named, ship_only never)");
+    { reuse: "false", source: "", run: "", fast_run: "7" },
+    "an exact-SHA ship fast tier alone runs the gate (fast_run named, no smoke-only shortcut)");
   assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" }), run({ id: 99, path: ".github/workflows/pages.yml", event: "workflow_dispatch", conclusion: "failure" })] }).reuse, "false",
     "a failed Pages gate beside a green fast tier on the same sha: the gate runs again");
   // A successful run is not proof the gate RAN: the CI aggregator passes skipped jobs.
@@ -704,10 +709,9 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 12, path: ".github/workflows/pages.yml", event: "schedule" })] }).reuse, "false",
     "a cancelled smoke shard is not a pass");
   assert.equal(verdict(M2, { [D]: [run({ id: 13 })] }).reuse, "false", "a skipped selected verdict is not a pass");
-  assert.equal(verdict(M2, { [D]: [run({ id: 14, event: "merge_group" })] }).reuse, "false", "merge_group needs its gate jobs too (no jobs on record: not a gate)");
   // T1: the poking run is in progress when the train starts; its tree-only jobs count.
   assert.deepEqual(verdict(M2, { [M2]: [run({ id: 20, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }),
-    { reuse: "false", source: "", run: "", fast_run: "20", ship_only: "false" },
+    { reuse: "false", source: "", run: "", fast_run: "20" },
     "an IN-PROGRESS exact-sha fast tier whose tree-only jobs all passed is fast_run (71 of 82 poked trains re-ran them)");
   assert.equal(verdict(M2, { [M2]: [run({ id: 21, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }).fast_run, "",
     "a node suite still running: not reused");
@@ -740,7 +744,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 99 })] }, { GITHUB_RUN_ID: "99" }).reuse, "false", "a run never reuses itself");
   assert.equal(verdict(M1, { [B]: [run()], [C]: [run({ path: ".github/workflows/pages.yml", event: "push" })] }).reuse, "false",
     "both parents green but the merge tree is new: the gate runs");
-  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7", fast_run: "", ship_only: "false" },
+  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7", fast_run: "" },
     "a fast-forwarded commit with its own green push run: reuse");
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
@@ -1200,7 +1204,7 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   // dispatch remain. The `!inputs.concurrency_key` term is what
   // tools/ci/ci-coverage.mjs reads to keep both jobs out of the deploy gate;
   // it has to stay first.
-  assert.match(rendererFilter, /if: \$\{\{ inputs\.smoke_only != true && !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
+  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
   assert.match(rendererJob, /^    needs: renderer-filter$/m);
   assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\)/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      renderer_macos:\n(?:.*\n)*?        type: boolean\n(?:.*\n)*?        default: false\n/,
@@ -1208,8 +1212,8 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   assert.equal(report.rendererGate.deployGate, false,
     "renderer-macos joined the deploy gate — pages.yml aggregates every job in ci.yml, so this must be deliberate");
   assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(),
-    ["gallery-build", "gallery-filter", "renderer-filter", "renderer-macos", "xr", "xr-filter"],
-    "jobs outside the deploy gate: renderer-*, path-gated xr, and track-survey gallery");
+    ["renderer-filter", "renderer-macos", "xr", "xr-filter"],
+    "jobs outside the deploy gate: renderer-* and the path-gated xr suite");
   // The path filter: every renderer backend plus the lighting modules the
   // gfx specs pin, the spec list DERIVED from package.json, fail-safe to run.
   // js/lighting/ as a DIRECTORY, not the six filenames this listed until
@@ -1365,10 +1369,10 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const wf = parseYAML(gpuWorkflow);
   const inputs = wf.on.workflow_dispatch.inputs;
   // Appended last: every earlier input keeps its name, position and default.
-  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam"]);
+  assert.deepEqual(Object.keys(inputs), ["track", "images", "census_only", "force", "ls", "clock", "tod", "cam", "entry"]);
   assert.equal(inputs.track.default, "montreal"); assert.equal(inputs.clock.default, "12"); assert.equal(inputs.tod.default, "");
   assert.equal(inputs.cam.type, "choice");
-  assert.deepEqual(inputs.cam.options, ["helmet", "chase"]);
+  assert.deepEqual(inputs.cam.options, ["helmet", "chase", "chase>cockpit"]);
   assert.equal(inputs.cam.default, "helmet", "the default is the game's own camera, so a default dispatch measures what it did before");
   assert.ok(Object.keys(inputs).length <= 25, "GitHub caps workflow_dispatch at 25 inputs");
   const plan = wf.jobs.plan;
@@ -1389,6 +1393,8 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   const chase = camOf({ INPUT_CAM: "chase" });
   if (chase !== null) {
     assert.equal(chase, "chase");
+    assert.equal(camOf({ INPUT_CAM: "chase>cockpit" }), "chase>cockpit");
+    assert.equal(camOf({ INPUT_CAM: "chase>drone" }), "helmet", "only the listed switch is allowed");
     assert.equal(camOf({}), "helmet");
     assert.equal(camOf({ INPUT_CAM: "drone\nimages=[\"x\"]" }), "helmet", "anything off the allowlist falls back, newline and all");
   }
@@ -1396,6 +1402,127 @@ test("gpu-census threads a cam input (helmet default, chase for the mirror-mip c
   assert.match(ggc, /--cam ID {2,}player camera/, "gpu-game-check --help documents --cam");
   assert.match(ggc, /out\.cam = await bounded\(\(\) => page\.evaluate\(/);
   assert.ok(ggc.indexOf("out.cam = await bounded") < ggc.indexOf("out.raceCall = await bounded"), "the camera is set BEFORE race(), so race entry never draws through another one");
+  assert.ok(ggc.indexOf("out.cam = await bounded") < ggc.indexOf("out.menu = await enterViaMenu("), "…and before the menu entry, whose car prep reads the camera");
+});
+
+test("gpu-census threads an entry input (api default; menu / menu-full = the player's RACE!) to every game check (hunt 5 E)", () => {
+  const wf = parseYAML(gpuWorkflow);
+  const inputs = wf.on.workflow_dispatch.inputs;
+  assert.equal(Object.keys(inputs).at(-1), "entry", "appended LAST: every earlier input keeps its position");
+  assert.equal(inputs.entry.type, "choice");
+  assert.deepEqual(inputs.entry.options, ["api", "menu", "menu-full"]);
+  assert.equal(inputs.entry.default, "api", "a default dispatch and the nightly enter as every earlier census did");
+  assert.ok(Object.keys(inputs).length <= 25, "GitHub caps workflow_dispatch at 25 inputs");
+  const plan = wf.jobs.plan, split = plan.steps.find((s) => s.id === "split");
+  assert.equal(plan.outputs.entry, "${{ steps.split.outputs.entry }}");
+  assert.equal(split.env.INPUT_ENTRY, "${{ inputs.entry || 'api' }}", "a scheduled run (no inputs) gets the default");
+  assert.equal(wf.jobs.census.env.CENSUS_ENTRY, "${{ needs.plan.outputs.entry }}");
+  const uses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"[^\n]*--entry "\$\{CENSUS_ENTRY:-api\}"/g) || [];
+  assert.equal(uses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must enter the plan-resolved way");
+  // The plan's allowlist, executed, for a PUSH request too (the request JSON bypasses the choice list).
+  const py = split.run.slice(split.run.indexOf("\n", split.run.indexOf("<<'PY'")) + 1).split("\nPY")[0];
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "census-plan-"));
+  const outOf = (env, req) => {
+    if (req) { fs.mkdirSync(path.join(dir, ".github"), { recursive: true }); fs.writeFileSync(path.join(dir, ".github/gpu-census-request.json"), JSON.stringify(req)); }
+    const r = cp.spawnSync("python3", ["-c", py], { cwd: dir, encoding: "utf8",
+      env: { PATH: process.env.PATH, EVENT: req ? "push" : "workflow_dispatch", ...env } });
+    if (r.error) return null;   // no python3: the static checks above still hold
+    assert.equal(r.status, 0, r.stderr);
+    return Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+  };
+  try {
+    const d = outOf({ INPUT_ENTRY: "menu" });
+    if (d !== null) {
+      assert.equal(d.entry, "menu");
+      assert.equal(outOf({}).entry, "api");
+      assert.equal(outOf({ INPUT_ENTRY: "menu-full" }).entry, "menu-full");
+      assert.equal(outOf({ INPUT_ENTRY: "garage\nimages=[\"x\"]" }).entry, "api", "anything off the allowlist falls back, newline and all");
+      const pushed = outOf({}, { images: "macos-latest", entry: "menu", cam: "chase>cockpit", ls: "apex26.tlxMirWarmLazy=1" });
+      assert.equal(pushed.entry, "menu"); assert.equal(pushed.cam, "chase>cockpit"); assert.equal(pushed.ls, "apex26.tlxMirWarmLazy=1");
+      assert.equal(pushed.images, '["macos-latest"]');
+      assert.equal(outOf({}, { entry: "teleport" }).entry, "api", "a pushed request is allowlisted too");
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  // The tool records the entry and threads it.
+  const ggc = fs.readFileSync(new URL("../../tools/gfx/gpu-game-check.mjs", import.meta.url), "utf8");
+  assert.match(ggc, /--entry api\|menu\|menu-full {2,}how the race starts/, "--help documents --entry");
+  assert.match(ggc, /glErrDrain: glErrDrainEveryPresent \? "present" : "beat", entry \}/, "the game JSON records which entry ran");
+  assert.match(ggc, /if \(entry === "api"\) \{\n\s+out\.raceCall = await bounded/, "api keeps race() exactly as before");
+  assert.match(ggc, /page\.waitForFunction\(menuPrepReady, null, \{ polling: 100, timeout: menuTimeout \}\)/, "the menu entry waits on the game's own prep signal");
+  assert.ok(ggc.indexOf('locator("#rs-go").click') > ggc.indexOf("waitForFunction(menuPrepReady"), "START RACE only after the prep wait");
+  assert.match(ggc, /out\.warmEnd = await bounded\(/, "memState().warm is read again after the window (the lazy mirror warm lands there)");
+  // LoAF script attribution beside the longtask window, and the gap rows' callback count.
+  assert.match(ggc, /\.observe\(\{ type: "long-animation-frame", buffered: true \}\)/);
+  assert.match(ggc, /loaf: window\.__apexLoaf \|\| \[\], loafObserver: window\.__apexLoafObserver/, "the dump carries the LoAF series");
+  assert.match(ggc, /out\.raceEntry\.loaf = _loaf;/, "written as raceEntry.loaf in the game JSON");
+  assert.match(ggc, /prevFrameMs: _gFrameDur, prevCallbacks: _gFrameCb,/);
+});
+
+test("census-entry parses --entry / --cam A>B and gates START RACE on the menu prep (hunt 5 E)", async () => {
+  const E = await import("../../tools/lib/census-entry.mjs");
+  assert.deepEqual(E.ENTRIES, ["api", "menu", "menu-full"]);
+  assert.equal(E.parseEntry(undefined), "api"); assert.equal(E.parseEntry(""), "api");
+  assert.equal(E.parseEntry("menu"), "menu"); assert.equal(E.parseEntry(" menu-full "), "menu-full");
+  assert.equal(E.parseEntry("garage"), null, "an unknown entry is refused, never silently api");
+  assert.deepEqual(E.parseCam(null), { start: null, switchTo: null }, "no --cam = the game's default camera");
+  assert.deepEqual(E.parseCam("chase"), { start: "chase", switchTo: null });
+  assert.deepEqual(E.parseCam("chase>cockpit"), { start: "chase", switchTo: "cockpit" });
+  for (const bad of ["chase>", ">cockpit", "a>b>c"]) assert.equal(E.parseCam(bad), null, bad);
+  assert.equal(E.switchBeat(20), 10); assert.equal(E.switchBeat(15), 7);
+  assert.equal(E.switchBeat(1), 1, "never the first beat: the switch lands inside the window");
+  // menuPrepReady reads window.__apex.menuPrep() — run it against stand-in pages.
+  const ready = { state: "menu", world: true, done: true, warmFrames: 0, warming: false };
+  const at = (p) => { globalThis.window = { __apex: p === undefined ? undefined : { menuPrep: () => p } }; try { return E.menuPrepReady(); } finally { delete globalThis.window; } };
+  assert.equal(at(ready), true);
+  assert.equal(at(undefined), false, "a build with no __apex is not ready");
+  assert.equal(at(null), false, "a build with no menuPrep hook is not ready");
+  for (const [k, v] of [["state", "count"], ["world", false], ["done", false], ["warmFrames", 2], ["warming", true]])
+    assert.equal(at({ ...ready, [k]: v }), false, `${k}=${v} is not ready`);
+  assert.equal(at({ ...ready, warmable: false, warmed: false }), true, "GLX/WGX have no program warm: done is enough");
+  // Serializable: Playwright ships the function's source, so it must not close over module scope.
+  assert.doesNotMatch(String(E.menuPrepReady), /\bE\.|import|require/);
+});
+
+test("the census race gate passes an entry that requested NO warm instead of waiting for warm.done (hunt 5 E)", async () => {
+  // Runs 491/492/502/503/505/507 read RACE NOT REACHED: the pack gate skipped
+  // requestWarm, so no warm:* mark, no entry warm, and memState().warm.done never came.
+  const { raceGate } = await import("../../tools/lib/census-entry.mjs");
+  const run = ({ state = "race", warming = false, warm = { done: false }, tlx = true, marks = [{ n: "begin:startRace", t: 0 }], hook = true }, gate) => {
+    globalThis.window = { __apex: { info: () => ({ state }), ...(hook ? { raceEntryProfile: () => ({ marks }) } : {}) } };
+    if (gate) globalThis.window.__raceGate = gate;
+    globalThis.GLX = tlx ? { __tlx: { memState: () => ({ warm }), warming: () => warming } } : {};
+    try { return { ok: raceGate(), g: globalThis.window.__raceGate }; } finally { delete globalThis.window; delete globalThis.GLX; }
+  };
+  const begin = { n: "begin:startRace", t: 0 };
+  // No warm mark at all (pack gate): passes once racing and not compiling, and records it.
+  let r = run({ marks: [begin, { n: "debrisPrime:end", t: 900 }] });
+  assert.equal(r.ok, true, "no warm requested: warm.done is not awaited");
+  assert.equal(r.g.warmRequested, false); assert.equal(r.g.warmMark, null);
+  // skipped-menu / noop: same, with the mark named.
+  r = run({ marks: [begin, { n: "warm:skipped-menu", t: 900 }] });
+  assert.equal(r.ok, true); assert.equal(r.g.warmMark, "warm:skipped-menu");
+  r = run({ marks: [begin, { n: "warm:noop", t: 900 }], tlx: false, warm: null });
+  assert.equal(r.ok, true); assert.equal(r.g.warmMark, "warm:noop");
+  // ...but never while something compiles, nor before the race state.
+  assert.equal(run({ marks: [begin], warming: true }).ok, false);
+  assert.equal(run({ marks: [begin], state: "count" }).ok, false);
+  // warm:request: the entry's warm must FINISH, exactly as before.
+  const req = [begin, { n: "warm:request", t: 900 }];
+  r = run({ marks: req, warm: { done: false } });
+  assert.equal(r.ok, false, "a requested warm that has not finished holds the gate");
+  assert.equal(r.g.warmRequested, true); assert.equal(r.g.warmMark, "warm:request");
+  assert.equal(run({ marks: req, warm: { done: true } }).ok, true);
+  // A build with no raceEntryProfile hook keeps the older rule: timeline done, or 5 s of race.
+  assert.equal(run({ hook: false, warm: { done: false } }).ok, false);
+  assert.equal(run({ hook: false, warm: { done: true } }).ok, true);
+  // An unprofiled window (no begin: mark) does not count as "no warm requested".
+  assert.equal(run({ marks: [], warm: { done: false } }).ok, false);
+  assert.equal(run({ hook: false, warm: null }, { t0: performance.now() - 6000, saw: false }).ok, true, "no timeline: 5 s of race with none");
+  assert.doesNotMatch(String(raceGate), /\bimport\b|require\(/, "serializable for page.waitForFunction");
+  const ggc = fs.readFileSync(new URL("../../tools/gfx/gpu-game-check.mjs", import.meta.url), "utf8");
+  assert.match(ggc, /await page\.waitForFunction\(raceGate, null, \{ polling: 100, timeout:/);
+  assert.match(ggc, /out\.raceEntry\.warmRequested = out\.race \? out\.race\.warmRequested : null;/, "raceEntry.warmRequested in the game JSON");
+  assert.match(ggc, /out\.raceEntry\.warmMark = out\.race \? out\.race\.warmMark : null;/);
 });
 
 test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpuErrors)", () => {
@@ -1472,8 +1599,8 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   for (const [name, job] of [["smoke", smokeJob], ["ship-filter", shipFilterJob]]) {
     assert.ok(job.includes(`    if: \${{ ${fastTier} }}`), `${name} must sit out the deploy branch's fast tier with the shared expression`);
   }
-  assert.ok(sweepsJob.includes(fastTier) && sweepsJob.includes("inputs.smoke_only != true"),
-    "sweeps sit out the fast tier and Pages ship-reuse smoke_only");
+  assert.ok(sweepsJob.includes(fastTier), "sweeps sit out the fast tier");
+  assert.doesNotMatch(ciWorkflow, /smoke_only/, "the always-false smoke_only input and its guards are gone (2026-10-14)");
   for (const name of ["guards", "unit-plan", "node-suites", "sweeps-parts", "driving-model", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
@@ -1571,7 +1698,7 @@ test("pages.yml is a release train: schedule + dispatch, one deploy branch, noth
   assert.ok(verdict.indexOf("Refuse to run off the deploy branch") < verdict.indexOf("What is live"));
 
   const ciJob = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
-  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && \(needs\.verdict\.outputs\.reuse != 'true' \|\| needs\.verdict\.outputs\.ship_only == 'true'\)/);
+  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && needs\.verdict\.outputs\.reuse != 'true'$/m);
   assert.match(ciJob, /before_sha: \$\{\{ needs\.verdict\.outputs\.since \}\}/, "the gate diffs against what is live, never against a push's before");
   assert.doesNotMatch(pagesWorkflow, /github\.event\.before/, "there is no push event to read a before from");
   const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  deploy:")[0];
@@ -1587,7 +1714,7 @@ test("ci.yml treats a Pages call as the gate it is, whatever the caller's event"
   // always carries, and it must decide all four places.
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
   const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  ship-filter:\n"));
-  assert.match(smokeJob, /timeout-minutes: \$\{\{ \(inputs\.concurrency_key == '' && \(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\)\) && 120 \|\| 50 \}\}/,
+  assert.match(smokeJob, /timeout-minutes: \$\{\{ \(inputs\.concurrency_key == '' && \(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\)\) && 120 \|\| 20 \}\}/,
     "a Pages call takes the smoke cap, never the wide run's 120");
   assert.match(smokeJob, /- name: Smoke\n(?:\s+#.*\n)*\s+if: needs\.ship-filter\.outputs\.ships != 'false' && \(inputs\.concurrency_key != '' \|\| \(github\.event_name != 'schedule' && github\.event_name != 'workflow_dispatch'\)\)/,
     "a Pages call always runs smoke.spec.js");
@@ -1603,8 +1730,9 @@ test("ci.yml treats a Pages call as the gate it is, whatever the caller's event"
       `${name} must accept a Pages call and still fail safe on the events it cannot resolve`);
   }
   // Which events each filter can resolve is NOT identical, and the difference is
-  // the point. The smoke filter asks "does this commit ship?", which a pull
-  // request cannot answer, so it fail-safes on one. The sweeps filter asks
+  // the point. The smoke filter asks "does this commit ship?"; since
+  // 2026-10-14 a pull request answers it from its own base AND the live
+  // deployment (see the ship-filter behaviour test). The sweeps filter asks
   // "could this diff have moved a vertex?", and a pull request answers that
   // perfectly well from its own base — it used to fail-safe anyway and ran the
   // whole fleet on every PR (2026-09-22).
@@ -1612,8 +1740,8 @@ test("ci.yml treats a Pages call as the gate it is, whatever the caller's event"
     "the sweeps filter resolves a pull request instead of running the fleet blind");
   // Read from the ship-filter JOB, which is where that filter lives since
   // 2026-09-22 — smokeJob no longer contains it.
-  assert.match(shipFilter, /case "\$EVENT" in\n\s+push\) ;;/,
-    "the ship filter still fail-safes a pull request: a PR head ships nothing to compare against");
+  assert.match(shipFilter, /case "\$EVENT" in\n\s+push\) ;;\n\s+pull_request\) \[ "\$CALLED" = "true" \] \|\| IS_PR=true ;;/,
+    "the ship filter resolves a ready pull request instead of fail-safing it into smoke");
   assert.match(selectJob, /EVENT: \$\{\{ inputs\.concurrency_key != '' && 'push' \|\| github\.event_name \}\}/);
   assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/,
     "on a Pages call the plan's base is the train's live commit");
@@ -1762,8 +1890,10 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   assert.ok(job.length > 0, "the selected-verdict job is gone");
   assert.match(job, /^    name: Selected specs \(verdict\)$/m, "the required-check name; branch protection names it");
   assert.match(job, /^    needs: \[select, selected, guards\]$/m);
-  assert.match(job, /inputs\.smoke_only != true/, "Pages ship-reuse skips the verdict with the legs");
-  assert.match(job, /github\.event_name == 'merge_group'/, "merge queue keeps the required name");
+  // Every event that runs `select` — push, pull_request, the Pages call — gets
+  // the verdict (no merge_group since 2026-10-14; no smoke_only either).
+  assert.match(job, /^    if: \$\{\{ !cancelled\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\) \}\}$/m,
+    "the required name reports on every push, PR and Pages call");
   assert.doesNotMatch(job, /^    if: \$\{\{ always\(\)/m, "always() turned a superseded run's cancelled `selected` into a red verdict");
   // The reading: select must pass; selected passes or is skipped; and (since
   // 2026-10-04) ANY dropped routed spec is a red off the train, whether or not
@@ -1799,4 +1929,102 @@ test("every workflow job carries a cap, and the Pages publishable check holds no
   const pages = parseYAML(pagesWorkflow);
   assert.deepEqual(pages.jobs.publishable.permissions, { contents: "read" });
   assert.ok(pages.jobs.deploy["timeout-minutes"] <= 30, "the deploy job holds the Pages lock: keep its cap tight");
+});
+
+/* ACTIONS AUDIT 2026-10-14 (ci.yml lane): the five full-history checkouts that
+ * still fetched every blob (C6), the dead merge-queue trigger (finding 7), and
+ * the ready-PR ship filter (C2a). */
+test("every fetch-depth: 0 checkout in ci.yml is blob-less (C6), and merge_group is gone (finding 7)", () => {
+  const jobs = parseYAML(ciWorkflow).jobs;
+  const full = [];
+  for (const [id, job] of Object.entries(jobs)) {
+    for (const st of job.steps || []) {
+      if (!/^actions\/checkout@/.test(st.uses || "") || st.with?.["fetch-depth"] !== 0) continue;
+      full.push(id);
+      assert.equal(st.with.filter, "blob:none", `${id}: a full-history checkout fetches every blob unless filtered (25 s vs 9 s measured)`);
+    }
+  }
+  for (const id of ["guards-a", "guards-b", "guards", "unit-plan", "xr-filter"]) assert.ok(full.includes(id), `${id} still needs its full history`);
+  const onBlock = ciWorkflow.slice(ciWorkflow.indexOf("\non:\n"), ciWorkflow.indexOf("\njobs:\n"));
+  assert.doesNotMatch(onBlock, /^  merge_group:/m, "merge queues need an organisation-owned repo; the trigger never fired");
+  assert.doesNotMatch(ciWorkflow.replace(/^\s*#.*$/gm, ""), /merge_group/, "no expression still branches on merge_group");
+});
+
+test("ship-filter: a ready PR skips smoke only when neither its own diff nor its base ships anything new (C2a)", () => {
+  const step = parseYAML(ciWorkflow).jobs["ship-filter"].steps.find((st) => st.id === "shipfilter");
+  assert.ok(step && step.run, "the ship filter step is gone");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ship-filter-"));
+  try {
+    const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const write = (f, s) => { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.writeFileSync(path.join(dir, f), s); };
+    git("init", "-q", "-b", "deploy"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+    // The filter's two repo inputs: the staged allow-list (stubbed: a file and
+    // a directory, like index.html and js/) and the real ci-pr-base.sh.
+    write("tools/desktop/stage-files.mjs", 'export function stagedNames() { return ["index.html", "app"]; }\n');
+    write("tools/ci/ci-pr-base.sh", fs.readFileSync(new URL("../../tools/ci/ci-pr-base.sh", import.meta.url), "utf8"));
+    write("index.html", "<!doctype html>\n"); write("app/a.js", "1\n"); write("notes/x.txt", "x\n"); write("tests/specs/smoke.spec.js", "//\n");
+    git("add", "-A"); git("commit", "-q", "-m", "live"); const LIVE = git("rev-parse", "HEAD");
+    // A PR branch for each shape, all forked from the live commit.
+    const branch = (name, file, body) => { git("checkout", "-q", "-b", name, LIVE); write(file, body); git("add", "-A"); git("commit", "-q", "-m", name); };
+    branch("docs", "notes/x.txt", "y\n");
+    branch("code", "app/b.js", "2\n");
+    branch("smoke", "tests/specs/smoke.spec.js", "// edited\n");
+    // The deploy branch moves past live with an unpublished app/ (js/) change.
+    git("checkout", "-q", "deploy"); write("app/a.js", "unpublished\n"); git("commit", "-q", "-am", "ahead"); const AHEAD = git("rev-parse", "HEAD");
+    // refs/pull/N/merge: first parent = the base tip the merge was built on.
+    const merge = (base, head) => { git("checkout", "-q", "--detach", base); git("merge", "-q", "--no-ff", "-m", `m ${head}`, head); return git("rev-parse", "HEAD"); };
+
+    const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
+    const calls = path.join(dir, "curl-calls.log");
+    fs.writeFileSync(path.join(bin, "curl"), "#!/usr/bin/env bash\n" +
+      `url="\${@: -1}"; echo "$url" >> "${calls}"\n` +
+      '[ -n "${FAKE_LIVE:-}" ] || exit 7\n' +
+      'case "$url" in\n' +
+      '  *deployments\\?environment=*) printf \'[{"sha":"%s","statuses_url":"https://api.test/statuses/1"}]\' "$FAKE_LIVE" ;;\n' +
+      '  *statuses*) printf \'[{"state":"success"}]\' ;;\n' +
+      '  *) exit 7 ;;\n' +
+      'esac\n');
+    fs.chmodSync(path.join(bin, "curl"), 0o755);
+    const scriptFile = path.join(dir, "step.sh");
+    fs.writeFileSync(scriptFile, step.run);
+    const run = (sha, env) => {
+      git("checkout", "-q", "--detach", sha);
+      fs.rmSync(calls, { force: true });
+      const out = path.join(dir, `out-${Math.random().toString(36).slice(2)}`);
+      const r = cp.spawnSync("bash", ["--noprofile", "--norc", "-eo", "pipefail", scriptFile], { cwd: dir, encoding: "utf8",
+        env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_OUTPUT: out, GITHUB_SHA: sha, GITHUB_REPOSITORY: "o/r",
+          RUNNER_TEMP: dir, GH_TOKEN: "t", CALLED: "false", FAKE_LIVE: LIVE, PR_BASE: "", ...env } });
+      assert.equal(r.status, 0, r.stderr + r.stdout);
+      const ships = /ships=(true|false)/.exec(fs.existsSync(out) ? fs.readFileSync(out, "utf8") : "")?.[1];
+      return { ships, log: r.stdout, api: fs.existsSync(calls) ? fs.readFileSync(calls, "utf8").trim().split("\n").filter(Boolean).length : 0 };
+    };
+    const pr = (base, head) => run(merge(base, head), { EVENT: "pull_request", PR_BASE: base });
+
+    const docsOnLive = pr(LIVE, "docs");
+    assert.equal(docsOnLive.ships, "false", docsOnLive.log);
+    assert.match(docsOnLive.log, /SKIPPING SMOKE/);
+    const docsOnAhead = pr(AHEAD, "docs");
+    assert.equal(docsOnAhead.ships, "true", "a docs PR on a base with an unpublished app/ (js/) change still boots it: pages.yml may reuse this run as the gate");
+    assert.match(docsOnAhead.log, /the diff touches a shipped path \(app\)/);
+    const code = pr(LIVE, "code");
+    assert.equal(code.ships, "true");
+    assert.match(code.log, /the PR touches a shipped path \(app\)/);
+    assert.equal(code.api, 0, "a PR that ships something decides without the deployments API");
+    const smoke = pr(LIVE, "smoke");
+    assert.equal(smoke.ships, "true");
+    assert.match(smoke.log, /fixed smoke spec/);
+    // Fail safe: no merge commit and no usable event base -> run smoke.
+    const lost = run(git("rev-parse", "docs"), { EVENT: "pull_request", PR_BASE: "1234567890123456789012345678901234567890" });
+    assert.equal(lost.ships, "true");
+    assert.match(lost.log, /unreachable/);
+    assert.equal(run(git("rev-parse", "docs"), { EVENT: "pull_request", PR_BASE: "" }).ships, "true", "no base at all runs smoke");
+    // An unreadable live deployment on the PR path still runs smoke.
+    assert.equal(run(merge(LIVE, "docs"), { EVENT: "pull_request", PR_BASE: LIVE, FAKE_LIVE: "" }).ships, "true");
+    // The push and Pages paths are unchanged: diff against live.
+    assert.equal(run(merge(LIVE, "docs"), { EVENT: "push" }).ships, "false");
+    assert.equal(run(AHEAD, { EVENT: "schedule", CALLED: "true" }).ships, "true");
+    assert.equal(run(AHEAD, { EVENT: "schedule" }).ships, "true", "an uncalled nightly is not a ship question: run smoke");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
