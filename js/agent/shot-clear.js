@@ -220,5 +220,5 @@ const ShotClear = (function () {
     return null;
   }
 
-  return { blocker, frameBlocker, boxes, orbit, side, ORBIT_TRIES };
+  return Object.freeze({ blocker, frameBlocker, boxes, orbit, side, ORBIT_TRIES });
 })();
