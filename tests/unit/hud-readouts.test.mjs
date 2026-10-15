@@ -81,6 +81,30 @@ test("spdPlate: one MPH|KPH plate — never KM/H, settings drive the unit", () =
   assert.deepEqual({ ...withAO.R.spdPlate(160.9344) }, { n: 100, unit: "MPH" });
 });
 
+test("colourblind HUD cues: flag and sector data attributes when on", () => {
+  const A11y = { cuesOn: () => true };
+  const { R } = load({ A11yOpts: A11y });
+  assert.equal(R.flagCueKind({ level: 1 }, false), "yellow");
+  assert.equal(R.flagCueKind({ level: 2 }, false), "vsc");
+  assert.equal(R.flagCueKind({ level: 3 }, false), "sc");
+  assert.equal(R.flagCueKind({ level: 4 }, false), "red");
+  assert.equal(R.flagCueKind(null, true), "blue");
+  assert.equal(R.sectorTimingKind(12.3, true, true), "session");
+  assert.equal(R.sectorTimingKind(12.3, false, true), "personal");
+  assert.equal(R.sectorTimingKind(12.3, false, false), "slow");
+  const flag = { dataset: {} };
+  R.paintFlag(flag, { caution: { level: 2 } });
+  assert.equal(flag.dataset.flagCue, "vsc");
+  R.paintFlag(flag, null);
+  assert.equal(flag.dataset.flagCue, undefined);
+  const row = { dataset: {} };
+  R.paintSectorRow(row, 1.2, false, true);
+  assert.equal(row.dataset.secTiming, "personal");
+  A11y.cuesOn = () => false;
+  R.paintSectorRow(row, 1.2, false, true);
+  assert.equal(row.dataset.secTiming, undefined);
+});
+
 test("blueFlag: only a car a lap up, physically just behind, within ~1.2 s", () => {
   const { R } = load();
   const L = 5000;

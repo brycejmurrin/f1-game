@@ -63,4 +63,9 @@ test("startRaceBody arms count without awaiting pack; requestWarm is packSettled
   assert.ok(warm > count, "requestWarm follows count");
   const gate = body.indexOf("settled(packState)", count);
   assert.ok(gate > 0 && gate < warm, "requestWarm is gated on packSettled(packState)");
+  // ...except on TLX (hunt 5): its programs never read the pack, and a skipped warm linked every program in the
+  // first present (one 11-13 s task on the macOS census). apex26.tlxWarmBeforePack="0" restores the gate.
+  assert.match(body, /const tlxEarly = gfx\.backend === "three" && [^\n]*apex26\.tlxWarmBeforePack"\) !== "0"/,
+    "TLX warms before the pack settles unless the knob is 0");
+  assert.match(body, /if \(!settled \|\| settled\(packState\) \|\| tlxEarly\) \{/, "the gate admits TLX early");
 });

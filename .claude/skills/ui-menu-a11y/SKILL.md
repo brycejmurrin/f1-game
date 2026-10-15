@@ -22,6 +22,19 @@ Not for in-race driving input, hub tab logic, whole-matrix review or restructure
 see the description for the owning skills (restructure: css-play
 `references/restructure.md`).
 
+## Where things live (HUD / menus / a11y)
+
+| Area | Path | Symbols to open first |
+|---|---|---|
+| In-race HUD DOM | `js/ui/hud.js` | `GameHud.create(G)` → `updateHud`, `invalidateFit`, `syncPhoneFit`; dock/lane fit (`fitHud`, `_dockL`/`_dockR`); `paintHudDelta`; flag chip via `cautionInfo()` |
+| HUD layout prefs | `js/ui/hud-layout.js`, `js/ui/hud-elements.js`, `js/ui/dock-layout.js` | `HudLayout.apply`, `HudElements.apply` (both call `GameHud.invalidateFit()`) |
+| Strategy/tyre HUD panels | `js/ui/hud-strategy.js`, `js/ui/hud-tyres.js` | Opt-in race panels — not the main tower |
+| Layer / Escape gate | `js/ui/layers.js`, `js/ui/modal.js` | `UiLayers.top()`, `anyOpen()`; driving keys gated with **input-controls** |
+| Agent probes (HUD/menu) | `js/agent/apex.js` | `__apex.render({what:"view"|…})`, `physState()`, `inputState()` (gate + focus), `agentHelp()` manifest |
+| Static HUD shell | `index.html` + `css/hud.css`, `css/touch-controls.css` | `#game` overlay ids (`#hud-*`, `.touchbtn`); class toggles from `hud.js` |
+
+Menu-only work rarely needs `game.js`; race HUD numbers come from `G.player` / `G.cars` each `updateHud` tick.
+
 ## Quick Reference
 
 | Surface | Owner | Contract |
