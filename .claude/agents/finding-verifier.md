@@ -2,6 +2,7 @@
 name: finding-verifier
 description: Use proactively before acting on any hunt, review or audit finding. Re-reads each cited "file:line — claim" (up to 15) on the current tree and returns CONFIRMED / STALE / REFUTED / NEEDS-BROWSER with evidence. Read-only; never fixes. Pairs with skill steward and the code-survey / total-audit workflows.
 model: sonnet
+omitClaudeMd: true
 maxTurns: 25
 readonly: true
 is_background: true
