@@ -1,41 +1,30 @@
-# Albert Park — scenery survey (2026-10-14)
+# Albert Park — scenery survey (2026-10-15)
 
-Circuit id `albert_park`. Scope: `js/circuits/albert_park.js`, `js/circuits/scenery/albert_park.js` only.
+Circuit pair only: `js/circuits/albert_park.js`, `js/circuits/scenery/albert_park.js`.
 
-**Capture note:** 25 frames committed as JPEG under `artifacts/shots/tracks/albert_park/` (dry weather, `day` / `dawn` / `dusk` / `night` on four anchor views). **Wet / rain / overcast / fog** batches wait on shared shot tooling ([tools PR](https://github.com/brycejmurrin/f1-game/pulls)) — follow-up rebase will add those panels.
+**36 survey JPEGs** in `artifacts/shots/tracks/albert_park/` (1280px, q≈80, &lt;300 KB). Captured with shared `shot.mjs` (`--weather`, `--tod`, `--jpeg`, `--present-timeout 90`, `--capture-retries 4`, SwiftShader default).
 
-## Code map
-
-| Layer | Path |
-|-------|------|
-| Def | `js/circuits/albert_park.js` — OSM centreline, `flatTerrain`, `pit: { side: 1 }`, bank zones, `pal` |
-| Scenery | `js/circuits/scenery/albert_park.js` — lake, CBD towers, MSAC, Piastri stand, grandstands, kerbs |
-| Landmarks | `tests/data/landmarks/albert_park.json` |
-| Brief | `docs/tracks/albert_park.md` |
-
-## Audit (post-fix)
+## Audit
 
 | Check | Result |
 |-------|--------|
-| `verify-track` | OK, 0 surface folds |
+| `verify-track` | OK |
 | float | 0 |
-| ground buried | 1 (jersey post foot in shared `structures.js`, intentional sink) |
-| clip severe | 1 @ ~0.784 (at baseline cap) |
-| coplanar | 0 |
+| ground buried | 1 (shared jersey post sink) |
+| clip severe | 1 @ baseline cap |
 
-## Fixes applied
+## Fixes on branch
 
-1. Greener `pal.runoff` (less sandy park verge).
-2. Boathouse launch ramp +0.06 m on `a.u` (buried props 3 → 1).
+- Greener `pal.runoff`; boathouse ramp +0.06 m (buried 3→1).
 
-## Weather / lighting backlog
+## Weather / lighting notes
 
-| Issue | Seen in | Severity |
-|-------|---------|----------|
-| Hand-placed lamp masts are geometry only — no `lampPost()` / flood emit | `night` panels | Medium — park reads dark; engine kit lamps may still gate on build `NIGHT` |
-| Chicane grandstand internal overlap | `day` chicane orbit | Low — at clip baseline |
-| Lake/CBD needs oblique orbit to read; cockpit/trackside miss water | sector panels | Doc/camera, not geometry |
-| **Deferred:** wet/rain/overcast/fog survey | — | Blocked on shared `shot.mjs` weather batch |
+| Issue | Panels | Notes |
+|-------|--------|-------|
+| Park lamp masts are mesh-only at **night** | `*__night-dry` | Hand `addCyl`/`addBox` lamps; no `lampPost()` flood emit |
+| **Fog** + low `pal.fogDensity` | `*__day-fog` | Engine fog dominates; circuit haze stays light |
+| **Storm** rain streaks | `*__day-storm` | Arc wetness + particles; road sheen OK |
+| Chicane grandstand clip | `s11-chicane__day-dry` | At fleet baseline; not circuit-only fix |
 
 ---
 
@@ -43,52 +32,53 @@ Circuit id `albert_park`. Scope: `js/circuits/albert_park.js`, `js/circuits/scen
 
 | | | |
 |:---:|:---:|:---:|
-| ![Track picker — Albert Park card](../../../artifacts/shots/tracks/albert_park/picker-track-card.jpg)<br>**View:** picker · **Wx:** dry · **TOD:** day | | |
+| ![picker](../../../artifacts/shots/tracks/albert_park/picker-track-card.jpg)<br>**view:** picker · **weather:** dry · **tod:** day | | |
 
 ---
 
-## Sector tour — dry · day
+## Reference sectors — dry · day
 
 | | | |
 |:---:|:---:|:---:|
-| ![S/F orbit](../../../artifacts/shots/tracks/albert_park/s00-sf__day-dry.jpg)<br>**S/F** · orbit · dry · day | ![Piastri trackside](../../../artifacts/shots/tracks/albert_park/s00-sf-ts__day-dry.jpg)<br>**S/F** · trackside · dry · day | ![T1–2](../../../artifacts/shots/tracks/albert_park/s01-t1__day-dry.jpg)<br>**T1–2** · orbit · dry · day |
-| ![T3 Hill](../../../artifacts/shots/tracks/albert_park/s02-t3__day-dry.jpg)<br>**T3** · orbit · dry · day | ![MSAC](../../../artifacts/shots/tracks/albert_park/s03-msac__day-dry.jpg)<br>**MSAC** · orbit · dry · day | ![East park](../../../artifacts/shots/tracks/albert_park/s04-east__day-dry.jpg)<br>**East** · orbit · dry · day |
-| ![Mid lap](../../../artifacts/shots/tracks/albert_park/s05-mid__day-dry.jpg)<br>**Mid** · cinematic · dry · day | ![Lakeside entry](../../../artifacts/shots/tracks/albert_park/s06-lake-in__day-dry.jpg)<br>**Lakeside in** · orbit · dry · day | ![Lake + CBD](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__day-dry.jpg)<br>**Lake/CBD** · orbit · dry · day |
-| ![Ricciardo](../../../artifacts/shots/tracks/albert_park/s08-ricciardo__day-dry.jpg)<br>**Ricciardo** · trackside · dry · day | ![Lakeside Stadium](../../../artifacts/shots/tracks/albert_park/s09-stadium__day-dry.jpg)<br>**Stadium** · orbit · dry · day | ![Golf fairways](../../../artifacts/shots/tracks/albert_park/s10-golf__day-dry.jpg)<br>**Golf** · orbit · dry · day |
-| ![Chicane](../../../artifacts/shots/tracks/albert_park/s11-chicane__day-dry.jpg)<br>**Chicane** · orbit · dry · day | ![Fan hill](../../../artifacts/shots/tracks/albert_park/s12-fanhill__day-dry.jpg)<br>**Fan hill** · orbit · dry · day | ![Pit lake side](../../../artifacts/shots/tracks/albert_park/s13-pitlake__day-dry.jpg)<br>**Pit lake** · orbit · dry · day |
+| ![MSAC](../../../artifacts/shots/tracks/albert_park/s03-msac__day-dry.jpg)<br>**view:** MSAC orbit · **weather:** dry · **tod:** day | ![Lake/CBD](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__day-dry.jpg)<br>**view:** lake/CBD orbit · **weather:** dry · **tod:** day | ![Stadium](../../../artifacts/shots/tracks/albert_park/s09-stadium__day-dry.jpg)<br>**view:** Lakeside Stadium · **weather:** dry · **tod:** day |
+| ![Chicane](../../../artifacts/shots/tracks/albert_park/s11-chicane__day-dry.jpg)<br>**view:** chicane orbit · **weather:** dry · **tod:** day | | |
 
 ---
 
-## Lighting — S/F anchor (dry)
+## Hero — S/F (`s00-sf`) orbit
 
 | | | |
 |:---:|:---:|:---:|
-| ![S/F day](../../../artifacts/shots/tracks/albert_park/s00-sf__day-dry.jpg)<br>**S/F** · dry · **day** | ![S/F dawn](../../../artifacts/shots/tracks/albert_park/s00-sf__dawn-dry.jpg)<br>**S/F** · dry · **dawn** | ![S/F dusk](../../../artifacts/shots/tracks/albert_park/s00-sf__dusk-dry.jpg)<br>**S/F** · dry · **dusk** |
-| ![S/F night](../../../artifacts/shots/tracks/albert_park/s00-sf__night-dry.jpg)<br>**S/F** · dry · **night** | | |
+| ![day dry](../../../artifacts/shots/tracks/albert_park/s00-sf__day-dry.jpg)<br>**view:** S/F orbit · **weather:** dry · **tod:** day | ![day wet](../../../artifacts/shots/tracks/albert_park/s00-sf__day-wet.jpg)<br>**view:** S/F orbit · **weather:** wet · **tod:** day | ![day rain](../../../artifacts/shots/tracks/albert_park/s00-sf__day-rain.jpg)<br>**view:** S/F orbit · **weather:** rain · **tod:** day |
+| ![day overcast](../../../artifacts/shots/tracks/albert_park/s00-sf__day-overcast.jpg)<br>**view:** S/F orbit · **weather:** overcast · **tod:** day | ![day fog](../../../artifacts/shots/tracks/albert_park/s00-sf__day-fog.jpg)<br>**view:** S/F orbit · **weather:** fog · **tod:** day | ![day storm](../../../artifacts/shots/tracks/albert_park/s00-sf__day-storm.jpg)<br>**view:** S/F orbit · **weather:** storm · **tod:** day |
+| ![dawn dry](../../../artifacts/shots/tracks/albert_park/s00-sf__dawn-dry.jpg)<br>**view:** S/F orbit · **weather:** dry · **tod:** dawn | ![dusk dry](../../../artifacts/shots/tracks/albert_park/s00-sf__dusk-dry.jpg)<br>**view:** S/F orbit · **weather:** dry · **tod:** dusk | ![night dry](../../../artifacts/shots/tracks/albert_park/s00-sf__night-dry.jpg)<br>**view:** S/F orbit · **weather:** dry · **tod:** night |
 
 ---
 
-## Lighting — Lake / CBD anchor (dry)
+## Hero — Lake / CBD (`s07-lake-cbd`) orbit
 
 | | | |
 |:---:|:---:|:---:|
-| ![Lake day](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__day-dry.jpg)<br>**Lake/CBD** · dry · **day** | ![Lake dawn](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__dawn-dry.jpg)<br>**Lake/CBD** · dry · **dawn** | ![Lake dusk](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__dusk-dry.jpg)<br>**Lake/CBD** · dry · **dusk** |
-| ![Lake night](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__night-dry.jpg)<br>**Lake/CBD** · dry · **night** | | |
+| ![day dry](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__day-dry.jpg)<br>**view:** lake/CBD orbit · **weather:** dry · **tod:** day | ![day wet](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__day-wet.jpg)<br>**view:** lake/CBD orbit · **weather:** wet · **tod:** day | ![day rain](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__day-rain.jpg)<br>**view:** lake/CBD orbit · **weather:** rain · **tod:** day |
+| ![day overcast](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__day-overcast.jpg)<br>**view:** lake/CBD orbit · **weather:** overcast · **tod:** day | ![day fog](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__day-fog.jpg)<br>**view:** lake/CBD orbit · **weather:** fog · **tod:** day | ![day storm](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__day-storm.jpg)<br>**view:** lake/CBD orbit · **weather:** storm · **tod:** day |
+| ![dawn dry](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__dawn-dry.jpg)<br>**view:** lake/CBD orbit · **weather:** dry · **tod:** dawn | ![dusk dry](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__dusk-dry.jpg)<br>**view:** lake/CBD orbit · **weather:** dry · **tod:** dusk | ![night dry](../../../artifacts/shots/tracks/albert_park/s07-lake-cbd__night-dry.jpg)<br>**view:** lake/CBD orbit · **weather:** dry · **tod:** night |
 
 ---
 
-## Lighting — Chicane anchor (dry)
+## Hero — Chicane (`s11-chicane`) orbit
 
 | | | |
 |:---:|:---:|:---:|
-| ![Chicane day](../../../artifacts/shots/tracks/albert_park/s11-chicane__day-dry.jpg)<br>**Chicane** · dry · **day** | ![Chicane dawn](../../../artifacts/shots/tracks/albert_park/s11-chicane__dawn-dry.jpg)<br>**Chicane** · dry · **dawn** | ![Chicane dusk](../../../artifacts/shots/tracks/albert_park/s11-chicane__dusk-dry.jpg)<br>**Chicane** · dry · **dusk** |
-| ![Chicane night](../../../artifacts/shots/tracks/albert_park/s11-chicane__night-dry.jpg)<br>**Chicane** · dry · **night** | | |
+| ![day dry](../../../artifacts/shots/tracks/albert_park/s11-chicane__day-dry.jpg)<br>**view:** chicane orbit · **weather:** dry · **tod:** day | ![day wet](../../../artifacts/shots/tracks/albert_park/s11-chicane__day-wet.jpg)<br>**view:** chicane orbit · **weather:** wet · **tod:** day | ![day rain](../../../artifacts/shots/tracks/albert_park/s11-chicane__day-rain.jpg)<br>**view:** chicane orbit · **weather:** rain · **tod:** day |
+| ![day overcast](../../../artifacts/shots/tracks/albert_park/s11-chicane__day-overcast.jpg)<br>**view:** chicane orbit · **weather:** overcast · **tod:** day | ![day fog](../../../artifacts/shots/tracks/albert_park/s11-chicane__day-fog.jpg)<br>**view:** chicane orbit · **weather:** fog · **tod:** day | ![day storm](../../../artifacts/shots/tracks/albert_park/s11-chicane__day-storm.jpg)<br>**view:** chicane orbit · **weather:** storm · **tod:** day |
+| ![dawn dry](../../../artifacts/shots/tracks/albert_park/s11-chicane__dawn-dry.jpg)<br>**view:** chicane orbit · **weather:** dry · **tod:** dawn | ![dusk dry](../../../artifacts/shots/tracks/albert_park/s11-chicane__dusk-dry.jpg)<br>**view:** chicane orbit · **weather:** dry · **tod:** dusk | ![night dry](../../../artifacts/shots/tracks/albert_park/s11-chicane__night-dry.jpg)<br>**view:** chicane orbit · **weather:** dry · **tod:** night |
 
 ---
 
-## Verify
+## Hero — MSAC (`s03-msac`) orbit
 
-```sh
-node tools/track/verify-track.cjs albert_park
-node tools/track/audit-circuit.cjs albert_park --checks verify,ground,float
-```
+| | | |
+|:---:|:---:|:---:|
+| ![day dry](../../../artifacts/shots/tracks/albert_park/s03-msac__day-dry.jpg)<br>**view:** MSAC orbit · **weather:** dry · **tod:** day | ![day wet](../../../artifacts/shots/tracks/albert_park/s03-msac__day-wet.jpg)<br>**view:** MSAC orbit · **weather:** wet · **tod:** day | ![day rain](../../../artifacts/shots/tracks/albert_park/s03-msac__day-rain.jpg)<br>**view:** MSAC orbit · **weather:** rain · **tod:** day |
+| ![day overcast](../../../artifacts/shots/tracks/albert_park/s03-msac__day-overcast.jpg)<br>**view:** MSAC orbit · **weather:** overcast · **tod:** day | ![day fog](../../../artifacts/shots/tracks/albert_park/s03-msac__day-fog.jpg)<br>**view:** MSAC orbit · **weather:** fog · **tod:** day | ![day storm](../../../artifacts/shots/tracks/albert_park/s03-msac__day-storm.jpg)<br>**view:** MSAC orbit · **weather:** storm · **tod:** day |
+| ![night dry](../../../artifacts/shots/tracks/albert_park/s03-msac__night-dry.jpg)<br>**view:** MSAC orbit · **weather:** dry · **tod:** night | | |
