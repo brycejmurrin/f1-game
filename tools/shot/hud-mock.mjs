@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // hud-mock.mjs — the race HUD on BLACK, every widget populated with mock
 // content, a labelled box per element, ~1 s a shot. For SEEING the layout fast.
-// @doc Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one race boot per pointer type, ~1 s a shot.
+// @doc Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one boot per pointer type, ~1 s a shot.
 // @skill survey-ui-matrix
 //
 //   node tools/shot/hud-mock.mjs                                   # phone landscape: shipped + all-on x the main cameras

@@ -102,6 +102,24 @@ test("tools/README.md: one row per tool, every row within the @doc cap, no undef
   }
 });
 
+test("gen-tools-readme refuses an over-long @doc instead of truncating it (#1709)", async () => {
+  // In-memory fixture, never a real tool: `--check` used to print a warning,
+  // truncate the row and still exit 0, so four headers sat over the cap.
+  const { collect, DOC_MAX } = await import("../../tools/gen/gen-tools-readme.mjs");
+  const header = (doc) => `#!/usr/bin/env node\n// fixture.mjs\n// @doc ${doc}\n`;
+  const fits = "x".repeat(DOC_MAX), long = "y".repeat(DOC_MAX + 1);
+  const src = { "gen/fits.mjs": header(fits), "gen/long.mjs": header(long) };
+  const read = (rel) => src[rel];
+
+  const ok = collect({ files: ["gen/fits.mjs"], read });
+  assert.equal(ok.main.length, 1);
+  assert.equal(ok.main[0].doc, fits, "a @doc at exactly the cap is kept whole");
+
+  assert.throws(() => collect({ files: ["gen/fits.mjs", "gen/long.mjs"], read }),
+    (e) => /gen\/long\.mjs: @doc is 121 chars \(max 120\)/.test(e.message) && !/gen\/fits\.mjs/.test(e.message),
+    "an over-long @doc must fail the generator (the CLI exits 2), naming the file and its length");
+});
+
 test("tools data-file readers cover specs and CommonJS unit tests", async () => {
   const { testReaderFiles } = await import("../../tools/gen/gen-tools-readme.mjs");
   const files = testReaderFiles();
