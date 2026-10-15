@@ -9,6 +9,15 @@
    else on the lap reads as smaller than it, so the outfield is scrub and low
    sheds, not generic tree ranks.
 
+   FRAMES (2026-10-15): the real start/finish is on the MAIN straight (def
+   startFrac), but this file is authored against the stitcher's v0, mid the 1.24 km
+   back straight (def sceneryStartFrac 0), so every frac below is in that OLD frame
+   and the rows keep their physical corners. Only blocks 1-3 (pit, grandstand,
+   paddock) belong to the LINE and are keyed with sl(r), r = laps past the real
+   line. The row labels below name the OLD lap positions; the circuit's own turn
+   numbers are: old 0.119 = T4, old 0.791 = T1 (end of the main straight), old
+   0.868 = the T3 hairpin, old 0.36-0.43 = the T10-12 parabola.
+
    Blocks implement docs/tracks/buddh.md §4, one row per block:
      0  lap spine (barrier chain + marshal chain; carries the `guardrail`
         asked for by rows 0.235, 0.565 and 0.870 as one run each side)
@@ -42,12 +51,11 @@
    CHAINS of short `ridge` slabs: a single slab big enough to span one of these
    features trips the overlap guard and is dropped whole.
 
-   Note on `place` guard drops: verify-track reports `place=8` with this
-   callback EMPTIED, so those eight come from the def / theme layer, not from
-   here. Nothing in this file can clear them. The scenery callback's own guard
-   drops are zero, and the way they are held there is `clear()` — every prop in
-   a depth band is pre-checked against the road instead of being offered to the
-   overlap guard and silently eaten. */
+   Guard drops (verify-track, 2026-10-15): none come from this file. The tree=6
+   that remain are the engine's own furniture ring (dist 18-26 m, inside this
+   file's 32 m scatter floor). The way this file holds its own at zero is
+   `clear()` — every prop in a depth band is pre-checked against the road instead
+   of being offered to the overlap guard and silently eaten. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["buddh"] =
   function (api) {
@@ -58,6 +66,14 @@
         grandstandEx, scaffoldStand, spectatorHill } = api;
 
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
+      // This file is authored against the OLD origin (def sceneryStartFrac 0 = the
+      // middle of the 1.24 km back straight), so every frac below is in THAT frame
+      // and stays on its physical corner. The real start/finish moved to the main
+      // straight (def startFrac): the pit, grandstand and paddock are the only
+      // blocks that belong to the LINE, and they go through sl(r) with r = laps
+      // past the real line (shanghai idiom: SL = 1 - _sceneryShift).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (r) => (((r + SL) % 1) + 1) % 1;
       // Earthworks run along the road; the guard only cares about footprint,
       // so the chain helper keeps every slab small enough to survive.
       const bank = (s, side, dist, len, w, h, col) => {
@@ -161,9 +177,9 @@
       //    at s0.12 and s0.86-0.88 (a single 12 m run lands on the
       //    neighbouring road there and loses eight segments to the guard),
       //    with a one-segment marshal gate at s0.869-0.872 where no offset
-      //    from 2 m to 12 m survives. Guard drops from this file: zero.
+      //    from 2 m to 12 m survives.
       guardrail(0.0, 0.116, 1, 12, ARMCO);
-      guardrail(0.116, 0.134, 1, 6, ARMCO);
+      guardrail(0.116, 0.134, 1, 6.5, ARMCO);
       guardrail(0.134, 0.858, 1, 12, ARMCO);
       guardrail(0.858, 0.869, 1, 6, ARMCO);
       guardrail(0.872, 0.884, 1, 6, ARMCO);
@@ -172,12 +188,17 @@
       for (const s of [0.045, 0.165, 0.275, 0.34, 0.46, 0.63, 0.70, 0.75, 0.83, 0.93])
         marshalPost(K(s), 1, 15);
 
-      // 1. PIT LANE AND PIT BLOCK (0.005 / +1 / 14) — LOCAL closed shell (not
+      // 1. PIT LANE AND PIT BLOCK (0.005 / +1 / 52) — LOCAL closed shell (not
       //    shared building()): solid back, garage bays on the track face, flat
       //    roof, saffron/green Indian-GP fascia. Keeps the long low modern
       //    read without open-face orphan slabs (#1056 owns the shared path).
+      //    It sits BEHIND the engine's pit lane + garage block: onTrack(r = 14)
+      //    reads true out to ~32 m on the pit side (the engine treats the pit
+      //    footprint as road), so the old 16 m anchor skipped the whole model and
+      //    the required landmark never shipped. 52 m puts its 22 m footprint
+      //    at 41-63 m, clear of that, and the paddock ranks move back behind it.
       {
-        const a = anchor(K(0.005), 1, 16);
+        const a = anchor(K(sl(0.005)), 1, 52);
         if (!onTrack(a.c[0], a.c[2], 14)) {
           const b = [a.r, a.u, a.t];
           const foot = a.c.slice();
@@ -191,10 +212,12 @@
           const emitPit = (stage) => {
             stage._mat = MAT.CONCRETE;
             addBox(stage, vadd(foot, a.u, 4.2), [12.5, 8.4, LEN], BODY, b);
-            addBox(stage, vadd(vadd(foot, a.r, 5.8), a.u, 4.6),
-              [1.4, 9.2, LEN + 2], BODY_D, b);
+            // Wall and end caps start at staggered heights (0.1 / 0.2 m) so no two
+            // bottom faces share the body's ground plane (flatCoplanar).
+            addBox(stage, vadd(vadd(foot, a.r, 5.8), a.u, 4.7),
+              [1.4, 9.2, LEN + 3], BODY_D, b);
             for (const tOff of [-LEN * 0.5 - 0.4, LEN * 0.5 + 0.4]) {
-              addBox(stage, vadd(vadd(foot, a.t, tOff), a.u, 4.4),
+              addBox(stage, vadd(vadd(foot, a.t, tOff), a.u, 4.6),
                 [13.2, 8.8, 1.2], BODY, b);
             }
             stage._mat = MAT.METAL;
@@ -223,28 +246,33 @@
             stage._mat = 0;
           };
           modelGroup("buddh-pit-complex", {
-            center: vadd(foot, a.u, 6), size: [22, 16, LEN + 8], basis: b,
+            center: vadd(foot, a.u, 6.2), size: [22, 16.4, LEN + 8], basis: b,
           }, emitPit, { required: true });
         }
       }
-      runoffApron(K(0.995), 1, 9, 120, CONCRETE);
-      runoffApron(K(0.035), 1, 9, 120, CONCRETE);
-      guardrail(0.0, 0.075, 1, 4.5, PITWALL);
-      guardrail(0.975, 1.0, 1, 4.5, PITWALL);
-      marshalPost(K(0.082), 1, 12);
-      billboard(K(0.018), 1, 22, 12, 4.2, BOARD);
-      billboard(K(0.055), -1, 28, 11, 4.0, BOARD);
+      runoffApron(K(sl(0.995)), 1, 9, 120, CONCRETE);
+      runoffApron(K(sl(0.035)), 1, 9, 120, CONCRETE);
+      guardrail(sl(0.0), sl(0.07), 1, 4.5, PITWALL);
+      guardrail(sl(0.975), sl(1.0), 1, 4.5, PITWALL);
+      marshalPost(K(sl(0.066)), 1, 12);
+      billboard(K(sl(0.018)), 1, 22, 12, 4.2, BOARD);
+      billboard(K(sl(0.055)), -1, 28, 11, 4.0, BOARD);
 
-      // 2. MAIN GRANDSTAND (0.022 / -1 / 24) — the only substantial structure
+      // 2. MAIN GRANDSTAND (0.022 / -1 / 34 — pushed back from 24 once the stand
+      //    faces the track: its front fascia now sits at 27 m, clear of the sponsor
+      //    hoarding line at 21 m that would otherwise hide the lower tiers) — the only substantial structure
       //    on the circuit. Real roof is a sea-wave aluminium cantilever over
       //    steel trusses (ENR 2011-05-23; slideshare material deck — exact
       //    30 vs 50 m height / 138 m length / 40 m cantilever / 56 trusses /
       //    41 garages remain UNCERTAIN single-source figures, so the model
       //    is a game-scale silhouette: ~14 truss bays, undulating roof height,
       //    pale aluminium sheeting, cantilever lip toward the pit straight).
-      //    Seating rises away from the track (−1 outfield → +r = rear).
+      //    Seating rises away from the track. anchor() r is the road's real RIGHT
+      //    vector, so on side −1 (left, outfield) the REAR is −r: every r offset
+      //    below is negated against the original build, which had the 6×16×136
+      //    shell between the stand and the road (blank wall facing the track).
       {
-        const a = anchor(K(0.022), -1, 24);
+        const a = anchor(K(sl(0.022)), -1, 34);
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
           const ALU = [0.78, 0.79, 0.80], ALU_D = [0.68, 0.69, 0.70];
@@ -257,12 +285,12 @@
             // previous top) so tier boxes do not share a ground plane.
             addBox(stage, vadd(a.c, a.u, 0.4), [16, 0.8, 138], CONC, b);
             for (let t = 0; t < 4; t++) {
-              const lat = 1.5 + t * 2.4, h = 1.8, y0 = 0.9 + t * 2.05;
+              const lat = -(1.5 + t * 2.4), h = 1.8, y0 = 0.9 + t * 2.05;
               addBox(stage, vadd(vadd(a.c, a.r, lat), a.u, y0 + h * 0.5),
                 [2.6, h, 132 - t * 4], t & 1 ? SEAT : SEAT_D, b);
             }
             // Rear concrete shell under the wave roof.
-            addBox(stage, vadd(vadd(a.c, a.r, 11.5), a.u, 9.0),
+            addBox(stage, vadd(vadd(a.c, a.r, -11.5), a.u, 9.0),
               [6, 16, 136], CONC, b);
             stage._mat = MAT.METAL;
             // Sea-wave roof: 14 truss bays at different elevations along the
@@ -275,12 +303,12 @@
               const roofY = 17.5 + wave;
               const p = vadd(a.c, a.t, tOff);
               // Rear post
-              addCyl(stage, vadd(p, a.r, 12.5), 0.28, roofY + 0.4, STEEL, 5, b);
-              // Cantilever beam toward the track (−r)
-              addBox(stage, vadd(vadd(p, a.r, 2.0), a.u, roofY),
+              addCyl(stage, vadd(p, a.r, -12.5), 0.28, roofY + 0.4, STEEL, 5, b);
+              // Cantilever beam toward the track (+r on this left-side stand)
+              addBox(stage, vadd(vadd(p, a.r, -2.0), a.u, roofY),
                 [18.5, 0.35, 0.45], STEEL, b);
               // Nose strut under the lip
-              addCyl(stage, vadd(vadd(p, a.r, -6.5), a.u, roofY - 4.5),
+              addCyl(stage, vadd(vadd(p, a.r, 6.5), a.u, roofY - 4.5),
                 0.16, 4.6, STEEL, 4, b);
             }
             // Aluminium sheeting panels between bays (wave follows truss tops).
@@ -290,52 +318,52 @@
               const wave = Math.sin(((i + 0.5) / (bays - 1)) * Math.PI * 2) * 3.2;
               const roofY = 17.8 + wave;
               const p = vadd(a.c, a.t, tOff);
-              addBox(stage, vadd(vadd(p, a.r, 2.5), a.u, roofY),
+              addBox(stage, vadd(vadd(p, a.r, -2.5), a.u, roofY),
                 [17.5, 0.28, pitch * 0.92], i & 1 ? ALU : ALU_D, b);
             }
             // Trackside fascia under the cantilever nose.
-            addBox(stage, vadd(vadd(a.c, a.r, -6.8), a.u, 16.2),
+            addBox(stage, vadd(vadd(a.c, a.r, 6.8), a.u, 16.2),
               [0.4, 1.0, 130], [0.88, 0.88, 0.86], b);
             stage._mat = 0;
           };
           modelGroup("buddh-main-grandstand", {
-            center: vadd(a.c, a.u, 12), size: [22, 28, 148], basis: b,
+            center: vadd(vadd(a.c, a.r, -1.75), a.u, 12), size: [26, 28, 148], basis: b,
           }, emitMainGS, { required: true });
         }
       }
-      sponsorHoarding(0.004, 0.042, -1, 21);
-      cameraTower(K(0.050), -1, 27);
+      sponsorHoarding(sl(0.004), sl(0.042), -1, 21);
+      cameraTower(K(sl(0.050)), -1, 27);
       //    ...and the depth BEHIND it, which is the giveaway that this stand
       //    stands in a field: a graded dust concourse, then unsurfaced parking
       //    scraped straight onto the farmland, then the fields resume.
-      runoffApron(K(0.012), -1, 62, 96, CONCRETE);
-      runoffApron(K(0.034), -1, 62, 96, CONCRETE);
+      runoffApron(K(sl(0.012)), -1, 62, 96, CONCRETE);
+      runoffApron(K(sl(0.034)), -1, 62, 96, CONCRETE);
       for (let i = 0; i < 3; i++)
-        runoffApron(K(0.006 + i * 0.018), -1, 118 + i * 28, 86, DUST);
+        runoffApron(K(sl(0.006 + i * 0.018)), -1, 118 + i * 28, 86, DUST);
       // Cars sit past the dust aprons so their footprints do not share a
       // ground plane with the apron quads (flatCoplanar 196×199).
       for (let i = 0; i < 22; i++) {
         const h = hash(i * 23);
-        place(K(0.000 + i * 0.0026), -1, 210 + (i % 4) * 14 + h * 4,
+        place(K(sl(0.000 + i * 0.0026)), -1, 210 + (i % 4) * 14 + h * 4,
           [1.9, 1.5, 4.4], CARS[i % 3]);
       }
 
       // 3. PADDOCK BEHIND THE PITS (0.060 / +1 / 45) — a rank of motorhome
       //    coaches, two hospitality units, the broadcast compound at the far
       //    end, hard flat concrete apron under all of it and no grass.
-      for (let i = 0; i < 4; i++) runoffApron(K(0.036 + i * 0.020), 1, 30, 64, CONCRETE);
-      for (let i = 0; i < 6; i++) place(K(0.036 + i * 0.0085), 1, 45, [3.2, 3.8, 12], COACH);
-      for (let i = 0; i < 4; i++) place(K(0.040 + i * 0.0085), 1, 58, [3.0, 3.6, 11], COACH);
+      for (let i = 0; i < 4; i++) runoffApron(K(sl(0.012 + i * 0.016)), 1, 78, 64, CONCRETE);
+      for (let i = 0; i < 6; i++) place(K(sl(0.016 + i * 0.0085)), 1, 72, [3.2, 3.8, 12], COACH);
+      for (let i = 0; i < 4; i++) place(K(sl(0.020 + i * 0.0085)), 1, 85, [3.0, 3.6, 11], COACH);
       // Closed hospitality boxes (solid place cores — avoid shared open-face
       // building() until #1056 lands). Fascia strips omitted: a ground-plane
       // place strip coplanars with the paddock apron (flatCoplanar 331×338).
-      place(K(0.072), 1, 66, [18, 6.5, 34], COACH);
-      place(K(0.088), 1, 66, [17, 6.0, 30], COACH);
-      broadcastCompound(K(0.102), 1, 48);
+      place(K(sl(0.046)), 1, 100, [18, 6.5, 34], COACH);
+      place(K(sl(0.060)), 1, 100, [17, 6.0, 30], COACH);
+      broadcastCompound(K(sl(0.068)), 1, 76);
       //    Paddock service yard: generators, freight and the fuel bowser rank
       //    tucked behind the coaches. Low, white, and in straight lines.
       for (let i = 0; i < 5; i++)
-        place(K(0.046 + i * 0.009), 1, 72, [2.6, 2.9, 7.5], COACH);
+        place(K(sl(0.026 + i * 0.009)), 1, 118, [2.6, 2.9, 7.5], COACH);
 
       // 4. BRAKING ZONE INTO TURN 1 (0.108 / -1 / 32) — the run-off IS the
       //    visual event: far wider than it needs to be, with the tyre wall set
@@ -353,7 +381,7 @@
       //    circuit in every reference photograph: grass worn off to reddish
       //    earth, a marshal post, low bush clumps, and the unmade service track
       //    that cuts across the infield and keeps the dust moving.
-      runoffApron(K(0.125), 1, 18, 40, DUST);
+      runoffApron(K(0.128), 1, 22, 34, DUST);
       runoffApron(K(0.140), 1, 22, 36, DUST);
       runoffApron(K(0.133), 1, 36, 52, DIRTRD);
       marshalPost(K(0.129), 1, 21);
@@ -403,9 +431,11 @@
       //    deck no longer shares a plane with the pale runoff (278×structures /
       //    279×281 / self-281 flatCoplanars).
       runoffApron(K(0.296), -1, 7, [14, 0.35, 44], PALE);
-      runoffApron(K(0.308), -1, 7, [14, 0.35, 44], PALE);
+      runoffApron(K(0.310), -1, 10, [14, 0.35, 40], PALE);
       tyreWall(0.284, 0.320, -1, 24, TYRECAP);
-      scaffoldStand(0.288, 0.316, -1, 38);
+      //    step 7 (default 6): at 6 m two inner-curve deck planks shared a top face
+      //    (flatCoplanar) once the hairpin chord point moved the node phase.
+      scaffoldStand(0.288, 0.316, -1, 38, { step: 7 });
       runoffApron(K(0.302), -1, 58, [28, 0.42, 52], DUST);
       for (let i = 0; i < 4; i++)
         runoffApron(K(0.286 + i * 0.016), -1, 96 + i * 26, 64, i % 2 ? FIELD_B : STUBBLE);
@@ -526,8 +556,8 @@
       //     and moving them back to 0.866/0.876 drops both again).
       marshalPost(K(0.882), 1, 22);
       billboard(K(0.888), 1, 30, 14, 5.0, BOARD);
-      place(K(0.934), 1, 22, [13, 6.0, 38], [0.76, 0.74, 0.70]);
-      place(K(0.934), 1, 15.5, [0.5, 1.4, 34], FASCIA);
+      place(K(sl(-0.060)), 1, 22, [13, 6.0, 38], [0.76, 0.74, 0.70]);
+      place(K(sl(-0.060)), 1, 15.5, [0.5, 1.4, 34], FASCIA);
 
       // 17. FARMLAND SCATTER — flat farmland and scrub, outfield only. Denser
       //     than the earlier thin pass so the neon-green void fills with scrub
@@ -577,7 +607,7 @@
           const STONE = [0.62, 0.34, 0.24], STONE_D = [0.50, 0.28, 0.20];
           const WHITE = [0.86, 0.82, 0.74];
           modelGroup("buddh-temple-hill", {
-            center: vadd(foot, a.u, 14), size: [48, 36, 48], basis: b,
+            center: vadd(foot, a.u, 14), size: [72, 36, 72], basis: b,
           }, (stage) => {
             // Graded earth mound under the compound.
             stage._mat = MAT.CONCRETE;
@@ -678,7 +708,7 @@
         tree(k, -1, d, 6.5 + h * 4, DRYFOL);
       }
       for (let i = 0; i < 4; i++) {
-        const h = hash(i * 67), d = 452 + h * 26, k = K(0.606 + i * 0.016);
+        const h = hash(i * 67), d = 452 + h * 26, k = K(0.606 + i * 0.016 + (i === 3 ? 0.005 : 0));
         if (!clear(k, d, 18)) continue;
         tree(k, -1, d, 7 + h * 3, DRYFOL);
       }

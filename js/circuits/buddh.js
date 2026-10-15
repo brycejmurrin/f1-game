@@ -7,7 +7,10 @@
    already had all of them, so this one had to be recovered from OSM directly —
    tools/track/osm-circuits.json holds the bbox and the researched lap length,
    and re-running the stitch reproduces this trace.
-   Stitched 5141 m researched vs 5138 m projected (-0.06%). */
+   Stitched 5141 m researched vs 5138 m projected (-0.06%); the BUILT centreline
+   measures ~5104 m (-0.65 %, Catmull-Rom smoothing of the OSM trace).
+   Built straights run short of the circuit site's (main 676 m vs 900-950 m, back
+   1180 m vs 1.24 km): an OSM-trace limit, not corrected here. */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -18,9 +21,18 @@
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
-    // v0 sits mid the longest straight, placed by the stitcher. Not yet checked
-    // against the real start/finish line — see docs/tracks/START-LINES.md.
-    startFrac: 0.0000,
+    // The line sits on the MAIN straight (T16 exit -> T1), not the stitcher's v0,
+    // which is the middle of the 1.24 km back straight after the T3 hairpin. The
+    // 15 built corner groups match the circuit's turn-by-turn only with real T1 =
+    // the 93 deg right at old lap 0.791. Index 73 is a colinear control point
+    // added at 43 % of the old 72->73 chord (~370 m before T1; no cp existed
+    // there: 72 puts grid slots 16-23 in T16, 73 is 176 m from T1). With the
+    // hairpin mid-chord point below the start is index 74 of 98 (74 / 98). The
+    // exact painted line is UNVERIFIED (no survey coordinate; docs/tracks/START-LINES.md).
+    startFrac: 0.7551,
+    // The dressing is authored against v0 (old startFrac 0); only the pit /
+    // grandstand / paddock blocks are re-keyed to the new line via sl().
+    sceneryStartFrac: 0,
     name: "BUDDH",
     gp: "Indian GP",
     country: "India",
@@ -55,18 +67,23 @@
     // 16 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
     sectors: [0.334, 0.667],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.1197, 0.2288, 0.2527, 0.2963, 0.3103, 0.3663, 0.3807, 0.4228, 0.4913, 0.5092, 0.5633, 0.5733, 0.6482, 0.7943, 0.8133, 0.8682],
+    // Re-seated onto the main-straight line (old v0 frame + _sceneryShift 0.2866, the
+    // rotate-markings.cjs rule): [0] = real T1 (the 93 deg right), [1] T2, [2] the T3
+    // hairpin, [3] = T4 after the 1.24 km back straight.
+    turns: [0.0809, 0.0999, 0.1548, 0.4063, 0.5154, 0.5393, 0.5829, 0.5969, 0.6529, 0.6673, 0.7094, 0.7779, 0.7958, 0.8499, 0.8599, 0.9348],
     // sparse: the outfield is open farmland with a field boundary, not the
     // generic 2–3 tree wood (the scatter was dropping ~90 of those).
     furniture: { tree: "broad", fol: [0.26, 0.40, 0.22], lamp: "post", lc: [0.92, 0.96, 1.0], sparse: true },
     kit: { marshal: "kiosk", rail: "wArmco", fence: "panelled", tyre: "stack", board: "monopole", gantry: "truss", camera: "monopole", hoarding: "panel" },
     standSet: ["alu", "sandstone", "steel"],
+    // 2026-10-15: +1 mid-chord point between the two apex samples of the R 15 m hairpin
+    // (old s 0.119): min node radius 7.05 -> 9.1 m (> hw 8), apex moved 0.4 m.
     // Colinear samples 40 m before two hairpins (the 178 m and 661 m chords).
     // Clears the folds at s 0.119 and 0.792. Apexes stay within 1.2 m. The
     // s 0.869 fold, at the start of the 742 m straight, does not.
     // +7 chord control points (2026-10 TE-1): short-spaced points 20-90 m either side of the tight hairpins so the
     // uniform Catmull-Rom stops overshooting (node radius korea 2.2 m / buddh 4.8 m / bahrain 5.2 m before; tools/track/verify-track.cjs).
-    path: { len: 5138, pts: [[-305.1,94.6],[-378.3,-170.7],[-410.63,-304.91],[-420,-343.8],[-421.6,-373.7],[-422.9,-398.7],[-419.6,-408.1],[-415.5,-410.6],[-406.8,-412.1],[-392.4,-408.1],[-366.4,-393.2],[-323,-368.3],[44.4,-157.6],[54.7,-153.9],[72,-153.2],[87,-156.7],[94.2,-160.6],[145.8,-208.3],[151,-214.2],[157,-227.9],[157.3,-242.4],[154.5,-250],[137.7,-271.2],[133.5,-286.6],[145.3,-424.6],[148.3,-441.9],[153.5,-452.2],[161.1,-460],[203.9,-482.8],[212.1,-493.2],[215.6,-502.2],[218,-515.4],[225.8,-738.1],[232.1,-770.2],[245.1,-792.7],[265.2,-809.9],[286.1,-819.1],[299.1,-821.6],[319.4,-821.6],[335.2,-817.5],[354.8,-807.4],[380.2,-785.8],[394,-769.5],[411,-740.2],[415.7,-728.3],[422.5,-704.4],[422.9,-686.1],[417,-666.5],[403.8,-648.9],[346.1,-602.5],[322.1,-573.8],[242.2,-434.5],[230.5,-409.3],[228.5,-388.9],[229.7,-379.5],[238.9,-356.8],[289.2,-296.5],[292.3,-287.7],[276.9,-52.3],[273.8,-40.5],[266,-26.6],[254.9,-13.9],[239.6,-5.2],[222.5,-1.8],[205,-4.4],[1.9,-120.2],[-69.2,-153.8],[-92,-160.5],[-100.2,-159.5],[-112.8,-151.3],[-115.9,-140.3],[-115.8,-133.4],[-103.5,-96.1],[108.91,487.02],[122.6,524.6],[123,540.9],[116.8,548.8],[109.7,552.5],[104.3,553.9],[54.4,562.9],[31.4,570.3],[10.5,583.4],[-9.5,602.7],[-28.6,632.6],[-48.8,677.8],[-55.9,708.7],[-59.7,736.7],[-63.7,766.5],[-67.7,796.2],[-72.5,814.6],[-76.3,818.8],[-85.5,821.6],[-95.9,817.7],[-101.5,808.3],[-109.7,779.5],[-123.4,731.4]] },
+    path: { len: 5138, pts: [[-305.1,94.6],[-378.3,-170.7],[-410.63,-304.91],[-420,-343.8],[-421.6,-373.7],[-422.9,-398.7],[-419.6,-408.1],[-415.5,-410.6],[-411.15,-411.35],[-406.8,-412.1],[-392.4,-408.1],[-366.4,-393.2],[-323,-368.3],[44.4,-157.6],[54.7,-153.9],[72,-153.2],[87,-156.7],[94.2,-160.6],[145.8,-208.3],[151,-214.2],[157,-227.9],[157.3,-242.4],[154.5,-250],[137.7,-271.2],[133.5,-286.6],[145.3,-424.6],[148.3,-441.9],[153.5,-452.2],[161.1,-460],[203.9,-482.8],[212.1,-493.2],[215.6,-502.2],[218,-515.4],[225.8,-738.1],[232.1,-770.2],[245.1,-792.7],[265.2,-809.9],[286.1,-819.1],[299.1,-821.6],[319.4,-821.6],[335.2,-817.5],[354.8,-807.4],[380.2,-785.8],[394,-769.5],[411,-740.2],[415.7,-728.3],[422.5,-704.4],[422.9,-686.1],[417,-666.5],[403.8,-648.9],[346.1,-602.5],[322.1,-573.8],[242.2,-434.5],[230.5,-409.3],[228.5,-388.9],[229.7,-379.5],[238.9,-356.8],[289.2,-296.5],[292.3,-287.7],[276.9,-52.3],[273.8,-40.5],[266,-26.6],[254.9,-13.9],[239.6,-5.2],[222.5,-1.8],[205,-4.4],[1.9,-120.2],[-69.2,-153.8],[-92,-160.5],[-100.2,-159.5],[-112.8,-151.3],[-115.9,-140.3],[-115.8,-133.4],[-103.5,-96.1],[-12.17,154.6],[108.91,487.02],[122.6,524.6],[123,540.9],[116.8,548.8],[109.7,552.5],[104.3,553.9],[54.4,562.9],[31.4,570.3],[10.5,583.4],[-9.5,602.7],[-28.6,632.6],[-48.8,677.8],[-55.9,708.7],[-59.7,736.7],[-63.7,766.5],[-67.7,796.2],[-72.5,814.6],[-76.3,818.8],[-85.5,821.6],[-95.9,817.7],[-101.5,808.3],[-109.7,779.5],[-123.4,731.4]] },
   }
   );
 })();
