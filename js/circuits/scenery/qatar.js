@@ -220,7 +220,7 @@
         const PIT_H = 12;
         const c = vadd(a.c, a.u, PIT_H * 0.55);
         // Emit body is factored out so `{ required: true }` stays within the
-        // contract test's 2200-char window of modelGroup("qatar-pit-slab".
+        // scenery-api-contract 2200-char window after the pit-slab modelGroup id.
         const emitPit = (stage) => {
           addBox(stage, vadd(a.c, a.u, 5.5), [16, 11, PIT_LEN], WHITE, b);
           addBox(stage, vadd(vadd(a.c, a.u, 5.7), a.r, 8.05),
