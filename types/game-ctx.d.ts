@@ -375,6 +375,7 @@ interface GameCtx {
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
   readonly openDailyPicker: () => void;
+  readonly closeSettings: () => void;
   readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
