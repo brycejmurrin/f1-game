@@ -241,7 +241,6 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/aero-zone-turns.cjs** | Pairs each geometry-detected straight with the `def.turns[]` indices bounding it, so an aero-zone claim can be checked. | agent-view |
 | **track/audit-circuit.cjs** | One circuit's offline audits in one call (verify/float/clip/coplanar/props/ground) vs baselines; `--json`, `--checks`. | survey-track |
 | **track/barrier-jumps.cjs** | Pure helpers: max adjacent \|Δbar\| / wallAt step on a barrier table (run-off terminus teleports). | check-changes |
-| **track/build-gallery.cjs** | Scans open cursor/*-survey* branches + local seeds; WebP + gallery/tracks/index.html for Pages. | survey-track |
 | **track/clip-audit.cjs** | PROP-VS-PROP interpenetration detector (emission-order adjacency); `--gate` ratchets against `clip-baseline.json`. | scenery-dress |
 | **track/coplanar-audit.cjs** | Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`. | scenery-dress |
 | **track/designer-code.mjs** | Headless designer share-code checker: decode APXT1/APXT2 via editor-vm, validate + insight summary; `--json`. | new-track |
@@ -251,7 +250,6 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/import-circuit-path.mjs** | Projects a `bacinger/f1-circuits` GeoJSON feature into a circuit def's `path`; `--self-check` diffs committed traces. | new-track |
 | **track/line-audit.mjs** | Audits the baked racing line on real circuits: slope, clamp time, corner-time / lap-time gains, tighter corners. | agent-view |
 | **track/measure-props-over-road.mjs** | Prop geometry on/above the racing line for ONE track; JSON report, `--shots` writes PNGs to `artifacts/tmp/`. | scenery-dress |
-| **track/pr-survey-panel.cjs** | Emits a PR body section with raw.githubusercontent.com image URLs (3 per row) from a survey branch. | survey-track |
 | **track/props-tris.cjs** | Per-circuit props triangles after hidden-face strip + vertex compaction; proves compaction render-identical. | scenery-dress |
 | **track/refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data; tests never call it or the network. | new-track |
 | **track/rotate-markings.cjs** | Rotates each circuit's `turns` onto a corrected start line by the scenery's arc shift, then re-sorts them; `--check`. | new-track |

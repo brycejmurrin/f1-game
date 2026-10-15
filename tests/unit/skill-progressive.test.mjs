@@ -476,7 +476,14 @@ test("every mcp__ tool an agent body names is in its tools: list", () => {
     const body = text.replace(/^---\n[\s\S]*?\n---\n/, "").split(/\n\s*\n/)
       .filter((para) => !/calls for the PARENT/i.test(para)).join("\n\n");
     const named = new Set(body.match(/\bmcp__[A-Za-z0-9_-]+__[A-Za-z0-9_]+/g) || []);
-    for (const t of named) assert.ok(!fm.tools || tools.has(t), `${f}: the body names ${t}, but tools: omits it`);
+    // `mcp__<server>` or `mcp__<server>__*` in tools: grants every tool of that
+    // server (https://code.claude.com/docs/en/sub-agents §Available tools,
+    // read 2026-10-15) — the worker agent lists whole servers.
+    const grants = (t) => tools.has(t) || [...tools].some((g) => {
+      const server = /^(mcp__[A-Za-z0-9_-]+?)(?:__\*)?$/.exec(g)?.[1];
+      return server && t.startsWith(`${server}__`);
+    });
+    for (const t of named) assert.ok(!fm.tools || grants(t), `${f}: the body names ${t}, but tools: omits it`);
   }
 });
 
