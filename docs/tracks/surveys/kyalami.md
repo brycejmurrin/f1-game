@@ -1,42 +1,20 @@
-# Kyalami — circuit survey (2026-10-14)
+# Kyalami — circuit survey (2026-10-15)
 
-**Branch survey:** `cursor/kyalami-survey-c736`  
-**Layout:** 2016 rebuild, 4.526 m OSM trace, anticlockwise (`reverse: true`).  
-**Brief:** `docs/tracks/kyalami.md`  
-**Screenshots:** `artifacts/shots/tracks/kyalami/` (**36** JPEG frames, q≈80, ≤1280px; weather variants deferred until shared shot batch lands).
+**Branch:** `cursor/kyalami-survey-c736` · **Brief:** `docs/tracks/kyalami.md`  
+**Screenshots:** `artifacts/shots/tracks/kyalami/` — **36** JPEG frames (q≈80, ≤1280px, <300 KB), captured with shared `shot.mjs` (`--jpeg --present-timeout 90 --capture-retries 4 --wait 120`).
 
 ## Code map
 
 | Layer | Path | Role |
 |--------|------|------|
-| Def | `js/circuits/kyalami.js` | OSM `path`, `elevations` (~45 m relief), `hwZones` / `bankZones`, `turns` (13 apexes), `furniture` (sparse acacia), `pit: { side: -1 }`, `sceneryCoordinates: "racing"`, `terrainOuter: 120`, straw-gold `pal` |
-| Scenery | `js/circuits/scenery/kyalami.js` | ~576 lines: Highveld dressing, five `required` `modelGroup`s, iron terraces, kit hospitality, estate houses on `groundUnder` |
-| Registry | `js/track/circuit-meta.js` | Meta row mirrors def (`reverse`, theme `green`, `terrainOuter: 120`) |
-| Build | `js/track/tracks.js` | Resolves def, applies `transformSceneryApi` when `reverse` (side/range compensation — see scenery `IN = (side) => -side`) |
+| Def | `js/circuits/kyalami.js` | OSM path, elevations, `reverse: true`, `sceneryCoordinates: "racing"`, straw-gold `pal` |
+| Scenery | `js/circuits/scenery/kyalami.js` | Highveld dressing, six required `modelGroup` landmarks |
 | Landmarks | `tests/data/landmarks/kyalami.json` | pit-block, race-control, main-grandstand, headgear, windpump, clubhouse |
-| Lighting | `js/lighting/presets.js` | Full `kyalami|*` grid; day dry tuned for thin highveld air (`fogDensityMul` 0.55) |
 
-### Scenery structure (by lap fraction, racing space)
+## Offline audit
 
-1. **Veld scatter** — `every(30)` acacia + `every(24)` scrub; `openArea()` clears start/finish and plateau 0.36–0.48.
-2. **Pit straight (s≈0.93–0.02)** — brick pit block + race control, main GS (−1), sponsor hoarding, motorhomes, kit hospitality, clubhouse, gantry.
-3. **Crowthorne (s≈0.06–0.12)** — terrace, gravel, red tyre wall, marshal post.
-4. **Mid-lap** — Barbecue gravel, spectator hills, guardrails both sides, headgear model (s≈0.34), climb terrace (0.47).
-5. **Leeukop / high point (s≈0.56)** — gravel, windpump + dam (0.70).
-6. **Plunge (s≈0.88)** — yellow tyre wall, final terrace.
-7. **Horizon** — ridge ring, four flat-top mine dumps (`addFrustum`), Midrand houses/office blocks, koppies `mountain()`, firebreak `groundPatch` strips.
-
-## Theme and models
-
-- **Palette:** straw-gold grass `[0.48, 0.43, 0.20]` in def; scenery uses `THORN`, `EARTH`, `BRICK`, `OXIDE`, `DUMP` (cyanided sand).
-- **Vegetation:** `api.acacia` flat crowns (not `tree()` umbrellas); columnar blue-gum windbreaks at 52–60 m; `forestEdge` bands; woodlot grids 95–125 m on outside (+1).
-- **Architecture:** face brick + corrugated iron terraces; no cantilever grandstands.
-- **Hero models (baked when pack live):** `kyalami-pit-block`, `kyalami-race-control`, `kyalami-main-grandstand`, `kyalami-headgear`, `kyalami-windpump`, `kyalami-clubhouse`.
-
-
-## Offline audit (latest)
-
-```
+```sh
+node tools/track/verify-track.cjs kyalami
 node tools/track/audit-circuit.cjs kyalami
 ```
 
@@ -44,87 +22,73 @@ node tools/track/audit-circuit.cjs kyalami
 |--------|--------|
 | verify-track | OK, surface folds 0 |
 | float / clip / coplanar | 0 |
-| ground | buried **5** (baseline 6) after windpump dam tweak |
+| ground | buried **5** (baseline 6) after windpump dam +0.12 m |
 
 ## Visual survey — panels
 
-> Paths below are relative to this file. GitHub PR uses `raw.githubusercontent.com` on branch `cursor/kyalami-survey-c736`.
+GitHub PR uses `raw.githubusercontent.com` on `cursor/kyalami-survey-c736`.
 
-### Sector 1 — landmarks (day, dry)
+### Sector landmarks (day, dry)
 
 | | | |
 |:---:|:---:|:---:|
-| ![S1-01-start](../../../artifacts/shots/tracks/kyalami/S1-01-start__day.jpg) | ![S1-02-main-gs](../../../artifacts/shots/tracks/kyalami/S1-02-main-gs__day.jpg) | ![S1-03-pit](../../../artifacts/shots/tracks/kyalami/S1-03-pit__day.jpg) |
+| ![SEC-01-start__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-01-start__day__dry.jpg) | ![SEC-02-main-gs__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-02-main-gs__day__dry.jpg) | ![SEC-03-pit__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-03-pit__day__dry.jpg) |
 | **Start / main straight (orbit)**<br/>TOD: day · wx: dry | **Main grandstand (trackside)**<br/>TOD: day · wx: dry | **Pit paddock (orbit)**<br/>TOD: day · wx: dry |
-| ![S1-04-race-control](../../../artifacts/shots/tracks/kyalami/S1-04-race-control__day.jpg) | ![S1-05-crowthorne](../../../artifacts/shots/tracks/kyalami/S1-05-crowthorne__day.jpg) | ![S1-06-crowthorne-terrace](../../../artifacts/shots/tracks/kyalami/S1-06-crowthorne-terrace__day.jpg) |
-| **Race control (trackside)**<br/>TOD: day · wx: dry | **T1 Crowthorne (chase)**<br/>TOD: day · wx: dry | **Crowthorne iron terrace**<br/>TOD: day · wx: dry |
-| ![S1-07-jukskei](../../../artifacts/shots/tracks/kyalami/S1-07-jukskei__day.jpg) | ![S1-08-barbecue](../../../artifacts/shots/tracks/kyalami/S1-08-barbecue__day.jpg) | ![S1-09-sector1-mid](../../../artifacts/shots/tracks/kyalami/S1-09-sector1-mid__day.jpg) |
-| **Jukskei Sweep**<br/>TOD: day · wx: dry | **Barbecue corner**<br/>TOD: day · wx: dry | **Sector 1 mid-lap**<br/>TOD: day · wx: dry |
-| ![S1-10-hospitality](../../../artifacts/shots/tracks/kyalami/S1-10-hospitality__day.jpg) |  |  |
-| **Paddock hospitality**<br/>TOD: day · wx: dry |  |  |
+| ![SEC-04-crowthorne__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-04-crowthorne__day__dry.jpg) | ![SEC-05-jukskei__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-05-jukskei__day__dry.jpg) | ![SEC-06-barbecue__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-06-barbecue__day__dry.jpg) |
+| **T1 Crowthorne (chase)**<br/>TOD: day · wx: dry | **Jukskei Sweep**<br/>TOD: day · wx: dry | **Barbecue corner**<br/>TOD: day · wx: dry |
+| ![SEC-07-headgear__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-07-headgear__day__dry.jpg) | ![SEC-08-climb__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-08-climb__day__dry.jpg) | ![SEC-09-leeukop__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-09-leeukop__day__dry.jpg) |
+| **Mine headgear (orbit)**<br/>TOD: day · wx: dry | **Climb iron terrace**<br/>TOD: day · wx: dry | **Leeukop high point**<br/>TOD: day · wx: dry |
+| ![SEC-10-windpump__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-10-windpump__day__dry.jpg) | ![SEC-11-plunge__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-11-plunge__day__dry.jpg) | ![SEC-12-horizon__day__dry.jpg](../../../artifacts/shots/tracks/kyalami/SEC-12-horizon__day__dry.jpg) |
+| **Windpump + dam**<br/>TOD: day · wx: dry | **Plunge descent**<br/>TOD: day · wx: dry | **Horizon / mine dumps (eye)**<br/>TOD: day · wx: dry |
 
-### Sector 2 — landmarks (day, dry)
-
-| | | |
-|:---:|:---:|:---:|
-| ![S2-01-esses](../../../artifacts/shots/tracks/kyalami/S2-01-esses__day.jpg) | ![S2-02-headgear](../../../artifacts/shots/tracks/kyalami/S2-02-headgear__day.jpg) | ![S2-03-sunset](../../../artifacts/shots/tracks/kyalami/S2-03-sunset__day.jpg) |
-| **The Esses**<br/>TOD: day · wx: dry | **Mine headgear (orbit)**<br/>TOD: day · wx: dry | **Sunset / climb**<br/>TOD: day · wx: dry |
-| ![S2-04-climb-terrace](../../../artifacts/shots/tracks/kyalami/S2-04-climb-terrace__day.jpg) | ![S2-05-sector2](../../../artifacts/shots/tracks/kyalami/S2-05-sector2__day.jpg) | ![S2-06-clubhouse](../../../artifacts/shots/tracks/kyalami/S2-06-clubhouse__day.jpg) |
-| **Climb iron terrace**<br/>TOD: day · wx: dry | **Sector 2 overview**<br/>TOD: day · wx: dry | **Clubhouse (orbit)**<br/>TOD: day · wx: dry |
-| ![S2-07-broadcast](../../../artifacts/shots/tracks/kyalami/S2-07-broadcast__day.jpg) |  |  |
-| **Broadcast compound**<br/>TOD: day · wx: dry |  |  |
-
-### Sector 3 — landmarks (day, dry)
+#### Start straight — weather & lighting
 
 | | | |
 |:---:|:---:|:---:|
-| ![S3-01-leeukop](../../../artifacts/shots/tracks/kyalami/S3-01-leeukop__day.jpg) | ![S3-02-windpump](../../../artifacts/shots/tracks/kyalami/S3-02-windpump__day.jpg) | ![S3-03-plunge](../../../artifacts/shots/tracks/kyalami/S3-03-plunge__day.jpg) |
-| **Leeukop high point**<br/>TOD: day · wx: dry | **Windpump + dam**<br/>TOD: day · wx: dry | **Plunge descent**<br/>TOD: day · wx: dry |
-| ![S3-04-final](../../../artifacts/shots/tracks/kyalami/S3-04-final__day.jpg) | ![S3-05-horizon](../../../artifacts/shots/tracks/kyalami/S3-05-horizon__day.jpg) | ![S3-06-final-straight](../../../artifacts/shots/tracks/kyalami/S3-06-final-straight__day.jpg) |
-| **Final corner**<br/>TOD: day · wx: dry | **Horizon / mine dumps (eye)**<br/>TOD: day · wx: dry | **Return to pit straight**<br/>TOD: day · wx: dry |
-| ![S3-07-sector3-mid](../../../artifacts/shots/tracks/kyalami/S3-07-sector3-mid__day.jpg) |  |  |
-| **Sector 3 mid-lap**<br/>TOD: day · wx: dry |  |  |
+| ![HERO-start__day__fog.jpg](../../../artifacts/shots/tracks/kyalami/HERO-start__day__fog.jpg) | ![HERO-start__day__overcast.jpg](../../../artifacts/shots/tracks/kyalami/HERO-start__day__overcast.jpg) | ![HERO-start__day__rain.jpg](../../../artifacts/shots/tracks/kyalami/HERO-start__day__rain.jpg) |
+| **Start straight**<br/>TOD: day · wx: fog | **Start straight**<br/>TOD: day · wx: overcast | **Start straight**<br/>TOD: day · wx: rain |
+| ![HERO-start__day__wet.jpg](../../../artifacts/shots/tracks/kyalami/HERO-start__day__wet.jpg) | ![HERO-start__dusk__dry.jpg](../../../artifacts/shots/tracks/kyalami/HERO-start__dusk__dry.jpg) | ![HERO-start__night__dry.jpg](../../../artifacts/shots/tracks/kyalami/HERO-start__night__dry.jpg) |
+| **Start straight**<br/>TOD: day · wx: wet | **Start straight**<br/>TOD: dusk · wx: dry | **Start straight**<br/>TOD: night · wx: dry |
 
-### Lighting variants (dry weather; four anchor views)
-
-Time-of-day only (`__apex.setTimeOfDay`). Rain/wet/overcast/fog matrix **deferred** — rebase on shared tooling PR `tools: shared shot tooling for circuit surveys`.
+#### Pit complex — weather & lighting
 
 | | | |
 |:---:|:---:|:---:|
-| ![LIT-01-start](../../../artifacts/shots/tracks/kyalami/LIT-01-start__dawn.jpg) | ![LIT-01-start](../../../artifacts/shots/tracks/kyalami/LIT-01-start__dusk.jpg) | ![LIT-01-start](../../../artifacts/shots/tracks/kyalami/LIT-01-start__night.jpg) |
-| **Start straight**<br/>TOD: dawn · wx: dry | **Start straight**<br/>TOD: dusk · wx: dry | **Start straight**<br/>TOD: night · wx: dry |
-| ![LIT-02-pit](../../../artifacts/shots/tracks/kyalami/LIT-02-pit__dawn.jpg) | ![LIT-02-pit](../../../artifacts/shots/tracks/kyalami/LIT-02-pit__dusk.jpg) | ![LIT-02-pit](../../../artifacts/shots/tracks/kyalami/LIT-02-pit__night.jpg) |
-| **Pit complex**<br/>TOD: dawn · wx: dry | **Pit complex**<br/>TOD: dusk · wx: dry | **Pit complex**<br/>TOD: night · wx: dry |
-| ![LIT-03-crowthorne](../../../artifacts/shots/tracks/kyalami/LIT-03-crowthorne__dawn.jpg) | ![LIT-03-crowthorne](../../../artifacts/shots/tracks/kyalami/LIT-03-crowthorne__dusk.jpg) | ![LIT-03-crowthorne](../../../artifacts/shots/tracks/kyalami/LIT-03-crowthorne__night.jpg) |
-| **Crowthorne T1**<br/>TOD: dawn · wx: dry | **Crowthorne T1**<br/>TOD: dusk · wx: dry | **Crowthorne T1**<br/>TOD: night · wx: dry |
-| ![LIT-04-headgear](../../../artifacts/shots/tracks/kyalami/LIT-04-headgear__dawn.jpg) | ![LIT-04-headgear](../../../artifacts/shots/tracks/kyalami/LIT-04-headgear__dusk.jpg) | ![LIT-04-headgear](../../../artifacts/shots/tracks/kyalami/LIT-04-headgear__night.jpg) |
-| **Mine headgear**<br/>TOD: dawn · wx: dry | **Mine headgear**<br/>TOD: dusk · wx: dry | **Mine headgear**<br/>TOD: night · wx: dry |
+| ![HERO-pit__day__fog.jpg](../../../artifacts/shots/tracks/kyalami/HERO-pit__day__fog.jpg) | ![HERO-pit__day__overcast.jpg](../../../artifacts/shots/tracks/kyalami/HERO-pit__day__overcast.jpg) | ![HERO-pit__day__rain.jpg](../../../artifacts/shots/tracks/kyalami/HERO-pit__day__rain.jpg) |
+| **Pit complex**<br/>TOD: day · wx: fog | **Pit complex**<br/>TOD: day · wx: overcast | **Pit complex**<br/>TOD: day · wx: rain |
+| ![HERO-pit__day__wet.jpg](../../../artifacts/shots/tracks/kyalami/HERO-pit__day__wet.jpg) | ![HERO-pit__dusk__dry.jpg](../../../artifacts/shots/tracks/kyalami/HERO-pit__dusk__dry.jpg) | ![HERO-pit__night__dry.jpg](../../../artifacts/shots/tracks/kyalami/HERO-pit__night__dry.jpg) |
+| **Pit complex**<br/>TOD: day · wx: wet | **Pit complex**<br/>TOD: dusk · wx: dry | **Pit complex**<br/>TOD: night · wx: dry |
 
-### Findings (visual)
+#### Crowthorne T1 — weather & lighting
+
+| | | |
+|:---:|:---:|:---:|
+| ![HERO-crowthorne__day__fog.jpg](../../../artifacts/shots/tracks/kyalami/HERO-crowthorne__day__fog.jpg) | ![HERO-crowthorne__day__overcast.jpg](../../../artifacts/shots/tracks/kyalami/HERO-crowthorne__day__overcast.jpg) | ![HERO-crowthorne__day__rain.jpg](../../../artifacts/shots/tracks/kyalami/HERO-crowthorne__day__rain.jpg) |
+| **Crowthorne T1**<br/>TOD: day · wx: fog | **Crowthorne T1**<br/>TOD: day · wx: overcast | **Crowthorne T1**<br/>TOD: day · wx: rain |
+| ![HERO-crowthorne__day__wet.jpg](../../../artifacts/shots/tracks/kyalami/HERO-crowthorne__day__wet.jpg) | ![HERO-crowthorne__dusk__dry.jpg](../../../artifacts/shots/tracks/kyalami/HERO-crowthorne__dusk__dry.jpg) | ![HERO-crowthorne__night__dry.jpg](../../../artifacts/shots/tracks/kyalami/HERO-crowthorne__night__dry.jpg) |
+| **Crowthorne T1**<br/>TOD: day · wx: wet | **Crowthorne T1**<br/>TOD: dusk · wx: dry | **Crowthorne T1**<br/>TOD: night · wx: dry |
+
+#### Mine headgear — weather & lighting
+
+| | | |
+|:---:|:---:|:---:|
+| ![HERO-headgear__day__fog.jpg](../../../artifacts/shots/tracks/kyalami/HERO-headgear__day__fog.jpg) | ![HERO-headgear__day__overcast.jpg](../../../artifacts/shots/tracks/kyalami/HERO-headgear__day__overcast.jpg) | ![HERO-headgear__day__rain.jpg](../../../artifacts/shots/tracks/kyalami/HERO-headgear__day__rain.jpg) |
+| **Mine headgear**<br/>TOD: day · wx: fog | **Mine headgear**<br/>TOD: day · wx: overcast | **Mine headgear**<br/>TOD: day · wx: rain |
+| ![HERO-headgear__day__wet.jpg](../../../artifacts/shots/tracks/kyalami/HERO-headgear__day__wet.jpg) | ![HERO-headgear__dusk__dry.jpg](../../../artifacts/shots/tracks/kyalami/HERO-headgear__dusk__dry.jpg) | ![HERO-headgear__night__dry.jpg](../../../artifacts/shots/tracks/kyalami/HERO-headgear__night__dry.jpg) |
+| **Mine headgear**<br/>TOD: day · wx: wet | **Mine headgear**<br/>TOD: dusk · wx: dry | **Mine headgear**<br/>TOD: night · wx: dry |
+
+
+### Findings
 
 | ID | Severity | Finding |
 |----|----------|---------|
-| K1 | Low | Pit-straight **motorhomes** up to **0.32 m** buried on falling grade — needs `groundUnder` pads, not gap-only |
-| K2 | Fixed | Windpump dam trough +0.12 m (`kyalami.js:406`) — buried 6→5 |
-| K3 | Info | **15 trees** guard-dropped (parallel-straight fold at ~52 m gum rows) |
-| K4 | Lighting | **Night:** `night: false` + `furniture.lamp: "none"` — expect dark veld; no floodlight pass (by design) |
-| K5 | Deferred | Weather panels (rain/wet/fog/overcast) blocked until batch `weather` in shared `shot.mjs` |
-
-## Ranked improvements
-
-1. Motorhome `groundUnder` pads (K1)
-2. Windbreak distance / fold guard (K3)
-3. Weather survey matrix after shared tooling merge
-4. Turn-name signage at Crowthorne / Barbecue / Leeukop
+| K1 | Low | Pit motorhomes ~0.32 m buried — `groundUnder` pads needed |
+| K2 | Fixed | Windpump dam trough +0.12 m |
+| K3 | Info | 15 trees guard-dropped (parallel-straight fold) |
+| K4 | Lighting | Night frames dark — `furniture.lamp: "none"` (expected) |
+| K5 | Weather | Rain/wet/fog/overcast verified on hero anchors |
 
 ## Fixes in this PR
 
-- Windpump dam approach slab **+0.12 m**
-- Survey doc + **36** committed JPEG frames under `artifacts/shots/tracks/kyalami/`
-
-## Verify
-
-```sh
-node tools/track/verify-track.cjs kyalami
-node tools/track/audit-circuit.cjs kyalami
-```
+- Windpump dam approach slab +0.12 m (`js/circuits/scenery/kyalami.js`)
+- Survey doc + 36 committed JPEGs
