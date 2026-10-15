@@ -2,6 +2,7 @@
 name: ci-watcher
 description: Read-only PR board for CI Watch. Use when a session wants the state of every open PR into the deploy branch and what to do about each (ARM, READY, SYNC, FIX, FOREIGN-ARM, WAIT, NONE) without spending its own context on API calls. Runs pr-board.mjs and ready-full-cap.mjs and returns a compact table with the exact GitHub MCP call per suggested action. Never calls a mutating tool, never merges.
 model: haiku
+omitClaudeMd: true
 maxTurns: 8
 readonly: true
 is_background: true

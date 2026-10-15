@@ -13,7 +13,7 @@
     "fuji": 12,
     "imola": 10,
     "interlagos": 33,
-    "istanbul": 13,
+    "istanbul": 5,
     "jacarepagua": 1,
     "jerez": 2,
     "kyalami": 6,
@@ -21,7 +21,6 @@
     "mexico": 5,
     "miami": 4,
     "monaco": 4,
-    "mont_tremblant": 1,
     "montreal": 5,
     "mugello": 5,
     "nurburgring": 3,
@@ -35,7 +34,6 @@
     "sochi": 4,
     "spa": 5,
     "suzuka": 2,
-    "watkins_glen": 1,
     "zandvoort": 4,
     "zolder": 7
   },
@@ -48,8 +46,7 @@
     "mexico": 3,
     "miami": 8,
     "paul_ricard": 5,
-    "qatar": 1,
-    "spa": 1
+    "qatar": 1
   },
   "flatCoplanar": {
     "abudhabi": 3,
@@ -67,7 +64,7 @@
     "hungaroring": 1,
     "imola": 1,
     "indianapolis": 1,
-    "istanbul": 3,
+    "istanbul": 1,
     "jeddah": 3,
     "jerez": 3,
     "korea": 7,
