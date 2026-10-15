@@ -12,7 +12,14 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { outcomeOf, outcome, aliveRun, procStart } from "../../tools/ci/test-bg.mjs";
+import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv } from "../../tools/ci/test-bg.mjs";
+
+test("parseTestBgArgv reads --timeout and --timeout=N as minutes", () => {
+  assert.equal(parseTestBgArgv(["--wait", "--timeout", "45"]).waitTimeoutMin, 45);
+  assert.equal(parseTestBgArgv(["--wait", "--timeout=45"]).waitTimeoutMin, 45);
+  assert.throws(() => parseTestBgArgv(["--wait", "--timeout"]), /--timeout requires/);
+  assert.deepEqual(parseTestBgArgv(["--wait", "--timeout", "45", "smoke"]).groups, ["smoke"]);
+});
 
 test("a non-zero exit wins over an earlier passing summary", () => {
   const log = "[tooling-fast] = run passed (249 passed, 0 failed)\n…sweeps…\n# pass 3\n# fail 1\n= bg exit 1\n";

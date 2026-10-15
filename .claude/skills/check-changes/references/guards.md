@@ -36,14 +36,20 @@ expectation vs real regression.
    `version.json`. Cross-lineage merge:
    `node tools/gen/gen-shell.mjs` regenerates the union shell.
 
-4. **Smoke + load order** if you touched load order, `index.html`, or a core
-   module (`index.html` script tags must match `tools/manifest.cjs`):
+4. **Structural guards (local edit loop)** — workers run the change-aware slice,
+   not the full suite in the foreground:
    ```sh
-   npm run test:tooling-fast && node tools/ci/test-bg.mjs smoke
+   node tools/ci/tooling-fast.mjs --changed
+   ```
+   Default concurrency is `os.cpus()` (never `--jobs=1` in the foreground). CI
+   and `deploy.mjs --gate-only` still run the full `tooling-fast` ladder.
+   Docs/skills/tools edits: `--changed` selects the docs-integrity family.
+   Smoke + load order when you touched `index.html` or `tools/manifest.cjs`:
+   ```sh
+   node tools/ci/tooling-fast.mjs --changed && node tools/ci/test-bg.mjs smoke
    ```
    `test:tooling` also runs the slow full-fleet sweeps — reserve that for
-   geometry pushes. Docs/skills/tools edits: `test:tooling-fast` covers
-   docs-integrity.
+   geometry pushes.
 
 ## Reading failures
 
