@@ -490,6 +490,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-occlusion.test.mjs",
   // GLX output-target (VR task 30): source-scan of bindFramebuffer(null) plus a recording-mock proof that setOutputTarget routes the final pass.
   "tests/unit/glx-output-target.test.mjs",
+  // #2153: GLX resize() snaps a ±1 px present/render jitter (WGX hysteresis) so the post chain is not rebuilt (mock).
+  "tests/unit/glx-resize-hysteresis.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/harness-display.test.mjs",

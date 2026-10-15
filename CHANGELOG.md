@@ -32,6 +32,9 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
 - Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
 - A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
+- Track Designer on a landscape phone: the map gets most of the screen and UNDO / FIT VIEW sit beside it instead of covering it (#2152).
+- Touch: sliders, dropdowns and fold-out rows (OVERALL SPEED, Spotify, EXTRA PAINT, EXTRA FUNDS, free-camera FOV) are big enough to tap (#2158).
+- Free camera with the lighting panel open: the camera bar no longer covers the panel's FREE CAMERA button on a phone (#2159).
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
