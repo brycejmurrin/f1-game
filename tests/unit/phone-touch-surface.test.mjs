@@ -112,9 +112,14 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   // The CAM and PAUSE buttons follow HUD SIZE (css/hud.css --tap-hud), but
   // only UP: --hud-btn-z is the top band's zoom floored at 1, so --tap-hud
   // never drops under the --tap rung. The restore eye stays on --tap itself.
-  for (const id of ["#pausebtn", "#btn-cam"]) {
-    assert.equal(decl(ov, id, "height"), "var(--tap-hud)", `${id} rides --tap-hud (HUD SIZE, floored at --tap)`);
-  }
+  // Past 150 % BUTTON SIZE PAUSE PAINTS bigger (--tap-btn, up to 200 %) while every layout reader keeps the
+  // --tap-hud band; CAM keeps the band height (its span crosses the sector plate) and moves left by PAUSE.
+  assert.equal(decl(ov, "#pausebtn", "height"), "var(--tap-btn, var(--tap-hud))", "#pausebtn paints --tap-btn, floored at the band");
+  assert.equal(decl(ov, "#btn-cam", "height"), "var(--tap-hud)", "#btn-cam keeps the --tap-hud band height");
+  assert.match(decl(ov, "#btn-cam", "right"), /var\(--tap-btn, var\(--tap-hud\)\)/, "CAM sits left of PAUSE's painted width");
+  const tb = decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--tap-btn");
+  assert.match(tb, /^max\(var\(--tap-hud\),/, "--tap-btn never paints under the band");
+  assert.match(tb, /var\(--dock-r-w, 0px\)/, "--tap-btn stops at the sector plate (it stands off --dock-r-w)");
   assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
   const hudCss = css("css/hud.css");
   assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
@@ -382,6 +387,30 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
     /body\[data-shape="wide"\]\[data-density="compact"\]\) #ios-install \{[^}]*right:\s*auto/,
     "compact-wide title parks #ios-install under the brand column, not over the doors",
   );
+});
+
+test("non-HUD menu hosts pad with the safe-area tokens", () => {
+  const overlay = decl(css("css/title.css"), "#overlay", "padding");
+  for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) {
+    assert.ok(overlay.includes(`var(${t})`), `#overlay padding uses ${t}`);
+  }
+  const screen = decl(css("css/components.css"), ".screen", "padding");
+  for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) {
+    assert.ok(screen.includes(`var(${t})`), `.screen padding uses ${t}`);
+  }
+  const compactBtns = decl(
+    css("css/menus.css"),
+    /:where\(body\[data-density="compact"\]\) #menu-buttons/,
+    "max-height",
+  );
+  assert.match(
+    compactBtns,
+    /min\(100%,\s*calc\(100\s*\*\s*var\(--svhz\)\s*-\s*var\(--safe-t\)\s*-\s*var\(--safe-b\)/,
+    "compact title column caps to the padded overlay box, not raw svh alone",
+  );
+  const tk = css("css/tokens.css");
+  assert.match(decl(tk, ":root", "--safe-w"), /var\(--safe-l\)/);
+  assert.match(decl(tk, ":root", "--safe-h"), /var\(--safe-t\)/);
 });
 
 /* ── the tilt prompt and the input.js fixes it must keep ─────────────────── */
