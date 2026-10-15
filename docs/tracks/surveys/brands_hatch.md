@@ -18,11 +18,7 @@
 
 ## Capture method
 
-36 headless frames via `scratch/brands-hatch-capture.mjs` driving `tools/shot/track-session.mjs` (SwiftShader). Weather set with `__apex.race(track, tod, wx)` (`wx`: `dry` \| `rain` \| `overcast` \| `fog`; `tod`: `day` \| `dawn` \| `dusk` \| `night`).
-
-> **Repo note:** `artifacts/` is gitignored until the shared shot-tooling PR adds `artifacts/shots/tracks/**`. PNGs live at `artifacts/shots/tracks/brands_hatch/` locally; rebase that PR to commit them.
-
-Image root on disk: `artifacts/shots/tracks/brands_hatch/` (PNG panels land in git after rebase on shared shot-tooling PR).
+36 headless JPEG frames (1280 px wide, q≈80) under `artifacts/shots/tracks/brands_hatch/`, captured via `scratch/brands-hatch-capture.mjs` + `track-session.mjs`. Weather via `__apex.race(track, tod, wx)`.
 
 ---
 
@@ -32,59 +28,59 @@ Sector splits from def: S1 `s` 0–27%, S2 27–70.3%, S3 70.3–100%.
 
 ### Sector 1 — Brabham, Paddock Hill, Druids
 
-| Frame | Frame | Frame |
+| | | |
 |---|---|---|
-| `s1-01-pit-straight-day-dry.png` — pit straight | `s1-02-paddock-hill-day-dry.png` — Paddock Hill | `s1-03-kentagon-day-dry.png` — Kentagon (+1) |
-| `s1-04-druids-day-dry.png` — Druids | `s1-05-druids-bridge-day-dry.png` — footbridge | `s1-06-hailwoods-day-dry.png` — Hailwoods dip |
+| ![Pit straight — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s1-01-pit-straight-day-dry.jpg)<br>**Pit straight** · orbit · day · dry | ![Paddock Hill — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s1-02-paddock-hill-day-dry.jpg)<br>**Paddock Hill** · trackside · day · dry | ![Kentagon — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s1-03-kentagon-day-dry.jpg)<br>**Kentagon (+1)** · orbit · day · dry |
+| ![Druids — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s1-04-druids-day-dry.jpg)<br>**Druids** · orbit · day · dry | ![Druids footbridge — cinematic, day, dry](../../../artifacts/shots/tracks/brands_hatch/s1-05-druids-bridge-day-dry.jpg)<br>**Druids footbridge** · cinematic · day · dry | ![Hailwoods — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s1-06-hailwoods-day-dry.jpg)<br>**Hailwoods dip** · trackside · day · dry |
 
 ### Sector 2 — Cooper, Surtees, woods
 
-| Frame | Frame | Frame |
+| | | |
 |---|---|---|
-| `s2-01-graham-hill-day-dry.png` — Graham Hill | `s2-02-cooper-day-dry.png` — Cooper | `s2-03-surtees-day-dry.png` — Surtees exit |
-| `s2-04-pilgrims-bridge-day-dry.png` — Pilgrims Drop | `s2-05-hawthorn-day-dry.png` — Hawthorns | `s2-06-westfield-day-dry.png` — Westfield |
-| `s2-07-dingle-dell-day-dry.png` — Dingle Dell | | |
+| ![Graham Hill — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-01-graham-hill-day-dry.jpg)<br>**Graham Hill** · trackside · day · dry | ![Cooper — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-02-cooper-day-dry.jpg)<br>**Cooper Straight** · orbit · day · dry | ![Surtees — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-03-surtees-day-dry.jpg)<br>**Surtees exit** · trackside · day · dry |
+| ![Pilgrims bridge — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-04-pilgrims-bridge-day-dry.jpg)<br>**Pilgrims Drop** · orbit · day · dry | ![Hawthorn — eye, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-05-hawthorn-day-dry.jpg)<br>**Hawthorns (woods)** · eye · day · dry | ![Westfield — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-06-westfield-day-dry.jpg)<br>**Westfield** · trackside · day · dry |
+| ![Dingle Dell — cinematic, day, dry](../../../artifacts/shots/tracks/brands_hatch/s2-07-dingle-dell-day-dry.jpg)<br>**Dingle Dell** · cinematic · day · dry | | |
 
 ### Sector 3 — Sheene, Stirlings, Clark
 
-| Frame | Frame | Frame |
+| | | |
 |---|---|---|
-| `s3-01-sheene-day-dry.png` — Sheene | `s3-02-stirlings-day-dry.png` — Stirlings | `s3-03-clark-day-dry.png` — Clark |
-| `s3-04-start-gantry-day-dry.png` — race control / gantry | | |
+| ![Sheene — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s3-01-sheene-day-dry.jpg)<br>**Sheene** · orbit · day · dry | ![Stirlings — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s3-02-stirlings-day-dry.jpg)<br>**Stirlings** · trackside · day · dry | ![Clark — trackside, day, dry](../../../artifacts/shots/tracks/brands_hatch/s3-03-clark-day-dry.jpg)<br>**Clark Curve** · trackside · day · dry |
+| ![Start gantry — orbit, day, dry](../../../artifacts/shots/tracks/brands_hatch/s3-04-start-gantry-day-dry.jpg)<br>**Race control / gantry** · orbit · day · dry | | |
 
 ---
 
 ## Weather & lighting (hero views)
 
-Variants on **pit straight**, **Paddock Hill**, **Druids**, **Dingle Dell**, plus **Clark** dusk/rain. Circuit has `night: false` and `lamp: "none"` — night frames are engine default sky only (no floodlit grandstands).
+Hero landmarks with alternate **time of day** and **weather**. Circuit `night: false`, `lamp: "none"` — night frames use default sky only.
 
 ### Pit straight / Brabham
 
-| Frame | Frame | Frame |
+| | | |
 |---|---|---|
-| `hero-pit-dusk-dry.png` | `hero-pit-dawn-dry.png` | `hero-pit-night-dry.png` |
-| `hero-pit-day-overcast.png` | `hero-pit-day-rain.png` | `hero-pit-day-fog.png` |
+| ![Pit — orbit, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-pit-dusk-dry.jpg)<br>**Pit straight** · orbit · dusk · dry | ![Pit — orbit, dawn, dry](../../../artifacts/shots/tracks/brands_hatch/hero-pit-dawn-dry.jpg)<br>**Pit straight** · orbit · dawn · dry | ![Pit — orbit, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-pit-night-dry.jpg)<br>**Pit straight** · orbit · night · dry |
+| ![Pit — orbit, day, overcast](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-overcast.jpg)<br>**Pit straight** · orbit · day · overcast | ![Pit — orbit, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-rain.jpg)<br>**Pit straight** · orbit · day · rain | ![Pit — orbit, day, fog](../../../artifacts/shots/tracks/brands_hatch/hero-pit-day-fog.jpg)<br>**Pit straight** · orbit · day · fog |
 
 ### Paddock Hill
 
-| Frame | Frame | Frame |
+| | | |
 |---|---|---|
-| `hero-paddock-dusk-dry.png` | `hero-paddock-night-dry.png` | `hero-paddock-day-rain.png` |
-| `hero-paddock-day-overcast.png` | | |
+| ![Paddock Hill — trackside, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-dusk-dry.jpg)<br>**Paddock Hill** · trackside · dusk · dry | ![Paddock Hill — trackside, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-night-dry.jpg)<br>**Paddock Hill** · trackside · night · dry | ![Paddock Hill — trackside, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-day-rain.jpg)<br>**Paddock Hill** · trackside · day · rain |
+| ![Paddock Hill — trackside, day, overcast](../../../artifacts/shots/tracks/brands_hatch/hero-paddock-day-overcast.jpg)<br>**Paddock Hill** · trackside · day · overcast | | |
 
 ### Druids & Dingle Dell
 
-| Frame | Frame | Frame |
+| | | |
 |---|---|---|
-| `hero-druids-dusk-dry.png` | `hero-druids-night-dry.png` | `hero-druids-day-fog.png` |
-| `hero-dingle-dusk-dry.png` | `hero-dingle-night-dry.png` | `hero-dingle-day-rain.png` |
-| `hero-dingle-day-overcast.png` | | |
+| ![Druids — orbit, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-druids-dusk-dry.jpg)<br>**Druids** · orbit · dusk · dry | ![Druids — orbit, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-druids-night-dry.jpg)<br>**Druids** · orbit · night · dry | ![Druids — orbit, day, fog](../../../artifacts/shots/tracks/brands_hatch/hero-druids-day-fog.jpg)<br>**Druids** · orbit · day · fog |
+| ![Dingle Dell — cinematic, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-dusk-dry.jpg)<br>**Dingle Dell** · cinematic · dusk · dry | ![Dingle Dell — cinematic, night, dry](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-night-dry.jpg)<br>**Dingle Dell** · cinematic · night · dry | ![Dingle Dell — cinematic, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-day-rain.jpg)<br>**Dingle Dell** · cinematic · day · rain |
+| ![Dingle Dell — cinematic, day, overcast](../../../artifacts/shots/tracks/brands_hatch/hero-dingle-day-overcast.jpg)<br>**Dingle Dell** · cinematic · day · overcast | | |
 
 ### Clark Curve
 
-| Frame | Frame | Frame |
+| | | |
 |---|---|---|
-| `hero-clark-dusk-dry.png` | `hero-clark-day-rain.png` | |
+| ![Clark — trackside, dusk, dry](../../../artifacts/shots/tracks/brands_hatch/hero-clark-dusk-dry.jpg)<br>**Clark Curve** · trackside · dusk · dry | ![Clark — trackside, day, rain](../../../artifacts/shots/tracks/brands_hatch/hero-clark-day-rain.jpg)<br>**Clark Curve** · trackside · day · rain | |
 
 ---
 
@@ -112,7 +108,6 @@ Variants on **pit straight**, **Paddock Hill**, **Druids**, **Dingle Dell**, plu
 2. **Night / lamps** — if MSV night events matter, enable `night: true` + targeted `lampPost` on pit straight only (needs lighting-tuner; def change).
 3. **Coplanar worn vs decking** — merge `groundPatch` spans @ Paddock Hill bar (`0.030`/`0.042`) into one patch.
 4. **Woods thinning at Stirlings** — optional density tweak in `every(14)` fourth rank as bowl reopens (visual only).
-5. **Follow-up weather matrix** — after shared shot-tooling PR: commit PNGs, add track-picker still, standardize wx batch without scratch driver.
 
 ---
 
