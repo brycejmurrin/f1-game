@@ -537,8 +537,8 @@
           addBox(stage, vadd(a.c, a.u, 24.7), [6, 0.6, 6], [0.30, 0.30, 0.34], b);  // roof slab
           addCyl(stage, vadd(a.c, a.u, 24.8), 0.12, 6, [0.42, 0.42, 0.46], 4, b);   // flag mast
           stage._mat = 0;
-          addBox(stage, vadd(vadd(a.c, a.u, 18), a.r, -side * 4.05), [0.2, 2.4, 2.4],
-                 [0.94, 0.93, 0.88], b);                                           // trackside clock face
+          addBox(stage, vadd(vadd(a.c, a.u, 14), a.r, -side * 3.3), [0.2, 2.4, 2.4],
+                 [0.94, 0.93, 0.88], b);                                           // trackside clock face, hung on the shaft (at 4.05 m it floated 15.5 m, ground-audit)
         }, { required: true });
       }
 
@@ -592,10 +592,12 @@
       forestEdge(0.00, 0.04, 1, 44, { density: 0.70, hMin: 11, hMax: 20,
         col: PINE_M, col2: PINE_L, pineFrac: 0.90 });
 
+      // Banks read as mown Ardennes grass, not the engine's timber-brown riser.
+      const HILL_GRASS = [0.15, 0.31, 0.16], HILL_RISER = [0.16, 0.25, 0.14];
       // Pouhon inside bank. Ends at 0.539: on the new 7-9 % descent its top
       // treads met a roadside slab flush at authored 0.544 (ground-audit flat).
-      spectatorHill(0.525, 0.539, -1, 11, { rows: 4, density: 0.55, step: 6 });
-      spectatorHill(0.658, 0.672, -1, 10, { rows: 3, density: 0.42, step: 6 });
+      spectatorHill(0.525, 0.539, -1, 11, { rows: 4, density: 0.55, step: 6, grass: HILL_GRASS, riser: HILL_RISER });
+      spectatorHill(0.658, 0.672, -1, 10, { rows: 3, density: 0.42, step: 6, grass: HILL_GRASS, riser: HILL_RISER });
 
       chalet(K(0.205),  1, 64, 7, 4.8, 10, [0.72, 0.69, 0.62], [0.28, 0.19, 0.15]);
       chalet(K(0.214),  1, 72, 6, 4.3, 9,  [0.76, 0.73, 0.66], [0.31, 0.21, 0.16]);
@@ -735,7 +737,7 @@
       // authored 0.192-0.212 was tried and dropped: it pushed one forestEdge
       // tree onto the road guard, a new suppression. Its OPEN window stays so
       // the deep ranks leave that verge as the open grass it is.)
-      spectatorHill(0.560, 0.590,  1, 20, { rows: 4, density: 0.55, step: 6 });
+      spectatorHill(0.560, 0.590,  1, 20, { rows: 4, density: 0.55, step: 6, grass: HILL_GRASS, riser: HILL_RISER });
       // Kemmel straight marshal posts, and broadcast camera towers at the
       // Raidillon crest, the Les Combes braking zone and Blanchimont.
       for (const [s, side] of [[0.245, -1], [0.285, 1], [0.325, -1]]) marshalPost(K(s), side, 4.2);
