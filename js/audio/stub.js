@@ -18,6 +18,7 @@ var GameAudio = (function () {
     _stub: true,
     onInterrupted: (fn) => { interrupted = typeof fn === "function" ? fn : null; },
     _interruptHook: () => interrupted,
+    context: () => null, sfxBus: () => null,
     init: noop, setEnabled: noop, setSfxEnabled: noop, setUiEnabled: noop,
     setMusicEnabled: noop, setMusicVolume: noop0, setSfxVolume: noop0,
     setMusicSource: noopStr, musicSource: noopStr, setMusicBackend: noop,
@@ -58,9 +59,10 @@ var ErsLayer = {
 var RivalAudio = {
   create: () => ({
     collect: () => [], emitFieldSfx: function () {},
-    attach: function () {}, detach: function () {}, tick: function () {},
+    attach: function () {}, detach: function () {}, tick: function () {}, silence: function () {},
     passByState: () => [], passByVoices: () => [],
   }),
+  silence: function () {},
   sprayAhead: () => 0,
 };
 var VoicePack = { create: () => null };

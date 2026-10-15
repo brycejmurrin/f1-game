@@ -1922,6 +1922,7 @@ function redFlagRestart() {
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   seedPlayerPose();
+  raceCtl.rewound();   // the leader re-runs its lap: a pending Overtake hold follows it (#2166)
   restartPending = true; replayBuf.breakTimeline();   // same clock, every car teleported: a scrub must not blend track position into the grid box
   setState("count", "red-flag-restart"); countT = 0; lightsLit = 0; startHold = 0;
   els.lights.hidden = false;
@@ -5862,7 +5863,8 @@ function updateCarLateral(c, dt, ranked, S) {
       if (freeRoom > 1.6) yieldPull = freeSide * AiDrive.letPassPull(aiT, !!track.street) * clamp(freeRoom / 2.4, 0, 1);
     }
     let defend = 0;
-    if (chaser && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
+    const caution = raceCtl.level >= 2;   // SC/VSC/red: no cover move either (the attack is gated above), #2175
+    if (chaser && !caution && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser._snapSpeed;
@@ -5872,7 +5874,7 @@ function updateCarLateral(c, dt, ranked, S) {
     }
     // One defensive move per straight (AiDrive.defendOnce); the side resets in
     // the braking zone, where defending is over anyway (holdLine below).
-    if (braking) { c.defendSide = 0; defend = 0; }   // NO MOVE UNDER BRAKING (FIA), the cover included
+    if (braking || caution) { c.defendSide = 0; defend = 0; }   // NO MOVE UNDER BRAKING (FIA), the cover included
     else { AiDrive.defendOnce(defend, c.defendSide || 0, _aiDefOnce); defend = _aiDefOnce.defend; c.defendSide = _aiDefOnce.side; }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side; when both sides are gone (a wall pile), pull TOWARD the
