@@ -81,16 +81,32 @@ on:
         description: "Time of day the track is BUILT with (day|night|dawn|dusk). This is what bakes the lamps, and so what decides whether the per-chunk lamp branch can run at all. Empty = the circuit's own default."
         required: false
         default: ""
-      # Appended LAST so every earlier input keeps its position (hunt 4 H5):
-      # helmet glass latches TLX's full mirror mip chain, so the mirror-mip
-      # cap (apex26.tlxMirMips) only shows on a chase leg.
+      # Appended LAST so every earlier input keeps its position (hunt 4 H5).
+      # The game's default camera is helmet, whose cockpit glass latches
+      # TLX's full mirror mip chain, so the mirror-mip cap (apex26.tlxMirMips)
+      # only shows on a chase leg. A choice input (GitHub caps a dispatch at
+      # 25 inputs; this is the 8th) — the plan job re-checks it for push requests.
+      # chase>cockpit (hunt 5 E) starts on chase and switches onboard halfway
+      # through the driven window: where the opt-in lazy mirror warm
+      # (ls apex26.tlxMirWarmLazy=1) is paid, read back as warmEnd.mirrorLazy.
       cam:
-        description: "Player camera for ALL game checks: helmet (the game's default, as before) or chase (shows TLX's mirror-mip cap; helmet latches the full chain)"
+        description: "Player camera for ALL game checks: helmet (the game's default, as before), chase (shows TLX's mirror-mip cap; helmet latches the full chain), or chase>cockpit (switch onboard mid-window: the lazy mirror warm's pause)"
         type: choice
-        options: ["helmet", "chase"]
+        options: ["helmet", "chase", "chase>cockpit"]
         required: false
         default: "helmet"
-
+      # Appended LAST, the 9th of GitHub's 25 dispatch inputs (hunt 5 E): HOW the
+      # race starts. api = __apex.race(), every census before this; menu = the
+      # player's path (title > RACE > RACE SETUP > START RACE) after the menu's
+      # car prep and TLX program warm settle; menu-full = the same at player pace
+      # (garage drive-out + flyby). Re-checked by the plan job for push requests.
+      # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onworkflow_dispatchinputs
+      entry:
+        description: "How ALL game checks enter the race: api (__apex.race, as before), menu (the player's RACE! after the menu prep/warm), menu-full (the same at player pace: drive-out + flyby)"
+        type: choice
+        options: ["api", "menu", "menu-full"]
+        required: false
+        default: "api"
   push:
     branches: ["cursor/**", "claude/**"]
     paths: [".github/gpu-census-request.json"]
@@ -131,6 +147,7 @@ jobs:
       force: ${{ steps.split.outputs.force }}
       census_only: ${{ steps.split.outputs.census_only }}
       cam: ${{ steps.split.outputs.cam }}
+      entry: ${{ steps.split.outputs.entry }}
       run: ${{ steps.gate.outputs.run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -232,7 +249,10 @@ jobs:
           # The player camera (hunt 4 H5). A push request bypasses the
           # dispatch form's choice list, so the allowlist is enforced here too.
           cm = str(req.get("cam") or os.environ.get("INPUT_CAM") or "helmet").strip()
-          print("cam=" + (cm if cm in ("helmet", "chase") else "helmet"))
+          print("cam=" + (cm if cm in ("helmet", "chase", "chase>cockpit") else "helmet"))
+          # The race entry (hunt 5 E), allowlisted for the same reason.
+          en = str(req.get("entry") or os.environ.get("INPUT_ENTRY") or "api").strip()
+          print("entry=" + (en if en in ("api", "menu", "menu-full") else "api"))
           PY
         env:
           EVENT: ${{ github.event_name }}
@@ -251,6 +271,7 @@ jobs:
           INPUT_FORCE: ${{ inputs.force || '' }}
           INPUT_CENSUS_ONLY: ${{ inputs.census_only || false }}
           INPUT_CAM: ${{ inputs.cam || 'helmet' }}
+          INPUT_ENTRY: ${{ inputs.entry || 'api' }}
 
   census:
     needs: plan
@@ -269,6 +290,7 @@ jobs:
       CENSUS_FORCE: ${{ needs.plan.outputs.force }}
       CENSUS_ONLY: ${{ needs.plan.outputs.census_only }}
       CENSUS_CAM: ${{ needs.plan.outputs.cam }}
+      CENSUS_ENTRY: ${{ needs.plan.outputs.entry }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -358,7 +380,18 @@ jobs:
         run: |
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
+          # wgxCapture=0 IS THE POINT OF THIS LEG. tlx.js arms its soft blit
+          # (GPU readback + putImageData every frame) whenever
+          # `!forceWebGL && (_softAdapter || _headless || cap==="1")`, and
+          # `_headless` is `navigator.webdriver` — true in EVERY automated run.
+          # So until 2026-09-22 this leg timed the headless readback and never
+          # once the swapchain present a player gets, on any image, including
+          # the hardware ones. Every fps/frames/luma number this column has
+          # ever produced for WebGPU was that blit (PERF-FINDINGS 2t read a
+          # 46.9-vs-66.2 gap straight off it). "0" = NATIVE keeps three's
+          # swapchain; the `path:` row below prints softBlit so a regression
+          # here is visible rather than silently re-measured.
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --backend three --path webgpu --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
@@ -374,7 +407,11 @@ jobs:
         run: |
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
+          # Same pin as the WebGPU leg, and a no-op here: forceWebGL
+          # short-circuits _softBlit. Written anyway so the two TLX legs differ
+          # in exactly ONE variable — the three path — which is the only thing
+          # that makes this a control.
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --backend three --path webgl2 --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
@@ -390,7 +427,13 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
+          # wgxCapture=0 = SCREENSHOTS NATIVE, which GLX honours since hunt 4
+          # I1: no preserveDrawingBuffer and no opaque #game-soft overlay — the
+          # present path a player has. Under the headless UA GLX otherwise blits
+          # to that overlay only when a capture waits, so census 450-455 shot
+          # one gen-1 frame for every A/B capture. A dispatcher's ls (after
+          # this pin) can override it; the A/B rows print the mode and gens.
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
@@ -407,7 +450,14 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" \
+          # wgxCapture=0 (hunt 4 I3), as on the other three legs: without it WGX
+          # soft-presents every frame under the headless UA — copyTextureToBuffer,
+          # a fresh 2.4-3.7 MB MAP_READ buffer, mapAsync, a JS loop and
+          # putImageData — which no player pays. Pinned by hand on spa dusk:
+          # 20.8 -> 36.7 fps in the driven window, busy 11.7 -> 7.5 ms/frame.
+          # The HeadlessChrome UA still forces MSAA 1 via _softAdapter
+          # (wgx.js), which this pin does not undo.
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} --cam "${CENSUS_CAM:-helmet}" --entry "${CENSUS_ENTRY:-api}" \
             --beats 20 --ls apex26.wgxCapture=0 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
