@@ -34,7 +34,7 @@
     sceneryCoordinates: "racing",
     terrainOuter: 90,
     dressingExclusions: [
-      { kinds: ["foliage"], s0: 0.86, s1: 0.22 },
+      { kinds: ["foliage"], s0: 0.74, s1: 0.22 },
       { kind: "foliage", s0: 0.30, s1: 0.70 },
       // No generic town at trackside, anywhere on the lap: IMS is grandstands,
       // the Pagoda/garages, open infield and the Brickyard Crossing golf
@@ -59,7 +59,7 @@
       { s: 0.68, halfM: 280, rise: -1.5 },
     ],
     hwZones: [
-      { s0: 0.240, s1: 0.700, hw: 6.4, ease: 0.020 },
+      { s0: 0.240, s1: 0.745, hw: 6.4, ease: 0.020 },
       { s0: 0.760, s1: 0.820, hw: 6.6, ease: 0.012 },
     ],
     // ONE banked corner: oval Turn 1 (9 deg 12 min, IMS), which the F1 road
