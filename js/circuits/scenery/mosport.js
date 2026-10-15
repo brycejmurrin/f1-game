@@ -180,12 +180,14 @@
       // 3. s 0.010 -1 18 — START/FINISH: TWO MODEST STEEL BANKS
       //    grandstandEx(s, side, gap, len, shell, crowd) — shell/crowd are
       //    COLOUR ARRAYS; null lets the emitter pick a livery.
-      grandstandEx(0.0040, -1, 18, 68, null, null);
-      grandstandEx(0.0300, -1, 18, 46, null, null);
+      // gap 30 (was 18): trackside ~35 m was inside the grandstand shell.
+      grandstandEx(0.0040, -1, 30, 58, null, null);
+      grandstandEx(0.0300, -1, 28, 40, null, null);
       sponsorHoarding(0.9930, 0.0520, -1, 12.5);
       fence(0.9880, 0.0600, -1, 11.5, 3.0, FENCE_C);
       gantry(0.0020, 7.0, [0.80, 0.80, 0.78]);
-      spectatorHill(0.9850, 0.0450, -1, 30, { h: 5.0, col: GRASS });
+      // gap 38: at gap 30 the hill tread coplanared grandstand crowd shells (ground-audit).
+      spectatorHill(0.9720, 0.0480, -1, 38, { h: 4.6, col: GRASS });
 
       // 4. s 0.0183 -1 11 — TURN ONE: the straight tips into the descent
       //    Almost no run-off (§5): armco hard on the outside, tyres at the
@@ -420,6 +422,8 @@
       }
       place(K(0.9183), -1, 22, [3.6, 2.8, 5.2], CONCRETE);
       groundPatch(K(0.9183), 1, 30, [12, 0.18, 20], TARMACISH);
+      // Outside spectator path apron — ties the free outside headwall to the slope.
+      groundPatch(K(0.9183), -1, 26, [14, 0.18, 14], TARMACISH);
       // Outside of Whites — wood beyond the outside portal (clip @ 0.916).
       guardrail(0.8950, 0.9700, -1, 11, ARMCO);
       mixedWood(0.8950, 0.9100, -1, 36, 20, 12);
