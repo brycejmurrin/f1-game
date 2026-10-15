@@ -38,9 +38,11 @@
         bleacher(s - lenM * M / 2, s + lenM * M / 2, side, gap, opts);
 
       const { cx, cz, radius: rad } = lapBounds();
-      for (const [extra, wMin, wVar, hMin, hVar, count, seg, fc, rc] of [
-        [160, 280, 85, 44, 46, 44, 8, [0.20, 0.38, 0.23], [0.30, 0.36, 0.28]],    // near base — tighter, denser green wall
-        [310, 320, 110, 68, 60, 36, 8, [0.25, 0.42, 0.28], [0.36, 0.42, 0.32]],   // mid green ridge
+      for (const [extra, wMin, wVar, hMin, hVar, count, seg, fc, rc, rough] of [
+        // seg 8 + low rough read as flat-faced light-green pyramids beside the stands (survey 2026-10-15):
+        // near/mid rings now use 11/10 facets, more rough, wider-and-lower profiles (slope ~0.25, was ~0.4).
+        [160, 290, 100, 32, 32, 44, 11, [0.17, 0.34, 0.20], [0.30, 0.36, 0.28], 0.55],    // near base — low rolling green wall
+        [310, 340, 120, 56, 54, 36, 10, [0.22, 0.38, 0.25], [0.36, 0.42, 0.32], 0.5],     // mid green ridge
         [500, 380, 140, 110, 85, 28, 8, [0.40, 0.50, 0.44], [0.45, 0.50, 0.45]],  // far hazed range
       ]) {
         const ring = rad + extra;
@@ -49,7 +51,7 @@
           const a = (i + offset + extra * 0.003) / count * 6.2832, h = hash(i * 11 + extra);
           const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
           mountain(mx, mz, pyMin, wMin + h * wVar, hMin + h * hVar, {
-            seg, seed: i * 17 + extra, snowline: 1.1,
+            seg, seed: i * 17 + extra, snowline: 1.1, rough,
             forest: [fc[0] + h * 0.06, fc[1] + h * 0.05, fc[2] + h * 0.05], rock: rc,
           });
         }
@@ -419,7 +421,7 @@
         }
       };
       footbridge("suzuka-esses-footbridge", 0.135, 8.0);
-      footbridge("suzuka-hairpin-footbridge", 0.500, 7.5);
+      footbridge("suzuka-hairpin-footbridge", 0.462, 7.5);   // was 0.500 = on the R19 apex beside the flex stand; 0.462 is a straight (R>4 km) clear of the 0.45 signs
 
       // ── Overhead camera / scoring gantries ───────────────────────────────────
       overheadSpan({ id: "suzuka-degner-gantry", frac: 0.30, clearance: 7.0,
@@ -503,6 +505,9 @@
         [0.655, -1, 18, 6.8, 1], [0.666, -1, 22, 7.4, 0], [0.677, -1, 17, 6.2, 1],
         [0.905, -1, 20, 7.0, 0], [0.914, -1, 24, 6.4, 1],
       ]) {
+        // The Esses trio (0.163-0.181) read as a bare trunk with a crown fragment (survey eye 0.17):
+        // draw those with the generic tree() in the same autumn colours.
+        if (s < 0.19) { tree(Math.round(n * s) % n, side, gap, h, red ? MOMIJI_R : MOMIJI_G); continue; }
         broadleafFall(Math.round(n * s) % n, side, gap, h,
                       red ? MOMIJI_R : MOMIJI_G,
                       { lobes: 4, spread: 1.25, barkCol: [0.32, 0.26, 0.22] });
@@ -572,11 +577,11 @@
       if (circuitKit) {
         circuitKit.trackSigns({
           id: "kit:suzuka:degner-signs", frac: 0.335, side: -1, gap: 6,
-          size: [3, 3, 30], count: 8, required: true,
+          size: [2.4, 2.2, 30], count: 5, required: true,
         });
         circuitKit.trackSigns({
           id: "kit:suzuka:hairpin-approach-signs", frac: 0.45, side: 1, gap: 6,
-          size: [3, 3, 26], count: 7, required: true,
+          size: [2.4, 2.2, 26], count: 4, required: true,
         });
       }
       cameraTower(K(0.37), -1, 20, { h: 18 });
