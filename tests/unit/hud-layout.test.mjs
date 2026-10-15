@@ -20,15 +20,15 @@ test("HUD browser helper atomically holds producers, selects camera and refreshe
   assert.ok(helper); const timeline=[];
   let camera="chase", broadcast=false, published="0px", frozen=false, headless=false;
   const elements=new Map();
-  const ctx=vm.createContext({BOOT_MS:60_000,PIN_PREVIOUS_LOOK:()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
+  const ctx=vm.createContext({BOOT_MS:60_000,RACE_BUILD_MS:60_000,awaitTrackBuild:async()=>{},PIN_PREVIOUS_LOOK:()=>{},localStorage:{setItem(){}},requestAnimationFrame:(fn)=>fn(),
     document:{
       body:{classList:{contains:()=>broadcast}},
       getElementById:(id)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},
       querySelector:()=>({currentCSSZoom:1,getBoundingClientRect:()=>({height:42})}),
       documentElement:{style:{getPropertyValue:()=>published}},
     },
-    window:{__apex:{
-      race(){}, info:()=>({track:"monza"}), go(){},
+    window:{__hudLayoutRace:"ok",__apex:{
+      race(){ return Promise.resolve(); }, info:()=>({track:"monza"}), go(){},
       camera(id){assert.equal(frozen&&headless,true,"producers held before camera update");camera=id;timeline.push("camera:"+id);},
       jump(frac,speed,x){assert.deepEqual([frac,speed,x],[.1,60,0]);assert.equal(frozen&&headless,true);broadcast=camera==="heli";published="42.0px";timeline.push("refresh:"+camera);},
       freeze(on){assert.equal(on,true);frozen=true;timeline.push("hold physics");},
