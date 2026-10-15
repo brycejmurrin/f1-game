@@ -4123,8 +4123,18 @@ const TLX = (function () {
           }
           return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
         },
-        createTexture(src) {
+        createTexture(src, opts) {
           const t = new THREE.Texture(src);
+          // Borrow sources by default. A caller-created bitmap must stay open
+          // for three's flipY checks/reuploads, then close when its texture dies.
+          if (opts && typeof opts.disposeSource === "function") {
+            const disposeSource = opts.disposeSource;
+            const release = () => {
+              t.removeEventListener("dispose", release);
+              try { disposeSource(src); } catch (_) { /* keep GPU disposal running */ }
+            };
+            t.addEventListener("dispose", release);
+          }
           t.flipY = true;                       // GLX uploads UNPACK_FLIP_Y
           t.anisotropy = 4;
           t.colorSpace = THREE.NoColorSpace;    // no-sRGB calibration invariant
