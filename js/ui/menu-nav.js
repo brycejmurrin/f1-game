@@ -399,21 +399,20 @@ window.MenuNav = (function () {
 
   // After a page: if the focused item is no longer inside its pane, move focus to
   // the item nearest the pane's leading edge that IS. Focus only — no scrollIntoView,
-  // which would undo the page we just performed. A sideways strip is bounded by its
-  // left/right edges, not top/bottom — checking only Y left focus on a circuit
-  // paged off the strip, and the next arrow press scrolled the strip back.
+  // which would undo the page we just performed.
   function keepFocusInView(pane, active, list) {
     if (!active || !pane.contains(active)) return;
-    const [lo, hi] = isStrip(pane) ? ["left", "right"] : ["top", "bottom"];
+    const horizontal = isStrip(pane);
+    const start = horizontal ? "left" : "top", end = horizontal ? "right" : "bottom";
     const p = pane.getBoundingClientRect();
-    const inside = (b) => b[lo] >= p[lo] - 1 && b[hi] <= p[hi] + 1;
-    if (inside(active.getBoundingClientRect())) return;
+    const a = active.getBoundingClientRect();
+    if (a[start] >= p[start] - 1 && a[end] <= p[end] + 1) return;
     let best = null, bestD = Infinity;
     for (const el of list) {
       if (!pane.contains(el)) continue;
       const b = el.getBoundingClientRect();
-      if (!inside(b)) continue;
-      const d = b[lo] - p[lo];
+      if (b[start] < p[start] - 1 || b[end] > p[end] + 1) continue;
+      const d = b[start] - p[start];
       if (d < bestD) { bestD = d; best = el; }
     }
     if (best) best.focus({ preventScroll: true });
