@@ -58,6 +58,7 @@ const AUXILIARY_HOSTS = {
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
+  "apex-lazy-integrity": "bump-cache.mjs adds the full lazy-script SRI map only to staged deployments; ScriptLoader treats its absence in dev and legacy shells as optional",
   "dh-tab-schedule":  "Data Hub hub.js builds its tab buttons as dh-tab-<id> when the lazy bundle opens; deep-link.js reads it null-guarded and retries",
   "ps-panel":          "PhotoStudio mk() builds the photo controls panel; setup-camera uses a null-guarded read to exclude it from orbit gestures",
   "pm-three-path":     "renderer-picker addBtn(), and only when the backend files exist — the read at paintPresent() is null-guarded",
@@ -75,6 +76,8 @@ export const RUNTIME_IDS = {
   "pm-motion":         "a11y-opts SettingRow.build REDUCE MOTION; getElementById is the mount-once guard",
   "pm-focus":          "a11y-opts SettingRow.build KEYBOARD FOCUS; getElementById is the mount-once guard",
   "pm-cbcues":         "a11y-opts SettingRow.build COLOURBLIND CUES; getElementById is the mount-once guard",
+  "pm-hold-throttle":  "a11y-opts SettingRow.build GAS hold/toggle; getElementById is the mount-once guard",
+  "pm-hold-lookback":  "a11y-opts SettingRow.build LOOK BACK hold/toggle; getElementById is the mount-once guard",
   "pm-xr-mode":        "xr-opts SettingRow.build creates VR MODE / VR RENDERER rows; the getElementById is the mount-once guard",
   "fb-in-ease":        "flyby-panel selectRow() builds it from a concatenated id; the one read is null-guarded",
   // Runtime soft-present overlay: GLX (HeadlessChrome) and TLX (WebGPU soft
