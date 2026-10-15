@@ -463,6 +463,10 @@ function _applyRaceBody() {
     // greying out the night and killing lamp-pool contrast.
     const _ovcFloor = isNightSession ? 0.95 : 1.0;
     if (G.frame.exposure == null || G.frame.exposure < _ovcFloor) G.frame.exposure = _ovcFloor;
+    // Daytime overcast: grey the ZENITH too. Only the horizon was flattened above (and
+    // only for "default"), so an explicit day kept the clear-sky blue overhead -- the
+    // 52-circuit weather survey saw a saturated blue band under overcast on every track.
+    if (!isNightSession && G.raceTimeOfDay !== "dusk" && G.raceTimeOfDay !== "dawn") _dayWetGreyDeck(G, 0.85);
   } else if (G.raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     G.frameSky.cloud = Math.min(0.85, G._cloudBase + 0.35);
@@ -500,6 +504,8 @@ function _applyRaceBody() {
     // lifted a dusk fog brighter than a clear dusk.
     const _fogFloor = isNightSession ? 0.95 : _twl ? 1.03 : 1.08;
     if (G.frame.exposure == null || G.frame.exposure < _fogFloor) G.frame.exposure = _fogFloor;
+    // Daytime fog: same -- the zenith stayed clear-sky blue above a grey wall of fog.
+    if (!isNightSession && !_twl) _dayWetGreyDeck(G, 0.85);
   } else {
     G.frameSky.cloud = G._cloudBase;
     // Guarantee frame.exposure always has a value (default = 1.0 if nothing set above)

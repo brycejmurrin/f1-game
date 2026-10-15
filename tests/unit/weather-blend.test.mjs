@@ -204,6 +204,25 @@ test("daytime rain and storm stay overcast daylight; night storm stays as dark a
   assert.ok(night.G.frame.exposure < 0.85, "night storm exposure stays suppressed");
 });
 
+test("daytime overcast and fog grey the zenith, not just the horizon (survey: blue sky under overcast)", () => {
+  for (const track of ["monza", "spa", "bahrain", "suzuka"]) {
+    const dry = boot(track);
+    dry.G.raceTimeOfDay = "day";
+    dry.G.raceWeather = "dry";
+    dry.atmo.applyRaceSettings();
+    const blueDry = dry.G.frameSky.zenith[2] - dry.G.frameSky.zenith[0];
+    for (const wx of ["overcast", "fog"]) {
+      const { G, atmo } = boot(track);
+      G.raceTimeOfDay = "day";
+      G.raceWeather = wx;
+      atmo.applyRaceSettings();
+      const blue = G.frameSky.zenith[2] - G.frameSky.zenith[0];
+      assert.ok(blue < blueDry * 0.5, `${track} day ${wx}: zenith blue excess ${blue.toFixed(3)} vs dry ${blueDry.toFixed(3)}`);
+      assert.ok(lum(G.frameSky.zenith) >= 0.45, `${track} day ${wx}: zenith too dark`);
+    }
+  }
+});
+
 test("wet and rain fog follow the sky's overcast grey, so terrain meets the skyline", () => {
   const { G, atmo } = boot();
   atmo.applyRaceSettings();
