@@ -1,0 +1,1 @@
+1792043921	Bryce Murrin	Menu audit closed-details visibility false positives; OWNED tools/ui/menu-mock.mjs tests/unit/hud-survey.test.mjs only. No overlap PR1862/1938/1973 exactfiles; root-approved isolated fix.  [cursor/menu-visibility-c82e; session 9706e01ce894fb8d207c1e0a]
