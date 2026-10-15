@@ -1265,6 +1265,7 @@ const NetLobby = (function () {
       if (role !== "host") return el;
       const b = document.createElement("button");
       b.type = "button";
+      b.className = "vs-roster-remove";
       b.dataset.rosterRemove = id;
       b.textContent = "Remove";
       b.setAttribute("aria-label", "Remove this player from the room");
