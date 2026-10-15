@@ -920,3 +920,39 @@ test("menu-mock --list needs no browser", () => {
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /title__desktop-1280x800\n\[menu-mock\] 1 cells/);
 });
+
+
+test("menu-mock: hidden fold controls are excluded while summaries and visible small controls remain", () => {
+  for (const native of [true, false]) {
+    let open = false;
+    const style = { display: "block", visibility: "visible", opacity: "1", overflowX: "visible", overflowY: "visible", fontSize: "14px" };
+    const rect = { left: 0, top: 0, right: 20, bottom: 20, width: 20, height: 20 };
+    const make = (id, tagName = "BUTTON") => ({ id, tagName, children: [], childNodes: [],
+      getBoundingClientRect: () => rect, getAttribute: () => null });
+    const fold = make("fold", "DETAILS"), summary = make("fold-summary", "SUMMARY");
+    const hidden = make("fold-button"), small = make("visible-small");
+    hidden.getBoundingClientRect = () => ({ ...rect, left: 150, right: 170 });
+    fold.children = [summary, hidden]; summary.parentElement = hidden.parentElement = fold;
+    Object.defineProperty(fold, "open", { get: () => open });
+    summary.contains = (el) => el === summary;
+    const hiddenAncestor = make("hidden-ancestor"); hiddenAncestor.hidden = true;
+    const descendant = make("hidden-descendant"); descendant.parentElement = hiddenAncestor;
+    if (native) for (const el of [summary, hidden, small, descendant]) {
+      el.checkVisibility = () => el !== descendant && (el !== hidden || open);
+    }
+    const nodes = [summary, hidden, small, descendant];
+    const root = { querySelectorAll: (selector) => selector === "*" ? [] : nodes };
+    const context = vm.createContext({ document: { querySelector: () => root, documentElement: {} },
+      window: { innerWidth: 100, innerHeight: 100 }, getComputedStyle: () => style });
+    const probe = () => vm.runInContext(`(${MM.probeMenu.toString()})({ rootSel: "#root", minTap: 44, minFont: 12 })`, context);
+    const closed = probe();
+    assert.deepEqual(Array.from(closed.recs, (r) => r.key), ["#fold-summary", "#visible-small"], "closed folds hide their controls, not the summary or genuine small targets");
+    assert.equal(closed.issues.tap.length, 2);
+    assert.equal(closed.issues.offscreen.length, 0, "closed fold geometry cannot create off-screen findings");
+    open = true;
+    const opened = probe();
+    assert.deepEqual(Array.from(opened.recs, (r) => r.key), ["#fold-summary", "#fold-button", "#visible-small"]);
+    assert.equal(opened.issues.tap.length, 3, "opening a fold exposes its genuinely small control");
+    assert.equal(opened.issues.offscreen.length, 1, "a visible off-screen control is still reported");
+  }
+});

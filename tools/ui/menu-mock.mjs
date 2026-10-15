@@ -61,6 +61,19 @@ export function probeMenu({ rootSel, minTap, minFont }) {
   const root = document.querySelector(rootSel) || document.body;
   const W = window.innerWidth, H = window.innerHeight;
   const vis = (el) => {
+    // Closed <details> descendants can retain a nonzero layout rectangle.
+    if (typeof el.checkVisibility === "function") {
+      if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+    } else {
+      for (let p = el; p; p = p.parentElement) {
+        const style = getComputedStyle(p);
+        if (p.hidden || style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+        if (p.tagName === "DETAILS" && !p.open && p !== el) {
+          const summary = Array.from(p.children).find((c) => c.tagName === "SUMMARY");
+          if (!summary || !summary.contains(el)) return false;
+        }
+      }
+    }
     const cs = getComputedStyle(el);
     if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) return false;
     const r = el.getBoundingClientRect();
