@@ -89,7 +89,7 @@ prompt that a rule can reach.
 | # | item | outcome |
 |---|---|---|
 | 1–3, 10, 12 | hook output as JSON `additionalContext` / `systemMessage`, SubagentHandback check, SessionStart matcher, hook timeouts, one-process bash-guard | hooks session's files (PR #2227): forwarded |
-| 4–5 | narrow `Bash(git *)`, drop `Bash(awk *)`, exact `npm install`; `:*` mid-token never matches (`npm run test:*`, `gen:*`, `curl …:*`) | diff below. The auto classifier REJECTED the edit as `[Self-Modification]`, so it waits for Bryce (default-mode session, or his approval) |
+| 4–5 | narrow `Bash(git *)`, drop `Bash(awk *)`, exact `npm install`; `:*` mid-token never matches (`npm run test:*`, `gen:*`, `curl …:*`) | diff below. The auto classifier rejected the first attempt as `[Self-Modification]`; applied after Bryce approved the retry in-session (2026-10-15) |
 | 6 | ~45 inert allow lines; add `Workflow` | not done: removing `Read` etc. changes reads outside the working directory, and `Workflow` is gated by design (explicit opt-in) |
 | 7 | `omitClaudeMd: true` on self-contained reporters | done for ci-watcher, deploy-research, finding-verifier, prior-art-scout, bloat-auditor (docs: v2.1.271+, container 2.1.300); not ci-red-triage, whose return line and re-run rule come from AGENTS.md |
 | 8 | AGENTS.md ≤ 12 KB; move procedures into skills | follow-up issue: too large for this PR, and the 75-rule-line test already holds the size steady |
@@ -103,12 +103,13 @@ Measured against item 4's premise in this auto session: `sed -n 561,590p
 these cloud sessions narrow Bash rules do not skip review. The narrowing still
 matters for local auto sessions without server-side review.
 
-Proposed `permissions.allow` diff (not applied):
+Applied `permissions.allow` diff:
 
 ```diff
 -      "Bash(git *)",
 -      "Bash(npm run test:*)",
 +      "Bash(npm run test*)",
++      "Bash(npm run test:guards)",   # exact: agent-config.test.mjs pins the guard suite
 -      "Bash(npm run gen:*)",
 +      "Bash(npm run gen*)",
 -      "Bash(npm install *)",
