@@ -1,0 +1,357 @@
+{
+  "job": {
+    "trackId": "anderstorp",
+    "frac": 0.67,
+    "cam": "eye",
+    "az": 35,
+    "el": 28,
+    "dist": 70,
+    "side": 1,
+    "tod": "day",
+    "weather": "dry",
+    "showHud": false,
+    "through": false,
+    "team": null,
+    "out": "/home/user/f1-game/artifacts/shots/tracks/anderstorp/anderstorp-15-eye67-day-dry.jpg",
+    "backend": "three",
+    "capture": {
+      "profile": "custom",
+      "width": null,
+      "height": null,
+      "viewport": null,
+      "dpr": 1,
+      "type": null,
+      "quality": null,
+      "scope": "scene",
+      "gpu": "swiftshader",
+      "gpuExplicit": false,
+      "browser": "auto",
+      "trace": false,
+      "tracePath": null,
+      "cacheAssets": false,
+      "reuse": true,
+      "isolated": false,
+      "seed": null,
+      "positionals": []
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "type": "jpeg",
+    "quality": 85,
+    "raster": false
+  },
+  "browser": {
+    "requested": {
+      "gpu": "swiftshader",
+      "flavor": "auto"
+    },
+    "executable": {
+      "requestedFlavor": "auto",
+      "executablePath": "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+      "source": "newest:1194 under /opt/pw-browsers (browsers.json wants 1243, not installed)",
+      "flavor": "chromium",
+      "pid": 2241
+    },
+    "version": "141.0.7390.37",
+    "actual": {
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+      "vendor": "Google Inc. (Google)",
+      "software": true,
+      "devices": [
+        {
+          "vendorId": 65535,
+          "deviceId": 65535,
+          "vendorString": "Google Inc. (Google)",
+          "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+          "driverVendor": "SwANGLE",
+          "driverVersion": "5.0.0"
+        }
+      ],
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "enabled",
+        "webgl2": "enabled",
+        "webgpu": "unavailable_software",
+        "webnn": "disabled_off"
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "diag": {
+      "env": {
+        "backend": "three",
+        "backendState": {
+          "api": "webgpu",
+          "forceWebGL": false,
+          "pin": null,
+          "autoStayGL": false,
+          "hasGpu": true,
+          "gpuAdapterOk": true,
+          "gpuCanvasOk": true,
+          "canvasAlpha": null,
+          "isMobile": false,
+          "mobileTier": false,
+          "isWebKit": false,
+          "liteGpu": true,
+          "softwareGL": true,
+          "softAdapter": true,
+          "headless": true,
+          "forceHw": false,
+          "forceBatches": false,
+          "skipBatches": true,
+          "skipBatchesPin": false,
+          "gpuErrFrames": 0,
+          "envFail": 0,
+          "envFailMsg": "",
+          "softBlit": true,
+          "capPref": null,
+          "fx": {
+            "shadows": 22,
+            "marks": 0,
+            "skidVerts": 0,
+            "glow": 0,
+            "particles": 0,
+            "decals": 4,
+            "lineVerts": 3192
+          },
+          "line": {
+            "meshes": 1,
+            "visible": 1,
+            "inScene": 1,
+            "geo": {
+              "index": 12282,
+              "indexType": "Uint32Array",
+              "range": 9570,
+              "pos": 4096,
+              "attrs": [
+                "position",
+                "lineAcross",
+                "lineSpeed",
+                "lineZone",
+                "lineAlong"
+              ],
+              "renderOrder": 8,
+              "bs": [
+                591.2
+              ]
+            }
+          },
+          "softRead": {
+            "gen": 28,
+            "lastMs": 3343,
+            "fails": 0,
+            "lastErr": null,
+            "abandoned": 0,
+            "pending": true
+          },
+          "gpuErrors": 0,
+          "gpuFirstError": null,
+          "gpuRecentErrors": [],
+          "presents": 11325,
+          "healed": false,
+          "ctxLost": false,
+          "calls": 1,
+          "arrayNearest": false,
+          "hasMaterialMaps": true,
+          "packLive": true,
+          "drawMatMode": 0
+        }
+      }
+    },
+    "seed": 1,
+    "renderClock": 189.90860000002957,
+    "render": {
+      "scale": 0.9,
+      "fps": 60,
+      "floorMs": 16.6,
+      "auto": true,
+      "tier": 0,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 600,
+        "maxMs": 966.7,
+        "slow": 3
+      },
+      "frameTimes": {
+        "frames": 2048,
+        "p50": 16.699999999982538,
+        "p95": 16.79999999998836,
+        "p99": 16.800000000017462,
+        "maxMs": 49.90000000002328,
+        "droppedSimS": 0.016666666666666666,
+        "physicsSteps": 5,
+        "windowFrames": 2048
+      },
+      "userTier": 0,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": false,
+      "tierFutile": false,
+      "tierHold": false
+    },
+    "camera": {
+      "eye": [
+        261.4613281250002,
+        3.393288398981093,
+        -117.42962478637732
+      ],
+      "target": [
+        241.15169189453093,
+        2.0235734272003167,
+        -83.1091421508784
+      ],
+      "fov": 64.00000000000006,
+      "previousAnchor": [
+        261.4613281250002,
+        -117.42962478637732
+      ],
+      "nextAnchor": [
+        261.4613281250002,
+        -117.42962478637732
+      ],
+      "renderFrame": 11326,
+      "simulationTime": 1.9999999999999964,
+      "renderTime": 189.90860000002957
+    },
+    "info": {
+      "state": "race",
+      "track": "anderstorp",
+      "n": 997,
+      "total": 3988.017497628846,
+      "timeTrial": false,
+      "seasonMode": false,
+      "flow": "gp",
+      "session": "race",
+      "career": false,
+      "practice": false,
+      "duel": false,
+      "raceQuali": false,
+      "raceGrid": "random",
+      "lapsTarget": 3,
+      "sectors": [
+        0.297,
+        0.667
+      ],
+      "turns": 8
+    }
+  },
+  "renderer": {
+    "requested": "three",
+    "matchesRequested": true,
+    "actual": "three",
+    "api": "webgpu",
+    "state": {
+      "api": "webgpu",
+      "forceWebGL": false,
+      "pin": null,
+      "autoStayGL": false,
+      "hasGpu": true,
+      "gpuAdapterOk": true,
+      "gpuCanvasOk": true,
+      "canvasAlpha": null,
+      "isMobile": false,
+      "mobileTier": false,
+      "isWebKit": false,
+      "liteGpu": true,
+      "softwareGL": true,
+      "softAdapter": true,
+      "headless": true,
+      "forceHw": false,
+      "forceBatches": false,
+      "skipBatches": true,
+      "skipBatchesPin": false,
+      "gpuErrFrames": 0,
+      "envFail": 0,
+      "envFailMsg": "",
+      "softBlit": true,
+      "capPref": null,
+      "fx": {
+        "shadows": 22,
+        "marks": 0,
+        "skidVerts": 0,
+        "glow": 0,
+        "particles": 0,
+        "decals": 4,
+        "lineVerts": 3192
+      },
+      "line": {
+        "meshes": 1,
+        "visible": 1,
+        "inScene": 1,
+        "geo": {
+          "index": 12282,
+          "indexType": "Uint32Array",
+          "range": 9570,
+          "pos": 4096,
+          "attrs": [
+            "position",
+            "lineAcross",
+            "lineSpeed",
+            "lineZone",
+            "lineAlong"
+          ],
+          "renderOrder": 8,
+          "bs": [
+            591.2
+          ]
+        }
+      },
+      "softRead": {
+        "gen": 28,
+        "lastMs": 3343,
+        "fails": 0,
+        "lastErr": null,
+        "abandoned": 0,
+        "pending": true
+      },
+      "gpuErrors": 0,
+      "gpuFirstError": null,
+      "gpuRecentErrors": [],
+      "presents": 11325,
+      "healed": false,
+      "ctxLost": false,
+      "calls": 1,
+      "arrayNearest": false,
+      "hasMaterialMaps": true,
+      "packLive": true,
+      "drawMatMode": 0
+    },
+    "positive": true,
+    "signal": "live-backend-state-and-presented-scene-pixels"
+  },
+  "readiness": {
+    "mode": "source-generation",
+    "required": 29,
+    "shown": 29
+  },
+  "pixels": {
+    "brightFraction": 1,
+    "centerBrightFraction": 1,
+    "variance": 611.690962791381,
+    "black": false,
+    "blackHudOnly": false,
+    "meaningful": true,
+    "classification": "scene-content"
+  },
+  "image": {
+    "path": "/home/user/f1-game/artifacts/shots/tracks/anderstorp/anderstorp-15-eye67-day-dry.jpg",
+    "bytes": 75311,
+    "via": "game-soft",
+    "scope": "scene"
+  }
+}
