@@ -403,7 +403,7 @@
           // Dam beside the pad — raised trough so pad/trough are not flat-coplanar;
           // dam foot sits slightly proud of the pad (was 0.33 m buried).
           const damFoot = vadd(vadd(a.c, a.r, 7.5), a.u, 0.35);
-          seat.box(stage, vadd(vadd(a.c, a.r, 4.0), a.u, 0.3), [4.0, 0.35, 1.0], [0.50, 0.42, 0.32], b);
+          seat.box(stage, vadd(vadd(a.c, a.r, 4.0), a.u, 0.42), [4.0, 0.35, 1.0], [0.50, 0.42, 0.32], b);
           seat.cyl(stage, damFoot, 4.6, 2.4, [0.52, 0.44, 0.34], 12, b);
           stage._mat = MAT.CONCRETE;
           seat.cyl(stage, vadd(damFoot, a.u, 2.4), 4.4, 0.2, [0.30, 0.36, 0.34], 12, b);

@@ -1,0 +1,185 @@
+{
+  "count": 36,
+  "shots": [
+    {
+      "file": "LIT-01-start__dawn.jpg",
+      "kb": "68.6",
+      "quality": 80
+    },
+    {
+      "file": "LIT-01-start__dusk.jpg",
+      "kb": "75.7",
+      "quality": 80
+    },
+    {
+      "file": "LIT-01-start__night.jpg",
+      "kb": "83.5",
+      "quality": 80
+    },
+    {
+      "file": "LIT-02-pit__dawn.jpg",
+      "kb": "56.5",
+      "quality": 80
+    },
+    {
+      "file": "LIT-02-pit__dusk.jpg",
+      "kb": "71.7",
+      "quality": 80
+    },
+    {
+      "file": "LIT-02-pit__night.jpg",
+      "kb": "82.3",
+      "quality": 80
+    },
+    {
+      "file": "LIT-03-crowthorne__dawn.jpg",
+      "kb": "37.6",
+      "quality": 80
+    },
+    {
+      "file": "LIT-03-crowthorne__dusk.jpg",
+      "kb": "39.8",
+      "quality": 80
+    },
+    {
+      "file": "LIT-03-crowthorne__night.jpg",
+      "kb": "42.7",
+      "quality": 80
+    },
+    {
+      "file": "LIT-04-headgear__dawn.jpg",
+      "kb": "50.4",
+      "quality": 80
+    },
+    {
+      "file": "LIT-04-headgear__dusk.jpg",
+      "kb": "66.7",
+      "quality": 80
+    },
+    {
+      "file": "LIT-04-headgear__night.jpg",
+      "kb": "69.3",
+      "quality": 80
+    },
+    {
+      "file": "S1-01-start__day.jpg",
+      "kb": "85.3",
+      "quality": 80
+    },
+    {
+      "file": "S1-02-main-gs__day.jpg",
+      "kb": "69.1",
+      "quality": 80
+    },
+    {
+      "file": "S1-03-pit__day.jpg",
+      "kb": "89.3",
+      "quality": 80
+    },
+    {
+      "file": "S1-04-race-control__day.jpg",
+      "kb": "123.8",
+      "quality": 80
+    },
+    {
+      "file": "S1-05-crowthorne__day.jpg",
+      "kb": "56.4",
+      "quality": 80
+    },
+    {
+      "file": "S1-06-crowthorne-terrace__day.jpg",
+      "kb": "59.2",
+      "quality": 80
+    },
+    {
+      "file": "S1-07-jukskei__day.jpg",
+      "kb": "62.2",
+      "quality": 80
+    },
+    {
+      "file": "S1-08-barbecue__day.jpg",
+      "kb": "67.5",
+      "quality": 80
+    },
+    {
+      "file": "S1-09-sector1-mid__day.jpg",
+      "kb": "88.7",
+      "quality": 80
+    },
+    {
+      "file": "S1-10-hospitality__day.jpg",
+      "kb": "73.6",
+      "quality": 80
+    },
+    {
+      "file": "S2-01-esses__day.jpg",
+      "kb": "47.4",
+      "quality": 80
+    },
+    {
+      "file": "S2-02-headgear__day.jpg",
+      "kb": "67.1",
+      "quality": 80
+    },
+    {
+      "file": "S2-03-sunset__day.jpg",
+      "kb": "43.1",
+      "quality": 80
+    },
+    {
+      "file": "S2-04-climb-terrace__day.jpg",
+      "kb": "63.8",
+      "quality": 80
+    },
+    {
+      "file": "S2-05-sector2__day.jpg",
+      "kb": "101.2",
+      "quality": 80
+    },
+    {
+      "file": "S2-06-clubhouse__day.jpg",
+      "kb": "69.6",
+      "quality": 80
+    },
+    {
+      "file": "S2-07-broadcast__day.jpg",
+      "kb": "67.3",
+      "quality": 80
+    },
+    {
+      "file": "S3-01-leeukop__day.jpg",
+      "kb": "57.6",
+      "quality": 80
+    },
+    {
+      "file": "S3-02-windpump__day.jpg",
+      "kb": "79.5",
+      "quality": 80
+    },
+    {
+      "file": "S3-03-plunge__day.jpg",
+      "kb": "58.6",
+      "quality": 80
+    },
+    {
+      "file": "S3-04-final__day.jpg",
+      "kb": "63.9",
+      "quality": 80
+    },
+    {
+      "file": "S3-05-horizon__day.jpg",
+      "kb": "55.5",
+      "quality": 80
+    },
+    {
+      "file": "S3-06-final-straight__day.jpg",
+      "kb": "66.5",
+      "quality": 80
+    },
+    {
+      "file": "S3-07-sector3-mid__day.jpg",
+      "kb": "50.3",
+      "quality": 80
+    }
+  ]
+}
