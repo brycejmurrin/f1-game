@@ -222,7 +222,6 @@ const UiExperience = (function () {
       if (typeof SettingRow !== "undefined" && goal.closest && !goal.closest(".set-row")) {
         const built = SettingRow.build("practice-goal-row", "GOAL");
         built.sel.id = "practice-goal";
-        built.sel.setAttribute("aria-labelledby", "practice-goal-label");
         const host = goal.parentNode;
         const oldLabel = intro && intro.querySelector('label[for="practice-goal"]');
         if (oldLabel) oldLabel.remove();
