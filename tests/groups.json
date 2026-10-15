@@ -770,8 +770,6 @@
     "tests/unit/sheetshape-registry.test.mjs",
     "tests/unit/shell-ids.test.mjs",
     "tests/unit/ship-filter-paths.test.mjs",
-    "// The free cameras step round a hill, building or tree between eye and car (js/agent/shot-clear.js).",
-    "tests/unit/shot-clear.test.mjs",
     "// shot.mjs --batch / --jpeg / --raster parse (no Chromium).",
     "tests/unit/shot-jobs.test.mjs",
     "// The physics step's functions (update, updateCar…) compile under 48 KB of bytecode — TurboFan's",

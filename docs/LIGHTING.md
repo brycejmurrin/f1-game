@@ -490,10 +490,7 @@ Don't re-specify a `"*"` value in a per-condition preset unless you're deliberat
   floods (`lampLevel`, `poolEnergy`), keep ambient low, `starBright`↑ for a clear desert sky.
 - **wet** — mirror-road: `ssrWetMul`↑, `wetDark`↑ (darker tarmac), cooler `tint`−, a touch more cloud.
 - **rain** — wet + weather: keep `ssrWetMul` up, `fogDensityMul`↑ (lower visibility), `lightning`
-  (storms), cooler and flatter. `rainCount` for storm density. In `atmosphere.js`, daytime
-  rain/storm also blend the sky toward the dry-overcast grey deck and keep exposure ≥ 1.0;
-  the storm block’s night-only darkening (zenith ×0.7, exposure ×0.86, …) does not run in
-  daylight, so wet sessions read as murky overcast, not night.
+  (storms), cooler and flatter. `rainCount` for storm density.
 - **fog** — `fogDensityMul`↑↑, `mistDensity`↑, desaturate (`saturation`−), reduced reach, cooler/greyer.
 - **overcast** — flat soft light: `keyMul`− (weaker sun), `ambientMul`↑ (soft fill), `cloudCover`+,
   low shadow contrast (`shadowStr`−), slight desaturation, cool-neutral `tint`.
