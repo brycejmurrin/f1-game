@@ -82,6 +82,9 @@
 #track-detail-elev { display: block; width: 100%; max-width: 100%; height: 48px; box-sizing: border-box; }
 #track-detail-drs-list { font-size: var(--fs-2); color: var(--text); }
 .tdd-zone { padding: 2px 0; }
+#track-detail-drs-list span[aria-label="crossing start/finish"] {
+  color: var(--dim); letter-spacing: var(--ls-2); white-space: nowrap;
+}
 .tdc-title { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); text-transform: uppercase; margin: 8px 0 calc(var(--gap) * 0.25); }
 #track-detail-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .tdc-corner {
