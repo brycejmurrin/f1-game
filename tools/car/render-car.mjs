@@ -83,11 +83,12 @@
 //   node tools/car/render-car.mjs --team=all --spineLogo=wrap --views=top,rearquarter  # one design, every car
 
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { resolve, dirname } from 'node:path';
 import { exitIfHelp } from '../lib/cli-args.mjs';
 import { glStack } from '../lib/browser-workers.mjs';
+import { chromiumPath } from '../lib/chromium-path.mjs';
 
 const RC_USAGE = `usage: node tools/car/render-car.mjs [--views=a,b,c] [--preset=<name>|list] [--team=<id>|all] [options]
   Headless batch renderer for tools/carview.html (needs a static server on :3456).
@@ -280,36 +281,13 @@ const OUTARG = arg('out', null);
 const OUT    = OUTARG != null
   ? resolve(process.cwd(), OUTARG)
   : resolveRepoDefault(ROOT, 'scratch', 'renders', 'cars', MULTI_TEAM ? 'teams' : TEAM);
-// Browser: PW_CHROMIUM wins, else Playwright's bundled build, else a Chromium
-// already installed under PLAYWRIGHT_BROWSERS_PATH. Sandboxes that preinstall
-// the browser (and set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD) have no bundled build,
-// and the bare "run npx playwright install" error sends you chasing a download
-// that is deliberately disabled there.
-function findChromium() {
-  if (process.env.PW_CHROMIUM) return process.env.PW_CHROMIUM;
-  const root = process.env.PLAYWRIGHT_BROWSERS_PATH || resolve(process.env.HOME || '', '.cache', 'ms-playwright');
-  if (!root || !existsSync(root)) return undefined;
-  // Prefer headless_shell (Cloud / PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD installs)
-  // then full chromium-*. Old code only looked for chromium- and fell through
-  // to Playwright's default, which then spent minutes on a missing download.
-  const dirs = readdirSync(root)
-    .filter((d) => d.startsWith('chromium_headless_shell-') || d.startsWith('chromium-'))
-    .sort()
-    .reverse();
-  const rels = [
-    'chrome-headless-shell-linux64/chrome-headless-shell',
-    'chrome-linux/chrome',
-    'chrome-mac/Chromium.app/Contents/MacOS/Chromium',
-  ];
-  for (const d of dirs) {
-    for (const rel of rels) {
-      const exe = resolve(root, d, rel);
-      if (existsSync(exe)) return exe;
-    }
-  }
-  return undefined;
-}
-const EXE    = findChromium();
+// Browser: tools/lib/chromium-path.mjs — PW_CHROMIUM (or CHROME) wins, then
+// Playwright's pinned revision, the newest installed chromium-*, a headless
+// shell, then a system Chromium. Sandboxes that preinstall the browser (and set
+// PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD) have no bundled build, and the bare "run
+// npx playwright install" error sends you chasing a download that is
+// deliberately disabled there.
+const EXE    = chromiumPath();
 // SwiftShader renders on the CPU, so a loaded box can take tens of seconds to
 // present a frame. These were fixed 15 s and aborted the whole sheet.
 const WAIT_MS = Math.max(15_000, (parseFloat(arg('wait', '90')) || 90) * 1000);

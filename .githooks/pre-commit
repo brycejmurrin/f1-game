@@ -47,7 +47,13 @@ else
   grep '^OVER' artifacts/pre-commit-ratchets.log >&2
   exit 1
 fi
-if ! npm run --silent test:guards >"$LOG" 2>&1; then
+# test:guards builds throwaway fixture repos; git exported GIT_DIR, GIT_INDEX_FILE
+# & co. into this hook (absolute in a linked worktree, the index.lock for -a), so
+# their git would act on THIS repo (#1807). Unset them for the suite only: the
+# ratchet auto-raise above must still stage into the commit's own index.
+# The idiom is githooks(5)'s own: https://git-scm.com/docs/githooks#_description
+# shellcheck disable=SC2046
+if ! ( unset $(git rev-parse --local-env-vars); npm run --silent test:guards ) >"$LOG" 2>&1; then
   echo "pre-commit: BLOCKED — npm run test:guards is red (AGENTS.md §Verification 3). Last lines of $LOG:" >&2
   grep -E 'not ok|Error|expected|actual' "$LOG" | tail -20 >&2
   exit 1

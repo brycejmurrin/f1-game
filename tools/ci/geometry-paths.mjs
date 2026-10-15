@@ -157,6 +157,11 @@ export const TARGETED = [
   { ere: "^tests/data/scenery-audit-baseline\\.json$",
     suites: ["tests/unit/scenery-ground-audit.test.mjs"],
     why: "the fleet baseline tools/track/ground-audit.cjs readBaseline() loads; a stale cap 'silently permits a regression' (the suite samples monaco, monza, spa)" },
+  // #2183: the stale-row policy scopes hard fails to the PR's circuits via
+  // circuitsTouched(); a change to that scoping must re-prove the policy.
+  { ere: "^tools/ci/select-specs\\.mjs$",
+    suites: ["tests/unit/prop-clipping.test.mjs"],
+    why: "the stale-baseline policy imports circuitsTouched() to decide which stale caps hard-fail on a PR" },
   { ere: "^js/ui/driving-line-opts\\.js$",
     suites: ["tests/unit/driving-line-opts.test.mjs"],
     why: "the sheet's store round-trip; builds no circuit" },

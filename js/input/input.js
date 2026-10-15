@@ -43,8 +43,20 @@ const Input = (function () {
   let recoverPressed = false;   // edge-triggered manual recover / put-me-back
   let radioPressed = false;     // edge-triggered RADIO CHECK — ask the engineer for the gaps (js/race/race-radio.js)
   let mirrorPressed = false;    // edge-triggered REAR-VIEW MIRROR on/off (js/render/shared/mirror-pass.js)
-  let keyLookBack = false;      // HELD: look-back mirror while the key/button is down
+  let keyLookBack = false;      // HELD or TOGGLE (apex26.holdMode): look-back mirror
   let padLookBack = false;
+  let holdMode = InputBindings.holdModeDefaults();
+  let keyThrottleToggle = false, keyLookBackToggle = false;
+  let padThrottleToggle = false, padLookBackToggle = false;
+  let _menuWasOpen = false, _wasInRace = false;
+  const throttleIsToggle = () => holdMode.throttle === "toggle";
+  const lookBackIsToggle = () => holdMode.lookBack === "toggle";
+  // Keyboard / pad TOGGLE state only — never the on-screen pedal latch (touch).
+  function clearDriveToggles() {
+    keyThrottleToggle = keyLookBackToggle = false;
+    padThrottleToggle = padLookBackToggle = false;
+    syncHeldKeys();
+  }
   // FREE-LOOK axes (js/camera/feel.js): right stick + RMB-drag mouse deltas.
   // Stick is latched each poll; mouse deltas accumulate until consumeLookMouse().
   let lookStickX = 0, lookStickY = 0;
@@ -541,8 +553,8 @@ const Input = (function () {
   }
 
   const bindings = InputBindings.create({
-    onKeysChanged() { heldKeys.clear(); keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false; },
-    onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; },
+    onKeysChanged() { heldKeys.clear(); keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false; clearDriveToggles(); },
+    onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; clearDriveToggles(); },
     activePad,
   });
   const {
@@ -820,8 +832,9 @@ const Input = (function () {
   }
   function syncHeldKeys() {
     keyLeft = heldAction("left"); keyRight = heldAction("right");
-    keyThrottle = heldAction("throttle"); keyBrake = heldAction("brake");
-    keyLookBack = heldAction("lookBack");
+    keyBrake = heldAction("brake");
+    keyThrottle = throttleIsToggle() ? keyThrottleToggle : heldAction("throttle");
+    keyLookBack = lookBackIsToggle() ? keyLookBackToggle : heldAction("lookBack");
   }
   function onKey(e, down) {
     const active = document.activeElement;
@@ -872,7 +885,8 @@ const Input = (function () {
        same treatment for Alt+Tab on Windows, for the same reason. */
     if (down && (e.code === "MetaLeft" || e.code === "MetaRight" || e.code === "AltLeft" || e.code === "AltRight")) {
       heldKeys.clear();
-      keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false;   // look-back is held too
+      keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false;
+      clearDriveToggles();
     }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
         driving gate — but still below a TEXT-FIELD check, because P in a field
@@ -893,6 +907,7 @@ const Input = (function () {
         (tag === "SELECT" && act === "pause" && printable);
       if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !inTextField) {
       if (act === "pause") {
+        clearDriveToggles();
         if (onPauseCb) onPauseCb();
         return;
       }
@@ -931,6 +946,16 @@ const Input = (function () {
       return;
     }
     if (["left", "right", "throttle", "brake", "lookBack"].includes(act)) {
+      const toggle = (act === "throttle" && throttleIsToggle()) || (act === "lookBack" && lookBackIsToggle());
+      if (toggle) {
+        if (down && !e.repeat) {
+          if (act === "throttle") keyThrottleToggle = !keyThrottleToggle;
+          else keyLookBackToggle = !keyLookBackToggle;
+          e.preventDefault();
+        }
+        syncHeldKeys();
+        return;
+      }
       if (down) {
         if (!heldKeys.has(e.code)) {
           if (act === "left") keyLeftSeq = ++keySeq;
@@ -1141,7 +1166,7 @@ const Input = (function () {
   }
   const holdButtons = InputHoldButtons.create({
     clamp,
-    beforeReleaseAll(keepLatch) { if (!keepLatch) throttleLatched = false; paintLatch(); },
+    beforeReleaseAll(keepLatch) { if (!keepLatch) { throttleLatched = false; paintLatch(); } },
   });
   const { wireHold, wireTap, holdReleasePointer, holdReleaseAll, holdTargetGone, lostCaptureShouldRelease } = holdButtons;
 
@@ -1380,9 +1405,15 @@ const Input = (function () {
     padSteerAnalog = Math.abs(stick) > 0.001;
     padSteer = padSteerAnalog ? stick : dpad;
     // pedals: analog triggers, a wheel's pedal AXES, or the A/B face buttons.
-    padThrottleVal = padPedalLevel(Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle")));
+    if (throttleIsToggle()) {
+      if (padActEdge(pad, "throttle")) padThrottleToggle = !padThrottleToggle;
+      padThrottle = padThrottleToggle;
+      padThrottleVal = padThrottleToggle ? 1 : 0;
+    } else {
+      padThrottleVal = padPedalLevel(Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle")));
+      padThrottle = padThrottleVal > 0;
+    }
     padBrakeVal = padPedalLevel(Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake")));
-    padThrottle = padThrottleVal > 0;
     padBrake = padBrakeVal > 0;
     // A connected pad is not active input. Record only a real deflection or a
     // newly pressed button, so an idle Bluetooth pad cannot steal Help/coach
@@ -1411,7 +1442,7 @@ const Input = (function () {
       const nb = pad.buttons ? pad.buttons.length : 0;
       for (let i = 0; i < nb; i++) if (btnEdge(pad, i)) { padCaptureCb(i); break; }
     } else {
-      if (padActEdge(pad, "pause") && onPauseCb) onPauseCb();
+      if (padActEdge(pad, "pause")) { clearDriveToggles(); if (onPauseCb) onPauseCb(); }
       // A MENU OPEN MEANS THE PAD DRIVES THE MENU, NOT THE CAR — mirroring
       // menuOverlayOpen() gating the keyboard's own driving keys elsewhere in
       // this file. Only ONE of the two branches below ever fires per poll, so a
@@ -1445,7 +1476,10 @@ const Input = (function () {
         if (padActEdge(pad, "recover")) recoverPressed = true;
         if (padActEdge(pad, "radio")) radioPressed = true;
         if (padActEdge(pad, "mirror")) mirrorPressed = true;
-        padLookBack = padActVal(pad, "lookBack") > 0.5;
+        if (lookBackIsToggle()) {
+          if (padActEdge(pad, "lookBack")) padLookBackToggle = !padLookBackToggle;
+          padLookBack = padLookBackToggle;
+        } else padLookBack = padActVal(pad, "lookBack") > 0.5;
       }
     }
     const n = pad.buttons ? pad.buttons.length : 0;
@@ -1560,6 +1594,12 @@ const Input = (function () {
   function navBlocksTouchLive() { return !!(window.UiLayers && window.UiLayers.anyOpen()); }
   function navBlocksTouch() { return _navLatch < 0 ? navBlocksTouchLive() : _navLatch === 1; }
   function poll() {
+    const menu = menuOverlayOpen();
+    if (menu && !_menuWasOpen) clearDriveToggles();
+    _menuWasOpen = menu;
+    const inRace = !!(window.UiLayers && typeof window.UiLayers.inRace === "function" && window.UiLayers.inRace());
+    if (_wasInRace && !inRace) clearDriveToggles();
+    _wasInRace = inRace;
     pollGamepad();
     _navLatch = navBlocksTouchLive() ? 1 : 0;
   }
@@ -2090,6 +2130,7 @@ const Input = (function () {
     padDpadLeftHeld = padDpadRightHeld = false;
     padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
     keyLookBack = false;
+    clearDriveToggles();
     lookStickX = 0; lookStickY = 0;
     lookMouseDx = 0; lookMouseDy = 0; lookMouseDown = false;
     remThr = remBrk = 0; remHeld = 0;   // the phone re-sends within 100 ms if still held
@@ -2247,8 +2288,13 @@ const Input = (function () {
     vibrate,
     hapticsSupported,
     setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
-    // Every race starts OFF: a latched GAS from the last race (finish, QUIT, RESTART) launched the car at lights-out untouched.
-    dropLatch() { if (throttleLatched) { throttleLatched = false; btnThrottle = false; paintLatch(); } },
+    setHoldMode(m) { holdMode = InputBindings.parseHoldMode(m); clearDriveToggles(); },
+    getHoldMode: () => InputBindings.parseHoldMode(holdMode),
+    // Every race starts OFF: touch latch + keyboard/pad toggles from the last race.
+    dropLatch() {
+      clearDriveToggles();
+      if (throttleLatched) { throttleLatched = false; btnThrottle = false; paintLatch(); }
+    },
     throttleLatched: () => throttleLatch && throttleLatched,
     primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,

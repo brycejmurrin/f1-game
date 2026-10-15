@@ -5,6 +5,7 @@
 // commit and push rules for any host (docs/notes/AGENT-GUARDS-2026-10-14.md).
 // The pre-push rules run against real git in a throwaway repo under
 // artifacts/; the adapter runs the real guard. A few seconds.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
