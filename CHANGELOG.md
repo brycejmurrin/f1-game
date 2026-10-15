@@ -83,3 +83,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 ### Audio
 - Results HIGHLIGHTS montage plays engine notes with the field (#1462)
+
+### Improved
+- HUD editing puts visibility beside position and size in both editors. Hidden maps, gaps and mirrors stay selectable, with AUTO available alongside SHOW and HIDE; timing-tower edits update the whole group together.

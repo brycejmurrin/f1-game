@@ -1009,6 +1009,43 @@ const HudLayout = (function () {
   // body[data-hud-hide~=…] token for each of our ids (js/ui/hud-elements.js).
   const TOGGLE = Object.freeze({ gearbox: "gear", speed: "speed", energy: "energy", tyre: "tyre", ot: "ot", aero: "aero", bb: "bb", sectors: "sectors", limits: "limits",
     damage: "damage", rel: "rel", strat: "strat", inputs: "inputs" });
+  const VIS_ROWS = Object.freeze({
+    map: ["pm-hudmap", "hudMapVis", "on"], gaps: ["pm-hudgaps", "hudGapsVis", "on"], mirror: ["pm-hudmirror", "hudMirror", "auto"],
+  });
+  const VIS_BINARY = Object.freeze([["on", "SHOW"], ["off", "HIDE"]]);
+  const VIS_AUTO = Object.freeze([["auto", "AUTO"], ...VIS_BINARY]);
+  function visibilityIds(id) {
+    return id === "tower" ? ["pos", "lap", "time", "best", "delta"] : TOGGLE[id] ? [TOGGLE[id]] : [];
+  }
+  // Both editors use the same piece-to-preference mapping. Race messages and
+  // flags remain event-driven; layout pieces and individual toggles differ.
+  function visibility(id) {
+    const row = VIS_ROWS[id];
+    if (row) {
+      const value = store ? store.get(row[1], row[2]) : row[2];
+      return { value: VIS_AUTO.some(([v]) => v === value) ? value : row[2], choices: VIS_AUTO };
+    }
+    const ids = visibilityIds(id);
+    if (!ids.length || typeof HudElements === "undefined") return null;
+    const count = ids.filter((key) => HudElements.isOn(key)).length;
+    return count && count < ids.length
+      ? { value: "mixed", choices: [...VIS_BINARY, ["mixed", "PARTLY SHOWN", true]] }
+      : { value: count ? "on" : "off", choices: VIS_BINARY };
+  }
+  function setVisibility(id, value) {
+    const current = visibility(id);
+    if (!current || !current.choices.some(([v, , disabled]) => v === value && !disabled)) return false;
+    const row = VIS_ROWS[id];
+    if (row) {
+      // These rows own live game state, mirror resources and their summaries.
+      // Use their real change handler instead of only changing stored JSON.
+      const select = doc && doc.getElementById(row[0] + "-sel");
+      if (!select || select.disabled) return false;
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    } else HudElements.setMany(visibilityIds(id), value === "on");
+    return true;
+  }
   /** Live: is element `el` drawn? (hidden attribute, display none, zero box) */
   function drawn(el) {
     if (!el || el.hidden) return false;
@@ -1032,7 +1069,8 @@ const HudLayout = (function () {
     if (live && drawn(el)) return null;
     const user = !!(el && el.hasAttribute && el.hasAttribute("data-hl-user"));
     const hideAttr = doc.body && doc.body.getAttribute ? String(doc.body.getAttribute("data-hud-hide") || "") : "";
-    const off = !!TOGGLE[id] && hideAttr.split(/\s+/).indexOf(TOGGLE[id]) >= 0;
+    const ids = visibilityIds(id), hidden = hideAttr.split(/\s+/);
+    const off = ids.length > 0 && ids.every((key) => hidden.indexOf(key) >= 0);
     for (const [ids, test, reason, soft] of HIDE_RULES) {
       if (ids.indexOf(id) >= 0 && test(has, user, off, el, live)) return { reason, soft: !!soft };
     }
@@ -1075,53 +1113,36 @@ const HudLayout = (function () {
     const help = el("p", { className: "adv-help" });
     body.appendChild(help);
     const paintHelp = () => {
-      help.textContent = "Move and resize each race HUD element. You are editing the " + editingProf.toUpperCase() +
-        " style's layout: each HUD STYLE keeps its own, because BROADCAST anchors the timing tower, map and gaps differently. " +
-        "COCKPIT keeps its own layout, " +
-        "because the steering wheel covers the bottom of the screen; on a desktop its shipped layout puts OVERTAKE, AERO, ENERGY " +
-        "and TYRES beside the wheel (on a touch screen there is no room beside it, so they stay hidden until you place them). " +
-        "HELMET is the visor: the same wheel, but GEAR and SPEED paint too, and on a touch screen ENERGY sits above the wheel and TYRES in the left corner. " +
-        "An element marked HIDDEN is not drawn in the current mode, so its sliders are off. " +
-        "A PRESET is a starting point you can still tweak. In a race, hold a slider to see the HUD through this page.";
+      help.textContent = "Choose an element to show, hide, move or resize. AUTO follows the camera and HUD style. " +
+        "Editing " + editingProf.toUpperCase() + " · " + editing.toUpperCase() + ": other styles and camera layouts keep their own positions. " +
+        "Start with a preset or reset an element. In a race, hold a slider to preview the HUD.";
     };
-    // The settings page's own stepper (‹ select ›, .set-row). Like every shell
-    // stepper the arrows are pointer-only (tabindex -1, aria-hidden): the
-    // <select> owns the keys, so MenuNav walks one control per row.
-    function stepper(id, label, options, onPick) {
-      const lab = el("span", { className: "tune-label", textContent: label });
-      lab.id = id + "-label";
-      const pickEl = el("select", { attrs: { "aria-labelledby": lab.id } });
-      pickEl.id = id + "-sel";
-      for (const [v, t, off] of options) pickEl.appendChild(el("option", { value: v, textContent: t, disabled: !!off }));
-      const go = (d) => {   // skips a disabled entry (PRESET's CUSTOM is a readout, not a choice)
-        let i = pickEl.selectedIndex;
-        for (let n = 0; n < options.length; n++) {
-          i = (i + d + options.length) % options.length;
-          if (!options[i][2]) break;
-        }
-        pickEl.selectedIndex = i; onPick(pickEl.value);
-      };
-      const prev = el("button", { type: "button", textContent: "\u2039", attrs: { "aria-label": "Previous " + label.toLowerCase(), "aria-hidden": "true", tabindex: "-1" } });
-      const next = el("button", { type: "button", textContent: "\u203A", attrs: { "aria-label": "Next " + label.toLowerCase(), "aria-hidden": "true", tabindex: "-1" } });
-      prev.addEventListener("click", () => go(-1));
-      next.addEventListener("click", () => go(1));
-      pickEl.addEventListener("change", () => onPick(pickEl.value));
-      const row = el("div", { className: "set-row", attrs: { role: "group", "aria-labelledby": lab.id } },
-        [lab, el("div", null, [prev, pickEl, next])]);
-      row.id = id;
-      body.appendChild(row);
-      return pickEl;
+    // Use the settings control's native-select and disabled-option semantics.
+    function stepper(id, label, options, read, write) {
+      const built = SettingRow.build(id, label, options);
+      SettingRow.wire(built.row, { values: options, read, write });
+      body.appendChild(built.row);
+      return built.sel;
     }
-    const setPick = stepper("pm-hl-set", "LAYOUT FOR", [["cockpit", "COCKPIT CAM"], ["helmet", "HELMET CAM"], ["other", "OTHER CAMS"]], (v) => {
+    const setPick = stepper("pm-hl-set", "LAYOUT FOR", [["cockpit", "COCKPIT CAM"], ["helmet", "HELMET CAM"], ["other", "OTHER CAMS"]], () => editing, (v) => {
       editing = v; if (fold.open) preview = v; apply(); paintAll(); peek(true, 900);
     });
     const presetPick = stepper("pm-hl-preset", "PRESET",
-      PRESETS.map((p) => [p[0], p[1]]).concat([["custom", "CUSTOM", true]]), (v) => {
+      PRESETS.map((p) => [p[0], p[1]]).concat([["custom", "CUSTOM", true]]), () => presetOf(editing, editingProf), (v) => {
         applyPreset(v, editing, editingProf); paintAll(); peek(true, 900);
       });
-    const pick = stepper("pm-hl-el", "ELEMENT", ELEMENTS.map((e) => [e[0], e[1]]), (v) => {
+    const pick = stepper("pm-hl-el", "ELEMENT", ELEMENTS.map((e) => [e[0], e[1]]), () => sel, (v) => {
       sel = v; selected = sel; apply(); paintAll(); peek(true, 900);
     });
+
+    stepper("pm-hl-visibility", "VISIBILITY", [], () => visibility(sel)?.value || "", (v) => {
+      setVisibility(sel, v); paintAll(); peek(true, 900);
+    });
+    function paintVisibility() {
+      const current = visibility(sel);
+      doc.getElementById("pm-hl-visibility").hidden = !current;
+      SettingRow.paint("pm-hl-visibility", current ? current.value : "", current ? current.choices : []);
+    }
 
     const painters = [], sliders = [];
     for (const k of ["x", "y", "s"]) {
@@ -1179,7 +1200,7 @@ const HudLayout = (function () {
       if (setPick.value !== editing) setPick.value = editing;
       if (pick.value !== sel) pick.value = sel;
       for (const p of painters) p();
-      paintSum(); paintPreset(); paintHelp(); paintHidden();
+      paintSum(); paintPreset(); paintHelp(); paintVisibility(); paintHidden();
     }
     // Open: preview the layout being edited and outline the selected element.
     // Closed: the race shows the camera's layout again.
@@ -1197,7 +1218,7 @@ const HudLayout = (function () {
     host.addEventListener("change", (ev) => { if (!fold.contains(ev.target)) setTimeout(refresh, 0); });
     // SettingRow.wire stops `change` propagation and the chevrons fire none, so
     // the bubbling listener above misses those rows: follow their store keys.
-    const ROW_KEYS = ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror"];
+    const ROW_KEYS = ["hudProfile", "hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudElements"];
     if (store && store.subscribe) store.subscribe((c) => {
       if (c && (ROW_KEYS.indexOf(c.key) >= 0 || (Array.isArray(c.keys) && c.keys.some((k) => ROW_KEYS.indexOf(k) >= 0)))) setTimeout(refresh, 0);
     });
@@ -1219,7 +1240,7 @@ const HudLayout = (function () {
     PACK_AIR, PACK_SCALE_MIN, PACK_FIXED, PACK_MOVE,
     get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
-    hiddenReason, originOf, packPhoneRects,
+    hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility,
   };
 })();
 Object.freeze(HudLayout);

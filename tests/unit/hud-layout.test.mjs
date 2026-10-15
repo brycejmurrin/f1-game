@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CAMG = fs.readFileSync(path.join(ROOT, "js/camera/cam-groups.js"), "utf8");
@@ -1187,4 +1188,74 @@ test("only the unplaced touch broadcast map clears pedals without resizing or sa
   map.removeAttribute("data-hl-user");state.broadcast=false;assert.equal(fit().left,54,"standard profile remains unchanged");
   state.broadcast=true;state.desktop=true;assert.equal(fit().left,54,"desktop remains unchanged");
   state.desktop=false;viewport.innerWidth=390;viewport.innerHeight=844;assert.equal(fit().left,54,"portrait remains unchanged");
+});
+
+// Real SettingRow + HudElements + HudLayout, including the original preference
+// rows. A saved JSON change alone must not masquerade as a live game change.
+function visibilityEditor() {
+  const dom = makeDom({ readyState: 'loading' }), document = dom.document;
+  const lookup = document.getElementById, create = document.createElement;
+  document.getElementById = id => dom.has(id) ? lookup(id) : null;
+  document.createElement = tag => {
+    const el = create(tag);
+    if (tag === 'select') Object.defineProperty(el, 'options', { get: () => el.children });
+    return el;
+  };
+  const host = dom.makeElement('details', 'pm-hud-details'); dom.body.appendChild(host);
+  const stored = {}, changes = [], owners = [], listeners = [], timers = [];
+  const store = { get: (k, d) => k in stored ? stored[k] : d, set(k, v) {
+    stored[k] = v; changes.push(k); for (const fn of listeners) fn({ key: k });
+  }, subscribe: fn => listeners.push(fn) };
+  const ctx = { document, GameStore: { store }, setTimeout: fn => timers.push(fn),
+    Event: class { constructor(type, init) { this.type = type; Object.assign(this, init); } } };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/setting-row.js'), 'utf8'), ctx);
+  for (const [id, key, initial] of [['map', 'hudMapVis', 'on'], ['gaps', 'hudGapsVis', 'on'], ['mirror', 'hudMirror', 'auto']]) {
+    const built = ctx.SettingRow.build('pm-hud' + id, id, [['auto', 'AUTO'], ['on', 'ON'], ['off', 'OFF']]);
+    ctx.SettingRow.wire(built.row, { read: () => store.get(key, initial), write(value) { owners.push([id, value]); store.set(key, value); } });
+    host.appendChild(built.row);
+  }
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/ui/hud-elements.js'), 'utf8') + '; this.HudElements = HudElements;', ctx);
+  vm.runInContext(SRC + '; this.HudLayout = HudLayout;', ctx);
+  ctx.HudLayout.build();
+  const choose = (id, value) => { const el = document.getElementById(id); assert.ok(el, id); el.value = value; dom.dispatch(el, { type: 'change', bubbles: true }); };
+  return { H: ctx.HudLayout, E: ctx.HudElements, document, choose, owners, stored, changes,
+    flush() { while (timers.length) timers.shift()(); } };
+}
+
+test('MOVE & SIZE visibility invokes original map/gaps/mirror owners and preserves AUTO', () => {
+  const e = visibilityEditor();
+  for (const [id, key] of [['map', 'hudMapVis'], ['gaps', 'hudGapsVis'], ['mirror', 'hudMirror']]) {
+    e.choose('pm-hl-el-sel', id);
+    const select = e.document.getElementById('pm-hl-visibility-sel');
+    assert.deepEqual(Array.from(select.children, option => option.value), ['auto', 'on', 'off']);
+    e.choose('pm-hl-visibility-sel', 'off');
+    assert.equal(e.stored[key], 'off'); assert.equal(select.value, 'off');
+    e.choose('pm-hl-visibility-sel', 'auto');
+    assert.equal(e.stored[key], 'auto'); assert.equal(select.value, 'auto');
+  }
+  assert.deepEqual(e.owners, [['map', 'off'], ['map', 'auto'], ['gaps', 'off'], ['gaps', 'auto'], ['mirror', 'off'], ['mirror', 'auto']], 'real owner handlers ran synchronously');
+  assert.equal(e.stored.hudLayout, undefined, 'visibility does not rewrite placement or another style');
+});
+
+test('grouped tower visibility stays mixed until explicitly changed and writes one hide list', () => {
+  const e = visibilityEditor();
+  e.E.set('delta', false);
+  e.flush();
+  e.choose('pm-hl-el-sel', 'tower');
+  const select = e.document.getElementById('pm-hl-visibility-sel');
+  assert.equal(select.value, 'mixed');
+  assert.equal(select.children.find(option => option.value === 'mixed').disabled, true);
+  const before = e.changes.length;
+  e.choose('pm-hl-visibility-sel', 'off');
+  assert.equal(e.changes.length - before, 1, 'one tower edit is one persistent update');
+  assert.equal(['pos', 'lap', 'time', 'best', 'delta'].some(e.E.isOn), false);
+  assert.equal(e.E.isOn('speed'), true, 'unrelated readouts are untouched');
+  e.choose('pm-hl-visibility-sel', 'on');
+  assert.equal(['pos', 'lap', 'time', 'best', 'delta'].every(e.E.isOn), true);
+  e.choose('pm-hl-el-sel', 'flag');
+  assert.equal(e.document.getElementById('pm-hl-visibility').hidden, true, 'race-event messages cannot be disabled accidentally');
+  assert.equal(e.H.setVisibility('speed', 'auto'), false, 'binary preferences cannot acquire AUTO');
+  assert.equal(e.H.setVisibility('tower', 'mixed'), false, 'mixed is a readout, not a command');
 });

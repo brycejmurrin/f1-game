@@ -734,13 +734,76 @@ test.describe("Race settings — landscape layout", () => {
 // clobbers the other scheme's offsets. Scheme switches are driven through
 // DockLayout.apply (same path store.subscribe uses) — opening pause after a
 // mid-race dock translate timed out on CI (pausebtn under the moved column).
+async function checkHudVisibilityEditors(page, testInfo) {
+  const errors = [], warnings = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error") errors.push(message.text());
+    if (message.type() === "warning") warnings.push(message.text());
+  });
+  await page.goto("/");
+  await expect(page).toHaveTitle(/Apex 26/);
+  await waitReady(page);
+  await page.evaluate(() => window.__apex.headless(true));
+  await openPauseSettings(page);
+  await page.locator("#pm-open-display").click();
+  await page.locator("#pm-hud-details > summary").click();
+  await page.locator("#pm-hudlayout > summary").click();
+  for (const id of ["map", "gaps", "mirror"]) {
+    await page.locator("#pm-hl-el-sel").selectOption(id);
+    await page.locator("#pm-hl-visibility-sel").selectOption("off");
+    await expect(page.locator("#pm-hud" + id + "-sel")).toHaveValue("off");
+  }
+  await page.locator("#pm-hudlayout > summary").click();
+  await page.locator("#pm-hud-arrange").click();
+  await expect(page.locator("#hud-arrange-bar")).toBeVisible();
+  for (const id of ["map", "gaps", "mirror"]) {
+    await page.locator("#hud-arrange-element").selectOption(id);
+    await expect(page.locator("#hud-arrange-vis")).toHaveValue("off");
+    await page.locator("#hud-arrange-vis").selectOption(id === "mirror" ? "auto" : "on");
+    await expect(page.locator("#pm-hud" + id + "-sel")).toHaveValue(id === "mirror" ? "auto" : "on");
+  }
+  await expect(page.locator("body")).not.toHaveClass(/\bhud-hide-map\b|\bhud-hide-gaps\b/);
+  await expect(page.locator("#minimap")).toBeVisible();
+  await page.locator("#hud-arrange-element").selectOption("map");
+  const visibility = page.locator("#hud-arrange-vis");
+  await visibility.focus();
+  await page.keyboard.press("Home");
+  await expect(visibility).toHaveValue("auto");
+  await page.keyboard.press("End");
+  await expect(visibility).toHaveValue("off");
+  await page.keyboard.press("ArrowUp");
+  await expect(visibility).toHaveValue("on");
+  await expect(page.locator("#pm-hudmap-sel")).toHaveValue("on");
+  expect((await page.locator("#hud-arrange-bar").boundingBox()).height).toBeLessThan(80);
+  await page.screenshot({ path: testInfo.outputPath("hud-controls-" + page.viewportSize().width + ".png") });
+  await page.locator("#hud-arrange-done").click();
+  await expect(page.locator("#pmsettings")).toBeVisible();
+  await page.locator("#pm-hudlayout > summary").click();
+  for (const id of ["map", "gaps", "mirror"]) {
+    await page.locator("#pm-hl-el-sel").selectOption(id);
+    await expect(page.locator("#pm-hl-visibility-sel")).toHaveValue(id === "mirror" ? "auto" : "on");
+  }
+  expect(await page.evaluate(() => ["hudMapVis", "hudGapsVis", "hudMirror"].map(key => JSON.parse(localStorage.getItem("apex26." + key))))).toEqual(["on", "on", "auto"]);
+  await testInfo.attach("console-health", { body: JSON.stringify({ errors, warnings }), contentType: "application/json" });
+  expect(errors, "HUD controls have no console or uncaught application errors").toEqual([]);
+}
+
 test.describe("HUD — ARRANGE HUD on-screen editor", () => {
   // The on-screen editor for MOVE & SIZE (js/ui/hud-arrange.js). Landscape touch:
   // the player this exists for, and the shape where pieces meet the docks.
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
+  test("visibility stays consistent between the slider and on-screen editors on touch", async ({ page }, testInfo) => {
+    await checkHudVisibilityEditors(page, testInfo);
+  });
+
   test.describe("desktop toolbar placement", () => {
     test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+
+    test("visibility stays consistent between the slider and on-screen editors on desktop", async ({ page }, testInfo) => {
+      await checkHudVisibilityEditors(page, testInfo);
+    });
 
     test("entry uses the populated toolbar size without a later position jump", async ({ page }) => {
       await page.addInitScript(() => localStorage.setItem("apex26.textSize", '"large"'));
@@ -800,7 +863,7 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     const moved = await page.evaluate(() => HudLayout.get("map"));
     expect(moved.x).toBeGreaterThan(5);
     expect(moved.y).toBeGreaterThan(3);
-    await expect(page.locator("#hud-arrange-name")).toContainText("TRACK MAP");
+    await expect(page.locator("#hud-arrange-element")).toHaveValue("map");
 
     // − / + act on the piece last touched; RESET returns it to the shipped layout.
     await page.locator("#hud-arrange-larger").click();
@@ -841,12 +904,12 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.waitForFunction(() => document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
     const vis = page.locator("#hud-arrange-vis");
     // Keyboard access starts with the first visible piece selected.
-    await expect(page.locator("#hud-arrange-name")).toContainText("TIMING TOWER");
+    await expect(page.locator("#hud-arrange-element")).toHaveValue("tower");
     await expect(vis).toBeEnabled();
-    await vis.click();
+    await vis.selectOption("off");
     expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].filter(id => HudElements.isOn(id)))).toEqual([]);
-    await expect(vis).toHaveText("SHOW");
-    await vis.click();
+    await expect(vis).toHaveValue("off");
+    await vis.selectOption("on");
     expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].every(id => HudElements.isOn(id)))).toBe(true);
     // Touch the sector plate (a press with no movement selects it).
     const sec = await page.locator("#hud-sectors").boundingBox();
@@ -854,15 +917,15 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.mouse.move(sec.x + sec.width / 2, sec.y + sec.height / 2);
     await page.mouse.down();
     await page.mouse.up();
-    await expect(page.locator("#hud-arrange-name")).toContainText("SECTORS");
+    await expect(page.locator("#hud-arrange-element")).toHaveValue("sectors");
     await expect(vis).toBeEnabled();
-    await expect(vis).toHaveText("HIDE");
-    await vis.click();
+    await expect(vis).toHaveValue("on");
+    await vis.selectOption("off");
     // Stored as hidden, yet still on screen as a ghost so it can be touched again.
     expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(false);
     await expect(page.locator("#hud-sectors")).toHaveAttribute("data-hl-off", "");
     await expect(page.locator("#hud-sectors")).toBeVisible();
-    await expect(vis).toHaveText("SHOW");
+    await expect(vis).toHaveValue("off");
     // DONE: the race hide list is back and the plate is gone from the race.
     await page.locator("#hud-arrange-done").click();
     await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
@@ -875,8 +938,8 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.mouse.move(sec2.x + sec2.width / 2, sec2.y + sec2.height / 2);
     await page.mouse.down();
     await page.mouse.up();
-    await expect(vis).toHaveText("SHOW");
-    await vis.click();
+    await expect(vis).toHaveValue("off");
+    await vis.selectOption("on");
     expect(await page.evaluate(() => HudElements.isOn("sectors"))).toBe(true);
     await page.locator("#hud-arrange-done").click();
     await page.waitForFunction(() => !document.body.hasAttribute("data-hud-arrange"), null, { polling: 100, timeout: BOOT_MS });
@@ -914,10 +977,10 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     const shifted = await page.locator("#announce").boundingBox();
     expect(Math.abs(shifted.y - after.y - LANDSCAPE.height / 20)).toBeLessThan(2);
     await picker.selectOption("inputs");
-    await expect(page.locator("#hud-arrange-vis")).toHaveText("SHOW");
-    await page.locator("#hud-arrange-vis").click();
-    await expect(page.locator("#hud-arrange-vis")).toHaveText("HIDE");
-    await page.locator("#hud-arrange-vis").click();
+    await expect(page.locator("#hud-arrange-vis")).toHaveValue("off");
+    await page.locator("#hud-arrange-vis").selectOption("on");
+    await expect(page.locator("#hud-arrange-vis")).toHaveValue("on");
+    await page.locator("#hud-arrange-vis").selectOption("off");
     await page.locator("#hud-arrange-done").click();
     expect(await page.evaluate(() => Object.fromEntries(["rel", "strat", "inputs"].map(id =>
       [id, { hidden: document.getElementById("hud-" + id).hidden, on: HudElements.isOn(id) }])))).toEqual(original);

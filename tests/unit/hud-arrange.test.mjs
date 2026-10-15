@@ -13,9 +13,20 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-arrange.js"), "utf8");
+const POLICY = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
+const ROW = fs.readFileSync(path.join(ROOT, "js/ui/setting-row.js"), "utf8");
+
+function visibilityPolicy(elements, stored = {}, rows = {}) {
+  const ctx = { document: { readyState: 'loading', querySelector: () => null,
+    getElementById: id => rows[id] || null, addEventListener() {} }, HudElements: elements,
+    Event: class { constructor(type) { this.type = type; } },
+    GameStore: { store: { get: (k, d) => k in stored ? stored[k] : d, set: (k, v) => { stored[k] = v; } } } };
+  vm.createContext(ctx); vm.runInContext(POLICY.replace(/^const\b/gm, 'var'), ctx);
+  return ctx.HudLayout;
+}
 
 function load() {
-  const ctx = { Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
+  const ctx = { HudLayout: visibilityPolicy(), Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };   // the shared clamp the module aliases
   vm.createContext(ctx);
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
@@ -78,29 +89,10 @@ test("clashes: only pairs overlapping by more than the margin on BOTH axes; touc
   assert.equal(A.MIN_CLASH, 3);
 });
 
-test("visIds / visShown: which HUD ELEMENTS toggles a piece maps to, and when it reads as shown", () => {
-  const A = load();
-  assert.deepEqual(plain(A.visIds("tower")), ["pos", "lap", "time", "best", "delta"], "the tower includes its delta box");
-  assert.deepEqual(plain(A.visIds("gearbox")), ["gear"]);
-  for (const id of ["map", "gaps", "mirror", "flag", "announce", "nope"]) assert.deepEqual(plain(A.visIds(id)), [], id + " has no toggle here");
-  const off = new Set(["pos", "lap", "time", "best", "delta", "speed"]);
-  const isOn = (v) => !off.has(v);
-  assert.equal(A.visShown("tower", isOn), false, "all five tower boxes off: hidden");
-  assert.equal(A.visShown("speed", isOn), false);
-  assert.equal(A.visShown("sectors", isOn), true);
-  assert.equal(A.visShown("map", isOn), true, "a piece with no toggle always reads as shown");
-  off.delete("lap");
-  assert.equal(A.visShown("tower", isOn), true, "any tower box on: shown");
-  // Every toggle id the editor writes is one js/ui/hud-elements.js declares.
-  const elSrc = fs.readFileSync(path.join(ROOT, "js/ui/hud-elements.js"), "utf8");
-  for (const ids of Object.values(A.VIS)) for (const v of ids) assert.match(elSrc, new RegExp('\\["' + v + '", "'), v + " is a HudElements id");
-});
-
 test("create: inert without a document or HudLayout; the pure API is frozen", () => {
   const A = load();
   assert.equal(A.create({}), null, "no document, no editor");
   assert.ok(Object.isFrozen(A));
-  assert.deepEqual(plain(A.LIM), { x: [-50, 50], y: [-50, 50], s: [50, 200] }, "the same range HudLayout.LIM clamps to");
 });
 
 // Exercise the real editor listeners with a tiny DOM and a controllable frame queue.
@@ -108,7 +100,11 @@ function editor(pieceId = "piece", options = {}) {
   const ids = new Map(), listeners = {}, frames = new Map(), writes = [], observers = [];
   let frame = 0, set = 'chase', profile = 'standard';
   class El {
-    constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.hidden = false; this.style = { removeProperty(k) { delete this[k]; }, setProperty(k,v) { this[k]=v; }, getPropertyValue(k) { return this[k] || ""; } }; this.isConnected = true; }
+    constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.attrs = {}; this.listeners = {}; this.hidden = false; this.style = { removeProperty(k) { delete this[k]; }, setProperty(k,v) { this[k]=v; }, getPropertyValue(k) { return this[k] || ""; } }; this.isConnected = true; }
+    set textContent(v) { this._text = v; this.children = []; } get textContent() { return this._text || this.children.map(c => c.textContent).join(''); }
+    replaceChildren(...kids) { this.children = []; for (const kid of kids) this.appendChild(kid); }
+    addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+    dispatchEvent(e) { e.stopPropagation ||= () => {}; for (const fn of this.listeners[e.type] || []) fn(e); }
     set id(v) { this._id = v; ids.set(v, this); } get id() { return this._id; }
     setAttribute(k, v) { this.attrs[k] = v; } getAttribute(k) { return this.attrs[k] ?? null; }
     hasAttribute(k) { return k in this.attrs; } removeAttribute(k) { delete this.attrs[k]; }
@@ -145,18 +141,31 @@ function editor(pieceId = "piece", options = {}) {
       if (id === 'map') { const el = ids.get(pieceId); el.setAttribute('data-hl-user', ''); el.style.removeProperty('--hud-clear-x'); el.style.removeProperty('--hud-clear-y'); }
     }, resetEl() {} };
   const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
+  const elements = { isOn: id => on.has(id), setMany(ids, enabled) {
+    for (const id of ids) { visibilityWrites.push({ id, enabled }); if (enabled) on.add(id); else on.delete(id); }
+  }, apply() {} };
+  const preferences = {}, rows = {};
+  for (const [id, key] of [['map', 'hudMapVis'], ['gaps', 'hudGapsVis'], ['mirror', 'hudMirror']]) {
+    preferences[key] = options.visibility || (id === 'mirror' ? 'auto' : 'on');
+    rows['pm-hud' + id + '-sel'] = { value: preferences[key], dispatchEvent() { preferences[key] = this.value; } };
+  }
+  const policy = visibilityPolicy(elements, preferences, rows);
+  Object.assign(layout, { LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility });
   if (options.hidden) ids.get(pieceId).hidden = true;
   if (options.rect) ids.get(pieceId).getBoundingClientRect = () => options.rect;
   const ctx = { document: doc, window: { innerWidth: options.width || 1000, innerHeight: options.height || 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } },
-    HudElements: { isOn: id => on.has(id), set(id, enabled) { visibilityWrites.push({ id, enabled }); if (enabled) on.add(id); else on.delete(id); }, apply() {} },
+    HudElements: elements,
     HudLayout: layout, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) }, Log: { info() {} },
     requestAnimationFrame: fn => { frames.set(++frame, fn); return frame; }, cancelAnimationFrame: n => frames.delete(n),
     MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
-  vm.createContext(ctx); vm.runInContext(SRC.replace(/^const\b/gm, 'var'), ctx);
+  vm.createContext(ctx); vm.runInContext(ROW, ctx); ctx.SettingRow = ctx.window.SettingRow;
+  vm.runInContext(SRC.replace(/^const\b/gm, 'var'), ctx);
   const api = ctx.HudArrange.create({ $: id => ids.get(id) });
   const fire = (name, args = {}) => { const e = { target: ids.get(pieceId), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
   const tick = () => { const todo = [...frames.values()]; frames.clear(); for (const fn of todo) fn(); };
-  return { api, fire, tick, writes, ids, frames, doc, get, observers, on, visibilityWrites, context(sn, pn = profile) { set = sn; profile = pn; for (const fn of observers) fn(); } };
+  return { api, fire, tick, writes, ids, frames, doc, get, observers, on, visibilityWrites, preferences,
+    chooseVisibility(value) { const select = ids.get('hud-arrange-vis'); select.value = value; select.dispatchEvent({ type: 'change' }); },
+    context(sn, pn = profile) { set = sn; profile = pn; for (const fn of observers) fn(); } };
 }
 
 test('editor: exit flushes the final drag once into its original camera/style and clears its frame', () => {
@@ -253,16 +262,16 @@ test('editor: opt-in readouts are selectable previews without enabling them and 
       }
     }
     const vis = e.ids.get('hud-arrange-vis');
-    assert.equal(vis.textContent, 'SHOW'); vis.onclick();
-    assert.equal(e.on.has(id), true); assert.equal(root.hidden, false); assert.equal(vis.textContent, 'HIDE');
-    vis.onclick(); assert.equal(e.on.has(id), false); assert.equal(root.hidden, false);
+    assert.equal(vis.value, 'off'); e.chooseVisibility(vis.value === 'off' ? 'on' : 'off');
+    assert.equal(e.on.has(id), true); assert.equal(root.hidden, false); assert.equal(vis.value, 'on');
+    e.chooseVisibility(vis.value === 'off' ? 'on' : 'off'); assert.equal(e.on.has(id), false); assert.equal(root.hidden, false);
     e.api.setEditing(false);
     assert.equal(root.hidden, true); assert.equal(root.children.length, 1);
     assert.equal(root.getAttribute('data-col-drop'), 'fit');
     assert.equal(original.hidden, false); assert.equal(original.textContent, 'producer content');
     // A paused toggle can be on before its producer has refreshed hidden=true.
     e.on.add(id); e.api.setEditing(true);
-    assert.equal(root.hidden, false); assert.equal(e.ids.get('hud-arrange-vis').textContent, 'HIDE');
+    assert.equal(root.hidden, false); assert.equal(e.ids.get('hud-arrange-vis').value, 'on');
     e.api.setEditing(false); assert.equal(root.hidden, true); assert.equal(e.on.has(id), true);
   }
 });
@@ -286,18 +295,18 @@ test('editor: tower hide/show includes DELTA and leaves SPEED independent', () =
   const e = editor('tower', { on: [...tower, 'speed'] });
   e.api.setEditing(true);
   const vis = e.ids.get('hud-arrange-vis');
-  assert.equal(vis.textContent, 'HIDE');
-  vis.onclick();
+  assert.equal(vis.value, 'on');
+  e.chooseVisibility(vis.value === 'off' ? 'on' : 'off');
   assert.deepEqual([...e.on], ['speed'], 'no timing-tower child remains on');
-  assert.equal(vis.textContent, 'SHOW');
-  vis.onclick();
+  assert.equal(vis.value, 'off');
+  e.chooseVisibility(vis.value === 'off' ? 'on' : 'off');
   for (const id of tower) assert.equal(e.on.has(id), true, id + ' returns with the tower');
   assert.equal(e.on.has('speed'), true);
   // DELTA can be the only enabled child after individual settings changes.
   for (const id of tower) if (id !== 'delta') e.on.delete(id);
   e.api.setEditing(false); e.api.setEditing(true);
-  assert.equal(vis.textContent, 'HIDE', 'a delta-only tower is visible');
-  vis.onclick();
+  assert.equal(vis.value, 'mixed', 'a delta-only tower remains partly shown');
+  e.chooseVisibility(vis.value === 'off' ? 'on' : 'off');
   assert.deepEqual([...e.on], ['speed']);
 });
 
@@ -306,9 +315,9 @@ test('editor: initial toolbar avoids the HUD using its visible content-sized box
   const piece = { left: 110, top: 10, right: 210, bottom: 70, width: 100, height: 60 };
   const e = editor('speed', { on: true, rect: piece, toolbarSize: ids => {
     // The populated toolbar is wider and taller than either its empty shell
-    // or the hidden element's zero-size box. Size must include the live hint.
-    const current = ids.get('hud-arrange-name').textContent === 'Piece 100%' &&
-      ids.get('hud-arrange-hint').textContent === 'drag to move · pinch or − + to size';
+    // or the hidden element's zero-size box. Use the final size readout.
+    const current = ids.get('hud-arrange-name').textContent === '100%' &&
+      ids.get('hud-arrange-hint').hidden;
     return current ? { width: 800, height: 100 } : { width: 200, height: 52 };
   } });
   e.api.setEditing(true);
@@ -371,4 +380,20 @@ test('editor: explicit custom maps never adopt stale automatic clearance', () =>
   map.setAttribute('data-hl-user','');map.style.setProperty('--hud-clear-x','117px');
   e.api.setEditing(true);e.ids.get('hud-arrange-larger').onclick();
   assert.equal(e.get('map').x,0);assert.equal(e.get('map').y,0);assert.equal(e.get('map').s,110);
+});
+
+test('editor: hidden map, gaps and mirror stay selectable and their owner modes can be restored', () => {
+  for (const id of ['map', 'gaps', 'mirror']) {
+    const e = editor(id, { hidden: true, visibility: 'off' });
+    e.api.setEditing(true);
+    assert.equal(e.api.selected(), id);
+    assert.ok(e.ids.get('hud-arrange-element').children.some(option => option.value === id));
+    assert.equal(e.ids.get('hud-arrange-vis').value, 'off');
+    e.chooseVisibility('on');
+    assert.equal(e.ids.get('hud-arrange-vis').value, 'on');
+    e.chooseVisibility('auto');
+    assert.equal(e.ids.get('hud-arrange-vis').value, 'auto');
+    assert.equal(e.preferences[id === 'map' ? 'hudMapVis' : id === 'gaps' ? 'hudGapsVis' : 'hudMirror'], 'auto');
+    assert.equal(e.writes.length, 0, 'changing visibility does not move the piece');
+  }
 });
