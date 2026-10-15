@@ -630,7 +630,7 @@ test("HIGHLIGHTS no-driver cuts replace retired subjects only while AUTO owns th
 });
 
 test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, including paused reels", () => {
-  for (const reel of [false, true]) for (const paused of [false, true]) {
+  for (const reel of [false, true]) for (const paused of [false, true]) for (const outerPaused of [false, true]) {
     const { replay, G, options, ctx } = transportReplay();
     replay.stop();
     const classes = new Set(), writes = [], frames = [];
@@ -656,6 +656,7 @@ test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, 
     assert.equal(classes.has("cockpit-cam"), true);
     assert.equal(layout, "cockpit");
     const before = replay.status();
+    G.paused = outerPaused;
     G.snapGameCam = (paint) => frames.push({ paint, mode: modes[G.camMode].id, layout });
     assert.equal(replay.setAuto(true), true);
     const after = replay.status(), shot = modes[G.camMode].id;
@@ -667,7 +668,7 @@ test("WATCH AUTO handoff updates the actual camera and cockpit HUD immediately, 
     assert.equal(classes.has("cockpit-cam"), false);
     assert.equal(layout, shot);
     assert.match(button.textContent, /^AUTO · /);
-    assert.deepEqual(frames, [{ paint: true, mode: shot, layout: shot }]);
+    assert.deepEqual(frames, [{ paint: outerPaused, mode: shot, layout: shot }], "normal frames render playback pause; the outer pause menu needs an explicit paint");
     assert.equal(after.T, before.T);
     assert.equal(after.follow, before.follow);
     assert.equal(after.paused, paused);

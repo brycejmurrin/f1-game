@@ -376,7 +376,9 @@ const RealReplay = (function () {
         // now through setCamMode so the camera, HUD and audio agree on ownership.
         bc.onCut(null);
         bc.refresh(bcState);
-        if (G.snapGameCam) G.snapGameCam(true);
+        // Playback pause still renders each frame. Only the outer pause menu
+        // needs an explicit paint; otherwise let the normal frame draw the cut.
+        if (G.snapGameCam) G.snapGameCam(!!G.paused);
       }
       return enabled;
     }
