@@ -475,7 +475,10 @@ jobs:
   unit-plan:
     name: Plan node unit slices
     runs-on: ubuntu-latest
-    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true }}
+    # DRAFTS RUN ONLY THE STRUCTURAL GUARDS (2026-10-14, ci-analysis REPORT #1):
+    # a draft fast tier cost 33 job-min a run and 44 % of draft runs were
+    # cancelled by the next push (~6,100 job-min/day). ready_for_review runs it.
+    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     # actions:read for base-green.sh on a deploy push (same contract as
     # node-suites' plan step). A job that names permissions gets ONLY what
     # it names, hence contents too.
@@ -561,7 +564,9 @@ jobs:
     # runs; an unneeded row (matrix.needed=false) skips checkout / npm ci /
     # plan below and reports green in seconds.
     # ready_for_review on the same head SHA: reuse-draft skips the work; names still report.
-    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true }}
+    # Drafts skip the whole job (guards-only draft tier, 2026-10-14): a draft
+    # cannot merge, and ready_for_review reports the six required names.
+    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -807,7 +812,8 @@ jobs:
     # change never censused against what is live. On the train the filter diffs
     # live..tip and skips cheaply when no parts path moved.
     # ready_for_review on an unchanged head SHA reuses the draft census.
-    if: ${{ inputs.smoke_only != true }}
+    # Drafts skip it (guards-only draft tier, 2026-10-14).
+    if: ${{ inputs.smoke_only != true && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     # One subtest of parts-visual-distinctness ("every option resolves to
     # itself") measured 559 s of the 999 s sweeps run on 2026-09-01. Its own
     # runner, unconditional and in parallel, so the geometry sweeps finish in
@@ -897,8 +903,13 @@ jobs:
   sweeps:
     name: Per-circuit geometry sweeps (${{ matrix.shard }}of4)
     runs-on: ubuntu-latest
+    needs: [guards, node-suites]
+    # HEAVY TIER WAITS FOR THE FAST TIER (2026-10-14, ci-analysis REPORT #2):
+    # a red guard or node shard skips this job instead of burning browser
+    # minutes on a run that is already red (392 job-min/day measured), and a
+    # superseding push cancels the run before the heavy tier starts.
     # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
-    if: ${{ inputs.smoke_only != true && !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
+    if: ${{ !cancelled() && (needs.guards.result == 'success' || needs.guards.result == 'skipped') && (needs.node-suites.result == 'success' || needs.node-suites.result == 'skipped') && inputs.smoke_only != true && !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
     # FOUR suite shards (2026-10-14). Pages train 38500310338 spent 1118 s in
     # the single-runner Geometry sweeps step (1218 s job) while every browser
     # spec shard was done by ~529 s — ~11 min of train idle on this job alone.
@@ -1325,8 +1336,12 @@ jobs:
   smoke:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
+    # HEAVY TIER WAITS FOR THE FAST TIER (2026-10-14, ci-analysis REPORT #2):
+    # a red guard or node shard skips this job instead of burning browser
+    # minutes on a run that is already red (392 job-min/day measured), and a
+    # superseding push cancels the run before the heavy tier starts.
     # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
-    if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
+    if: ${{ !cancelled() && (needs.guards.result == 'success' || needs.guards.result == 'skipped') && (needs.node-suites.result == 'success' || needs.node-suites.result == 'skipped') && !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
     # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
     # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
     # branch and PR push: `inputs` is empty on a plain push, null coerces like
@@ -1426,7 +1441,7 @@ jobs:
     # the condition instead, checkout and the dependency install included: on a
     # diff that ships nothing this job starts, does nothing, and reports success
     # in seconds, exactly as it did when the filter was its first step.
-    needs: [ship-filter]
+    needs: [ship-filter, guards, node-suites]
     steps:
       # fetch-depth: 1 is enough now. The full history was here for the filter,
       # which diffed against an arbitrarily old live SHA; that work moved to the
@@ -1636,7 +1651,7 @@ jobs:
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
     # Also skipped when unit-plan says this diff does not need the characterization
     # (ci-verdict treats that skip as a pass).
-    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true && needs.unit-plan.outputs.driving == 'true' }}
+    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true && needs.unit-plan.outputs.driving == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1834,7 +1849,7 @@ jobs:
 
   renderer-macos:
     name: Renderer specs on a real GPU (macos-latest, Metal)
-    needs: renderer-filter
+    needs: [renderer-filter, guards, node-suites]
     # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
     # comment forbids it, because this job is already outside the deploy gate
     # (renderer-filter is skipped on the Pages call, so this is too). The
@@ -1843,7 +1858,7 @@ jobs:
     # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
     # ready PR whose filter said the diff touches the renderer. Never a
     # draft PR or a bare topic-branch push — see the filter's header.
-    if: needs.renderer-filter.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))
+    if: ${{ !cancelled() && (needs.guards.result == 'success' || needs.guards.result == 'skipped') && (needs.node-suites.result == 'success' || needs.node-suites.result == 'skipped') && needs.renderer-filter.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is
@@ -1977,8 +1992,8 @@ jobs:
 
   xr:
     name: Emulated VR (IWER / xr-emulated)
-    needs: xr-filter
-    if: needs.xr-filter.outputs.xr == 'true'
+    needs: [xr-filter, guards, node-suites]
+    if: ${{ !cancelled() && (needs.guards.result == 'success' || needs.guards.result == 'skipped') && (needs.node-suites.result == 'success' || needs.node-suites.result == 'skipped') && needs.xr-filter.outputs.xr == 'true' }}
     runs-on: ubuntu-latest
     # Unmeasured on CI; local IWER suite is minutes. Cap generously.
     timeout-minutes: 25
@@ -2039,7 +2054,8 @@ jobs:
     # every spec the last day of merges routed, with room for more overflow
     # shards than one change gets — so a spec a 15-minute per-change budget
     # squeezes out runs within a day, not on its group's night in 11.
-    if: ${{ inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'merge_group' || inputs.concurrency_key != '') }}
+    # Drafts skip selection (guards-only draft tier, 2026-10-14).
+    if: ${{ inputs.smoke_only != true && !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'merge_group' || inputs.concurrency_key != '') }}
     # actions:read on top of the workflow default — the base-verdict step at the
     # end lists this workflow's runs on the deploy branch. A job that names
     # permissions gets ONLY what it names, hence contents too.
@@ -2135,10 +2151,14 @@ jobs:
     # on the few runs whose guards are red (4 of 100 ship runs).
     # (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
     # — "If a job fails or is skipped, all jobs that need it are skipped".)
-    needs: [select]
+    needs: [select, guards, node-suites]
     # Drafts skip the matrix (required name is selected-verdict). smoke_only
     # Pages skips.
-    if: ${{ inputs.smoke_only != true && needs.select.outputs.any == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+    # HEAVY TIER WAITS FOR THE FAST TIER (2026-10-14, ci-analysis REPORT #2):
+    # a red guard or node shard skips this job instead of burning browser
+    # minutes on a run that is already red (392 job-min/day measured), and a
+    # superseding push cancels the run before the heavy tier starts.
+    if: ${{ !cancelled() && (needs.guards.result == 'success' || needs.guards.result == 'skipped') && (needs.node-suites.result == 'success' || needs.node-suites.result == 'skipped') && inputs.smoke_only != true && needs.select.outputs.any == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2365,7 +2385,7 @@ jobs:
     # BEFORE deciding: failures in junit stay a hard fail; clean junit marks
     # infra-retry and exits 0. ci-verdict defers `selected` to this job when
     # this job is green, so the aggregator does not re-fail on the rollup.
-    if: ${{ !cancelled() && inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group' || inputs.concurrency_key != '') }}
+    if: ${{ !cancelled() && inputs.smoke_only != true && !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group' || inputs.concurrency_key != '') }}
     steps:
       # Junit must land BEFORE the verdict: cancel/red with clean junit is
       # infra-retry (selected-gate-verdict.mjs). Carry-forward still uses the
@@ -2676,7 +2696,8 @@ jobs:
       - selected-verdict
       - baseline-trial
       - poke-train
-    if: ${{ !cancelled() }}
+    # Drafts run the guards only; their result is the draft's verdict.
+    if: ${{ !cancelled() && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

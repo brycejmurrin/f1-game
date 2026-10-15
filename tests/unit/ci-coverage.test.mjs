@@ -187,13 +187,14 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // so an event test alone would skip the plan on every deploy.
   // `schedule` too: the nightly's change-aware lane (every spec the last day
   // of merges routed; tools/ci/ci-resolve-before.sh).
-  assert.match(selectJob, /if: \$\{\{ inputs\.smoke_only != true && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| github\.event_name == 'merge_group' \|\| inputs\.concurrency_key != ''\) \}\}/);
+  assert.match(selectJob, /if: \$\{\{ inputs\.smoke_only != true && !\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| github\.event_name == 'merge_group' \|\| inputs\.concurrency_key != ''\) \}\}/);
   assert.doesNotMatch(selectJob, /inputs\.concurrency_key == ''/, "the plan must never exclude the deploy gate");
   assert.doesNotMatch(selectJob + selectedJob, /^    continue-on-error:/m);
   // The runner consumes the plan as a matrix and takes its cap per shard.
-  // 2026-10-10 (R3-CI-HEALTH-2): the selected legs start as soon as the plan exists; a guards red
-  // still fails selected-verdict / ci-verdict / poke-train, which keep `guards` in their needs.
-  assert.match(selectedJob, /needs: \[select\]$/m);
+  // 2026-10-14 (ci-analysis REPORT #2): the selected legs wait for the fast tier (guards +
+  // node suites) so a red or superseded run never starts the browser tier.
+  assert.match(selectedJob, /needs: \[select, guards, node-suites\]$/m);
+  assert.match(selectedJob, /if: \$\{\{ !cancelled\(\) && \(needs\.guards\.result == 'success' \|\| needs\.guards\.result == 'skipped'\) && \(needs\.node-suites\.result == 'success' \|\| needs\.node-suites\.result == 'skipped'\) && /);
   assert.match(selectedJob, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
   assert.match(selectedJob, /timeout-minutes: \$\{\{ matrix\.timeout \}\}/);
   assert.match(selectedJob, /APEX_WORKERS: \$\{\{ matrix\.workers \|\| 1 \}\}/,
@@ -317,7 +318,7 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(body, "ci-verdict job missing");
   assert.match(body, /^    name: CI$/m, "the required-check display name must be the stable `CI`");
-  assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
+  assert.match(body, /if: \$\{\{ !cancelled\(\) && !\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\) \}\}/, 'drafts run the guards only');
   assert.match(body, /run: node tools\/ci\/ci-verdict\.mjs/);
   assert.match(body, /NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
   for (const j of ["guards", "unit-plan", "node-suites", "smoke", "selected", "baseline-trial", "poke-train"]) {
@@ -407,8 +408,8 @@ test("test:xr is path-gated (xr-filter → xr) and feeds ci-verdict", () => {
     "xr-filter must skip draft PRs (heavy Chromium suite; fast tier)");
   const xr = (ciWorkflow.split("\n  xr:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(xr, "xr job missing");
-  assert.match(xr, /needs: xr-filter/);
-  assert.match(xr, /needs\.xr-filter\.outputs\.xr == 'true'/);
+  assert.match(xr, /needs: \[xr-filter, guards, node-suites\]/);
+  assert.match(xr, /if: \$\{\{ !cancelled\(\) && \(needs\.guards\.result == 'success' \|\| needs\.guards\.result == 'skipped'\) && \(needs\.node-suites\.result == 'success' \|\| needs\.node-suites\.result == 'skipped'\) && needs\.xr-filter\.outputs\.xr == 'true' \}\}/);
   assert.match(xr, /npm run test:xr/);
   const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(body, /- xr-filter\b/);
@@ -990,7 +991,7 @@ test("the ship filter is ONE job whose answer every smoke shard reads", () => {
   assert.match(shipFilter, /fetch-depth: 0/, "it diffs against an arbitrarily old live SHA");
   assert.match(shipFilter, /ships: \$\{\{ steps\.shipfilter\.outputs\.ships \}\}/, "it must publish the answer");
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
-  assert.match(smoke, /^    needs: \[ship-filter\]$/m, "smoke must read the hoisted answer");
+  assert.match(smoke, /^    needs: \[ship-filter, guards, node-suites\]$/m, "smoke must read the hoisted answer");
   assert.doesNotMatch(smoke.replace(/^\s*#.*$/gm, ""), /deployments\?environment=github-pages/,
     "the filter body is back inside the matrix — that is four copies of one question");
   // EVERY step, checkout and setup-apex included, or the move buys nothing.
@@ -1182,8 +1183,8 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   // tools/ci/ci-coverage.mjs reads to keep both jobs out of the deploy gate;
   // it has to stay first.
   assert.match(rendererFilter, /if: \$\{\{ inputs\.smoke_only != true && !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
-  assert.match(rendererJob, /^    needs: renderer-filter$/m);
-  assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\)/);
+  assert.match(rendererJob, /^    needs: \[renderer-filter, guards, node-suites\]$/m);
+  assert.match(rendererJob, /if: \$\{\{ !cancelled\(\) && \(needs\.guards\.result == 'success' \|\| needs\.guards\.result == 'skipped'\) && \(needs\.node-suites\.result == 'success' \|\| needs\.node-suites\.result == 'skipped'\) && needs\.renderer-filter\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\)/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      renderer_macos:\n(?:.*\n)*?        type: boolean\n(?:.*\n)*?        default: false\n/,
     "the dispatch must declare the renderer_macos opt-in, default off");
   assert.equal(report.rendererGate.deployGate, false,
@@ -1450,9 +1451,9 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
   const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  ship-filter:\n"));
   const shipFilterJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  ship-filter:\n"), ciWorkflow.indexOf("\n  smoke:\n"));
-  for (const [name, job] of [["smoke", smokeJob], ["ship-filter", shipFilterJob]]) {
-    assert.ok(job.includes(`    if: \${{ ${fastTier} }}`), `${name} must sit out the deploy branch's fast tier with the shared expression`);
-  }
+  assert.ok(shipFilterJob.includes(`    if: \${{ ${fastTier} }}`), "ship-filter must sit out the deploy branch's fast tier with the shared expression");
+  // smoke also waits for the fast tier (2026-10-14), so the shared expression closes its `if:`.
+  assert.ok(smokeJob.includes(` && ${fastTier} }}`), "smoke must sit out the deploy branch's fast tier with the shared expression");
   assert.ok(sweepsJob.includes(fastTier) && sweepsJob.includes("inputs.smoke_only != true"),
     "sweeps sit out the fast tier and Pages ship-reuse smoke_only");
   for (const name of ["guards", "unit-plan", "node-suites", "sweeps-parts", "driving-model", "select"]) {

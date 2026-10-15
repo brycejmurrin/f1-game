@@ -1197,10 +1197,12 @@ test("declared-slow specs are split by MEASURED time, not 8 tests a leg: the 22-
   assert.equal(blind.length, Math.max(Math.ceil(expectedSec(rows[0], EMPTY) / TARGET_SHARD_SEC), Math.ceil(rows[0].tests / MAX_TESTS_PER_JOB)));
 });
 
-test("the browser legs do not wait on the guards aggregator, and a guards red still fails the run (R3-CI-HEALTH-2)", () => {
-  // Ship run 38041862767: the legs started at 11.3 min behind the 30 s
-  // aggregator's own queue trip instead of ~2; in the 07:59Z burst that trip
-  // alone queued 26-37 min. The verdict jobs keep the edge.
+test("the browser legs wait for the fast tier (guards + node suites), and a guards red still fails the run", () => {
+  // 2026-10-14 (ci-analysis REPORT #2, Bryce's call over R3-CI-HEALTH-2): the
+  // legs used to start as soon as the plan existed (ship run 38041862767), but
+  // in 41 of 97 red ready runs a fast-tier job had already failed and the heavy
+  // tier still burned ~392 job-min/day, plus ~1,368/day in runs a later push
+  // cancelled. They now need guards and node-suites; the verdict jobs keep the edge.
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   const job = (name) => (yml.split(`\n  ${name}:\n`)[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   const needsOf = (name) => {
@@ -1210,8 +1212,8 @@ test("the browser legs do not wait on the guards aggregator, and a guards red st
     const list = body.match(/^    needs:\n((?:      - [\w-]+\n)+)/m);
     return list ? list[1].trim().split("\n").map((l) => l.replace(/^\s*- /, "")) : [];
   };
-  assert.deepEqual(needsOf("selected"), ["select"], "the matrix starts as soon as the plan exists");
-  assert.doesNotMatch(job("selected").match(/^    if: .*$/m)?.[0] || "", /needs\.guards/, "its if: must not read a job it does not need");
+  assert.deepEqual(needsOf("selected"), ["select", "guards", "node-suites"], "the matrix waits for the fast tier");
+  assert.match(job("selected").match(/^    if: .*$/m)?.[0] || "", /needs\.guards\.result == 'success' \|\| needs\.guards\.result == 'skipped'/, "a guards red skips the browser tier");
   for (const j of ["selected-verdict", "ci-verdict", "poke-train"]) assert.ok(needsOf(j).includes("guards"), `${j} must still need guards`);
   assert.match(job("poke-train"), /needs\.guards\.result == 'success'/, "a guards red pokes no train");
   const verdictSrc = fs.readFileSync(path.join(ROOT, "tools/ci/selected-gate-verdict.mjs"), "utf8");
