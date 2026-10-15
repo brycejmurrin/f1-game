@@ -81,7 +81,7 @@ function create(G, deps) {
   if (!root) return null;
   const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
-  let last = null, focus = null, libraryPaint = 0;
+  let last = null, raw = null, capturedOptions = null, focus = null, libraryPaint = 0;
   const mk = (tag, props, kids) => {
     const el = document.createElement(tag);
     if (props) for (const k in props) {
@@ -123,10 +123,11 @@ function create(G, deps) {
       mk("p", { id: "ps-context", className: "adv-help" }),
       subjectGroup,
       group("COMPOSITION", [
-        select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); }, "ps-aspect"),
+        select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); if (!st.busy) recompose(); }, "ps-aspect"),
         select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
         shots, mk("p", { id: "ps-help", className: "adv-help" }),
-        select("Caption", [["off", "Off"], ["on", "Postcard"]], () => st.postcard ? "on" : "off", (v) => { st.postcard = v === "on"; }, "ps-postcard"),
+        coaching(),
+        select("Caption", [["off", "Off"], ["on", "Postcard"]], () => st.postcard ? "on" : "off", (v) => { st.postcard = v === "on"; if (!st.busy) recompose(); }, "ps-postcard"),
       ]),
       group("YOUR PHOTO", [
         mk("img", { id: "ps-preview", alt: "Captured photo preview", hidden: true }),
@@ -163,6 +164,7 @@ function create(G, deps) {
   function camera() { return deps.freeCam || (typeof FreeCam !== "undefined" ? FreeCam : null); }
   function isGarage() { return st.source === "home" || st.source === "garage"; }
   function setShot(id) {
+    if (st.busy || st.closing) return;
     if (isGarage()) { if (deps.garage && deps.garage.shot) deps.garage.shot(id); }
     else {
       const fc = camera(); if (!fc || !fc.cmd) return;
@@ -172,7 +174,7 @@ function create(G, deps) {
   function open(opts) {
     opts = opts || {};
     if (st.open) close(false);
-    last = null; E["ps-preview"].hidden = true;
+    last = null; raw = null; capturedOptions = null; E["ps-preview"].hidden = true;
     st.source = opts.source || "race"; st.metadata = opts.metadata || {}; st.back = typeof opts.back === "function" ? opts.back : null;
     st.subject = typeof opts.subject === "function" ? opts.subject : null;
     focus = document.activeElement;
@@ -198,7 +200,7 @@ function create(G, deps) {
     shots.replaceChildren();
     const list = isGarage() ? [["hero", "HERO"], ["front", "FRONT"], ["side", "SIDE"], ["rear", "REAR"], ["top", "TOP"]] : [["car", "CHASE"], ["wide", "WIDE"], ["detail", "DETAIL"], ["corner", "CORNER"]];
     for (const [id, label] of list) shots.appendChild(button(label, () => setShot(id)));
-    st.closing = false; guides(); busy(false); say("Capture the frame, then save or download it."); paintLibrary(); E["ps-close"].focus();
+    st.closing = false; guides(); busy(false); say("Capture the frame, then save or download it. Frame and Caption recrop your photo; moving the camera leaves it unchanged until CAPTURE."); paintLibrary(); E["ps-close"].focus();
     return true;
   }
   function close(back) {
@@ -240,7 +242,7 @@ function create(G, deps) {
     // gate and leave the pause card up (photo-studio.spec.js race close).
     const target = focus, generation = st.generation;
     // Release the composed canvas (up to 2048 px, ~17 MB RGBA) and its preview data URL; open() rebuilds both.
-    last = null; E["ps-preview"].removeAttribute("src"); E["ps-preview"].hidden = true;
+    last = null; raw = null; capturedOptions = null; E["ps-preview"].removeAttribute("src"); E["ps-preview"].hidden = true;
     root.hidden = true; document.body.classList.remove("photo-studio-open");
     busy(false);
     if (back && returnTo) returnTo();
@@ -289,18 +291,37 @@ function create(G, deps) {
     }
     return canvas;
   }
-  function compose(source) {
-    const box = crop(source.width, source.height, st.aspect), scale = Math.min(1, 2048 / box.width, 2048 / box.height), out = mk("canvas");
+  function options() { return { aspect: st.aspect, postcard: st.postcard, metadata: { title: st.metadata.title || G.track && G.track.name || "GARAGE", subtitle: st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT") } }; }
+  function recompose() {
+    if (!raw || !capturedOptions) return;
+    last = compose(raw, { ...capturedOptions, aspect: st.aspect, postcard: st.postcard });
+    E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
+  }
+  function keepSource(source, opts) {
+    const scale = Math.min(1, 2048 / source.width, 2048 / source.height), copy = mk("canvas");
+    copy.width = Math.max(1, Math.round(source.width * scale)); copy.height = Math.max(1, Math.round(source.height * scale));
+    copy.getContext("2d").drawImage(source, 0, 0, copy.width, copy.height); raw = copy; capturedOptions = opts;
+  }
+  function coaching() {
+    const box = mk("details", { id: "ps-coach" }, [mk("summary", { textContent: "COMPOSITION TIPS" })]);
+    for (const [label, shot, tip] of [["Car detail", "detail", "Use a narrow lens to make one car detail the subject."], ["Corner story", "corner", "Include the entry and exit so the corner tells a story."], ["Space ahead", "wide", "Leave room in the direction the car is travelling."]]) {
+      box.appendChild(mk("p", { className: "adv-help", textContent: tip }));
+      box.appendChild(button(label, () => { if (st.busy) return; setShot(isGarage() ? ({ detail: "front", corner: "side", wide: "hero" })[shot] : shot); st.grid = "thirds"; E["ps-grid-select"].value = "thirds"; guides(); }));
+    }
+    box.appendChild(button("DISMISS TIPS", () => { box.hidden = true; })); return box;
+  }
+  function compose(source, opts = options()) {
+    const box = crop(source.width, source.height, opts.aspect), scale = Math.min(1, 2048 / box.width, 2048 / box.height), out = mk("canvas");
     out.width = Math.round(box.width * scale); out.height = Math.round(box.height * scale);
     const ctx = out.getContext("2d"); if (!ctx) throw new Error("Image composition is unavailable");
     ctx.drawImage(source, box.x, box.y, box.width, box.height, 0, 0, out.width, out.height);
-    if (st.postcard) {
+    if (opts.postcard) {
       const h = Math.max(54, out.height * 0.11), pad = Math.max(16, out.width * 0.025);
       ctx.fillStyle = "rgba(12,12,20,0.9)"; ctx.fillRect(0, out.height - h, out.width, h);
       ctx.fillStyle = "#f6f6f9"; ctx.font = "bold " + Math.round(h * 0.32) + "px sans-serif";
-      ctx.fillText("APEX 26 · " + text(st.metadata.title || G.track && G.track.name || "GARAGE", 70), pad, out.height - h * 0.5, out.width - pad * 2);
+      ctx.fillText("APEX 26 · " + text(opts.metadata.title, 70), pad, out.height - h * 0.5, out.width - pad * 2);
       ctx.font = Math.round(h * 0.22) + "px sans-serif";
-      ctx.fillText(text(st.metadata.subtitle || (isGarage() ? "PERSONAL PHOTO" : "RACE MOMENT"), 90), pad, out.height - h * 0.18, out.width - pad * 2);
+      ctx.fillText(text(opts.metadata.subtitle, 90), pad, out.height - h * 0.18, out.width - pad * 2);
     }
     return out;
   }
@@ -312,10 +333,10 @@ function create(G, deps) {
   }
   async function capture() {
     if (!st.open || st.busy) return false;
-    const gen = st.generation; busy(true); say("Capturing the rendered scene…");
+    const gen = st.generation, opts = options(); busy(true); say("Capturing the rendered scene…");
     try {
       const source = await frame(); if (gen !== st.generation) return false;
-      last = compose(source); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
+      keepSource(source, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false;
       say("Captured " + last.width + " × " + last.height + ". Ready to download or save."); return true;
     } catch (e) { Log.warn("ui", "capture failed", e); if (gen === st.generation) say("Capture failed: " + text(e.message, 120) + ". Try again once the scene is ready."); return false; }
     finally { if (gen === st.generation) busy(false); }
@@ -368,21 +389,44 @@ function create(G, deps) {
   async function importPhoto(file) {
     if (!file || !st.open || st.busy) return;
     if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 12 * 1024 * 1024) { say("Choose a PNG, JPEG or WebP photo under 12 MB."); return; }
-    const gen = st.generation; busy(true);
+    const gen = st.generation, opts = options(); busy(true);
     try {
       const image = await createImageBitmap(file, { resizeWidth: 1024, resizeQuality: "high" });
       try {
         if (gen !== st.generation) return;
         if (image.height > 4096) throw new Error("Choose a photo with a less extreme aspect ratio");
-        last = compose(image); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false; say("Personal photo imported. Save it or use it as your menu background.");
+        keepSource(image, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false; say("Personal photo imported. Save it or use it as your menu background.");
       }
       finally { image.close(); }
     } catch (e) { if (gen === st.generation) say("This photo could not be opened: " + text(e.message)); }
     finally { if (gen === st.generation) { busy(false); importFile.value = ""; } }
   }
-  function state() { return { open: st.open, source: st.source, subject: !!st.subject, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, background: !!background() }; }
-  const api = { open, close, capture, state, background, setBackground, exportPhoto, savePhoto };
+  function state() { return { open: st.open, generation: st.generation, source: st.source, subject: !!st.subject, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, background: !!background() }; }
+  async function album() {
+    let photos;
+    try { photos = await library("list"); } catch (e) { if (!session.length) throw e; photos = []; }
+    const seen = new Set();
+    return photos.concat(session).sort((a, b) => b.at - a.at || String(a.id).localeCompare(String(b.id)))
+      .filter((p) => { if (seen.has(p.id)) return false; seen.add(p.id); return /^data:image\/(jpeg|png);base64,/.test(p.thumb || "") && p.thumb.length < 240000; })
+      .slice(0, LIMIT).map((p) => Object.freeze({ id: String(p.id), title: text(p.title || "Photo"), thumb: p.thumb, at: +p.at || 0 }));
+  }
+  async function contactSheet(times, seek, cancelled) {
+    const out = mk("canvas"); out.width = 1536; out.height = 342;
+    const ctx = out.getContext("2d"); if (!ctx) throw new Error("Image composition is unavailable");
+    for (let i = 0; i < times.length; i++) {
+      if (cancelled()) throw new Error("Contact sheet cancelled");
+      seek(times[i]); const image = await frame();
+      if (cancelled()) throw new Error("Contact sheet cancelled");
+      const box = crop(image.width, image.height, "wide");
+      ctx.drawImage(image, box.x, box.y, box.width, box.height, i * 512, 0, 512, 288);
+      ctx.fillStyle = "#0c0c14"; ctx.fillRect(i * 512, 288, 512, 54); ctx.fillStyle = "#f6f6f9"; ctx.font = "18px sans-serif";
+      ctx.fillText(["BEFORE", "MOMENT", "AFTER"][i] + " · " + times[i].toFixed(2) + "s", i * 512 + 16, 322);
+    }
+    const blob = await blobOf(out); if (cancelled()) throw new Error("Contact sheet cancelled");
+    download(blob, "apex26-replay-moment.png"); return true;
+  }
+  const api = { open, close, capture, state, contactSheet, album, background, setBackground, exportPhoto, savePhoto };
   live = api; busy(false); return api;
 }
-return Object.freeze({ create, background, setBackground, crop, filename, ASPECTS, LIMIT, state: () => live ? live.state() : { open: false } });
+return Object.freeze({ create, background, setBackground, crop, filename, ASPECTS, LIMIT, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
 })();

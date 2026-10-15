@@ -217,7 +217,7 @@ function appendFlaps(M, out, blend) {
   const info = out.flapInfo;
   if (!info) return out;
   for (const el of M.Car3D.aeroFlaps(info.aLvl, info.style)) {
-    const g = M.Car3D.buildFlapGeom(el, info.col, info.finish);
+    const g = M.Car3D.buildFlapGeom(el, info.col, info.finish, info.surface);
     const ang = el.zAngle + (el.xAngle - el.zAngle) * blend;
     const ca = Math.cos(ang), sa = Math.sin(ang);
     const base = out.pos.length / 3;
