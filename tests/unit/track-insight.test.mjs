@@ -216,3 +216,16 @@ test("START FROM: Monza, Spa and Monaco trace into 60–120 lattice points that 
     if (id === "spa") assert.equal(v.issues.some((i) => i.code === "fold"), false, id + " fold: " + codes(v));
   }
 });
+
+
+test("Spa memory cards use three curated racing-space apexes and signed built curvature", () => {
+  const spa = def("spa"), tr = Tracks.buildCenterline(spa, { line: false });
+  const cards = I.memoryCards(tr, spa.turns);
+  assert.equal(cards.length, 3);
+  for (const [i,c] of cards.entries()) {
+    assert.equal(c.n, i+1); assert.equal(c.sApex, spa.turns[i] * tr.total);
+    assert.equal(c.dir, Math.sign(tr.curv[Math.round(spa.turns[i]*tr.n)%tr.n]));
+    assert.equal("vApex" in c, false);
+  }
+  assert.deepEqual(plain(I.memoryCards(null, spa.turns)), []);
+});

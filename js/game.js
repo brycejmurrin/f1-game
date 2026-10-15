@@ -2899,6 +2899,7 @@ function entrySettings() {
     season ? _seasonEntryIds.get(season) : null, season && season.round,
     season && season.stage, SeasonCal.quali()]);
 }
+const _customTrackStarts = new WeakSet();
 function startRace() {
   // TopModal mirrors hidden→close via MutationObserver (next task). Sync-close
   // so #loading is not trapped under :modal for the rest of this long task.
@@ -2921,7 +2922,11 @@ function startRace() {
   // Menu buttons fire and forget. Observe rejection on a separate branch so
   // those callers do not raise an unhandledrejection overlay; an awaiting agent
   // still receives the original rejecting promise and its original error.
-  request.then((r) => { if (r !== false) CustomTracks.afterStart(); }, (e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));   // afterStart: a designer test drive's restarts go back to its point
+  if (!_customTrackStarts.has(request)) {
+    _customTrackStarts.add(request);
+    request.outcome.then((r) => { if (r.kind === "committed" && sessionEntry.owns(r)) CustomTracks.afterStart(); });
+  }
+  request.catch((e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));   // afterStart: a designer test drive's restarts go back to its point
   return request;
 }
 

@@ -77,9 +77,10 @@ const TrackDesigner = (function () {
   let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand", scenery = null, sceneryView = false;
+  let propKind = "stand", scenery = null, sceneryView = false, repair = null;
   const undo = [], redo = [];
   let replacementGeneration = 0, lifecycleWired = false;
+  let libraryImportGeneration = 0, libraryImportPlan = null;
   let previewT = 0, draftT = 0, confirmDel = null, msgT = 0;
   // savedSnap: the design as last loaded or saved — anything else is unsaved
   // work a load must not drop. nudge: the arrow-key run one undo entry covers.
@@ -651,8 +652,8 @@ const TrackDesigner = (function () {
     commit(Object.assign({}, design, { props }), "prop"); return true;
   }
   function copyPropAt(i) {
-    const p = design && design.props && design.props[i]; if (!p) return false;
-    const props = TrackDesignerProps.place(design.props, p.kind, Object.assign({}, p, { s: TrackDesignerProps.pointFrac(design.pts, Math.max(0, sel)) }));
+    const p = design && design.props && design.props[i]; if (!p || sel < 0 || sel >= design.pts.length) return false;
+    const props = TrackDesignerProps.place(design.props, p.kind, Object.assign({}, p, { s: TrackDesignerProps.pointFrac(design.pts, sel) }));
     if (!props) { message("Object limit reached", true); return false; }
     commit(Object.assign({}, design, { props }), "prop"); return true;
   }
@@ -850,7 +851,16 @@ const TrackDesigner = (function () {
     ui.libraryFile = el("input"); ui.libraryFile.type = "file"; ui.libraryFile.accept = ".json,application/json"; ui.libraryFile.hidden = true;
     ui.libraryFile.setAttribute("aria-label", "Import a circuit library file");
     ui.libraryFile.addEventListener("change", () => { const f = ui.libraryFile.files && ui.libraryFile.files[0]; ui.libraryFile.value = ""; if (f) importLibraryFile(f); });
-    ui.lib = el("div", "td-grid"); ui.paneLib.append(libraryFiles, ui.libraryFile, ui.lib);
+    ui.libraryReview = group("REVIEW LIBRARY IMPORT"); ui.libraryReview.hidden = true;
+    ui.libraryProgress = el("p", "adv-help"); ui.libraryProgress.setAttribute("role", "status");
+    ui.libraryRecords = el("ul", "td-issues"); ui.libraryRecords.setAttribute("aria-label", "Incoming circuits");
+    ui.libraryApply = btn("IMPORT", "sel-chip", commitLibraryImport); ui.libraryApply.disabled = true;
+    ui.libraryApply.dataset.role = "library-import-apply";
+    ui.libraryCancel = btn("CANCEL", "sel-chip", () => cancelLibraryImport(true));
+    ui.libraryCancel.dataset.role = "library-import-cancel";
+    const importActions = el("div", "td-chips"); importActions.append(ui.libraryApply, ui.libraryCancel);
+    ui.libraryReview.append(ui.libraryProgress, ui.libraryRecords, importActions);
+    ui.lib = el("div", "td-grid"); ui.paneLib.append(libraryFiles, ui.libraryFile, ui.libraryReview, ui.lib);
     buildHowTo(ui.paneHow);
     body.append(ui.modeGroup, stage, rail);
     // foot
@@ -916,7 +926,7 @@ const TrackDesigner = (function () {
   }
   function tabBtn(label, pane) {
     const b = btn(label, "sel-chip td-tab", () => showPane(pane));
-    b.setAttribute("role", "tab");
+    DesignerFollowup.tab(b, pane, () => [ui.tabDesign, ui.tabLib, ui.tabHow], showPane);
     return b;
   }
   function showPane(pane) {
@@ -924,7 +934,7 @@ const TrackDesigner = (function () {
     if (root) root.dataset.pane = pane;
     for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
       const on = id === pane;
-      p.hidden = !on;
+      p.hidden = !on; p.id = "td-panel-" + id; p.setAttribute("aria-labelledby", b.id); b.tabIndex = on ? 0 : -1;
       b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false");
     }
     if (pane === "library") renderLibrary();
@@ -1061,7 +1071,8 @@ const TrackDesigner = (function () {
     scenery = DesignerScenery.create({ el, btn, group, stepper,
       onTheme: setTheme, onLook: setLook, onPreset: setAtmosphere, onKind: setPropKind,
       onPlace: () => placeProp(), onRemove: () => removeProp(), onRemoveAt: removePropAt,
-      onSelect: selectRange, onEditAt: editPropAt, onCopyAt: copyPropAt });
+      onSelect: selectRange, onEditAt: editPropAt, onCopyAt: copyPropAt,
+      onRecipe: (props) => { commit(Object.assign({}, design, { props }), "prop"); return true; } });
     const theme = scenery.root; ui.themeGroup = theme;
     // circuit
     const circuit = group("4 DETAILS");
@@ -1152,7 +1163,8 @@ const TrackDesigner = (function () {
     head.append(el("div", "td-label", "5 CHECKS"), ui.fixAll);
     // Not a live region: it is rebuilt on every preview (announceChecks speaks the counts).
     ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-label", "Design checks");
-    issues.append(head, ui.issues);
+    repair = DesignerFollowup.repairPanel({ el, btn, getDesign: () => design, check: TrackValidate.check, onApply: (next, codes, msg) => { commitFix(next, codes); message(msg); } });
+    issues.append(head, ui.issues, repair.root);
     // share in: a pasted code or link (SHARE on the foot copies one out)
     const sharing = group("SHARE CODE");
     ui.code = el("input", "td-input"); ui.code.type = "text"; ui.code.autocomplete = "off"; ui.code.spellcheck = false;
@@ -1236,22 +1248,62 @@ const TrackDesigner = (function () {
       message("Exported " + data.items.length + " saved circuits"); return true;
     } catch (e) { message("Library export failed: " + (e && e.message || e), true); return false; }
   }
-  function loadCollection(data) {
-    const r = custom.importCollection(data, TrackValidate.check);
-    if (!r.ok) {
-      const why = r.reason === "full" ? "MY CIRCUITS holds at most " + custom.LIMITS.items + " circuits — remove some before importing"
-        : r.reason === "invalid" || r.reason === "collision" ? "Circuit " + (r.index + 1) + " " + (r.reason === "collision" ? "has a conflicting content ID" : "failed validation")
-        : r.reason === "write" ? "Library storage write failed" : "Not a supported Apex 26 circuit library";
-      message(why + ". Nothing imported.", true); return false;
-    }
+  function libraryImportError(r) {
+    const why = r.reason === "full" ? "MY CIRCUITS holds at most " + custom.LIMITS.items + " circuits — remove some before importing"
+      : r.reason === "invalid" || r.reason === "collision" ? "Circuit " + (r.index + 1) + " " + (r.reason === "collision" ? "has a conflicting content ID" : "failed validation")
+      : r.reason === "write" ? "Library storage write failed"
+      : r.reason === "changed" ? "MY CIRCUITS changed — review the file again"
+      : "Not a supported Apex 26 circuit library";
+    message(why + ". Nothing imported.", true);
+  }
+  function paintLibraryProgress(p) {
+    if (!ui.libraryProgress) return;
+    ui.libraryProgress.textContent = p.done + " of " + p.total + " checked · " + p.added + " to add · " + p.skipped + " duplicates";
+    ui.libraryRecords.textContent = "";
+    for (const row of p.records) ui.libraryRecords.appendChild(el("li", "", row.name + " — " + (row.status === "error" ? row.reason : row.status === "add" ? "ADD" : "DUPLICATE · KEEP EXISTING")));
+  }
+  function cancelLibraryImport(tell) {
+    ++libraryImportGeneration;
+    if (libraryImportPlan) custom.cancelCollectionPreflight(libraryImportPlan);
+    libraryImportPlan = null;
+    if (ui.libraryReview) { ui.libraryReview.hidden = true; ui.libraryReview.removeAttribute("aria-busy"); }
+    if (ui.libraryApply) ui.libraryApply.disabled = true;
+    if (tell) { message("Import canceled. Nothing imported."); if (ui.tabLib) ui.tabLib.focus(); }
+  }
+  function commitLibraryImport() {
+    if (!libraryImportPlan) return false;
+    const r = custom.commitCollectionPreflight(libraryImportPlan);
+    cancelLibraryImport(false);
+    if (!r.ok) { libraryImportError(r); return false; }
     renderLibrary(); showPane("library");
     message("Imported " + r.added + " circuits · " + r.skipped + " duplicates kept unchanged" + (r.durable ? "" : " · storage unavailable: export a backup before reloading"), !r.durable);
+    if (ui.tabLib) ui.tabLib.focus();
+    return true;
+  }
+  async function loadCollection(data, generation) {
+    if (generation == null) { cancelLibraryImport(false); generation = libraryImportGeneration; }
+    const valid = () => generation === libraryImportGeneration;
+    showPane("library");
+    ui.libraryReview.hidden = false; ui.libraryReview.setAttribute("aria-busy", "true"); ui.libraryApply.disabled = true;
+    paintLibraryProgress({ done: 0, total: data && Array.isArray(data.items) ? data.items.length : 0, added: 0, skipped: 0, records: [] });
+    ui.libraryCancel.focus();
+    const r = await custom.preflightCollection(data, TrackValidate.check, { valid, onProgress: (p) => { if (valid()) paintLibraryProgress(p); } });
+    if (!valid()) { custom.cancelCollectionPreflight(r); return false; }
+    ui.libraryReview.removeAttribute("aria-busy");
+    if (!r.ok) { libraryImportError(r); return false; }
+    libraryImportPlan = r; ui.libraryApply.disabled = false;
+    message("Review " + r.added + " additions and " + r.skipped + " duplicates, then IMPORT. Nothing imported yet.");
+    ui.libraryApply.focus();
     return true;
   }
   async function importLibraryFile(file) {
+    cancelLibraryImport(false);
+    const generation = libraryImportGeneration;
     if (!file || !(file.size <= IMPORT_MAX * custom.LIMITS.items)) { message("Library file is too large (" + (IMPORT_MAX * custom.LIMITS.items >> 10) + " KB max)", true); return false; }
-    try { return loadCollection(JSON.parse(await file.text())); }
-    catch (_) { message("Could not read the library file. Nothing imported.", true); return false; }
+    try {
+      const data = JSON.parse(await file.text());
+      return generation === libraryImportGeneration ? await loadCollection(data, generation) : false;
+    } catch (_) { if (generation === libraryImportGeneration) message("Could not read the library file. Nothing imported.", true); return false; }
   }
   async function importFile(file) {
     const generation = ++replacementGeneration;
@@ -1389,8 +1441,7 @@ const TrackDesigner = (function () {
     let r = null;
     try { r = F && F.apply ? F.apply(design, it, verdict) : null; } catch (e) { Log.warn("track", "designer fix " + (it && it.code) + " threw: " + (e && e.message)); r = null; }
     if (!r || !r.design || r.design === design) { message("No automatic fix for this one", true); return false; }
-    commitFix(r.design, [it.code]);
-    message("Fixed: " + (r.msg || it.code) + " — UNDO to revert");
+    repair.preview(r.design, [it.code], "Fixed: " + (r.msg || it.code) + " — UNDO to revert");
     return true;
   }
   /** One UNDO entry for a remedy, keyed off issue.code (never issue.fix: the
@@ -1408,8 +1459,7 @@ const TrackDesigner = (function () {
     const applied = r && Array.isArray(r.applied) ? r.applied : [];
     // Nothing applied → fixAll hands back the SAME design object: no commit.
     if (!r || !r.design || r.design === design || !applied.length) { message("Nothing here can be fixed automatically", true); return false; }
-    commitFix(r.design, applied);
-    message("Fixed " + applied.join(", ") + " — UNDO to revert");
+    repair.preview(r.design, applied, "Fixed " + applied.join(", ") + " — UNDO to revert");
     return true;
   }
   function renderIssues() {
@@ -1548,6 +1598,8 @@ const TrackDesigner = (function () {
   function close() {
     if (!root || !openFlag) return;
     saveDraft();
+    cancelLibraryImport(false);
+    if (repair) repair.cancel();
     if (cv) cv.reset();
     hideCtx();
     // The card is a one-time note: seen for one visit is enough (GOT IT also stores it).
@@ -1612,6 +1664,7 @@ const TrackDesigner = (function () {
     const turns = group("TURNS");
     ui.turns = el("ul", "td-issues"); ui.turns.setAttribute("aria-label", "Corners, in driving order");
     turns.appendChild(ui.turns);
+    pane.appendChild(DesignerFollowup.learningPanel({ el, btn }).root);
     pane.insertBefore(turns, before);
   }
   const fmtTurn = (c) => "T" + c.n + " · " + (c.dir < 0 ? "RIGHT " : "LEFT ") + Math.round(Math.abs(c.angDeg)) + "° · R " + Math.round(c.R) + " m · " + Math.round(c.vApex * 3.6) + " km/h · " + Math.round(c.lenM) + " m" + turnTags(c);
@@ -2195,28 +2248,32 @@ const TrackDesigner = (function () {
   async function cardCanvas() {
     if (previewT || !verdict) runPreview();
     if (!verdict || !verdict.ok || !verdict.tr) { message("Fix the red issues before sharing", true); return null; }
-    const code = await shareCode();
+    // The encoder yields to compression; editing can continue meanwhile. One
+    // snapshot owns the link, drawing, filename AND native share-sheet title.
+    const item = copy(design), preview = verdict;
+    const code = await TrackCodec.encode(item);
+    lastCode = code;
     if (!code) { message("This design cannot be encoded", true); return null; }
-    const url = TrackCodec.shareUrl(code), tr = verdict.tr, st = verdict.stats || {}, COL = DesignerCanvas.COL;
+    const url = TrackCodec.shareUrl(code), tr = preview.tr, st = preview.stats || {}, COL = DesignerCanvas.COL;
     const c = document.createElement("canvas"); c.width = CARD_W; c.height = CARD_H;
     const g = c.getContext("2d");
     if (!g) { message("This browser cannot draw the card", true); return null; }
     g.fillStyle = "#000"; g.fillRect(0, 0, CARD_W, CARD_H);   // opaque under the translucent chip ink
     g.fillStyle = COL.chipBg; g.fillRect(0, 0, CARD_W, CARD_H);
     let ink = COL.handle;
-    try { ink = (TrackMaps.themeColor && TrackMaps.themeColor(verdict.def)) || ink; } catch (_) { ink = COL.handle; }
+    try { ink = (TrackMaps.themeColor && TrackMaps.themeColor(preview.def)) || ink; } catch (_) { ink = COL.handle; }
     strokeOutline(g, tr, { x: 28, y: 28, w: 304, h: 304 }, ink);
-    const X = 376, W = CARD_W - X - 24, T = TrackThemes.get(design.theme);
+    const X = 376, W = CARD_W - X - 24, T = TrackThemes.get(item.theme);
     g.textBaseline = "top";
-    g.fillStyle = COL.chipText; g.font = "bold 24px system-ui, sans-serif"; g.fillText(design.name, X, 40, W);
+    g.fillStyle = COL.chipText; g.font = "bold 24px system-ui, sans-serif"; g.fillText(item.name, X, 40, W);
     g.fillStyle = COL.text; g.font = "14px system-ui, sans-serif";
-    g.fillText(fmtKm(tr.total) + " · " + (st.turns != null ? st.turns : (verdict.turns || []).length) + " corners · est lap " + fmtLap(st.estLapS), X, 80, W);
-    g.fillText((T && T.label) || design.theme, X, 102, W);
+    g.fillText(fmtKm(tr.total) + " · " + (st.turns != null ? st.turns : (preview.turns || []).length) + " corners · est lap " + fmtLap(st.estLapS), X, 80, W);
+    g.fillText((T && T.label) || item.theme, X, 102, W);
     g.fillStyle = COL.sel; g.font = "bold 12px system-ui, sans-serif"; g.fillText("APEX 26 · TRACK DESIGNER", X, 140, W);
     g.fillStyle = COL.text; g.font = "11px ui-monospace, monospace";
     const lines = wrapUrl(g, url, W);
     lines.forEach((l, k) => g.fillText(l, X, CARD_H - 24 - (lines.length - k) * 15));
-    return { canvas: c, url, name: fileStem() + "-card.png" };
+    return { canvas: c, url, title: item.name, name: fileStem(item) + "-card.png" };
   }
   /** CARD: the OS share sheet with the PNG and the full link where the browser
    *  can share files (canShare({files})), else the file is saved. A dismissed
@@ -2236,7 +2293,7 @@ const TrackDesigner = (function () {
       const file = typeof File === "function" ? new File([blob], card.name, { type: "image/png" }) : null;
       if (file && nav && typeof nav.share === "function" && nav.canShare && nav.canShare({ files: [file] })) {
         try {
-          await nav.share({ files: [file], title: design.name, text: card.url });
+          await nav.share({ files: [file], title: card.title, text: card.url });
           message("Card shared"); Log.info("track", "designer card shared");
           return true;
         } catch (e) {
@@ -2352,6 +2409,6 @@ const TrackDesigner = (function () {
     selectCorner, toggleHeat, toggleElevationHeat, trackOfTheDay, startFrom, toggleStartFrom,
     designed, useCandidate, moreLikeThis,
     setSpanWidth, setCornerBank, setKerbStyle, setBerms,
-    exportLibraryFile, importLibraryFile, loadCollection };
+    exportLibraryFile, importLibraryFile, loadCollection, commitLibraryImport, cancelLibraryImport };
 })();
 Object.freeze(TrackDesigner);

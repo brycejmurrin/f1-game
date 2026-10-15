@@ -491,12 +491,13 @@ test("the data-hub DAG orders every tab module before hub.js", () => {
 // it is last and every module points at it. Derived like the data hub's.
 test("the track-designer DAG orders shape.js before every module that destructures it, and the screen last", () => {
   const SHAPE = "js/editor/shape.js", CODEC = "js/editor/codec.js", ELEV = "js/editor/elev-presets.js", SCREEN = "js/editor/designer.js";
-  const pure = new Set([SHAPE, CODEC, ELEV, SCREEN, "js/editor/scenery-preview.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js"]);
+  const pure = new Set([SHAPE, CODEC, ELEV, SCREEN, "js/editor/scenery-preview.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/followup-tools.js"]);
   assert.equal(MANIFEST.LAZY_EDITOR[0], SHAPE, "shape.js evaluates first");
   assert.equal(MANIFEST.LAZY_EDITOR[MANIFEST.LAZY_EDITOR.length - 1], SCREEN, "the screen evaluates last");
   const shapeEdges = MANIFEST.LAZY_EDITOR.filter((f) => !pure.has(f)).map((f) => [SHAPE, f]);
   const screenEdges = MANIFEST.LAZY_EDITOR.filter((f) => f !== SCREEN).map((f) => [f, SCREEN]);
-  assert.deepEqual(MANIFEST.LAZY_EDITOR_EDGES, shapeEdges.concat(screenEdges));
+  const helperEdges = [["js/editor/followup-tools.js", "js/editor/scenery-panel.js"]];
+  assert.deepEqual(MANIFEST.LAZY_EDITOR_EDGES, shapeEdges.concat(helperEdges, screenEdges));
   for (const f of MANIFEST.LAZY_EDITOR) {
     const src = readFileSync(join(ROOT, f), "utf8");
     const binds = /const\s+S\s*=\s*TrackShape\b/.test(src);

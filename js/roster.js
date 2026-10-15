@@ -518,6 +518,7 @@
     "js/editor/elev-presets.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
+    "js/editor/followup-tools.js",
     "js/editor/scenery-panel.js",
     "js/editor/designer.js"
   ],
@@ -549,6 +550,10 @@
     [
       "js/editor/shape.js",
       "js/editor/profile.js"
+    ],
+    [
+      "js/editor/followup-tools.js",
+      "js/editor/scenery-panel.js"
     ],
     [
       "js/editor/shape.js",
@@ -596,6 +601,10 @@
     ],
     [
       "js/editor/selection-panel.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/followup-tools.js",
       "js/editor/designer.js"
     ],
     [
