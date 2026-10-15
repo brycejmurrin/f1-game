@@ -2,6 +2,7 @@
 name: prior-art-scout
 description: Use proactively as step 0 of a hunt or audit. Greps DEFECT-LEDGER, docs/BUGS.md, docs/notes hunt/survey notes and git log for what is already known about a slice or topic; returns at most 30 KNOWN rows as the do-not-re-report list. Read-only. Pairs with code-hunter and slim-bloat.
 model: haiku
+omitClaudeMd: true
 maxTurns: 12
 readonly: true
 is_background: true

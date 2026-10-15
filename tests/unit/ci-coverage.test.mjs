@@ -2119,3 +2119,19 @@ test("ci.yml runs on PRs into the deploy branch only, and a label event other th
   assert.match(String(wf.jobs.selected.if), /!\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\)/,
     "the selected legs skip every draft; the header and docs/TESTING.md say so");
 });
+
+// #2169: five tools/ci/*.sh copies of inline ci.yml steps sat unused (one had
+// drifted from its step) until someone noticed. A step script lives only while
+// a workflow, another tool or a test cites it; delete it or wire it in.
+test("every tools/ci/*.sh is cited by a workflow, another tool or a test", () => {
+  const root = new URL("../../", import.meta.url).pathname;
+  const self = path.relative(root, new URL(import.meta.url).pathname);
+  const scripts = fs.readdirSync(path.join(root, "tools/ci")).filter((f) => f.endsWith(".sh"));
+  assert.ok(scripts.length > 0, "no tools/ci/*.sh found — the scan is broken");
+  const orphans = scripts.filter((f) => {
+    const out = cp.spawnSync("git", ["grep", "-l", "-F", f, "--", ".github/workflows", "tools", "tests",
+      `:!tools/ci/${f}`, ":!tools/README.md", `:!${self}`], { cwd: root, encoding: "utf8" });
+    return !out.stdout.trim();
+  });
+  assert.deepEqual(orphans, [], `orphan step scripts (nothing runs them): ${orphans.join(", ")}`);
+});
