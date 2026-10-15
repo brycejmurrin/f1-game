@@ -2698,8 +2698,6 @@ jobs:
       - driving-model
       - renderer-macos
       - xr
-      - gallery-filter
-      - gallery-build
       - select
       - selected
       - selected-verdict
