@@ -23,6 +23,13 @@ merge (`merge_pull_request` is not yours; a clean green PR is reported to
 Bryce as ready to merge), never squash or rebase, never cancel a run, never
 push to a branch a live session pushed in the last 15 min.
 
+Then check your own mode: `get_session` (no id). In `permission_mode:
+default`, `send_later` and `send_message` prompt whatever the allow rules say,
+and nobody answers an unattended prompt (the 2026-10-15 desk stalled for
+hours; `agent-fleet` `references/orchestrator.md` §Authority). Ask Bryce once to
+switch this session to Auto, run read-only sweeps meanwhile, and launch no
+lane (a default parent cannot create an auto child).
+
 ## One sweep
 
 1. Inbox: `ReadNotifications` until 0 remain. `SWEEP <n>`, `DONE`,
@@ -34,8 +41,14 @@ push to a branch a live session pushed in the last 15 min.
 3. Act per row (skill `ci-watch` table), with these gates:
    - READY → `ready-gate.mjs --pr <n>` exits 0, cap has room, ~6 or fewer PRs
      ready, at most 3 flips a sweep → `update_pull_request draft:false`.
+     A PR whose base is `track-survey-assets` is not a READY row while ci.yml
+     still runs on that base (no `track-survey-assets` filter in
+     `.github/workflows/ci.yml`): its flip queues a full-tier run that the
+     merge seconds later does not cancel (46 stranded runs, ≈ 250 jobs, on
+     2026-10-15). Hold those flips and tell Bryce; the fix is ci.yml's, not yours.
    - ARM → ci.yml `success` on the head (queued or running is not enough),
-     `mergeable_state` not dirty/unknown, < 2 armed repo-wide, no line
+     `ready-gate.mjs --pr <n>` exits 0, `mergeable_state` not dirty/unknown,
+     < 2 armed repo-wide, no line
      starting `MERGE-HOLD:` → `enable_pr_auto_merge mergeMethod: MERGE`. If
      GitHub answers "already clean", tell Bryce the PR is ready to merge.
    - FOREIGN-ARM → `disable_pr_auto_merge`; re-arm MERGE only under the gate.
@@ -70,7 +83,8 @@ relaunch: `create_session` (`permission_mode: "auto"`, tags
 `["merge-desk"]`, title starting `[Merge Desk]`) with a full brief from
 `agent-fleet` `references/orchestrator.md` §Launch template: GOAL, the
 exact PR list, OWNED/FORBIDDEN, the recipe, PACING ("`queue-depth.mjs`
-before every push; push only on `= queue ok`; ≤ 4 pushes per check"),
+before every push; push only on `= queue ok`; ≤ 4 pushes per check", plus
+`PUSH SLOT: <n>` per `launch-policy.md`, Paced push),
 STAND-DOWN, CAPS, DONE WHEN, ORCHESTRATOR (your session id), USER GRANTS
 quoted verbatim with UTC times, and the line `Do not enable auto-merge or
 merge.` Name the archived predecessor's claims as stale so the new worker

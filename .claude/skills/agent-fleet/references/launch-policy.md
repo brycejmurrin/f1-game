@@ -37,4 +37,12 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   never Sync and merge in one run (`behind-ship.mjs` warns over 10 behind, never fails). No auto-update-branch bots.
   Abort or stop and report a Finish/Update run past ~120 messages or > 2 tip moves with no progress while clean-behind.
   Normalize a messy merge with `node tools/check/merge-hygiene.mjs --fix`, then `gen-test-groups.mjs`.
+- **Paced push.** `queue-depth.mjs` is read by every session, so a fleet that
+  waits on `= queue hold` pushes together when it flips: on 2026-10-15 ~30
+  sessions pushed in the minute it read ok and the gauge went to 206 / 178 and
+  270 / 259 Linux jobs in flight / queued (cap 40), until orchestrators handed
+  out slots by hand. Each brief therefore carries `PUSH SLOT: <n>` (0–9, launch
+  order): after `= queue ok`, wait `n` minutes, read the gauge again, and push
+  only if it still says ok; on hold, start over. A gauge-side mechanism, if one
+  lands, replaces this rule.
 - Every worker hand-back reports its head SHA; on a token failure it stops and reports. Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.

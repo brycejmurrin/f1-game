@@ -36,7 +36,9 @@ DONE WHEN: <exact verify command or measured check, green on the PR head>
 CAPS: ≤ <n> screenshots/captures (default 25); ≤ 2 nested subagents; abort at
       ~400 messages or ~90 min with no OWNED push and say so.
 ORCHESTRATOR: <host>:<your session id>
-USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do beyond AGENTS.md
+USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do beyond AGENTS.md,
+      scoped to the lane (OWNED globs / issue list, follow-up PRs included), not to PR numbers
+PUSH SLOT: <n> — paced push, launch-policy.md (n = this worker's launch index, 0–9)
 Load skill agent-fleet and follow references/worker.md.
 Open a DRAFT PR; keep its fleet block current; subscribe with your host's tool.
 When blocked or unsure: set state: blocked, needs-orchestrator: yes, comment
@@ -59,6 +61,17 @@ Do not enable auto-merge or merge.
   auto parent: from a `default` session `create_session` refuses with
   "permission_mode 'auto' requires the parent session to be in auto mode", so
   ask the user to switch YOUR session to Auto before a launch.
+- **Coordinators run in auto too.** A Merge Desk or orchestrator lives on
+  `send_message` and `send_later`, and in `default` mode both are a platform
+  confirmation that no allow rule clears: the default-mode Sonnet desk
+  (session_01WQY3pk…, 2026-10-15) logged them as `accept / rule /
+  user_temporary` (a human's "don't ask again") with `mcp__claude-code-remote__*`
+  allowed, while its Bash and GitHub calls matched `rule / config`; in the auto
+  fix lanes the same two tools went `classifier`. That desk restarted its
+  container 14 times (`worker_epoch`), and a session-scoped approval does not
+  obviously survive a restart, which fits its hours-long stalls. A coordinator
+  that reads `permission_mode: default` on itself (`get_session`, no id) asks the
+  user once to switch it to Auto and does read-only work until then.
 - **What an auto worker can do unattended** (measured 2026-10-15 on 76637056,
   about 100 calls in two auto siblings: 0 prompts, 0 blocks): git and worktree
   commits, the `worker` and `Explore` subagents, tasks, worktree tools,
@@ -106,17 +119,27 @@ Do not enable auto-merge or merge.
   worker's own session arrives as a human turn (`list_events`: `origin.kind:
   "human"`) and unblocks it at once. So after `create_session`, print one
   copy-paste block per worker for the user (session id, then a fenced one-message
-  grant naming the PRs, the paced-push rule and "Do not enable auto-merge or
-  merge"). Do not argue the relay or resend it.
+  grant naming the lane's scope, the paced-push rule from
+  `launch-policy.md` and "Do not enable auto-merge or merge"). Do not argue the
+  relay or resend it.
+- **Grant a class, not a PR number.** A grant that lists "#2152 #2158" covers
+  nothing else, so every follow-on PR the lane finds needs a fresh launch or a
+  fresh user message. Word the quoted grant (and ask the user to word theirs)
+  by scope: "open and drive draft PRs for <OWNED globs> / issues <list>,
+  including follow-ups this lane finds; SWEEP each to Merge Desk". The worker
+  still files out-of-scope work as an issue, not a PR.
 - **`subscribe_pr_activity` can fail** ("Could not subscribe to this PR", seen on
   #2062 and #2063 from three workers). Treat it as normal: `ci-watch.mjs --sha
   <head> --once` on each timer wake, and say the subscription failed in the
   hand-back. It is a server-side tool; no settings rule fixes it.
 - **Permissions.** `APEX_PUSH_HOLD=0` (queue-hold override) is only for a push
   the user asked for now; the classifier may deny it and `git merge` /
-  `sync-pr` in a worker anyway. Shared allow rules belong in
-  `.claude/settings.json` on the deploy branch, so every worker that syncs gets
-  them; a local settings file helps only its own container.
+  `sync-pr` in a worker anyway. Do not expect a new `.claude/settings.json`
+  allow rule to unblock a worker: the file already allows every tool and
+  server, an auto session's Bash goes to the classifier anyway, and what still
+  prompts (the `.mcp.json` servers, MDN, BrowserStack, `send_message`,
+  `create_session`) no repo rule reaches. Measure before adding one
+  (`docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`).
 - **What the brief grants up front** (so no mid-run grant is needed): open its
   own DRAFT PR, `subscribe_pr_activity`, a `ci-watch.mjs --sha` Monitor and one
   `send_later` check-in, then drive the draft fast tier to green; send Merge
