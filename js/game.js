@@ -2225,7 +2225,7 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
   // re-render gate, so a new track whose first snapped cell + sunDir happen to
   // match the old track's last values would keep the PREVIOUS track's shadow
   // silhouette until the camera moved a cell (~16 m).
-  shadowPass.reset();
+  shadowPass.reset(); FrameLights.release();   // a day track never re-enters setFrameLights: drop the old lamp set here
   // Buildings light up for the chosen SESSION time, not the track's default:
   // night/dusk/dawn (or a night-default track in "default") → lit windows. Props
   // are rebuilt when this flips so a day-default circuit raced at night gets a

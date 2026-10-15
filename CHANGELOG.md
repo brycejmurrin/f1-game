@@ -14,11 +14,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
-- VS FRIEND: a short network outage mid-race (up to the race's 25 s grace) no longer ends the session; your friend's car is driven by AI until their connection comes back (#2195).
-- VS FRIEND room code: INVITE ANOTHER no longer leaves a dead room behind. Closing back to the room brings the same code back for the next friend (#2197).
-- Phone as controller: an expired pairing code takes its QR down and frees the button, and a phone whose link dropped keeps trying to reconnect for about a minute (#2198).
-- VS FRIEND results: the host's finishing order is kept when the host leaves just after the flag (#2199).
-- VS FRIEND lobby: an expired room code is taken down instead of staying shareable, a failed code join frees its connection, and the scan camera turns off when the lobby leaves its step (#2200).
+- VS FRIEND: running into the back of your friend's car is one clean bump, so you no longer stay glued to their gearbox for several frames (#2164).
 - A rival's pass-by whoosh no longer keeps hissing under the pause menu, the results sheet or the title screen (#2187).
 - The team-radio key-up squelch now plays on phones, and on desktop it follows the master and SFX volume (#2189).
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
@@ -34,6 +30,11 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
 - Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
 - A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
+- VS FRIEND: a short network outage mid-race (up to the race's 25 s grace) no longer ends the session; your friend's car is driven by AI until their connection comes back (#2195).
+- VS FRIEND room code: INVITE ANOTHER no longer leaves a dead room behind. Closing back to the room brings the same code back for the next friend (#2197).
+- Phone as controller: an expired pairing code takes its QR down and frees the button, and a phone whose link dropped keeps trying to reconnect for about a minute (#2198).
+- VS FRIEND results: the host's finishing order is kept when the host leaves just after the flag (#2199).
+- VS FRIEND lobby: an expired room code is taken down instead of staying shareable, a failed code join frees its connection, and the scan camera turns off when the lobby leaves its step (#2200).
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)

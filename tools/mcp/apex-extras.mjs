@@ -180,7 +180,7 @@ export function createExtras(ctx) {
   /** The plan options shot-survey.mjs has no flag for; the async job carries them as --plan-json. */
   const pickPlanArgs = (a) => {
     const o = {};
-    for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName"]) if (a[k] != null) o[k] = a[k];
+    for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName", "weather"]) if (a[k] != null) o[k] = a[k];
     return o;
   };
   async function handleShotSurvey(args = {}) {
@@ -272,7 +272,7 @@ export function createExtras(ctx) {
           try {
             reply = await sessSend({
               shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
-              h: s.h, side: s.side, tod: s.tod, hud: s.hud,
+              h: s.h, side: s.side, tod: s.tod, weather: s.weather, hud: s.hud,
             }, 240000);
           } catch (e) {
             failed.push({ ...s, track, error: String(e.message || e) });
