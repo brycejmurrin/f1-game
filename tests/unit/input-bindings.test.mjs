@@ -210,3 +210,100 @@ test("padLabel follows auto-sniffed brand, and setPadLabelMode overrides it", ()
   // Callers that already hold a Gamepad can pass it (skips activePad scan).
   assert.equal(nin.padBrand({ id: "DualShock 4" }), "ps");
 });
+
+// ---- hold / toggle mode (apex26.holdMode) ----------------------------------
+
+test("InputBindings.parseHoldMode round-trips and rejects junk", () => {
+  const sb = {
+    Math, Object, Array, Number, JSON, Map, Set, String, RegExp, Promise,
+    navigator: {}, Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+  };
+  const ctx = vm.createContext(sb);
+  vm.runInContext(read("js/input/bindings.js"), ctx, { filename: "js/input/bindings.js" });
+  const parse = vm.runInContext("InputBindings.parseHoldMode", ctx);
+  const defs = vm.runInContext("InputBindings.holdModeDefaults", ctx);
+  assert.deepEqual(plain(defs()), { throttle: "hold", lookBack: "hold" });
+  assert.deepEqual(plain(parse(null)), { throttle: "hold", lookBack: "hold" });
+  assert.deepEqual(plain(parse({ throttle: "toggle", lookBack: "nope", extra: "toggle" })),
+    { throttle: "toggle", lookBack: "hold" });
+  assert.deepEqual(plain(parse({ lookBack: "toggle" })), { throttle: "hold", lookBack: "toggle" });
+});
+
+function bootInput(holdMode) {
+  const readJs = (p) => read(p).replace(/^const\b/gm, "var");
+  const listeners = {};
+  const els = new Map();
+  function el(id) {
+    if (id && els.has(id)) return els.get(id);
+    const on = {};
+    const e = {
+      id, cls: new Set(), attrs: {},
+      addEventListener: (t, f) => { (on[t] ||= []).push(f); }, removeEventListener() {},
+      fire(t, ev) { (on[t] || []).forEach((f) => f({ pointerId: 1, clientX: 0, clientY: 0, preventDefault() {}, ...ev })); },
+      style: {}, dataset: {}, children: [],
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      setAttribute() {}, getAttribute: () => null, removeAttribute() {},
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 300 }),
+      setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false,
+    };
+    if (id) els.set(id, e);
+    return e;
+  }
+  const sb = {
+    Math, Object, Array, Number, isFinite, JSON, Map, Set, Date, String, RegExp, Promise,
+    performance: { now: () => 0 },
+    Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
+    addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
+    removeEventListener() {}, setTimeout: () => 0, clearTimeout() {},
+    navigator: {}, screen: {}, matchMedia: () => ({ matches: false, addEventListener() {} }),
+    UiLayers: { inRace: () => true, anyOpen: () => false, navOpen: () => false },
+    document: {
+      addEventListener: (t, f) => { (listeners[t] ||= []).push(f); }, removeEventListener() {},
+      getElementById: () => null, querySelector: () => null, querySelectorAll: () => [], hidden: false,
+      body: { classList: { add() {}, remove() {}, toggle() {} } }, activeElement: { tagName: "BODY" },
+    },
+  };
+  sb.window = sb;
+  const ctx = vm.createContext(sb);
+  vm.runInContext(readJs("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+    vm.runInContext(readJs(f), ctx, { filename: f });
+  const Input = vm.runInContext("Input", ctx);
+  Input.init(el("canvas"));
+  if (holdMode) Input.setHoldMode(holdMode);
+  const fire = (type, code) => (listeners[type] || []).forEach((f) => f({ key: code, code, repeat: false, isTrusted: true, preventDefault() {}, target: { tagName: "BODY" }, metaKey: false, ctrlKey: false }));
+  return { Input, fire, listeners };
+}
+
+test("keyboard GAS toggle: tap on, tap off; rebind clears", () => {
+  const { Input, fire } = bootInput({ throttle: "toggle" });
+  fire("keydown", "KeyW");
+  assert.equal(Input.throttle(), true);
+  fire("keyup", "KeyW");
+  assert.equal(Input.throttle(), true, "toggle survives key up");
+  fire("keydown", "KeyW");
+  assert.equal(Input.throttle(), false);
+  fire("keydown", "KeyW");
+  assert.equal(Input.throttle(), true);
+  Input.setKeyBinding("throttle", 0, "KeyN");
+  assert.equal(Input.throttle(), false, "rebind clears a latched toggle");
+});
+
+test("keyboard LOOK BACK toggle mirrors GAS semantics", () => {
+  const { Input, fire } = bootInput({ lookBack: "toggle" });
+  fire("keydown", "KeyB");
+  assert.equal(Input.lookingBack(), true);
+  fire("keyup", "KeyB");
+  assert.equal(Input.lookingBack(), true);
+  fire("keydown", "KeyB");
+  assert.equal(Input.lookingBack(), false);
+});
+
+test("setHoldMode clears a live keyboard toggle", () => {
+  const { Input, fire } = bootInput({ throttle: "toggle" });
+  fire("keydown", "KeyW");
+  assert.equal(Input.throttle(), true);
+  Input.setHoldMode({ throttle: "hold" });
+  assert.equal(Input.throttle(), false);
+  assert.deepEqual(plain(Input.getHoldMode()), { throttle: "hold", lookBack: "hold" });
+});
