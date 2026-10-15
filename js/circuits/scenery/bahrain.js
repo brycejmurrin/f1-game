@@ -16,15 +16,19 @@
 
       // FRAME: every frac in this file is authored against the def's
       // sceneryStartFrac (0.2250), not the racing line. The real start/finish
-      // (startFrac 0, the trace's vertex 0) sits at SF in this frame and the
-      // real T1 apex (def.turns[0]) at T1F; the engine's _sceneryShift
-      // (0.27027) carries both to racing 0 / 0.1038. The pit complex, main
-      // grandstand, Sakhir Tower and T1 grandstand are keyed off these two so
+      // (racing 0) sits at SF in this frame and the real T1 apex
+      // (def.turns[0]) at T1F; both are DERIVED from the built
+      // def._sceneryShift (0.26095 at the 4 m node grid) so they cannot go
+      // stale again (the old hard-coded 0.7297 came from a 0.27027 shift and
+      // put every SF-keyed prop ~50 m early). The pit complex, main
+      // grandstand, Sakhir Tower and T1 grandstand are keyed off these so
       // they dress the real pit straight; the paddock/pit lane is on its
       // RIGHT (+1), the main grandstand on its LEFT (-1).
-      const SF = 0.7297, T1F = 0.8335;
+      const wrap01 = (x) => ((x % 1) + 1) % 1;
+      const SF = wrap01(1 - (api.def._sceneryShift || 0.27027));
+      const T1F = wrap01(SF + api.def.turns[0]);
       // Final corner apex (def.turns[14] racing 0.8783) in this scenery frame.
-      const FC = 0.608;
+      const FC = wrap01(SF + api.def.turns[14]);
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -475,11 +479,15 @@
       fence(0.03, 0.09, -1, 7, 3.2, [0.70, 0.72, 0.76]);
       marshalPost(K(0.06), 1, 22);
 
+      // University stands sit on the DRS straight just before T4 (bahrain.gp
+      // map; def.turns[3] = racing 0.2503). Keyed off SF, not a raw frac: the
+      // raw 0.18 this replaced landed at racing ~0.44, on T8, not T4.
+      const UNI = wrap01(SF + 0.185);
       const UNI_LIVERY = ["steel", "alu"];
       // University Grandstand — three stacked cream slabs + blue seat rake
       // + cantilever canopy (sheet-01 DETAIL: was grey placeholder stack).
       {
-        const a = anchor(K(0.18), 1, 28), b = [a.r, a.u, a.t];
+        const a = anchor(K(UNI), 1, 28), b = [a.r, a.u, a.t];
         if (!onTrack(a.c[0], a.c[2], 22)) {
           modelGroup("bahrain-university-grandstand", {
             center: vadd(a.c, a.u, 10), size: [24, 24, 58], basis: b,
@@ -523,17 +531,17 @@
         [2,  0.025, 24, 42, SEAT_BLUE],
         [3,  0.060, 28, 38, SEAT],
       ]) {
-        // No centre bay (ds 0) in the table — the stacked University mass owns 0.18.
+        // No centre bay (ds 0) in the table — the stacked University mass owns UNI.
         if (i % 2 === 0) {
-          grandstandEx(0.18 + ds, 1, dGap, seLen, STAND_CREAM, seatC, { endWalls: true });
+          grandstandEx(wrap01(UNI + ds), 1, dGap, seLen, STAND_CREAM, seatC, { endWalls: true });
         } else {
-          grandstandEx(0.18 + ds, 1, dGap, seLen, null, null,
+          grandstandEx(wrap01(UNI + ds), 1, dGap, seLen, null, null,
             { livery: UNI_LIVERY[(i >> 1) % UNI_LIVERY.length], endWalls: true });
         }
       }
-      billboard(K(0.15), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
+      billboard(K(UNI - 0.03), 1, 11, 12, 4, [0.90, 0.55, 0.05]);
       // University / Turn-4 DRS straight (bahrain.gp University stand map).
-      lightBank(K(0.185), 1, 28);
+      lightBank(K(UNI + 0.005), 1, 28);
 
       // Per-wedge setbacks: the 0.11-0.14 and 0.37 legs run 80-140 m to the left
       // of this stretch, so a uniform 64 + 14 i put wedges 0, 1 and 4 on those
@@ -677,7 +685,7 @@
       // Split around the 0.832 hairpin: on its inside the 8 m face is on the
       // fold's tarmac, so the run was suppressed there while the driving limit
       // was still recorded (a phantom wall the player could not see).
-      // This is the real PIT STRAIGHT (SF 0.7297 in this frame): its right
+      // This is the real PIT STRAIGHT (SF, derived from def._sceneryShift): its right
       // side is the pit lane + garages (TrackPit, side +1) up to the exit, so
       // the right-hand fence/tyre run starts past the pit exit and the
       // right-side stands, masts and boards that stood in the pit lane are
@@ -743,13 +751,17 @@
       // anchor lands on another leg's tarmac falls back to the other side.
       if (typeof every === "function") {
         const RING_GAP = 44, PIT0 = FC + 0.006;
-        let alt = 0;
+        let alt = 0, hairpinDone = false;
         every(55, (k) => {
           const f = k / n;
           if (f >= PIT0 && f <= T1F) {
             for (const side of [-1, 1]) {
-              const hairpin = side === 1 && f >= 0.828;
-              floodMast(hairpin ? K(0.822) : k, side, hairpin ? 20 : 30, 39);
+              const hairpin = side === 1 && f >= T1F - 0.0055;
+              if (hairpin) {
+                if (!hairpinDone) hairpinDone = floodMast(K(T1F - 0.0115), side, 20, 39) !== false;
+                continue;
+              }
+              floodMast(k, side, 30, 39);
             }
             return;
           }
@@ -889,7 +901,7 @@
       windTower(K(0.80),   1, 58, 14);
       // F1 Village marquee — back straight hospitality terrace only (T4 outside
       // is open desert beyond the University stand; 0.26 marquee sat in runoff).
-      marquee(K(0.79),  1, 40, 12, 44);
+      marquee(K(0.80),  1, 40, 12, 44);
       // Removed marquee@0.50 — clipped the midfield hall (2.59 m severe @ frac 0.529).
       // Video walls facing the main, T1, and Beyon grandstands.
       videoWall(K(SF + 0.012),  1, 40, 12, 7);
