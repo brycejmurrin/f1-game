@@ -15,7 +15,7 @@ const RaceEntryProfile = (() => {
   "use strict";
 
   const MAX_TASKS = 64;
-  const MAX_MARKS = 64;
+  const MAX_MARKS = 128;
 
   let legs = [];
   let marks = [];
@@ -48,6 +48,10 @@ const RaceEntryProfile = (() => {
     introWarmPrograms: "Programs",
     lampBake: "Lighting",
     introPrepare: "Prepare",
+    introBuild: "Build",
+    introWarm: "Warm intro",
+    introGarage: "Garage intro",
+    flyby: "Flyby",
     studioDone: "Garage",
     studioOpen: "Garage open",
     warmCarAssets: "Car warm",

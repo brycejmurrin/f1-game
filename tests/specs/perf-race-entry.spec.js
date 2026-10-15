@@ -8,6 +8,7 @@ import {
   STRICT,
   writeArtifact,
   formatStageTable,
+  markdownDiffTable,
 } from "../helpers/perf-race-entry.mjs";
 
 const ARTIFACT_DIR = "artifacts/perf-race-entry";
@@ -22,7 +23,6 @@ async function boot(page) {
 }
 
 async function menuStart(page, mode) {
-  const t0 = await page.evaluate(() => performance.now());
   if (mode === "practice") {
     await page.locator("#mb-practice").click();
   } else {
@@ -31,6 +31,7 @@ async function menuStart(page, mode) {
   await page.locator("#sel-go").click();
   const goLabel = mode === "practice" ? "START PRACTICE" : "START RACE";
   await expect(page.locator("#rs-go")).toHaveText(goLabel, { timeout: BOOT_MS });
+  const t0 = await page.evaluate(() => performance.now());
   await page.locator("#rs-go").click();
   await page.waitForFunction(
     () => {
@@ -50,17 +51,12 @@ test.describe("perf race-entry — SwiftShader stage table", () => {
   test.use({ viewport: SCENARIO.viewport });
 
   test("race vs practice menu entry stages (full intro)", async ({ page }) => {
-    test.setTimeout(600_000);
+    test.setTimeout(1_200_000);
 
     await boot(page);
 
     const race = await menuStart(page, "race");
-    await page.evaluate(() => window.__apex.quitToMenu());
-    await page.waitForFunction(
-      () => window.__apex.info().state === "menu",
-      null,
-      { polling: 200, timeout: BOOT_MS },
-    );
+    await boot(page);
     const practice = await menuStart(page, "practice");
     const diff = await page.evaluate(
       ([a, b]) => window.__apex.raceEntryStageDiff(a, b),
@@ -73,6 +69,7 @@ test.describe("perf race-entry — SwiftShader stage table", () => {
       race,
       practice,
       diff,
+      diffMarkdown: markdownDiffTable(diff),
     };
     const artifactFile = writeArtifact(ARTIFACT_DIR, payload);
 
@@ -89,13 +86,23 @@ test.describe("perf race-entry — SwiftShader stage table", () => {
       type: "perf-race-entry-practice",
       description: `wall=${practice.wallMs}ms ${formatStageTable(practice.stages)}`,
     });
+    test.info().annotations.push({
+      type: "perf-race-entry-diff",
+      description: markdownDiffTable(diff),
+    });
 
     expect(race.stages && race.stages.entry).toBeTruthy();
     expect(practice.stages && practice.stages.entry).toBeTruthy();
-    expect(race.snap && race.snap.marks && race.snap.marks.length).toBeGreaterThan(3);
+    expect(race.stages.entry).toMatch(/race|practice|tt/);
+    expect(race.snap && race.snap.marks && race.snap.marks.length).toBeGreaterThan(8);
+    const markNames = race.snap.marks.map((m) => m.n);
     expect(
-      race.snap.marks.some((m) => m.n === "awaitIntroWarm:start" || m.n === "loadTrackStepped:start" || m.n === "warmCarAssets:start"),
+      markNames.some((n) => n === "entry:race" || n === "entry:practice"),
     ).toBe(true);
+    expect(
+      markNames.some((n) => n === "awaitIntroWarm:start" || n === "introBuild:start" || n === "introPrepare:start"),
+    ).toBe(true);
+    expect(markNames.some((n) => n === "flyby:start" || n === "flyby:end")).toBe(true);
 
     if (STRICT) {
       expect(race.wallMs, "race menu entry wall time").toBeLessThan(RACE_ENTRY_SOFT_MS);

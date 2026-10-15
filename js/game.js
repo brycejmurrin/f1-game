@@ -3967,12 +3967,14 @@ function introGarage(go) {
   let prepared = false;
   (async () => {
     try {
-      const prepP = introPrepare(live, key, info, n, false); prepP.catch(() => {});   // handled: awaited below, after the drive-out — a rejection meanwhile is not the global error overlay
-      await RaceEntryProfile.spanAsync("studioDone", () => studioDone(live, n));   // garage-out first (or its 3× / openAt safety cap)
-      const ready = await prepP;
-      if (!ready) return;
-      if (live() && ready.fly) _menuFly = ready.fly;
-      prepared = true;
+      await RaceEntryProfile.spanAsync("introGarage", async () => {
+        const prepP = introPrepare(live, key, info, n, false); prepP.catch(() => {});   // handled: awaited below, after the drive-out — a rejection meanwhile is not the global error overlay
+        await RaceEntryProfile.spanAsync("studioDone", () => studioDone(live, n));   // garage-out first (or its 3× / openAt safety cap)
+        const ready = await prepP;
+        if (!ready) return;
+        if (live() && ready.fly) _menuFly = ready.fly;
+        prepared = true;
+      });
     }
     catch (e) { if (live()) { Log.warn("gfx", "intro garage failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } }
     finally { afterGarageOut(n, key, go, prepared, live); }
@@ -3993,24 +3995,26 @@ function introBuild(go) {
   let prepared = false;
   (async () => {
     try {
-      await RaceEntryProfile.spanAsync("ensureScenery", () => ensureScenery(idx));
-      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the preparation card paints first
-      if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
-      // In steps, a few ms per frame: the preparation card and skip remain responsive.
-      if (join) await mp.step;
-      if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live))) || !live()) return;
-      _menuGate.ready = key; _menuGate.track = track;
-      // Assets, plans and shader warm all settle before the outgoing animation.
-      const t1 = performance.now();
-      await RaceEntryProfile.spanAsync("prepareMenuCarAssets", () => prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500));
-      const ready = await introPrepare(live, key, info0, n, true);
-      if (!ready) return;
-      const fly = ready.fly;
-      // Publish only after compilation: cancellation cannot leave a stale plan.
-      if (live() && fly) _menuFly = fly;
-      _menuGate.warm = 0;
-      if (_introSkip !== n) { RaceEntryProfile.mark("studioOpen:start"); studioOpen(n, info0); await RaceEntryProfile.spanAsync("studioDone", () => studioDone(live, n)); RaceEntryProfile.mark("studioOpen:end"); }
-      prepared = true;
+      await RaceEntryProfile.spanAsync("introBuild", async () => {
+        await RaceEntryProfile.spanAsync("ensureScenery", () => ensureScenery(idx));
+        await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));   // the preparation card paints first
+        if (!(await awaitIntroWarm(live)) || !live()) return;   // compilation retains ownership of its scene
+        // In steps, a few ms per frame: the preparation card and skip remain responsive.
+        if (join) await mp.step;
+        if (!(await RaceEntryProfile.spanAsync("loadTrackStepped", () => loadTrackStepped(idx, live))) || !live()) return;
+        _menuGate.ready = key; _menuGate.track = track;
+        // Assets, plans and shader warm all settle before the outgoing animation.
+        const t1 = performance.now();
+        await RaceEntryProfile.spanAsync("prepareMenuCarAssets", () => prepareMenuCarAssets(() => live() && performance.now() - t1 < 1500));
+        const ready = await introPrepare(live, key, info0, n, true);
+        if (!ready) return;
+        const fly = ready.fly;
+        // Publish only after compilation: cancellation cannot leave a stale plan.
+        if (live() && fly) _menuFly = fly;
+        _menuGate.warm = 0;
+        if (_introSkip !== n) { RaceEntryProfile.mark("studioOpen:start"); studioOpen(n, info0); await RaceEntryProfile.spanAsync("studioDone", () => studioDone(live, n)); RaceEntryProfile.mark("studioOpen:end"); }
+        prepared = true;
+      });
     } catch (e) {
       if (live()) { Log.warn("gfx", "intro build failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); }
     }
@@ -4035,24 +4039,26 @@ function introWarm(go) {
   if (cold) introCover(info, n); else studioOpen(n, info);
   let prepared = false;
   (async () => { try {
-      if (cold) {
-        // Cold: compilation owns the renderer — prepare under the cover, then garage-out.
-        const ready = await introPrepare(live, key, info, n, true);
-        if (!ready) return;
-        if (ready.fly) _menuFly = ready.fly;
-        _menuGate.warm = 0;
-        if (_introSkip !== n) { RaceEntryProfile.mark("studioOpen:start"); studioOpen(n, info); await RaceEntryProfile.spanAsync("studioDone", () => studioDone(live, n)); RaceEntryProfile.mark("studioOpen:end"); }
-      } else {
-        // Warm world: garage-out and prepare overlap; never wait on prepare before studioDone.
-        const prepP = introPrepare(live, key, info, n, false); prepP.catch(() => {});   // handled: awaited below, after the drive-out (as introGarage)
-        await RaceEntryProfile.spanAsync("studioDone", () => studioDone(live, n));
-        const ready = await prepP;
-        if (!ready) return;
-        if (ready.fly) _menuFly = ready.fly;
-        _menuGate.warm = 0;
-      }
-      if (!live()) return;
-      prepared = true;   // afterGarageOut closes the held garage, then the race/session card
+      await RaceEntryProfile.spanAsync("introWarm", async () => {
+        if (cold) {
+          // Cold: compilation owns the renderer — prepare under the cover, then garage-out.
+          const ready = await introPrepare(live, key, info, n, true);
+          if (!ready) return;
+          if (ready.fly) _menuFly = ready.fly;
+          _menuGate.warm = 0;
+          if (_introSkip !== n) { RaceEntryProfile.mark("studioOpen:start"); studioOpen(n, info); await RaceEntryProfile.spanAsync("studioDone", () => studioDone(live, n)); RaceEntryProfile.mark("studioOpen:end"); }
+        } else {
+          // Warm world: garage-out and prepare overlap; never wait on prepare before studioDone.
+          const prepP = introPrepare(live, key, info, n, false); prepP.catch(() => {});   // handled: awaited below, after the drive-out (as introGarage)
+          await RaceEntryProfile.spanAsync("studioDone", () => studioDone(live, n));
+          const ready = await prepP;
+          if (!ready) return;
+          if (ready.fly) _menuFly = ready.fly;
+          _menuGate.warm = 0;
+        }
+        if (!live()) return;
+        prepared = true;   // afterGarageOut closes the held garage, then the race/session card
+      });
     } catch (e) { if (live()) { Log.warn("gfx", "intro warm failed", e); quitToMenu(); announce("PREPARATION FAILED — please retry", 5, "info"); } else if (n === _introRun) loadingScreen.stop(); }
     finally { afterGarageOut(n, key, go, prepared, live); }
   })();
@@ -4166,7 +4172,13 @@ function raceIntro(go) {
   FlybySeq.setDuration(flyMs);   // plan every pan for the seconds this run has
   if (world) FlybySeq.warm(track, flybyShots);   // plan the opening shots now, the rest in slices before their cuts
   FlybySeq.reset();   // this run's shot 0 is a cut, not a glide from wherever the camera was
-  loadingScreen.run(info, go);
+  (async () => {
+    try {
+      await RaceEntryProfile.spanAsync("flyby", async () => {
+        await new Promise((resolve) => { loadingScreen.run(info, () => { resolve(); go(); }); });
+      });
+    } catch (e) { Log.warn("gfx", "flyby handoff failed", e); go(); }
+  })();
 }
 /** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
  *  session's settings, and whether there is a built world to fly over. Named

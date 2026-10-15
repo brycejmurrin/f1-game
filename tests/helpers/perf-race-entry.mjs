@@ -42,3 +42,18 @@ export function markdownStageTable(table) {
     .map((r) => `| ${r.n} | ${r.ms != null ? Math.round(r.ms) : "open"} |`);
   return "| stage | ms |\n|---|---|\n" + rows.join("\n");
 }
+
+export function markdownDiffTable(diff) {
+  if (!diff || !Array.isArray(diff.rows)) return "| stage | race ms | practice ms | Δ |\n|---|---:|---:|---:|";
+  const rows = diff.rows
+    .filter((r) => (r.raceMs ?? 0) > 0 || (r.practiceMs ?? 0) > 0)
+    .sort((a, b) => Math.max(b.raceMs || 0, b.practiceMs || 0) - Math.max(a.raceMs || 0, a.practiceMs || 0));
+  const body = rows.map((r) => `| ${r.n} | ${r.raceMs != null ? Math.round(r.raceMs) : "—"} | ${r.practiceMs != null ? Math.round(r.practiceMs) : "—"} | ${r.deltaMs != null ? Math.round(r.deltaMs) : "—"} |`).join("\n");
+  return "| stage | race ms | practice ms | Δ |\n|---|---:|---:|---:|\n" + body;
+}
+
+/** Stages with meaningful race time and negligible practice time (ms). */
+export function raceOnlyStages(diff, raceFloorMs = 50, practiceCeilMs = 5) {
+  if (!diff?.rows) return [];
+  return diff.rows.filter((r) => (r.raceMs ?? 0) >= raceFloorMs && (r.practiceMs ?? 0) <= practiceCeilMs).map((r) => r.n);
+}
