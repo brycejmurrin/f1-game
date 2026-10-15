@@ -268,8 +268,8 @@
       //     tree() is 1680 verts, a whole 0.01 frac of band is ~600 — which is
       //     also why the tree wall above drops its third rank more often than
       //     it used to. The bands replace it, and cover more ground.
-      forestEdge(0.206, 0.262, -1, 29, { col: LEAF_B, h: 18, rows: 3 });
-      forestEdge(0.372, 0.442, -1, 29, { col: LEAF_M, h: 18, rows: 3 });
+      forestEdge(0.206, 0.262, -1, 29, { col: LEAF_B, col2: LEAF_B, hMin: 13, hMax: 18, pineFrac: 0.12 });
+      forestEdge(0.372, 0.442, -1, 29, { col: LEAF_M, col2: LEAF_M, hMin: 13, hMax: 18, pineFrac: 0.12 });
 
       // 4. START/FINISH, PIT WALL (+1) — official OIC pit building (1F garages /
       //    2F media) + 4-storey control tower (OIRC office / briefing / control /
@@ -379,7 +379,7 @@
       //    commentary box, a scoreboard, the sponsor run at the stand foot and
       //    a pair of open terraces where the covered bank runs out.
       grandstandEx(0.015, -1, 10, 80, null, null);
-      forestEdge(0.985, 0.075, -1, 30, { col: LEAF, h: 12, rows: 2 });
+      forestEdge(0.985, 0.075, -1, 30, { col: LEAF, col2: LEAF, hMin: 7, hMax: 12, pineFrac: 0.12 });
       hill(0.030, -1, 62, 150, 34, 14, [0.27, 0.39, 0.22]);
       hill(0.010, -1, 62, 120, 26, 11, [0.29, 0.41, 0.23]);
       billboard(K(0.050), -1, 10, 9, 3.2, [0.78, 0.20, 0.18]);
@@ -400,8 +400,8 @@
       //    hard on the edge, forest one row back, ridge rising behind. Three
       //    bands now, stepping up in height, so the wall has real thickness.
       guardrail(0.068, 0.118, -1, 5, ARMCO);
-      forestEdge(0.068, 0.120, -1, 9, { col: LEAF_D, h: 13, rows: 3 });
-      forestEdge(0.066, 0.122, -1, 26, { col: LEAF_B, h: 17, rows: 3 });
+      forestEdge(0.068, 0.120, -1, 9, { col: LEAF_D, col2: LEAF_D, hMin: 8, hMax: 13, pineFrac: 0.12 });
+      forestEdge(0.066, 0.122, -1, 26, { col: LEAF_B, col2: LEAF_B, hMin: 12, hMax: 17, pineFrac: 0.12 });
       hill(0.090, -1, 62, 130, 30, 15, [0.26, 0.38, 0.22]);
       hill(0.076, -1, 62, 110, 24, 19, [0.24, 0.36, 0.21]);
       marshalPost(K(0.0800), -1, 8);
@@ -418,7 +418,7 @@
       cameraTower(K(0.1172), -1, 15);
       cameraTower(K(0.1080), -1, 17);
       hill(0.1172, -1, 62, 120, 28, 16, [0.25, 0.37, 0.21]);
-      forestEdge(0.096, 0.146, -1, 33, { col: LEAF_D, h: 18, rows: 3 });
+      forestEdge(0.096, 0.146, -1, 33, { col: LEAF_D, col2: LEAF_D, hMin: 13, hMax: 18, pineFrac: 0.12 });
       bld(0.1220, -1, 20, 5.5, 4.5, 4.0, WALL_GREY, ROOF_TIN, 1);   // photo platform
       pad(0.1220, -1, 18.5, [3.0, 0.3, 5.0], STEEL, 0, 0.3);         // its deck
       for (let i = 0; i < 6; i++)                     // spare tyre stacks, mixed
@@ -452,9 +452,9 @@
       //    wall: ranks and bush infill to the barrier line, no sky gap. Four
       //    depth bands here; the circuit's works shed hides in the third.
       guardrail(0.145, 0.200, -1, 4, ARMCO);
-      forestEdge(0.145, 0.200, -1, 7, { col: LEAF_D, h: 14, rows: 3 });
-      forestEdge(0.145, 0.200, -1, 19, { col: LEAF, h: 16, rows: 2 });
-      forestEdge(0.143, 0.202, -1, 31, { col: LEAF_B, h: 19, rows: 3 });
+      forestEdge(0.145, 0.200, -1, 7, { col: LEAF_D, col2: LEAF_D, hMin: 9, hMax: 14, pineFrac: 0.12 });
+      forestEdge(0.145, 0.200, -1, 19, { col: LEAF, col2: LEAF, hMin: 11, hMax: 16, pineFrac: 0.12 });
+      forestEdge(0.143, 0.202, -1, 31, { col: LEAF_B, col2: LEAF_B, hMin: 14, hMax: 19, pineFrac: 0.12 });
       // Hedge inset from the forestEdge start so tops do not share a plane
       // (flatCoplanar 3.1–5.2 m² hedge×hedge / hedge×tree at 0.145).
       hedge(0.148, 0.198, -1, 6.4, 1.5, SCRUB);
@@ -521,7 +521,7 @@
       billboard(K(0.2330), 1, 14, 8, 3.0, [0.90, 0.56, 0.16]);
       hedge(0.190, 0.252, 1, 34, 1.7, SCRUB_L);
       fence(0.190, 0.252, 1, 22, 2.4, [0.50, 0.52, 0.48]);
-      forestEdge(0.194, 0.248, 1, 50, { col: LEAF_M, h: 17, rows: 3 });
+      forestEdge(0.194, 0.248, 1, 50, { col: LEAF_M, col2: LEAF_M, hMin: 12, hMax: 17, pineFrac: 0.12 });
       marshalPost(K(0.2420), 1, 14);
       for (let i = 0; i < 9; i++) {
         const s = 0.192 + (i / 8) * 0.050, hh = hash(i * 23 + 77);
@@ -533,9 +533,9 @@
       //     guardrail, forest dense and dark, marshal post in the only gap.
       //     A third band and two ridges give the darkness somewhere to go.
       guardrail(0.270, 0.300, -1, 4, ARMCO);
-      forestEdge(0.270, 0.300, -1, 6, { col: LEAF_D, h: 15, rows: 3 });
-      forestEdge(0.270, 0.300, -1, 18, { col: LEAF, h: 17, rows: 2 });
-      forestEdge(0.266, 0.304, -1, 30, { col: LEAF_D, h: 20, rows: 3 });
+      forestEdge(0.270, 0.300, -1, 6, { col: LEAF_D, col2: LEAF_D, hMin: 10, hMax: 15, pineFrac: 0.12 });
+      forestEdge(0.270, 0.300, -1, 18, { col: LEAF, col2: LEAF, hMin: 12, hMax: 17, pineFrac: 0.12 });
+      forestEdge(0.266, 0.304, -1, 30, { col: LEAF_D, col2: LEAF_D, hMin: 15, hMax: 20, pineFrac: 0.12 });
       marshalPost(K(0.2928), -1, 7);
       hut(0.2870, -1, 11, ROOF_GRN);
       for (let i = 0; i < 8; i++) {
@@ -562,7 +562,7 @@
       for (let i = 0; i < 3; i++)                     // stall row on the crest
         bld(0.2995 + i * 0.0085, 1, 25, 5.0, 3.0, 4.0,
           i & 1 ? WALL_CREAM : [0.90, 0.90, 0.88], i & 1 ? ROOF_RED : ROOF_BLUE, 1);
-      forestEdge(0.290, 0.332, 1, 34, { col: LEAF_M, h: 16, rows: 3 });
+      forestEdge(0.290, 0.332, 1, 34, { col: LEAF_M, col2: LEAF_M, hMin: 11, hMax: 16, pineFrac: 0.12 });
       marshalPost(K(0.3300), 1, 10);   // past the bank end, not on its treads
 
       // 13. HAIRPIN, s=0.3372 (-1, 6 m) — tyres on a pale clay cut, a stepped
@@ -574,8 +574,8 @@
       clayCut(0.320, 0.358, -1, 10, 7.0, CLAY, CLAY_R);
       spectatorHill(0.324, 0.354, -1, 18, { h: 8.0, col: GRASS, steps: 3 });
       spectatorHill(0.322, 0.356, -1, 28, { h: 11.5, col: SOIL, steps: 2 });
-      forestEdge(0.318, 0.360, -1, 38, { col: BAMBOO_D, h: 14, rows: 3 });
-      forestEdge(0.316, 0.362, -1, 50, { col: LEAF_D, h: 19, rows: 3 });
+      forestEdge(0.318, 0.360, -1, 38, { col: BAMBOO_D, col2: BAMBOO_D, hMin: 9, hMax: 14, pineFrac: 0.12 });
+      forestEdge(0.316, 0.362, -1, 50, { col: LEAF_D, col2: LEAF_D, hMin: 14, hMax: 19, pineFrac: 0.12 });
       cameraTower(K(0.3372), -1, 14);
       for (let i = 0; i < 5; i++)                     // tyre bundles on the cut
         box(0.3245 + i * 0.0060, -1, 12.5, [1.8, 1.2, 1.8],
@@ -590,8 +590,8 @@
       //     Two bands behind the stand and a pump house in the trees.
       marshalPost(K(0.3992), 1, 11);
       sponsorHoarding(0.386, 0.414, 1, 11, { h: 1.4 });
-      forestEdge(0.380, 0.424, 1, 16, { col: LEAF, h: 14, rows: 3 });
-      forestEdge(0.376, 0.428, 1, 28, { col: LEAF_B, h: 18, rows: 3 });
+      forestEdge(0.380, 0.424, 1, 16, { col: LEAF, col2: LEAF, hMin: 9, hMax: 14, pineFrac: 0.12 });
+      forestEdge(0.376, 0.428, 1, 28, { col: LEAF_B, col2: LEAF_B, hMin: 13, hMax: 18, pineFrac: 0.12 });
       bld(0.4080, 1, 21, 6.0, 3.6, 5.0, WALL_GREY, ROOF_GRN, 1);      // pump house
       box(0.4130, 1, 22, [2.4, 3.2, 2.4], STEEL);                     // water tank
       billboard(K(0.3890), 1, 12, 8, 3.0, [0.84, 0.20, 0.30]);
@@ -606,9 +606,9 @@
       //     shoulders and ridges running with the track as it gains height.
       //     The ridge line now steps UP with the road (14 -> 26 m) and a second
       //     outfield band at 24 m keeps the far shoulder from thinning out.
-      forestEdge(0.440, 0.620, -1, 9, { col: LEAF, h: 14, rows: 3 });
-      forestEdge(0.440, 0.620, 1, 10, { col: LEAF_L, h: 13, rows: 2 });
-      forestEdge(0.468, 0.600, -1, 25, { col: LEAF_B, h: 18, rows: 3 });
+      forestEdge(0.440, 0.620, -1, 9, { col: LEAF, col2: LEAF, hMin: 9, hMax: 14, pineFrac: 0.12 });
+      forestEdge(0.440, 0.620, 1, 10, { col: LEAF_L, col2: LEAF_L, hMin: 8, hMax: 13, pineFrac: 0.12 });
+      forestEdge(0.468, 0.600, -1, 25, { col: LEAF_B, col2: LEAF_B, hMin: 13, hMax: 18, pineFrac: 0.12 });
       hill(0.4552, -1, 62, 140, 30, 16, [0.27, 0.39, 0.22]);
       hill(0.5200, -1, 62, 150, 32, 20, [0.25, 0.37, 0.21]);
       hill(0.5900, -1, 62, 140, 30, 24, [0.24, 0.36, 0.21]);
@@ -644,8 +644,8 @@
       cameraTower(K(0.6450), -1, 18);
       hill(0.6322, -1, 62, 120, 28, 20, [0.24, 0.36, 0.21]);
       hill(0.6480, -1, 62, 130, 30, 24, [0.23, 0.35, 0.20]);
-      forestEdge(0.606, 0.664, -1, 34, { col: BAMBOO_D, h: 15, rows: 3 });
-      forestEdge(0.614, 0.658, -1, 47, { col: LEAF_D, h: 20, rows: 3 });
+      forestEdge(0.606, 0.664, -1, 34, { col: BAMBOO_D, col2: BAMBOO_D, hMin: 10, hMax: 15, pineFrac: 0.12 });
+      forestEdge(0.614, 0.658, -1, 47, { col: LEAF_D, col2: LEAF_D, hMin: 15, hMax: 20, pineFrac: 0.12 });
       sponsorHoarding(0.626, 0.648, -1, 13, { h: 1.4 });
       bld(0.6380, -1, 30, 7.0, 4.0, 5.5, WALL_CREAM, ROOF_BLUE, 1);   // stand office
       marshalPost(K(0.6220), 1, 8);
@@ -672,9 +672,9 @@
       marshalPost(K(0.6937), 1, 10);
       guardrail(0.665, 0.760, 1, 4, ARMCO);
       guardrail(0.665, 0.760, -1, 4, ARMCO);
-      forestEdge(0.665, 0.775, 1, 8, { col: LEAF_D, h: 14, rows: 3 });
-      forestEdge(0.665, 0.775, -1, 7, { col: LEAF_D, h: 15, rows: 3 });
-      forestEdge(0.670, 0.762, -1, 22, { col: LEAF_B, h: 19, rows: 3 });
+      forestEdge(0.665, 0.775, 1, 8, { col: LEAF_D, col2: LEAF_D, hMin: 9, hMax: 14, pineFrac: 0.12 });
+      forestEdge(0.665, 0.775, -1, 7, { col: LEAF_D, col2: LEAF_D, hMin: 10, hMax: 15, pineFrac: 0.12 });
+      forestEdge(0.670, 0.762, -1, 22, { col: LEAF_B, col2: LEAF_B, hMin: 14, hMax: 19, pineFrac: 0.12 });
       hill(0.7400, -1, 62, 130, 28, 18, [0.26, 0.38, 0.22]);
       hut(0.6937, 1, 14, ROOF_TIN);
       billboard(K(0.7200), 1, 10, 8, 3.0, [0.84, 0.26, 0.20]);
@@ -702,9 +702,9 @@
       billboard(K(0.8820), 1, 11, 9, 3.2, [0.20, 0.56, 0.32]);
       marshalPost(K(0.9000), 1, 11);
       grandstandEx(0.930, -1, 12, 70, null, null);
-      forestEdge(0.800, 0.930, -1, 8, { col: LEAF, h: 14, rows: 3 });
-      forestEdge(0.800, 0.860, 1, 14, { col: LEAF_L, h: 13, rows: 2 });
-      forestEdge(0.818, 0.922, -1, 25, { col: LEAF_B, h: 18, rows: 3 });
+      forestEdge(0.800, 0.930, -1, 8, { col: LEAF, col2: LEAF, hMin: 9, hMax: 14, pineFrac: 0.12 });
+      forestEdge(0.800, 0.860, 1, 14, { col: LEAF_L, col2: LEAF_L, hMin: 8, hMax: 13, pineFrac: 0.12 });
+      forestEdge(0.818, 0.922, -1, 25, { col: LEAF_B, col2: LEAF_B, hMin: 13, hMax: 18, pineFrac: 0.12 });
       hill(0.8678, -1, 62, 130, 30, 15, [0.27, 0.39, 0.22]);
       hill(0.8200, -1, 62, 140, 32, 19, [0.25, 0.37, 0.21]);
       hill(0.9200, -1, 62, 120, 26, 13, [0.28, 0.40, 0.23]);
