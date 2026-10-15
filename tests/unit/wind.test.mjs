@@ -103,3 +103,11 @@ test("level OFF is a true no-op: calm state, vmaxMul exactly 1, latA exactly 0",
   assert.equal(W.setLevel("real"), "real");
   assert.ok(W.sync(5, "storm", "bahrain", 120).ms > 0);
 });
+
+test("race settings offer WIND off/real and persist it (phone players can turn it off)", () => {
+  const src = readFileSync(join(ROOT, "js/race/race-settings.js"), "utf8");
+  assert.match(src, /function ensureWindRow[\s\S]*?\$\("rs-dirty"\)[\s\S]*?id="rs-wind-label">WIND</, "WIND row injected after DIRTY AIR");
+  assert.match(src, /RS_WIND = \[\["off", "OFF"\], \["real", "REAL"\]\]/);
+  assert.match(src, /store\.set\("wind", Wind\.setLevel\(v\)\)/, "the choice reaches Wind and apex26.wind");
+  assert.match(readFileSync(join(ROOT, "js/game.js"), "utf8"), /Wind\.setLevel\(store\.get\("wind", "real"\)\)/, "boot reads the same key");
+});
