@@ -6,28 +6,13 @@ visual findings, and ranks follow-ups.
 
 **Reference brief:** `docs/tracks/imola.md` (FIA 2025 corner table, palette, landmarks).
 
-### Capture status (course correction 2026-10-14)
-
-Shared batch weather/time-of-day support is landing in a separate PR (**tools: shared
-shot tooling for circuit surveys**, from `claude/f1-game-project-26h3ng`). Until that
-merges, this branch does **not** change `tools/shot/*`, `apex-eval`, `.gitignore`, or
-guard baselines.
-
-- **Committed to git:** survey prose + `js/circuits/scenery/imola.js` fixes only.
-- **Shot plan:** 32 frames (sector landmarks × dry midday) + **6 hero views** ×
-  (dusk, night, overcast, rain, fog, wet) after rebase — cap **30–36** total with
-  weather/lighting on **4–6** anchors only.
-- **Local only (not committed; `artifacts/` gitignored until shared PR):**
-  `artifacts/shots/tracks/imola/`. A partial batch was stopped at 38 files; filenames
-  include weather tags but **`shot.mjs` did not apply `__apex.weather()`** on this
-  branch — treat every frame as **dry / day** until re-captured after the tooling PR.
-
-Game weather API (for the follow-up pass): `__apex.weather("dry"|"wet"|"rain"|"overcast"|"fog")`;
-time of day: `setTimeOfDay("day"|"dawn"|"dusk"|"night")` (`docs/DEBUG-HOOKS.md`). Imola def
-has `night: false` but night lighting still exercises bespoke `lampPost` rows in scenery.
+**Survey shots:** **42** committed JPEGs in `artifacts/shots/tracks/imola/` (`git add -f`;
+repo `artifacts/` remains gitignored). Raw URL base:
+`https://raw.githubusercontent.com/brycejmurrin/f1-game/cursor/imola-survey-f9bd/artifacts/shots/tracks/imola/`.
 
 ---
 
+## 1. Code map
 ## 1. Code map
 
 | Layer | Path | Role |
@@ -50,56 +35,87 @@ has `night: false` but night lighting still exercises bespoke `lampPost` rows in
 
 ---
 
-## 2. Sector landmark map (dry midday — intended panels)
+## 2. Screenshot panels (committed JPEGs)
 
-Paths below are **relative to repo root**; files land after rebase + `artifacts/shots/tracks/**`
-gitignore exception. Early agent captures also exist under `/opt/cursor/artifacts/imola-*.png`
-(14-frame pilot set).
+**42 frames** under `artifacts/shots/tracks/imola/` (1280px wide, JPEG q≈80, <300 KB each). Filename weather tags reflect the batch recipe; capture used `shot.mjs` **time-of-day only** on this branch — treat non-`dry` weather filenames as **intent labels** until shared tooling re-shoot applies `__apex.weather()`.
 
-| Sector | Fraction | Landmark | Local path (dry midday) |
-|--------|----------|----------|-------------------------|
-| S1 | 0.00 | Start / pit / Partenza | `artifacts/shots/tracks/imola/s1-start_day-dry.png` |
-| S1 | 0.075 | Tamburello / Senna | `artifacts/shots/tracks/imola/s1-tamburello_day-dry.png` |
-| S1 | 0.10 | Santerno footbridge | `artifacts/shots/tracks/imola/s1-bridge_day-dry.png` |
-| S1 | 0.12 | Villeneuve | `artifacts/shots/tracks/imola/s1-villeneuve_day-dry.png` |
-| S1 | 0.28 | Tosa | `artifacts/shots/tracks/imola/s1-tosa_day-dry.png` |
-| S2 | 0.35 | Piratella | `artifacts/shots/tracks/imola/s2-piratella_day-dry.png` |
-| S2 | 0.48 | Acque Minerali | `artifacts/shots/tracks/imola/s2-acque_day-dry.png` |
-| S2 | 0.50 | Park hollow / vineyards | `artifacts/shots/tracks/imola/s2-hollow_day-dry.png` |
-| S2 | 0.65 | Variante Alta | *(pending rebase batch)* |
-| S3 | 0.80 | Rivazza | *(pending rebase batch)* |
-| S3 | 0.92 | Variante Bassa | *(pending rebase batch)* |
-| S3 | 0.99 | Pit tower | *(pending rebase batch)* |
-
-Built lap length: **4871.25 m** (verify-track); FIA reference 4909 m — timing uses built metric (`docs/tracks/imola.md` §7).
-
-### S1 — Sector 1 (dry midday panels)
-
-Filenames only until `artifacts/shots/tracks/imola/` is committed (shared tooling PR).
+### S1 — by landmark / variant
 
 | | | |
 |:---:|:---:|:---:|
-| `s1-start_day-dry.png` | `s1-tamburello_day-dry.png` | `s1-bridge_day-dry.png` |
-| Start / pit straight | Tamburello / Senna | Santerno footbridge |
-| `s1-villeneuve_day-dry.png` | `s1-tosa_day-dry.png` | |
-| Villeneuve chicane | Tosa hairpin | |
+| ![Santerno bridge · day · dry](../../../artifacts/shots/tracks/imola/s1-bridge_day-dry.jpg)<br/>Santerno bridge · day · dry | ![Santerno bridge · day · fog](../../../artifacts/shots/tracks/imola/s1-bridge_day-fog.jpg)<br/>Santerno bridge · day · fog | ![Santerno bridge · day · overcast](../../../artifacts/shots/tracks/imola/s1-bridge_day-overcast.jpg)<br/>Santerno bridge · day · overcast |
+| ![Santerno bridge · day · rain](../../../artifacts/shots/tracks/imola/s1-bridge_day-rain.jpg)<br/>Santerno bridge · day · rain | ![Santerno bridge · day · wet](../../../artifacts/shots/tracks/imola/s1-bridge_day-wet.jpg)<br/>Santerno bridge · day · wet | ![Start / pit · day · dry](../../../artifacts/shots/tracks/imola/s1-start_day-dry.jpg)<br/>Start / pit · day · dry |
+| ![Start / pit · day · fog](../../../artifacts/shots/tracks/imola/s1-start_day-fog.jpg)<br/>Start / pit · day · fog | ![Start / pit · day · overcast](../../../artifacts/shots/tracks/imola/s1-start_day-overcast.jpg)<br/>Start / pit · day · overcast | ![Start / pit · day · rain](../../../artifacts/shots/tracks/imola/s1-start_day-rain.jpg)<br/>Start / pit · day · rain |
+| ![Start / pit · day · wet](../../../artifacts/shots/tracks/imola/s1-start_day-wet.jpg)<br/>Start / pit · day · wet | ![Tamburello · day · dry](../../../artifacts/shots/tracks/imola/s1-tamburello_day-dry.jpg)<br/>Tamburello · day · dry | ![Tamburello · day · fog](../../../artifacts/shots/tracks/imola/s1-tamburello_day-fog.jpg)<br/>Tamburello · day · fog |
+| ![Tamburello · day · overcast](../../../artifacts/shots/tracks/imola/s1-tamburello_day-overcast.jpg)<br/>Tamburello · day · overcast | ![Tamburello · day · rain](../../../artifacts/shots/tracks/imola/s1-tamburello_day-rain.jpg)<br/>Tamburello · day · rain | ![Tamburello · day · wet](../../../artifacts/shots/tracks/imola/s1-tamburello_day-wet.jpg)<br/>Tamburello · day · wet |
+| ![Tosa · day · dry](../../../artifacts/shots/tracks/imola/s1-tosa_day-dry.jpg)<br/>Tosa · day · dry | ![Tosa · day · fog](../../../artifacts/shots/tracks/imola/s1-tosa_day-fog.jpg)<br/>Tosa · day · fog | ![Tosa · day · overcast](../../../artifacts/shots/tracks/imola/s1-tosa_day-overcast.jpg)<br/>Tosa · day · overcast |
+| ![Tosa · day · rain](../../../artifacts/shots/tracks/imola/s1-tosa_day-rain.jpg)<br/>Tosa · day · rain | ![Tosa · day · wet](../../../artifacts/shots/tracks/imola/s1-tosa_day-wet.jpg)<br/>Tosa · day · wet | ![Villeneuve · day · dry](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-dry.jpg)<br/>Villeneuve · day · dry |
+| ![Villeneuve · day · fog](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-fog.jpg)<br/>Villeneuve · day · fog | ![Villeneuve · day · overcast](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-overcast.jpg)<br/>Villeneuve · day · overcast | ![Villeneuve · day · rain](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-rain.jpg)<br/>Villeneuve · day · rain |
+| ![Villeneuve · day · wet](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-wet.jpg)<br/>Villeneuve · day · wet |  |  |
 
-### S2 — Sector 2 (dry midday panels)
+### S2 — by landmark / variant
 
 | | | |
 |:---:|:---:|:---:|
-| `s2-piratella_day-dry.png` | `s2-acque_day-dry.png` | `s2-hollow_day-dry.png` |
-| Piratella climb | Acque Minerali | Park hollow |
+| ![Acque Minerali · day · dry](../../../artifacts/shots/tracks/imola/s2-acque_day-dry.jpg)<br/>Acque Minerali · day · dry | ![Acque Minerali · day · fog](../../../artifacts/shots/tracks/imola/s2-acque_day-fog.jpg)<br/>Acque Minerali · day · fog | ![Acque Minerali · day · overcast](../../../artifacts/shots/tracks/imola/s2-acque_day-overcast.jpg)<br/>Acque Minerali · day · overcast |
+| ![Acque Minerali · day · rain](../../../artifacts/shots/tracks/imola/s2-acque_day-rain.jpg)<br/>Acque Minerali · day · rain | ![Acque Minerali · day · wet](../../../artifacts/shots/tracks/imola/s2-acque_day-wet.jpg)<br/>Acque Minerali · day · wet | ![Variante Alta · day · dry · park](../../../artifacts/shots/tracks/imola/s2-alta_day-dry_park.jpg)<br/>Variante Alta · day · dry · park |
+| ![Park hollow · day · dry](../../../artifacts/shots/tracks/imola/s2-hollow_day-dry.jpg)<br/>Park hollow · day · dry | ![Park hollow · day · overcast](../../../artifacts/shots/tracks/imola/s2-hollow_day-overcast.jpg)<br/>Park hollow · day · overcast | ![Park hollow · day · rain](../../../artifacts/shots/tracks/imola/s2-hollow_day-rain.jpg)<br/>Park hollow · day · rain |
+| ![Piratella · day · dry](../../../artifacts/shots/tracks/imola/s2-piratella_day-dry.jpg)<br/>Piratella · day · dry | ![Piratella · day · fog](../../../artifacts/shots/tracks/imola/s2-piratella_day-fog.jpg)<br/>Piratella · day · fog | ![Piratella · day · overcast](../../../artifacts/shots/tracks/imola/s2-piratella_day-overcast.jpg)<br/>Piratella · day · overcast |
+| ![Piratella · day · rain](../../../artifacts/shots/tracks/imola/s2-piratella_day-rain.jpg)<br/>Piratella · day · rain | ![Piratella · day · wet](../../../artifacts/shots/tracks/imola/s2-piratella_day-wet.jpg)<br/>Piratella · day · wet |  |
 
-### S3 — Sector 3
+### S3 — by landmark / variant
 
-*Rivazza, Variante Bassa, and pit-tower frames scheduled in the post-rebase 32-frame batch
-(pilot set: `/opt/cursor/artifacts/imola-07-rivazza.png`, `imola-08-variante-bassa.png`,
-`imola-09-pit-tower.png`).*
+| | | |
+|:---:|:---:|:---:|
+| ![Variante Bassa · day · dry · orbit](../../../artifacts/shots/tracks/imola/s3-bassa_day-dry_orbit.jpg)<br/>Variante Bassa · day · dry · orbit | ![Pit tower · day · dry · eye](../../../artifacts/shots/tracks/imola/s3-pit-tower_day-dry_eye.jpg)<br/>Pit tower · day · dry · eye | ![Rivazza · day · dry · trackside](../../../artifacts/shots/tracks/imola/s3-rivazza_day-dry_trackside.jpg)<br/>Rivazza · day · dry · trackside |
+
+### By time-of-day + weather (filename)
+
+#### `day-dry`
+
+| | | |
+|:---:|:---:|:---:|
+| ![Acque Minerali · day · dry](../../../artifacts/shots/tracks/imola/s2-acque_day-dry.jpg)<br/>Acque Minerali · day · dry | ![Variante Alta · day · dry · park](../../../artifacts/shots/tracks/imola/s2-alta_day-dry_park.jpg)<br/>Variante Alta · day · dry · park | ![Variante Bassa · day · dry · orbit](../../../artifacts/shots/tracks/imola/s3-bassa_day-dry_orbit.jpg)<br/>Variante Bassa · day · dry · orbit |
+| ![Santerno bridge · day · dry](../../../artifacts/shots/tracks/imola/s1-bridge_day-dry.jpg)<br/>Santerno bridge · day · dry | ![Park hollow · day · dry](../../../artifacts/shots/tracks/imola/s2-hollow_day-dry.jpg)<br/>Park hollow · day · dry | ![Piratella · day · dry](../../../artifacts/shots/tracks/imola/s2-piratella_day-dry.jpg)<br/>Piratella · day · dry |
+| ![Pit tower · day · dry · eye](../../../artifacts/shots/tracks/imola/s3-pit-tower_day-dry_eye.jpg)<br/>Pit tower · day · dry · eye | ![Rivazza · day · dry · trackside](../../../artifacts/shots/tracks/imola/s3-rivazza_day-dry_trackside.jpg)<br/>Rivazza · day · dry · trackside | ![Start / pit · day · dry](../../../artifacts/shots/tracks/imola/s1-start_day-dry.jpg)<br/>Start / pit · day · dry |
+| ![Tamburello · day · dry](../../../artifacts/shots/tracks/imola/s1-tamburello_day-dry.jpg)<br/>Tamburello · day · dry | ![Tosa · day · dry](../../../artifacts/shots/tracks/imola/s1-tosa_day-dry.jpg)<br/>Tosa · day · dry | ![Villeneuve · day · dry](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-dry.jpg)<br/>Villeneuve · day · dry |
+
+#### `day-fog`
+
+| | | |
+|:---:|:---:|:---:|
+| ![Acque Minerali · day · fog](../../../artifacts/shots/tracks/imola/s2-acque_day-fog.jpg)<br/>Acque Minerali · day · fog | ![Santerno bridge · day · fog](../../../artifacts/shots/tracks/imola/s1-bridge_day-fog.jpg)<br/>Santerno bridge · day · fog | ![Piratella · day · fog](../../../artifacts/shots/tracks/imola/s2-piratella_day-fog.jpg)<br/>Piratella · day · fog |
+| ![Start / pit · day · fog](../../../artifacts/shots/tracks/imola/s1-start_day-fog.jpg)<br/>Start / pit · day · fog | ![Tamburello · day · fog](../../../artifacts/shots/tracks/imola/s1-tamburello_day-fog.jpg)<br/>Tamburello · day · fog | ![Tosa · day · fog](../../../artifacts/shots/tracks/imola/s1-tosa_day-fog.jpg)<br/>Tosa · day · fog |
+| ![Villeneuve · day · fog](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-fog.jpg)<br/>Villeneuve · day · fog |  |  |
+
+#### `day-overcast`
+
+| | | |
+|:---:|:---:|:---:|
+| ![Acque Minerali · day · overcast](../../../artifacts/shots/tracks/imola/s2-acque_day-overcast.jpg)<br/>Acque Minerali · day · overcast | ![Santerno bridge · day · overcast](../../../artifacts/shots/tracks/imola/s1-bridge_day-overcast.jpg)<br/>Santerno bridge · day · overcast | ![Park hollow · day · overcast](../../../artifacts/shots/tracks/imola/s2-hollow_day-overcast.jpg)<br/>Park hollow · day · overcast |
+| ![Piratella · day · overcast](../../../artifacts/shots/tracks/imola/s2-piratella_day-overcast.jpg)<br/>Piratella · day · overcast | ![Start / pit · day · overcast](../../../artifacts/shots/tracks/imola/s1-start_day-overcast.jpg)<br/>Start / pit · day · overcast | ![Tamburello · day · overcast](../../../artifacts/shots/tracks/imola/s1-tamburello_day-overcast.jpg)<br/>Tamburello · day · overcast |
+| ![Tosa · day · overcast](../../../artifacts/shots/tracks/imola/s1-tosa_day-overcast.jpg)<br/>Tosa · day · overcast | ![Villeneuve · day · overcast](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-overcast.jpg)<br/>Villeneuve · day · overcast |  |
+
+#### `day-rain`
+
+| | | |
+|:---:|:---:|:---:|
+| ![Acque Minerali · day · rain](../../../artifacts/shots/tracks/imola/s2-acque_day-rain.jpg)<br/>Acque Minerali · day · rain | ![Santerno bridge · day · rain](../../../artifacts/shots/tracks/imola/s1-bridge_day-rain.jpg)<br/>Santerno bridge · day · rain | ![Park hollow · day · rain](../../../artifacts/shots/tracks/imola/s2-hollow_day-rain.jpg)<br/>Park hollow · day · rain |
+| ![Piratella · day · rain](../../../artifacts/shots/tracks/imola/s2-piratella_day-rain.jpg)<br/>Piratella · day · rain | ![Start / pit · day · rain](../../../artifacts/shots/tracks/imola/s1-start_day-rain.jpg)<br/>Start / pit · day · rain | ![Tamburello · day · rain](../../../artifacts/shots/tracks/imola/s1-tamburello_day-rain.jpg)<br/>Tamburello · day · rain |
+| ![Tosa · day · rain](../../../artifacts/shots/tracks/imola/s1-tosa_day-rain.jpg)<br/>Tosa · day · rain | ![Villeneuve · day · rain](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-rain.jpg)<br/>Villeneuve · day · rain |  |
+
+#### `day-wet`
+
+| | | |
+|:---:|:---:|:---:|
+| ![Acque Minerali · day · wet](../../../artifacts/shots/tracks/imola/s2-acque_day-wet.jpg)<br/>Acque Minerali · day · wet | ![Santerno bridge · day · wet](../../../artifacts/shots/tracks/imola/s1-bridge_day-wet.jpg)<br/>Santerno bridge · day · wet | ![Piratella · day · wet](../../../artifacts/shots/tracks/imola/s2-piratella_day-wet.jpg)<br/>Piratella · day · wet |
+| ![Start / pit · day · wet](../../../artifacts/shots/tracks/imola/s1-start_day-wet.jpg)<br/>Start / pit · day · wet | ![Tamburello · day · wet](../../../artifacts/shots/tracks/imola/s1-tamburello_day-wet.jpg)<br/>Tamburello · day · wet | ![Tosa · day · wet](../../../artifacts/shots/tracks/imola/s1-tosa_day-wet.jpg)<br/>Tosa · day · wet |
+| ![Villeneuve · day · wet](../../../artifacts/shots/tracks/imola/s1-villeneuve_day-wet.jpg)<br/>Villeneuve · day · wet |  |  |
+
 
 ---
 
-## 3. Weather / lighting matrix (blocked — follow-up after shared tooling PR)
+## 3. Weather / lighting matrix (filename tags; re-shoot with shared tooling)
 
 **Hero anchors** (4–6 views only): start, Tamburello, Tosa, Acque Minerali, Piratella,
 Rivazza.
@@ -115,12 +131,7 @@ Rivazza.
 | Wet road | `day` | `wet` | Grip visual vs dry |
 | Fog | `day` | `fog` | Engine fog vs authored `acque-mist-*` patches (double-fog risk) |
 
-Planned grid row example (after rebase, 3 per row under `artifacts/shots/tracks/imola/`):
-
-| | | |
-|:---:|:---:|:---:|
-| Acque dry midday | Acque dusk | Acque night |
-| Acque rain | Acque fog | Acque overcast |
+Panels for each filename tag are in §2.
 
 ### Weather / lighting backlog (findings to confirm on re-capture)
 
@@ -196,7 +207,7 @@ Centreline: **0 surface folds**; min radius 6.19 m @ node 852.
 | `node tools/track/verify-track.cjs imola` | OK, 0 folds |
 | `node tools/track/audit-circuit.cjs imola` | OK |
 | `npm test -- tests/specs/imola-foundation.spec.js` | passed (2/2) on scenery tip |
-| Committed PNG panels | **Pending** shared shot tooling + gitignore exception |
+| Committed JPEG panels | **42** in `artifacts/shots/tracks/imola/` (`git add -f`) |
 
 ---
 
