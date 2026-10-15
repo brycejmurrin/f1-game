@@ -34,14 +34,27 @@
       const DARK      = [0.10, 0.10, 0.14];
       const DUSK      = [0.30, 0.16, 0.20];    // deep dusk masonry
 
+      // RACING-frame keys. This file is authored against the OLD scenery origin
+      // (sceneryStartFrac 0.075 -> def._sceneryShift +0.1015 lap, ~536 m), so a
+      // bare K(0.0) lands at racing 0.1015, not on the start line. Anything the
+      // brief places at a real position — the pit complex at the line, the north
+      // hairpin (T3-T4, racing 0.248), the pit-exit tunnel — is keyed through
+      // sl()/R(): sl(f) is the scenery key whose racing frac is f (the brands_hatch
+      // idiom). The marina, Ferrari World, hotel and arena keep their authored
+      // keys: they were tuned in this frame and sit where the brief wants them.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      const R = (f) => K(sl(f));
+      const HP = 0.248;   // north hairpin apex (T3-T4), racing frac
+
       if (circuitKit) {
         // Control tower closes the pit complex at the final-corner end.
         circuitKit.raceControl({
-          id: "kit:abudhabi:race-control", frac: 0.985, side: 1, gap: 78,
+          id: "kit:abudhabi:race-control", frac: sl(0.985), side: 1, gap: 78,
           size: [12, 26, 14], style: "tapered", required: true,
         });
         {
-          const a = anchor(K(0.985), 1, 78 + 6);   // kit centres the tower at gap + size[0]/2
+          const a = anchor(R(0.985), 1, 78 + 6);   // kit centres the tower at gap + size[0]/2
           out._mat = MAT.CONCRETE;
           seat.cyl(out, a.c, 3.2, 25.5, [0.20, 0.21, 0.26], 8, [a.r, a.u, a.t]);
           out._mat = 0;
@@ -58,7 +71,7 @@
         });
         // Broadcast cranes mark the two major spectator bowls.
         circuitKit.cameraCrane({
-          id: "kit:abudhabi:north-hairpin-camera", frac: 0.285,
+          id: "kit:abudhabi:north-hairpin-camera", frac: sl(HP - 0.004),
           side: -1, gap: 34, size: [6, 18, 6], required: true,
         });
         circuitKit.cameraCrane({
@@ -79,8 +92,8 @@
           stage._mat = 0;
         }, { required: true });
       };
-      spectatorCanopy("yas-north-hairpin-led-left", 0.280, -1, LED_TEAL);
-      spectatorCanopy("yas-north-hairpin-led-right", 0.280, 1, LED_AMBER);
+      spectatorCanopy("yas-north-hairpin-led-left", sl(HP), -1, LED_TEAL);
+      spectatorCanopy("yas-north-hairpin-led-right", sl(HP), 1, LED_AMBER);
       spectatorCanopy("yas-turn-9-led-canopy", 0.420, -1, LED_MAG);
 
       let ledSeq = 0;
@@ -146,24 +159,22 @@
       }
 
       for (let i = 0; i < 6; i++) {
-        place(K(0.0 + i * 0.012), 1, 12, [9, 6, 30], [0.30, 0.31, 0.36]);   // pit garages
+        place(R(0.006 + i * 0.012), 1, 12, [9, 6, 30], [0.30, 0.31, 0.36]);   // pit garages
         // deeper 0.1: its sunk foot shared the garage's underside (flat coplanar)
-        place(K(0.0 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD, 0.1);     // lit fascia band
+        place(R(0.006 + i * 0.012), 1, 12, [9.4, 1.0, 30.4], FLOOD, 0.1);     // lit fascia band
       }
       // gap 22 (was 18): at 18 every crowdBank riser hit a neighbouring leg
       // (hollow shell). Shared grandstandEx now suppresses rowless stands;
       // without this nudge the S/F photo boxes at +8.5 m become unsupported.
-      grandstandEx(0.0, -1, 22, 90, null, null,
+      grandstandEx(sl(0.0), -1, 22, 90, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", suites: true, endWalls: true, pylons: true });
-      ledFascia(0.0, -1, 22, 90, 2);
-      grandstandEx(0.02, -1, 9, 70, null, null,
+      ledFascia(sl(0.0), -1, 22, 90, 2);
+      grandstandEx(sl(0.02), -1, 9, 70, null, null,
         { livery: "darkSteel", tiers: 2, roof: "cantilever", endWalls: true });
-      ledFascia(0.02, -1, 9, 70, 2);
+      ledFascia(sl(0.02), -1, 9, 70, 2);
       // The start gantry stands over the REAL line, re-keyed through sl() (the
       // brands_hatch idiom): this file's s = 0 is the scenery origin, and RS()
       // alone put the gantry — and the start lamps it carries — 536 m away.
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (f + SL) % 1;
       gantry(sl(0.0), 9, DARK);
 
       // s 0.03-0.06 R — PIT-EXIT TUNNEL: Yas Marina's pit lane surfaces via a
@@ -174,7 +185,7 @@
       // one atomic model (modelGroup) so its footprint never reaches the
       // racing line.
       {
-        const tk = K(0.045);
+        const tk = R(0.045);
         const a = anchor(tk, 1, 40);
         const b = [a.r, a.u, a.t];
         modelGroup("abudhabi:pit-exit-tunnel-portal", {
@@ -191,10 +202,10 @@
           { id: "abudhabi:pit-exit-trench", samples: 6 });
       }
 
-      grandstandEx(0.05, -1, 8, 70, null, null,
+      grandstandEx(sl(0.077), -1, 8, 70, null, null,
         { livery: "sandstone", tiers: 1, roof: "flat", endWalls: true });
-      ledFascia(0.05, -1, 8, 70, 1);
-      billboard(K(0.05), -1, 10, 18, 11, LED_TEAL);
+      ledFascia(sl(0.077), -1, 8, 70, 1);
+      billboard(R(0.077), -1, 10, 18, 11, LED_TEAL);
 
       {
         const k = K(0.18);
@@ -229,13 +240,16 @@
         }, { required: true });
       }
 
-      for (const side of [-1, 1]) {
-        grandstandEx(0.28, side, 7, 90, null, null,
+      // The hairpin bowl: OUTSIDE (+1) stands wrap the apex; the INSIDE (-1) ones
+      // sit on the entry/exit straights, because at R 47 m a 90 m stand on the
+      // inside of the curve has its inner face on the tarmac and is dropped whole.
+      for (const [side, a, b] of [[1, HP - 0.01, HP + 0.01], [-1, HP - 0.026, HP + 0.034]]) {
+        grandstandEx(sl(a), side, 7, 90, null, null,
           { livery: "teal", tiers: 2, roof: "cantilever", pylons: true });
-        ledFascia(0.28, side, 7, 90, 2);
-        grandstandEx(0.30, side, 7, 70, null, null,
+        ledFascia(sl(a), side, 7, 90, 2);
+        grandstandEx(sl(b), side, 7, 70, null, null,
           { livery: "teal", tiers: 2, roof: "cantilever", pylons: true });
-        ledFascia(0.30, side, 7, 70, 2);
+        ledFascia(sl(b), side, 7, 70, 2);
       }
 
       for (let i = 0; i < 13; i++) {
@@ -251,11 +265,11 @@
       // Floodlights ringing the pit straight on the grandstand side (the pits
       // are +1). Shared floodMast: it REGISTERS its lens, so these light the
       // straight at night instead of standing over painted pool discs.
-      for (let i = 0; i < 6; i++) floodMast(K(0.0 + i * 0.012), -1, 20, { h: 36 });
+      for (let i = 0; i < 6; i++) floodMast(R(0.006 + i * 0.012), -1, 20, { h: 36 });
       // Hairpin floodlights — both sides with pools
       for (const side of [-1, 1])
         for (let i = 0; i < 3; i++) {
-          const tk = K(0.27 + i * 0.014);
+          const tk = R(HP - 0.014 + i * 0.014);
           tower(tk, side, 18, 4, 34, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
           const pa = anchor(tk, side, 18);
           addCyl(out, vadd(pa.c, pa.u, 0.1), 9, 0.25, POOL, 10, [pa.r, pa.u, pa.t]);
@@ -462,6 +476,46 @@
           });
         }
 
+        // LED gridshell VEIL: the seven arches above are single thin bars (read as
+        // ribbons over the road). Tie them into a lattice — longitudinal rails along
+        // the crown plus diagonal X-bracing between neighbouring arches — so the
+        // hotel's canopy reads as a diamond-grid shell, not seven loose bars.
+        {
+          const nA = shellClearances.length, step = 0.016 / (nA - 1);
+          const lats = [-22.5, -11.25, 0, 11.25, 22.5];
+          const crown = (i, lat) => {
+            const ak = anchor(K(0.872 + i * step), 1, 0);
+            return vadd(vadd(vadd(ak.c, ak.r, lat - 8), ak.u, shellClearances[i] + shellThick * 0.5),
+              ak.t, 0);
+          };
+          const member = (p0, p1, col, th) => {
+            const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]];
+            const len = Math.hypot(d[0], d[1], d[2]) || 1;
+            const t = [d[0] / len, d[1] / len, d[2] / len];
+            const ak = anchor(K(0.88), 1, 0);
+            const rr = ak.r;
+            // right axis made perpendicular to the member; up completes the frame
+            const dot = rr[0] * t[0] + rr[1] * t[1] + rr[2] * t[2];
+            let r2 = [rr[0] - dot * t[0], rr[1] - dot * t[1], rr[2] - dot * t[2]];
+            const rl = Math.hypot(r2[0], r2[1], r2[2]) || 1;
+            r2 = [r2[0] / rl, r2[1] / rl, r2[2] / rl];
+            const u2 = [t[1] * r2[2] - t[2] * r2[1], t[2] * r2[0] - t[0] * r2[2], t[0] * r2[1] - t[1] * r2[0]];
+            const mid = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2];
+            addBox(out, mid, [th, th, len + 0.3], col, [r2, u2, t]);
+          };
+          out._mat = MAT.METAL;
+          for (let i = 0; i < nA - 1; i++) {
+            for (let j = 0; j < lats.length; j++) {
+              member(crown(i, lats[j]), crown(i + 1, lats[j]), LED_CYCLE[(i + j) % 3], 0.42);
+              if (j < lats.length - 1) {
+                const flip = (i + j) % 2;
+                member(crown(i, lats[j + flip]), crown(i + 1, lats[j + 1 - flip]), [0.10, 0.11, 0.15], 0.3);
+              }
+            }
+          }
+          out._mat = 0;
+        }
+
         // Landmark-pinned lattice (clear of the road) for scenery-api Must landmarks.
         {
           const aLeg = anchor(k, -1, 28);
@@ -525,11 +579,11 @@
         }
       }
 
-      billboard(K(0.95), 1, 9, 16, 10, LED_MAG);
-      billboard(K(0.95), -1, 9, 16, 10, LED_TEAL);
+      billboard(R(0.95), 1, 9, 16, 10, LED_MAG);
+      billboard(R(0.95), -1, 9, 16, 10, LED_TEAL);
       // MAIN GRANDSTAND flank, closing the bowl back toward the line
-      grandstandEx(0.96, -1, 8, 80, null, null, { livery: "darkSteel", roof: "cantilever", endWalls: true });
-      ledFascia(0.96, -1, 8, 80, 1);
+      grandstandEx(sl(0.96), -1, 8, 80, null, null, { livery: "darkSteel", roof: "cantilever", endWalls: true });
+      ledFascia(sl(0.96), -1, 8, 80, 1);
 
       grandstandEx(0.08, -1, 8, 70, null, null, { livery: "sandstone", roof: "flat" });          // WEST
       ledFascia(0.08, -1, 8, 70, 1);
@@ -563,8 +617,8 @@
         grandstandEx(0.828, -1, 16, 60, null, null, { livery: "sandstone", roof: "flat" });
       }
       ledFascia(0.828, -1, 16, 60, 1);
-      grandstandEx(0.92, -1, 8, 60, null, null, { livery: "darkSteel", roof: "cantilever" });     // MAIN
-      ledFascia(0.92, -1, 8, 60, 1);
+      grandstandEx(sl(0.92), -1, 8, 60, null, null, { livery: "darkSteel", roof: "cantilever" });     // MAIN
+      ledFascia(sl(0.92), -1, 8, 60, 1);
 
       building(K(0.44), 1, 42, 36, 48, 26, { kind: "cylinder", wall: [0.18, 0.20, 0.28], lit: true, windowCol: WIN_EMI, floor: 6 });
       building(K(0.45), 1, 44, 26, 34, 20, { kind: "fin", wall: [0.16, 0.18, 0.26], lit: true, windowCol: WIN_WARM, floor: 5 });
@@ -630,16 +684,15 @@
       // Bare palm() calls only where dist is safely large (20m+).
       // Marina-facing palm avenue — stop before hotel approach (was 0.74; palms
       // clipped pavilion/hotel geometry and raised severe clip spots).
-      forestEdge(0.50, 0.66, 1, 22, {
-        density: 0.40, hMin: 7, hMax: 11,
-        col: [0.25, 0.55, 0.20], col2: [0.28, 0.57, 0.22],
-        pineFrac: 0.0,
+      // forestEdge() is not used here: with pineFrac 0 its non-pine branch is the
+      // broadleaf tree() cone (the "pines in the desert" of the survey, 49 guard
+      // drops). palm() through along() keeps the avenue desert-true.
+      along(0.50, 0.66, 14, (k) => {
+        palm(k, 1, 22 + hash(k * 3.1) * 4, 8 + hash(k * 5.3) * 3, [0.25, 0.55, 0.20]);
       });
       // Marsa curve palms — end before the hotel gridshell at 0.88.
-      forestEdge(0.78, 0.84, -1, 16, {
-        density: 0.45, hMin: 9, hMax: 13,
-        col: [0.27, 0.57, 0.22], col2: [0.24, 0.52, 0.18],
-        pineFrac: 0.0,
+      along(0.78, 0.84, 14, (k) => {
+        palm(k, -1, 16 + hash(k * 2.7) * 4, 9 + hash(k * 4.9) * 4, [0.27, 0.57, 0.22]);
       });
       // pit straight palms at safe distance (20m+) — no clipping risk
       for (let i = 0; i < 14; i++) {
@@ -668,16 +721,18 @@
       recordBarrier(0.50, 0.86, 1, 4.5);
       recordBarrier(0.30, 0.48, -1, 4.5);
       // Pit-wall (solid concrete) along the start/finish straight, pit side
-      wall(0.985, 0.07, 1, 3.0, 1.1, [0.80, 0.82, 0.86], 0.6);
+      wall(sl(0.985), sl(0.07), 1, 3.0, 1.1, [0.80, 0.82, 0.86], 0.6);
       // Armco guardrails on the open runoff edges
       guardrail(0.05, 0.18, -1, 6, [0.75, 0.77, 0.80]);
       guardrail(0.32, 0.42, 1, 6, [0.75, 0.77, 0.80]);
       guardrail(0.90, 0.99, -1, 6, [0.75, 0.77, 0.80]);
       // Tyre-wall stacks at the tight corner exits (hairpin + final chicane)
-      tyreWall(0.27, 0.31, 1, 5, LED_TEAL);
-      tyreWall(0.27, 0.31, -1, 5, LED_AMBER);
-      tyreWall(0.95, 0.985, 1, 5, LED_MAG);
-      tyreWall(0.05, 0.085, -1, 5, LED_TEAL);
+      tyreWall(sl(HP - 0.02), sl(HP + 0.02), 1, 5, LED_TEAL);
+      // inside of the curve: caps overlap at R_in ~34 m, so only the straights either side
+      tyreWall(sl(HP - 0.028), sl(HP - 0.015), -1, 5, LED_AMBER);
+      tyreWall(sl(HP + 0.015), sl(HP + 0.028), -1, 5, LED_AMBER);
+      tyreWall(sl(0.935), sl(0.968), -1, 5, LED_MAG);   // T16 is a right: the outside is -1
+      tyreWall(sl(0.05), sl(0.085), -1, 5, LED_TEAL);
       // Marshal posts (orange roof + flag pole) spaced around the lap.
       // Skip 0.60–0.72 (marina camera corridor) — a post at gap 7 filled f67.
       for (let i = 0; i < 14; i++) {
@@ -699,26 +754,26 @@
 
       {
         // Long terrain-conforming paddock apron.
-        groundPatch(K(0.02), 1, 20, [74, 0.45, 68], PAVED,
+        groundPatch(R(0.045), 1, 20, [74, 0.45, 68], PAVED,
           { id: "yas-paddock-apron", samples: 10 });
         // team motorhome row (modern two-storey lit hospitality units) — was 3
         // stacked raw boxes per unit; now the purpose-built motorhome() model
         // (slide-out awning, window ribbon, livery accent stripe).
         for (let i = 0; i < 10; i++) {
-          const k = K(0.985 + i * 0.010);
+          const k = R(0.005 + i * 0.010 + (i >= 4 ? 0.010 : 0));   // skip the tunnel portal at 0.045
           const wc = (i % 2) ? WIN : WIN_WARM;
           motorhome(k, 1, 36, 14, 8.5, 17, { window: wc, wall: [0.86, 0.87, 0.90],
             accent: (i % 2) ? [0.75, 0.10, 0.10] : [0.10, 0.30, 0.72] });
         }
         // pit-lane back wall + garage roof line (more prominent)
         for (let i = 0; i < 7; i++) {
-          place(K(0.0 + i * 0.011), 1, 22, [11, 9, 30], [0.24, 0.25, 0.30]);
+          place(R(0.006 + i * 0.011), 1, 22, [11, 9, 30], [0.24, 0.25, 0.30]);
           // Gap 23.2 / deeper 0.25: separates from the gap-12 pit fascia (flatCoplanar).
-          place(K(0.0 + i * 0.011), 1, 23.2, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80], 0.25);
+          place(R(0.006 + i * 0.011), 1, 23.2, [11.4, 1.4, 30.4], [1.0, 0.95, 0.80], 0.25);
         }
         // Paddock floodlight masts — taller, with large light pools below
         for (let i = 0; i < 7; i++) {
-          const tk = K(0.99 + i * 0.010);
+          const tk = R(0.010 + i * 0.010 + (i >= 4 ? 0.010 : 0));
           tower(tk, 1, 50, 5, 32, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
           const pa = anchor(tk, 1, 50);
           addCyl(out, vadd(pa.c, pa.u, 0.1), 12, 0.30, POOL, 12, [pa.r, pa.u, pa.t]);
@@ -731,10 +786,10 @@
       // start gantry moved to the line. js/race/start-lights.js lights the
       // gantry's own lamps with the countdown instead.
       // a second photo/scoring gantry just before T1
-      gantry(0.96, 9, DARK);
+      gantry(sl(0.035), 9, DARK);
 
       {
-        const k = K(0.28);
+        const k = R(HP);
         const a = anchor(k, 1, 36);
         out._mat = MAT.CONCRETE;
         addFrustum(out, a.c, 14, 9, 40, [0.12, 0.13, 0.18], 10, [a.r, a.u, a.t]);
@@ -749,7 +804,7 @@
         addCyl(out, vadd(a.c, a.u, 0.10), 14, 0.20, POOL_SOFT, 10, [a.r, a.u, a.t]);
       }
 
-      for (const [s, side] of [[0.0, -1], [0.28, -1], [0.28, 1], [0.70, 1], [0.78, -1]]) {
+      for (const [s, side] of [[sl(0.0), -1], [sl(HP), -1], [sl(HP), 1], [0.70, 1], [0.78, -1]]) {
         const a = anchor(K(s), side, 18);
         // Screen frame — sits atop the grandstand at ~8m height
         addBox(out, vadd(a.c, a.u, 8), [20, 10, 1.5], WIN_EMI, [a.r, a.u, a.t]);
@@ -802,26 +857,27 @@
       }
 
       {
-        // Mid-field low ridges — skip marina corridor (0.52–0.74) so water + hotel glow read
+        // Mid-field and far dune horizon. These were 15 backdrop() boxes — flat
+        // brown slabs with hard edges and 9 guard drops; mountain() gives the same
+        // low sand-coloured mass with a sloped, rounded profile. Skip the marina
+        // corridor (0.52-0.74) so water + hotel glow read.
+        const dune = (k, side, gap, w, h, col, seed) => {
+          const a = anchor(k, side, gap);
+          mountain(a.c[0], a.c[2], pyMin, w, h,
+                   { seg: 7, seed, rough: 0.10, forest: col, rock: col, snowline: 2 });
+        };
         const midSlots = [0.04, 0.12, 0.20, 0.28, 0.36, 0.44,
                           0.78, 0.86, 0.94];
         for (let i = 0; i < midSlots.length; i++) {
-          const k = K(midSlots[i]);
-          const side = (i % 2) ? 1 : -1;
           const h = hash(i * 11 + 250);
-          const ridgeH = 10 + h * 10;
-          const ridgeW = 220 + h * 120;
-          backdrop(k, side, 200 + h * 80, [ridgeW, ridgeH, 100], [0.64, 0.52, 0.36]);
+          dune(K(midSlots[i]), (i % 2) ? 1 : -1, 200 + h * 80, 220 + h * 120, 10 + h * 10,
+               [0.74, 0.62, 0.44], i * 19 + 250);
         }
-        // Far hazy dune horizon
         const farSlots = [0.06, 0.18, 0.30, 0.42, 0.80, 0.92];
         for (let i = 0; i < farSlots.length; i++) {
-          const k = K(farSlots[i]);
-          const side = (i % 2) ? 1 : -1;
           const h = hash(i * 13 + 430);
-          const ridgeH = 14 + h * 12;
-          const ridgeW = 280 + h * 160;
-          backdrop(k, side, 340 + h * 100, [ridgeW, ridgeH, 120], [0.50, 0.40, 0.26]);
+          dune(K(farSlots[i]), (i % 2) ? 1 : -1, 340 + h * 100, 280 + h * 160, 14 + h * 12,
+               [0.62, 0.51, 0.36], i * 23 + 430);
         }
       }
 
