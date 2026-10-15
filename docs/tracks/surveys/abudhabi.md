@@ -31,54 +31,91 @@
 | Audits | `node tools/track/audit-circuit.cjs abudhabi --json` |
 | Clip detail | `node tools/track/clip-audit.cjs abudhabi --why` |
 | Contracts | `npm test -- tests/specs/abudhabi-foundation.spec.js` |
-| Visual (this pass) | 12× headless TLX night orbit/park (`node tools/shot/shot.mjs --batch`, session artifacts) |
-| Picker still | `assets/stills/abudhabi.webp` |
+| Visual | **34** JPEGs in `artifacts/shots/tracks/abudhabi/` (`git add -f`; max 1280×, q≈80, &lt;300 KB) |
+| Capture tool | `node tools/shot/shot.mjs --batch` + converted session PNGs (dry only; wx variants after shared shot PR) |
 
-### Capture status (course correction 2026-10-14)
+## Committed screenshots (34 frames, dry)
 
-- **Committed shots:** Not in this PR — `artifacts/` is gitignored until the shared tooling PR adds `artifacts/shots/tracks/**`.
-- **Captured this session (night / dry only):** 12 PNGs under session storage (paths below); PR body embeds them for review.
-- **Planned 32-frame pass (after shared `tools: shared shot tooling for circuit surveys` lands):** 12 sector anchors (night dry) + 20 weather/lighting variants on **5 hero views** only (`s≈0.02` pit, `0.18` Ferrari World, `0.55` marina, `0.885` Yas Hotel, `0.42` Turn 9) × (`day/dry`, `dusk/dry`, `night/dry`, `day/overcast`, `day/wet`, `day/fog`, plus `day/rain` and `night/wet` on marina + hotel). Game supports all listed wx/TOD; batch capture waits on shared shot weather + retry tooling.
+Panel labels use **view · time of day · weather**. Paths are relative to this file.
 
-## Screenshots — by sector (night, dry)
+### Track select (night, dry)
 
-Night is the canonical Abu Dhabi GP look. Images are session captures until `artifacts/shots/tracks/abudhabi/` is committable.
+| track select · still · night · dry |
+| :---: |
+| ![track-select_still_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/track-select_still_night_dry.jpg) |
 
-| S1 — Start / esses | S1 — Ferrari World | S1 — North hairpin |
-|:---:|:---:|:---:|
-| ![S1 pit](/opt/cursor/artifacts/abudhabi-survey/01-pit-straight.png) | ![S1 Ferrari](/opt/cursor/artifacts/abudhabi-survey/03-ferrari-world.png) | ![S1 hairpin](/opt/cursor/artifacts/abudhabi-survey/04-north-hairpin.png) |
-| `01-pit-straight.png` | `03-ferrari-world.png` | `04-north-hairpin.png` |
+### Sector lap — night, dry
 
-| S1 — Turn 1 | S2 — Back straight | S2 — Turn 9 |
-|:---:|:---:|:---:|
-| ![T1](/opt/cursor/artifacts/abudhabi-survey/02-turn1-esses.png) | ![S2 straight](/opt/cursor/artifacts/abudhabi-survey/05-back-straight.png) | ![T9](/opt/cursor/artifacts/abudhabi-survey/06-turn9-banked.png) |
-| `02-turn1-esses.png` | `05-back-straight.png` | `06-turn9-banked.png` |
+| S1 ferrari · orbit · night · dry | S1 hairpin · orbit · night · dry | S1 pit · orbit · night · dry |
+| :---: | :---: | :---: |
+| ![s1-ferrari_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-ferrari_orbit_night_dry.jpg) | ![s1-hairpin_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-hairpin_orbit_night_dry.jpg) | ![s1-pit_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-pit_orbit_night_dry.jpg) |
 
-| S2 — Marina water | S2 — Marina hotel | S3 — Marsa |
-|:---:|:---:|:---:|
-| ![Marina](/opt/cursor/artifacts/abudhabi-survey/07-marina-water.png) | ![Marina hotel](/opt/cursor/artifacts/abudhabi-survey/08-marina-hotel.png) | ![Marsa](/opt/cursor/artifacts/abudhabi-survey/09-marsa-curve.png) |
-| `07-marina-water.png` | `08-marina-hotel.png` | `09-marsa-curve.png` |
+| S1 turn1 · orbit · night · dry | S2 backstraight · orbit · night · dry | S2 marina hotel · orbit · night · dry |
+| :---: | :---: | :---: |
+| ![s1-turn1_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-turn1_orbit_night_dry.jpg) | ![s2-backstraight_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-backstraight_orbit_night_dry.jpg) | ![s2-marina-hotel_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-marina-hotel_orbit_night_dry.jpg) |
 
-| S3 — Yas Hotel approach | S3 — Under hotel (chase) | S3 — Final corners |
-|:---:|:---:|:---:|
-| ![Hotel orbit](/opt/cursor/artifacts/abudhabi-survey/10-yas-hotel-underpass.png) | ![Hotel chase](/opt/cursor/artifacts/abudhabi-survey/11-hotel-chase.png) | ![Final](/opt/cursor/artifacts/abudhabi-survey/12-final-corners.png) |
-| `10-yas-hotel-underpass.png` | `11-hotel-chase.png` | `12-final-corners.png` |
+| S2 marina · orbit · night · dry | S2 turn9 · orbit · night · dry | S3 final · orbit · night · dry |
+| :---: | :---: | :---: |
+| ![s2-marina_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-marina_orbit_night_dry.jpg) | ![s2-turn9_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-turn9_orbit_night_dry.jpg) | ![s3-final_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s3-final_orbit_night_dry.jpg) |
 
-**Track select:** `assets/stills/abudhabi.webp` (hotel gridshell over track).
+| S3 hotel · orbit · night · dry | S3 marsa · orbit · night · dry |
+| :---: | :---: |
+| ![s3-hotel_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s3-hotel_orbit_night_dry.jpg) | ![s3-marsa_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s3-marsa_orbit_night_dry.jpg) |
 
-## Screenshots — by weather / lighting (planned)
+### Sector lap — day, dry
+
+| S1 ferrari · orbit · day · dry | S1 hairpin · orbit · day · dry | S1 pit · orbit · day · dry |
+| :---: | :---: | :---: |
+| ![s1-ferrari_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-ferrari_orbit_day_dry.jpg) | ![s1-hairpin_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-hairpin_orbit_day_dry.jpg) | ![s1-pit_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-pit_orbit_day_dry.jpg) |
+
+| S1 turn1 · orbit · day · dry | S2 backstraight · orbit · day · dry | S2 marina hotel · orbit · day · dry |
+| :---: | :---: | :---: |
+| ![s1-turn1_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-turn1_orbit_day_dry.jpg) | ![s2-backstraight_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-backstraight_orbit_day_dry.jpg) | ![s2-marina-hotel_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-marina-hotel_orbit_day_dry.jpg) |
+
+| S2 marina · orbit · day · dry | S2 turn9 · orbit · day · dry | S3 docks · orbit · day · dry |
+| :---: | :---: | :---: |
+| ![s2-marina_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-marina_orbit_day_dry.jpg) | ![s2-turn9_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-turn9_orbit_day_dry.jpg) | ![s3-docks_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s3-docks_orbit_day_dry.jpg) |
+
+| S3 final · orbit · day · dry | S3 hotel · trackside · day · dry | S3 marsa · orbit · day · dry |
+| :---: | :---: | :---: |
+| ![s3-final_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s3-final_orbit_day_dry.jpg) | ![s3-hotel_trackside_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s3-hotel_trackside_day_dry.jpg) | ![s3-marsa_orbit_day_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s3-marsa_orbit_day_dry.jpg) |
+
+### Key views — dusk, dry
+
+| S1 ferrari · orbit · dusk · dry | S1 pit · orbit · dusk · dry | S2 marina · orbit · dusk · dry |
+| :---: | :---: | :---: |
+| ![s1-ferrari_orbit_dusk_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-ferrari_orbit_dusk_dry.jpg) | ![s1-pit_orbit_dusk_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s1-pit_orbit_dusk_dry.jpg) | ![s2-marina_orbit_dusk_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-marina_orbit_dusk_dry.jpg) |
+
+| S2 turn9 · orbit · dusk · dry | S3 hotel · trackside · dusk · dry |
+| :---: | :---: |
+| ![s2-turn9_orbit_dusk_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s2-turn9_orbit_dusk_dry.jpg) | ![s3-hotel_trackside_dusk_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s3-hotel_trackside_dusk_dry.jpg) |
+
+### Hero framing — night, dry
+
+| Hero ferrari · orbit · night · dry | Hero hotel · trackside · night · dry | Hero marina · orbit · night · dry |
+| :---: | :---: | :---: |
+| ![hero-ferrari_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/hero-ferrari_orbit_night_dry.jpg) | ![hero-hotel_trackside_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/hero-hotel_trackside_night_dry.jpg) | ![hero-marina_orbit_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/hero-marina_orbit_night_dry.jpg) |
+
+| Hero turn9 · cinematic · night · dry |
+| :---: |
+| ![hero-turn9_cinematic_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/hero-turn9_cinematic_night_dry.jpg) |
+
+### Hotel chase — night, dry
+
+| S3 hotel · park · night · dry |
+| :---: |
+| ![s3-hotel_park_night_dry.jpg](../../../artifacts/shots/tracks/abudhabi/s3-hotel_park_night_dry.jpg) |
+
+## Weather / lighting — still planned (not in this commit)
 
 | Condition | TOD | Weather | Status |
 |-----------|-----|---------|--------|
-| Dry midday | `day` | `dry` | Blocked — rebatch after shared shot PR |
-| Golden hour | `dusk` | `dry` | Blocked |
-| Night GP | `night` | `dry` | **Partial** — sector set above |
-| Overcast | `day` | `overcast` | Blocked |
-| Wet | `day` | `wet` | Blocked |
-| Rain | `day` | `rain` | Blocked |
-| Fog / mist | `day` | `fog` | Blocked |
+| Overcast | `day` | `overcast` | Pending shared shot batch |
+| Wet | `day` | `wet` | Pending |
+| Rain | `day` | `rain` | Pending |
+| Fog / mist | `day` | `fog` | Pending |
 
-### Weather / lighting backlog (review when matrix ships)
+### Weather / lighting backlog (review when wx matrix ships)
 
 | Issue | Where to check | Risk |
 |-------|----------------|------|
@@ -114,7 +151,7 @@ Night is the canonical Abu Dhabi GP look. Images are session captures until `art
 
 ## Ranked improvements
 
-1. **After shared shot PR:** Run 32-frame matrix; commit under `artifacts/shots/tracks/abudhabi/`; fill weather tables above.
+1. **After shared shot PR:** Add wet/rain/overcast/fog panels on the five hero views; extend tables above.
 2. Hotel survey camera in `track-stills` / shot preset at `s≈0.885` trackside (engine-adjacent, not scenery).
 3. Trim redundant pool discs on back straight if perf budget tightens (keep `floodMast` registrations).
 4. Investigate severe clip @ 0.147 without widening clip baseline (likely paddock / hero interaction).
