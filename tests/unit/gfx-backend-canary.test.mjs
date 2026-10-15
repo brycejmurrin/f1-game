@@ -723,6 +723,17 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   assert.match(read("js/render/three/tlx-shadow.js"), /TLX: shadow pass failed/);
 });
 
+test("TLX composite skips ACES and HDR grade on an 8-bit scene target", () => {
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(tsl, /sceneHdr: uniform\(1\)/);
+  assert.match(tsl, /C\.sceneHdr\.greaterThan\(0\.5\)[\s\S]*?acesTonemap/);
+  assert.match(tsl, /C\.hdrGradeOn\.greaterThan\(0\.5\)\.and\(C\.sceneHdr\.greaterThan\(0\.5\)\)/);
+  const post = read("js/render/three/tlx-post.js");
+  assert.match(post, /P\.composite\.U\.sceneHdr\.value = _sceneHdr/);
+  const glx = read("js/render/glx/post.js");
+  assert.match(glx, /EXT_color_buffer_half_float/);
+});
+
 test("TLX AO and god-ray blurs cannot share a node-program cache key", () => {
   const post = read("js/render/three/tsl-post.js");
   assert.match(post, /const blurAO = makeBlur\("tlx-post-blur-ao"\)/);
