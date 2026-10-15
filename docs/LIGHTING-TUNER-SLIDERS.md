@@ -706,7 +706,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `exposureMul` | EXPOSURE | 0.1 … 2.35 | 1 | — | ✓ | game.js, setup-camera.js |
-| `contrast` | CONTRAST | 0.5 … 2.05 | 1.12 | `uContrast` | ✓ | — |
+| `contrast` | CONTRAST | 0.5 … 2.05 | 1.15 | `uContrast` | ✓ | — |
 | `shadows` | SHADOWS | -0.55 … 0.55 | 0 | — | ✓ | post-common.js |
 | `midtones` | MIDTONES | -2 … 1.4 | 0 | — | ✓ | post-common.js |
 | `highlights` | HIGHLIGHTS | -1 … 1.5 | 0 | — | ✓ | real-race-tab.js, post-common.js |
@@ -721,7 +721,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `gainR` | GAIN · RED | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `gainG` | GAIN · GREEN | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
 | `gainB` | GAIN · BLUE | 0.4 … 2.5 | 1 | — | ✓ | post-common.js×2 |
-| `vibrance` | VIBRANCE | 0 … 1.5 | 0.2 | `uVibrance` |   | — |
+| `vibrance` | VIBRANCE | 0 … 1.5 | 0.24 | `uVibrance` |   | — |
 | `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, geom.js, build-props.js×6, graph.js |
 | `gradeStr` | GRADE STRENGTH | 0 … 2.5 | 1 | — |   | game.js |
 | `shadowHue` | SHADOW TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |
@@ -733,7 +733,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `acesB` | TONE CURVE TOE LIFT | 0 … 0.08 | 0.03 | `uAcesB` |   | — |
 | `acesC` | TONE CURVE CONTRAST | 1.6 … 4 | 2.43 | `uAcesC` |   | — |
 | `acesD` | TONE CURVE MIDS | 0.2 … 1.2 | 0.59 | `uAcesD` |   | — |
-| `acesE` | TONE CURVE BLACK | 0.02 … 0.45 | 0.14 | `uAcesE` |   | — |
+| `acesE` | TONE CURVE BLACK | 0.02 … 0.45 | 0.12 | `uAcesE` |   | — |
 | `chromAb` | CHROMATIC AB. | 0 … 15 | 0 | `uChromAb` |   | — |
 | `grain` | FILM GRAIN | 0 … 0.3 | 0 | `uGrain` |   | — |
 | `lensDirt` | LENS DIRT | 0 … 1 | 0.15 | `uLensDirt` | ✓ | — |

@@ -3,11 +3,13 @@ window.LightPresets = {
   "*": {
     "carGloss": 0.35,
     "blacks": -0.06,
-    "shadows": 0.04,
-    "midtones": 0.03,
+    // Fleet HDR anchor: positive shadow/mid lifts before ACES read hazy on garage,
+    // menus and clear-day race — trim the lift; toe/shoulder keep the S-curve.
+    "shadows": 0.01,
+    "midtones": 0.01,
     "highlights": -0.06,
     "whites": -0.08,
-    "toe": 0.05,
+    "toe": 0.03,
     "shoulder": 0.14,
     "liftR": 0,
     "liftG": 0,

@@ -500,7 +500,7 @@ vec3 colourGrade(vec3 c) {
   // Gain (per-channel linear scale in highlights)
   c *= vec3(1.015, 1.008, 0.992);
   // Soft S-curve: deepen contrast for punch (less washed-out / flat)
-  c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);
+  c = c * (1.0 + c * 0.15) / (1.0 + c * 0.22);
   // Midtone-darkening contrast for a more realistic, less-bright look: a gentle
   // gamma deepens the mids/shadows while blacks stay black and the ACES highlight
   // rolloff is preserved — turns the flat "video-game bright" image filmic.
@@ -558,8 +558,8 @@ uniform vec3 uGradeHi;       // multiplicative tint pulled into highlights (~1.0
 uniform float uGradeStr;     // 0 = neutral grade (backward-compatible)
 // Live colour-grade tunables (IMAGE & COLOUR tuner group); defaults reproduce
 // the shipped look so a missing tune object is a no-op.
-uniform float uContrast;     // midtone-contrast gamma (default 1.12)
-uniform float uVibrance;     // selective saturation of dull pixels (default 0.20)
+uniform float uContrast;     // midtone-contrast gamma (default 1.15)
+uniform float uVibrance;     // selective saturation of dull pixels (default 0.24)
 uniform float uSaturation;   // global saturation (1 = unchanged)
 uniform float uTint;         // warm(+)/cool(-) white-balance shift, -1..1 (default 0)
 uniform float uVignette;     // corner-darkening floor: 1 = none, lower = stronger (default 0.80)

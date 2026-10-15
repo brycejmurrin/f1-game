@@ -468,7 +468,7 @@ fn colourGradeP(c_in : vec3<f32>, grade : vec4<f32>, shadowStr : vec4<f32>, hiLi
   var c : vec3<f32> = c_in;
   let LUMA = vec3<f32>(0.299, 0.587, 0.114);
   c = c * vec3<f32>(1.015, 1.008, 0.992);                 // gain
-  c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);            // soft S-curve
+  c = c * (1.0 + c * 0.15) / (1.0 + c * 0.22);            // soft S-curve
   c = pow(max(c, vec3<f32>(1e-6)), vec3<f32>(grade.x));   // midtone contrast; pow(0, n) NaNs on mobile GPUs, black stays black
   // Vibrance: pull dull pixels toward colour more than vivid ones.
   let luma = dot(c, LUMA);

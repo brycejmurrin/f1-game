@@ -214,6 +214,33 @@ test("exposed-units threshold keeps the shipped bloom at default knobs, and EXPO
     "the garage present keeps its bloom in exposed units, matching the race clamp");
 });
 
+test("fleet wildcard HDR anchor does not lift 18% grey before ACES", () => {
+  const presets = src("js/lighting/presets.js");
+  const m = /"\*":\s*\{([^}]+)\}/.exec(presets);
+  assert.ok(m, "LightPresets * wildcard");
+  const block = m[1];
+  const num = (id) => {
+    const r = new RegExp(`"${id}":\\s*(-?[\\d.]+)`).exec(block);
+    return r ? Number(r[1]) : 0;
+  };
+  const p = {
+    tones: [num("blacks"), num("shadows"), num("midtones"), num("highlights"), num("whites")],
+    toe: num("toe"),
+    shoulder: num("shoulder"),
+    gain: [num("gainR") || 1, num("gainG") || 1, num("gainB") || 1],
+  };
+  const sample = [0.18, 0.18, 0.18];
+  const graded = hdrGrade(sample, p);
+  const liftStops = Math.log2(Math.max(luma(graded), 1e-6) / 0.18);
+  assert.ok(liftStops < 0.08, `18% grey lifted ${liftStops.toFixed(3)} stops by * preset (want < 0.08)`);
+});
+
+test("post-ACES S-curve constants stay aligned on GLX, WGX and TLX", () => {
+  assert.match(GLSL, /c \* \(1\.0 \+ c \* 0\.15\) \/ \(1\.0 \+ c \* 0\.22\)/);
+  assert.match(CHUNKS, /c \* \(1\.0 \+ c \* 0\.15\) \/ \(1\.0 \+ c \* 0\.22\)/);
+  assert.match(TSL_POST, /\.mul\(0\.15\)\.add\(1\.0\)\)\.div\(c\.mul\(0\.22\)\.add\(1\.0\)\)/);
+});
+
 test("the mirror / PiP inset takes the composite's colour grade and dither on all three backends", () => {
   // GLX: one COLOUR_GRADE / DITHER_LSB string in both programs.
   const comp = /const COMPOSITE_FS = `([\s\S]*?)`;\n/.exec(GLSL)[1];

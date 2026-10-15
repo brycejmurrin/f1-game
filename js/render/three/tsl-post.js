@@ -538,7 +538,7 @@
     // mirror / PiP inset call the same nodes on the same C uniforms.
     function colourGradeT(c) {
       c.mulAssign(vec3(1.015, 1.008, 0.992));
-      c.assign(c.mul(c.mul(0.13).add(1.0)).div(c.mul(0.20).add(1.0)));
+      c.assign(c.mul(c.mul(0.15).add(1.0)).div(c.mul(0.22).add(1.0)));
       // pow(0, n) NaNs on mobile GPUs and is -inf through WGSL exp2/log2;
       // the 1e-6 floor keeps black black (glsl-post.js).
       c.assign(pow(max(c, vec3(1e-6)), vec3(C.contrast)));
