@@ -848,6 +848,25 @@ test("docs/README indexes every live engineering doc", () => {
   assert.deepEqual(missing, [], "a doc under docs/ is not linked from docs/README.md");
 });
 
+test("every markdown table in docs/README.md has a header separator before body rows", () => {
+  const lines = read("docs/README.md").split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!/^\|.+\|/.test(line) || !/\|\s*$/.test(line)) continue;
+    const cells = line.split("|").slice(1, -1);
+    if (!cells.length) continue;
+    const isSeparator = cells.every((c) => /^[\s:|-]+$/.test(c));
+    if (isSeparator) continue;
+    const prev = i > 0 ? lines[i - 1] : "";
+    if (/^\|.+\|/.test(prev)) continue;
+    const next = lines[i + 1] ?? "";
+    const nextCells = next.split("|").slice(1, -1);
+    const nextIsSep = nextCells.length === cells.length
+      && nextCells.every((c) => /^[\s:|-]+$/.test(c));
+    assert.ok(nextIsSep, `docs/README.md table at line ${i + 1} must be followed by a |---| separator row`);
+  }
+});
+
 test("docs/README indexes every research doc too", () => {
   // The walk above covers docs/ top level only, so four research docs sat
   // unindexed for weeks (round-6 finding) — a doc nobody can find is a doc
