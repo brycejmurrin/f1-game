@@ -793,6 +793,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/settings-export.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
   "tests/unit/settings-tabs.test.mjs",
+  "tests/unit/settings-ttlb-backup.test.mjs",
   // R19 guards. Both belong in the EDIT LOOP rather than a slow topical group:
   // each re-derives a fact the source depends on (which livery fields move a
   // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are

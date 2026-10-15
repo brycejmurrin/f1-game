@@ -573,8 +573,7 @@ const GameStore = (function () {
   // repeated. v2 is {v:2, classes:[ctx…], laps:[{t,teamId,code,name,ts,c}]}
   // with `c` indexing classes (absent = the unversioned legacy class). Both
   // shapes read; the next write stores v2. Callers only ever see v1 rows.
-  function ttRead(trackId) {
-    const b = store.get("ttlb." + trackId, []);
+  function ttParseBoard(b) {
     let laps = [];
     if (Array.isArray(b)) laps = b;
     else if (b && b.v === 2 && Array.isArray(b.laps)) {
@@ -588,6 +587,9 @@ const GameStore = (function () {
       });
     }
     return laps.filter(e => e && Number.isFinite(e.t) && e.t > 0);
+  }
+  function ttRead(trackId) {
+    return ttParseBoard(store.get("ttlb." + trackId, []));
   }
   function ttWrite(trackId, laps) {
     const classes = [], at = new Map();
@@ -639,7 +641,7 @@ const GameStore = (function () {
     return SaveMigrate.migrateSeasonPoints(store, season);
   }
 
-  return { store, ttBoard, ttBoardAdd,
+  return { store, ttBoard, ttBoardAdd, ttRead, ttParseBoard,
            hexToRgb, rgbToHex, seasonDriverId,
            migrateSeasonPoints,
            migrateCareer: SaveMigrate.migrateCareer,
