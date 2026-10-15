@@ -144,7 +144,8 @@ const GLXPost = (function () {
     function setup() {
       // RGBA16F is the ideal HDR target (preserves sun/specular > 1 for bloom);
       // fall back to 8-bit if float colour buffers aren't renderable.
-      const ext = gl.getExtension("EXT_color_buffer_float");
+      const ext = gl.getExtension("EXT_color_buffer_float")
+        || gl.getExtension("EXT_color_buffer_half_float");
       colorType = ext ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
 
       // One parallel batch, like the core programs (glx.js beginLinks): read
