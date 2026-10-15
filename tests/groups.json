@@ -379,8 +379,6 @@
     "// churn on the clock, and the rear window stays flash-free. ~0.2 s.",
     "tests/unit/frame-lights-rank-cache.test.mjs",
     "tests/unit/frame-lights-shed.test.mjs",
-    "// Night traffic: five tail lights fit phone 24 / TLX-lite 16 slots (emit) or glow-only (paint).",
-    "tests/unit/frame-lights-tail-budget.test.mjs",
     "// The FRAMING REPORT's math (tools/lib/frame-math.mjs): projection handedness,",
     "// ray-vs-box, occlusion, horizon, motion and the flags an agent acts on without",
     "// a picture. Hand-built worlds, no game VM, ~0.1 s.",
