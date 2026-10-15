@@ -39,19 +39,19 @@ function emitStagedPathList() {
   return r.stdout.trim().split("\n").filter(Boolean);
 }
 
-test("stage-files.mjs allow-list is non-empty and has the expected 14 names", () => {
+test("stage-files.mjs allow-list is non-empty and has the expected 13 names", () => {
   const names = [...stagedNames()].sort();
   assert.ok(names.length > 0, "stagedNames() must never be empty");
-  assert.equal(names.length, 14, `expected 14 staged names, got ${names.length}: ${names.join(",")}`);
-  assert.equal(STAGE_ROOT_FILES.length + STAGE_DIRS.length, 14);
+  assert.equal(names.length, 13, `expected 13 staged names, got ${names.length}: ${names.join(",")}`);
+  assert.equal(STAGE_ROOT_FILES.length + STAGE_DIRS.length, 13);
   assert.ok(names.includes("cockpit-view.html"), "player cockpit preview must ship");
-  assert.ok(names.includes("gallery"), "circuit survey gallery must ship on Pages");
   assert.deepEqual(names, [...STAGE_ROOT_FILES, ...STAGE_DIRS].sort());
 });
 
 test("ship-filter reads stage-files.mjs and fails loudly on an empty list", () => {
-  const ship = (CI.split("\n  ship-filter:")[1] || "").split("\n  smoke:")[0];
-  assert.ok(ship, "ship-filter job missing");
+  // A step of the `select` plan job since 2026-10-15 (its own job before).
+  const ship = (CI.split("      - name: Does this diff change anything that ships?\n")[1] || "").split("\n      - name: ")[0];
+  assert.ok(ship, "ship filter step missing");
   assert.match(ship, /tools\/desktop\/stage-files\.mjs/);
   assert.match(ship, /stagedNames/);
   assert.doesNotMatch(ship, /matchAll\(\/\^\\s\*cp/);
@@ -70,6 +70,6 @@ test("pages.yml stages via stage.mjs (same allow-list the ship-filter reads)", (
 test("emitted staged path list matches stage-files.mjs (ship-filter / Pages drift)", () => {
   const emitted = emitStagedPathList();
   assert.ok(emitted.length > 0, "emitted list must not be empty");
-  assert.equal(emitted.length, 14);
+  assert.equal(emitted.length, 13);
   assert.deepEqual(emitted, [...stagedNames()].sort());
 });

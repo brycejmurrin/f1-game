@@ -3,6 +3,9 @@
   "hooks": {
     "beforeShellExecution": [
       { "command": "bash .cursor/hooks/shell-guard.sh", "timeout": 200 }
+    ],
+    "beforeMCPExecution": [
+      { "command": "bash .cursor/hooks/mcp-guard.sh", "timeout": 10, "failClosed": true }
     ]
   }
 }

@@ -101,6 +101,14 @@ var RadioVoice = (function () {
   const LEAD_RESERVE_S = 0.25;
   const SPOTTER_DECODE_LEAD_S = 0.6;   // lead behind a spotter clip whose decode has not settled (remaining() = Infinity)
   const WORDS_PER_S = 2.4;   // deliberately SLOW: under-estimating speech is the safe direction
+  // js/game.js showAnnounce: announceT = max(ANN_CARD_MIN_S, (dur || 1.6) + ANN_CARD_PAD_S).
+  const ANN_CARD_PAD_S = 0.5;
+  const ANN_CARD_MIN_S = 3;
+  // Courtesy-figure length from js/audio/radio-fx.js RADIO_CH (same sums as GameAudio.radioLeadS).
+  const RADIO_LEAD_S = 0.03 + 0.105 + 0.09 + 0.09 + 0.11;
+  const CONTROL_LEAD_S = 0.03 + 0.10 + 0.12;
+  // Recorded voice hard-stop slack (speakPack deadline, ms).
+  const PACK_STOP_TAIL_S = 0.4;
   // Tokens that must keep their capitals. Everything else is lowercased before
   // speaking, because several engines spell a short all-caps token letter by
   // letter — "B-O-X" instead of "box". Invisible on Chrome/Windows and ruinous
@@ -256,6 +264,21 @@ var RadioVoice = (function () {
     out.rate = rate; out.pitch = tone.pitch; out.budgetMs = Math.max(0, budget) * 1000;
     out.secs = estimate(text, rate);   // the words' own length, for a caller that holds a bed under them
     return out;
+  }
+
+  /** Minimum announce card life (`announceT` in js/game.js) for a line to speak whole. */
+  function cardLifeS(o) {
+    const kind = o.kind || "race";
+    const lead = Math.max(0, o.lead != null ? +o.lead : (kind === "comm" ? 0 : (SPEAKERS[kind] === "control" ? CONTROL_LEAD_S : RADIO_LEAD_S)));
+    const text = speakable(o.msg);
+    if (!text) return ANN_CARD_MIN_S;
+    const budgetNeed = estimate(text, RATE_MAX);
+    return Math.max(ANN_CARD_MIN_S, lead + LEAD_RESERVE_S + budgetNeed);
+  }
+
+  /** `dur` for announce() so max(ANN_CARD_MIN_S, dur + ANN_CARD_PAD_S) fits plan(). */
+  function cardDurS(o) {
+    return cardLifeS(o) - ANN_CARD_PAD_S;
   }
 
   /** A live instance's shape, with every method a no-op. */
@@ -905,8 +928,9 @@ var RadioVoice = (function () {
     };
   }
 
-  return { create, inert, plan, speakable, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
+  return { create, inert, plan, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
            PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S,
+           ANN_CARD_PAD_S, ANN_CARD_MIN_S, RADIO_LEAD_S, CONTROL_LEAD_S, PACK_STOP_TAIL_S,
            radioBand, squelchPlan, hashSeed, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };
 })();
 Object.freeze(RadioVoice);
