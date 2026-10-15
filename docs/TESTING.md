@@ -1128,23 +1128,23 @@ Two always-judged checks give the gate fixed names:
 
 | Lane | When | What |
 |---|---|---|
-| **Draft PR** | `pull_request` + draft | Fast tier: Structural guards A/B shards + aggregator (incl. behind-ship on the aggregator), unit-plan / node slices, parts census, driving-model, change-aware `select`/`selected`. Heavy jobs skipped: geometry sweeps, wide smoke shards, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. |
-| **Ready PR** | `ready_for_review` / non-draft | Full tier on the same head: smoke + sweeps + ship-filter, plus path-gated renderer-macos / xr when the diff reaches them. Desktop pack-smoke is packaging-path-gated (`desktop/**`, `tools/desktop/**`, `desktop.yml` only — not `js/**` / `css/**`). Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
+| **Draft PR** | `pull_request` + draft | Fast tier: Structural guards A/B shards (ratchets, test:audit, ci-coverage and behind-ship run at the end of shard B; the aggregator checks out nothing) + the `Select specs for this change` plan job (node-slice plan, spec selection, and on ready runs the ship / renderer / xr path filters — one job since 2026-10-15, it was five), the NEEDED node slices only (a draft cannot merge, so the six required names owe it nothing), parts census, driving-model, `selected` on ready runs. Each job asks the ready_for_review reuse question itself as a step (no `reuse-draft` hop). Heavy jobs skipped: geometry sweeps, smoke, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. Why: `docs/notes/CI-CLOG-SURVEY-2026-10-15.md`. |
+| **Ready PR** | `ready_for_review` / non-draft | Full tier on the same head: smoke + sweeps (the ship filter is a step of `select`), every node-slice name, plus path-gated renderer-macos / xr when the diff reaches them. Desktop pack-smoke is packaging-path-gated (`desktop/**`, `tools/desktop/**`, `desktop.yml` only — not `js/**` / `css/**`). Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
 
 **Check names (GitHub UI)** — fast tier on a **draft** PR or a **deploy-branch push** (`ci.yml` jobs unless noted):
 
-- `Reuse draft fast-tier?`, `Structural guards (tooling A)`, `Structural guards (tooling B)`, `Structural guards`
-- `Plan node unit slices`, `Pure-node unit suites (<slice>)` (six matrix legs when planned)
+- `Structural guards (tooling A)`, `Structural guards (tooling B)`, `Structural guards` (the ready_for_review reuse question is a step of each job since 2026-10-15, not a `Reuse draft fast-tier?` job)
+- `Pure-node unit suites (<slice>)` (six matrix legs on a ready PR and a deploy push; a DRAFT gets only the needed legs — planned by `Select specs for this change`, which replaced `Plan node unit slices` on 2026-10-15)
 - `Does this diff touch track survey inputs?` (`sweeps-parts`), `Characterization driving model` (when planned)
 - `Select specs for this change`, `Selected specs (…)` matrix legs when routed, `Selected specs (verdict)`
 - `CI` (aggregator `ci-verdict`; skipped jobs count as pass)
 - `Docs guards (prose-tree unit files)` (`docs-guards.yml` — runs on every PR including drafts; exits in seconds on mixed/code PRs)
 
-**Full tier** adds (ready/non-draft PR, `merge_group`, Pages train / `workflow_dispatch` with `concurrency_key`, nightly `schedule` where noted):
+**Full tier** adds (ready/non-draft PR, Pages train / `workflow_dispatch` with `concurrency_key`, nightly `schedule` where noted):
 
-- `Does this diff change anything that ships?`, `Smoke (page boots, __apex responds)`, `Per-circuit geometry sweeps` (+ four shard legs and roll-up)
-- `Does this diff touch the renderer?` → `Renderer specs on a real GPU (macos-latest, Metal)` when the diff reaches `js/render/**`
-- `Does this diff touch WebXR?` → `Emulated VR (IWER / xr-emulated)` when the diff reaches XR paths
+- `Smoke (page boots, __apex responds)`, `Per-circuit geometry sweeps` (+ four shard legs and roll-up); the ship / renderer / WebXR path questions are steps of `Select specs for this change` (2026-10-15; they were the `Does this diff …?` jobs)
+- `Renderer specs on a real GPU (macos-latest, Metal)` when the diff reaches `js/render/**`
+- `Emulated VR (IWER / xr-emulated)` when the diff reaches XR paths
 - `Pack smoke (ubuntu-latest)` (`desktop.yml`, packaging paths only)
 - `Golden menus on a runner (trial, non-blocking)` (nightly/dispatch only, advisory)
 - `Poke the release train` (deploy-branch push fast tier only — not PRs)
