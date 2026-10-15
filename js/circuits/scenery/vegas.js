@@ -175,8 +175,8 @@
 
       fence(0.0, 0.07, 1, 1.4, 3.6, [0.55, 0.56, 0.60]);             // pit/paddock straight
       fence(0.83, 0.91, -1, 1.4, 3.6, [0.55, 0.56, 0.60]);          // neon final straight
-      guardrail(0.16, 0.21, 1, 1.0, [0.80, 0.80, 0.84]);            // T3 hard-right armco
-      guardrail(0.45, 0.49, -1, 1.0, [0.80, 0.80, 0.84]);          // T8-T9 onto the Strip
+      guardrail(sl(0.080), sl(0.112), 1, 1.0, [0.80, 0.80, 0.84]);  // T3-T5 (racing 0.087-0.109): bare 0.16-0.21 landed on T1
+      guardrail(sl(0.295), sl(0.335), -1, 1.0, [0.80, 0.80, 0.84]); // T8-T9 approach (racing 0.33-0.34); same span the bare 0.45-0.49 reached
       // Tyre walls use sceneryRange (authored + _sceneryShift). Pass sl() so
       // the Sphere chicane stack sits at racing T7/T8, not mid-Koval.
       tyreWall(sl(0.305), sl(0.345), -1, 1.2, MAGENTA);             // Sphere chicane apex
@@ -267,7 +267,8 @@
       const lampPost = (k, side, dist) => {
         const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
         // Slim mast
-        addCyl(out, a.c, 0.22, 12, [0.28, 0.28, 0.32], 5, b);
+        // A culled mast (pit keep-out / on-road guard) takes its arm and head with it.
+        if (addCyl(out, a.c, 0.22, 12, [0.28, 0.28, 0.32], 5, b) === false) return;
         // Cobra-arm angled box reaching over the track
         const armPt = vadd(a.c, a.u, 12);
         addBox(out, vadd(armPt, b[2], -side * 1.5), [0.2, 0.2, 3.0], [0.30, 0.30, 0.34], b);
@@ -276,14 +277,15 @@
         addBox(out, headPt, [2.8, 0.5, 1.8], [0.98, 0.95, 0.82], b);
       };
 
-      // Lamp posts along the pit straight / paddock sector (s 0.00–0.10)
-      for (let s = 0.01; s <= 0.09; s += 0.018) {
-        lampPost(K(s), -1, 11);
-        lampPost(K(s + 0.009), 1, 11);
+      // Lamp posts along the pit straight / paddock sector (racing 0.965–0.05):
+      // bare authored K(s) stood ~0.157 lap early, on the Harmon approach.
+      for (let s = 0.965; s <= 1.045; s += 0.018) {
+        lampPost(K(sl(s)), -1, 11);
+        lampPost(K(sl(s + 0.009)), 1, 11);
       }
-      // Lamp posts around T1–T5 sector (s 0.10–0.28)
-      for (let s = 0.10; s <= 0.27; s += 0.022) {
-        lampPost(K(s), (s < 0.18 ? 1 : -1), 12);
+      // Lamp posts around T1–T5 sector (racing 0.055–0.115)
+      for (let s = 0.055; s <= 0.115; s += 0.022) {
+        lampPost(K(sl(s)), (s < 0.085 ? 1 : -1), 12);
       }
       // Lamp posts along the full Strip (racing 0.48–0.82) — setback clears neonTower.
       for (let s = 0.48; s <= 0.82; s += 0.022) {
@@ -301,14 +303,14 @@
           let j = 0;
           for (let s = s0; s <= s1; s += step, j++) {
             const side = (j % 2) ? 1 : -1;
-            const a = anchor(K(s), side, gap);
+            const a = anchor(K(sl(s)), side, gap);
             const poolNeon = NEON[(j * 3 + (side > 0 ? 1 : 0)) % NEON.length];
             const dimN = [poolNeon[0] * 0.55, poolNeon[1] * 0.55, poolNeon[2] * 0.55];
             // Narrow lateral footprint (3.2 m) kept well past the edge; long along-track
             addBox(out, vadd(a.c, a.u, 0.12), [3.2, 0.18, 14], dimN, [a.r, a.u, a.t]);
           }
         };
-        stripNeon(0.01, 0.08, 0.028, 3.2);   // pit/paddock verge (scenery-local; plaza uses sl)
+        stripNeon(0.97, 1.04, 0.028, 3.2);   // pit/paddock verge (racing fracs via sl, like the plaza)
         // Strip + Harmon verges: racing fracs via sl() so neon follows the Blvd.
         for (let s = 0.485; s <= 0.815; s += 0.022) {
           const side = (Math.round(s * 50) % 2) ? 1 : -1;
@@ -378,11 +380,12 @@
         addBox(out, vadd(a.c, a.u, 15), [3.5, 1.2, 1.2], LED, [a.r, a.u, a.t]); // bright light head
       }
       if (circuitKit) {
-        // Gap 55 (was 30): kit modules clipped back-row neonTower (severe
-        // 1.11 m @ racing 0.042) after the sl() re-key densified this strip.
+        // Gap 42: 30 clipped back-row neonTower (severe 1.11 m @ racing 0.042);
+        // 44+ is "footprint rejected" (measured 2026-10-15), so the 55 m the
+        // clip fix chose silently dropped the whole hospitality kit.
         circuitKit.hospitality({
           id: "kit:vegas:paddock-hospitality", frac: sl(0.045),
-          side: -1, gap: 55, size: [18, 9, 46], modules: 5,
+          side: -1, gap: 42, size: [18, 9, 46], modules: 5,
         });
         circuitKit.serviceCompound({
           id: "kit:vegas:paddock-service", frac: sl(0.022),
@@ -467,39 +470,33 @@
         // the edge (track-build node scan); side -1 / dist 132 there rejected
         // the footprint against the far side of the loop.
         const a = anchor(K(sl(0.28)), 1, 125);
-        const rad = 88;
+        // Real venue: 112 m high x 157 m wide (Wikipedia "Sphere (venue)"; Las Vegas
+        // Review-Journal, 2023-08-02), a truncated sphere: R = 78.5 m wide at the
+        // equator, flat base, so the vertical axis is squashed to H = 112 m.
+        const R = 78.5, H = 112;
         const baseY = a.c[1];
         const SPHERE = [0.16, 0.72, 0.98];
         const SPHERE_HI = [0.42, 0.92, 1.00];
         modelGroup("vegas-sphere", {
-          center: [a.c[0], baseY + rad, a.c[2]],
-          size: [rad * 2.08, rad * 2.08, rad * 2.08],
+          center: [a.c[0], baseY + H / 2, a.c[2]],
+          size: [R * 2.08, H * 1.04, R * 2.08],
         }, (stage) => {
-          // Pedestal foot on grade (addFrustum treats c as base).
-          seat.frustum(stage, [a.c[0], baseY, a.c[2]], rad * 0.34, rad * 0.28, rad * 0.16,
-            [0.22, 0.24, 0.28], 16, null);
-          const bands = 5;
+          // 14 cos-spaced latitude bands of an ellipsoid, flat-based (phi from
+          // P0) and capped near the pole, so the silhouette reads as an orb, not
+          // stacked buckets. Bands alternate LED tint; the equator is magenta.
+          const P0 = 0.62, P1 = Math.PI - 0.12, bands = 14;
+          const yAt = (ph) => baseY + H * (Math.cos(P0) - Math.cos(ph)) / (Math.cos(P0) - Math.cos(P1));
           for (let i = 0; i < bands; i++) {
-            const t0 = i / bands, t1 = (i + 1) / bands;
-            const phi0 = t0 * Math.PI, phi1 = t1 * Math.PI;
-            const rB = rad * Math.sin(phi0), rT = rad * Math.sin(phi1);
-            const yB = baseY + rad * (1 - Math.cos(phi0));
-            const hB = rad * (Math.cos(phi0) - Math.cos(phi1));
-            const tint = (i === 2) ? SPHERE_HI : SPHERE;
-            addFrustum(stage, [a.c[0], yB, a.c[2]], Math.max(rB, 2), Math.max(rT, 2),
-              Math.max(hB, 1), tint, 24, null);
+            const ph0 = P0 + (P1 - P0) * i / bands, ph1 = P0 + (P1 - P0) * (i + 1) / bands;
+            const mid = (ph0 + ph1) / 2;
+            const tint = Math.abs(mid - Math.PI / 2) < 0.12 ? [1.0, 0.35, 0.85] : (i % 2 ? SPHERE_HI : SPHERE);
+            addFrustum(stage, [a.c[0], yAt(ph0), a.c[2]], R * Math.sin(ph0), R * Math.sin(ph1),
+              yAt(ph1) - yAt(ph0), tint, 28, null);
           }
-          addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 0.92, 7.0, SPHERE_HI, 28, null);
-          // Bright polar cap + chunky vertical LED meridians — Sphere reads as
-          // an LED orb from the track (thin 2.4 m ribs vanished in QA panels).
-          addCyl(stage, [a.c[0], baseY + rad * 1.78, a.c[2]], rad * 0.38, 10, SPHERE_HI, 16, null);
-          addCyl(stage, [a.c[0], baseY + rad * 0.5, a.c[2]], rad * 1.02, 10, [1.0, 0.35, 0.85], 28, null);
-          for (let m = 0; m < 4; m++) {
-            const ang = (m / 4) * Math.PI * 2;
-            const mx = a.c[0] + Math.cos(ang) * rad * 0.96;
-            const mz = a.c[2] + Math.sin(ang) * rad * 0.96;
-            addBox(stage, [mx, baseY + rad, mz], [7.2, rad * 1.55, 7.2], SPHERE_HI, null);
-          }
+          // Bright polar cap + dark pedestal ring on grade.
+          addCyl(stage, [a.c[0], yAt(P1) - 0.5, a.c[2]], R * Math.sin(P1) + 1.5, 1.5, SPHERE_HI, 16, null);
+          seat.frustum(stage, [a.c[0], baseY, a.c[2]], R * Math.sin(P0) + 3, R * Math.sin(P0) + 1, 3.5,
+            [0.22, 0.24, 0.28], 24, null);
         }, { required: true });
         // Cyan / lime runoff stripe near the Sphere.
         groundPatch(K(sl(0.292)), -1, 4.5, [10, 0.16, 42], [0.12, 0.55, 0.62],
@@ -609,8 +606,10 @@
           // Crown neon band — keep proud of the roof slab (no coplanar fight).
           addBox(stage, vadd(a.c, a.u, 75.2), [18, 2.0, 56], [1.0, 0.82, 0.35], b);
         }, { required: true });
-        // Forecourt apron between the kerb and the lake-edge posts (lateral 4-14): [depth, h, length].
-        place(K(sl(0.68)), 1, 9, [10, 2.0, 95], [1.0, 0.75, 0.20]);
+        // Forecourt apron between the kerb and the lake-edge posts (lateral 4-14): a thin painted verge strip —
+        // place() built a collidable 2 m-tall, 95 m-long gold wall here (survey 2026-10-15).
+        groundPatch(K(sl(0.68)), 1, 4, [3, 0.16, 95], [0.85, 0.62, 0.16],
+          { id: "vegas-bellagio-apron", samples: 6 });
         // Lake-edge balustrade posts (no shore groundPatch — was flat-coplanar
         // with the existing pool-strip / apron decals).
         for (let i = 0; i < 6; i++) {
