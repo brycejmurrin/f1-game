@@ -281,13 +281,12 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
  * ci.yml run, while tooling-fast holds guards over exactly those trees.
  * docs-guards.yml closed it (2026-09-25..2026-10-15) by triggering on the SAME list as `paths:` — so the
  * two lists must stay one list, and the job must run the group that holds them. */
-/* EVERY REQUIRED CHECK REPORTS ON EVERY PR (2026-09-30). Branch protection on
- * the deploy branch requires the fast-tier jobs and docs-guards; a required
- * check that never reports blocks the merge for good. So neither workflow may
- * path-filter its pull_request trigger: ci.yml runs the fast tier on a prose
- * PR too (the node plan keeps it to guards plus seconds), and docs-guards runs
- * on every PR and exits before `npm ci` unless the diff is prose-only — a
- * list it READS from ci.yml's push paths-ignore, the one filter that stays. */
+/* THE REQUIRED CHECK REPORTS ON EVERY PR (2026-09-30; one check, `CI`, since
+ * 2026-10-15 — before that the fast-tier jobs and docs-guards by name). A
+ * required check that never reports blocks the merge for good, so ci.yml may
+ * not path-filter its pull_request trigger: it runs the fast tier on a prose
+ * PR too (the node plan keeps it to guards plus seconds). docs-guards.yml,
+ * which read ci.yml's push paths-ignore to exit early on code PRs, is gone. */
 test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and test:docs-guards is a local alias inside tooling-fast", () => {
   // RETIRED 2026-10-15 (Actions audit finding 5; docs/notes/CI-CLOG-SURVEY-2026-10-15.md):
   // tooling-fast held every file of the group, so the workflow ran 615 times
@@ -1004,7 +1003,12 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
   // Same refusal import-models.yml carries: the deploy branch by name.
   assert.match(timings, /claude\/f1-game-project-26h3ng\|""\|\*\[!a-z0-9\._\/-\]\*\)/,
     "the push must refuse the deploy branch by name, as import-models.yml does");
-  assert.match(timings, /git push -f origin "\$TIMINGS_BRANCH"/);
+  // The bot's own hooks must not refuse the bot (2026-10-15, #2084): package.json
+  // `prepare` activates .githooks on the runner, and pre-push calls every
+  // non-fast-forward push "a force push". The rolling record IS a force push.
+  assert.match(timings, /git -c core\.hooksPath=\/dev\/null push -f origin "\$TIMINGS_BRANCH"/,
+    "the record push bypasses the prepare-installed pre-push hook (it blocked the bot on 18cb8f37 and c23ad312)");
+  assert.doesNotMatch(timings, /^\s+git push -f origin/m, "no bare force push left that the hook can refuse");
   // FORCE-PUSHED, so the namespace matters as much as the name: `claude/*` is
   // where sessions branch, and a bot that force-pushes there lands on an open
   // PR's head sooner or later. `bot/` is import-models.yml's convention.
