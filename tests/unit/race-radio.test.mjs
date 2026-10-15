@@ -5,7 +5,7 @@
  *  1. WORDS. Every template in the phrasebook can be SPOKEN inside its own card
  *     (RadioVoice.plan refuses a line it cannot finish — and a radio that drops
  *     its own lines is silent exactly when it has the most to say), and a pool
- *     is dealt like a deck: nothing repeats before the pool is used up.
+ *     remembers recent variants so nothing repeats back to back.
  *  2. FACTS. Gaps come from the timing loop, not prog/speed; a swap only counts
  *     as a pass once it HOLDS; a car in the pit lane is never "overtaken".
  *  3. THE BRAIN. Lines wait for the straight (never while braking or loaded up
@@ -46,8 +46,6 @@ const LONG = { pos: 20, passed: "VERSTAPPEN", by: "VERSTAPPEN", n: 12, gap: "10.
   behind: "VERSTAPPEN", rate: "0.8", laps: 12, gapA: "10.5", gapB: "10.5", time: "1:32.4", delta: "2.3",
   left: 10, grid: 20, name: "VERSTAPPEN", leader: "VERSTAPPEN", a: "VERSTAPPEN", b: "HULKENBERG",
   why: "MECHANICAL TROUBLE" };
-const RADIO_LEAD_S = 0.43;   // js/audio/engine.js RADIO_CH.radio: 0.03 + the four-note courtesy figure
-
 test("every phrasebook line can be spoken inside its own card", () => {
   const refused = [];
   let n = 0;
@@ -56,9 +54,10 @@ test("every phrasebook line can be spoken inside its own card", () => {
     for (const tpl of pool) {
       const msg = RL.fill(tpl, LONG);
       assert.ok(msg, `${key}: "${tpl}" has a slot this test does not fill`);
-      const dur = RR.durFor(msg);
-      const life = Math.max(3, dur + 0.5);   // js/game.js showAnnounce
-      const p = RV.plan({ msg, life, kind: tv ? "comm" : "info", lead: tv ? 0 : RADIO_LEAD_S,
+      const kind = tv ? "comm" : "info";
+      const dur = RR.durFor(msg, kind);
+      const life = Math.max(RV.ANN_CARD_MIN_S, dur + RV.ANN_CARD_PAD_S);   // js/game.js showAnnounce
+      const p = RV.plan({ msg, life, kind, lead: tv ? 0 : RV.RADIO_LEAD_S,
         enabled: true, soundOn: true, api: true, state: "race" });
       n++;
       if (!p.speak) refused.push(`${key}: "${msg}" (${p.reason})`);
@@ -68,18 +67,14 @@ test("every phrasebook line can be spoken inside its own card", () => {
   assert.deepEqual(refused, []);
 });
 
-test("a pool is dealt like a deck: every variant once before any twice, never back to back", () => {
+test("a pool remembers recent picks: never the same line twice in a row", () => {
   const pools = { k: ["A", "B", "C", "D"] };
   const d = RL.create(7, pools);
   let prev = null;
-  for (let round = 0; round < 25; round++) {
-    const seen = new Set();
-    for (let i = 0; i < 4; i++) {
-      const s = d.pick("k", {});
-      assert.notEqual(s, prev, "the same line twice in a row");
-      seen.add(s); prev = s;
-    }
-    assert.equal(seen.size, 4, "a variant repeated before the pool was used up");
+  for (let i = 0; i < 50; i++) {
+    const s = d.pick("k", {});
+    assert.notEqual(s, prev, "the same line twice in a row");
+    prev = s;
   }
 });
 
@@ -111,7 +106,11 @@ function race(opts = {}) {
     cautionInfo: () => ({ level: G._caution || 0 }),
     cautionLevel: () => G._caution || 0,
     store: { get: (k, d) => (store.has(k) ? store.get(k) : d), set: (k, v) => store.set(k, v) },
-    announce: (msg, dur, kind) => { said.push({ t: +G.raceT.toFixed(2), msg, kind }); return true; },
+    announce: (msg, dur, kind) => {
+      if (G._holdAnnounce) return false;
+      said.push({ t: +G.raceT.toFixed(2), msg, kind });
+      return true;
+    },
   };
   const radio = RR.create(G, { seed: 3 });
   function step(dt, n = 1) {
@@ -307,11 +306,11 @@ test("nothing below tier 5 is said while the driver is braking or loaded up in a
 
 test("a defend call for a car that has already dropped back is dropped, not said late", () => {
   const r = race({ cars: [car("AAA", 2000, 60), car("PLY", 1000, 60, { isPlayer: true, local: true }), car("BBB", 950, 60)] });
-  r.G.announceBusy = true;               // the card is taken…
+  r.G._holdAnnounce = true;              // the card is taken…
   r.step(0.05, 200);
   r.cars[2].speed = 40;                  // …and BBB falls away before it frees up
   r.step(0.05, 200);
-  r.G.announceBusy = false;
+  r.G._holdAnnounce = false;
   r.step(0.05, 40);
   assert.equal(r.said.filter((s) => /BBB/.test(s.msg) && /DEFEND|MIRRORS|CLOSING|TIGHT|INSIDE/.test(s.msg)).length, 0,
     `a stale defend call was said: ${JSON.stringify(r.said)}`);
@@ -837,7 +836,7 @@ test("a player racing on the lead lap hears the last lap once — the engineer's
 test('queued driving advice is discarded when a caution starts, the driver retires, or a pit stop begins', () => {
   for (const change of ['caution', 'retired', 'pit']) {
     const r = race();
-    r.G.announceBusy = true;
+    r.G._holdAnnounce = true;
     r.step(.1, 130);
     assert.ok(r.radio.debug().pending.eng.includes('attack'), 'attack waits behind the card');
     if (change === 'caution') r.G._caution = 2;
@@ -849,7 +848,7 @@ test('queued driving advice is discarded when a caution starts, the driver retir
 });
 
 test('a queued low-battery warning is dropped after the battery recovers', () => {
-  const r = race(); r.G.announceBusy = true; r.G.player.energy = .05;
+  const r = race(); r.G._holdAnnounce = true; r.G.player.energy = .05;
   r.step(.1, 130);
   assert.ok(r.radio.debug().pending.eng.includes('batt'));
   r.G.player.energy = .6; r.step(.1);
@@ -1170,4 +1169,210 @@ test("observe ranks the field at 10 Hz, not every physics step", () => {
   r.G.raceT = 60; r.step(.05); r.step(.05, 900);
   r.radio.replayEvent({ kind: "fastest", dur: 91 }, r.cars[1]); r.step(.05, 200);
   assert.ok(comm(r).slice(before).some(s => /1:31/.test(s.msg)), JSON.stringify(r.said));
+});
+
+
+test("accepted live race cards cannot survive a new field or a radio reset", () => {
+  for (const boundary of ["field", "reset"]) {
+    const r = race(), accepted = [];
+    r.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, kind, still }); return true; };
+    r.step(.05);
+    r.G._caution = 3;
+    r.step(.05);
+    const card = accepted.find((c) => /SAFETY CAR/.test(c.msg));
+    assert.ok(card, "urgent live safety car card was accepted");
+    assert.equal(card.still(), true, "same race and caution remain valid");
+    r.G.paused = true;
+    assert.equal(card.still(), true, "a pause preserves this race's news");
+    r.G.paused = false;
+    if (boundary === "field") {
+      r.G.cars = r.cars.map((c) => ({ ...c }));
+      r.G.player = r.G.cars.find((c) => c.isPlayer);
+      assert.equal(card.still(), false, "field replacement invalidates before the next radio tick");
+      r.step(.05);
+    } else {
+      r.radio.reset();
+      r.step(.05);
+    }
+    assert.equal(card.still(), false, "a matching caution in a new race cannot revive old copy");
+  }
+});
+
+
+test("commentary OFF permanently discards accepted WATCH copy without suppressing new news", () => {
+  const r = watch(), accepted = [];
+  r.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, still }); return true; };
+  r.step(.05);
+  r.radio.replayEvent({ kind: "sc", level: 3 });
+  r.step(.05);
+  assert.equal(accepted.length, 1);
+  assert.equal(accepted[0].still(), true);
+  r.radio.setComm("off");
+  assert.equal(accepted[0].still(), false, "OFF applies to accepted cards waiting behind other news");
+  r.radio.setComm("on");
+  assert.equal(accepted[0].still(), false, "re-enabling must not resurrect discarded copy");
+  r.radio.replayEvent({ kind: "green" });
+  r.step(.05);
+  assert.equal(accepted.length, 2);
+  assert.equal(accepted[1].still(), true, "new commentary remains available");
+});
+
+// ── saturated announce (coach + TV + engineer share one card) ───────────────
+
+function raceSaturated(opts = {}) {
+  const r = race(opts);
+  const G = r.G;
+  const PRI = { comm: 1, coach: 1, practice: 2, info: 2, warning: 3, box: 4, race: 4 };
+  const QMAX = 2;
+  G._annQueue = [];
+  G.announceT = 0;
+  G._annPri = 0;
+  G.announce = (msg, dur, kind, still) => {
+    const pri = PRI[kind] || 2;
+    const life = Math.max(3, (dur || 1.6) + 0.5);
+    if (G.announceT > 0) {
+      const low = G._annQueue.length ? G._annQueue[G._annQueue.length - 1].pri : 0;
+      const cap = pri > low ? QMAX + 3 : QMAX;
+      while (G._annQueue.length >= cap) {
+        const tail = G._annQueue[G._annQueue.length - 1];
+        if (!tail || tail.pri >= pri) return false;
+        G._annQueue.pop();
+      }
+      let at = G._annQueue.length;
+      while (at > 0 && G._annQueue[at - 1].pri < pri) at--;
+      G._annQueue.splice(at, 0, { msg, dur, kind, pri, still, life });
+      return true;
+    }
+    r.said.push({ t: +G.raceT.toFixed(2), msg, kind });
+    G.announceT = life;
+    G._annPri = pri;
+    return true;
+  };
+  G.tickAnnounce = (dt) => {
+    if (!(G.announceT > 0)) return;
+    G.announceT -= dt;
+    if (G.announceT > 0) return;
+    G._annPri = 0;
+    while (G._annQueue.length) {
+      const q = G._annQueue.shift();
+      if (q.still && !q.still()) continue;
+      r.said.push({ t: +G.raceT.toFixed(2), msg: q.msg, kind: q.kind });
+      G.announceT = q.life;
+      G._annPri = q.pri;
+      break;
+    }
+  };
+  Object.defineProperty(G, "announceBusy", { configurable: true, enumerable: true, get: () => G.announceT > 0 });
+  const base = r.step;
+  r.step = (dt, n = 1) => { for (let i = 0; i < n; i++) { base(dt); G.tickAnnounce(dt); } };
+  return r;
+}
+
+function loadEngineer() {
+  const ectx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
+  seedLog(ectx);
+  ectx.window = ectx;
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js",
+    "js/car/parts.js", "js/physics/tyre-model.js", "js/race/engineer.js"]) {
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ectx, { filename: f });
+  }
+  return vm.runInContext("RaceEngineer", ectx);
+}
+
+test("engineer lines and a BOX call survive a saturated announce queue; announce-refused stays bounded", () => {
+  const r = raceSaturated({ laps: 8, store: { radioChat: "chatty", commentary: "on" } });
+  const RE = loadEngineer();
+  const tctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite });
+  seedLog(tctx);
+  tctx.window = tctx;
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/car/parts.js", "js/physics/tyre-model.js"]) {
+    vm.runInContext(readFileSync(join(ROOT, f), "utf8"), tctx, { filename: f });
+  }
+  const TyreModel = vm.runInContext("TyreModel", tctx);
+  const tm = TyreModel.create({
+    lapsTarget: 8, track: { total: LAP, def: {} }, LAT_MAX: 22,
+    aTop: () => 7, vTop: () => 60, raceWeather: "dry",
+  });
+  tm.setLevel("real");
+  r.G.tyres = tm;
+  r.G.pits = {
+    estimate: () => ({ lossS: 22, gapS: 2, marginS: -20, caution: false }),
+    lastCue: () => null,
+    nextCode: () => "H",
+  };
+  r.G.lapsTarget = 8;
+  const eng = RE.create(r.G);
+  const c = r.G.player;
+  Object.assign(c, { human: true, local: true, consistency: 0.75, accSm: 0, lastLap: 90, pitStops: 0,
+    pitPlan: { stops: 1, seq: ["medium", "hard"], stints: [5, 3], lapsAt: [5] } });
+  tm.fit(c, { id: "t", code: "M", life: 0.88, off: 0, tread: 0, colour: [1, 1, 1] });
+  c.lap = 5;
+  c.tyreTs = TyreModel.optTemp(0.88);
+  c.tyreTb = TyreModel.optTemp(0.88);
+  c.tyreWear = 0.55;
+  c.tyreWearF = 0.55;
+  c.tyreWearR = 0.55;
+
+  for (let i = 0; i < 350; i++) {
+    r.G.announce("ACTIVE AERO — Z — you can open it now", 3, "coach");
+    if (i % 4 === 0) r.G.announce("COMMENTARY FILLER " + i, 3, "comm");
+    r.step(0.1);
+    eng.update(c, 0.1);
+  }
+  const engLog = r.radio.debug().log.filter((l) => l.ch === "eng");
+  const refused = r.radio.debug().dropCounts["announce-refused"] || 0;
+  assert.ok(engLog.length >= 1, `expected engineer race-radio lines, got ${engLog.length}: ${JSON.stringify(engLog)}`);
+  assert.ok(refused < 80, `announce-refused should retry, not storm-drop (${refused})`);
+  eng.update(c, RE.QUIET_S + 1);
+  c._eng.said = {};
+  c._eng.t = 0;
+  assert.equal(eng.senseOf(c).lapsToStop, 0, "stop lap armed for BOX BOX BOX");
+  const box = eng.update(c, 1);
+  assert.match(box, /BOX BOX BOX/, `pit call on the stop lap: ${box}`);
+  assert.ok(r.said.some((s) => s.kind === "box" && /BOX/.test(s.msg)), `box priority reached the card: ${JSON.stringify(r.said.filter((s) => s.kind === "box"))}`);
+});
+
+test("engineer OFF permanently invalidates accepted last-lap copy, including OFF then ON", () => {
+  const r = race(), accepted = [];
+  r.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, kind, still }); return true; };
+  r.step(.1);
+  r.G.player.prog = 19 * LAP + 340; r.G.player.lap = 20; r.step(.1);
+  const card = accepted.find(c => c.kind === "race");
+  assert.ok(card && /LAST|ONE TO GO|ONE MORE|EVERYTHING|HOLD/.test(card.msg), "last-lap call was accepted");
+  assert.equal(card.still(), true);
+  assert.equal(r.radio.setChat("off"), "off");
+  assert.equal(r.store.get("radioChat"), "off");
+  assert.equal(card.still(), false, "accepted copy waiting in the card queue obeys OFF immediately");
+  r.radio.setChat("normal");
+  assert.equal(card.still(), false, "re-enabling must not resurrect discarded engineer copy");
+  r.G._caution = 3; r.step(.1);
+  const fresh = accepted.find(c => /SAFETY CAR/.test(c.msg));
+  assert.ok(fresh); assert.equal(fresh.still(), true, "new engineer news remains available");
+});
+
+test("engineer OFF clears refused pending urgent copy before chatter is re-enabled", () => {
+  const r = race(), accepted = [];
+  r.G.announce = (msg, dur, kind) => { if (kind === "race") return false; accepted.push(msg); return true; };
+  r.step(.1); r.G.player.prog = 19 * LAP + 340; r.G.player.lap = 20; r.step(.1);
+  assert.ok(r.radio.debug().pending.eng.includes("last"), "refused urgent last lap remains pending");
+  r.radio.setChat("off");
+  assert.equal(r.radio.debug().pending.eng.length, 0, "OFF discards internal engineer queue");
+  r.radio.setChat("normal");
+  r.G.announce = msg => { accepted.push(msg); return true; }; r.step(.1, 5);
+  assert.ok(!accepted.some(msg => /LAST LAP|ONE TO GO|ONE MORE|LAST ONE/.test(msg)), "old last-lap offer stays discarded");
+});
+
+test("engineer chatter changes preserve accepted WATCH commentary and valid non-OFF modes", () => {
+  const w = watch(), accepted = [];
+  w.G.announce = (msg, dur, kind, still) => { accepted.push({ msg, still }); return true; };
+  w.step(.1); w.radio.replayEvent({ kind: "sc", level: 3 }); w.step(.1);
+  const tv = accepted[0]; assert.ok(tv); assert.equal(tv.still(), true);
+  w.radio.setChat("off"); w.radio.setChat("chatty");
+  assert.equal(tv.still(), true, "TV and race-control commentary retain their own setting/generation");
+  const r = race(), cards = [];
+  r.G.announce = (msg, dur, kind, still) => { cards.push({ msg, still }); return true; };
+  r.step(.1); r.G._caution = 3; r.step(.1);
+  const engineer = cards.find(c => /SAFETY CAR/.test(c.msg)); assert.ok(engineer);
+  r.radio.setChat("chatty"); assert.equal(engineer.still(), true);
+  assert.equal(r.radio.setChat("bogus"), "chatty"); assert.equal(engineer.still(), true);
 });

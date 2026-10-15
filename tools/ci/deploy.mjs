@@ -60,6 +60,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS, targetedSuites } from "./geometry-paths.mjs";
+import { githubToken } from "./github-token.mjs";
 import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -682,8 +683,8 @@ function ghApi(token, method, url, body) {
   if (body !== undefined) {
     input += `header = "Content-Type: application/json"\ndata-binary = ${JSON.stringify(JSON.stringify(body))}\n`;
   }
-  const r = spawnSync("curl", args, { encoding: "utf8", input });
-  if (r.status !== 0) throw new Error(`curl ${method} ${url}: ${(r.stderr || "").trim()}`);
+  const r = spawnSync("curl", args, { encoding: "utf8", input, maxBuffer: 64 << 20 });
+  if (r.status !== 0) throw new Error(`curl ${method} ${url}: ${(r.stderr || r.error?.code || "").trim()}`);
   // -w appended the status on its own last line; everything before it is body.
   const out = (r.stdout || "").split("\n");
   const status = Number(out.pop().trim());
@@ -803,22 +804,44 @@ export function gateOnly() {
 /* IS THE TRAIN ALREADY RED? A deploy inherits the branch it lands on, and a red
    tip means your green push still ships nothing: on 2026-09-18 pages.yml runs
    2416 and 2417 both failed and the branch went ~2 h without publishing, which
-   no session noticed until one read the run list by hand. Two unauthenticated
-   API calls answer it up front, so "my deploy did not go live" is distinguishable
-   from "the train was down before I got here".
+   no session noticed until one read the run list by hand. Two API calls answer
+   it up front, so "my deploy did not go live" is distinguishable from "the
+   train was down before I got here".
    ADVISORY, never a refusal: the fix for a red train is usually the next push,
    and this must not stand between a session and it. Any failure to reach the
    API is silent for the same reason — an offline box still deploys. */
+/* One ADVISORY GET for trainHealth / nightlyHealth: parsed JSON, or null on ANY
+   failure (no network, non-2xx, bad JSON) — the callers print "unknown" and the
+   deploy goes on. Authenticated when a token resolves (env, else `gh auth
+   token`), riding curl's stdin config like ghApi so it never reaches argv: bare
+   curls drew on the 60/h unauthenticated limit, shared by every session behind
+   the proxy's egress IP (docs/notes/ACTIONS-AUDIT-2026-10-14.md finding 8;
+   https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
+   No token: the same unauthenticated GET as before. */
+let advisoryToken;
+export function advisoryGet(url, { run = spawnSync, token } = {}) {
+  if (token === undefined) {
+    if (advisoryToken === undefined) { try { advisoryToken = githubToken() || null; } catch { advisoryToken = null; } }
+    token = advisoryToken;
+  }
+  const args = ["-sS", "--max-time", "10", "-w", "\n%{http_code}", "-H", "Accept: application/vnd.github+json",
+    "-H", "X-GitHub-Api-Version: 2022-11-28", ...(token ? ["-K", "-"] : []), url];
+  try {
+    const r = run("curl", args, { encoding: "utf8", maxBuffer: 64 << 20,
+      ...(token ? { input: `header = "Authorization: Bearer ${token}"\n` } : {}) });
+    if (r.status !== 0) return null;
+    const out = (r.stdout || "").split("\n");
+    if (Number(out.pop()) !== 200) return null;
+    return JSON.parse(out.join("\n"));
+  } catch { return null; }
+}
+
 function trainHealth() {
   const api = (wf) => {
     const url = `https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/${wf}/runs`
       + `?branch=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1&exclude_pull_requests=true`;
-    const r = spawnSync("curl", ["-sS", "--max-time", "10", "-H", "Accept: application/vnd.github+json", url], { encoding: "utf8" });
-    if (r.status !== 0) return null;
-    try {
-      const run = JSON.parse(r.stdout).workflow_runs?.[0];
-      return run ? { status: run.status, conclusion: run.conclusion, sha: (run.head_sha || "").slice(0, 7), url: run.html_url } : null;
-    } catch { return null; }
+    const run = advisoryGet(url)?.workflow_runs?.[0];
+    return run ? { status: run.status, conclusion: run.conclusion, sha: (run.head_sha || "").slice(0, 7), url: run.html_url } : null;
   };
   for (const [wf, label] of [["ci.yml", "ci"], ["pages.yml", "pages"]]) {
     const r = api(wf);
@@ -848,17 +871,13 @@ function trainHealth() {
    "the box was busy". It sat unread for the day. The job list is the only
    honest source, so that is what this reads.
 
-   ADVISORY and silent on any API failure, exactly like trainHealth above: an
+   ADVISORY and silent on any API failure (advisoryGet), like trainHealth above: an
    offline box still deploys, and a red nightly is never a reason to refuse a
    push. */
 function nightlyHealth() {
   const url = `https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/ci.yml/runs`
     + `?branch=${encodeURIComponent(DEPLOY_BRANCH)}&event=schedule&per_page=1&exclude_pull_requests=true`;
-  const get = (u) => {
-    const r = spawnSync("curl", ["-sS", "--max-time", "10", "-H", "Accept: application/vnd.github+json", u], { encoding: "utf8" });
-    if (r.status !== 0) return null;
-    try { return JSON.parse(r.stdout); } catch { return null; }
-  };
+  const get = (u) => advisoryGet(u);
   const run = get(url)?.workflow_runs?.[0];
   if (!run) { log("train nightly: unknown (no API answer)"); return; }
   const when = (run.run_started_at || "").slice(0, 10);

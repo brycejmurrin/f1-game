@@ -614,32 +614,106 @@ const CarDraw = (function () {
       const gfx = G.gfx || {};
       const lodWarm = FieldLod.on && !G.headlessMode &&
         !!(casters || typeof gfx.mirrorBegin === "function");
+      const sliced = carWarmSliceOn();
       for (let i = 0; i < G.cars.length; i++) {
         const c = G.cars[i];
         try {
-          if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
-          if (c.isPlayer && ["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c);
-          getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
-          if (casters) teamMesh(c.team, c, true);
-          if (casters && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c);
-          // What the LAUNCH first draws (FieldLod): the planted field wheels and
-          // the exhaust flame quad — each was built on its first draw, after the
-          // lights, in the frame the field pulled away. (The caster silhouette is
-          // the line above.) The HUD mirror and the PiP draw these same body and
-          // wheel meshes (drawMirrorCar). NOT a whole-car teamMesh per rival: one
-          // each cost ~5 s of CPU here (game-vm track build 4 s -> 9 s), and no
-          // procedural pass draws a rival with one (past 120 m it only drops its decal).
-          if (lodWarm) {
-            if (!c.isPlayer) getFieldWheelMeshes(c.team, c);
-            // The wing-flap hinge solve (Car3D.aeroFlaps, ~30-225 ms per recipe, memoised):
-            // every rival draws its flap set at any range now, so solve it behind the cover.
-            if (!c.isPlayer) { const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp); Car3D.aeroFlaps(aSt.val, aSt.aero); }
-            CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame);
-            if (c.isPlayer) CarMesh.getErsLight();
-          }
+          for (let ph = 0; ph < WARM_PHASES; ph++) warmCarPhase(c, ph, casters, lodWarm, sliced);
         } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
       }
       Log.info("gfx", "race car assets ready", { cars: G.cars.length, casters, lodWarm, cpuMs: Math.round(performance.now() - at) });
+    }
+    // ONE CAR'S WARM, IN FOUR PHASES — each one heavy piece, so the stepped
+    // variant below can yield between them (perf hunt 4 F3.3: the whole field in
+    // one task measured 0.91 s GLX, 1.05 s three/WebGL2, 1.10 s three/WebGPU and
+    // 3.17 s WGX on the macOS census, spa dusk, census 471). The sync path runs
+    // all four back to back under one try per car, in today's order.
+    //   0 body (+ the cockpit body)   1 livery atlas   2 caster (+ cockpit caster)
+    //   3 the LAUNCH's FieldLod set: planted wheels, the flap solve, flame, ERS lamp
+    const WARM_PHASES = 4;
+    function warmCarPhase(c, ph, casters, lodWarm, sliced) {
+      if (ph === 0) {
+        if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
+        if (c.isPlayer && ["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c);
+      } else if (ph === 1) {
+        const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
+        // TLX defers every canvas to its first draw (gfx.js uploadTexture): push it
+        // now, as the menu prep does, or the first warm frame uploads the field's
+        // atlases in one go. GLX / WGX upload inside createTexture (no method).
+        if (sliced && tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
+      } else if (ph === 2) {
+        if (casters) teamMesh(c.team, c, true);
+        if (casters && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c);
+      } else if (lodWarm) {
+        // What the LAUNCH first draws (FieldLod): the planted field wheels and
+        // the exhaust flame quad — each was built on its first draw, after the
+        // lights, in the frame the field pulled away. (The caster silhouette is
+        // phase 2.) The HUD mirror and the PiP draw these same body and
+        // wheel meshes (drawMirrorCar). NOT a whole-car teamMesh per rival: one
+        // each cost ~5 s of CPU here (game-vm track build 4 s -> 9 s), and no
+        // procedural pass draws a rival with one (past 120 m it only drops its decal).
+        if (!c.isPlayer) getFieldWheelMeshes(c.team, c);
+        // The wing-flap hinge solve (Car3D.aeroFlaps, ~30-225 ms per recipe, memoised):
+        // every rival draws its flap set at any range now, so solve it behind the cover.
+        if (!c.isPlayer) warmFlaps(c);
+        CarMesh.getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame);
+        if (c.isPlayer) CarMesh.getErsLight();
+      }
+    }
+    // The flap set a rival draws (teamDecalState's own key): a memo hit after the first car of a recipe.
+    function warmFlaps(c) { const aSt = teamDecalState(c.team, false, c.visualSetup, c.visStamp); Car3D.aeroFlaps(aSt.val, aSt.aero); }
+    // apex26.carWarmSlice (perf hunt 4 F3.3), default ON: the menu prep also solves the
+    // rivals' flaps and builds their planted wheels, the race warm uploads TLX atlases,
+    // and warmCarAssetsAsync yields between phases. 0 restores the single-task warm.
+    // Read per call, like liveryAsync: no reboot, no boot-order dependency on the store.
+    function carWarmSliceOn() {
+      try { const v = G.store && G.store.get ? G.store.get("carWarmSlice", 1) : 1; return !(v === 0 || v === "0" || v === false); } catch (_) { return true; }
+    }
+    // THE STEPPED RACE WARM: warmCarAssets' phases, one per step, yielding once a
+    // slice has spent `sliceMs` (the menu prep's 8 ms), so no task holds more than
+    // one heavy piece (measured in Node: a body build 20-110 ms cold, a flap solve
+    // 20-135 ms per recipe, a caster 16-100 ms; an atlas paint + upload is the
+    // browser's). `current()` false between steps abandons it (resolves false);
+    // whatever is left builds on first draw, as before this warm existed. Resolves
+    // true when every phase ran. Knob 0: the single sync task, today's path.
+    // The caller must keep the loading cover up and the grid undrawn until it
+    // resolves — a frame drawn between steps would build the rest itself.
+    async function warmCarAssetsAsync(current, sliceMs) {
+      if (carModelBuf) return true;
+      if (!carWarmSliceOn()) { warmCarAssets(); return true; }
+      const at = performance.now(), budget = sliceMs > 0 ? sliceMs : 8;
+      const casters = shadowCastersWanted(), gfx = G.gfx || {};
+      const lodWarm = FieldLod.on && !G.headlessMode && !!(casters || typeof gfx.mirrorBegin === "function");
+      const cars = G.cars.slice();
+      let sliceAt = performance.now(), cpuMs = 0, maxStepMs = 0, yields = 0;
+      for (let i = 0; i < cars.length; i++) {
+        const c = cars[i];
+        for (let ph = 0; ph < WARM_PHASES; ph++) {
+          if (performance.now() - sliceAt >= budget) {
+            await yieldWarm(); yields++;
+            sliceAt = performance.now();
+            if (current && !current()) {
+              Log.info("gfx", "race car warm abandoned", { at: i, of: cars.length, yields });
+              return false;
+            }
+          }
+          const t = performance.now();
+          try { warmCarPhase(c, ph, casters, lodWarm, true); }
+          catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
+          const ms = performance.now() - t; cpuMs += ms; if (ms > maxStepMs) maxStepMs = ms;
+        }
+      }
+      Log.info("gfx", "race car assets ready", { cars: cars.length, casters, lodWarm, cpuMs: Math.round(cpuMs),
+        maxStepMs: Math.round(maxStepMs), yields, wallMs: Math.round(performance.now() - at) });
+      // The census reads RaceEntryProfile marks, not Log.info: one mark carries the step stats.
+      if (typeof RaceEntryProfile !== "undefined") RaceEntryProfile.mark("warmCarAssets:steps yields=" + yields + " maxStepMs=" + Math.round(maxStepMs) + " cpuMs=" + Math.round(cpuMs));
+      return true;
+    }
+    // https://developer.chrome.com/blog/use-scheduler-yield — a continuation that keeps
+    // its place ahead of other queued tasks; setTimeout(0) where it is missing.
+    function yieldWarm() {
+      return (typeof scheduler !== "undefined" && scheduler && typeof scheduler.yield === "function")
+        ? scheduler.yield() : new Promise((r) => setTimeout(r, 0));
     }
     function shadowCastersWanted() {
       const LT = typeof LightTune !== "undefined" && LightTune.LT, gfx = G.gfx || {};
@@ -675,8 +749,13 @@ const CarDraw = (function () {
       // warmCarAssets keeps its call, all hits after this (and the safety net).
       const casters = shadowCastersWanted();
       const steps = casters ? field.flatMap(c => [c, { caster: c }]) : field;
+      // AND THE LAUNCH'S FIELD-LOD SET (perf hunt 4 F3.3, apex26.carWarmSlice): every
+      // rival's planted wheels and flap solve (~20-135 ms per recipe, memoised), a step
+      // each after the bodies, under warmCarAssets' lodWarm gate — race entry then hits.
+      const lodPrep = carWarmSliceOn() && FieldLod.on && !!(casters || typeof G.gfx.mirrorBegin === "function");
+      const plan = lodPrep ? steps.concat(field.filter(c => !c.isPlayer).map(c => ({ lod: c }))) : steps;
       let cpuMs = 0, maxCpuMs = 0, sliceAt = performance.now();
-      for (const step of steps) {
+      for (const step of plan) {
         // Cache hits need no per-car timer. Yield only after real work spends
         // the slice; still use the actual caches so eviction/settings stay correct.
         if (performance.now() - sliceAt >= 8) {
@@ -684,22 +763,28 @@ const CarDraw = (function () {
           sliceAt = performance.now();
         }
         if (!valid() || (G.gfx.warming && G.gfx.warming())) return;
-        const at = performance.now(), c = step.caster || step;
+        const at = performance.now(), c = step.caster || step.lod || step;
         try {
-          if (step.caster && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c, visualKey);
-          if (step.caster) teamMesh(c.team, c, true);
+          if (step.lod) { getFieldWheelMeshes(c.team, c); warmFlaps(c); }
           else {
-            if (c.isPlayer) {
-              playerBodyMesh(c.team, c, visualKey);
-              if (["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c, visualKey);
-            } else teamBodyMesh(c.team, c);
-            const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), c.isPlayer);
-            if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
+            if (step.caster && c.isPlayer && ["cockpit", "helmet", "visor"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitShadowMesh(c.team, c, visualKey);
+            if (step.caster) teamMesh(c.team, c, true);
+            else {
+              if (c.isPlayer) {
+                playerBodyMesh(c.team, c, visualKey);
+                if (["cockpit", "helmet"].includes(CamModes.CAM_MODES[G.camMode].id)) cockpitBodyMesh(c.team, c, visualKey);
+              } else teamBodyMesh(c.team, c);
+              const tex = getCarDecalTexture(c.team, carDecalNum(c.team, c), c.isPlayer);
+              if (tex && typeof G.gfx.uploadTexture === "function") G.gfx.uploadTexture(tex);
+            }
           }
         } catch (e) { Log.warn("gfx", "selector car asset preparation failed", e); }
         const elapsed = performance.now() - at; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
       }
-      Log.info("gfx", "selector car assets ready", { cars: field.length, casters, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs) });
+      // Resolves to its record only when it ran to its end (the export keeps the last: menuCarAssets).
+      const done = { cars: field.length, steps: plan.length, casters, lod: lodPrep, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs), at: Math.round(performance.now()) };
+      Log.info("gfx", "selector car assets ready", done);
+      return done;
     }
     function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup, setup, stamp) {
       const state = teamDecalState(team, usePlayerSetup, setup, stamp);
@@ -1490,16 +1575,20 @@ const CarDraw = (function () {
       _teamMeshKeyCache.clear();
     }
 
+    let _menuCarPrep = null;   // the last prepareMenuCarAssets that ran to its end (menuCarAssets)
     return (_instance = {
       teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,
-      warmCarAssets, prepareMenuCarAssets, loadCarModel, buildCarData,
+      warmCarAssets, warmCarAssetsAsync, loadCarModel, buildCarData,
+      // __apex.menuPrep().cars: the last menu car prep that ran to its end.
+      prepareMenuCarAssets: (current) => prepareMenuCarAssets(current).then((r) => { if (r) _menuCarPrep = r; return r; }),
       setPlayerParts, invalidateCustomMeshCaches, invalidateFactoryMeshCaches,
       WHEELS, coOpt, liveryBitmapOpts,
       get modelBuf() { return carModelBuf; },
       get playerVisualKey() { return playerVisualKey; },
+      get menuCarAssets() { return _menuCarPrep; },
     });
   }
   // The live instance, for mirror-pass.js state().glass — game.js creates exactly one.

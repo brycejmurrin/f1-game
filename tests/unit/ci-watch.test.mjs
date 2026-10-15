@@ -235,6 +235,38 @@ test("API polling asks HTTP caches to revalidate and preserves failed HTTP/JSON 
   }
 });
 
+test("API polling is conditional: the URL's ETag rides in If-None-Match and a 304 reuses the body (audit finding 8)", () => {
+  const etags = new Map(), seen = [];
+  const reply = (stdout) => (command, args, options) => {
+    seen.push(args);
+    assert.ok(options.maxBuffer >= 16 << 20, "a 100-job page must not hit spawnSync's 1 MB default (ENOBUFS, #1733)");
+    assert.ok(args.includes("\n%{http_code} %header{etag}"), "-w reports the status and the response ETag");
+    return { status: 0, stdout };
+  };
+  const env = { GH_TOKEN: "fixture" };
+  const first = api("actions/runs?head_sha=x", { env, etags, run: reply('{"workflow_runs":[{"id":1}]}\n200 W/"abc"') });
+  assert.deepEqual(first, { json: { workflow_runs: [{ id: 1 }] } });
+  assert.ok(!seen[0].some((a) => /^If-None-Match/.test(a)), "the first GET of a URL is unconditional");
+  const second = api("actions/runs?head_sha=x", { env, etags, run: reply('\n304 W/"abc"') });
+  assert.ok(seen[1].includes('If-None-Match: W/"abc"'), "the stored ETag is sent back verbatim");
+  assert.deepEqual(second, { json: { workflow_runs: [{ id: 1 }] }, cached: true });
+  const third = api("actions/runs?head_sha=x", { env, etags, run: reply('{"workflow_runs":[]}\n200 "def"') });
+  assert.deepEqual(third, { json: { workflow_runs: [] } }, "a changed resource replaces the cached body");
+  assert.equal(etags.get("https://api.github.com/repos/brycejmurrin/f1-game/actions/runs?head_sha=x").etag, '"def"');
+  assert.equal(api("other", { env, etags, run: reply("\n304 x") }).error, "HTTP 304", "a 304 with nothing cached is not a body");
+  assert.equal(api("x", { env, etags, run: () => ({ status: null, error: { code: "ENOBUFS" }, stdout: "" }) }).error, "ENOBUFS",
+    "a spawn failure names its cause instead of a bare 'curl failed'");
+  const noStore = [];
+  api("nostore", { env, etags: null, run: (c, args) => { noStore.push(args); return { status: 0, stdout: '{}\n200 "e"' }; } });
+  api("nostore", { env, etags: null, run: (c, args) => { noStore.push(args); return { status: 0, stdout: '{}\n200 "e"' }; } });
+  assert.ok(!noStore.flat().some((a) => /^If-None-Match/.test(a)), "etags: null disables conditional GETs");
+});
+
+test("ci-watch polls every 60 s by default (360–480 GETs/h at 30 s crossed the token limit at ~15 watches)", async () => {
+  const { DEFAULT_INTERVAL_S } = await import("../../tools/ci/ci-watch.mjs");
+  assert.equal(DEFAULT_INTERVAL_S, 60);
+});
+
 function afterThreeMinutes(request, options = {}) {
   const lines = []; let clockCalls = 0;
   return watchSha(SHA, { interval: 1, deadline: Infinity, once: false,

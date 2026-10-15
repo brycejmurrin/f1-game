@@ -400,9 +400,28 @@ const HudLayout = (function () {
       let l = Infinity, t = Infinity, rr = -Infinity, bb = -Infinity;
       for (const m of g) { l = Math.min(l, m.r.left); t = Math.min(t, m.r.top); rr = Math.max(rr, m.r.right); bb = Math.max(bb, m.r.bottom); }
       const dx = clampAxis(l, rr, W), dy = clampAxis(t, bb, H);
+      g.dx = dx; g.dy = dy;
       for (const m of g) {
         if (dx) m.el.style.setProperty("--hl-x", String(+(m.e.x + dx / W * 100).toFixed(2)));
         if (dy) m.el.style.setProperty("--hl-y", String(+(m.e.y + dy / H * 100).toFixed(2)));
+      }
+    }
+    // A CLAMPED BLOCK MUST NOT LAND ON A NEIGHBOUR. Desktop cockpit at HUD 150%: the strip's TYRES (-30vw) runs
+    // off the left edge and the clamp brings it back onto BRAKE BIAS (-18vw, its own block; hud-mock 1440x900).
+    // Push the untouched neighbour the clamp's way, clear of it; at 100% nothing is hit, so nothing moves.
+    const at = (m, g) => ({ L: m.r.left + g.dx, R: m.r.right + g.dx, T: m.r.top + g.dy, B: m.r.bottom + g.dy });
+    for (const g of groups.values()) {
+      if (!g.dx) continue;
+      for (const h of groups.values()) {
+        if (h === g || h.dx || h.dy) continue;
+        let push = 0;
+        for (const p of g) for (const q of h) {
+          const A = at(p, g), B = at(q, h);
+          if (A.L < B.R && B.L < A.R && A.T < B.B && B.T < A.B) push = g.dx > 0 ? Math.max(push, A.R + EDGE - B.L) : Math.min(push, A.L - EDGE - B.R);
+        }
+        if (!push) continue;
+        h.dx = push;
+        for (const q of h) q.el.style.setProperty("--hl-x", String(+(q.e.x + push / W * 100).toFixed(2)));
       }
     }
     // READOUT-ON-CONTROL: a MOVE & SIZE offset chosen on a wide desktop can
@@ -926,6 +945,8 @@ const HudLayout = (function () {
       const el = doc.querySelector(sel);
       if (el) clearanceObserver.observe(el, { box: "border-box" });
     }
+    // TYRES is a block for clearReadouts and grows up from its dock anchor (the PLAN and pit rows).
+    { const t = doc.querySelector("#hud-tyre"); if (t) clearanceObserver.observe(t, { box: "border-box" }); }
   }
 
   /** Force the rear-view on when the player places it in MOVE & SIZE.

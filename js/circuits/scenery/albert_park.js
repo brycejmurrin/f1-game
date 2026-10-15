@@ -12,7 +12,8 @@
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,
               addCyl, addCone, addFrustum, addPrism, addPyramid,
               forestEdge, cityFront, bowlSeatWall, MAT, circuitKit, seat,
-              cameraTower, recordBarrier, track, bankedKerbStrip, indexSolid } = api;
+              cameraTower, recordBarrier, track, bankedKerbStrip, indexSolid,
+              lampPost, floodMast } = api;
       const k = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -713,40 +714,45 @@
 
       const LAMP_COL = [0.96, 0.93, 0.70];
       const POLE_COL = [0.35, 0.35, 0.37];
+      const parkLamp = (kk, side, poleH, headLift, headSize) => {
+        const a = anchor(kk, side, 11);
+        if (onTrack(a.c[0], a.c[2], 1)) return;
+        const b = [a.r, a.u, a.t];
+        addCyl(out, a.c, 0.12, poleH, POLE_COL, 5, b);
+        const head = vadd(a.c, a.u, headLift);
+        addBox(out, head, headSize, LAMP_COL, b);
+        if (typeof lampPost === "function") {
+          lampPost({ pos: head, k: kk, side, kind: "sodium" });
+        }
+      };
 
       // Zone A — main straight (s=0.0–0.10, both sides)
       for (let j = 0; j < 10; j++) {
         for (const side of [-1, 1]) {
-          const a = anchor((k(0.0) + j * 12) % n, side, 11);
-          if (onTrack(a.c[0], a.c[2], 1)) continue;
-          addCyl(out, a.c, 0.13, 7.5, POLE_COL, 5, [a.r, a.u, a.t]);
-          addBox(out, vadd(a.c, a.u, 7.5), [0.8, 0.5, 1.8], LAMP_COL, [a.r, a.u, a.t]);
+          parkLamp((k(0.0) + j * 12) % n, side, 7.5, 7.5, [0.8, 0.5, 1.8]);
         }
       }
       // Zone B — parkland east corridor (s=0.12–0.28, both sides)
       for (let j = 0; j < 14; j++) {
         for (const side of [-1, 1]) {
-          const a = anchor((k(0.12) + j * 11) % n, side, 11);
-          if (onTrack(a.c[0], a.c[2], 1)) continue;
-          addCyl(out, a.c, 0.12, 8.0, POLE_COL, 5, [a.r, a.u, a.t]);
-          addBox(out, vadd(a.c, a.u, 8.0), [0.8, 0.5, 1.8], LAMP_COL, [a.r, a.u, a.t]);
+          parkLamp((k(0.12) + j * 11) % n, side, 8.0, 8.0, [0.8, 0.5, 1.8]);
         }
       }
       // Zone C — lakeside Drive (s=0.42–0.60, L shore — water + CBD beyond)
       for (let j = 0; j < 16; j++) {
-        const a = anchor((k(0.42) + j * 10) % n, -1, 11);
-        if (onTrack(a.c[0], a.c[2], 1)) continue;
-        addCyl(out, a.c, 0.12, 8.5, POLE_COL, 5, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 8.5), [0.9, 0.5, 2.0], LAMP_COL, [a.r, a.u, a.t]);
+        parkLamp((k(0.42) + j * 10) % n, -1, 8.5, 8.5, [0.9, 0.5, 2.0]);
       }
       // Zone D — southern park + chicane exit (s=0.70–0.90, both sides)
       for (let j = 0; j < 18; j++) {
         for (const side of [-1, 1]) {
-          const a = anchor((k(0.70) + j * 10) % n, side, 11);
-          if (onTrack(a.c[0], a.c[2], 1)) continue;
-          addCyl(out, a.c, 0.12, 7.5, POLE_COL, 5, [a.r, a.u, a.t]);
-          addBox(out, vadd(a.c, a.u, 7.5), [0.8, 0.5, 1.8], LAMP_COL, [a.r, a.u, a.t]);
+          parkLamp((k(0.70) + j * 10) % n, side, 7.5, 7.5, [0.8, 0.5, 1.8]);
         }
+      }
+      // Brabham main grandstand apron — tall cool floods (furniture.lamp is "none").
+      if (typeof floodMast === "function") {
+        for (const [s, side, gap] of [
+          [0.015, -1, 28], [0.035, -1, 32], [0.055, 1, 30], [0.075, 1, 34],
+        ]) floodMast(k(s), side, gap, { h: 40, cool: true, pool: false, arms: 2 });
       }
 
       for (const [s, side, cnt] of [[0.65, 1, 3], [0.32, -1, 3], [0.88, 1, 2], [0.12, -1, 2]]) {

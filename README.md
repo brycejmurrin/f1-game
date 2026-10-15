@@ -28,16 +28,49 @@ Night races run under floodlights.
 - **Electric boost** — hold BOOST to deploy battery energy; deployment tapers
   away at high speed, exactly like the 2026 power units. Recharge by braking
   and lifting.
-- **Overtake Mode** — be within 1 second of the car ahead at the circuit's
-  detection line and the OT light arms for the following lap; trigger it for
-  a 3–5 second push of full, taper-free deployment. The DRS replacement.
+- **Active Aero** — in MANUAL, press **Z** (or **AERO** on screen) inside an
+  activation zone to open the wings (**STRAIGHT MODE**): less drag and grip;
+  braking or leaving the zone closes them. **SETTINGS › CONTROLS › ACTIVE
+  AERO: AUTO** handles the wings; the HUD shows mode and zone status. Some
+  circuits have no zones.
+- **Overtake Mode** — stay within one second of the car ahead at the circuit's
+  detection line to earn it; the allowance arms at the start/finish line for
+  that lap, then toggle **OVERTAKE** for about 3–5 seconds of taper-free
+  electric deployment (the DRS replacement). Unavailable on lap one until the
+  leader starts lap two, under safety car or red flag, in low grip, or until
+  you are close enough at the detection line—the HUD shows **OVERTAKE READY**
+  when you may deploy.
+- **Pit stops & tyre wear** — **RACE SETTINGS › TYRE WEAR** defaults to
+  **REAL** (full wear; stops matter). **LIGHT** wears about half as fast;
+  **OFF** removes the pit lane entirely. There is no pit button—hold the car
+  in the pit lane at the entry for about half a second to call the stop.
+- **Race control** — yellow flags, virtual safety car, safety car and red flag
+  are **off** by default. Turn them on in **RACE SETTINGS › CAUTIONS**.
 - **Manual gearbox** (optional, SETTINGS › CONTROLS › GEARS: MANUAL) — an
   8-speed 'box with a live gear readout and tachometer. Shift up near the
   redline, down for corner exits; the limiter makes you upshift to reach top
   speed. Auto mode shifts for you.
 - Five red lights, lights out. Real points (25-18-15-12-10-8-6-4-2-1).
-- **Season mode**: all 24 rounds in order with persistent
-  championship standings.
+
+### Modes
+
+Menu routes and regression journeys: [docs/USAGE-PATHS.md](docs/USAGE-PATHS.md).
+
+- **Season** — race the calendar in order with saved championship progress;
+  **SEASON SETUP** picks rounds, qualifying and sprint weekends.
+- **Career** — **DRIVER CAREER** or **MY TEAM**: qualify, race, contracts,
+  R&D and prize money across seasons ([docs/CAREER.md](docs/CAREER.md)).
+- **Multiplayer** — private **RACE A FRIEND** sessions for 2–4 players over
+  WebRTC ([docs/MULTIPLAYER.md](docs/MULTIPLAYER.md)).
+- **WATCH** — broadcast-style replays and real-race playback from the title
+  menu; **DATA HUB › RACE IT** loads a real Grand Prix to **WATCH**,
+  **HIGHLIGHTS**, or **JUMP IN** as a real driver.
+- **REAL RACE (Data Hub RACE IT)** — OpenF1 timing drives the grid, gaps,
+  stops and safety-car windows while you drive one real driver's seat
+  ([docs/notes/REAL-RACE-2026-09-27.md](docs/notes/REAL-RACE-2026-09-27.md)).
+- **Photo Studio** — frame and capture stills from Home, the garage, a paused
+  race or a replay, with optional backgrounds (**CAPTURE & BACKGROUNDS** on
+  the title menu).
 
 **Build your own circuit** in the TRACK DESIGNER (title menu): RANDOMISE or
 draw a loop, drag its points, stamp corners, hairpins and chicanes, pick a
@@ -49,26 +82,35 @@ link. The designer's HOW TO tab walks through it; the long form is
 
 ### Controls
 
-- **Mobile (tilt):** tilt the phone to steer — calibrates at the start
-  lights. On-screen **GAS** / **BRAKE** pedals (left), **BOOST** / **OT**
-  toggles (right). iOS asks motion permission on your first tap.
-- **Mobile (no gyro):** touch the left/right side of the screen to steer;
-  toggle TILT in the pause menu.
-- **Desktop:** `←`/`→` or `A`/`D` steer, `↑`/`W` throttle, `↓`/`S` brake,
-  `Space` toggle boost, `X` overtake, `C` change camera, `P`/`Esc` pause.
-  Manual gears: `E` up, `Q` down.
-- **Gamepad:** plug in or pair a controller (PS5 / Xbox / MFi — works on
-  desktop browsers and iOS&nbsp;14.5+ Safari) for low-latency analog steering.
-  Left stick steers, **RT**/**A** throttle, **LT**/**B** brake, **X** boost,
-  **Y** overtake, **RB**/**LB** shift up/down, **View/Back** camera,
-  **Menu/Start** pause. Supported pads also rumble on contact and kerbs.
-- **Camera:** the **CAM** button (top-right, next to pause) or the `C` key
-  cycle through **20 camera modes** — **CHASE** (close), **FAR** (pulled back),
-  **DRIFT**, **COCKPIT** (onboard driver's eye), **HOOD** (nose cam), and more
-  (overhead, heli, trackside, cinematic, T-cam…). Your choice is remembered.
+- **Keyboard:** `←`/`→` or `A`/`D` steer, `↑`/`W` gas, `↓`/`S` brake,
+  `Space` toggles boost, `X` overtake, `Z` active aero, `C` cycles the
+  camera, `B` look back (hold), `R` recover, `T` radio check, `M` mirror
+  on/off, `P` pause. `Esc` goes back while a menu is open and pauses the
+  race only when none is. Manual gears: `E` up, `Q` or Left Shift down
+  (either Shift key).
+- **Gamepad:** left stick or the D-pad steers. **RT**/**A** gas,
+  **LT**/**B** brake (the triggers are gradual), **X** boost, **Y**
+  overtake, D-pad up active aero, **RB**/**LB** shift up/down, **View**
+  camera, **RS** look back (hold), **LS** recover, D-pad down radio
+  check, **Menu**/**Start** pause. Mirror has no default button. Plug in
+  or pair a pad (PS5 / Xbox / MFi); supported pads rumble on contact and
+  kerbs.
+- **Mobile:** choose **SETTINGS › CONTROLS › STEERING INPUT** —
+  **TILT**, **BUTTONS** or **TOUCH** — and rotate to landscape to drive.
+  **TILT** rolls the phone to steer, calibrates at the lights, and uses
+  on-screen **GAS** and **BRAKE**; if motion permission is denied the
+  game switches to **BUTTONS**. **BUTTONS** holds an on-screen arrow
+  (slide back to ease it); the pedals sit opposite the arrows. **TOUCH**
+  is drag-to-steer from where the finger lands, with automatic gas: use
+  **BRAKE** to slow down, and a tap alone does not steer. Stuck or
+  facing the wrong way? Pause, then **RECOVER CAR**.
+- Manual gears (**SETTINGS › CONTROLS › GEARS: MANUAL**) work on desktop
+  and with **TILT**. **BUTTONS** and **TOUCH** keep gears automatic.
+- Rebind keyboard and controller actions in **SETTINGS › CONTROLS**.
 
-Throttle is manual — hold GAS to accelerate. BOOST and OVERTAKE are taps that
-toggle/activate rather than buttons you hold.
+The **CAM** button (top-right, next to pause) cycles cameras the same
+way `C` and **View** do. The choice is remembered. Boost is a tap that
+toggles; overtake is a tap that activates; look back is held.
 
 ### Handling & tuning
 

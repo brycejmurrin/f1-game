@@ -17,10 +17,11 @@
 //   [ci-watch] CI › Smoke (page boots, __apex responds) (2) → failure — step "Run smoke shard": <annotation> <url>
 //   [ci-watch] = ci failed (19 jobs, 1 failed, 4 skipped) sha=e3bd067 …   terminal; the process exits
 //
-//   node tools/ci/ci-watch.mjs                       # HEAD, poll every 30 s, until every run completes (or 120 min)
+//   node tools/ci/ci-watch.mjs                       # HEAD, poll every 60 s, until every run completes (or 120 min)
 //   node tools/ci/ci-watch.mjs --sha e3bd067 --timeout 30   # minutes; default 120 for CI and --pages together
 //   node tools/ci/ci-watch.mjs --pages               # …then follow pages.yml until a run containing the SHA ends
 //   node tools/ci/ci-watch.mjs --once                # print the current state and exit (no waiting)
+//   node tools/ci/ci-watch.mjs --interval 30         # seconds between polls (min 10, default 60)
 //
 // Under Claude Code, arm it as a Monitor (every line is an event; re-arm on the
 // 30-min expiry — it resumes from the API, nothing is lost) or as ONE
@@ -33,6 +34,15 @@
 // Auth: GH_TOKEN or GITHUB_TOKEN, else `gh auth token` (Cloud boxes often have
 // gh logged in with no env token). Sent via curl's stdin config so it never
 // appears in argv. Read-only: GET requests only.
+//
+// API budget (docs/notes/ACTIONS-AUDIT-2026-10-14.md finding 8): a tick is 3–4
+// GETs, so the old 30 s default cost 360–480 requests/h per armed watch and
+// ~15 concurrent watches crossed the 5,000/h token limit. The default is 60 s,
+// and every GET is CONDITIONAL: the URL's last ETag rides in If-None-Match and
+// a 304 reuses the cached body. "Making a conditional request does not count
+// against your primary rate limit if a 304 response is returned" (authorized
+// requests only) — https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#use-conditional-requests
+// (read 2026-10-14; measured here: x-ratelimit-remaining unchanged across 304s).
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,25 +53,48 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
-export const DEFAULT_TIMEOUT_MIN = 120;     // no --timeout: CI (~15 min) + the Pages train (≤ ~25 min), with room
+export const DEFAULT_TIMEOUT_MIN = 120;     // no --timeout: CI (~15 min) + the gated Pages publish (median 23, p90 73 min)
+export const DEFAULT_INTERVAL_S = 60;       // seconds between polls; --interval overrides (min 10)
 const say = (...a) => console.log("[ci-watch]", ...a);
 
-export function api(pathQs, { run = spawnSync, env = process.env, gh } = {}) {
+/** url -> { etag, json }: the last 200 per URL, for If-None-Match. Bounded. */
+const ETAGS = new Map();
+export const ETAG_CACHE_MAX = 256;
+
+/** GET `repos/<REPO>/<pathQs>` → { json } | { error }; `cached: true` when a 304
+ *  reused the stored body. `etags` (a Map, or null to disable) is the per-URL
+ *  ETag store, injectable for tests. */
+export function api(pathQs, { run = spawnSync, env = process.env, gh, etags = ETAGS } = {}) {
   const token = githubToken(gh !== undefined ? { env, gh } : { env });
   if (!token) return { error: NO_TOKEN_HINT };
-  const r = run("curl", ["-sS", "--max-time", "30", "-K", "-", "-w", "\n%{http_code}",
+  const url = `https://api.github.com/repos/${REPO}/${pathQs}`;
+  const prior = etags?.get(url);
+  // -w: the status code and the response ETag on the last line (`%header{}`, curl ≥ 7.84).
+  const r = run("curl", ["-sS", "--max-time", "30", "-K", "-", "-w", "\n%{http_code} %header{etag}",
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28",
     // Revalidate stored HTTP responses when polling mutable CI/PR state.
     // https://www.rfc-editor.org/rfc/rfc9111.html#section-5.2.1.4
-    // https://docs.github.com/en/rest/guides/best-practices-for-using-the-rest-api#use-conditional-requests
     "-H", "Cache-Control: no-cache",
-    `https://api.github.com/repos/${REPO}/${pathQs}`],
-    { encoding: "utf8", input: `header = "Authorization: Bearer ${token}"\n` });
-  if (r.status !== 0) return { error: (r.stderr || "curl failed").trim() };
+    ...(prior ? ["-H", `If-None-Match: ${prior.etag}`] : []),
+    url],
+  // maxBuffer: a 100-job page or a 50-run page can pass spawnSync's 1 MB
+  // default; ready-full-cap died of exactly that (ENOBUFS, #1733).
+  { encoding: "utf8", maxBuffer: 64 << 20, input: `header = "Authorization: Bearer ${token}"\n` });
+  if (r.status !== 0) return { error: (r.stderr || r.error?.code || "curl failed").trim() };
   const out = (r.stdout || "").split("\n");
-  const code = Number(out.pop());
-  try { return code === 200 ? { json: JSON.parse(out.join("\n")) } : { error: `HTTP ${code}` }; }
-  catch { return { error: "bad JSON" }; }
+  const [, codeText = "", etag = ""] = /^(\d{3})\s*(.*)$/.exec(out.pop().trim()) || [];
+  const code = Number(codeText);
+  if (code === 304 && prior) return { json: prior.json, cached: true };
+  try {
+    if (code !== 200) return { error: `HTTP ${code}` };
+    const json = JSON.parse(out.join("\n"));
+    if (etags && etag) {
+      etags.delete(url);
+      etags.set(url, { etag, json });
+      if (etags.size > ETAG_CACHE_MAX) etags.delete(etags.keys().next().value);
+    }
+    return { json };
+  } catch { return { error: "bad JSON" }; }
 }
 
 /** One run per workflow: the NEWEST by creation. A push run the PR run on the
@@ -161,8 +194,9 @@ function annotations(jobId) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] [--once] [--timeout <min>]
-  Polls every workflow run for a SHA (default HEAD): one [ci-watch] line per job, a red\'s failing step,
+exitIfHelp(argv, `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] [--once] [--timeout <min>] [--interval <s>]
+  Polls every workflow run for a SHA (default HEAD) every 60 s, with ETag conditional GETs (a 304 is free):
+  one [ci-watch] line per job, a red\'s failing step,
   then one \`= ci <verdict>\` line (passed | failed | cancelled | superseded | none). --pages adds the Pages train.
   --once polls one time and exits. Details: the header of this file and AGENTS.md §Watching CI and Pages.`);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
@@ -329,7 +363,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const resolved = resolveSha(ref);
   if (resolved.error) { say(`= ci unknown — ${resolved.error}`); process.exit(3); }
   const sha = resolved.sha;
-  const interval = Math.max(10, +opt("--interval", 30)) * 1000;
+  const interval = Math.max(10, +opt("--interval", DEFAULT_INTERVAL_S) || DEFAULT_INTERVAL_S) * 1000;
   // No --timeout = DEFAULT_TIMEOUT_MIN, not forever: a `--pages` watch whose
   // train never contains the SHA (or a CI that never reports) used to poll
   // until the task was killed, and a killed task leaves no verdict line.

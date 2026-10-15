@@ -429,7 +429,86 @@ test("results orbit uses the rendered subject and road elevation instead of a mi
   const api = R.create(G); api.onFlag();
   assert.deepEqual(Array.from(extra.carPos), [198, 298], "opening shot uses the drawn body anchor");
   assert.equal(extra.frameSubject, true);
+  assert.equal(extra.bankDy, 2, "opening side shot follows the same banked road height as the orbit");
   api.startOrbit();
   assert.deepEqual(Array.from(G.dbgCam.target), [198, 83.2, 298]);
   assert.equal(G.dbgCam.eye[1], 88, "orbit is above the banked road, not below an elevated circuit");
+});
+
+
+test("chequered and highlights frame the bank lift at each rendered subject pose", () => {
+  for (const interpolated of [true, false]) {
+    const samples = [];
+    const R = boot({ Tracks: { banking: (_track, s, x, out, smooth) => {
+      samples.push({ s, x, out, smooth });
+      out.dy = x; return out;
+    } } });
+    const winner = { finPos: 1, s: 20, x: 3, px: 20, pz: 1 };
+    const rival = { finPos: 2, s: 50, x: -2, px: 50, pz: 2 };
+    const G = { player: winner, cars: [winner, rival], gfx: {}, track: {},
+      camPoseOf: interpolated ? (c) => ({ s: c.s - 1, x: c.x, carPos: [c.px - 1, c.pz], carHead: 0 }) : null,
+      camVantage: (_mode, _s, _x, _speed, _time, extra) => ({
+        eye: [extra.carPos[0], 5 + extra.bankDy, 0], tgt: [extra.carPos[0], 1 + extra.bankDy, 0],
+      }) };
+    const camera = R.create(G);
+    camera.attachReplay({ window: () => ({ t0: 0, t1: 10, frames: 30 }),
+      tags: () => [{ t: 5, car: 1 }], beginScrub: () => true,
+      apply: () => { rival.s = rival.px = 70; }, endScrub() {} });
+    assert.equal(camera.onFlag(), true);
+    assert.equal(G.dbgCam.target[1], 4, "flag lifts the target to the winner's banked surface");
+    assert.equal(camera.startHighlights(), true);
+    assert.equal(G.dbgCam.target[1], -1, "highlight preserves signed bank lift for the tagged car");
+    assert.equal(G.dbgCam.target[0], interpolated ? 69 : 70, "sample the newly posed highlight subject");
+    assert.deepEqual(samples.map(({ s, x, smooth }) => [s, x, smooth]),
+      [[interpolated ? 19 : 20, 3, true], [interpolated ? 69 : 70, -2, true]]);
+    assert.equal(samples[0].out, samples[1].out, "banking scratch is reused across shots");
+    camera.reset();
+  }
+});
+
+
+test("chequered framing tolerates absent track banking without a stale lift", () => {
+  for (const Tracks of [undefined, {}, { banking: () => null }]) {
+    const R = boot({ Tracks });
+    const car = { s: 5, x: 1, px: 10, pz: 20, finPos: 1 };
+    let lift;
+    const G = { player: car, cars: [car], gfx: {}, track: {},
+      camVantage: (_mode, _s, _x, _speed, _time, extra) => {
+        lift = extra.bankDy; return { eye: [0, 5, 0], tgt: [10, lift, 20] };
+      } };
+    const camera = R.create(G);
+    assert.equal(camera.onFlag(), true);
+    assert.equal(lift, 0);
+    assert.ok(G.dbgCam.target.every(Number.isFinite));
+    camera.reset();
+  }
+});
+
+
+test("results highlights expose the scene and restore the sheet on every exit", () => {
+  for (const exit of ["button", "complete", "reset", "eligibility"]) {
+    const nodes = new Map([["results", { dataset: {} }], ["res-menu", { parentNode: { insertBefore: (b) => nodes.set(b.id, b) } }]]);
+    const R = boot({ document: { getElementById: (id) => nodes.get(id) || null, createElement: () => ({}) } });
+    const car = { finPos: 1, s: 0, px: 0, pz: 0 };
+    const G = { player: car, cars: [car], gfx: {}, camVantage: () => ({ eye: [0, 5, -10], tgt: [0, 0, 0] }) };
+    let allowed = true, ends = 0;
+    const camera = R.create(G, () => allowed);
+    camera.attachReplay({ window: () => ({ t0: 0, t1: 2, frames: 60 }), tags: () => [],
+      beginScrub: () => true, apply() {}, endScrub: () => ends++ });
+    camera.onFlag();
+    const button = nodes.get("res-highlights"), sheet = nodes.get("results");
+    assert.equal(button.textContent, "HIGHLIGHTS");
+    button.onclick();
+    assert.equal(camera.status().phase, "highlights");
+    assert.equal(sheet.dataset.resultsPlayback, "playing", "presentation hides the classification over the footage");
+    assert.equal(button.textContent, "BACK TO RESULTS");
+    if (exit === "button") button.onclick();
+    else if (exit === "complete") camera.tick(3);
+    else if (exit === "reset") camera.reset();
+    else { allowed = false; camera.tick(1); }
+    assert.equal(sheet.dataset.resultsPlayback, undefined, exit + " restores full results presentation");
+    assert.equal(button.textContent, "HIGHLIGHTS");
+    assert.equal(ends, 1, "replay released exactly once");
+    assert.equal(camera.status().phase, exit === "reset" || exit === "eligibility" ? "idle" : "orbit");
+  }
 });

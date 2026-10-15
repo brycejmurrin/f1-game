@@ -285,8 +285,9 @@ const HudArrange = (() => {
 
     /* ---- pieces the race hides until something happens: show them with sample content ---- */
     const SAMPLE = [
-      ["announce", [[document.getElementById("announce-num"), "33"], [document.getElementById("announce-who"), "VERSTAPPEN \u00b7 RADIO"],
-        [document.getElementById("announce-text"), "Box this lap \u2014 cheaper stop, about 23s lost"]]],
+      // A typical message, not the longest: the sample sizes the card the player arranges (phone report 2026-10-14).
+      ["announce", [[document.getElementById("announce-num"), "3"], [document.getElementById("announce-who"), "RACE CONTROL"],
+        [document.getElementById("announce-text"), "\u201cTRACK LIMITS 2/4\u201d"]]],
       ["flag", [[document.getElementById("hud-flag"), "YELLOW \u00b7 SECTOR 2"]]],
       ["limits", []],
       ["damage", []],

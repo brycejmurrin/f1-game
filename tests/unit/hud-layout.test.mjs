@@ -203,7 +203,8 @@ test("phone portrait parks the minimap under the timing tower; other shapes keep
   assert.ok(baseMap, "shipped #minimap rule");
   assert.match(baseMap[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\)\);/);
   assert.doesNotMatch(baseMap[1], /--hud-top-h/, "landscape/desktop map stays in the top-left corner");
-  assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 1);
+  assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 2,
+    "tower/map stack plus the unpublished-lane radio fallback, both after the rules they beat");
 });
 
 // Empty .hud-gaps collapses (css/hud.css). The COMPACT metrics test must seed
@@ -472,6 +473,42 @@ test("fit clamps pieces that share an offset as ONE block, so neighbours keep th
   assert.ok(r.right <= 1000 - 4 + 1e-6, "the block ends on screen: " + r.right);
   assert.ok(o.right <= r.left, `OT (${o.left}-${o.right}) still left of AERO (${r.left}-${r.right})`);
   assert.equal(ot.props["--hl-x"], aero.props["--hl-x"], "one correction for the whole block");
+});
+
+test("fit: a block the edge clamp brings back pushes the neighbour it lands on, and only then", () => {
+  // Desktop cockpit, HUD 150 % at 1440x900 (hud-mock 2026-10-14): ENERGY + TYRES ship at -30,-4 and TYRES runs
+  // off the left edge; the clamp brought it back onto BRAKE BIAS (-18,0, its own block). At 100 % the clamp
+  // leaves TYRES short of BRAKE BIAS, so BRAKE BIAS must keep its own offset.
+  const run = (tyreW) => {
+    const mk = (left, w, top, h, ship) => {
+      const props = {}, attrs = { "data-hl": "" };
+      return { props,
+        style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; } },
+        setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+        getBoundingClientRect() { const x = left + (parseFloat(props["--hl-x"] || ship) - ship) * 14.4; return { left: x, right: x + w, top, bottom: top + h, width: w, height: h }; } };
+    };
+    const tyre = mk(4 - tyreW - 6, tyreW, 582, 75, -30), energy = mk(80, 285, 582, 27, -30), bb = mk(129, 92, 639, 40, -18);
+    const written = { hudLayout: { v: 2, cockpit: { tyre: { x: -30, y: -4, s: 150 }, energy: { x: -30, y: -4, s: 150 }, bb: { x: -18, y: 0, s: 150 } }, other: {} } };
+    const blank = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
+    const by = { "#hud-tyre": tyre, "#hud-energy": energy, "#hud-bb": bb };
+    const ctx = {
+      console, window: { innerWidth: 1440, innerHeight: 900 },
+      document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => true } },
+        querySelector: (sel) => by[sel] || blank },
+      GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
+    };
+    vm.createContext(ctx);
+    vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+    ctx.HudLayout.setCam("cockpit");
+    ctx.HudLayout.fit();
+    return { tyre: tyre.getBoundingClientRect(), bb: bb.getBoundingClientRect(), bbX: bb.props["--hl-x"] };
+  };
+  const at150 = run(195);
+  assert.ok(at150.tyre.left >= 4 - 1e-6, "TYRES back on screen: " + at150.tyre.left);
+  assert.ok(at150.bb.left >= at150.tyre.right, `BRAKE BIAS (${at150.bb.left}) clear of TYRES (..${at150.tyre.right})`);
+  const at100 = run(120);
+  assert.ok(at100.tyre.right < 129, "at 100 % the clamped TYRES stops short of BRAKE BIAS: " + at100.tyre.right);
+  assert.equal(at100.bbX, "-18", "BRAKE BIAS keeps its own offset when nothing lands on it");
 });
 
 test("fit clamps a size-only piece on its own, not as one block with every other size-only piece", () => {
@@ -748,6 +785,8 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "phone sectors (tilt/touch/buttons) take the same --dock-r-w clearance as limits/damage");
   assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
     "touch #announce sits in the published dock lane (centred when none is published), not at 10px+sal over TILT's left dock");
+  assert.match(css, /@media \(orientation: portrait\) and \(max-width: 500px\) \{[\s\S]*?body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 34% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
+    "portrait unpublished-lane fallback pins left past the map column so HUD 150% on 390 clears #minimap");
   assert.doesNotMatch(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-prof-broadcast\)[^{]*#announce \{[\s\S]*?left: calc\(10px \+ var\(--sal\)/,
     "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");
   assert.doesNotMatch(css,

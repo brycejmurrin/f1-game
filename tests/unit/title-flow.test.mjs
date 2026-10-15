@@ -10,12 +10,15 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 
 function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racing = false, link = false, queuedVt = false } = {}) {
   const hash = { on: link }, transitions = [];
+  const captures = [];
   const btns = {}, listeners = {}, log = { announce: [], vt: 0, builds: 0, opened: 0, consumed: 0, restore: 0, flyby: 0, dailySelect: 0 };
   const G = {
     flow: "title", session: "none", soundOn: false, trackIdx: 0, announce: (...a) => log.announce.push(a),
     buildSelect: () => { log.builds++; }, scheduleFlybyTrack() { log.flyby++; },
     daily: { select() { log.dailySelect++; }, stop() {} },
-    netLobby: { open: () => { log.opened++; } }, els: { overlay: { hidden: false }, select: { hidden: true } },
+    netLobby: { open: () => { log.opened++; } }, els: { overlay: { hidden: false,
+      addEventListener(type, fn, capture) { captures.push({ type, fn, capture }); },
+    }, select: { hidden: true } },
     $: (id) => btns[id] || (btns[id] = { id, addEventListener() {} }),
   };
   const ctx = vm.createContext({
@@ -28,8 +31,66 @@ function boot({ ensureNet = () => Promise.resolve(true), top = () => null, racin
   vm.runInContext(source, ctx);
   const api = ctx.TitleFlow.create(G, { vt: (f) => { log.vt++; if (queuedVt) transitions.push(f); else f(); }, restoreFreePlaySelection: () => { log.restore++; },
     careerUi: { openSlots() {} }, refreshTitle() {}, ensureNet });
-  return { G, btns, listeners, log, api, hash, transitions };
+  // Mirror DOM capture before onclick, including taps on a button's SVG/span.
+  function click(id) {
+    const button = G.$(id);
+    const event = { target: { closest: (selector) => selector === "button, a" ? button : null } };
+    for (const { type, fn, capture } of captures) if (type === "click" && capture === true) fn(event);
+    button.onclick?.();
+  }
+  return { G, btns, listeners, log, api, hash, transitions, click };
 }
+
+test("Settings/Help visits cancel pending VS success and failure even after BACK", async () => {
+  for (const door of ["mb-settings", "mb-help"]) {
+    for (const outcome of [true, false, "reject"]) {
+      let resolveNet, rejectNet, top = null, cached;
+      const h = boot({ top: () => top, ensureNet: () => cached ||= new Promise((resolve, reject) => {
+        resolveNet = resolve; rejectNet = reject;
+      }) });
+      h.G.$(door).onclick = () => { top = { id: door === "mb-settings" ? "pmsettings" : "howtoplay" }; };
+      h.click("mb-vs");
+      h.click(door);
+      assert.ok(top, "the external title handler still opens its sheet");
+      top = null;   // BACK before the pending download finishes
+      if (outcome === "reject") rejectNet(new Error("offline"));
+      else resolveNet(outcome);
+      await tick();
+      assert.equal(h.log.opened, 0, `${door}: stale ${outcome} does not reopen the lobby`);
+      assert.equal(h.log.announce.length, 0, "cancelled failures remain silent");
+      assert.equal(h.G.flow, "title"); assert.equal(h.G.session, "none");
+      assert.equal(h.log.restore, 0, "cancelled requests do not change selection");
+      if (outcome !== true) cached = Promise.resolve(true);   // loader's normal retry after failure
+      h.click("mb-vs");
+      await tick();
+      assert.equal(h.log.opened, 1, "fresh activation accepts the cached or retried bundle");
+      assert.equal(h.G.flow, "gp"); assert.equal(h.G.session, "race");
+      assert.equal(h.log.restore, 1);
+    }
+  }
+});
+
+test("repeated VS activations sharing one download open the lobby only once", async () => {
+  let ready;
+  const download = new Promise((resolve) => { ready = resolve; });
+  const h = boot({ ensureNet: () => download });
+  h.click("mb-vs"); h.click("mb-vs");
+  ready(true);
+  await tick();
+  assert.equal(h.log.opened, 1);
+  assert.equal(h.log.restore, 1);
+});
+
+test("title sound and background-motion toggles do not cancel a pending VS entry", async () => {
+  let ready;
+  const h = boot({ ensureNet: () => new Promise((resolve) => { ready = resolve; }) });
+  h.click("mb-vs");
+  h.click("soundbtn"); h.click("home-motion");
+  ready(true);
+  await tick();
+  assert.equal(h.log.opened, 1);
+  assert.equal(h.log.restore, 1);
+});
 
 test("M5: VS FRIEND leaves flow/selection alone and announces when the net bundle is refused", async () => {
   const h = boot({ ensureNet: () => Promise.resolve(false) });

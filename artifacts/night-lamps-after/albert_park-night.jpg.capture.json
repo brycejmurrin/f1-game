@@ -1,0 +1,355 @@
+{
+  "job": {
+    "trackId": "albert_park",
+    "frac": 0.02,
+    "cam": "orbit",
+    "az": 45,
+    "el": 18,
+    "dist": 45,
+    "side": 1,
+    "tod": "night",
+    "showHud": false,
+    "team": null,
+    "out": "/workspace/artifacts/night-lamps-after/albert_park-night.jpg",
+    "backend": "three",
+    "capture": {
+      "profile": "custom",
+      "width": null,
+      "height": null,
+      "viewport": null,
+      "dpr": 1,
+      "type": null,
+      "quality": null,
+      "scope": "scene",
+      "gpu": "swiftshader",
+      "gpuExplicit": false,
+      "browser": "auto",
+      "trace": false,
+      "tracePath": null,
+      "cacheAssets": false,
+      "reuse": true,
+      "isolated": false,
+      "seed": null,
+      "positionals": []
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "type": "jpeg",
+    "quality": 85,
+    "raster": false
+  },
+  "browser": {
+    "requested": {
+      "gpu": "swiftshader",
+      "flavor": "auto"
+    },
+    "executable": {
+      "requestedFlavor": "auto",
+      "executablePath": "/usr/local/bin/google-chrome",
+      "source": "PATH:google-chrome",
+      "flavor": "chromium",
+      "pid": 29614
+    },
+    "version": "154.0.8037.92",
+    "actual": {
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+      "vendor": "Google Inc. (Google)",
+      "software": true,
+      "devices": [
+        {
+          "vendorId": 65535,
+          "deviceId": 65535,
+          "vendorString": "Google Inc. (Google)",
+          "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+          "driverVendor": "SwANGLE",
+          "driverVersion": "5.0.0"
+        }
+      ],
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "enabled",
+        "webgpu": "unavailable_software",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "diag": {
+      "env": {
+        "backend": "three",
+        "backendState": {
+          "api": "webgpu",
+          "forceWebGL": false,
+          "pin": null,
+          "autoStayGL": false,
+          "hasGpu": true,
+          "gpuAdapterOk": true,
+          "gpuCanvasOk": true,
+          "canvasAlpha": null,
+          "isMobile": false,
+          "mobileTier": false,
+          "isWebKit": false,
+          "liteGpu": true,
+          "softwareGL": true,
+          "softAdapter": true,
+          "headless": true,
+          "forceHw": false,
+          "forceBatches": false,
+          "skipBatches": true,
+          "skipBatchesPin": false,
+          "gpuErrFrames": 0,
+          "envFail": 0,
+          "envFailMsg": "",
+          "softBlit": true,
+          "capPref": null,
+          "fx": {
+            "shadows": 1,
+            "marks": 0,
+            "skidVerts": 0,
+            "glow": 16,
+            "particles": 0,
+            "decals": 3,
+            "lineVerts": 4212
+          },
+          "line": {
+            "meshes": 1,
+            "visible": 1,
+            "inScene": 1,
+            "geo": {
+              "index": 12630,
+              "indexType": "Uint32Array",
+              "range": 12630,
+              "pos": 4212,
+              "attrs": [
+                "position",
+                "lineAcross",
+                "lineSpeed",
+                "lineZone",
+                "lineAlong"
+              ],
+              "renderOrder": 9,
+              "bs": [
+                1070.6
+              ]
+            }
+          },
+          "softRead": {
+            "gen": 2,
+            "lastMs": 10072,
+            "fails": 0,
+            "lastErr": null,
+            "abandoned": 0,
+            "pending": true
+          },
+          "gpuErrors": 0,
+          "gpuFirstError": null,
+          "gpuRecentErrors": [],
+          "presents": 443,
+          "healed": false,
+          "ctxLost": false,
+          "calls": 0,
+          "arrayNearest": false,
+          "hasMaterialMaps": true,
+          "packLive": true,
+          "drawMatMode": 0
+        }
+      }
+    },
+    "seed": 1,
+    "renderClock": 7.683300000000044,
+    "render": {
+      "scale": 1,
+      "fps": 60,
+      "floorMs": 16.6,
+      "auto": true,
+      "tier": 0,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 440,
+        "maxMs": 6366.4,
+        "slow": 8
+      },
+      "frameTimes": {
+        "frames": 443,
+        "p50": 16.69999999999709,
+        "p95": 16.799999999995634,
+        "p99": 2916.5,
+        "maxMs": 6366.4000000000015,
+        "droppedSimS": 0.19999999999999998,
+        "physicsSteps": 11,
+        "windowFrames": 2048
+      },
+      "userTier": 0,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": false,
+      "tierFutile": false,
+      "tierHold": false
+    },
+    "camera": {
+      "eye": [
+        180.63106067426443,
+        15.386851741580218,
+        -357.2292890733495
+      ],
+      "target": [
+        180.74588165283208,
+        1.4810869947075844,
+        -400.02664794921867
+      ],
+      "fov": 64.0000397273188,
+      "previousAnchor": [
+        180.7458877217303,
+        -400.02664184767724
+      ],
+      "nextAnchor": [
+        180.7458877217303,
+        -400.02664184767724
+      ],
+      "renderFrame": 443,
+      "simulationTime": 1.0666666666666664,
+      "renderTime": 7.683300000000044
+    },
+    "info": {
+      "state": "race",
+      "track": "albert_park",
+      "n": 1315,
+      "total": 5261.3358325241115,
+      "timeTrial": false,
+      "seasonMode": false,
+      "flow": "gp",
+      "session": "race",
+      "career": false,
+      "practice": false,
+      "duel": false,
+      "raceQuali": false,
+      "raceGrid": "random",
+      "lapsTarget": 3,
+      "sectors": [
+        0.3,
+        0.62
+      ],
+      "turns": 14
+    }
+  },
+  "renderer": {
+    "requested": "three",
+    "matchesRequested": true,
+    "actual": "three",
+    "api": "webgpu",
+    "state": {
+      "api": "webgpu",
+      "forceWebGL": false,
+      "pin": null,
+      "autoStayGL": false,
+      "hasGpu": true,
+      "gpuAdapterOk": true,
+      "gpuCanvasOk": true,
+      "canvasAlpha": null,
+      "isMobile": false,
+      "mobileTier": false,
+      "isWebKit": false,
+      "liteGpu": true,
+      "softwareGL": true,
+      "softAdapter": true,
+      "headless": true,
+      "forceHw": false,
+      "forceBatches": false,
+      "skipBatches": true,
+      "skipBatchesPin": false,
+      "gpuErrFrames": 0,
+      "envFail": 0,
+      "envFailMsg": "",
+      "softBlit": true,
+      "capPref": null,
+      "fx": {
+        "shadows": 1,
+        "marks": 0,
+        "skidVerts": 0,
+        "glow": 16,
+        "particles": 0,
+        "decals": 3,
+        "lineVerts": 4212
+      },
+      "line": {
+        "meshes": 1,
+        "visible": 1,
+        "inScene": 1,
+        "geo": {
+          "index": 12630,
+          "indexType": "Uint32Array",
+          "range": 12630,
+          "pos": 4212,
+          "attrs": [
+            "position",
+            "lineAcross",
+            "lineSpeed",
+            "lineZone",
+            "lineAlong"
+          ],
+          "renderOrder": 9,
+          "bs": [
+            1070.6
+          ]
+        }
+      },
+      "softRead": {
+        "gen": 2,
+        "lastMs": 10072,
+        "fails": 0,
+        "lastErr": null,
+        "abandoned": 0,
+        "pending": true
+      },
+      "gpuErrors": 0,
+      "gpuFirstError": null,
+      "gpuRecentErrors": [],
+      "presents": 443,
+      "healed": false,
+      "ctxLost": false,
+      "calls": 0,
+      "arrayNearest": false,
+      "hasMaterialMaps": true,
+      "packLive": true,
+      "drawMatMode": 0
+    },
+    "positive": true,
+    "signal": "live-backend-state-and-presented-scene-pixels"
+  },
+  "readiness": {
+    "mode": "source-generation",
+    "required": 2,
+    "shown": 2
+  },
+  "pixels": {
+    "brightFraction": 0.69775390625,
+    "centerBrightFraction": 0.8717105263157895,
+    "variance": 2382.521174722119,
+    "black": false,
+    "blackHudOnly": false,
+    "meaningful": true,
+    "classification": "scene-content"
+  },
+  "image": {
+    "path": "/workspace/artifacts/night-lamps-after/albert_park-night.jpg",
+    "bytes": 113709,
+    "via": "game-soft",
+    "scope": "scene"
+  }
+}

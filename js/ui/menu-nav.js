@@ -398,19 +398,21 @@ window.MenuNav = (function () {
   }
 
   // After a page: if the focused item is no longer inside its pane, move focus to
-  // the item nearest the pane's top edge that IS. Focus only — no scrollIntoView,
+  // the item nearest the pane's leading edge that IS. Focus only — no scrollIntoView,
   // which would undo the page we just performed.
   function keepFocusInView(pane, active, list) {
     if (!active || !pane.contains(active)) return;
+    const horizontal = isStrip(pane);
+    const start = horizontal ? "left" : "top", end = horizontal ? "right" : "bottom";
     const p = pane.getBoundingClientRect();
     const a = active.getBoundingClientRect();
-    if (a.top >= p.top - 1 && a.bottom <= p.bottom + 1) return;
+    if (a[start] >= p[start] - 1 && a[end] <= p[end] + 1) return;
     let best = null, bestD = Infinity;
     for (const el of list) {
       if (!pane.contains(el)) continue;
       const b = el.getBoundingClientRect();
-      if (b.top < p.top - 1 || b.bottom > p.bottom + 1) continue;
-      const d = b.top - p.top;
+      if (b[start] < p[start] - 1 || b[end] > p[end] + 1) continue;
+      const d = b[start] - p[start];
       if (d < bestD) { bestD = d; best = el; }
     }
     if (best) best.focus({ preventScroll: true });

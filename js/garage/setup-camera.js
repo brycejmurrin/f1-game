@@ -128,7 +128,7 @@ function startDriveOut() {
   driveOut = null;
   if (!cfg.enabled) return 0;
   // AUTOMATION skips it (LoadingScreen.isAutomation, the one gate #1294's 700 ms
-  // card uses): a harness launch on software GL spent the ~9.6 s drive-out (up to 3x
+  // card uses): a harness launch on software GL spent the ~10.6 s drive-out (up to 3x
   // on a stalled clock) plus awaitSoftPresent on top of a 30-90 s build and blew
   // the specs' 45 s grid wait (steering, quali). No drive-out means no studio and no
   // soft-present wait: game.js introGarage flies straight on, as with the tuner off.
@@ -138,6 +138,7 @@ function startDriveOut() {
   // card (js/game.js studioDone → afterGarageOut → raceIntro).
   const play = Object.assign({}, cfg, { enabled: true });
   driveOut = { t: 0, cfg: play };
+  driveOutEngine(true);
   return Math.round(GarageArrival.OUT_DURATION * 1000 / play.speed);
 }
 // Wall ms of the drive-out still to play: it advances on the clamped frame dt, so a
@@ -152,7 +153,38 @@ function stepDriveOut(held = false) {
   const now = performance.now(), gap = driveOut.last ? (now - driveOut.last) / 1000 : 0;
   driveOut.last = now;
   if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
-  return Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg), { active: true });
+  const pose = Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg, reducedMotion()), { active: true });
+  driveOutSound(pose, gap);
+  return pose;
+}
+// THE ENGINE ON THE WAY OUT (sound on): an idle while the shutter lifts, revs
+// with the car's speed as it rolls, a chirp of wheelspin as it pulls away. Its
+// own start/stop, so the race's startEngine (js/game.js, with its venue) builds
+// a fresh graph exactly as it did before: stopDriveOut always stops this one.
+let _outEngine = false, _outPrev = null;
+function driveOutEngine(on) {
+  if (on && G.soundOn && typeof GameAudio !== "undefined" && GameAudio.startEngine) {
+    try {
+      const team = Teams.LIST[G.teamIdx];
+      if (GameAudio.setVoice) GameAudio.setVoice(team && team.engine);
+      GameAudio.startEngine(); _outEngine = true; _outPrev = null;
+    } catch (e) { _outEngine = false; Log.warn("audio", "garage engine failed", e); }
+  } else if (!on && _outEngine) {
+    _outEngine = false; _outPrev = null;
+    try { GameAudio.stopEngine(); if (GameAudio.setSkid) GameAudio.setSkid(0, false); } catch (_) { /* already down */ }
+  }
+}
+function driveOutSound(pose, gap) {
+  if (!_outEngine || !(gap > 0)) { _outPrev = pose; return; }
+  const p = _outPrev; _outPrev = pose;
+  if (!p) return;
+  const v = Math.hypot(pose.x - p.x, pose.z - p.z) / Math.min(0.1, gap);   // m/s along the path
+  const s01 = Math.min(1, v / 12), rolling = v > 0.2;
+  try {
+    GameAudio.setEngine(rolling ? 0.22 + 0.35 * s01 : 0.12, 0, false, s01 * 0.2, 1,
+      { throttle: rolling ? 0.45 : 0, brake: 0, slip: 0, wet: false });
+    if (GameAudio.setSkid) GameAudio.setSkid(rolling && v < 2.5 ? 0.35 : 0, false);
+  } catch (_) { /* audio is decoration here */ }
 }
 // THE ARRIVAL PREVIEW (#garrival's PREVIEW IN / OUT): the tuner's saved settings
 // played once in this room, from the settings page — the title screen or a paused
@@ -177,7 +209,7 @@ function startArrivalPreview(dir, btn) {
 }
 function stepPreview(dt) {
   preview.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * preview.cfg.speed;
-  const pose = (preview.dir === "out" ? GarageArrival.poseOut : GarageArrival.pose)(preview.t, preview.cfg);
+  const pose = (preview.dir === "out" ? GarageArrival.poseOut : GarageArrival.pose)(preview.t, preview.cfg, reducedMotion());
   if (pose.active) return pose;
   stopPreview();
   return Object.assign(pose, { active: true });   // this frame still holds the last pose, not the turntable's
@@ -755,6 +787,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   GarageScene.recentre(_spProj, _spView, _spVP, panelFrac, !homeFit && autoFrame && !(arriving && arriving.active), _spHull);
   M4.invertTo(_spInvProj, _spProj);
   const context = garageCtx(), sceneTime = context.sceneNow;
+  context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell
   const liv = _spLiv();
   const lightsRig = GarageScene.live(liv, sceneTime, context);
   if (gfx.begin({
@@ -789,6 +822,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const carMesh = getSetupPreviewMesh();
   GarageScene.draw(team, liv, eye, getTeamParts, G.driverIdx, context, carMesh, arriving, arrivalCar);
   gfx.draw(carMesh, arrivalCar, spMat);
+  // Rolling in or out at NIGHT or in the WET, the rain light is on, as it is on
+  // the grid (js/game.js drawRearLights); parked in the bay it stays dark.
+  if (arriving && arriving.active && (context.night || /rain|wet|storm/.test(String(context.weather || ""))) && CarMesh.drawRearLights)
+    CarMesh.drawRearLights(arrivalCar, 1);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.
   {
@@ -980,7 +1017,7 @@ return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
   startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival: arrival.cancel,
-  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; },
+  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },

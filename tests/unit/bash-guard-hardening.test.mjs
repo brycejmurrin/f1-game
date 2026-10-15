@@ -638,3 +638,70 @@ test("a PASSING commit tells the model which guard path ran: additionalContext +
     assert.equal(hook("bash-guard.sh", bashCall("git status", { cwd: repo.dir }), { cwd: repo.dir }).stdout, "");
   } finally { repo.rm(); }
 });
+
+// ── THE CLOG OF 2026-10-15 (docs/notes/CI-CLOG-SURVEY-2026-10-15.md) ────────
+// 306 of 401 PR runs that day ended cancelled, 142 of them in 17 one-minute
+// sweeps under the owner's account, and every sweep was followed by a
+// "retrigger" push. A queued run holds no slot, so the sweep bought nothing
+// and the retrigger bought a second run. Both doors refuse the cancel; the
+// push hold AGENTS.md rule 4 described in prose is enforced.
+test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks", () => {
+  const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command), { env });
+  for (const c of ["gh run cancel 38683549544", "gh run cancel 1 --repo o/r", "gh api -X POST repos/o/r/actions/runs/123/cancel",
+    "curl -X POST -H 'Authorization: Bearer x' https://api.github.com/repos/o/r/actions/runs/123/cancel",
+    "curl -X POST \"https://api.github.com/repos/o/r/actions/runs/123/cancel\"", "bash -c 'gh run cancel 5'",
+    "gh api -X POST repos/o/r/actions/runs/123/force-cancel", "gh api -X POST \"repos/o/r/actions/runs/$id/cancel\""]) {
+    const r = run(c);
+    assert.equal(r.status, 2, `must block: ${c} (${r.stderr})`);
+    assert.match(r.stderr, /BLOCKED: cancelling an Actions run/);
+  }
+  for (const c of ["gh run view 1", "gh run list --limit 5", "echo 'gh run cancel 1'", "gh api repos/o/r/actions/runs/123/jobs",
+    "node tools/ci/test-bg.mjs --stop", "cat >> t.mjs <<'EOT'\ncurl https://api.github.com/repos/o/r/actions/runs/123/cancel\nEOT"])
+    assert.equal(run(c).status, 0, `must allow: ${c}`);
+  assert.equal(run("gh run cancel 1", { APEX_RUN_CANCEL_OK: "1" }).status, 0, "the user asked: env override");
+  assert.equal(run("APEX_RUN_CANCEL_OK=1 gh run cancel 1").status, 0, "the user asked: command override");
+  const mcp = (tool_input, env = {}) => decisionOf(hook("github-mcp-guard.sh", { tool_name: "mcp__github__actions_run_trigger", tool_input }, { env }));
+  assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }), "deny");
+  assert.equal(mcp({ method: "force_cancel_workflow_run", run_id: 1 }), "deny");
+  assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_RUN_CANCEL_OK: "1" }), null, "the user asked");
+  assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }), "ask", "a re-run is at most once, infra only");
+  assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }), "ask");
+  assert.equal(mcp({ method: "run_workflow", workflow_id: "ci.yml", ref: "x" }), null, "a dispatch passes");
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
+  assert.ok(new RegExp(g.matcher).test("mcp__github__actions_run_trigger"), "the matcher must route actions_run_trigger through the guard");
+});
+
+test("2026-10-15: git push holds while queue-depth says hold; a silent gauge or APEX_PUSH_HOLD=0 lets it through", () => {
+  const repo = scratchRepo("hook-push-hold-");
+  try {
+    // The hold applies only in a checkout of this repository (the hook's other
+    // tests push from scratch repos with no origin and must stay unaffected).
+    repo.g("remote", "add", "origin", "https://github.com/brycejmurrin/f1-game.git");
+    repo.g("checkout", "-qb", "cursor/topic-1234");
+    fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });
+    const gauge = (code, line) => fs.writeFileSync(path.join(repo.dir, "tools/ci/queue-depth.mjs"),
+      `console.log(${JSON.stringify(line)}); process.exit(${code});\n`);
+    const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_PUSH_HOLD: "", ...env } });
+    gauge(1, "= queue hold (53 Linux jobs in flight / 40, 12 queued, 0 macOS / 5)");
+    for (const c of ["git push -u origin cursor/topic-1234", "git push", "git -C . push origin HEAD", "bash -c 'git push origin HEAD'", "git fetch && git push origin HEAD"]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `must hold: ${c} (${r.stderr})`);
+      assert.match(r.stderr, /BLOCKED: = queue hold \(53 Linux jobs in flight/);
+      assert.match(r.stderr, /APEX_PUSH_HOLD=0/, "the refusal names the override");
+    }
+    assert.equal(run("git push -u origin cursor/topic-1234", { APEX_PUSH_HOLD: "0" }).status, 0, "the env override");
+    assert.equal(run("APEX_PUSH_HOLD=0 git push -u origin cursor/topic-1234").status, 0, "the command override");
+    for (const c of ["git status", "echo 'git push'", "git log --oneline -1", "cat <<'EOT'\ngit push\nEOT"]) assert.equal(run(c).status, 0, `not a push: ${c}`);
+    gauge(0, "= queue ok (10 Linux jobs in flight / 40, 0 queued, 0 macOS / 5)");
+    assert.equal(run("git push -u origin cursor/topic-1234").status, 0, "an ok gauge lets the push through");
+    gauge(3, "= queue unknown — API: HTTP 401");
+    const r = run("git push -u origin cursor/topic-1234");
+    assert.equal(r.status, 0, "a gauge that cannot answer never holds");
+    assert.match(r.stderr, /queue-depth could not answer/);
+    // Not this repository: no gauge, no hold (the scratch repos above).
+    repo.g("remote", "set-url", "origin", "https://github.com/someone/else.git");
+    gauge(1, "= queue hold");
+    assert.equal(run("git push -u origin cursor/topic-1234").status, 0, "another origin is not held");
+  } finally { repo.rm(); }
+});

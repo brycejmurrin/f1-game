@@ -67,7 +67,7 @@ const MULTI_GLOBAL = {
   ],
   // Title-boot race-session stub; ensureRaceSession() reinjects via `var`.
   "js/race/session-stub.js": [
-    "Damage", "Duel", "FlyingStart", "MarshalPanels", "PitLane", "RaceEngineer",
+    "Damage", "Duel", "FlyingStart", "JumpStartPenalty", "MarshalPanels", "PitLane", "RaceEngineer",
     "RaceFacts", "RaceRadio", "RadioLines", "Reliability", "SessionRecords",
     "Spotter", "StartLights",
   ],
@@ -86,7 +86,7 @@ const SHARED_GLOBALS = {
   GameAudioToneModel: 2, CarSfx: 2, RivalAudio: 2, VoicePack: 2,
   RecordedAnnouncer: 2, DrivingCues: 2, RadioVoice: 2, Announcer: 2, AudioPanel: 2,
   // LAZY_RACE_SESSION reinjection: session-stub.js then the real module (cap 2).
-  Damage: 2, Duel: 2, FlyingStart: 2, MarshalPanels: 2, PitLane: 2, RaceEngineer: 2,
+  Damage: 2, Duel: 2, FlyingStart: 2, JumpStartPenalty: 2, MarshalPanels: 2, PitLane: 2, RaceEngineer: 2,
   RaceFacts: 2, RaceRadio: 2, RadioLines: 2, Reliability: 2, SessionRecords: 2,
   Spotter: 2, StartLights: 2,
 };
@@ -135,6 +135,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "scheduler"], // shell build id + error card; scheduler.yield (Chrome 129+) typeof-guarded in startRaceBody, Safari → setTimeout(0)
   "js/perf/race-entry-profile.js": ["scheduler"], // afterPaint yield on UI Start Race (Chrome 129+); typeof-guarded, else rAF+setTimeout / Promise.resolve
+  "js/car/car-draw.js": ["scheduler"], // warmCarAssetsAsync's step yield (Chrome 129+, perf hunt 4 F3.3); typeof-guarded, else setTimeout(0)
   "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)
   "js/core/script-loader.js": ["__APEX_BUILD"], // the shell stamps dynamically injected asset URLs
   "js/core/lazy-bundles.js": ["__TEST_MODE", "__APEX_BUILD", "scheduler"], // Playwright agent-surface flag; prefetch URL stamp; scheduler.yield (Chrome 129+) typeof-guarded in ensureAudio, Safari → setTimeout(0)

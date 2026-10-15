@@ -465,6 +465,9 @@ function setTrackFilter(id, focus, keepDaily) {
   if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
   snapTrackToFilter();
+  // The chip rebuild is deferred through view transitions; the hero must not
+  // keep describing the circuit the filter just hid (FINDINGS tracks-ui #1).
+  updateTrackPreview();
   vt(() => {
     buildSelect();
     // THE BAR IS NOT INSIDE THE STRIP. mountToolbar puts it on the SHELF, as a
@@ -1082,6 +1085,24 @@ function updateTrackPreview() {
   // default box until now, so the first open never flashes an empty canvas).
   map.dataset.drawn = "";
 }
+
+// Track-detail DRS metre labels — shared so unit tests can pin wrap semantics.
+function drsZoneWraps(z) {
+  return !!(z.wrap || z.b > 1 || z.b < z.a);
+}
+function drsZoneLapMetre(frac, trackLenM) {
+  const m = Math.round(frac * trackLenM);
+  return m > trackLenM ? m - trackLenM : m;
+}
+function drsZoneRangeHtml(z, trackLenM) {
+  const a = drsZoneLapMetre(z.a, trackLenM);
+  const b = drsZoneLapMetre(z.b, trackLenM);
+  if (drsZoneWraps(z)) {
+    return a + " m <span aria-label=\"crossing start/finish\">&rarr; S/F &rarr;</span> " + b + " m";
+  }
+  return a + " m &ndash; " + b + " m";
+}
+
 function openTrackDetail() {
   const t = Tracks.LIST[G.trackIdx];
   if (!t) return;
@@ -1176,14 +1197,8 @@ function openTrackDetail() {
       // or a drawer already folded b into the next lap (z.b < z.a). Either way
       // "4870 m – 514 m" looked broken — name the S/F wrap. Place-keys stay on
       // Tracks / AeroZones; this is only the label.
-      const lapM = function (f) { const m = Math.round(f * trackLen); return m > trackLen ? m - trackLen : m; };
-      const wraps = function (z) { return !!(z.wrap || z.b > 1 || z.b < z.a); };
       drsList.innerHTML = dz.map(function (z, i) {
-        const a = lapM(z.a), b = lapM(z.b);
-        const range = wraps(z)
-          ? (a + " m &ndash; past S/F &ndash; " + b + " m")
-          : (a + " m &ndash; " + b + " m");
-        return '<div class="tdd-zone">Zone ' + (i + 1) + ': ' + range + "</div>";
+        return '<div class="tdd-zone">Zone ' + (i + 1) + ": " + drsZoneRangeHtml(z, trackLen) + "</div>";
       }).join("");
       drsWrap.hidden = false;
     } else {
@@ -1287,7 +1302,10 @@ function closeTrackDetail() {
   if (detailRO) detailRO.disconnect();
   detailRO = null;
 }
-return { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt };
+return {
+  buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt,
+  drsZoneWraps, drsZoneLapMetre, drsZoneRangeHtml,
+};
 }
 
 return { create };

@@ -12,7 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
   REGEN_MESSAGE, mergeTreeConflicts, assertMergeable,
-  sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths } from "../../tools/ci/deploy.mjs";
+  sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths, advisoryGet } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites, PARTS_ERE, partsFiles } from "../../tools/ci/geometry-paths.mjs";
 import { createRequire } from "node:module";
@@ -486,7 +486,7 @@ test("the parts census derives its trigger, and every fail-safe branch RUNS it",
   // the last push's green census says nothing about the train's live..tip diff.
   assert.ok(!/^    if: .*fast_tier_run/m.test(job),
     "the train must census live..tip itself; a reused fast run only covered the last push's diff");
-  assert.match(job, /- if: (needs\.reuse-draft\.outputs\.reuse != 'true' && )?steps\.filter\.outputs\.parts == 'true'\n\s+run: npm run test:sweeps-parts/,
+  assert.match(job, /- if: (steps\.reuse\.outputs\.reuse != 'true' && )?steps\.filter\.outputs\.parts == 'true'\n\s+run: npm run test:sweeps-parts/,
     "the expensive step is what the filter gates");
 });
 
@@ -766,4 +766,30 @@ test("--train answers without preflight, and names all three signals", () => {
   // question you ask while a browser run is pinning loadavg above the refusal,
   // and preflight() returns 3 there.
   assert.ok(!/REFUSED:/.test(out), `--train must not run preflight:\n${out}`);
+});
+
+/* trainHealth / nightlyHealth used three bare curls, drawing on the 60/h
+ * UNAUTHENTICATED limit shared by every session behind the proxy's egress IP
+ * (docs/notes/ACTIONS-AUDIT-2026-10-14.md finding 8). advisoryGet sends the
+ * token when one resolves — on curl's stdin, never argv — and stays advisory:
+ * any failure is null, so the line prints "unknown" and the deploy goes on. */
+test("advisoryGet: token on stdin when present, unauthenticated without, null on any failure", () => {
+  const url = "https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/ci.yml/runs?per_page=1";
+  let seen;
+  const fake = (stdout, status = 0) => (cmd, args, opts) => { seen = { cmd, args, opts }; return { status, stdout }; };
+  assert.deepEqual(advisoryGet(url, { token: "fixture-tok", run: fake('{"workflow_runs":[{"id":1}]}\n200') }), { workflow_runs: [{ id: 1 }] });
+  assert.equal(seen.cmd, "curl");
+  assert.ok(seen.args.includes("-K") && seen.args.at(-1) === url);
+  assert.ok(!seen.args.some((a) => a.includes("fixture-tok")), "the token never reaches argv");
+  assert.match(seen.opts.input, /Authorization: Bearer fixture-tok/);
+  assert.ok(seen.opts.maxBuffer >= 16 << 20, "a list response must not hit spawnSync's 1 MB default (#1733)");
+  advisoryGet(url, { token: null, run: fake("{}\n200") });
+  assert.ok(!seen.args.includes("-K") && seen.opts.input === undefined, "no token: the same unauthenticated GET as before");
+  for (const [stdout, status] of [['{"message":"API rate limit exceeded"}\n403', 0], ["not json\n200", 0], ["", 7]]) {
+    assert.equal(advisoryGet(url, { token: "t", run: fake(stdout, status) }), null, `${status} ${stdout}`);
+  }
+  assert.equal(advisoryGet(url, { token: "t", run: () => { throw new Error("spawn"); } }), null);
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
+  const health = src.slice(src.indexOf("function trainHealth("), src.indexOf("export function main("));
+  assert.doesNotMatch(health, /spawnSync\("curl"/, "train/nightly health GETs go through advisoryGet");
 });

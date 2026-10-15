@@ -33,7 +33,8 @@ Already own the PR and a push went red: start at step 3, then 4
    `node tools/ci/tooling-fast.mjs --jobs=3 > artifacts/logs/tooling-fast.log 2>&1`
    as ONE background task (rule 4); the change-aware pick from `pick-tests`;
    `node tools/ci/deploy.mjs --gate-only > artifacts/logs/gate.log 2>&1`
-   (background, rule 4) before the push; `apex-status/queue-depth.json` hold:
+   (background, rule 4) before the push; `node tools/ci/queue-depth.mjs` says
+   `= queue hold` (queued + running JOBS vs the 40 Linux / 5 macOS slots):
    commit locally only. Browser groups only as
    `node tools/ci/remote-group.mjs <group>` AFTER the push (rule 4 table), never a local group while Actions is healthy. Commit, then one push
    per green cycle. Never a force-push or rebase; catch up only when GitHub says

@@ -336,7 +336,9 @@ test("the menu prep builds the shadow casters under shadowCastersWanted(), keyed
   const prep = cd.slice(cd.indexOf("async function prepareMenuCarAssets("), cd.indexOf("function drawCarDecals("));
   assert.match(prep, /const casters = shadowCastersWanted\(\);/, "warmCarAssets' own gate");
   assert.match(prep, /const steps = casters \? field\.flatMap\(c => \[c, \{ caster: c \}\]\) : field;/, "a step of its own after its car");
-  assert.match(prep, /for \(const step of steps\) \{\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*if \(performance\.now\(\) - sliceAt >= 8\) \{/, "the same slice discipline");
+  // apex26.carWarmSlice appends the rivals' FieldLod steps (flaps, planted wheels) to the same sliced loop.
+  assert.match(prep, /const plan = lodPrep \? steps\.concat\(field\.filter\(c => !c\.isPlayer\)\.map\(c => \(\{ lod: c \}\)\)\) : steps;/, "lod steps after the bodies");
+  assert.match(prep, /for \(const step of plan\) \{\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*if \(performance\.now\(\) - sliceAt >= 8\) \{/, "the same slice discipline");
   assert.match(prep, /if \(step\.caster\) teamMesh\(c\.team, c, true\);/, "the shadow passes' (team, car, true)");
   const warm = cd.slice(cd.indexOf("function warmCarAssets()"), cd.indexOf("async function prepareMenuCarAssets("));
   assert.match(warm, /if \(casters\) teamMesh\(c\.team, c, true\);/, "warmCarAssets keeps the call: the safety net, hits after the menu");
@@ -427,6 +429,95 @@ test("a career field and MY TEAM's hire: after the menu prep, race entry builds 
     assert.equal(hire.length, 1, "the hire's body is prepped once, on the saved build's key");
     raceEntry(v, v.rec.builds.length, "MY TEAM");
     assert.ok(v.G.cars.find((c) => c.num === 98).visStamp, "the hire races the saved build (its own stamp)");
+  }
+});
+
+// THE STEPPED RACE WARM (perf hunt 4 F3.3, apex26.carWarmSlice). warmCarAssets was
+// one main-thread task per race entry: 0.91 s GLX, 1.05-1.10 s three.js, 3.17 s WGX
+// on the macOS census (471, spa dusk). warmCarAssetsAsync runs the SAME four phases
+// per car (body, atlas, caster, FieldLod set) and yields once a slice has spent 8 ms,
+// so a task holds one heavy piece. A fake clock charges each heavy piece (a Car3D
+// build, an atlas paint, a flap solve) 20-40 ms; the recording renderer says what
+// was built. Knob 0: the single sync task, and the menu prep without the lod steps.
+function warmRig(opts = {}) {
+  const v = carDrawVm(Object.assign({ casters: true }, opts));
+  const ctx = v.ctx, got = { atlases: [], uploads: 0, solves: 0, yields: 0, slice: 0, maxSlice: 0 };
+  let clock = 0;
+  const heavy = (ms) => { clock += ms; got.slice++; got.maxSlice = Math.max(got.maxSlice, got.slice); };
+  ctx.performance = { now: () => clock };
+  const build = ctx.Car3D.build;
+  ctx.Car3D.build = (c1, c2, o) => { heavy(30); return build(c1, c2, o); };
+  ctx.Car3D.aeroFlaps = () => { heavy(40); got.solves++; return []; };
+  ctx.LiveryTex = { buildAtlas: (id, _liv, num) => { heavy(20); got.atlases.push(id + ":" + num); return { width: 8, height: 8 }; } };
+  v.G.gfx.createTexture = (cv) => ({ cv });
+  v.G.gfx.uploadTexture = () => { got.uploads++; };
+  ctx.setTimeout = (fn) => { got.yields++; got.slice = 0; Promise.resolve().then(fn); return 0; };
+  const warns = () => JSON.stringify(ctx.Log.records({ ns: "gfx" }).filter((r) => /warm-up failed|preparation failed/.test(r.msg || "")).map((r) => r.msg));
+  return { v, got, warns };
+}
+test("warmCarAssetsAsync builds exactly warmCarAssets' set, one heavy piece per task", async () => {
+  const a = warmRig(), b = warmRig();
+  a.v.field((c, i) => 3000 - 9 * i); b.v.field((c, i) => 3000 - 9 * i);
+  a.v.carDraw.warmCarAssets();
+  assert.equal(a.got.yields, 0, "the sync warm never yields");
+  assert.ok(a.got.maxSlice > 40, "…so the whole field is one task (" + a.got.maxSlice + " heavy pieces)");
+  assert.equal(await b.v.carDraw.warmCarAssetsAsync(() => true), true, "ran to the end");
+  assert.deepEqual(b.v.rec.builds, a.v.rec.builds, "the same bodies and casters, in the same order");
+  assert.deepEqual(b.got.atlases, a.got.atlases, "the same livery atlases");
+  assert.equal(b.v.rec.wheels, a.v.rec.wheels, "the same planted field wheels");
+  assert.equal(b.got.solves, a.got.solves, "the same flap solves");
+  assert.equal(b.got.solves, 21, "one per rival (Car3D memoises per recipe; the warm asks once a car)");
+  assert.equal(b.got.uploads, 22, "every atlas pushed to the GPU now (TLX's deferred upload), as the menu prep does");
+  assert.equal(a.got.uploads, 22, "the sync warm too, with the knob on");
+  assert.equal(b.got.maxSlice, 1, "no task holds more than one heavy piece");
+  assert.ok(b.got.yields >= 22 * 2, "it yielded between the pieces (" + b.got.yields + ")");
+  assert.deepEqual([a.warns(), b.warns()], ["[]", "[]"], "no phase threw");
+  const ready = b.v.ctx.Log.records({ ns: "gfx" }).filter((r) => /^race car assets ready/.test(r.msg || ""));
+  assert.equal(ready.length, 1, "the end-of-build line quali.spec.js waits on, once");
+});
+test("warmCarAssetsAsync stops when current() goes false; carWarmSlice=0 is today's single task", async () => {
+  {
+    const r = warmRig();
+    r.v.field((c, i) => 3000 - 9 * i);
+    let live = true;
+    const p = r.v.carDraw.warmCarAssetsAsync(() => live);
+    live = false;
+    assert.equal(await p, false, "abandoned at the first yield");
+    assert.ok(r.v.rec.builds.length <= 1, "one heavy piece, then nothing (" + r.v.rec.builds.length + " builds)");
+  }
+  {
+    const r = warmRig(), s = warmRig();
+    r.v.G.store.set("carWarmSlice", 0); s.v.G.store.set("carWarmSlice", 0);
+    r.v.field((c, i) => 3000 - 9 * i); s.v.field((c, i) => 3000 - 9 * i);
+    assert.equal(await r.v.carDraw.warmCarAssetsAsync(() => true), true);
+    s.v.carDraw.warmCarAssets();
+    assert.equal(r.got.yields, 0, "knob 0: no yield — the one sync task");
+    assert.deepEqual(r.v.rec.builds, s.v.rec.builds, "…building the same set");
+    assert.deepEqual([r.got.uploads, s.got.uploads], [0, 0], "…with no upload of its own (today's race warm)");
+  }
+});
+test("the menu prep solves the rivals' flaps and builds their planted wheels (carWarmSlice); race entry's lod phase hits", async () => {
+  {
+    const r = warmRig();
+    r.v.G.teamIdx = 3; r.v.G.driverIdx = 0;
+    await r.v.carDraw.prepareMenuCarAssets(() => true);
+    assert.equal(r.got.solves, 21, "a flap solve per rival, in the menu");
+    const wheels = r.v.rec.wheels;
+    assert.ok(wheels > 0, "the field wheel pair, in the menu");
+    assert.ok(r.got.maxSlice <= 2, "a prep step is at most body + atlas, as before (" + r.got.maxSlice + ")");
+    assert.equal(r.warns(), "[]", "no prep step threw");
+    const menu = r.v.rec.builds.length;
+    r.v.field((c, i) => 3000 - 9 * i);
+    r.v.carDraw.warmCarAssets();
+    assert.deepEqual(r.v.rec.builds.slice(menu), [], "race entry: bodies and casters all hits");
+    assert.equal(r.v.rec.wheels, wheels, "race entry: the field wheels a hit");
+  }
+  {
+    const r = warmRig();
+    r.v.G.store.set("carWarmSlice", 0);
+    r.v.G.teamIdx = 3; r.v.G.driverIdx = 0;
+    await r.v.carDraw.prepareMenuCarAssets(() => true);
+    assert.deepEqual([r.got.solves, r.v.rec.wheels], [0, 0], "knob 0: the menu prep as before (no lod steps)");
   }
 });
 

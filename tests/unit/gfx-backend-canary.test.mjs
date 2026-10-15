@@ -1098,8 +1098,8 @@ test("the GPU-census gate scopes hardware expectations, and only those", () => {
   // blocking — that is the whole point of 2f.
   r = runVerdict(script, { census: sw, legs: legs({ webgpu: { ...tlxLegJson(), error: "launch failed", gfx: undefined } }) });
   assert.match(r.out, /launch failed/, "a leg's error is printed even when it does not block");
-  const wf = read(".github/workflows/gpu-census.yml");
-  assert.match(wf, /rows\.push\(\s*`\$\{" "\.repeat\(8\)\}gfx:/);
+  const wf = read("tools/gfx/census-verdict.mjs");
+  assert.match(wf, /rows\.push\(`\$\{IND\}gfx:/);
 });
 
 test("GLX exports a real gpuErrors counter and the workflow fails on a missing one", () => {
@@ -1120,7 +1120,7 @@ test("GLX exports a real gpuErrors counter and the workflow fails on a missing o
   assert.ok(h.GLX.gpuFirstError(), "the first error is kept for the report");
   h.GLX.begin(h.frame()); h.GLX.present({});
   assert.equal(h.GLX.gpuErrors(), 2, "a clean present adds nothing");
-  const wf = read(".github/workflows/gpu-census.yml");
+  const wf = read("tools/gfx/census-verdict.mjs");
   assert.doesNotMatch(wf, /if\s*\(\s*\(\s*gfx\.gpuErrors\s*\|\|\s*0\s*\)\s*>\s*0\s*\)/,
     "the || 0 form treats an absent counter as zero — that was the bug");
 });
@@ -1167,25 +1167,20 @@ test("GLX honours SCREENSHOTS = NATIVE under automation: no preserveDrawingBuffe
     "#game-soft is read back by ?gfxdebug=1 every rebuild — the 2D context must say so (I7), as TLX's does");
 });
 
-// The Verdict step is a `node -e` script embedded in YAML, so nothing ever ran
-// it — every guard on it was a regex over its SOURCE. That is how three
-// vacuous clauses lived in it at once. Lift the real script out and execute it
-// against fixtures, so the tests below are about behaviour, not spelling.
+// The Verdict was a `node -e` script embedded in YAML, so nothing ever ran it
+// — every guard on it was a regex over its SOURCE. That is how three vacuous
+// clauses lived in it at once. It is tools/gfx/census-verdict.mjs now (audit
+// G4): the step runs that CLI, and the tests below run the SAME CLI against
+// fixtures, so they are about behaviour, not spelling.
+const VERDICT_TOOL = "tools/gfx/census-verdict.mjs";
 function verdictScript() {
   const wf = read(".github/workflows/gpu-census.yml");
   const at = wf.indexOf("Verdict — fail the job on what the game reported");
   assert.ok(at > 0, "the Verdict step is gone from gpu-census.yml");
-  const open = wf.indexOf("node -e '", at);
-  assert.ok(open > at, "the Verdict step no longer runs an inline node script");
-  const lines = wf.slice(wf.indexOf("\n", open) + 1).split("\n");
-  const end = lines.findIndex((l) => l.trim() === "'");
-  assert.ok(end > 0, "could not find the end of the inline script");
-  const body = lines.slice(0, end).join("\n");
-  // A silent empty extraction would make every case below pass vacuously —
-  // the exact failure this whole round is about. Refuse to hand one back.
-  assert.ok(body.length > 2000, `extracted only ${body.length} chars of Verdict script`);
-  assert.match(body, /const bad = \[\];/, "extracted text is not the Verdict script");
-  return body;
+  assert.ok(wf.indexOf(`run: node ${VERDICT_TOOL}`, at) > at, `the Verdict step no longer runs ${VERDICT_TOOL}`);
+  const src = read(VERDICT_TOOL);
+  assert.match(src, /const bad = \[\];/, "the tool is not the Verdict");
+  return path.join(ROOT, VERDICT_TOOL);
 }
 
 // Fixtures shaped like what tools/gfx/gpu-game-check.mjs actually writes: it reads
@@ -1195,7 +1190,8 @@ const tlxLegJson = (gfxOver = {}) => ({
   phase: "done", ok: true,
   gfx: {
     glx: true, gpuErrors: 0, gpuFirstError: null,
-    backendState: { api: "webgpu", softAdapter: false, headless: false },
+    // softBlit false: every hardware TLX leg since the wgxCapture=0 pin (66/66).
+    backendState: { api: "webgpu", softAdapter: false, headless: false, softBlit: false },
     envState: { on: true, face: 6, ready: true, blank: false, fail: 0, failMsg: "", gaveUp: false },
     ...gfxOver,
   },
@@ -1208,13 +1204,15 @@ const glxLegJson = (gfxOver = {}) => ({
 });
 // The native WGX leg (2026-09-02): gpu-game-check reports wgx (GLX.softPresent
 // exists — WGX bound), wgxSoftPresent and headlessUa; no TLX env/backend state.
+// wgxSoftPresent false: the swapchain, on every hardware run since the hunt 4
+// I3 pin (15/15); headlessUa true on every run (gpu-game-check is headless).
 const wgxLegJson = (gfxOver = {}) => ({
   phase: "done", ok: true,
-  gfx: { glx: true, gpuErrors: 0, gpuFirstError: null, wgx: true, wgxSoftPresent: true, headlessUa: true, ...gfxOver },
+  gfx: { glx: true, gpuErrors: 0, gpuFirstError: null, wgx: true, wgxSoftPresent: false, headlessUa: true, ...gfxOver },
   frame: { meanLuma: 0.4 },
 });
 
-function runVerdict(script, { census, legs }) {
+function runVerdict(script, { census, legs, ls = "" }) {
   const image = "macos-latest";
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-verdict-"));
   try {
@@ -1222,9 +1220,10 @@ function runVerdict(script, { census, legs }) {
     for (const [leg, json] of Object.entries(legs)) {
       fs.writeFileSync(path.join(dir, `game-${leg}-${image}.json`), JSON.stringify(json));
     }
-    const r = spawnSync(process.execPath, ["-e", script], {
+    // cwd = the artifact dir, env = the step's: exactly how the workflow runs it.
+    const r = spawnSync(process.execPath, [script], {
       cwd: dir, encoding: "utf8",
-      env: { ...process.env, IMAGE: image, GITHUB_STEP_SUMMARY: path.join(dir, "summary.md") },
+      env: { ...process.env, IMAGE: image, CENSUS_LS: ls, GITHUB_STEP_SUMMARY: path.join(dir, "summary.md") },
     });
     return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -1246,7 +1245,7 @@ test("gpu-game-check reports appearance, and can say when it could not measure i
   assert.match(ggc, /await import\("sharp"\)/,
     "sharp is loaded dynamically so a missing binary degrades to frameReadFailed");
 
-  const wf = read(".github/workflows/gpu-census.yml");
+  const wf = read("tools/gfx/census-verdict.mjs");
   assert.match(wf, /if \(g\.frameReadFailed\) rows\.push/,
     "the Verdict must print WHY appearance is missing, like the gfx:/ovl: rows");
 });
@@ -1314,23 +1313,33 @@ test("the GPU gate fails a census that measured nothing instead of calling it so
   assert.equal(soft.code, 0, `a measured software image must still pass:\n${soft.out}`);
 });
 
-test("the GPU gate holds the native WGX leg to bind + swapchain, but only a HEADED run to the swapchain", () => {
+test("the GPU gate holds the native WGX leg to bind + swapchain whenever the native pin is in force", () => {
   // Run 19 (2026-09-02, macos-latest) was the first census that ran WGX at all:
-  // bound, 0 GPU errors, the brightest leg — and soft-presenting, because WGX
-  // sniffs a HeadlessChrome UA as software by design. That is expected on a
-  // headless runner and a regression on a headed one; a fallback to GLX is a
-  // regression on any hardware run.
+  // bound, 0 GPU errors — and soft-presenting, because WGX treats a
+  // HeadlessChrome UA as software, so the gate exempted a headless UA. But
+  // gpu-game-check is ALWAYS headless (headlessUa true in 65/65 runs), so the
+  // exemption meant the swapchain clause could never fire. Since the hunt 4 I3
+  // pin (apex26.wgxCapture=0 on every leg) a headless hardware run takes the
+  // swapchain (15/15), so the PIN is the condition: off the swapchain with it
+  // in force fails; a dispatch that overrides it through `ls` is reported.
   const script = verdictScript();
   const hw = { anyHardware: true, runs: [] }, sw = { anyHardware: false, runs: [] };
   const legs = (wgx) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx });
   let r = runVerdict(script, { census: hw, legs: legs(wgxLegJson()) });
-  assert.equal(r.code, 0, `headless hardware + soft-present is the documented shape:\n${r.out}`);
-  assert.match(r.out, /expected: WGX blits under a headless UA by design/);
-  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ headlessUa: false })) });
-  assert.equal(r.code, 1, "HEADED hardware + soft-present must fail");
+  assert.equal(r.code, 0, `headless hardware on the swapchain is the pinned shape:\n${r.out}`);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgxSoftPresent: true })) });
+  assert.equal(r.code, 1, "headless hardware + soft-present with the pin in force must fail");
   assert.match(r.out, /WGX is soft-presenting/);
-  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ headlessUa: false, wgxSoftPresent: false })) });
-  assert.equal(r.code, 0, `headed hardware on the swapchain passes:\n${r.out}`);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgxSoftPresent: true, headlessUa: false })) });
+  assert.equal(r.code, 1, "HEADED hardware + soft-present must fail too");
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgxSoftPresent: undefined, wgxSoftPresentError: "boom" })) });
+  assert.equal(r.code, 1, "a bound WGX with NO softPresent state must not read as the swapchain");
+  assert.match(r.out, /NO softPresent state reported.*boom/);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgxSoftPresent: true })), ls: "apex26.instCellCache=1 apex26.wgxCapture=1" });
+  assert.equal(r.code, 0, `a dispatch that overrides the pin asked for the blit — reported, not gated:\n${r.out}`);
+  assert.match(r.out, /apex26\.wgxCapture=1 from the dispatch ls overrides the native pin/);
+  r = runVerdict(script, { census: sw, legs: legs(wgxLegJson({ wgxSoftPresent: true })) });
+  assert.equal(r.code, 0, `a software image soft-presents by design:\n${r.out}`);
   r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgx: false })) });
   assert.equal(r.code, 1, "hardware + WGX not bound must fail");
   assert.match(r.out, /WGX did not bind/);
@@ -1441,6 +1450,32 @@ test("the Verdict prints the camera each leg drove and its mirror chain, and fla
   assert.match(r.out, /cam: {3}helmet \(asked game default, at window end helmet\)\n/);
 });
 
+test("the Verdict prints the menu entry, a mid-window camera switch and the lazy mirror warm it paid (hunt 5 E)", () => {
+  const script = verdictScript();
+  const hw = { anyHardware: true, runs: [] };
+  const menu = { entry: "menu", ok: true, prepReady: true, prepWaitMs: 4200, garage: { garageReady: true },
+    atGo: { done: true, warmed: true, warmable: true, cars: { cars: 22, steps: 65, lod: true, cpuMs: 900, maxCpuMs: 140 } } };
+  const switched = { ...tlxLegJson(), entry: "menu", menu,
+    cam: { asked: "chase", set: "chase", switchedTo: "cockpit", atWindowEnd: "cockpit" },
+    camSwitch: { to: "cockpit", at: 51234.5, set: "cockpit", beat: 10 },
+    warmEnd: { mirror: 0, mirrorDeferred: true, mirrorLazy: { ms: 2900, drawn: 1, ok: true } } };
+  switched.raceEntry = { ...(tlxLegJson().raceEntry || {}), loaf: { supported: true, summary: "1 LoAF(s), 1012 ms in 13000 ms of race entry; scripts by invoker: resolve-promise 840 ms/1",
+    longest: [{ atMs: 2500, duration: 1012.4, span: "warmCarAssets", scripts: [{ invokerType: "resolve-promise", invoker: "startRaceBody.then", sourceFunctionName: "startRaceBody", duration: 840 }] }] } };
+  switched.gapWork = { summary: "1 rAF gap(s)", rows: [{ gapMs: 1100, phase: "race start (pre-window)", atMs: 2400, prevFrameMs: 1000, prevCallbacks: 7, longTaskMs: 1000, prev: "-", between: "-" }] };
+  const early = { ...tlxLegJson(), entry: "menu-full", menu: { ok: true, prepReady: false, prepWaitMs: 150000, prepNote: "menu prep not ready after 150000 ms — START RACE pressed anyway", atGo: { done: false, warmable: false } },
+    raceEntry: { ...(tlxLegJson().raceEntry || {}), loaf: { supported: false, note: "no long-animation-frame PerformanceObserver in this browser (Chrome 123+) — nothing was measured" } } };
+  const r = runVerdict(script, { census: hw, legs: { webgpu: switched, webgl2: early, glx: glxLegJson(), wgx: wgxLegJson() } });
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /cam: {3}chase \(asked chase, at window end cockpit\) {2}switch>cockpit at beat 10\n/, "a switch that landed is not CAMERA NOT AS ASKED");
+  assert.match(r.out, /mirwarm: deferred=true lazy=2900 ms drawn=1 ok=true entryMirror=0/);
+  assert.match(r.out, /menu: {2}entry=menu ok=true prepReady=true waited=4200ms done=true warmed=true garage=true {2}cars=22 steps=65 lod=true cpu=900ms max=140ms/);
+  assert.match(r.out, /menu: {2}entry=menu-full ok=true prepReady=false[^\n]*\(no warm\)[^\n]*cars: no prep recorded {3}<- menu prep not ready after 150000 ms/);
+  assert.doesNotMatch(r.out, /glx[^\n]*\n(?:\s{8}[^\n]*\n)*?\s+menu:/, "an api leg prints no menu row");
+  assert.match(r.out, /loaf: {2}1 LoAF\(s\), 1012 ms in 13000 ms of race entry; scripts by invoker: resolve-promise 840 ms\/1\n\s+1012\.4 ms at \+2500 ms \[warmCarAssets\]: resolve-promise startRaceBody\.then startRaceBody 840 ms\n/);
+  assert.match(r.out, /loaf: {2}NOT MEASURED — no long-animation-frame PerformanceObserver/);
+  assert.match(r.out, /1100 ms \[race start \(pre-window\)\] at \+2400 ms: step before 1000 ms \(7 cb\), long tasks 1000 ms/);
+});
+
 test("the census labels which work each backend's GPU timer spans (hunt 4 I5)", () => {
   // WGX times the lit pass only, GLX main + post, TLX three's summed render
   // passes: three different numbers under one name. The per-pass timer is not
@@ -1483,7 +1518,7 @@ test("the GPU gate fails a hardware TLX leg that stopped reporting an env count"
   assert.match(failed.out, /81 env-probe faces FAILED/);
 
   // Both banned shapes pinned out of the source, so neither can return quietly.
-  const wf = read(".github/workflows/gpu-census.yml");
+  const wf = read("tools/gfx/census-verdict.mjs");
   assert.doesNotMatch(wf, /if \(\(env\.fail \|\| 0\) > 0\)/,
     "the || 0 form treats an absent env counter as zero — that was the bug");
   assert.doesNotMatch(wf, /const hardware = !!\(census && census\.anyHardware\);/,
@@ -2948,28 +2983,30 @@ test("three still treats NoBlending as non-opaque (why the tag cannot live in op
     "whether NoBlending + opacityNode=tag still ghosts cars");
 });
 
-test("the garage floor reflection is a noDepthTest ghost on all three backends", () => {
-  // #1025's opaque+depthBias resolve hid the contact sheen (polygon offset
-  // cannot lift a mesh metres below y=0). Restore the planar ghost; backends
-  // must still honour noDepthTest so the slab cannot bury it.
+test("the garage floor reflection depth-resolves after the room on all backends", () => {
+  // noDepthTest + alpha drew the mirrored car into empty pixels below the bay
+  // slab (a duplicate under the floor). Room-first + MIRROR_RESOLVE depth bias
+  // clips to floor/props; mirrorSheen + ensureMirrorFade keep contact sheen.
   const scene = code("js/garage/scene.js");
-  assert.match(scene, /const MIRROR_OPTS = \{ alpha: 0\.26/,
-    "garage mirror is the accepted planar ghost");
-  assert.match(scene, /noDepthTest:\s*true/,
-    "ghost must skip depth test so the floor cannot hide it");
-  assert.doesNotMatch(scene, /MIRROR_RESOLVE|mirrorSheen|ensureMirrorFade/,
-    "do not reintroduce the #1025 fade path that erased the reflection");
+  assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
+    "garage mirror resolves opaque with depth bias");
+  assert.match(scene, /depthBias: MIRROR_BIAS/,
+    "bias pulls the under-floor mesh past the slab for a planar clip");
+  assert.match(scene, /mirrorSheen\(/, "contact sheen scales with camera distance");
+  assert.match(scene, /ensureMirrorFade/, "bay fade quad restores floor sheen");
+  assert.doesNotMatch(scene, /MIRROR_OPTS.*noDepthTest/,
+    "do not restore the noDepthTest ghost that smeared under the floor");
 
   const glx = code("js/render/glx/glx.js");
-  assert.match(glx, /opts\.noDepthTest/, "GLX draw() must read opts.noDepthTest");
+  assert.match(glx, /opts\.noDepthTest/, "GLX draw() must still read opts.noDepthTest");
 
   const wgx = code("js/render/webgpu/wgx.js");
-  assert.match(wgx, /noDepthTest/, "WGX must map noDepthTest onto always-pass depth");
+  assert.match(wgx, /noDepthTest/, "WGX must still map noDepthTest onto always-pass depth");
 
   const lit = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
-  assert.match(lit, /o\.noDepthTest/, "tsl-lit makeMaterial must read o.noDepthTest");
+  assert.match(lit, /o\.noDepthTest/, "tsl-lit makeMaterial must still read o.noDepthTest");
   assert.match(TLX, /o\.noDepthTest\s*\?\s*"\|nd"/,
-    "tlx materialFor key must distinguish noDepthTest variants");
+    "tlx materialFor key must still distinguish noDepthTest variants");
 });
 
 test("TLX asks for an opaque canvas on the WebGPU backend", () => {
@@ -4077,7 +4114,9 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
   // .test.mjs) around startRaceBody(), which still carries this whole flow.
   const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
-  assert.match(sr, /RaceEntryProfile\.span\("warmCarAssets", \(\) => warmCarAssets\(\)\);[\s\S]{0,160}?RaceEntryProfile\.span\("debrisPrime"/,
+  // Stepped since perf hunt 4 F3.3: awaited, then the stale check, then debris.
+  // render() draws nothing while it runs (_carWarm.busy), so no frame builds the cars it has not reached.
+  assert.match(sr, /_carWarm\.busy = true;\s*\n\s*try \{ await RaceEntryProfile\.spanAsync\("warmCarAssets", \(\) => warmCarAssetsAsync\([^\n]*\)\); \} finally \{ _carWarm\.busy = false; \}\s*\n\s*if \(stale\(\)\) return false;\s*\n\s*RaceEntryProfile\.span\("debrisPrime"/,
     "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -5540,6 +5579,9 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     // The shadow casters (warmCarAssets' gate): OFF for the cancel matrix, ON below.
     let casters = false;
     const shadowCastersWanted = () => casters;
+    // apex26.carWarmSlice=0: the prep's own matrix, without the FieldLod steps
+    // (those are car-presentation-canary.test.mjs's, over the real CarDraw).
+    const carWarmSliceOn = () => false;
     const teamMesh = (t, c, sil) => calls.push(["caster", c.num, sil, c.visSh || "sh"]);
     const cockpitShadowMesh = (t, c, key) => calls.push(["fpCaster", c.num, key]);   // the first-person caster (car-draw.js)
     const WORKS = { aero: "w", tyres: "w" };
