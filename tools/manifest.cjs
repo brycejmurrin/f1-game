@@ -897,6 +897,7 @@ const LAZY_RACE_SESSION = [
   "js/race/start-lights.js",
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
+  "js/race/jump-start-penalty.js",
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/race/radio-lines.js", "js/race/race-radio.js"],
