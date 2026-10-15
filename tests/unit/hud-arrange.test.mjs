@@ -80,12 +80,12 @@ test("clashes: only pairs overlapping by more than the margin on BOTH axes; touc
 
 test("visIds / visShown: which HUD ELEMENTS toggles a piece maps to, and when it reads as shown", () => {
   const A = load();
-  assert.deepEqual(plain(A.visIds("tower")), ["pos", "lap", "time", "best"], "the tower is its four boxes together");
+  assert.deepEqual(plain(A.visIds("tower")), ["pos", "lap", "time", "best", "delta"], "the tower includes its delta box");
   assert.deepEqual(plain(A.visIds("gearbox")), ["gear"]);
   for (const id of ["map", "gaps", "mirror", "flag", "announce", "nope"]) assert.deepEqual(plain(A.visIds(id)), [], id + " has no toggle here");
-  const off = new Set(["pos", "lap", "time", "best", "speed"]);
+  const off = new Set(["pos", "lap", "time", "best", "delta", "speed"]);
   const isOn = (v) => !off.has(v);
-  assert.equal(A.visShown("tower", isOn), false, "all four tower boxes off: hidden");
+  assert.equal(A.visShown("tower", isOn), false, "all five tower boxes off: hidden");
   assert.equal(A.visShown("speed", isOn), false);
   assert.equal(A.visShown("sectors", isOn), true);
   assert.equal(A.visShown("map", isOn), true, "a piece with no toggle always reads as shown");
@@ -104,22 +104,32 @@ test("create: inert without a document or HudLayout; the pure API is frozen", ()
 });
 
 // Exercise the real editor listeners with a tiny DOM and a controllable frame queue.
-function editor(pieceId = "piece") {
+function editor(pieceId = "piece", options = {}) {
   const ids = new Map(), listeners = {}, frames = new Map(), writes = [], observers = [];
   let frame = 0, set = 'chase', profile = 'standard';
   class El {
-    constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.hidden = false; this.style = { removeProperty() {} }; this.isConnected = true; }
+    constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.hidden = false; this.style = { removeProperty(k) { delete this[k]; }, setProperty(k,v) { this[k]=v; }, getPropertyValue(k) { return this[k] || ""; } }; this.isConnected = true; }
     set id(v) { this._id = v; ids.set(v, this); } get id() { return this._id; }
     setAttribute(k, v) { this.attrs[k] = v; } getAttribute(k) { return this.attrs[k] ?? null; }
     hasAttribute(k) { return k in this.attrs; } removeAttribute(k) { delete this.attrs[k]; }
     appendChild(e) { this.children.push(e); e.parentNode = this; return e; }
     insertBefore(e) { return this.appendChild(e); }
+    removeChild(e) { this.children.splice(this.children.indexOf(e), 1); }
     contains(e) { return this === e || this.children.some(c => c.contains(e)); }
     closest(sel) { return sel === "#" + pieceId && this.id === pieceId ? this : null; }
     getBoundingClientRect() { return { left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20 }; }
+    get offsetWidth() {
+      if (this.hidden || this.id !== 'hud-arrange-bar') return 0;
+      return options.toolbarSize ? options.toolbarSize(ids).width : 320;
+    }
+    get offsetHeight() {
+      if (this.hidden || this.id !== 'hud-arrange-bar') return 0;
+      return options.toolbarSize ? options.toolbarSize(ids).height : 52;
+    }
     focus() { doc.activeElement = this; }
   }
-  const body = new El(), doc = { body, createElement: tag => new El(tag), activeElement: null,
+  const body = new El(); body.dataset = {};
+  const doc = { body, createElement: tag => new El(tag), activeElement: null,
     getElementById: id => ids.get(id), querySelector: sel => ids.get(sel.slice(1)), querySelectorAll: () => [],
     addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } };
   for (const id of [pieceId, 'pmsettings', 'pausemenu', 'pm-hud-details', 'pm-hud-details-sum', 'rotate-device']) { const e = new El(); e.id = id; body.appendChild(e); }
@@ -128,8 +138,17 @@ function editor(pieceId = "piece") {
   const key = (sn = set, pn = profile) => sn + ':' + pn;
   const get = (id, sn, pn) => ({ x: 0, y: 0, s: 100, ...values.get(key(sn, pn)) });
   const layout = { ELEMENTS: [[pieceId, 'Piece', '#' + pieceId]], shown: () => set, profile: () => profile, get,
-    set(id, v, sn, pn) { writes.push({ id, v: { ...v }, sn, pn }); values.set(key(sn, pn), { ...get(id, sn, pn), ...v }); }, resetEl() {} };
-  const ctx = { document: doc, window: { innerWidth: 1000, innerHeight: 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } },
+    set(id, v, sn, pn) {
+      writes.push({ id, v: { ...v }, sn, pn });
+      const stored = options.snap ? Object.fromEntries(Object.entries(v).map(([k,n]) => [k, Math.round(n)])) : v;
+      values.set(key(sn, pn), { ...get(id, sn, pn), ...stored });
+      if (id === 'map') { const el = ids.get(pieceId); el.setAttribute('data-hl-user', ''); el.style.removeProperty('--hud-clear-x'); el.style.removeProperty('--hud-clear-y'); }
+    }, resetEl() {} };
+  const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
+  if (options.hidden) ids.get(pieceId).hidden = true;
+  if (options.rect) ids.get(pieceId).getBoundingClientRect = () => options.rect;
+  const ctx = { document: doc, window: { innerWidth: options.width || 1000, innerHeight: options.height || 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } },
+    HudElements: { isOn: id => on.has(id), set(id, enabled) { visibilityWrites.push({ id, enabled }); if (enabled) on.add(id); else on.delete(id); }, apply() {} },
     HudLayout: layout, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) }, Log: { info() {} },
     requestAnimationFrame: fn => { frames.set(++frame, fn); return frame; }, cancelAnimationFrame: n => frames.delete(n),
     MutationObserver: class { constructor(fn) { observers.push(fn); } observe() {} } };
@@ -137,7 +156,7 @@ function editor(pieceId = "piece") {
   const api = ctx.HudArrange.create({ $: id => ids.get(id) });
   const fire = (name, args = {}) => { const e = { target: ids.get(pieceId), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
   const tick = () => { const todo = [...frames.values()]; frames.clear(); for (const fn of todo) fn(); };
-  return { api, fire, tick, writes, ids, frames, doc, get, observers, context(sn, pn = profile) { set = sn; profile = pn; for (const fn of observers) fn(); } };
+  return { api, fire, tick, writes, ids, frames, doc, get, observers, on, visibilityWrites, context(sn, pn = profile) { set = sn; profile = pn; for (const fn of observers) fn(); } };
 }
 
 test('editor: exit flushes the final drag once into its original camera/style and clears its frame', () => {
@@ -194,4 +213,162 @@ test("editor: a radio pinch rebases the remaining finger from its painted positi
   e.fire("pointermove", { pointerId: 1, clientX: 101 }); e.tick();
   assert.equal(e.get("announce").x, -48.9, "one pixel follows the measured radio origin, not the unplaced zero");
   assert.equal(e.get("announce").y, -23);
+});
+
+
+test('editor: first keyboard radio move starts at its painted position on phone landscape', () => {
+  const e = editor('announce', { width: 844, height: 390, rect: { left: 148, top: 106, right: 348, bottom: 146, width: 200, height: 40 } });
+  e.api.setEditing(true);
+  const move = (key, shiftKey = false) => e.fire('keydown', { key, shiftKey, target: e.ids.get('hud-arrange-move') });
+  move('ArrowRight');
+  assert.ok(Math.abs(e.get('announce').x - ((148 - 422) / 844 * 100 + 1)) < 1e-9);
+  assert.ok(Math.abs(e.get('announce').y - ((106 - 97.5) / 390 * 100)) < 1e-9);
+  const before = e.get('announce'); move('ArrowDown', true);
+  assert.equal(e.get('announce').x, before.x); assert.equal(e.get('announce').y, before.y + 5);
+  for (let i = 0; i < 30; i++) move('ArrowLeft', true);
+  assert.equal(e.get('announce').x, -50);
+});
+
+test('editor: opt-in readouts are selectable previews without enabling them and restore on exit', () => {
+  for (const id of ['rel', 'strat', 'inputs']) {
+    const e = editor(id, { hidden: true }), root = e.ids.get(id);
+    const original = e.doc.createElement('div'); original.textContent = 'producer content'; original.hidden = false; root.appendChild(original);
+    root.setAttribute('data-col-compact', ''); root.setAttribute('data-col-drop', 'fit');
+    e.api.setEditing(true);
+    assert.equal(root.hidden, false); assert.equal(e.api.selected(), id);
+    assert.ok(e.ids.get('hud-arrange-element').children.some(option => option.value === id));
+    assert.equal(root.hasAttribute('data-hl-off'), true);
+    assert.deepEqual(e.visibilityWrites, []);
+    assert.equal(root.hasAttribute('data-col-drop'), false);
+    assert.equal(root.hasAttribute('data-col-compact'), true);
+    if (id !== 'inputs') {
+      assert.equal(original.hidden, true);
+      const preview = root.children.at(-1);
+      if (id === 'rel') {
+        assert.equal(preview.hasAttribute('data-col-row'), true);
+        assert.deepEqual(preview.children.map(cell => cell.textContent), ['P2', 'YOU', '+0.8', 'M', '']);
+      } else {
+        assert.equal(preview.getAttribute('data-k'), 'next');
+        assert.deepEqual(preview.children.map(cell => cell.textContent), ['NEXT', 'LAP 12']);
+      }
+    }
+    const vis = e.ids.get('hud-arrange-vis');
+    assert.equal(vis.textContent, 'SHOW'); vis.onclick();
+    assert.equal(e.on.has(id), true); assert.equal(root.hidden, false); assert.equal(vis.textContent, 'HIDE');
+    vis.onclick(); assert.equal(e.on.has(id), false); assert.equal(root.hidden, false);
+    e.api.setEditing(false);
+    assert.equal(root.hidden, true); assert.equal(root.children.length, 1);
+    assert.equal(root.getAttribute('data-col-drop'), 'fit');
+    assert.equal(original.hidden, false); assert.equal(original.textContent, 'producer content');
+    // A paused toggle can be on before its producer has refreshed hidden=true.
+    e.on.add(id); e.api.setEditing(true);
+    assert.equal(root.hidden, false); assert.equal(e.ids.get('hud-arrange-vis').textContent, 'HIDE');
+    e.api.setEditing(false); assert.equal(root.hidden, true); assert.equal(e.on.has(id), true);
+  }
+});
+
+
+test('editor: visible optional readouts lift and restore producer drop state without replacing content', () => {
+  const e = editor('rel', { on: true }), root = e.ids.get('rel');
+  const row = e.doc.createElement('div'); row.textContent = 'live row'; root.appendChild(row);
+  root.setAttribute('data-col-drop', '');
+  e.api.setEditing(true);
+  assert.equal(root.hasAttribute('data-col-drop'), false); assert.equal(root.children.length, 1);
+  assert.equal(row.hidden, false);
+  e.api.setEditing(false);
+  assert.equal(root.hidden, false); assert.equal(root.getAttribute('data-col-drop'), '');
+  assert.equal(row.textContent, 'live row'); assert.deepEqual(e.visibilityWrites, []);
+});
+
+
+test('editor: tower hide/show includes DELTA and leaves SPEED independent', () => {
+  const tower = ['pos', 'lap', 'time', 'best', 'delta'];
+  const e = editor('tower', { on: [...tower, 'speed'] });
+  e.api.setEditing(true);
+  const vis = e.ids.get('hud-arrange-vis');
+  assert.equal(vis.textContent, 'HIDE');
+  vis.onclick();
+  assert.deepEqual([...e.on], ['speed'], 'no timing-tower child remains on');
+  assert.equal(vis.textContent, 'SHOW');
+  vis.onclick();
+  for (const id of tower) assert.equal(e.on.has(id), true, id + ' returns with the tower');
+  assert.equal(e.on.has('speed'), true);
+  // DELTA can be the only enabled child after individual settings changes.
+  for (const id of tower) if (id !== 'delta') e.on.delete(id);
+  e.api.setEditing(false); e.api.setEditing(true);
+  assert.equal(vis.textContent, 'HIDE', 'a delta-only tower is visible');
+  vis.onclick();
+  assert.deepEqual([...e.on], ['speed']);
+});
+
+
+test('editor: initial toolbar avoids the HUD using its visible content-sized box', () => {
+  const piece = { left: 110, top: 10, right: 210, bottom: 70, width: 100, height: 60 };
+  const e = editor('speed', { on: true, rect: piece, toolbarSize: ids => {
+    // The populated toolbar is wider and taller than either its empty shell
+    // or the hidden element's zero-size box. Size must include the live hint.
+    const current = ids.get('hud-arrange-name').textContent === 'Piece 100%' &&
+      ids.get('hud-arrange-hint').textContent === 'drag to move · pinch or − + to size';
+    return current ? { width: 800, height: 100 } : { width: 200, height: 52 };
+  } });
+  e.api.setEditing(true);
+  const bar = e.ids.get('hud-arrange-bar');
+  assert.equal(bar.hidden, false);
+  assert.equal(bar.offsetWidth, 800);
+  assert.equal(bar.offsetHeight, 100);
+  // Derive the painted slot from its actual dimensions and positioning.
+  const left = bar.style.left === '50%' ? (1000 - bar.offsetWidth) / 2 :
+    bar.style.right ? 1000 - 8 - bar.offsetWidth : 8;
+  const top = bar.style.top ? 8 : 500 - 8 - bar.offsetHeight;
+  const overlap = Math.max(0, Math.min(left + bar.offsetWidth, piece.right) - Math.max(left, piece.left)) *
+    Math.max(0, Math.min(top + bar.offsetHeight, piece.bottom) - Math.max(top, piece.top));
+  assert.equal(overlap, 0, 'the visible toolbar fits below the HUD rather than using a fictitious narrow top slot');
+  assert.ok(top > piece.bottom);
+});
+
+test('editor: toolbar uses the clear middle when every edge covers HUD content', () => {
+  const top = { left: 100, top: 8, right: 900, bottom: 108, width: 800, height: 100 };
+  const bottom = { left: 100, top: 392, right: 900, bottom: 492, width: 800, height: 100 };
+  const e = editor('speed', { on: true, rect: top, toolbarSize: () => ({ width: 800, height: 100 }) });
+  const control = e.doc.createElement('button'); control.getBoundingClientRect = () => bottom;
+  e.doc.querySelectorAll = () => [control];
+  e.api.setEditing(true);
+  const bar = e.ids.get('hud-arrange-bar');
+  assert.equal(bar.style.top, '50%'); assert.equal(bar.style.left, '50%');
+  assert.equal(bar.style.transform, 'translate(-50%, -50%)');
+  const painted = { top: (500 - bar.offsetHeight) / 2, bottom: (500 + bar.offsetHeight) / 2 };
+  assert.ok(painted.top > top.bottom && painted.bottom < bottom.top, 'neither edge readout is obscured');
+});
+
+
+test('editor: first cleared-map edits adopt its painted origin on the whole-percent grid', () => {
+  for (const kind of ['keyboard', 'drag', 'size', 'pinch']) {
+    const e = editor('map', { snap: true }), map = e.ids.get('map');
+    map.style.setProperty('--hud-clear-x', '117px'); map.style.setProperty('--hud-clear-y', '25px');
+    map.getBoundingClientRect = () => {
+      const cur=e.get('map'), left=10+cur.x*10+parseFloat(map.style.getPropertyValue('--hud-clear-x')||0);
+      const top=10+cur.y*5+parseFloat(map.style.getPropertyValue('--hud-clear-y')||0);
+      return {left,top,right:left+20,bottom:top+20,width:20,height:20};
+    };
+    e.api.setEditing(true);
+    e.ids.get('hud-arrange-element').onchange();
+    assert.equal(e.writes.length,0,'opening and selecting the map never saves an offset');
+    if(kind==='keyboard')e.fire('keydown',{key:'ArrowRight',target:e.ids.get('hud-arrange-move')});
+    if(kind==='drag') {e.fire('pointerdown');e.fire('pointermove',{clientX:120});e.tick();e.fire('pointermove',{clientX:130});e.tick();}
+    if(kind==='size')e.ids.get('hud-arrange-larger').onclick();
+    if(kind==='pinch') {e.fire('pointerdown');e.fire('pointerdown',{pointerId:2,clientX:200});e.fire('pointermove',{pointerId:2,clientX:300});e.tick();}
+    const cur=e.get('map');
+    assert.equal(cur.x,kind==='keyboard'?13:kind==='drag'?15:12,kind+' retains the temporary horizontal correction');
+    assert.equal(cur.y,5,kind+' retains the temporary vertical correction');
+    if(kind==='size')assert.equal(cur.s,110);
+    if(kind==='pinch')assert.equal(cur.s,200);
+    assert.equal(map.getBoundingClientRect().top,35);
+  }
+});
+
+test('editor: explicit custom maps never adopt stale automatic clearance', () => {
+  const e=editor('map',{snap:true}),map=e.ids.get('map');
+  map.setAttribute('data-hl-user','');map.style.setProperty('--hud-clear-x','117px');
+  e.api.setEditing(true);e.ids.get('hud-arrange-larger').onclick();
+  assert.equal(e.get('map').x,0);assert.equal(e.get('map').y,0);assert.equal(e.get('map').s,110);
 });
