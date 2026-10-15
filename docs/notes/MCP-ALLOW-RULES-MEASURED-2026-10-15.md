@@ -154,3 +154,64 @@ and does only read-only work until the user types into it; a requested
 Sources: <https://code.claude.com/docs/en/permissions>,
 <https://code.claude.com/docs/en/permission-modes>; issue #2125 (bash-guard
 `pkill -f` gap found by the same census).
+
+## Blocker census, 15:35Z (34 sessions, ~3,800 events)
+
+Every `reject` and every human prompt in the orchestrator
+(session_01QTnGarENnxSWFxr7iFjub6), the Merge Desks (…yAYoWr, …w5DLUG) and the
+29 lanes and workers they launched, read from `list_events`
+`tool_result_meta[].permission_decision` plus the hook texts in the results.
+Long sessions were paged back about 30 minutes only, so blocks from earlier in
+the day are missing (the classifier rows below come from the orchestrator's
+own log).
+
+| tool or command | what blocked it | count | verdict |
+|---|---|---|---|
+| `git add X && git commit` in ONE command | bash-guard unstaged rule: the hook runs before the `git add`, so X reads as unstaged | 7 | false positive: hook fix (diff 2) |
+| `create_session` with `permission_mode: "auto"` | platform: "requires the parent session to be in auto mode" (parent in plan or default) | 9 | platform, Needs Bryce |
+| `send_message` / `send_later` / `create_session` | human prompt (`user_temporary`) with `mcp__claude-code-remote` allowed | 16 | platform confirmation, Needs Bryce |
+| `sleep N; cat log` | the built-in sleep guard | 3 | intended: use `run_in_background` or `Monitor` |
+| `git commit` over a tree or topLets ratchet, or with red guards | bash-guard | 3 | intended: ratchets and guards are the gate |
+| `git checkout --theirs … tests/data/ratchets.json` while resolving a conflict | protect-files generated-file rule (shellparse kind `git-checkout`) | 2 | false positive: hook fix (diff 1) |
+| `git worktree add` | classifier gave no verdict | 1 | transient: retry once |
+| Bash writes to `.claude/settings.local.json`, edits to `.claude/hooks/*` | classifier `[Self-Modification]` | orchestrator log | protected path, Needs Bryce |
+| `APEX_PUSH_HOLD=0 git push` | classifier `[Safety Bypass Flag]` | orchestrator log | Needs Bryce, or wait for the gauge |
+| `APEX_RUN_CANCEL_OK=1 gh run cancel` | classifier `[Interfere With Workloads]` | orchestrator log | intended (never cancel); Needs Bryce if wanted |
+| `mcp__MDN__*`, `mcp__mcp_browserstack_com__*` | claude.ai connector set to `ask` | earlier rounds | Needs Bryce |
+
+There were no `github-mcp-guard` or `mcp-browser-guard` hits:
+`APEX_MERGE_DESK=1` in `.claude/settings.json` `env` lets merge, arm,
+ready and re-run through.
+
+### Why the repo cannot fix the classifier rows
+
+- The auto-mode classifier reads `autoMode` (`allow`, `soft_deny`,
+  `environment`) only from `~/.claude/settings.json`, managed settings or the
+  `--settings` flag. It never reads it from `.claude/settings.json` or
+  `.claude/settings.local.json`: "a checked-in repo or a build step could
+  otherwise inject its own allow rules"
+  (<https://code.claude.com/docs/en/auto-mode-config>).
+- Writes to protected paths (`.claude/`, including the hooks and settings
+  files) are "never auto-approved": in auto mode they go to the classifier, and
+  `permissions.allow` rules do not pre-approve them
+  (<https://code.claude.com/docs/en/permission-modes#protected-paths>). The
+  classifier also refused a hook edit made on a scratchpad copy. A hook change
+  therefore needs a session in default mode with a human approving the edit.
+- A cloud session's permission mode is set by the surface that started it.
+  Cloud sessions ignore `defaultMode` `bypassPermissions` and `dontAsk` in a
+  settings file.
+
+### The two hook fixes (applied in this session after Bryce switched it to default mode)
+
+1. protect-files / shellparse: `git checkout|restore` with `--ours`,
+   `--theirs`, `--merge` or `-m`, or a source of MERGE_HEAD or the deploy
+   branch, is kind `git-resolve`. That kind skips the generated-file and
+   shared-contract rules. The live-run and scoped-agent rules still apply.
+   Any other ref, HEAD included, stays blocked: R4-SUPPLY-4 pins
+   `git checkout HEAD js/roster.js`. The side flags count only while a merge,
+   cherry-pick, revert or rebase is in progress: outside one, `--ours` and
+   `--theirs` restore from the index (measured: a staged hand edit came back
+   that way), so they stay blocked there.
+2. bash-guard: a `git add` earlier in the same command counts as staged for the
+   unstaged rule and the docs-only set. `git add -A`, `-u` and `.` read like
+   `commit -a`.

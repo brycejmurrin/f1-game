@@ -33,8 +33,9 @@
 #    APEX_PUSH_HOLD=0 overrides) unless the push starts no CI (#2182), and an Actions run cancel (`gh run cancel`,
 #    …/actions/runs/<id>/cancel) is refused (APEX_RUN_CANCEL_OK=1 overrides).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
-#    .claude/agents; never a generated doc) runs only docs-integrity — no
-#    ratchet raise, no test:guards.
+#    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
+#    and artifacts/track-survey; never a generated doc) runs only
+#    docs-integrity — no ratchet raise, no test:guards.
 #
 # Exit 2 blocks with the reason on stderr; exit 0 lets the normal permission
 # flow decide.
@@ -374,6 +375,24 @@ fi
 read -r _C_N C_RUN C_ALL C_GITDIR C_PATHS <<EOF
 $COMMIT_LINE
 EOF
+# `git add X && git commit` IN ONE COMMAND (2026-10-15 blocker census: 7 blocks
+# in 7 sessions). This hook runs before the whole command, so X is still
+# unstaged when the unstaged rule below reads the tree. A `git add` in the same
+# command counts as staged: its paths join the unstaged cover and the docs-only
+# set (never C_PATHS, the commit's own pathspec, which the ratchet rule reads);
+# -A/--all/-u/--update/./:/ stage everything, so they read like `commit -a`.
+ADD_PATHS=""; ADD_ALL=0
+set -f   # a glob pathspec stays a word, not this cwd's matches
+for w in $(printf '%s\n' "$SCAN" | grep -oE "(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:];&|()]+)?[[:space:]]+add([[:space:]]+[^;&|()[:space:]]+)*" \
+           | sed -E 's/^[;&|([:space:]]*git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+add//'); do
+  case "$w" in
+    -A|--all|-u|--update|.|:/) ADD_ALL=1 ;;
+    -*) ;;
+    *) ADD_PATHS="$ADD_PATHS $w" ;;
+  esac
+done
+set +f
+[ "$ADD_ALL" = 1 ] && C_ALL=1
 # Another host's adapter (.cursor/hooks/shell-guard.sh, used by Cursor and
 # Codex) sets APEX_COMMIT_GATE=githook when core.hooksPath is .githooks: the
 # git pre-commit hook runs this same gate there, so it is not run twice.
@@ -429,13 +448,13 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   # js/game.js` with only docs/a.md staged used to take the docs-only path
   # and commit js/game.js unguarded. The named paths join the set judged.
   COMMITTED="$STAGED"
-  for p in $C_PATHS; do COMMITTED="$COMMITTED
+  for p in $C_PATHS $ADD_PATHS; do COMMITTED="$COMMITTED
 $p"; done
   GENERATED_DOCS=$(cd "$ROOT" && node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ')
   [ -n "$GENERATED_DOCS" ] || GENERATED_DOCS="tools/README.md docs/DEBUG-HOOKS.md docs/ARCHITECTURE.md docs/LIGHTING-TUNER-SLIDERS.md docs/notes/PREPUSH-GATE-LADDER.md"
   DOCS_ONLY=0
   # `--all` / -a stage at commit time: the index is not what will be committed.
-  if [ -n "$STAGED$C_PATHS" ] && [ "$C_ALL" != "1" ]; then
+  if [ -n "$STAGED$C_PATHS$ADD_PATHS" ] && [ "$C_ALL" != "1" ]; then
     DOCS_ONLY=1
     while IFS= read -r f; do
       [ -z "$f" ] && continue
@@ -445,7 +464,11 @@ $p"; done
       case " $GENERATED_DOCS " in
         *" $f "*) DOCS_ONLY=0; break ;;
       esac
-      printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$' || { DOCS_ONLY=0; break; }
+      # Survey assets count as prose (2026-10-15): image/report output in the
+      # track-survey-assets dirs only (docs/notes/SURVEY-ASSETS-BRANCH.md). That
+      # branch dropped ci.yml (#2234), so test:guards is red there by
+      # construction and every image commit needed APEX_SKIP_GUARDS=1.
+      printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$|^artifacts/(shots/(tracks|gallery)|track-survey)/.+\.(png|jpe?g|webp|json|html)$' || { DOCS_ONLY=0; break; }
     done <<EOF
 $COMMITTED
 EOF
@@ -479,7 +502,7 @@ EOF
       [ -z "$f" ] && continue
       case "$f" in .claude/memory/*) continue ;; esac
       covered=0
-      for p in $C_PATHS; do
+      for p in $C_PATHS $ADD_PATHS; do
         p="${p%/}"; case "$f" in "$p"|"$p"/*) covered=1 ;; esac
         [ "$p" = "." ] && covered=1
       done
