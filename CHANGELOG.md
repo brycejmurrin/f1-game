@@ -14,6 +14,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- Photo captures on the THREE.JS WebGL2 path wait for readback without a synchronous GPU round trip; capture buffers and fences are released on failure or timeout.
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - Blue flags: letting one lapping car through no longer counts toward a penalty for the next one in the queue (#2163).
 - Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).

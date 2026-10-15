@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { fnSource } from "../helpers/fn-source.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -425,3 +426,94 @@ test("GLX and TLX clamp the present size to the driver limit before deriving the
   const wgx = read("js/render/webgpu/wgx.js");
   assert.doesNotMatch(wgx, /GLX and TLX do not clamp at all/, "the WGX comment must not describe a gap that is closed");
 });
+
+function captureHarness(opts = {}) {
+  const state = new Map(), jobs = [], buffers = [], fences = [];
+  let clock = 0, copied = 0, submitted = 0;
+  const gl = Object.fromEntries(['PIXEL_PACK_BUFFER', 'PIXEL_PACK_BUFFER_BINDING', 'PACK_ALIGNMENT',
+    'PACK_ROW_LENGTH', 'PACK_SKIP_PIXELS', 'PACK_SKIP_ROWS', 'STREAM_READ', 'BUFFER_SIZE', 'RGBA',
+    'UNSIGNED_BYTE', 'SYNC_GPU_COMMANDS_COMPLETE', 'ALREADY_SIGNALED', 'CONDITION_SATISFIED',
+    'TIMEOUT_EXPIRED', 'WAIT_FAILED'].map((k, i) => [k, i + 1]));
+  const binding = { external: true }, laterBinding = { renderer: true };
+  state.set(gl.PIXEL_PACK_BUFFER_BINDING, binding);
+  const names = [gl.PACK_ALIGNMENT, gl.PACK_ROW_LENGTH, gl.PACK_SKIP_PIXELS, gl.PACK_SKIP_ROWS];
+  names.forEach((n, i) => state.set(n, [8, 7, 2, 1][i]));
+  const frame = Uint8Array.from({ length: 24 }, (_, i) => i + 1);
+  Object.assign(gl, {
+    getParameter: (n) => state.get(n),
+    createBuffer() { if (opts.refuseBuffer) return null; const b = { deleted: 0 }; buffers.push(b); return b; },
+    bindBuffer(_t, b) { state.set(gl.PIXEL_PACK_BUFFER_BINDING, b); },
+    bufferData(_t, size) { state.get(gl.PIXEL_PACK_BUFFER_BINDING).size = size; },
+    getBufferParameter: () => opts.refuseAllocation ? 0 : state.get(gl.PIXEL_PACK_BUFFER_BINDING).size,
+    pixelStorei: (n, v) => state.set(n, v),
+    readPixels(_x, _y, w, h, _format, _type, offset) {
+      assert.equal(offset, 0, 'GPU-buffer offset, never a synchronous client-memory read');
+      assert.deepEqual(names.map((n) => state.get(n)), [4, 0, 0, 0]);
+      if (opts.submitThrows) throw new Error('submit failed');
+      state.get(gl.PIXEL_PACK_BUFFER_BINDING).data = frame.slice(0, w * h * 4); submitted++;
+    },
+    fenceSync() { if (opts.refuseFence) return null; const f = { deleted: 0 }; fences.push(f); return f; },
+    flush() {}, isContextLost: () => !!opts.lost,
+    clientWaitSync(_s, flags, timeout) {
+      assert.equal(flags, 0); assert.equal(timeout, 0, 'no blocking fence wait');
+      return opts.waitFailed ? gl.WAIT_FAILED : opts.ready ? gl.CONDITION_SATISFIED : gl.TIMEOUT_EXPIRED;
+    },
+    getBufferSubData(_t, _offset, dst) {
+      assert.ok(opts.ready, 'no client copy before GPU completion');
+      if (opts.copyThrows) throw new Error('copy failed');
+      dst.set(state.get(gl.PIXEL_PACK_BUFFER_BINDING).data); copied++;
+    },
+    deleteBuffer(b) { b.deleted++; }, deleteSync(s) { s.deleted++; },
+  });
+  const src = read('js/render/three/tlx.js');
+  const sb = { _captureReads: new WeakSet(), performance: { now: () => clock },
+    setTimeout: (fn) => { jobs.push(fn); }, Uint8ClampedArray, ownGL: gl, renderer: { backend: {} }, W: 2, H: 3 };
+  vm.runInNewContext(`${fnSource(src, 'async function readGlCapture(gl, w, h) {')}
+    const gfx = { ${fnSource(src, 'capturePixels() {')} }; globalThis.capture = () => gfx.capturePixels();`, sb);
+  return { opts, gl, sb, frame, state, names, binding, laterBinding, buffers, fences, jobs,
+    capture: sb.capture, copied: () => copied, submitted: () => submitted,
+    advance: (ms) => { clock += ms; },
+    tick: async () => { assert.ok(jobs.length, 'poll scheduled'); jobs.shift()(); await Promise.resolve(); await Promise.resolve(); },
+  };
+}
+
+test('TLX WebGL capture snapshots now, waits without blocking, restores GL state and returns independent top-down pixels', async () => {
+  const h = captureHarness();
+  const p = h.capture();
+  assert.equal(h.submitted(), 1, 'snapshot issued before the canvas can be cleared by compositing');
+  assert.equal(h.copied(), 0);
+  assert.equal(h.state.get(h.gl.PIXEL_PACK_BUFFER_BINDING), h.binding);
+  assert.deepEqual(h.names.map((n) => h.state.get(n)), [8, 7, 2, 1]);
+  await assert.rejects(h.capture(), /already in progress/);
+  assert.equal(h.buffers.length, 1, 'concurrent captures cannot multiply pending buffers');
+  await h.tick();
+  assert.equal(h.copied(), 0, 'a pending fence yields again');
+  h.frame.fill(0); h.sb.W = 1; h.sb.H = 1;
+  h.gl.bindBuffer(h.gl.PIXEL_PACK_BUFFER, h.laterBinding);
+  h.opts.ready = true; await h.tick();
+  const shot = await p;
+  assert.equal(shot.width, 2); assert.equal(shot.height, 3, 'resize does not change an in-flight snapshot');
+  assert.deepEqual([...shot.data], [...Array.from({ length: 8 }, (_, i) => i + 17),
+    ...Array.from({ length: 8 }, (_, i) => i + 9), ...Array.from({ length: 8 }, (_, i) => i + 1)]);
+  assert.equal(h.state.get(h.gl.PIXEL_PACK_BUFFER_BINDING), h.laterBinding, 'preserve intervening renderer state');
+  assert.equal(h.buffers[0].deleted, 1); assert.equal(h.fences[0].deleted, 1); assert.equal(h.jobs.length, 0);
+  const held = [...shot.data], again = h.capture(); await h.tick(); await again;
+  assert.deepEqual([...shot.data], held, 'later shots do not overwrite a held image');
+});
+
+for (const fault of ['refuseBuffer', 'refuseAllocation', 'submitThrows', 'refuseFence', 'waitFailed', 'lost', 'copyThrows', 'timeout']) {
+  test(`TLX WebGL capture releases owned resources on ${fault}`, async () => {
+    const opts = { ready: fault === 'copyThrows' }, h = captureHarness(opts);
+    if (fault !== 'timeout') opts[fault] = true;
+    const p = h.capture(), rejected = assert.rejects(p, /capture|submit|copy/);
+    if (h.jobs.length) { if (fault === 'timeout') h.advance(20001); await h.tick(); }
+    await rejected;
+    assert.equal(h.state.get(h.gl.PIXEL_PACK_BUFFER_BINDING), h.binding);
+    assert.deepEqual(h.names.map((n) => h.state.get(n)), [8, 7, 2, 1]);
+    for (const b of h.buffers) assert.equal(b.deleted, 1);
+    for (const f of h.fences) assert.equal(f.deleted, 1);
+    assert.equal(h.jobs.length, 0, 'failed captures leave no polling timer');
+    for (const k of Object.keys(opts)) delete opts[k]; opts.ready = true;
+    const retry = h.capture(); await h.tick(); await retry;
+  });
+}
