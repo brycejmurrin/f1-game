@@ -3,7 +3,6 @@
 # @section runner
 set -u
 run_all() { echo "ships=true" >> "$GITHUB_OUTPUT"; echo "RUNNING SMOKE: $1"; exit 0; }
-[ "${SMOKE_ONLY:-}" = "true" ] && run_all "Pages ship-reuse: one smoke shard"
 IS_PR=false
 case "${EVENT:-}" in
   push) ;;
