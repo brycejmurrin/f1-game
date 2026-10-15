@@ -8,9 +8,8 @@
 
 | Item | Status |
 |------|--------|
-| Dry **day / dusk / night** (`shot.mjs --tod`) | **31 frames** captured headless TLX; paths below (`artifacts/shots/tracks/spa/`). Not committed yet — blocked on shared PR *tools: shared shot tooling for circuit surveys* (`.gitignore` exception for `artifacts/shots/tracks/**`). |
-| **Weather** (`dry` / `wet` / `rain` / `overcast` / `fog` via `__apex.weather`) | **Deferred** — same shared PR adds batch `wx` + retries. Planned on **4–6 hero views** after rebase: Eau Rouge, Pouhon, Bus Stop, pit straight (+ optional Blanchimont fog, Kemmel dawn). |
-| Prior pilot (15 frames) | `/opt/cursor/artifacts/spa-survey/` on the survey agent VM (not in repo). |
+| Dry **day / dusk / night** (`shot.mjs --tod`) | **33 frames** committed under `artifacts/shots/tracks/spa/` (`git add -f`; JPEG q≈80, ≤1280 px wide). |
+| **Weather** (`wet` / `rain` / `overcast` / `fog` / dawn) | **Deferred** — batch `wx` after shared shot tooling PR. Planned on **4–6 hero views**. |
 
 **Night note:** `js/circuits/spa.js` sets `night: false` and `furniture.lamp: "none"`. Night shots are intentionally dark; no circuit floodlight pass — expect missing trackside lamps (backlog P2).
 
@@ -38,72 +37,79 @@ Authored scenery fractions ≈ racing + 0.0423 (see `OPEN` comments in scenery).
 
 ---
 
-## Screenshots by sector (dry weather, day unless noted)
+## Screenshots by sector (committed, dry weather)
 
-Filenames below are under `artifacts/shots/tracks/spa/` on disk; they will be committed after the shared tooling PR adds the gitignore exception. The open PR embeds the panel grids as images.
+**33 frames** in `artifacts/shots/tracks/spa/` (JPEG q≈80, max width 1280 px).
 
 ### Sector 1 — La Source → Kemmel (racing s ≈ 0–0.28)
 
-| Frame A | Frame B | Frame C |
-|---------|---------|---------|
-| `pit-start_day_dry.jpg` — pit **day** | `pit-start_dusk_dry.jpg` — pit **dusk** | `pit-start_night_dry.jpg` — pit **night** |
-| `la-source_day_dry.jpg` — La Source **day** | `la-source_dusk_dry.jpg` — **dusk** | `la-source_night_dry.jpg` — **night** |
-| `eau-rouge_day_dry.jpg` — Eau Rouge **day** | `eau-rouge_dusk_dry.jpg` — **dusk** | `eau-rouge_night_dry.jpg` — **night** |
-| `raidillon_day_dry.jpg` — Raidillon **day** | `raidillon_dusk_dry.jpg` — **dusk** | `raidillon_night_dry.jpg` — **night** |
-| `gold3-stands_day_dry.jpg` — Gold 3 **day** | `gold3-stands_dusk_dry.jpg` — **dusk** | `kemmel_day_dry.jpg` — Kemmel **day** |
-| `kemmel_dusk_dry.jpg` — Kemmel **dusk** | `village-church_day_dry.jpg` — village **day** | `village-church_dusk_dry.jpg` — **dusk** |
+| | | |
+|:---:|:---:|:---:|
+| ![Pit / start · dry · day (s≈0)](../../../artifacts/shots/tracks/spa/pit-start_day_dry.jpg) | ![Pit / start · dry · dusk (s≈0)](../../../artifacts/shots/tracks/spa/pit-start_dusk_dry.jpg) | ![Pit / start · dry · night (s≈0)](../../../artifacts/shots/tracks/spa/pit-start_night_dry.jpg) |
+| ![La Source · dry · day (s≈0.035)](../../../artifacts/shots/tracks/spa/la-source_day_dry.jpg) | ![La Source · dry · dusk (s≈0.035)](../../../artifacts/shots/tracks/spa/la-source_dusk_dry.jpg) | ![La Source · dry · night (s≈0.035)](../../../artifacts/shots/tracks/spa/la-source_night_dry.jpg) |
+| ![Village / church · dry · day (s≈0.062)](../../../artifacts/shots/tracks/spa/village-church_day_dry.jpg) | ![Village / church · dry · dusk (s≈0.062)](../../../artifacts/shots/tracks/spa/village-church_dusk_dry.jpg) | ![Eau Rouge · dry · day (s≈0.14)](../../../artifacts/shots/tracks/spa/eau-rouge_day_dry.jpg) |
+| ![Eau Rouge · dry · dusk (s≈0.14)](../../../artifacts/shots/tracks/spa/eau-rouge_dusk_dry.jpg) | ![Eau Rouge · dry · night (s≈0.14)](../../../artifacts/shots/tracks/spa/eau-rouge_night_dry.jpg) | ![Gold 3 stands · dry · day (s≈0.15)](../../../artifacts/shots/tracks/spa/gold3-stands_day_dry.jpg) |
+| ![Gold 3 stands · dry · dusk (s≈0.15)](../../../artifacts/shots/tracks/spa/gold3-stands_dusk_dry.jpg) | ![Raidillon · dry · day (s≈0.165)](../../../artifacts/shots/tracks/spa/raidillon_day_dry.jpg) | ![Raidillon · dry · dusk (s≈0.165)](../../../artifacts/shots/tracks/spa/raidillon_dusk_dry.jpg) |
+| ![Raidillon · dry · night (s≈0.165)](../../../artifacts/shots/tracks/spa/raidillon_night_dry.jpg) | ![Kemmel straight · dry · day (s≈0.245)](../../../artifacts/shots/tracks/spa/kemmel_day_dry.jpg) | ![Kemmel straight · dry · dusk (s≈0.245)](../../../artifacts/shots/tracks/spa/kemmel_dusk_dry.jpg) |
+| ![Kemmel straight · dry · night (s≈0.245)](../../../artifacts/shots/tracks/spa/kemmel_night_dry.jpg) |   |   |
 
 ### Sector 2 — Les Combes → Stavelot (s ≈ 0.28–0.68)
 
-| Frame A | Frame B | Frame C |
-|---------|---------|---------|
-| `les-combes_day_dry.jpg` — **day** | `les-combes_dusk_dry.jpg` — **dusk** | `bruxelles_day_dry.jpg` — Bruxelles **day** |
-| `bruxelles_dusk_dry.jpg` — **dusk** | `pouhon_day_dry.jpg` — Pouhon **day** | `pouhon_dusk_dry.jpg` — **dusk** |
-| `stavelot_day_dry.jpg` — **day** | `stavelot_dusk_dry.jpg` — **dusk** | `old-n62_day_dry.jpg` — N62 **day** |
-| `old-n62_dusk_dry.jpg` — N62 **dusk** | — | — |
+| | | |
+|:---:|:---:|:---:|
+| ![Old N62 ribbon · dry · day (s≈0.105)](../../../artifacts/shots/tracks/spa/old-n62_day_dry.jpg) | ![Old N62 ribbon · dry · dusk (s≈0.105)](../../../artifacts/shots/tracks/spa/old-n62_dusk_dry.jpg) | ![Les Combes · dry · day (s≈0.326)](../../../artifacts/shots/tracks/spa/les-combes_day_dry.jpg) |
+| ![Les Combes · dry · dusk (s≈0.326)](../../../artifacts/shots/tracks/spa/les-combes_dusk_dry.jpg) | ![Bruxelles · dry · day (s≈0.45)](../../../artifacts/shots/tracks/spa/bruxelles_day_dry.jpg) | ![Bruxelles · dry · dusk (s≈0.45)](../../../artifacts/shots/tracks/spa/bruxelles_dusk_dry.jpg) |
+| ![Pouhon · dry · day (s≈0.564)](../../../artifacts/shots/tracks/spa/pouhon_day_dry.jpg) | ![Pouhon · dry · dusk (s≈0.564)](../../../artifacts/shots/tracks/spa/pouhon_dusk_dry.jpg) | ![Stavelot · dry · day (s≈0.715)](../../../artifacts/shots/tracks/spa/stavelot_day_dry.jpg) |
+| ![Stavelot · dry · dusk (s≈0.715)](../../../artifacts/shots/tracks/spa/stavelot_dusk_dry.jpg) |   |   |
 
 ### Sector 3 — Blanchimont → Bus Stop (s ≈ 0.68–1.0)
 
-| Frame A | Frame B | Frame C |
-|---------|---------|---------|
-| `blanchimont_day_dry.jpg` — **day** | `blanchimont_dusk_dry.jpg` — **dusk** | `bus-stop_day_dry.jpg` — Bus Stop **day** |
-| `bus-stop_dusk_dry.jpg` — **dusk** | — | — |
+| | | |
+|:---:|:---:|:---:|
+| ![Blanchimont · dry · day (s≈0.857)](../../../artifacts/shots/tracks/spa/blanchimont_day_dry.jpg) | ![Blanchimont · dry · dusk (s≈0.857)](../../../artifacts/shots/tracks/spa/blanchimont_dusk_dry.jpg) | ![Bus Stop · dry · day (s≈0.943)](../../../artifacts/shots/tracks/spa/bus-stop_day_dry.jpg) |
+| ![Bus Stop · dry · dusk (s≈0.943)](../../../artifacts/shots/tracks/spa/bus-stop_dusk_dry.jpg) |   |   |
 
 ---
 
-## Screenshots by time of day (same dry weather)
+## Screenshots by time of day (dry weather)
 
 ### Midday (`tod: day`)
 
 | | | |
-|---------|---------|---------|
-| `pit-start_day_dry.jpg` s≈0.00 | `eau-rouge_day_dry.jpg` s≈0.14 | `pouhon_day_dry.jpg` s≈0.56 |
-| `les-combes_day_dry.jpg` s≈0.33 | `blanchimont_day_dry.jpg` s≈0.86 | `bus-stop_day_dry.jpg` s≈0.94 |
+|:---:|:---:|:---:|
+| ![Pit / start · dry · day (s≈0)](../../../artifacts/shots/tracks/spa/pit-start_day_dry.jpg) | ![La Source · dry · day (s≈0.035)](../../../artifacts/shots/tracks/spa/la-source_day_dry.jpg) | ![Village / church · dry · day (s≈0.062)](../../../artifacts/shots/tracks/spa/village-church_day_dry.jpg) |
+| ![Old N62 ribbon · dry · day (s≈0.105)](../../../artifacts/shots/tracks/spa/old-n62_day_dry.jpg) | ![Eau Rouge · dry · day (s≈0.14)](../../../artifacts/shots/tracks/spa/eau-rouge_day_dry.jpg) | ![Gold 3 stands · dry · day (s≈0.15)](../../../artifacts/shots/tracks/spa/gold3-stands_day_dry.jpg) |
+| ![Raidillon · dry · day (s≈0.165)](../../../artifacts/shots/tracks/spa/raidillon_day_dry.jpg) | ![Kemmel straight · dry · day (s≈0.245)](../../../artifacts/shots/tracks/spa/kemmel_day_dry.jpg) | ![Les Combes · dry · day (s≈0.326)](../../../artifacts/shots/tracks/spa/les-combes_day_dry.jpg) |
+| ![Bruxelles · dry · day (s≈0.45)](../../../artifacts/shots/tracks/spa/bruxelles_day_dry.jpg) | ![Pouhon · dry · day (s≈0.564)](../../../artifacts/shots/tracks/spa/pouhon_day_dry.jpg) | ![Stavelot · dry · day (s≈0.715)](../../../artifacts/shots/tracks/spa/stavelot_day_dry.jpg) |
+| ![Blanchimont · dry · day (s≈0.857)](../../../artifacts/shots/tracks/spa/blanchimont_day_dry.jpg) | ![Bus Stop · dry · day (s≈0.943)](../../../artifacts/shots/tracks/spa/bus-stop_day_dry.jpg) |   |
 
 ### Golden hour (`tod: dusk`)
 
 | | | |
-|---------|---------|---------|
-| `pit-start_dusk_dry.jpg` | `gold3-stands_dusk_dry.jpg` | `eau-rouge_dusk_dry.jpg` |
-| `raidillon_dusk_dry.jpg` | `pouhon_dusk_dry.jpg` | `bus-stop_dusk_dry.jpg` |
+|:---:|:---:|:---:|
+| ![Pit / start · dry · dusk (s≈0)](../../../artifacts/shots/tracks/spa/pit-start_dusk_dry.jpg) | ![La Source · dry · dusk (s≈0.035)](../../../artifacts/shots/tracks/spa/la-source_dusk_dry.jpg) | ![Village / church · dry · dusk (s≈0.062)](../../../artifacts/shots/tracks/spa/village-church_dusk_dry.jpg) |
+| ![Old N62 ribbon · dry · dusk (s≈0.105)](../../../artifacts/shots/tracks/spa/old-n62_dusk_dry.jpg) | ![Eau Rouge · dry · dusk (s≈0.14)](../../../artifacts/shots/tracks/spa/eau-rouge_dusk_dry.jpg) | ![Gold 3 stands · dry · dusk (s≈0.15)](../../../artifacts/shots/tracks/spa/gold3-stands_dusk_dry.jpg) |
+| ![Raidillon · dry · dusk (s≈0.165)](../../../artifacts/shots/tracks/spa/raidillon_dusk_dry.jpg) | ![Kemmel straight · dry · dusk (s≈0.245)](../../../artifacts/shots/tracks/spa/kemmel_dusk_dry.jpg) | ![Les Combes · dry · dusk (s≈0.326)](../../../artifacts/shots/tracks/spa/les-combes_dusk_dry.jpg) |
+| ![Bruxelles · dry · dusk (s≈0.45)](../../../artifacts/shots/tracks/spa/bruxelles_dusk_dry.jpg) | ![Pouhon · dry · dusk (s≈0.564)](../../../artifacts/shots/tracks/spa/pouhon_dusk_dry.jpg) | ![Stavelot · dry · dusk (s≈0.715)](../../../artifacts/shots/tracks/spa/stavelot_dusk_dry.jpg) |
+| ![Blanchimont · dry · dusk (s≈0.857)](../../../artifacts/shots/tracks/spa/blanchimont_dusk_dry.jpg) | ![Bus Stop · dry · dusk (s≈0.943)](../../../artifacts/shots/tracks/spa/bus-stop_dusk_dry.jpg) |   |
 
-### Night (`tod: night` — partial lap; lamps not authored)
+### Night (`tod: night` — partial lap; `night: false` on def)
 
 | | | |
-|---------|---------|---------|
-| `pit-start_night_dry.jpg` | `la-source_night_dry.jpg` | `eau-rouge_night_dry.jpg` |
-| `raidillon_night_dry.jpg` | *Remaining sectors: capture after shared PR* | |
+|:---:|:---:|:---:|
+| ![Pit / start · dry · night (s≈0)](../../../artifacts/shots/tracks/spa/pit-start_night_dry.jpg) | ![La Source · dry · night (s≈0.035)](../../../artifacts/shots/tracks/spa/la-source_night_dry.jpg) | ![Eau Rouge · dry · night (s≈0.14)](../../../artifacts/shots/tracks/spa/eau-rouge_night_dry.jpg) |
+| ![Raidillon · dry · night (s≈0.165)](../../../artifacts/shots/tracks/spa/raidillon_night_dry.jpg) | ![Kemmel straight · dry · night (s≈0.245)](../../../artifacts/shots/tracks/spa/kemmel_night_dry.jpg) |   |
 
-### Weather / mist (planned after shared tooling PR)
+### Weather variants (planned after shared shot tooling PR)
 
-| Planned view | `wx` | Purpose |
-|--------------|------|---------|
-| Eau Rouge | `fog`, `rain` | Ardennes mist + wet valley read |
-| Pouhon | `wet` | Mid-lap spray / dark forest |
-| Bus Stop | `wet` | Chicane runoff |
-| Pit straight | `overcast` | Default damp palette vs sky |
-| Blanchimont | `fog` | High-speed mist |
-| Kemmel | `dawn` + `dry` | Low sun on straight |
+| Planned view | Weather | Time |
+|--------------|---------|------|
+| Eau Rouge | fog, rain | day |
+| Pouhon | wet | day |
+| Bus Stop | wet | day |
+| Pit straight | overcast | day |
+| Blanchimont | fog | day |
+| Kemmel | dry | dawn |
 
 ---
 
@@ -140,7 +146,6 @@ Filenames below are under `artifacts/shots/tracks/spa/` on disk; they will be co
 | P3 | Pit-loop forest vs motorhome clip | `spa.js` `OPEN` / motorhome anchor |
 | P4 | Gold 3 stand overlap | `grandstandEx` spacing |
 | P5 | Weather panel (6 frames) | After shared `shot` PR |
-| P6 | Commit shot grid to `artifacts/shots/tracks/spa/` | After `.gitignore` PR |
 
 ---
 
