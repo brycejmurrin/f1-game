@@ -3,6 +3,7 @@
 // source pages.yml is asserted against), the circuit-touch detector reads a
 // real diff, preflight refuses what the protocol refuses, and --help exits 0
 // without touching git. plan()/main() need the network and are not run here.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
