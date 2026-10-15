@@ -454,7 +454,7 @@ function loadSeasonUi(trackIds = ["a", "b"], cal = {}) {
       config: () => ({ trackIds: trackIds.slice(), quali: true, sprint: true, laps: 57, points: "modern", flPoint: false, drop: 0 }),
       PRESETS: [{ id: "full", label: "FULL" }], presetIds: () => ["a"], shuffled: (x) => x,
       LAP_OPTS: [3, 5, 10, 25, 57], SPRINT_POINTS: [8, 7, 6, 5, 4, 3, 2, 1], DROP_OPTS: [0, 2, 3],
-      hasProgress: () => false, rounds: () => 2, restart: () => ({}), setConfig() {}, save() {}, trackIndex: () => 0,
+      canRace: () => true, matchesConfig: () => false, hasProgress: () => false, rounds: () => 2, restart: () => ({}), setConfig() {}, save() {}, trackIndex: () => 0,
       ...cal,
     },
     Tracks: { LIST: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
@@ -463,6 +463,96 @@ function loadSeasonUi(trackIds = ["a", "b"], cal = {}) {
   vm.runInNewContext(src("js/career/season-ui.js"), sb, { filename: "js/career/season-ui.js" });
   return { dom, ui: sb.SeasonUI.create(G), $: G.$, G };
 }
+
+test("season setup: unchanged qualifying survives APPLY; changing rules requires a fresh confirmation", () => {
+  let calls = 0;
+  const { ui, $, G } = loadSeasonUi(["a", "b"], {
+    matchesConfig: (season, next) => !!season && season.config.laps === next.laps,
+    applyConfig: (next) => { calls++; return { ok: true, durable: true,
+      season: next.laps === G.season.config.laps ? G.season : { round: 0, config: next } }; },
+  });
+  const season = { round: 0, config: { laps: 57 }, qualiTrack: "a", qualiMode: "season",
+    qualiOrder: [{ id: "driver", t: 80, human: true }] };
+  G.season = season;
+  G.armConfirm = (btn, text, act) => {
+    if (btn.dataset.armed) act();
+    else { btn.dataset.armed = "1"; btn.classList.add("armed"); btn.textContent = text; }
+  };
+  ui.open();
+  assert.equal($("ss-apply").textContent, "APPLY");
+  $("ss-apply").onclick();
+  assert.equal(G.season, season);
+  assert.equal(calls, 1);
+  assert.equal($("season-setup").hidden, true);
+  ui.open();
+  $("ss-laps").children[0].onclick();
+  assert.equal($("ss-apply").textContent, "APPLY — RESTART SEASON");
+  $("ss-apply").onclick();
+  assert.equal(calls, 1, "the first click cannot erase qualifying");
+  assert.equal(G.season.qualiOrder.length, 1);
+  assert.equal($("season-setup").hidden, false);
+  $("ss-back").onclick();
+  ui.open();
+  assert.equal($("ss-apply").dataset.armed, undefined, "BACK discards the armed draft");
+  $("ss-laps").children[0].onclick();
+  $("ss-apply").onclick();
+  assert.equal(calls, 1, "a reopened setup must confirm again");
+  $("ss-apply").onclick();
+  assert.equal(calls, 2);
+  assert.equal(G.season.qualiOrder, undefined);
+  assert.equal(G.season.config.laps, 3);
+});
+
+test("season setup: changed rounds and sprint results still warn, and unchanged APPLY keeps the selected round", () => {
+  for (const season of [{ round: 2 }, { round: 0, stage: "race" }]) {
+    let changed = true, confirms = 0, selected = null;
+    const { ui, $, G } = loadSeasonUi(["a", "b"], {
+      matchesConfig: () => !changed,
+      hasProgress: (s) => !!s && (s.round > 0 || s.stage === "race"),
+      applyConfig: () => ({ ok: true, durable: true, season }),
+      trackIndex: (round) => { selected = round; return round; },
+    });
+    G.season = season;
+    G.armConfirm = () => { confirms++; };
+    ui.open();
+    assert.equal($("ss-apply").textContent, "APPLY — RESTART SEASON");
+    $("ss-apply").onclick();
+    assert.equal(confirms, 1);
+    changed = false; ui.build();
+    $("ss-apply").onclick();
+    assert.equal(confirms, 1);
+    assert.equal(selected, season.round, "preserving a season must not select round zero");
+  }
+});
+
+test("season setup: START NEW SEASON confirms and restarts completed standings with unchanged rules", () => {
+  let calls = 0, selected = null;
+  const completed = { round: 2, pts: { driver: 50 } };
+  const fresh = { round: 0, pts: {} };
+  const { ui, $, G } = loadSeasonUi(["a", "b"], {
+    matchesConfig: () => true,
+    canRace: (s) => !!s && s.round < 2,
+    hasProgress: (s) => !!s && s.round > 0,
+    applyConfig: () => { calls++; return { ok: true, durable: true, season: fresh }; },
+    trackIndex: (round) => { selected = round; return round < 2 ? round : -1; },
+  });
+  G.season = completed;
+  G.armConfirm = (btn, text, act) => {
+    if (btn.dataset.armed) act();
+    else { btn.dataset.armed = "1"; btn.textContent = text; }
+  };
+  ui.open();
+  assert.equal($("ss-apply").textContent, "APPLY — RESTART SEASON");
+  $("ss-apply").onclick();
+  assert.equal(calls, 0, "completed standings still need destructive confirmation");
+  assert.equal(G.season, completed);
+  $("ss-apply").onclick();
+  assert.equal(calls, 1);
+  assert.equal(G.season, fresh);
+  assert.equal(selected, 0);
+  assert.equal(G.trackIdx, 0, "the new championship selects its first circuit");
+  assert.equal($("season-setup").hidden, true);
+});
 
 test("season setup: RACE DISTANCE chips carry a unit and none claims FULL", () => {
   const { ui, $ } = loadSeasonUi();
