@@ -294,7 +294,11 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   // on 2026-10-14 to test nothing new, one job start per PR event. Its required
   // status context was removed from the deploy branch's protection first (a
   // required check that never reports blocks every merge), then the file.
-  assert.ok(!fs.existsSync(new URL("../../.github/workflows/docs-guards.yml", import.meta.url)),
+  // (A directory listing, not a path literal: cross-file-paths.test.mjs reads
+  // every `new URL("…")` as a reference that must resolve — tooling B went red
+  // on the deploy tip 55bebd22 for exactly that.)
+  const workflowsDir = new URL("../../.github/workflows/", import.meta.url);
+  assert.ok(!fs.readdirSync(workflowsDir).includes("docs-guards.yml"),
     "docs-guards.yml is back — tooling-fast already runs every file it ran, and a second workflow is a job start per PR event");
   const listAfter = (text, key, from = 0) => {
     const at = text.indexOf(`\n    ${key}:\n`, from);
@@ -325,9 +329,8 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   const notFast = files.filter((f) => !fast.has(f) && f !== "tests/unit/environment-json.test.mjs");
   assert.deepEqual(notFast, [], "test:docs-guards is an alias over tooling-fast's prose guards, not a new home for files");
   // No other workflow may quietly take its place.
-  const dir = new URL("../../.github/workflows/", import.meta.url);
-  const others = fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n) && n !== "ci.yml")
-    .filter((n) => /npm run test:docs-guards/.test(fs.readFileSync(new URL(n, dir), "utf8")));
+  const others = fs.readdirSync(workflowsDir).filter((n) => /\.ya?ml$/.test(n) && n !== "ci.yml")
+    .filter((n) => /npm run test:docs-guards/.test(fs.readFileSync(new URL(n, workflowsDir), "utf8")));
   assert.deepEqual(others, [], "no workflow but ci.yml's guards runs the prose group on PRs");
 });
 
