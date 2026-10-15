@@ -1,0 +1,1 @@
+1792059479	Bryce Murrin	PR #1977 observe existing run38706961003 attempt2, update Plan/Status, merge only after all user-required gates. Fresh REST claims-board archive confirms old owner stale, no overlapping live claim. No retry: existing attempt consumes recovery. No source/sync/push.  [cursor/deep-browser-fixes-0644; session 7313529e5808d19f004ec6ca]
