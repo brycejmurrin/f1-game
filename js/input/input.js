@@ -624,6 +624,7 @@ const Input = (function () {
     axisCaptureCb = typeof cb === "function" ? cb : null;
     axisCaptureRest = null;
     axisCaptureSkip = new Set((opts && opts.exclude) || []);
+    axisCaptureOwner = opts && opts.ownerKey || null;
     if (!axisCaptureCb) return;
     axisCaptureRest = snapshotRests(readPads(), new Map());
   }
@@ -634,6 +635,7 @@ const Input = (function () {
     for (let j = 0; j < pads.length; j++) {
       const p = pads[j];
       if (!p || !p.connected) continue;
+      if (axisCaptureOwner && padKey(p, j) !== axisCaptureOwner) continue;
       const rests = axisCaptureRest.get(padKey(p, j));
       if (!rests) { snapshotRests([p], axisCaptureRest); continue; }
       const axes = p.axes || [];
@@ -652,7 +654,16 @@ const Input = (function () {
     axisExt = { key: bestKey, axis: bestI, rest: bestRest, far: bestV, until: nowMs() + AXIS_EXT_MS };
     cb(bestI, Math.sign(bestV - bestRest) || 1, axisExt);
   }
-  function setPadAxisMap(saved) {
+  function setPadAxisMap(saved, ownerKey) {
+    let owner = null;
+    if (ownerKey != null) {
+      const pads = readPads();
+      owner = Array.prototype.find.call(pads, (p, i) => p && p.connected && padKey(p, i) === ownerKey);
+      if (!owner) return null;   // a disconnected wizard cannot change another device
+      const profiles = ensureDeviceProfiles();
+      if (profiles) profiles.activate(owner);
+    }
+    const previous = getPadAxisMap();
     padAxisMap = Object.assign({}, PAD_AXIS_DEF);
     if (saved && typeof saved === "object") {
       for (const k of ["steer", "throttle", "brake"]) {
@@ -668,6 +679,7 @@ const Input = (function () {
       // One axis cannot be both pedals: a combined axis reads brake AND throttle at rest.
       if (padAxisMap.brake != null && padAxisMap.brake === padAxisMap.throttle) padAxisMap.brake = padAxisMap.brakeRest = padAxisMap.brakeFar = null;
     }
+    if (owner) invalidateAxisRest(padIdOf(owner), previous);
     profileChanged();
     return getPadAxisMap();
   }
@@ -690,6 +702,23 @@ const Input = (function () {
       changed: () => { if (typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("apexcontrollerprofilechange")); },
     });
     return deviceProfiles;
+  }
+
+  // Rest belongs to the device AND its steering axis/sign. Profile resets and
+  // completed captures must not reuse an offset measured on a different axis.
+  function invalidateAxisRest(id, previous) {
+    if (previous.steer === padAxisMap.steer && previous.steerInvert === padAxisMap.steerInvert) return;
+    padRestMap.delete(id);
+    padRestLegacy = null; padRestOffset = 0;
+    if (typeof GameStore !== "undefined" && GameStore.store) GameStore.store.set("padRest", padRestStore());
+  }
+  function resetControllerProfile() {
+    const current = deviceProfiles && deviceProfiles.current();
+    if (!current) return false;
+    const previous = getPadAxisMap();
+    if (!deviceProfiles.reset()) return false;
+    invalidateAxisRest(current.id, previous);
+    return true;
   }
 
   function padAxesAreDefault() {
@@ -764,6 +793,7 @@ const Input = (function () {
     throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null };   // pedal travel ends, measured by the wizard
   let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
   let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
+  let axisCaptureOwner = null;   // after first wheel answer, ignore other physical devices
   let axisCaptureSkip = new Set(); // axes the wizard already assigned; capture ignores them
   let axisCaptureRest = null;    // resting snapshot taken when the wizard armed
   function readPadAxis(axes, i) {
@@ -2314,7 +2344,7 @@ const Input = (function () {
     controllerProfile: () => deviceProfiles ? deviceProfiles.current() : null,
     getControllerProfiles: () => ensureDeviceProfiles() ? deviceProfiles.data() : { v: 1, devices: [] },
     setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
-    resetControllerProfile: () => deviceProfiles ? deviceProfiles.reset() : false,
+    resetControllerProfile,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, clearPadRest, padRestStore,
     touchControlsNeeded,
     pickPad,

@@ -328,6 +328,11 @@ const DrivingCoach = (function () {
       if (elapsed >= 0.1) {
         elapsed %= 0.1;
         insights.update(G.player);
+        if (typeof SetupTrials !== "undefined" && SetupTrials.active()) {
+          SetupTrials.observe(G.setupTrialContext ? G.setupTrialContext() : null);
+          const result = insights.summary();
+          if (result.drill && result.drill.done && result.lastDrill) SetupTrials.record(result.lastDrill, G.setupTrialContext ? G.setupTrialContext() : null);
+        }
         if (enabled && G.state === "race" && G.player && !G.timeTrial && G.tyres && G.tyres.on()) tyreWatch(G.player);
         if (enabled || practice) {
           if (G.player) { trace.push(sample(G.player)); if (trace.length > 600) trace.shift(); }
@@ -524,6 +529,7 @@ const DrivingCoach = (function () {
     // a one-car world and behaves exactly as it always did.
     function mark() {
       if (!canPractice()) return false;
+      if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Checkpoint changed during attempt");
       if (!insights.startDrill(drillMode)) return false;
       checkpoint = { world: captureWorld(), mode: drillMode };
       practice = true; G.records.invalidate();
@@ -531,6 +537,7 @@ const DrivingCoach = (function () {
       return true;
     }
     function retry() {
+      if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Checkpoint retry invalidates a measured attempt");
       if (!checkpoint || !canPractice()) return false;
       restoreWorld(checkpoint.world);
       drillMode = checkpoint.mode;
@@ -549,6 +556,7 @@ const DrivingCoach = (function () {
     // See restoreWorld() for the two things that are RESET rather than
     // restored (the Rapier debris field and any live incident).
     function rewind() {
+      if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Rewind invalidates a measured attempt");
       if (!canPractice() || !rewindBuf.length) return false;
       const e = rewindBuf.shift();
       rewindBuf = [];                 // everything after it is a future that no longer happened
@@ -568,6 +576,7 @@ const DrivingCoach = (function () {
       return true;
     }
     function reset() {
+      if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session reset before attempt completed");
       checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
       rewindBuf = []; rewindAcc = 0; reminded.clear(); reminderAt = 0; reminders = 0; pendingReport = null; tyreAcc = null; tyreSaid.clear();
       clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
@@ -723,7 +732,13 @@ const DrivingCoach = (function () {
     bind("pm-practice-rewind", rewind); bind("pm-practice-arm", armPractice);
     SettingRow.wire($("pm-coach"), { values: [["off", "OFF"], ["on", "ON"]],
       read: () => enabled ? "on" : "off", write: v => { if ((v === "on") !== !!enabled) toggle(); } });
+    function beginSetupTrial() {
+      if (!G.practice || !canPractice()) return false;
+      drillMode = "launch";
+      return mark();
+    }
     function setPracticeGoal(mode) {
+      if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Practice goal changed");
       if (!Object.hasOwn(RaceInsights.DRILLS, mode)) return false;
       drillMode = mode; paint(); return true;
     }
@@ -756,7 +771,7 @@ const DrivingCoach = (function () {
     // unlocks rewind, but a season or career round is always scored — a rewound
     // P1 took full points and prize money. Practice those in a one-off race.
     function canArm() { return !!(!G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && onTrack() && G.player && !G.practice && G.flow !== "season" && G.flow !== "career"); }
-    return { update, status, feedback, advice, mark, retry, rewind, reset, toggle, paint, armPractice, canArm,
+    return { update, status, feedback, advice, beginSetupTrial, mark, retry, rewind, reset, toggle, paint, armPractice, canArm,
       practiceGoal: () => drillMode, setPracticeGoal,
       canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
       practiceActive: () => practice,

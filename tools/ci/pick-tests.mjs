@@ -294,6 +294,8 @@ export const RULES = [
   // panel, the global type and colour tokens, the picker), so they ride along.
   [/^css\/(menus|carsetup|tokens|select)\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
+  [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
+  [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
   // select-specs' BOOT_FALLBACK_REASONS, the strings that let node-plan.mjs
   // drop the boot group from the VM plan when only a blanket rule named it

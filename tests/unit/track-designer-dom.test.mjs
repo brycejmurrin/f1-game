@@ -2567,3 +2567,19 @@ test("native CARD share title remains captured when the design changes during PN
   assert.equal((await b.CD.decode(b.CD.fromHash(shared.text.slice(shared.text.indexOf("#"))))).design.name, name);
   b.D.close();
 });
+
+
+test("close cancels pending single-file and decoded imports without blocking a new closed API load", async () => {
+  for (const path of ["file","decode"]) {
+    const b=bootScreen();b.D.init(b.G,{custom:b.C,root:b.root});b.D.open();b.D.load(design({name:"ORIGINAL"}));
+    let finish;const gate=new Promise(resolve=>{finish=resolve;});let pending;
+    if(path==="file")pending=b.D.importFile({size:100,text:()=>gate});
+    else {b.ctx.TrackCodec={...b.ctx.TrackCodec,decode:()=>gate};pending=b.D.loadFrom("held-code");}
+    b.D.close();const before=JSON.stringify(b.D.state().design),draft=JSON.stringify(b.C.draft());
+    finish(path==="file"?JSON.stringify({format:"apex26.track",v:1,design:design({name:"LATE"})}):{ok:true,design:design({name:"LATE"})});
+    assert.equal(await pending,false,path+" loses ownership on close");
+    assert.equal(JSON.stringify(b.D.state().design),before);assert.equal(JSON.stringify(b.C.draft()),draft);assert.equal(b.D.isOpen(),false);
+    assert.equal(await b.D.loadFrom(JSON.stringify({format:"apex26.track",v:1,design:design({name:"EXPLICIT CLOSED"})})),true,"a new intentional closed API import remains supported");
+    assert.equal(b.D.state().design.name,"EXPLICIT CLOSED");assert.equal(b.D.isOpen(),false);
+  }
+});

@@ -568,3 +568,12 @@ test('cooling goal uses the existing selected practice control and displays its 
   assert.match(nodes.get('pm-drill-status').textContent, /Measured recovery.*Grain -10.0pp; grip \+5.0%/);
   assert.doesNotMatch(nodes.get('pm-drill-status').textContent, /best|nulls/);
 });
+
+test('setup trial hook arms real unscored launch, samples equivalence and settles once through the comparison owner', () => {
+  const h=fixture({realInsights:true}),{G,c,coach,ctx,tick}=h,received=[],observed=[];
+  ctx.SetupTrials={active:()=>true,observe:x=>observed.push(x),record:r=>{if(!received.length)received.push(r);},invalidate(){}};
+  G.records.key=()=> 'trial-test';G.setupTrialContext=()=>({unscored:true,stableWeather:true});G.practice=true;Object.assign(c,{speed:0,prog:0,lap:1,s:0,throttleDemand:0});
+  assert.equal(coach.beginSetupTrial(),true);assert.equal(coach.practiceGoal(),'launch');tick(.2);tick(.3,{throttleDemand:1,speed:10,prog:5});tick(.3,{speed:51,prog:25});
+  assert.equal(received.length,1);assert.equal(received[0].mode,'launch');assert.equal(received[0].clean,true);assert.ok(Number.isFinite(received[0].score));assert.ok(observed.length>0);
+  G.practice=false;assert.equal(coach.beginSetupTrial(),false,'refuses a scored session');
+});

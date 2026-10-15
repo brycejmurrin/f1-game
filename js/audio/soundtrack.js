@@ -475,10 +475,15 @@ var GameAudioSoundtrack = (function () {
     }
 
     function startMusic(trackIdx) {
+      if (musicEnabled) ++actionGeneration;
+      resumeMusic(trackIdx);
+    }
+    // Context/visibility recovery reuses the owner rather than pretending to
+    // be a new manual selection. An explicit stop invalidates pending resumes.
+    function resumeMusic(trackIdx) {
       const idx = (typeof trackIdx === "number") ? trackIdx : 0;
       lastTrackIdx = idx;
       if (!musicEnabled) return;
-      ++actionGeneration;
       // Delegated: the backend owns play/pause, and needs no AudioContext.
       if (backend) { try { backend.start(); } catch (e) { /* a broken backend must not take the audio down */ } return; }
       if (!host.context()) return;                    // remember the track but stay silent if music is off
@@ -516,6 +521,9 @@ var GameAudioSoundtrack = (function () {
 
     function stopMusic() {
       ++actionGeneration;
+      stopPlayback();
+    }
+    function stopPlayback() {
       stopInternal();
       if (backend) { try { backend.stop(); } catch (e) { /* a broken backend must not take the audio down */ } }
     }
@@ -535,7 +543,7 @@ var GameAudioSoundtrack = (function () {
     function suspendMusic() {
       captureStreamPos();
       const hidBuf = musicResumeBuf, hidAt = musicResumeAt, hidOff = musicResumeOff;
-      if (musicOn) stopMusic();
+      if (musicOn) stopPlayback();
       musicResumeBuf = hidBuf; musicResumeAt = hidAt; musicResumeOff = hidOff;
     }
     function resetContext() {
@@ -565,7 +573,7 @@ var GameAudioSoundtrack = (function () {
       musicPlaybackGeneration: () => actionGeneration,
       stopMusicIfGeneration(generation) { if (generation !== actionGeneration) return false; stopMusic(); return true; },
       startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck,
-      suspendMusic, resetContext, releaseEngineDuck, duckForEngine,
+      suspendMusic, resumeMusic, resetContext, releaseEngineDuck, duckForEngine,
       isPlaying: () => musicOn, streaming: () => musicStreaming, lastTrack: () => lastTrackIdx, volume: () => musicVol,
     };
   }

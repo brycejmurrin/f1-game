@@ -20,7 +20,8 @@ const SaveHealth = (function () {
   }
   async function inspect(opts) {
     const { store, disk, storage } = dependencies(opts), groups = new Map();
-    const report = { ok: true, localBytes: 0, categories: [], estimate: null, estimateUnavailable: false,
+    const history = opts && opts.restorePoints || (typeof CareerRestorePoints !== "undefined" && CareerRestorePoints);
+    const report = { history: history && history.health ? history.health() : [], ok: true, localBytes: 0, categories: [], estimate: null, estimateUnavailable: false,
       failed: store && store.failedKeys ? store.failedKeys() : [], mirror: store && store.mirror ? {
         supported: store.mirror.supported, pending: store.mirror.pending, failed: store.mirror.failed,
         skipped: store.mirror.skipped || 0, authoredBytes: store.mirror.authoredBytes || 0,
@@ -91,6 +92,10 @@ const SaveHealth = (function () {
       }
       if (report.failed.length) for (const f of report.failed) measurements.appendChild(node(doc, "p", "Not saved: " + f.key + " (" + f.reason + "). Use SAVE RETRY after making room."));
       else measurements.appendChild(node(doc, "p", "No failed primary writes are currently recorded."));
+      for (const point of report.history) measurements.appendChild(node(doc, "p",
+        (point.flavour === "myteam" ? "MY TEAM" : "DRIVER") + " SLOT " + (point.slot + 1) + " history: " +
+        (point.state === "saved" ? "last restore point saved" : point.state === "saving" ? "capturing restore point" : "restore point unavailable (" + point.reason + ")") +
+        " · " + new Date(point.at).toLocaleString() + ". Primary save status is separate."));
       status.textContent = "Cleanup removes only downloaded response caches. Career saves, garage work, ghosts and authored circuits are kept.";
       refresh.disabled = false;
     }

@@ -123,6 +123,24 @@ test('strict preset shape rejects whole malformed or unsupported library without
   }
 });
 
+test('named preset context survives garage backups while malformed metadata cannot replace the library', () => {
+  const a = boot(), b = boot(), value = library(a);
+  value.items[0].context = { v: 1, physics: 'trial-physics', parts: { engine: 'works' }, track: 'monza', note: 'Dry baseline' };
+  assert.equal(a.garage(value).applied, 1);
+  const file = plain(a.api.collectGarage());
+  assert.deepEqual(file.garage['setupPresets.mercedes'], value);
+  assert.equal(b.api.applyGarage(file).applied, 1);
+  assert.deepEqual(plain(b.store.get('setupPresets.mercedes')), value);
+  const before = b.disk.get('apex26.setupPresets.mercedes');
+  for (const context of [{ ...value.items[0].context, v: 2 }, { ...value.items[0].context, future: true },
+    { ...value.items[0].context, note: 'x'.repeat(161) }, { ...value.items[0].context, parts: { engine: 'x'.repeat(97) } },
+    { ...value.items[0].context, parts: [] }]) {
+    const invalid = plain(value); invalid.items[0].context = context;
+    assert.equal(b.garage(invalid).applied, 0);
+    assert.equal(b.disk.get('apex26.setupPresets.mercedes'), before);
+  }
+});
+
 test('import UI retains its existing durable-success reload path', () => {
   assert.match(source, /if \(!r\.applied\)[\s\S]*?reloading = true; b\.disabled = true;[\s\S]*?location\.reload\(\)/);
   assert.ok(!source.includes('Input.setControllerProfiles('), 'no extra live reapply added to a reload-based importer');

@@ -12,6 +12,10 @@ const CareerRestorePoints = (function () {
     const now = opts.now || (() => Date.now());
     const previews = new WeakMap();
     let opening = null, sequence = 0;
+    const captureHealth = new Map(), captureOwners = new Map();
+    function health() {
+      return [...captureHealth].map(([key, value]) => Object.assign({ flavour: key.split(".")[0], slot: +key.split(".")[1] }, value));
+    }
     function slotKey(flavour, i) { const key = flavour + "." + i; return SLOT_RE.test(key) ? key : null; }
     function refused(reason) { return { ok: false, durable: false, reason }; }
     function open() {
@@ -57,10 +61,19 @@ const CareerRestorePoints = (function () {
     }
     async function capture(flavour, i, data, options) {
       const key = slotKey(flavour, i), json = key && clean(data, flavour);
-      if (!key || !json) return refused("invalid-or-too-large");
+      if (!key) return refused("invalid-or-too-large");
       const reason = options && options.reason;
       if (!["round", "import", "before-import", "before-restore"].includes(reason)) return refused("explicit-boundary-required");
-      const db = await open(); if (!db) return refused("history-unavailable");
+      const owner = (captureOwners.get(key) || 0) + 1; captureOwners.set(key, owner);
+      captureHealth.set(key, { state: "saving", at: now(), boundary: reason, reason: null });
+      const finish = (result) => {
+        if (captureOwners.get(key) === owner) captureHealth.set(key, {
+          state: result.ok && result.durable ? "saved" : "unavailable", at: now(), boundary: reason, reason: result.reason || null,
+        });
+        return result;
+      };
+      if (!json) return finish(refused("invalid-or-too-large"));
+      const db = await open(); if (!db) return finish(refused("history-unavailable"));
       return new Promise((resolve) => {
         let tx, result = null;
         try {
@@ -75,7 +88,7 @@ const CareerRestorePoints = (function () {
           tx.oncomplete = () => resolve(result || refused("history-write-failed"));
           tx.onerror = tx.onabort = () => resolve(refused("history-write-failed"));
         } catch (_) { resolve(refused("history-write-failed")); }
-      });
+      }).then(finish);
     }
     function validItems(items, flavour) {
       if (!Array.isArray(items)) return [];
@@ -140,11 +153,11 @@ const CareerRestorePoints = (function () {
         return Object.assign({}, result, { reloadRequired: result.ok === true });
       } catch (_) { return refused("restore-failed"); }
     }
-    return { capture, list, preview, restore, limits: { perSlot: LIMIT, snapshotBytes: SNAPSHOT_BYTES, totalBytes: LIMIT * SNAPSHOT_BYTES * 6 } };
+    return { capture, list, preview, restore, health, limits: { perSlot: LIMIT, snapshotBytes: SNAPSHOT_BYTES, totalBytes: LIMIT * SNAPSHOT_BYTES * 6 } };
   }
   let instance;
   const current = () => instance || (instance = create());
   return { create, capture: (...args) => current().capture(...args), list: (...args) => current().list(...args),
-    preview: (...args) => current().preview(...args), restore: (...args) => current().restore(...args) };
+    preview: (...args) => current().preview(...args), restore: (...args) => current().restore(...args), health: () => current().health() };
 })();
 Object.freeze(CareerRestorePoints);

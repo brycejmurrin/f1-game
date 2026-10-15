@@ -287,6 +287,8 @@ const FULL = [
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
+  "js/garage/setup-trials.js", // bounded unscored setup comparison receipts (call-time consumers)
+  "js/race/setup-trial-session.js", // fresh solo trial sessions through normal race entry
   "js/garage/setup-presets.js",
   "js/garage/setup-experiments.js", // reversible tune experiments and aero bench
   "js/garage/setup-sheet.js",

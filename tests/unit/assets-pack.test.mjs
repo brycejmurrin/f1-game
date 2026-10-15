@@ -1565,9 +1565,61 @@ test("asset decode fallback yields a task between layers and unload during the y
     if (cancel) assets.unload();
     tasks.shift()();
     assert.equal(await pending, !cancel);
-    assert.deepEqual(events, ["decode1", "decode2"]);
+    assert.deepEqual(events, cancel ? ["decode1"] : ["decode1", "decode2"], "obsolete layers are not decoded");
     assert.equal(microtasks, 0, "microtasks cannot give rendering a turn");
     assert.equal(uploads, cancel ? 0 : 1);
-    assert.deepEqual(closed.sort(), [1, 2], "all decoded bitmap owners are released once");
+    assert.deepEqual(closed.sort(), cancel ? [1] : [1, 2], "all decoded bitmap owners are released once");
   }
+});
+
+
+test("readback destination ownership is local across sync, overlapping async, failure and unload", async () => {
+  for (const waitFails of [false, true]) {
+    const tasks = [], mock = makeAsyncGl({ busyPolls: 2, waitFails });
+    const sandbox = { setTimeout(fn) { tasks.push(fn); }, OffscreenCanvas: class { getContext() { return mock.gl; } } };
+    sandbox.window = sandbox; vm.createContext(sandbox); seedLog(sandbox);
+    // Inspect module roots without exporting a production diagnostic surface.
+    const src = fs.readFileSync(path.join(ROOT,"js/render/shared/assets.js"),"utf8");
+    vm.runInContext(src.replace("return { init, supported,", "return { scratchForTest: () => _scratchGl, init, supported,"),sandbox);
+    const a = sandbox.Assets, n = 17, size = 2, data = new Uint8Array(size*size*4*n);
+    const images = []; images[1] = layerImage(1,size);
+    assert.deepEqual([...a.readLayerBytes(size,images,n,data)],[1]);
+    const owns = (buffer) => Object.values(a.scratchForTest()).some((v) => ArrayBuffer.isView(v) && v.buffer === buffer);
+    assert.equal(owns(data.buffer),false,"session scratch context must not root a completed sync destination");
+    const x = new Uint8Array(data.length), y = new Uint8Array(data.length);
+    const first = a.readLayerBytesAsync(size,images,n,x);
+    const images2 = []; images2[1] = layerImage(2,size);
+    const second = a.readLayerBytesAsync(size,images2,n,y);
+    a.unload();
+    assert.equal(owns(x.buffer),false); assert.equal(owns(y.buffer),false,"in-flight local views are not session roots");
+    while(tasks.length) tasks.shift()();
+    assert.deepEqual([...await first],waitFails?[]:[1]); assert.deepEqual([...await second],waitFails?[]:[1]);
+    if (!waitFails) {
+      assert.deepEqual([...x.slice(size*size*4,size*size*8)],[...layerImage(1,size).pixels(size,size)]);
+      assert.deepEqual([...y.slice(size*size*4,size*size*8)],[...layerImage(2,size).pixels(size,size)],"concurrent readback must not redirect earlier output");
+    }
+    assert.equal(owns(x.buffer),false);assert.equal(owns(y.buffer),false);
+    assert.equal(mock.ops.filter(([op])=>op==="deleteBuffer").length,2);
+    assert.equal(mock.ops.filter(([op])=>op==="deleteSync").length,2);
+  }
+});
+
+test("obsolete Safari fallback stops at a layer task and closes both crop and full-strip owners", async () => {
+  const tasks=[], bitmaps=[], calls=[]; const blob={size:1}; let maps=0, uploads=0;
+  const assets=assetLoader({
+    setTimeout(fn){tasks.push(fn);},
+    fetch:async(url)=>url.endsWith("manifest.json")?{ok:true,json:async()=>({materials:{size:1,albedo:"a",layers:[{mat:1,scale:1},{mat:2,scale:1},{mat:3,scale:1}]}})}:{ok:true,blob:async()=>blob},
+    async createImageBitmap(source,...args){
+      calls.push(source===blob?(args.length>1?"blob-crop":"full"):"fallback-crop");
+      if(source===blob&&args.length>1)throw Error("Safari crop unsupported");
+      const b={closed:0,close(){this.closed++;}};bitmaps.push(b);return b;
+    },
+  });
+  assets.init({createTextureArray(){uploads++;return{};},setMaterialMaps(v){if(v)maps++;}});
+  const pending=assets.load();await new Promise(setImmediate);
+  assert.deepEqual(calls,["blob-crop","full","fallback-crop"]);
+  assets.unload();tasks.shift()();
+  assert.equal(await pending,false);assert.equal(uploads,0);assert.equal(maps,0);
+  assert.deepEqual(calls,["blob-crop","full","fallback-crop"],"cancellation neither decodes another layer nor retries the full strip");
+  assert.deepEqual(bitmaps.map(b=>b.closed),[1,1]);
 });

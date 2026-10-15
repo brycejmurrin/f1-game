@@ -283,8 +283,8 @@ var GameAudio = (function () {
   // "suspended" and every rebuild re-arms the next one: unbounded, that loop
   // closes and recreates a context every ~280 ms for as long as the page is up.
   const DEVICE_REBUILD_MAX = 3, DEVICE_REBUILD_WINDOW_MS = 30000;
-  let resumeMusic = false;
-  let resumeEngine = false;
+  let resumeMusic = null;   // owner generations, not just a remembered playing flag
+  let resumeEngine = null;
   let resumeRain = false;
 
   function clamp01(v) {
@@ -766,7 +766,7 @@ var GameAudio = (function () {
     const wasMusic = soundtrack.isPlaying();
     const wasTrack = soundtrack.lastTrack();
     const wasEngine = engineOn;
-    if (soundtrack.isPlaying()) stopMusic();
+    if (wasMusic) soundtrack.suspendMusic();
     engineOn = false;               // old nodes died with the old context
     // A TRY/CATCH CANNOT SWALLOW A REJECTION, and close() returns a Promise.
     // The "already closed" this catch was written for is exactly the case the
@@ -808,18 +808,18 @@ var GameAudio = (function () {
                             // tests/tools call centroidHz() today, not the game loop)
     if (!createCtx()) return;
     reapplyContextState();
-    if (wasMusic) startMusic(wasTrack);
-    if (wasEngine) startEngine();
+    if (wasMusic) soundtrack.resumeMusic(wasTrack);
+    if (wasEngine) startEngineGraph();
     if (rainWanted) startRain();
   }
 
   function onVisibility() {
     if (document.hidden) {
-      resumeMusic = soundtrack.isPlaying();
-      resumeEngine = engineOn;
+      resumeMusic = soundtrack.isPlaying() ? soundtrack.musicPlaybackGeneration() : null;
+      resumeEngine = engineOn ? engineActionGeneration : null;
       resumeRain = rainWanted;
       soundtrack.suspendMusic();
-      if (engineOn) stopEngine();
+      if (engineOn) stopEngineGraph();
       if (rainWanted) stopRain(true);
       // SUSPEND THE CONTEXT, not only its sources. Stopping the nodes leaves
       // master, the DynamicsCompressor, sfxBus, tiltEq, the voice formant and
@@ -851,10 +851,10 @@ var GameAudio = (function () {
       // the music / engine restarts below land on the context it would replace.
       if (deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) requestOutputDeviceRebuild(deviceRebuildPending);
       resumeIfNeeded();
-      if (resumeMusic) startMusic(soundtrack.lastTrack()); // restarts re-synced to the clock
-      if (resumeEngine) startEngine();
+      if (resumeMusic !== null && resumeMusic === soundtrack.musicPlaybackGeneration()) soundtrack.resumeMusic(soundtrack.lastTrack());
+      if (resumeEngine !== null && resumeEngine === engineActionGeneration) startEngineGraph();
       if (resumeRain) startRain();
-      resumeMusic = resumeEngine = resumeRain = false;
+      resumeMusic = resumeEngine = null; resumeRain = false;
     }
   }
 
@@ -1389,7 +1389,12 @@ var GameAudio = (function () {
   // per menu-race cycle. Arming first and tearing down on the way out makes a
   // partial build cost silence instead of a permanent one.
   function startEngine() {
-    ++engineActionGeneration;
+    ++engineActionGeneration; resumeEngine = null;
+    startEngineGraph();
+  }
+  // Lifecycle/sample graph swaps keep the current playback owner. Only an
+  // explicit start/stop transfers ownership or cancels a queued hide resume.
+  function startEngineGraph() {
     if (!ctx || engineOn) return;
     engineOn = true;
     try { startEngineBody(); }
@@ -1402,7 +1407,10 @@ var GameAudio = (function () {
   }
 
   function stopEngine() {
-    ++engineActionGeneration;
+    ++engineActionGeneration; resumeEngine = null;
+    stopEngineGraph();
+  }
+  function stopEngineGraph() {
     if (!engineOn) return;
     const t0 = now();
     soundtrack.releaseEngineDuck(t0, true);   // a line still on air keeps its own duck
@@ -1534,9 +1542,9 @@ var GameAudio = (function () {
     // at the moment the samples arrive — never a per-frame flip.
     // Upgrade once when the sample (or the worklet behind it) arrives mid-race.
     if (samplesReady && engBuf && !usingSamples) {
-      stopEngine();
+      stopEngineGraph();
       keepFade = true;
-      try { startEngine(); } finally { keepFade = false; }
+      try { startEngineGraph(); } finally { keepFade = false; }
     }
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));

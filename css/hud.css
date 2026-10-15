@@ -2389,4 +2389,7 @@ body.desktop #hud-inputs:not([data-hl-user]) {
      rules; HudRelative fitRows() slides/caps RELATIVE off the left pedals. */
 }
 :root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
+/* Pause review is a still, labelled chart independent of the live HUD scale. */
+#pausemenu .input-review, #pausemenu .sheet-body > .player-tool-panel { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }
+.input-review-canvas { display: block; width: 100%; max-width: 100%; height: auto; }
 } /* @layer hud */

@@ -2582,6 +2582,7 @@ function invalidateMap() { minimapBg = null; }
 // The race DELTA's best lap and the spoken HUD's baselines are per race too.
 let _pitSideTrack = null, _pitSide = 1;
 function resetRace() {
+  if (typeof HudInputs !== "undefined" && HudInputs.reset) HudInputs.reset();
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
   _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
   _ePrev = NaN; _blueSaid = null; _blueLaps = 0;

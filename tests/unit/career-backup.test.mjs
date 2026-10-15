@@ -1398,3 +1398,27 @@ test('recovery file UI confirms only its reviewed card and reports durable compl
  await chooseRecovery(ui,{format:'apex26-recovery-v1',career:save({money:777})});ui.G.$('cr-left').querySelectorAll('[data-cr-act="import"]')[1].onclick({stopPropagation(){}});
  assert.equal(h.store.get('career.driver.1').money,777);assert.notEqual(h.store.get('career.driver.0').money,777);assert.equal(ui.notices.at(-1),'CAREER RESTORED');
 });
+
+for (const action of ["delete-arm", "delete-confirm", "close", "normal"]) test(`pending career backup read respects ${action} ownership`, async () => {
+  const h = bootBackupUi({ CareerBackup: {
+    MAX_BYTES: 10000, validate: () => ({ ok: true }), preview: () => ({ slots: [], extras: [] }),
+  } });
+  // Keep the existing card mounted while the file is reading: DELETE remains
+  // actionable, as in the browser. clickImport's older helper clears it first.
+  h.G.$("cr-left").querySelector('[data-cr-act="import"]').onclick({ stopPropagation() {} });
+  let resolve;
+  const pending = new Promise((done) => { resolve = done; });
+  const picker = h.dom.document.body.querySelector("input");
+  picker.files = [{ size: 100, name: "pending.json", text: () => pending }]; picker.onchange();
+  const clear = () => { h.G.$("cr-left").replaceChildren(); h.G.$("cr-right").replaceChildren(); };
+  const remove = () => {
+    const button = h.G.$("cr-left").querySelector(".cr-slot-del"); assert.ok(button);
+    clear(); button.onclick({ stopPropagation() {} });
+  };
+  if (action.startsWith("delete")) { remove(); if (action === "delete-confirm") remove(); }
+  if (action === "close") h.ui.close();
+  clear(); resolve(JSON.stringify({ format: "apex26-career-backup-v1" }));
+  await Promise.resolve(); await Promise.resolve();
+  const review = h.G.$("cr-left").querySelectorAll('[data-cr-act="import"]').some((button) => button.textContent === "IMPORT?");
+  assert.equal(review, action === "normal", "abandoned file must not recreate an import review");
+});

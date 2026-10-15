@@ -97,7 +97,7 @@ const lazyBundles = LazyBundles.create({
     if (G.daily.isActive() && G.daily.current().class === "standard") records.prepareDaily();   // a STANDARD daily picked before this bundle landed was prepared by the stub (a no-op): every lap would be refused
     raceRadio = RaceRadio.create(G);
     flyingStart = FlyingStart.create(G, {
-      realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active),
+      realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active) || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())),
     });
   },
 });
@@ -1029,7 +1029,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 // Shared neutral fallback for a human car with no resolved setup. Frozen and
 // module-scope so updateCar's per-car binding never allocates.
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
-let lastFrame = 0, raceMessageHistory = null, controllerProfileUi = null, raceMixUi = null;
+let lastFrame = 0, raceMessageHistory = null, controllerProfileUi = null, raceMixUi = null, setupTrialSession = null;
 let announceT = 0, radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
 let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race welcome; same inert() deal
 // "box" is the engineer's PIT CALL and nothing else (js/race/engineer.js): an
@@ -2886,6 +2886,7 @@ function entrySettings() {
 }
 const _customTrackStarts = new WeakSet();
 function startRace() {
+  if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
   // TopModal mirrors hidden→close via MutationObserver (next task). Sync-close
   // so #loading is not trapped under :modal for the rest of this long task.
   const rs = $("race-settings");
@@ -3217,6 +3218,10 @@ const G = {
   get ttSessionTs() { return ttSessionTs; },
   get records() { return records; },
   get coach() { return coach; },
+  get realRace() { return realRace; },
+  setupTrialRestart: (options) => setupTrialSession.restart(options),
+  setupTrialContext: () => setupTrialSession.context(),
+  setupTrialCancel: () => { if (setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())) quitToMenu(); },
   openCoachDetails: () => { openSettings(); settingsNav.show("driving", true); },
   get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
   get announcer() { return announcer; },   // js/audio/announcer.js — AudioPanel drives its switch and voice
@@ -3632,10 +3637,11 @@ radioVoice = RadioVoice.create(G);
 announcer = Announcer.create(G);
 let records = SessionRecords.create(G);   // LAZY_RACE_SESSION
 const coach = DrivingCoach.create(G);     // FULL — UiExperience captures this instance
+setupTrialSession = SetupTrialSession.create(G);
 let raceRadio = RaceRadio.create(G);      // LAZY_RACE_SESSION — recreated on ensure
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
-let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // LAZY_RACE_SESSION
+let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active || !!(setupTrialSession && (setupTrialSession.pending() || setupTrialSession.active())) });   // LAZY_RACE_SESSION
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
@@ -3651,6 +3657,7 @@ const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
+if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
@@ -4397,6 +4404,8 @@ function quitToMenu() {
   if (announcer.stop) announcer.stop();   // results commentary must not outlive the race
   shake = 0; hitStop = 0;
   PerfGov.sentinelArm(false); netPlay.stop("local"); hideCamPicker(); Input.unlockLandscape();   // inactive: forgets a stale disconnect reason
+  if (setupTrialSession) setupTrialSession.cancel();
+  if (typeof SetupTrials !== "undefined") SetupTrials.invalidate("Session ended before attempt completed");
   if (garageReturn === "pit") { setupCam.cancelArrival(); $("carsetup").hidden = true; setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select"; }   // the pit garage goes down with the race (comment above)
   if (typeof ExtraRigs !== "undefined" && ExtraRigs.resetAuto) ExtraRigs.resetAuto();   // the auto-cut state is the race's, not the menu's
   if (qualiField) { cars = qualiField; qualiField = null; }   // a mid-quali quit: the 1-car trim is not the menu's field
@@ -8783,7 +8792,24 @@ $("track-detail-close").onclick = closeTrackDetail;
 // the same rule the mode-dependent driving controls follow, so the grid never
 // reflows under a thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
+SettingsSearch.register("race-settings", [{ id: "tyre-wear", label: "Tyre wear", page: "race-settings", target: "rs-tyres-sel",
+  aliases: "tires degradation pit stops", options: "off light real",
+  unavailableReason: "Tyre wear is chosen in Race Settings before starting a solo race.",
+  navigate: (arrived) => { settingsNav.invalidate(); return raceSettings.openSettingSearch(() => settingsNav.returnToSearch(), arrived); },
+}]);
+const revealHudRequirement = (target) => SettingsSearch.reveal(target === "rs-tyres-sel" ? $("rs-tyres-sel") : target === "pm-hudprofile-sel" ? $("pm-hudprofile-sel") : null);
+HudElements.configure({ context: () => ({ state, hasPlayer: !!player, profile: hudProfile,
+  timeTrial: isTimeTrial(), practice: isPractice(), session, tyreWear: !!(tyres && tyres.on()), carCount: cars.length }),
+  navigate: (page, target) => { if (page === "race-settings") { const row = SettingsSearch.find("tyre wear").find((r) => r.id === "tyre-wear"), opener = document.activeElement;
+      settingsNav.invalidate();
+      if (row && raceSettings.openSettingSearch(() => { settingsNav.show("display", false); SettingsSearch.reveal(opener); }, () => revealHudRequirement(target)) === false) {
+        const host = $("pm-panel-display"); let note = host.querySelector("[data-hud-nav-status]");
+        if (!note) { note = document.createElement("p"); note.dataset.hudNavStatus = ""; note.className = "adv-help"; note.setAttribute("role", "status"); host.prepend(note); }
+        note.textContent = row.unavailableReason; LiveRegion.say(row.unavailableReason, "hud"); } }
+    else { settingsNav.show(page, true); revealHudRequirement(target); } },
+});
 SettingsNav.onEnter((page) => {
+  if (page === "display") HudElements.refreshVisibility();
   if (page === "controls" && !controllerProfileUi && typeof ControllerProfileControls !== "undefined" && Input.controllerProfile) {
     controllerProfileUi = ControllerProfileControls.create({ host: $("pm-panel-controls"), input: Input, afterReset: () => { if (keyBinds) keyBinds.render(); } });
   }

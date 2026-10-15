@@ -316,6 +316,7 @@ function create(G) {
       // screen reader, and the second press deleted a save with no warning.
       del.setAttribute("aria-label", armed ? `Confirm: delete ${what}. Press again to delete` : `Delete ${what}`);
       del.onclick = (ev) => {
+        ++backupReadGeneration;   // DELETE abandons any still-pending file review
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
         armedImport = "";

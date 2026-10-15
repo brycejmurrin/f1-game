@@ -1259,6 +1259,8 @@ what it covers.
 |---|---|
 | `career-data-audio-improvements.test.mjs` | Slot-owned identity, shared contract preview/sign calculation, winter reports, DSQ vs retirement, timing confidence/provenance, stale music searches, upload diagnostics and bounded audition. |
 | `player-tools-ui.test.mjs` | Settings search/focus, formatted range values, setup preset confirmation, surface camera restoration, delivered-card history, controller profile UI and cue/audition lifecycle. |
+| `settings-search.test.mjs` | Search return focus and scroll, cancelled lazy navigation, owner descriptors and option labels, external destinations and full-row layout. |
+| `setup-trial-session.test.mjs` | Fresh solo setup-trial restart ownership, actual starting conditions, configuration drift and asynchronous cancellation. |
 | `save-durability.test.mjs` | Foreign-write retry ownership, bounded authored mirrors, restore revisions and active-career races, native recovery feedback, cache-only cleanup. |
 | `controller-profiles.test.mjs` | Per-device axes/buttons, bounded legacy adoption and source-owned remote input release. |
 | `phone-input-improvements.test.mjs` | Age-bounded phone actions, semantic activation, pointer release, input ACK freshness and negotiated touch steering. |
