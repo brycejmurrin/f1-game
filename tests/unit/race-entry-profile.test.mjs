@@ -123,6 +123,24 @@ test("PerformanceObserver longtask entries are recorded when supported", () => {
   assert.equal(P.armed(), false);
 });
 
+test("menu entry session stays armed through present:ready and resumes into startRace", () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t } });
+  P.beginUi("race");
+  P.mark("flyby:start");
+  P.notePresent(false);
+  P.tickFrame();
+  P.tickFrame();
+  P.tickFrame();
+  assert.equal(P.armed(), true, "present:ready must not end the menu-entry window");
+  P.continueWindow("startRace");
+  const names = P.snapshot().marks.map((m) => m.n);
+  assert.ok(names.includes("entry:race"));
+  assert.ok(names.includes("flyby:start"));
+  assert.ok(names.includes("begin:startRace"));
+  assert.equal(P.snapshot().entry, "race");
+});
+
 test("beginUi + afterPaint + continueWindow keep UI cover marks into startRace", async () => {
   let t = 0;
   const P = load({ performance: { now: () => t } });

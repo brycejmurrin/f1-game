@@ -93,7 +93,8 @@ test.describe("perf race-entry — SwiftShader stage table", () => {
 
     expect(race.stages && race.stages.entry).toBeTruthy();
     expect(practice.stages && practice.stages.entry).toBeTruthy();
-    expect(race.stages.entry).toMatch(/race|practice|tt/);
+    expect(race.stages.entry).toBe("race");
+    expect(practice.stages.entry).toBe("practice");
     expect(race.snap && race.snap.marks && race.snap.marks.length).toBeGreaterThan(8);
     const markNames = race.snap.marks.map((m) => m.n);
     expect(

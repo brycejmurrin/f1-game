@@ -37,6 +37,8 @@ const RaceEntryProfile = (() => {
   let introBudgetMs = 0;
   let introBudgetArmed = false;
   let progressSink = null;
+  /** True from beginUi until startRace commits — keeps the window armed through flyby/handoff. */
+  let menuEntrySession = false;
   const INTRO_BUDGET_SOFT_MS = 45000;
   const INTRO_BUDGET_HW_MS = 120000;
   const STAGE_LABELS = {
@@ -214,19 +216,31 @@ const RaceEntryProfile = (() => {
    *  calls begin() so generation bumps and old observers are dropped. */
   function beginUi(tag) {
     if (armed) { mark("ui:tap"); return; }
+    menuEntrySession = true;
     begin(tag || "uiStart");
     uiPending = true;
     mark("entry:" + (entryKind || tag || "ui"));
   }
 
   function continueWindow(tag) {
-    if (armed && uiPending) {
+    const resumeMenu = marks.some((m) => /^entry:/.test(m.n));
+    if ((armed && uiPending) || resumeMenu) {
+      if (!armed) {
+        armed = true;
+        disarmObserver();
+        generation++;
+        armObserver();
+      }
       uiPending = false;
       if (tag) pushMark("begin:" + tag);
       presentationEnabled = false;
       return;
     }
     begin(tag);
+  }
+
+  function clearMenuEntrySession() {
+    menuEntrySession = false;
   }
 
   /** Yield so #loading can paint before ensure* / intro sync work.
@@ -284,7 +298,7 @@ const RaceEntryProfile = (() => {
 
   /** Call once per rendered frame while a race-entry window is armed. */
   function tickFrame() {
-    if (!armed || !sawReady) return;
+    if (menuEntrySession || !armed || !sawReady) return;
     if (endAfterReady > 0 && --endAfterReady === 0) end();
   }
 
@@ -344,9 +358,9 @@ const RaceEntryProfile = (() => {
     });
     request.then((result) => {
       if (!owns()) return;
-      if (result === false || (result && result.kind === "canceled")) end();
-      else { mark("session:committed"); presentationEnabled = true; }
-    }, () => { if (owns()) end(); });
+      if (result === false || (result && result.kind === "canceled")) { clearMenuEntrySession(); end(); }
+      else { mark("session:committed"); clearMenuEntrySession(); presentationEnabled = true; }
+    }, () => { if (owns()) { clearMenuEntrySession(); end(); } });
     return request;
   }
 
@@ -381,7 +395,7 @@ const RaceEntryProfile = (() => {
 
   return {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
-    requestWarm, raiseHandoff, span, spanAsync, afterPresent, runSession,
+    requestWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
     snapshot, stageTable, diffStages, stagesFromSnapshot,
     introBudgetLeft, introBudgetExpired, setProgressSink, softwareRaster,
     legs: () => legs.slice(),
