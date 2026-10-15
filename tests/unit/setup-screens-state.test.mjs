@@ -141,7 +141,7 @@ function careerStub(opts = {}) {
   return C;
 }
 
-function loadCareerUi(careerOpts = {}) {
+function loadCareerUi(careerOpts = {}, uiGlobals = {}) {
   const dom = makeDom({ tagFor: (id) => (/^(cr-back|cr-go|cr-garage|co-back|ch-back|cg-back)$/.test(id) ? "button" : "div") });
   const Career = careerStub(careerOpts);
   const G = {
@@ -166,12 +166,146 @@ function loadCareerUi(careerOpts = {}) {
     SeasonCal: { hasProgress: () => false, rounds: () => 24, load: () => null },
     Reliability: { REASONS: ["engine"], TIER_RISK: [0.02, 0.06] },
     PhysicsConsts: { DIFF: { EASY: 1 } },
+    ...uiGlobals,
   });
   vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
   vm.runInNewContext(src("js/career/experience.js"), sb, { filename: "js/career/experience.js" });
   vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
   const ui = sb.CareerScreen.create(G);
   return { dom, ui, Career, G, $: G.$ };
+}
+
+// Controlled reads exercise the actual picker callbacks without browser timing.
+function backupPickerUi(readerKind) {
+  const applied = [], validated = [], notices = [];
+  const h = loadCareerUi({}, {
+    CareerBackup: {
+      MAX_BYTES: 1024,
+      validate: (envelope) => { validated.push(envelope); return { ok: true }; },
+      preview: () => ({ slots: [], extras: [] }),
+      apply: (envelope) => { applied.push(envelope); return { ok: true }; },
+    },
+    FileReader: class {
+      readAsText(file) {
+        file.resolve = (text) => { this.result = text; this.onload(); };
+        file.reject = () => this.onerror();
+      }
+    },
+  });
+  h.G.announce = (message) => notices.push(message);
+  h.ui.openSlots();
+  const clickImport = (index = 0) => {
+    const button = h.$("cr-left").querySelectorAll('[data-cr-act="import"]')[index];
+    assert.ok(button);
+    button.onclick({ stopPropagation() {} });
+  };
+  const choose = (name) => {
+    const picker = h.dom.document.body.querySelector("input");
+    const file = { name, size: 100 };
+    if (readerKind === "File.text") file.text = () => new Promise((resolve, reject) => {
+      file.resolve = resolve; file.reject = reject;
+    });
+    picker.files = [file];
+    picker.onchange();
+    return file;
+  };
+  const settle = async (file, failure = false) => {
+    empty(h.dom, "cr-left", "cr-right");
+    if (failure) file.reject(new Error("read failed"));
+    else file.resolve(JSON.stringify({ filename: file.name }));
+    await Promise.resolve();
+  };
+  return { ...h, applied, validated, notices, clickImport, choose, settle };
+}
+
+for (const readerKind of ["File.text", "FileReader"]) {
+  for (const failure of [false, true]) {
+    test(`career backup: ${readerKind} ignores an older ${failure ? "failure" : "success"} after a newer selection`, async () => {
+      const h = backupPickerUi(readerKind);
+      h.clickImport();
+      const old = h.choose("old.json");
+      // Another change on the same input must also invalidate its previous read.
+      const current = h.choose("current.json");
+      await h.settle(current);
+      const review = texts(h.$("cr-left"), ".cr-note").join(" ");
+      assert.match(review, /File: current\.json/);
+      // Keep the current rendered review while the stale callback resolves.
+      if (failure) old.reject(new Error("late failure"));
+      else old.resolve(JSON.stringify({ filename: old.name }));
+      await Promise.resolve();
+      assert.equal(h.validated.length, 1, "only the selected file reaches validation");
+      assert.equal(texts(h.$("cr-left"), ".cr-note").join(" "), review);
+      assert.deepEqual(h.notices, [], "late errors cannot overwrite the current review");
+      h.clickImport();
+      assert.equal(h.applied.length, 1);
+      assert.equal(h.applied[0].filename, "current.json");
+    });
+  }
+
+  for (const exit of ["close", "openSlots", "openHub", "empty slot"]) {
+    test(`career backup: ${readerKind} discards reads after ${exit}`, async () => {
+      for (const failure of [false, true]) {
+        const h = backupPickerUi(readerKind);
+        h.clickImport();
+        const old = h.choose("old.json");
+        empty(h.dom, "cr-left", "cr-right");
+        if (exit === "empty slot") {
+          h.ui.build();
+          h.$("cr-left").querySelectorAll(".cr-slot-main")[1].onclick();
+        } else h.ui[exit]();
+        if (failure) old.reject(new Error("late failure"));
+        else old.resolve(JSON.stringify({ filename: old.name }));
+        await Promise.resolve();
+        assert.deepEqual(h.validated, []);
+        assert.deepEqual(h.notices, []);
+        assert.deepEqual(h.applied, []);
+      }
+    });
+  }
+
+  test(`career backup: opening another ${readerKind} picker cancels the pending read even before selection`, async () => {
+    const h = backupPickerUi(readerKind);
+    h.clickImport();
+    const old = h.choose("old.json");
+    h.clickImport(1);
+    await h.settle(old);
+    assert.deepEqual(h.validated, []);
+    assert.deepEqual(h.notices, []);
+    const current = h.choose("current.json");
+    await h.settle(current);
+    assert.match(texts(h.$("cr-left"), ".cr-note").join(" "), /File: current\.json/);
+    h.clickImport(1);
+    assert.equal(h.applied[0].filename, "current.json");
+  });
+
+  test(`career backup: a new ${readerKind} picker disarms the previous file while its replacement loads`, async () => {
+    const h = backupPickerUi(readerKind);
+    h.clickImport();
+    await h.settle(h.choose("first.json"));
+    assert.equal(h.$("cr-left").querySelector('[data-cr-act="import"]').textContent, "IMPORT?");
+    const next = h.$("cr-left").querySelectorAll('[data-cr-act="import"]')[1];
+    empty(h.dom, "cr-left", "cr-right");
+    next.onclick({ stopPropagation() {} });
+    const replacement = h.choose("replacement.json");
+    const buttons = h.$("cr-left").querySelectorAll('[data-cr-act="import"]');
+    assert.ok(buttons.every((button) => button.textContent === "IMPORT"), "the old confirmation is gone during the read");
+    assert.doesNotMatch(texts(h.$("cr-left"), ".cr-note").join(" "), /first\.json|Review restore/);
+    assert.deepEqual(h.applied, []);
+    await h.settle(replacement);
+    assert.equal(h.$("cr-left").querySelectorAll('[data-cr-act="import"]').filter((button) => button.textContent === "IMPORT?").length, 1);
+    assert.match(texts(h.$("cr-left"), ".cr-note").join(" "), /File: replacement\.json/);
+    h.clickImport(1);
+    assert.equal(h.applied.length, 1);
+    assert.equal(h.applied[0].filename, "replacement.json");
+  });
+
+  test(`career backup: a current ${readerKind} read failure is still announced`, async () => {
+    const h = backupPickerUi(readerKind);
+    h.clickImport();
+    await h.settle(h.choose("bad.json"), true);
+    assert.deepEqual(h.notices, ["IMPORT FAILED — BAD FILE"]);
+    assert.deepEqual(h.applied, []);
+  });
 }
 
 const hubCareer = () => ({
