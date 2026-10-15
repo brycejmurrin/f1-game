@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-l621RK+i7OcyjyzPEgU8J+jhi5gY/bFyPRLNUJmCKHk=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -340,6 +340,7 @@
   window.addEventListener("unhandledrejection", function (e) {
     var r = e && e.reason;
     recordError("rejection", (r && (r.message || r)) || "unknown", r && r.stack);
+    if (typeof GfxRecovery !== "undefined" && GfxRecovery.handle("rejection", r)) return;
     show("Promise rejection", (r && (r.message || r)) || "unknown", r && r.stack);
   });
 
@@ -3647,6 +3648,7 @@
 <script defer crossorigin="anonymous" src="js/perf/race-entry-profile.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/quality-preset.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/renderer-picker.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/compatibility-recovery.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/gfx-debug-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dock-layout.js?v=dev"></script>

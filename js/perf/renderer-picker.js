@@ -95,6 +95,27 @@ function paintRendererSummary(pref, liveFallback) {
       : "");
   sum.innerHTML = '<span data-fold="k">RENDERER</span><span data-fold="sep"> · </span><span data-fold="val">' +
     backendLabel(pref) + "</span>" + fallbackChip;
+  paintPostHealth(sum);
+}
+function paintPostHealth(summary) {
+  const details = summary && summary.parentElement;
+  if (!details || !document.createElement) return;
+  let row = document.getElementById("pm-post-health");
+  const health = typeof GLX !== "undefined" && typeof GLX.postHealth === "function" ? GLX.postHealth() : null;
+  if (!health || health.state === "healthy") { if (row) row.hidden = true; return; }
+  if (!row) {
+    row = document.createElement("div"); row.id = "pm-post-health";
+    row.setAttribute("role", "status"); details.appendChild(row);
+  }
+  row.hidden = false;
+  row.textContent = health.state === "recovering"
+    ? "Post-processing recovering (" + health.attempts + "/" + health.maxAttempts + ")"
+    : "Post-processing reduced: " + (health.reason || "Recovery unavailable");
+  if (health.state === "degraded" && health.retryable !== false && typeof GLX.retryPost === "function") {
+    const retry = document.createElement("button"); retry.type = "button"; retry.textContent = "RETRY POST-PROCESSING";
+    retry.addEventListener("click", () => { GLX.retryPost(); paintPostHealth(summary); });
+    row.appendChild(retry);
+  }
 }
 function markReloading(rb, next) {
   const msg = backendLabel(next) + " — RELOADING…";

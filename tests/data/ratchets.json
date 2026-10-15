@@ -28,7 +28,7 @@
       "lines": 2194
     },
     "js/render/glx/glx.js": {
-      "lines": 2980
+      "lines": 2986
     },
     "js/track/tracks.js": {
       "lines": 757
@@ -84,7 +84,7 @@
     },
     "waitForTimeout": 85,
     "waitNoPolling": {
-      "ceiling": 54,
+      "ceiling": 44,
       "slack": 39
     },
     "zeroRefModules": {

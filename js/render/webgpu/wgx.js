@@ -510,6 +510,9 @@ const WGX = (function () {
    * WGX.create(canvas, opts) -> Promise<backend | null>
    */
   async function create(canvas, opts) {
+    const initOwner = opts && opts.initOwner;
+    const initActive = () => !initOwner || initOwner.active;
+    if (!initActive()) return null;
     if (typeof navigator === "undefined" || !navigator.gpu) return null;
     // No WGSL sources -> no renderer. Refuse BEFORE touching the canvas, so the
     // GLX fallback can still attach a webgl2 context to it.
@@ -526,7 +529,9 @@ const WGX = (function () {
       // (Safari 26 sometimes returns null for high-performance only).
       const _pref = WGX_LITE ? "low-power" : "high-performance";
       adapter = await navigator.gpu.requestAdapter({ powerPreference: _pref });
+      if (!initActive()) return null;
       if (!adapter) adapter = await navigator.gpu.requestAdapter();
+      if (!initActive()) return null;
       if (!adapter) return _fail("no adapter");
       // Software / headless adapters: the native swapchain never composites
       // (black #game) but the 2D soft-present blit does. SETTINGS ▸ WEBGPU
@@ -577,6 +582,7 @@ const WGX = (function () {
       if (_canTimestamp) _want.push("timestamp-query");
       if (_canPostHDR) _want.push("rg11b10ufloat-renderable");
       device = await adapter.requestDevice(_want.length ? { requiredFeatures: _want } : {});
+      if (!initActive()) { try { device.destroy(); } catch (_) { /* cancelled init: device may already be lost */ } return null; }
       // NOT `if (!device)`. requestDevice ALWAYS resolves a GPUDevice — the spec
       // says so — even when it cannot give a valid one; the failure is signalled
       // by handing back a device whose `lost` promise is ALREADY resolved. So a
@@ -607,6 +613,7 @@ const WGX = (function () {
       POST_HDR_FORMAT = (_canPostHDR && _devHas("rg11b10ufloat-renderable"))
         ? "rg11b10ufloat" : SCENE_FORMAT;
     } catch (e) {
+      if (!initActive()) { try { if (device) device.destroy(); } catch (_) { /* cancelled init: device may already be lost */ } return null; }
       return _fail("device request threw: " + ((e && e.message) || e));
     }
 
@@ -651,6 +658,11 @@ const WGX = (function () {
     // menus are DOM layered over the canvas, and the RENDERER button is one tap
     // away. A frozen frame the player can navigate out of beats a reload loop.
     let _lost = false;
+    let _capReq = null;
+    function _rejectCapture(reason) {
+      const req = _capReq; _capReq = null;
+      if (req) req.reject(new Error(reason || "device lost"));
+    }
     // JS-error strikes for begin()/present(). The old catch latched
     // `_lost = true` for ANY exception — a healthy-device data bug froze the
     // canvas forever, silently, with the label still claiming WEBGPU. Now a
@@ -782,7 +794,7 @@ const WGX = (function () {
       try { if (softPresentTex) softPresentTex.destroy(); } catch (_) { /* gone */ }
       softPresentTex = null; softPresentView = null;
       try { if (device && typeof device.destroy === "function") device.destroy(); } catch (_) { /* already lost */ }
-      return _fail(reason);
+      return initActive() ? _fail(reason) : null;
     }
     // CSS-box observation is shared; WGX still owns DPR, jitter suppression,
     // swapchain configuration and target allocation.
@@ -798,12 +810,14 @@ const WGX = (function () {
     // repeat once per GPU error after the cap, so the warning prints once.
     let _capMuteWarned = false;
     function _wgxEscalate(why, force) {
+      if (!initActive()) return;
       if (_outProbeOff && !force) {
         if (!_capMuteWarned) { _capMuteWarned = true; try { Log.warn("gfx", "WGX capture mode — suppressed escalate:", why); } catch (_) { /* harness */ } }
         return;
       }
       if (_lost) return;
       _lost = true;
+      _rejectCapture("renderer unavailable");
       _healReset();
       try { localStorage.setItem("apex26.gfxWgxFail", why); } catch (_) { /* blocked storage */ }
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
@@ -906,6 +920,7 @@ const WGX = (function () {
       _jsStrikes++;
       if (_jsStrikes < JS_STRIKE_CAP) return;
       _lost = true;
+      _rejectCapture("renderer unavailable");
       _healReset();
       try { localStorage.setItem("apex26.gfxWgxFail", where + " threw: " + ((e && e.message) || e)); } catch (_) { /* blocked storage */ }
       try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
@@ -941,6 +956,7 @@ const WGX = (function () {
     } catch (_) { /* no document events (harness) */ }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
+      if (!initActive()) return;
       // Crash latches, mirroring GLX webglcontextlost / TLX onDeviceLost: a
       // real loss while visible disarms the expensive opt-ins so the next boot
       // does not repeat the configuration that killed the device. Same
@@ -950,6 +966,7 @@ const WGX = (function () {
       try { hidden = !!(typeof document !== "undefined" && document.hidden); } catch (_) { /* no document (harness) */ }
       if (!hidden && _nowMs() - _shownAt < 3000) {
         _lost = true;
+        _rejectCapture("renderer unavailable");
         setTimeout(function () { try { location.reload(); } catch (_) { /* harness */ } }, 300);
         return;
       }
@@ -980,6 +997,7 @@ const WGX = (function () {
       // again — still a reload, because a lost device cannot be revived in
       // place, but with the pick and the ladder untouched.
       _lost = true;
+      _rejectCapture("renderer unavailable");
       try { Log.warn("gfx", "WGX device lost while hidden (" + ((info && info.reason) || "unknown") + ") — reload deferred to visibility, rung kept"); } catch (_) { /* harness */ }
       try {
         const onVisible = function () {
@@ -4311,7 +4329,6 @@ const WGX = (function () {
     // frame encoder; _capFinish maps after onSubmittedWorkDone. Optional
     // readback oracle — visible #game is the soft-present 2D blit; prefer
     // gfx-probe.mjs for the primary visible-canvas gate. One request in flight.
-    let _capReq = null;
     function capturePixels() {
       if (_lost) return Promise.reject(new Error("device lost"));
       if (_capReq) return Promise.reject(new Error("capture already pending"));
@@ -5754,6 +5771,7 @@ const WGX = (function () {
       }),
     ]);
     try { if (_stTimer !== null) clearTimeout(_stTimer); } catch (_) { /* timer already fired or missing in harness */ }
+    if (!initActive()) return _bootFail("initialization cancelled");
     const _stMs = Date.now() - _stT0;
     if (!_stReason && _stMs > SELFTEST_BUDGET_MS) {
       _stReason = "self-test took " + _stMs + " ms (budget " + SELFTEST_BUDGET_MS + " ms)";
@@ -5772,6 +5790,7 @@ const WGX = (function () {
     // same-page GLX getContext("webgl2") then dies and forces a reload.
     // Every refusal above still returns with #game untouched.
     try {
+      if (!initActive()) return _bootFail("initialization cancelled");
       ctx = canvas.getContext("webgpu");
       if (!ctx) return _bootFail("canvas has no webgpu context");
       resize();
@@ -5805,6 +5824,7 @@ const WGX = (function () {
       return _bootFail(_presentReason);
     }
 
+    if (!initActive()) return _bootFail("initialization cancelled");
     LightBudget.setSlots(MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
     _runtimeReady = true;
     try { Log.info("gfx", "WGX bind ok"); } catch (_) { /* harness */ }
@@ -6045,6 +6065,7 @@ const WGX = (function () {
       multiDrawStats: () => ({ supported: false, on: false }),
 
       // extension: lets a future __apex.gfxBackend() report the active path.
+      postHealth: () => null, retryPost: () => false,
       backend: "webgpu",
     };
   }

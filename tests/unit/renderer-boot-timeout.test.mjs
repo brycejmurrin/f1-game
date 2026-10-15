@@ -16,7 +16,8 @@ const src = readFileSync(new URL("../../js/render/renderer-boot.js", import.meta
 const BOOT_STEP_MS = Number(src.match(/let ms = (\d+);/)?.[1] || 15000);
 const settle = () => new Promise((r) => setImmediate(r));
 
-function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false } = {}) {
+const gfxSeam = vm.runInNewContext(readFileSync(new URL("../../js/render/gfx.js", import.meta.url), "utf8") + ";Gfx");
+function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false, ownerProtocol = false } = {}) {
   const ls = new Map(stored ? [["apex26.gfxBackend", stored]] : []), ss = new Map();
   const timers = [], warns = [], calls = [];
   const ctx = vm.createContext({
@@ -31,7 +32,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
     Event: class { constructor(type) { this.type = type; } },
     GLX: noGLX ? {} : { init: () => { calls.push("GLX.init"); return true; } },
     RendererPicker: { showUnavailable() { calls.push("unavailable"); } },
-    Gfx: { create: gfxCreate || (async () => null) },
+    Gfx: { create: gfxCreate || (async () => null), ...(ownerProtocol ? { createInitOwner: gfxSeam.createInitOwner } : {}) },
     Log: { warn: (_ns, ...m) => warns.push(m.join(" ")), info() {} },
     // Manual clock: the 8 s caps are fired by the test.
     setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; },
@@ -41,7 +42,7 @@ function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = fals
   ctx.dispatchEvent = () => true;
   vm.runInContext(src.replace(/^const\b/gm, "var"), ctx);
   const rb = vm.runInContext("RendererBoot", ctx).create({
-    $: () => null, els: {}, canvas: {}, ensureDataHub() {},
+    $: () => null, els: {}, canvas: { getContext: () => ({}) }, ensureDataHub() {},
     loadBackendScripts: loadBackend || (async (files) => { calls.push(...files); }),
   });
   const fire = (ms) => { for (const t of timers) if (t.live && t.ms === ms) { t.live = false; t.fn(); } };
@@ -109,4 +110,95 @@ test("missing GLX fallback script is bounded and failed fetch resolves unavailab
     assert.equal(await started, null);
     assert.equal(h.timers.filter((t) => t.live && t.ms >= 1000).length, 0);
   }
+});
+
+for (const claimed of [false, true]) test(`timed-out alternate relinquishes publication and prevents competing claim (alreadyClaimed=${claimed})`, async () => {
+  let owner, finish;
+  const h=boot({ownerProtocol:true,gfxCreate:async (_, opts)=>{
+    owner=opts.initOwner;
+    if(claimed) owner.canvas.getContext("webgpu");
+    await new Promise(r=>{finish=r;});
+    assert.equal(owner.canvas.getContext("webgpu"),null,"late continuation cannot claim canvas");
+    return {backend:"three"};
+  }});
+  const pending=h.rb.start(); await settle(); h.fire(BOOT_STEP_MS); const result=await pending;
+  assert.equal(owner.active,false);
+  if(claimed) assert.equal(result,null,"claimed timeout refuses same-page binding"); else assert.equal(result.bound,false);
+  assert.equal(h.calls.includes("GLX.init"),!claimed,"claimed canvas takes existing safe reload/refusal path");
+  finish();await settle();assert.equal(result && result.bound,claimed ? null : false,"late backend never publishes");
+});
+
+test("known asynchronous GPU failure gets one compatibility card with explicit guarded recovery", async () => {
+  const byId = new Map(), timers = [], prefs = new Map(), session = new Map(), sentinel = [], copied = [];
+  let reloads = 0, focused = null, toggleLayer = null;
+  const dialogs = [], layers = [];
+  function append(child) {
+    if (child.parentNode) child.parentNode.children = child.parentNode.children.filter((item) => item !== child);
+    child.parentNode = this; this.children.push(child);
+  }
+  const doc = {
+    body: { dataset: { race: "1" }, children: [], appendChild: append },
+    querySelectorAll: () => dialogs.filter((dialog) => dialog.open),
+    addEventListener(name, fn) { if (name === "toggle") toggleLayer = fn; },
+    getElementById: (id) => byId.get(id) || null,
+    createElement(tag) {
+      const el = { tagName: tag.toUpperCase(), style: {}, dataset: {}, children: [], hidden: false,
+        classList: { add() {}, remove() {} }, setAttribute(k, v) { this[k] = v; },
+        appendChild: append, focus() { focused = this; },
+        showPopover() { this.popped = true; layers.push(this); }, hidePopover() { this.popped = false; },
+        matches(selector) { return selector === ":popover-open" && !!this.popped; } };
+      Object.defineProperty(el, "id", { get() { return this._id; }, set(v) { this._id = v; byId.set(v, this); } });
+      return el;
+    },
+  };
+  const context = vm.createContext({
+    console, Promise, Log: { info() {} },
+    GameStore: { store: { raw: (k) => prefs.get(k) ?? null, rawSet: (k,v) => prefs.set(k,v), rawDel: (k) => prefs.delete(k) } },
+    sessionStorage: { getItem: (k) => session.get(k) ?? null, removeItem: (k) => session.delete(k) },
+    navigator: {}, PerfGov: { sentinelArm: (v) => sentinel.push(v) }, location: { reload() { reloads++; } },
+    setTimeout(fn, delay) { timers.push({ fn, delay }); return timers.length; }, clearTimeout() {},
+  });
+  context.window = context;
+  // The picker's production confirmation/reload policy is exercised, not a
+  // hand-written imitation of the two-tap guard.
+  vm.runInContext(readFileSync(new URL("../../js/perf/renderer-picker.js", import.meta.url), "utf8"), context);
+  context.document = doc;
+  const recovery = vm.runInContext(readFileSync(new URL("../../js/render/shared/compatibility-recovery.js", import.meta.url), "utf8") + ";GfxRecovery", context);
+  let backend = { api: "webgpu" };
+  const ui = recovery.create({ document: doc, backendState: () => backend, clipboard: async (text) => { copied.push(JSON.parse(text)); return true; } });
+  const err = { message: "Instance dropped in popErrorScope", stack: "OperationError at vendor/three-0.186.1/three.webgpu.min.js:2:10" };
+  assert.equal(ui.handle("rejection", new Error("fetch failed")), false);
+  assert.equal(ui.handle("rejection", { message: err.message, stack: "app.js:1" }), false);
+  assert.equal(ui.handle("rejection", err), true);
+  const card = byId.get("gfx-recovery"), retry = card.children.find((e) => e.textContent === "USE WEBGL2 AND RELOAD");
+  assert.equal(focused, retry);
+  for (let i = 0; i < 8; i++) assert.equal(ui.handle("rejection", err), true);
+  assert.equal(doc.body.children.length, 1, "errors do not multiply cards or steal focus");
+  assert.equal(ui.state().occurrences, 9);
+  const modal = doc.createElement("dialog"); modal.open = true; dialogs.push(modal); doc.body.appendChild(modal);
+  toggleLayer({ target: modal, newState: "open" });
+  assert.equal(card.parentNode, modal, "recovery is inside the modal, not inert behind it");
+  assert.equal(layers[layers.length - 1], card, "recovery is promoted above a later modal");
+  const otherPopover = doc.createElement("aside"); otherPopover.showPopover();
+  toggleLayer({ target: otherPopover, newState: "open" });
+  assert.equal(layers[layers.length - 1], card, "later popovers do not hide recovery");
+  modal.open = false; toggleLayer({ target: modal, newState: "closed" });
+  assert.equal(card.parentNode, doc.body, "closed dialog no longer owns the recovery card");
+  assert.match(card.children[card.children.length - 1].children[1].style.cssText, /--fs-2/);
+  card.children.find((e) => e.textContent === "DISMISS").onclick();
+  ui.handle("rejection", err);
+  assert.equal(card.hidden, true, "dismissed card stays dismissed despite repeated rejection");
+  await card.children.find((e) => e.textContent === "COPY DIAGNOSTICS").onclick();
+  assert.equal(copied[0].occurrences, 10);
+  retry.onclick();
+  assert.equal(prefs.has("apex26.gfxBackend"), false, "first in-race tap only arms");
+  assert.equal(reloads, 0); assert.equal(retry.dataset.armed, "1");
+  retry.onclick();
+  assert.equal(prefs.get("apex26.gfxBackend"), "webgl2");
+  assert.deepEqual(sentinel, [false]);
+  assert.equal(retry.disabled, true);
+  timers.find((t) => t.delay === 350).fn();
+  assert.equal(reloads, 1);
+  backend = { api: "webgl2" };
+  assert.equal(ui.handle("rejection", err), false, "no universal GPU-failure classification");
 });

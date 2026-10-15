@@ -98,11 +98,12 @@ const BOOT_STEP_MS = (() => {
   return ms;
 })();
 const TIMED_OUT = { timedOut: true };
-function withTimeout(promise, ms, label) {
+function withTimeout(promise, ms, label, onTimeout) {
   if (typeof setTimeout !== "function") return Promise.resolve(promise);   // some VM harnesses: await it alone
   let timer = null;
   const cap = new Promise((resolve) => {
     timer = setTimeout(() => {
+      if (onTimeout) onTimeout();
       Log.warn("gfx", label + " gave no answer in " + ms / 1000 + " s — treating the backend as unavailable");
       resolve(TIMED_OUT);
     }, ms);
@@ -120,6 +121,7 @@ function showGraphicsUnavailable() {
 async function start() {
 let gfx = null;
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
+let _initOwner = null;
 let _createHung = false;     // the backend's create() never answered: leave its canary armed
 try {
   // Refresh apex26.xrCaps before sync bootPick (ms). ApexXR is LAZY_XR and is only
@@ -210,7 +212,8 @@ try {
     const fetched = await withTimeout(loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu), BOOT_STEP_MS, "backend script fetch");
     // A slow fetch is the network's verdict, not the device's: GLX for this boot,
     // canary state untouched. A hung create() IS the device's (see _createHung).
-    const made = fetched === TIMED_OUT ? null : await withTimeout(Gfx.create(canvas, { backend: pref }), BOOT_STEP_MS, "backend " + pref + " init");
+    if (fetched !== TIMED_OUT && Gfx.createInitOwner) _initOwner = Gfx.createInitOwner(canvas);
+    const made = fetched === TIMED_OUT ? null : await withTimeout(Gfx.create(canvas, { backend: pref, initOwner: _initOwner }), BOOT_STEP_MS, "backend " + pref + " init", () => { if (_initOwner) _initOwner.abort(); });
     const backend = made === TIMED_OUT ? (_createHung = true, null) : made;
     if (backend) {
       // game.js and tracks.js take the backend by injection (the `gfx` handle
@@ -245,7 +248,7 @@ if (!gfx) {
     } catch (_) { showGraphicsUnavailable(); return null; }
   }
   if (typeof GLX.init !== "function") { showGraphicsUnavailable(); return null; }
-  if (!GLX.init(canvas)) {
+  if ((_initOwner && !_initOwner.active && _initOwner.claimed) || !GLX.init(canvas)) {
     // A failed backend opt-in (WGX or TLX) may have already claimed the
     // canvas (getContext "webgpu"/"webgl2" succeeded before init died), so
     // getContext("webgl2") can never attach on this load. Reload once with a

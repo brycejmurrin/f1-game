@@ -9,8 +9,11 @@
 const WGXPost = (function () {
 
   function init(core) {
+    let postFailureLogged = false;
     function _buildPost() {
       if (!core.Post) return;
+      const buffers = {};
+      const makeBuffer = (name, size) => { buffers[name] = core.device.createBuffer({ size, usage: core.UCD }); };
       try {
         core.pointSampler = core.device.createSampler({ addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
         // Bloom mips are core.POST_HDR_FORMAT textures (ensureTargets) — the
@@ -114,13 +117,26 @@ const WGXPost = (function () {
         // FXAA writing the SGSR intermediate needs a matching LDR pipeline.
         core.pFXAALdr   = (core.presentFormat !== core.LDR_FORMAT)
           ? core.fsPipe(core.Post.FXAA, core.LDR_FORMAT, null) : core.pFXAA;
-        core.ssaoUBO      = core.device.createBuffer({ size: core.Post.SSAO_UNIFORM_BYTES,      usage: core.UCD });
-        core.blurUBO      = core.device.createBuffer({ size: BLUR_STRIDE * BLUR_SLOTS,       usage: core.UCD });
-        core.godrayUBO    = core.device.createBuffer({ size: core.Post.GODRAY_UNIFORM_BYTES,    usage: core.UCD });
-        core.compositeUBO = core.device.createBuffer({ size: core.Post.COMPOSITE_UNIFORM_BYTES, usage: core.UCD });
-        core.fxaaUBO      = core.device.createBuffer({ size: core.Post.FXAA_UNIFORM_BYTES,      usage: core.UCD });
-        core.ssrUBO       = core.device.createBuffer({ size: core.Post.SSR_UNIFORM_BYTES,       usage: core.UCD });
-      } catch (_) { core.pComposite = null; }   // disable post; ensureTargets stays inert
+        makeBuffer("ssaoUBO", core.Post.SSAO_UNIFORM_BYTES);
+        makeBuffer("blurUBO", BLUR_STRIDE * BLUR_SLOTS);
+        makeBuffer("godrayUBO", core.Post.GODRAY_UNIFORM_BYTES);
+        makeBuffer("compositeUBO", core.Post.COMPOSITE_UNIFORM_BYTES);
+        makeBuffer("fxaaUBO", core.Post.FXAA_UNIFORM_BYTES);
+        makeBuffer("ssrUBO", core.Post.SSR_UNIFORM_BYTES);
+        Object.assign(core, buffers);
+      } catch (e) {
+        for (const buffer of Object.values(buffers)) { try { buffer.destroy(); } catch (_) { /* continue rollback */ } }
+        core.pComposite = null;   // ensureTargets stays inert
+        if (!postFailureLogged) {
+          postFailureLogged = true;
+          Log.warn("gfx", "WGX post construction failed: " + ((e && e.message) || e));
+        }
+      }
+    }
+    function _retireSpatial(buffer) {
+      if (!buffer) return;
+      try { buffer.destroy(); } catch (_) { /* already lost */ }
+      if (core.sgsrUBO === buffer) { core.sgsrUBO = null; core.pSGSR = null; core._sgsrGather = false; }
     }
 
     function _ensureSpatial() {
@@ -138,7 +154,7 @@ const WGXPost = (function () {
         if (!variants.length) return false;
         core.sgsrUBO = core.device.createBuffer({ size: core.Post.SGSR_UNIFORM_BYTES, usage: core.UCD });
         _trySgsr(variants, 0);
-      } catch (_) { core.pSGSR = null; core.sgsrUBO = null; core._sgsrGather = false; }
+      } catch (_) { _retireSpatial(core.sgsrUBO); core.pSGSR = null; core._sgsrGather = false; }
       return !!(core.pSGSR && core.sgsrUBO);
     }
 
@@ -152,8 +168,8 @@ const WGXPost = (function () {
     // committed only when it pops null; until then pSGSR stays null and
     // wantSpatialUpscale() keeps the canvas at render size (fail closed). A
     // device without error scopes (the unit-test mock) keeps the old sync path.
-    function _trySgsr(variants, i) {
-      if (i >= variants.length) { Log.warn("gfx", "WGX SGSR: no variant compiled — spatial upscale stays off"); return; }
+    function _trySgsr(variants, i, buffer = core.sgsrUBO) {
+      if (i >= variants.length) { _retireSpatial(buffer); Log.warn("gfx", "WGX SGSR: no variant compiled — spatial upscale stays off"); return; }
       const v = variants[i], dev = core.device;
       const commit = (pipe) => {
         core.pSGSR = pipe; core._sgsrGather = v.gather;
@@ -163,18 +179,21 @@ const WGXPost = (function () {
       if (!scoped) {
         let pipe = null;
         try { pipe = core.fsPipe(v.code, core.presentFormat, null); } catch (_) { pipe = null; }
-        if (pipe) { core.pSGSR = pipe; core._sgsrGather = v.gather; } else _trySgsr(variants, i + 1);
+        if (pipe) { core.pSGSR = pipe; core._sgsrGather = v.gather; } else _trySgsr(variants, i + 1, buffer);
         return;
       }
       dev.pushErrorScope("validation");
       let pipe = null;
       try { pipe = core.fsPipe(v.code, core.presentFormat, null); } catch (_) { pipe = null; }
       dev.popErrorScope().then((err) => {
-        if (core.device !== dev) return;   // the device was replaced while it compiled
+        if (core.device !== dev || core.sgsrUBO !== buffer) { _retireSpatial(buffer); return; }   // the device was replaced while it compiled
         if (pipe && !err) { commit(pipe); return; }
         Log.warn("gfx", "WGX SGSR " + (v.gather ? "gather" : "4-tap") + " variant failed: " + ((err && err.message) || "threw"));
-        _trySgsr(variants, i + 1);
-      }, () => _trySgsr(variants, i + 1));
+        _trySgsr(variants, i + 1, buffer);
+      }, () => {
+        if (core.device !== dev || core.sgsrUBO !== buffer) { _retireSpatial(buffer); return; }
+        _trySgsr(variants, i + 1, buffer);
+      });
     }
 
     return {
