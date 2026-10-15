@@ -2,50 +2,72 @@
 
 **Branch:** `cursor/suzuka-survey-b92a` · **Brief:** [`docs/tracks/suzuka.md`](../suzuka.md)  
 **Data:** `js/circuits/suzuka.js` · **Dressing:** `js/circuits/scenery/suzuka.js`  
-**Landmarks:** `tests/data/landmarks/suzuka.json`  
-**Shots (31 JPEG, committed):** `artifacts/shots/tracks/suzuka/` (`git add -f`; repo `.gitignore` still ignores `artifacts/` until shared tooling PR).
+**Shots:** **36** JPEGs in `artifacts/shots/tracks/suzuka/` (`git add -f`; tracked via shared tooling `.gitignore` exception on merge).
 
-Weather variants (`wet` / `rain` / `overcast` / `fog`) deferred until shared shot batch `wx` support lands; this pass is **dry** only, with **day / dusk / dawn / night** on hero views.
+Capture: `shot.mjs --batch` with `--jpeg --present-timeout 90 --capture-retries 4 --wait 120` (SwiftShader / default backend). Weather via `__apex.weather()` (`dry|wet|rain|overcast|fog|storm`); time via `setTimeOfDay` (`day|dawn|dusk|night`).
 
 ## Code map
 
-| Layer | Role |
+| Layer | Notes |
 |---|---|
-| `suzuka.js` | OSM path, `startFrac` 0.9942, racing-frame scenery, SRTM elevation, figure-8 `bridges` at s≈0.845, `dressingExclusions` over crossover sectors |
-| `scenery/suzuka.js` | Motopia wheel, crossover deck/portal, Dunlop arch, Spoon terrace, shrine, cedar/bamboo/sakura, kit pit/rc/hospitality |
-| Engine | `tracks.js` centreline + bridge lift; shared `overheadSpan`, `circuitKit`, `forestEdge` |
+| `suzuka.js` | Figure-8 `bridges` at s≈0.845, racing-frame scenery, SRTM elevation, crossover `dressingExclusions` |
+| `scenery/suzuka.js` | Motopia wheel, Dunlop arch, crossover deck/portal, Spoon terrace, shrine, cedar/bamboo/sakura |
 
-## Findings (summary)
+## Findings
 
 | ID | Finding |
 |---|---|
-| F1 | `verify-track` OK — no surface folds; min radius 9.26 m (Casio, hw 6.1 m) |
-| F2 | `audit-circuit` OK — float 0; ground within baseline (buried mountain bases + tyre cap anchors) |
-| F3 | Figure-8 crossover reads correctly (green upper parapets, dark soffit, lower portal) |
-| F4 | Night: `furniture.lamp: "none"` + crossover `lighting` exclusions — hand lamps only; Esses/130R floodlight gap |
-| F5 | Weather matrix not shot this pass (tooling); re-run after shared PR |
+| F1 | `verify-track` OK — no surface folds |
+| F2 | `audit-circuit` OK — float 0; ground within baseline |
+| F3 | Crossover reads correctly under all sampled weather |
+| F4 | Night/dusk: hand `lampWarm` posts visible; no fleet flood masts (`furniture.lamp: "none"`) |
+| F5 | Storm/rain show wet road + particles; fog softens distant mountains (Ferris orbit) |
 
-## By sector — dry · day · midday
-
-| | | |
-|:---:|:---:|:---:|
-| ![S/F main stand](../../../artifacts/shots/tracks/suzuka/sector-s1-start-main-day-dry.jpg)<br>**S/F main stand** · trackside · dry · day | ![Ferris & Motopia](../../../artifacts/shots/tracks/suzuka/sector-s1-ferris-motopia-day-dry.jpg)<br>**Motopia / Circuit Wheel** · orbit · dry · day | ![Pit complex](../../../artifacts/shots/tracks/suzuka/sector-s1-pit-complex-day-dry.jpg)<br>**Pit & RC** · orbit · dry · day |
-| ![Esses climb](../../../artifacts/shots/tracks/suzuka/sector-s1-esses-climb-day-dry.jpg)<br>**Esses climb** · trackside · dry · day | ![Dunlop arch](../../../artifacts/shots/tracks/suzuka/sector-s1-dunlop-arch-day-dry.jpg)<br>**Dunlop arch** · trackside · dry · day | ![Esses footbridge](../../../artifacts/shots/tracks/suzuka/sector-s1-esses-footbridge-day-dry.jpg)<br>**Esses footbridge** · eye · dry · day |
-| ![Degner](../../../artifacts/shots/tracks/suzuka/sector-s2-degner-day-dry.jpg)<br>**Degner** · eye · dry · day | ![Crossover under](../../../artifacts/shots/tracks/suzuka/sector-s2-crossover-under-day-dry.jpg)<br>**Crossover portal** · eye · dry · day | ![Hairpin](../../../artifacts/shots/tracks/suzuka/sector-s2-hairpin-day-dry.jpg)<br>**Hairpin** · trackside · dry · day |
-| ![200R](../../../artifacts/shots/tracks/suzuka/sector-s2-200r-day-dry.jpg)<br>**200R** · trackside · dry · day | ![Spoon](../../../artifacts/shots/tracks/suzuka/sector-s2-spoon-day-dry.jpg)<br>**Spoon terrace** · trackside · dry · day | ![Shrine hill](../../../artifacts/shots/tracks/suzuka/sector-s2-shrine-hill-day-dry.jpg)<br>**Shrine / torii** · orbit · dry · day |
-| ![Flyover deck](../../../artifacts/shots/tracks/suzuka/sector-s3-crossover-bridge-day-dry.jpg)<br>**Crossover bridge** · trackside · dry · day | ![130R](../../../artifacts/shots/tracks/suzuka/sector-s3-130r-day-dry.jpg)<br>**130R** · trackside · dry · day | ![Casio](../../../artifacts/shots/tracks/suzuka/sector-s3-casio-chicane-day-dry.jpg)<br>**Casio chicane** · trackside · dry · day |
-| ![Lap overview](../../../artifacts/shots/tracks/suzuka/sector-overview-day-dry.jpg)<br>**Lap overview** · orbit · dry · day | | |
-
-## By lighting — hero views · dry weather
+## Sector tour — dry · day
 
 | | | |
 |:---:|:---:|:---:|
-| ![Ferris dusk](../../../artifacts/shots/tracks/suzuka/light-ferris-dusk.jpg)<br>**Ferris** · orbit · dry · **dusk** | ![Ferris night](../../../artifacts/shots/tracks/suzuka/light-ferris-night.jpg)<br>**Ferris** · orbit · dry · **night** | ![Ferris dawn](../../../artifacts/shots/tracks/suzuka/light-ferris-dawn.jpg)<br>**Ferris** · orbit · dry · **dawn** |
-| ![Esses dusk](../../../artifacts/shots/tracks/suzuka/light-esses-dusk.jpg)<br>**Esses** · trackside · dry · **dusk** | ![Esses night](../../../artifacts/shots/tracks/suzuka/light-esses-night.jpg)<br>**Esses** · trackside · dry · **night** | ![Esses dawn](../../../artifacts/shots/tracks/suzuka/light-esses-dawn.jpg)<br>**Esses** · trackside · dry · **dawn** |
-| ![Dunlop dusk](../../../artifacts/shots/tracks/suzuka/light-dunlop-dusk.jpg)<br>**Dunlop** · trackside · dry · **dusk** | ![Dunlop night](../../../artifacts/shots/tracks/suzuka/light-dunlop-night.jpg)<br>**Dunlop** · trackside · dry · **night** | |
-| ![Bridge dusk](../../../artifacts/shots/tracks/suzuka/light-crossover-bridge-dusk.jpg)<br>**Flyover** · trackside · dry · **dusk** | ![Bridge night](../../../artifacts/shots/tracks/suzuka/light-crossover-bridge-night.jpg)<br>**Flyover** · trackside · dry · **night** | ![Bridge dawn](../../../artifacts/shots/tracks/suzuka/light-crossover-bridge-dawn.jpg)<br>**Flyover** · trackside · dry · **dawn** |
-| ![Under night](../../../artifacts/shots/tracks/suzuka/light-crossover-under-night.jpg)<br>**Portal** · eye · dry · **night** | ![Casio dusk](../../../artifacts/shots/tracks/suzuka/light-casio-dusk.jpg)<br>**Casio** · trackside · dry · **dusk** | ![Casio night](../../../artifacts/shots/tracks/suzuka/light-casio-night.jpg)<br>**Casio** · trackside · dry · **night** |
-| ![Casio dawn](../../../artifacts/shots/tracks/suzuka/light-casio-dawn.jpg)<br>**Casio** · trackside · dry · **dawn** | | |
+| ![S/F](../../../artifacts/shots/tracks/suzuka/sector-s1-start-main-day-dry.jpg)<br>**S/F main stand** · trackside · dry · day | ![Ferris](../../../artifacts/shots/tracks/suzuka/sector-s1-ferris-motopia-day-dry.jpg)<br>**Motopia / Circuit Wheel** · orbit · dry · day | ![Esses](../../../artifacts/shots/tracks/suzuka/sector-s1-esses-climb-day-dry.jpg)<br>**Esses climb** · trackside · dry · day |
+| ![Dunlop](../../../artifacts/shots/tracks/suzuka/sector-s1-dunlop-arch-day-dry.jpg)<br>**Dunlop arch** · trackside · dry · day | ![Degner](../../../artifacts/shots/tracks/suzuka/sector-s2-degner-day-dry.jpg)<br>**Degner** · eye · dry · day | ![Portal](../../../artifacts/shots/tracks/suzuka/sector-s2-crossover-under-day-dry.jpg)<br>**Crossover portal** · eye · dry · day |
+| ![Hairpin](../../../artifacts/shots/tracks/suzuka/sector-s2-hairpin-day-dry.jpg)<br>**Hairpin** · trackside · dry · day | ![Spoon](../../../artifacts/shots/tracks/suzuka/sector-s2-spoon-day-dry.jpg)<br>**Spoon terrace** · trackside · dry · day | ![Shrine](../../../artifacts/shots/tracks/suzuka/sector-s2-shrine-hill-day-dry.jpg)<br>**Shrine / torii** · orbit · dry · day |
+| ![Flyover](../../../artifacts/shots/tracks/suzuka/sector-s3-crossover-bridge-day-dry.jpg)<br>**Crossover bridge** · trackside · dry · day | ![130R](../../../artifacts/shots/tracks/suzuka/sector-s3-130r-day-dry.jpg)<br>**130R** · trackside · dry · day | ![Casio](../../../artifacts/shots/tracks/suzuka/sector-s3-casio-chicane-day-dry.jpg)<br>**Casio chicane** · trackside · dry · day |
+
+## Hero weather & lighting (5 views)
+
+### Circuit Wheel (orbit s≈0.02)
+
+| | | |
+|:---:|:---:|:---:|
+| ![wet](../../../artifacts/shots/tracks/suzuka/wx-ferris-wet-day.jpg)<br>**Ferris** · orbit · **wet** · day | ![rain](../../../artifacts/shots/tracks/suzuka/wx-ferris-rain-day.jpg)<br>**Ferris** · orbit · **rain** · day | ![overcast](../../../artifacts/shots/tracks/suzuka/wx-ferris-overcast-day.jpg)<br>**Ferris** · orbit · **overcast** · day |
+| ![fog](../../../artifacts/shots/tracks/suzuka/wx-ferris-fog-day.jpg)<br>**Ferris** · orbit · **fog** · day | ![storm](../../../artifacts/shots/tracks/suzuka/wx-ferris-storm-day.jpg)<br>**Ferris** · orbit · **storm** · day | ![dusk](../../../artifacts/shots/tracks/suzuka/wx-ferris-dusk-dry.jpg)<br>**Ferris** · orbit · dry · **dusk** |
+| ![night](../../../artifacts/shots/tracks/suzuka/wx-ferris-night-dry.jpg)<br>**Ferris** · orbit · dry · **night** | | |
+
+### Esses (trackside s≈0.18)
+
+| | | |
+|:---:|:---:|:---:|
+| ![wet](../../../artifacts/shots/tracks/suzuka/wx-esses-wet-day.jpg)<br>**Esses** · trackside · **wet** · day | ![rain](../../../artifacts/shots/tracks/suzuka/wx-esses-rain-day.jpg)<br>**Esses** · trackside · **rain** · day | ![overcast](../../../artifacts/shots/tracks/suzuka/wx-esses-overcast-day.jpg)<br>**Esses** · trackside · **overcast** · day |
+| ![fog](../../../artifacts/shots/tracks/suzuka/wx-esses-fog-day.jpg)<br>**Esses** · trackside · **fog** · day | | |
+
+### Flyover (trackside s≈0.845)
+
+| | | |
+|:---:|:---:|:---:|
+| ![wet](../../../artifacts/shots/tracks/suzuka/wx-bridge-wet-day.jpg)<br>**Flyover** · trackside · **wet** · day | ![rain](../../../artifacts/shots/tracks/suzuka/wx-bridge-rain-day.jpg)<br>**Flyover** · trackside · **rain** · day | ![overcast](../../../artifacts/shots/tracks/suzuka/wx-bridge-overcast-day.jpg)<br>**Flyover** · trackside · **overcast** · day |
+| ![storm](../../../artifacts/shots/tracks/suzuka/wx-bridge-storm-day.jpg)<br>**Flyover** · trackside · **storm** · day | ![dusk](../../../artifacts/shots/tracks/suzuka/wx-bridge-dusk-dry.jpg)<br>**Flyover** · trackside · dry · **dusk** | ![night](../../../artifacts/shots/tracks/suzuka/wx-bridge-night-dry.jpg)<br>**Flyover** · trackside · dry · **night** |
+
+### Casio (trackside s≈0.94)
+
+| | | |
+|:---:|:---:|:---:|
+| ![wet](../../../artifacts/shots/tracks/suzuka/wx-casio-wet-day.jpg)<br>**Casio** · trackside · **wet** · day | ![rain](../../../artifacts/shots/tracks/suzuka/wx-casio-rain-day.jpg)<br>**Casio** · trackside · **rain** · day | ![overcast](../../../artifacts/shots/tracks/suzuka/wx-casio-overcast-day.jpg)<br>**Casio** · trackside · **overcast** · day |
+| ![fog](../../../artifacts/shots/tracks/suzuka/wx-casio-fog-day.jpg)<br>**Casio** · trackside · **fog** · day | | |
+
+### Crossover portal (eye s≈0.437)
+
+| | | |
+|:---:|:---:|:---:|
+| ![wet](../../../artifacts/shots/tracks/suzuka/wx-portal-wet-day.jpg)<br>**Portal** · eye · **wet** · day | ![rain](../../../artifacts/shots/tracks/suzuka/wx-portal-rain-day.jpg)<br>**Portal** · eye · **rain** · day | ![night](../../../artifacts/shots/tracks/suzuka/wx-portal-night-dry.jpg)<br>**Portal** · eye · dry · **night** |
 
 ## Verification
 
