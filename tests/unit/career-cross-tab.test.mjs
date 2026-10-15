@@ -41,6 +41,16 @@ function load(options = {}) {
         },
       }) };
       const transaction = { objectStore: () => ({
+        // Bounded mirror flush inventories existing rows in the readwrite
+        // transaction before applying its batch, just like actual IndexedDB.
+        getAll() {
+          const request = {};
+          queueMicrotask(() => {
+            request.result = mirrorRows.map((row) => ({ ...row }));
+            if (request.onsuccess) request.onsuccess();
+          });
+          return request;
+        },
         // B5 flush reads prev via get() before put — refuse older lsOk:true.
         get(k) {
           const request = {};
@@ -53,7 +63,9 @@ function load(options = {}) {
         },
         put() {}, delete() {},
       }) };
-      queueMicrotask(() => { if (transaction.oncomplete) transaction.oncomplete(); });
+      // Request success handlers run before transaction completion. Queue the
+      // completion after the requests synchronously issued by mirrorFlush.
+      queueMicrotask(() => queueMicrotask(() => { if (transaction.oncomplete) transaction.oncomplete(); }));
       return transaction;
     },
   };
