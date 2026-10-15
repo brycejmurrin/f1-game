@@ -137,6 +137,20 @@ var RivalAudio = (() => {
     }
   }
 
+  // Stop-engine silence (#2187): collect() only runs from the race step, so
+  // pause / finish / quit / scrub exit must zero the pool or the last gain
+  // keeps hissing under the menus. Same as applyPassBy([]), at time t.
+  function silence(t) {
+    if (!voices) return;
+    const at = t != null ? t : (actx && actx.currentTime) || 0;
+    for (let i = 0; i < voices.length; i++) {
+      const v = voices[i];
+      aimParam(v.gain.gain, 0, at, 0.06);
+      v.dist = 0;
+      v.key = -1;
+    }
+  }
+
   function detach() {
     if (!voices) return;
     const t = actx ? actx.currentTime || 0 : 0;
@@ -271,7 +285,7 @@ var RivalAudio = (() => {
       }
     }
 
-    return { collect, emitFieldSfx, attach, tick: collect, detach, passByState, passByVoices };
+    return { collect, emitFieldSfx, attach, tick: collect, detach, silence, passByState, passByVoices };
   }
 
   /** Wet-spray wake: nearest rival ahead within 40 m → 0..1 (1 = on your gearbox).
@@ -296,5 +310,5 @@ var RivalAudio = (() => {
     try { attach(pending.ctx, pending.dest); } catch (e) { /* stub dest already gone */ }
   }
 
-  return { create, attach, detach, sprayAhead, passByGain, passByDoppler, passByPan, passByVoices, SLOTS };
+  return { create, attach, detach, silence, sprayAhead, passByGain, passByDoppler, passByPan, passByVoices, SLOTS };
 })();

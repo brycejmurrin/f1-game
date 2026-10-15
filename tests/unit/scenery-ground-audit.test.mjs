@@ -27,6 +27,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { staleStrictIds } from "../../tools/lib/stale-rows.mjs";
 
 const require = createRequire(import.meta.url);
 const GA = require("../../tools/track/ground-audit.cjs");
@@ -35,7 +36,12 @@ const MANIFEST = require("../../tools/manifest.cjs");
 
 // Chosen to carry non-zero counts on every check, so a blind audit cannot pass:
 // monaco (harbour, hillside city), monza (bowl, banking), spa (forest).
-const SAMPLE = ["monaco", "monza", "spa"];
+// `unsupported` is the one fixes keep driving to 0 (spa's reached 0 in 2026-10),
+// so it is carried by two circuits whose baseline still has rows (miami, bahrain):
+// one more fix cannot blind the guard. When their rows reach 0, pick two that still
+// have non-zero rows in tests/data/scenery-audit-baseline.json (measured == cap, or
+// the "no stale cap" test below fails on the lowered row).
+const SAMPLE = ["monaco", "monza", "spa", "miami", "bahrain"];
 
 const { scope } = require("../../tools/lib/circuit-scope.cjs");
 const ROSTER = scope(MANIFEST.CIRCUITS);
@@ -67,12 +73,20 @@ test("every (scoped) circuit stays within the scenery-audit baseline", () => {
     "names the source line:\n  " + over.join("\n  "));
 });
 
-test("no stale cap on the measured circuits — a cap above the measured count is a lie", () => {
+// Gating the whole roster makes every stale row a candidate, so the #2183
+// policy applies (tools/lib/stale-rows.mjs): on a PR only its own circuits'
+// stale rows fail (all of them when it edits the baseline); the rest are
+// advisories. Local runs stay strict.
+test("no stale cap on the measured circuits — a cap above the measured count is a lie", (t) => {
+  const strict = staleStrictIds("tests/data/scenery-audit-baseline.json");
   const slack = [];
   for (const r of measure())
     for (const c of GA.CHECKS) {
       const cap = (base[c] || {})[r.id] || 0;
-      if (r.counts[c] < cap) slack.push(`${r.id} ${c}: baseline ${cap} but measured ${r.counts[c]}`);
+      if (!(r.counts[c] < cap)) continue;
+      const line = `${r.id} ${c}: baseline ${cap} but measured ${r.counts[c]}`;
+      if (strict === null || strict.has(r.id)) slack.push(line);
+      else t.diagnostic(`STALE (advisory: not in this diff) ${line}`);
     }
   assert.deepEqual(slack, [], "lower with `node tools/track/ground-audit.cjs --all --update`:\n  " + slack.join("\n  "));
 });

@@ -597,3 +597,63 @@ test("a swaying op's crown is rounded identically on replay and on the canonical
   for (let i = 0; i < model.geo.nrm.length; i++)
     assert.ok(Math.abs(model.geo.nrm[i] - out.nrm[i]) < 1e-6, `bake/replay normal ${i} differ: ${model.geo.nrm[i]} vs ${out.nrm[i]}`);
 });
+
+// #2178: a whole-or-nothing model (a pine, or meta.whole — the lobed tree) that
+// passed its dry run already holds every verdict, so the road guard runs once
+// per op, not twice. The emitter below mirrors build-props' guarded protocol
+// (_recVerdicts / _replayVerdicts / _dryRun / _absorbOnly) and counts guard calls.
+function guardedCounter(reject = () => false) {
+  const n = { guard: 0 };
+  const wrap = (name) => (o, ...args) => {
+    const tv = o._replayVerdicts;
+    if (tv) { if (tv[o._vIdx++] !== 1) return false; }
+    else {
+      n.guard++;
+      if (reject(name, args)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; return false; }
+      if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
+      if (o._dryRun) return true;
+    }
+    if (o._absorbOnly) return true;
+    RAW[name](o, ...args); return true;
+  };
+  const emit = {};
+  for (const name of ["addBox", "addCyl", "addCone", "addFrustum", "addPrism", "addPyramid"]) emit[name] = wrap(name);
+  return { emit, n };
+}
+const pineBuild = (rec) => {
+  rec.cyl([0, 0, 0], 0.3, 4, [1, 1, 1], 6);
+  rec.cone([0, 3, 0], 2, 4, [0, 1, 0], 7);
+  rec.frustum([0, 6, 0], 1.5, 0.5, 3, [0, 1, 0], 7);
+};
+
+test("a passing whole model pays one road-guard pass, not two (#2178)", () => {
+  for (const prefer of [true, false]) for (const meta of [{ kind: "pine" }, { kind: "tree", whole: true }]) {
+    const g = TrackGraph.create({ raw: RAW });
+    const { emit, n } = guardedCounter();
+    const out = buf(); out._preferInstance = prefer;
+    const landed = g.instance("w", AT([0, 0, 0]), pineBuild, meta, emit, out);
+    const ops = g.models.get("w").ops.length;
+    assert.equal(landed, ops);
+    assert.equal(n.guard, ops, `prefer=${prefer} ${meta.kind}: guard calls`);
+    // Same buffers as a plain (non-whole) instance that guards on its own.
+    const g2 = TrackGraph.create({ raw: RAW });
+    const ref = guardedCounter();
+    const out2 = buf(); out2._preferInstance = prefer;
+    g2.instance("w", AT([0, 0, 0]), pineBuild, { kind: "plain" }, ref.emit, out2);
+    assert.deepEqual(plain(out.pos), plain(out2.pos));
+    assert.deepEqual(plain(out.idx), plain(out2.idx));
+    assert.deepEqual(plain(g.batches()), plain(g2.batches()));
+  }
+});
+
+test("a whole model with one culled op plants nothing (#2178)", () => {
+  for (const prefer of [true, false]) {
+    const g = TrackGraph.create({ raw: RAW });
+    const { emit } = guardedCounter((name) => name === "addCone");
+    const out = buf(); out._preferInstance = prefer;
+    assert.equal(g.instance("w", AT([0, 0, 0]), pineBuild, { kind: "tree", whole: true }, emit, out), 0);
+    assert.equal(out.pos.length, 0);
+    assert.equal(g.stats().nodes, 0);
+    assert.equal(g.stats().dropped, 1);
+  }
+});

@@ -13,6 +13,12 @@ test.beforeEach(async ({ page }) => {
     try {
       localStorage.setItem("apex26.gfxBackend", "three");
       localStorage.setItem("apex26.tlxForceGL", "1");
+      // Every test here measures TLX, so a GLX fallback is a wrong world, not
+      // a pass. Pages 38563752300 (#1956): "[gfx] backend three init gave no
+      // answer in 8 s" on a busy llvmpipe runner, then backend undefined.
+      // renderer-boot.js lets a spec that measures TLX raise BOOT_STEP_MS
+      // (never lower it). Same value and reason as track-switch-memory.spec.js.
+      localStorage.setItem("apex26.gfxBootStepMs", "45000");
     } catch (_) {}
   });
 });

@@ -6,6 +6,7 @@
 // the job will see every day. The skip list is load-bearing: a selector that
 // silently drops the expensive spec reads as "covered", which is the same
 // lie the coverage reporter exists to catch from the other side.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
