@@ -568,6 +568,7 @@ const TrackLine = (function () {
   function wrapS(L, s) { s %= L; if (s < 0) s += L; return s; }
 
   const _out = { x: 0, w: 0 };
+  _out.w = 0.5; _out.w = 0;   // born a Double field: a 0 literal is a Smi, and the first fractional lineW split the map mid-race (PERF-HUNT-5)
   // O(1) index + lerp, same math as TrackSpline.curvature. Returns a shared object.
   // `fam` (optional, −1..1) blends toward a FAMILY: +1 the inner line, −1 the
   // outer (bake step 6). 0 / absent is the racing line.

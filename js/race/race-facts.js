@@ -61,6 +61,9 @@ var RaceFacts = (function () {
         s = { id: nextId++, cp: -1, fresh: true, times: new Float64Array(RING), idx: new Int32Array(RING).fill(-1),
           lap: c.lap || 0, lastLap: c.lastLap || 0, retired: !!c.retired, finished: !!c.finished,
           stops: c.pitStops || 0, pit: inPits(c), pitT: -99, errs: c.errCount | 0 };
+        // Born Double, values kept: an integer here is a Smi field, and the first lap time / pit stamp split every
+        // bag's map mid-race and deopted gap()/timeAt() (PERF-HUNT-5).
+        const l0 = s.lastLap; s.lastLap = s.pitT = 0.5; s.lastLap = l0; s.pitT = -99;
         st.set(c, s);
       }
       return s;
@@ -128,7 +131,14 @@ var RaceFacts = (function () {
     // ONE answer per instance, reused every step: race-radio reads `f` and walks
     // `ev` before the next observe, and its `last` (the request() snapshot) is
     // the latest `f` either way. The events in `ev` are still fresh objects.
-    const _out = { f: null, ev: [] }, _f = {}, _fastestOut = { car: null, time: 0 }, _finishers = [];
+    const _out = { f: null, ev: [] }, _fastestOut = { car: null, time: 0 }, _finishers = [];
+    // `f`'s fields in observe()'s fill order (every one is rewritten before `f` is handed out); lastLap / best / the
+    // fastest time are born Double — integer 0s made Smi fields, and the first lap time re-mapped `f` under every
+    // race-radio `still` reader (PERF-HUNT-5).
+    const _f = { t: 0, laps: 0, lap: 0, toGo: null, leaderToGo: null, pos: 0, rawPos: 0, n: 0, gridPos: null, ahead: null,
+      behind: null, gapA: null, gapB: null, rateA: null, rateB: null, leader: null, second: null, leadGap: null,
+      lastLap: 0.5, best: 0.5, fastest: null, energy: null, finished: false, retired: false, pitting: false, caution: 0, started: false };
+    _f.lastLap = _f.best = 0; _fastestOut.time = 0.5; _fastestOut.time = 0;
     function observe(G, dt) {
       const ev = _out.ev, finishers = _finishers;
       ev.length = 0; finishers.length = 0; _out.f = null;
@@ -252,7 +262,7 @@ var RaceFacts = (function () {
           const ia = bag(a).id, ib = bag(b).id;
           const key = ia < ib ? pairKey(ia, ib) : pairKey(ib, ia);
           let r = pairs.get(key);
-          if (!r) { pairs.set(key, { ahead: a, pend: 0, key, visit: pairVisit }); continue; }
+          if (!r) { pairs.set(key, r = { ahead: a, pend: 0.5, key, visit: pairVisit }); r.pend = 0; continue; }
           r.visit = pairVisit;
           if (r.ahead === a) { r.pend = 0; continue; }
           r.pend += dt;

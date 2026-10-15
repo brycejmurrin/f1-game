@@ -202,6 +202,7 @@ const AiDrive = (function () {
   // Writes into `out` (module scratch when omitted — per-AI per-step, so no
   // allocation) and returns it.
   const _defOnce = { defend: 0, side: 0 };
+  _defOnce.defend = 0.5; _defOnce.defend = 0;   // born Double: a 0 literal is a Smi field (PERF-HUNT-5)
   function defendOnce(defend, side, out) {
     const o = out || _defOnce;
     const sgn = defend > 0 ? 1 : (defend < 0 ? -1 : 0);
@@ -477,6 +478,7 @@ const AiDrive = (function () {
   const _bind = { vC: 0, d: 1 };
 
   const _br = { braking: false, brakeLvl: 0, vLim: 0, excess: 0, ff: 0 };
+  _br.brakeLvl = _br.ff = 0.5; _br.brakeLvl = _br.ff = 0;   // born Double, like _defOnce
   function brakeDecision(ctx) {
     const vLim = brakeTarget(ctx);
     const speed = ctx.speed || 0;
