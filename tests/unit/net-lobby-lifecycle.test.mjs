@@ -32,7 +32,8 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   const status = element("vs-status");
   status.classList = { toggle() {} };
   for (const id of ["vs-close", "vs-invite-more", "vs-host", "vs-join", "vs-make-answer", "vs-accept",
-                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value"]) element(id);
+                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value",
+                    "vs-edit-car", "vs-ready"]) element(id);
   const scan = element("vs-scan");
   const video = element("vs-scan-video");
   const listeners = new Map();
@@ -668,6 +669,47 @@ test("a LEGENDS car is moved off in the room like MY TEAM (legends: true, no cus
     assert.equal(h.G.teamIdx, 0, "…onto the first free REAL seat");
     assert.equal(hellos().at(-1).d.team, "alpha", "…and announced it");
     assert.match(h.status.textContent, /^LEGENDS cars only exist on your own screen/);
+  } finally { h.lobby.cancel(); }
+});
+
+test("CHANGE CAR withdraws READY before the garage opens; returning re-announces but does not re-ready (#1919)", async () => {
+  // A READY guest could open the Garage, switch driver and sit there while the
+  // host still saw the OLD profile as READY and started the race with it.
+  const { h, s, hellos } = await connectedGuest();
+  h.lobby.wire();
+  const readies = () => s.sent.filter((m) => m.t === "ready");
+  const opened = [];
+  h.G.openGarageFrom = (from) => {
+    opened.push({ from, selfReady: h.lobby.roomState().selfReady, wire: readies().at(-1) && readies().at(-1).d.ready });
+  };
+  try {
+    s.deliver("hello", { team: "beta", driver: 0, rank: 1 });   // the host, seated elsewhere
+    h.click("vs-ready");
+    assert.equal(h.lobby.roomState().selfReady, true, "READY before the garage");
+    h.click("vs-edit-car");
+    assert.equal(opened.length, 1, "the garage opened");
+    assert.equal(opened[0].selfReady, false, "READY is withdrawn BEFORE any edit can happen");
+    assert.equal(opened[0].wire, false, "…and the host was told, so its START gate closes");
+    h.G.driverIdx = 1;                                          // the edit
+    const before = hellos().length;
+    h.lobby.roomChanged("car");                                // Garage exit (game.js)
+    assert.equal(hellos().length, before + 1, "returning publishes the current profile");
+    assert.equal(hellos().at(-1).d.driver, 1, "…with the new driver");
+    assert.equal(h.lobby.roomState().selfReady, false, "…but does not silently re-ready");
+    h.click("vs-ready");
+    assert.equal(readies().at(-1).d.ready, true, "an explicit READY re-arms the start");
+  } finally { h.lobby.cancel(); }
+});
+
+test("CHANGE CAR when not READY sends no READY traffic", async () => {
+  const { h, s } = await connectedGuest();
+  h.lobby.wire();
+  h.G.openGarageFrom = () => {};
+  try {
+    const before = s.sent.length;
+    h.click("vs-edit-car");
+    assert.equal(s.sent.filter((m) => m.t === "ready").length, 0);
+    assert.equal(s.sent.length, before, "nothing on the wire");
   } finally { h.lobby.cancel(); }
 });
 

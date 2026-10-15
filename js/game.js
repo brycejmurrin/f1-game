@@ -1241,7 +1241,16 @@ function announce(msg, dur, kind, still, quiet) {   // still(): false once a que
     // newcomer that outranks nothing waiting; one that does (a warning behind
     // two reports) queues deeper instead of pushing an accepted line out.
     const low = _annQueue.length ? _annQueue[_annQueue.length - 1].pri : 0;
-    if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
+    const cap = pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX;
+    // A full queue used to refuse the newcomer outright (race-radio counted
+    // those as announce-refused and dropped the line). Shed the lowest-priority
+    // waiting cards — comm and coach first — so engineer, box and warnings still
+    // land. Only refuse when nothing waiting is weaker than the newcomer.
+    while (_annQueue.length >= cap) {
+      const tail = _annQueue[_annQueue.length - 1];
+      if (!tail || tail.pri >= pri) return false;
+      _annQueue.pop();
+    }
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
     _annQueue.splice(at, 0, { msg, dur, kind, pri, still, t: performance.now() });
@@ -4372,7 +4381,7 @@ function syncRotateBlocker(moveFocus) {
   // rotateBlockMql as well as the box: a DOM with no stylesheet (the node
   // game-vm harness) reads every display as shown, and would pause every race.
   if (active && rotateBlockMql.matches && !paused && (state === "race" || state === "count") && !netPlay.active()) setPaused(true, "rotate-block");
-  if (paused && !(garageReturn === "pit" && !$("carsetup").hidden)) els.pausemenu.hidden = active || photoMode;   // the pit garage holds its own pause: no card over it (setPaused)
+  if (paused && !(garageReturn === "pit" && !$("carsetup").hidden)) els.pausemenu.hidden = active || photoMode || els.pmsettings?.hidden === false;   // Settings keeps the foreground after rotation; the pit garage owns its pause (setPaused)
   if (active && moveFocus) requestAnimationFrame(() => {
     const first = $("rotate-controls"); if (first && getComputedStyle(box).display !== "none") first.focus();
   }); return active;
@@ -4812,7 +4821,12 @@ function collideFx(a, b, impact) {
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
-  if (soundOn) GameAudio.collision(impact);
+  if (soundOn) {
+    const other = a.isPlayer ? b : a;
+    const lat = (other.x != null ? other.x : 0) - (pc.x != null ? pc.x : 0);
+    const side = Math.abs(lat) > 0.08 ? Math.max(-1, Math.min(1, lat / 3.5)) : 0;
+    GameAudio.collision(impact, false, side);
+  }
   shake = Math.min(1, shake + impact * 0.45);
   hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;
@@ -8581,8 +8595,10 @@ function tickBody(now) {
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }
     _audioParamStep = true;   // any other update() caller (the __apex step hooks) sets them
-    PerfGov.recordSimulation(steps, steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0);   // only what the line below drops; the sub-step remainder carries
-    if (steps === 5 && physAcc >= PHYS_DT) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
+    const dropped = steps === 5 && physAcc >= PHYS_DT ? physAcc - physAcc % PHYS_DT : 0;   // only what the line below drops; the sub-step remainder carries
+    PerfGov.recordSimulation(steps, dropped);
+    if (dropped) physAcc %= PHYS_DT;   // fell badly behind — drop the backlog, keep the sub-step remainder (a clean 5-step frame lost up to a step: Fix Your Timestep)
+    if (state === "count" && !netStart && !(netPlay && netPlay.awaitingStart && netPlay.awaitingStart())) countT += startLights.countCredit(_dtMs / 1000, dt, dropped);   // solo lights on the wall clock, not the step cap (#1882)
     _poseAt = now - physAcc * 1000;   // the stepped pose lags this frame by the unspent remainder
   } else _poseAt = null;
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp

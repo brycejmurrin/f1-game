@@ -121,3 +121,28 @@ test("analyzeOverlap: survey clash shapes are the failure mode we clear", () => 
   const inClash = analyzeOverlap([inTouch, boost, ot], W, H, ins);
   assert.ok(inClash.hudClash.some((p) => p.includes("hud-inputs")), "INPUTS×right-dock is a hudClash");
 });
+
+
+test("joint dock height cap preserves default pedals and stays monotonic at larger requests", () => {
+  const body = HUD_JS.match(/const heightCap = \(height, topMax = 1\.5\) => \{([\s\S]*?)\n    \};/);
+  assert.ok(body, "the real fitHud joint height solver is present");
+  const capFor = (controlsRoom, height, topMax = 1.5) => Function("controlsRoom", "height", "topMax", body[1])(controlsRoom, height, topMax);
+  assert.equal(capFor(350, 236), 1.25, "844×390's tall button-steer column retains its default 90px pedals");
+  assert.ok(capFor(350, 172, 2) < capFor(350, 172), "the right dock reserves PAUSE growth beyond CAM's 150% ceiling");
+  assert.match(HUD_JS, /heightCap\(gL\.h\), heightCap\(gR\.h, 2\)/, "left and right columns budget their distinct top controls");
+  assert.equal(capFor(350, 0), Infinity, "an empty group adds no cap");
+  for (const topMax of [1.5, 2]) for (const room of [250, 329, 350]) for (const height of [80, 172, 236, 400]) {
+    for (const widthCap of [.9, 1.8, Infinity]) {
+      let previous = 0;
+      for (const requested of [1.25, 1.5, 2, 3]) {
+        const z = Math.min(requested, Math.max(.4, Math.min(capFor(room, height, topMax), widthCap)));
+        assert.ok(z >= previous, "larger BUTTON SIZE never reduces effective dock size");
+        assert.ok(height * z + 44 * Math.min(topMax, Math.max(1, z)) <= room + 1e-9,
+          "the dock and its top buttons fit together after width and height caps");
+        previous = z;
+      }
+    }
+  }
+  assert.match(CSS, /--hud-btn-z:\s*clamp\(1, var\(--hud-z-dock, var\(--hud-btn-scale, 1\)\), 1\.5\)/,
+    "CAM/PAUSE consume the same effective zoom that the height solver budgets");
+});
