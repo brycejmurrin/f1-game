@@ -65,6 +65,9 @@ same turn. No repo rule shape pre-approves those two connectors.
 
 ## What no repo setting changes
 
+- The repo's own `.mcp.json` servers (apex-tools, chrome-devtools,
+  playwright-official): the repository cannot approve servers it defines.
+  Run in auto mode, or approve once per session.
 - MDN and BrowserStack: the permissions doc says a claude.ai connector tool
   set to `ask` overrides allow rules; the fix is the per-connector tool
   permission at <https://claude.ai/customize/connectors>.
@@ -106,6 +109,39 @@ were absent and the `mcp__<server>__*` lines were not exercised there.
 
 A throwaway worktree commit passed the commit hook there (the worktree had
 no `node_modules` problem because the clone was fresh and whole).
+
+## Census on 76637056 (after #2127), two AUTO siblings with the repo attached
+
+session_01XtWKWEvzEhT3Ua76VxDi22 (MCP servers and connectors, ~70 calls) and
+session_01Xgk7GqMWpKmaXoWkYuC2j9 (worker loop, 27 calls), both launched with
+`source_url` and `permission_mode: "auto"` from an auto parent. Totals: 0
+prompted, 0 rejected.
+
+| path | tools |
+|---|---|
+| rule / config | github (8 tools), claude-code-remote reads, Context7, Claude_Docs, TinyFish (4 of 5 tools), Read, Glob, Grep, WebSearch, WebFetch, ToolSearch, Skill |
+| classifier | apex-tools (7 tools), chrome-devtools (3), playwright-official (3), MDN, BrowserStack, TinyFish `list_monitors`, `send_message`, Bash (incl. worktree add and commit), Agent (Explore, worker), SubagentHandback |
+| built-in, no rule needed | TaskCreate/Update/List/Get, EnterWorktree, ExitWorktree, ListAgents, ReadNotifications, CronList, ListConnectors, ListSkills, ListPlugins |
+
+- **The `.mcp.json` servers never match a repo rule**, bare or `__*`, in a
+  session that starts on a tip carrying both. The permissions doc's trust
+  table: for servers in `.mcp.json`, "the repository's own approvals don't
+  count". So #2124's wildcard lines are inert for them; in auto mode the
+  classifier approves their read calls, and in default mode they prompt.
+- The `rule` matches split by TOOL inside one server (TinyFish 4 of 5,
+  claude-code-remote reads vs `send_message`), so the matching list is not
+  only the repo's server-level entries. Unverified where the rest comes from.
+- #2127 holds: a `git worktree add` tree and a `worker` subagent's isolation
+  worktree both committed (d267ce5, 94586b0, never pushed); the commit hook
+  linked the main checkout's `node_modules` in.
+- Messaging: sibling-to-sibling `send_message` delivered both ways in ~20 s.
+  A worker refused the peer-ping step when the grant arrived relayed through
+  the orchestrator, and sent it once the user said so in its own session.
+- In auto mode `APEX_PUSH_HOLD=0 git push` is rejected by the classifier as
+  `[Safety Bypass Flag]` (Merge Desk session_01KbZH5rhh9vEnwbU2w5DLUG, 10:31Z).
+- A parent in `default` mode cannot create an auto child: `create_session`
+  refuses with "permission_mode 'auto' requires the parent session to be in
+  auto mode".
 
 ## Spawning siblings (same day)
 
