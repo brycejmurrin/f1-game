@@ -328,7 +328,9 @@
       // the modelGroup pad when the hill ran under s≈0.16–0.19).
       spectatorHill(0.118, 0.148, -1, 30, { h: 6.5, col: GRASS });
       spectatorHill(0.220, 0.255, -1, 30, { h: 7.0, col: GRASS });
-      forestEdge(0.120, 0.250, -1, 52, { col: LEAF, spacing: 15 });
+      // Stop the wood belt before the Hollywood model footprint (clip-audit
+      // severe ~2.4 m³ at s≈0.176 when trees overlapped the stand boxes).
+      forestEdge(0.120, 0.165, -1, 52, { col: LEAF, spacing: 15 });
       guardrail(0.120, 0.250, -1, 11, ARMCO);
       fence(0.130, 0.235, -1, 14, 3.2, FENCE_C);
       marshalPost(K(0.1698), -1, 14);
@@ -384,7 +386,8 @@
       terrace(0.328, 0.356, 1, 32, { rows: 3, rise: 0.9, depth: 2.0, conc: CONCRETE });
       safeBox(K(0.350), 1, 32, [4.0, 2.8, 5], WALL_2);
       groundPatch(K(0.340), 1, 36, [20, 0.16, 56], ROUGH);
-      hedge(0.306, 0.386, 1, 54, 2.1, HEDGE_L);
+      // Deep boundary hedge: +2 m gap avoids flatCoplanar with the foot hedge.
+      hedge(0.306, 0.386, 1, 56, 2.1, HEDGE_L);
       rank(0.302, 0.392, 1, 64, 16, 1270, 9.5, 16.0);
 
       // 10. s 0.4552 +1 10 — STARKEY'S BRIDGE, on the climb back out
@@ -423,7 +426,7 @@
       // --- deep wood: a third rank and scrub at the foot of it. No buildings,
       //     by the brief; the only man-made things here are the marshal post and the guardrail.
       rank(0.486, 0.562, -1, 64, 20, 1490, 10.0, 17.0);
-      for (let i = 0; i < 7; i++) bush(K(0.494 + i * 0.010), -1, 30 + (i % 3) * 6, i % 2 ? LEAF_D : LEAF_B);
+      for (let i = 0; i < 4; i++) bush(K(0.496 + i * 0.012), -1, 34 + (i % 3) * 6, i % 2 ? LEAF_D : LEAF_B);
 
       // 12. s 0.5713 +1 18 — McLEANS
       tyreWall(0.562, 0.584, 1, 12, TW_Y);
@@ -448,7 +451,7 @@
       {
         const sAir = 0.640;                         // between McLeans and Coppice
         const a = anchor(K(sAir), -1, 480);          // east of Coppice woods; ~EMA side
-        const alt = 130;                            // low departure — "fairly low overhead"
+        const alt = 95;                             // readable silhouette; still sky-only (float cap)
         const c = [a.c[0], a.c[1] + alt, a.c[2]];
         const bn = [a.r, a.u, a.t];
         const bf = [a.r, a.t, a.u];                 // cylinder axis along fuselage
@@ -476,7 +479,7 @@
       // --- the coppice has BODY: a third rank, hazel scrub at its foot and a
       //     low ridge carrying the wood up the slope behind the corner.
       rank(0.644, 0.736, -1, 56, 22, 1710, 10.5, 17.5);
-      for (let i = 0; i < 8; i++) bush(K(0.652 + i * 0.010), -1, 24 + (i % 3) * 5, i % 2 ? LEAF_D : LEAF_C);
+      for (let i = 0; i < 5; i++) bush(K(0.654 + i * 0.012), -1, 30 + (i % 3) * 6, i % 2 ? LEAF_D : LEAF_C);
       slopeRidge(K(0.700), -1, 62, 90, 22, 5.0, GRASS_D);
 
       // 14. s 0.7592 -1 12 — THE ESSES (spectator tunnel crossing)
