@@ -251,8 +251,11 @@ function paintHudDelta(player, timeTrial) {
   const ghostT = ref && (!ghost || (player.lap | 0) >= 1) ? ref.timeAt(player.s) : null;
   if (ghostT == null || !(player.lapTime >= 0)) {
     hData(box, "pending", "");
+    if (_deltaShown && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just lost a box (TT restart, lap 0, lost ghost)
+    _deltaShown = false;
     return;
   }
+  _deltaShown = true;
   const wasPending = box.dataset ? box.dataset.pending != null : box.hasAttribute && box.hasAttribute("data-pending");
   hData(box, "pending", null);
   if (wasPending && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just grew a box
@@ -491,6 +494,10 @@ function syncComputedRootVars() {
   _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
 }
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
+// LEFT-HANDED (body.mirror-controls) flips #hud-dock (row-reverse), so #dock-right paints on the LEFT. The fit
+// reasons in screen sides, so pick each handle by the side it is painted on (re-picked at every fit).
+let _dockMir = null, _deltaShown = false;   // _deltaShown: DELTA has painted a number since it last went pending
+function pickDocks() { const m = document.body.classList.contains("mirror-controls"); if (_dockL && m === _dockMir) return; _dockMir = m; const a = document.getElementById("dock-left"), b = document.getElementById("dock-right"); _dockL = m ? b : a; _dockR = m ? a : b; }
 // THE BUDGET IS THE UN-MOVED LAYOUT. MOVE & SIZE (js/ui/hud-layout.js) paints a
 // player offset on top of each element with `translate` / `scale` (data-hl,
 // --hl-x/-y in screen %, --hl-s, origin --hl-o), and getBoundingClientRect
@@ -882,9 +889,8 @@ function phoneFitStampSync(scale, force) {
   if (!_hudTop) {
     _hudTop = document.querySelector(".hud-top");
     _hudBottom = document.querySelector(".hud-bottom");
-    _dockL = document.getElementById("dock-left");
-    _dockR = document.getElementById("dock-right");
   }
+  pickDocks();
   const bumpDock = () => {
     const boost = _boostOnRightHalf();
     if (!boost) return false;
@@ -1074,7 +1080,8 @@ function fitHud() {
     }
     return hi > lo ? (hi - lo) / zoomDiv(el, pub) : wide(el, pub);
   };
-  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
+  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); }
+  pickDocks();
   const top = wide(_hudTop, zTopPub);
   // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
   // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)
