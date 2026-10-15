@@ -294,6 +294,8 @@ test("docs-guards.yml and ci.yml both run on every pull request; the prose list 
     "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required checks");
   const docsOn = docsWorkflow.slice(docsWorkflow.indexOf("\non:"), docsWorkflow.indexOf("\npermissions:"));
   assert.match(docsWorkflow, /^on:\n  pull_request:\n/m, "docs-guards runs on pull requests");
+  assert.match(docsWorkflow, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "marking a draft ready must re-run docs-guards on the same head");
   assert.doesNotMatch(docsOn, /\n    paths(-ignore)?:/, "docs-guards must report on every PR too (it is a required check)");
   assert.match(docsWorkflow, /- name: Is every changed path prose\?/);
   assert.match(docsWorkflow, /readFileSync\("\.github\/workflows\/ci\.yml", "utf8"\)/, "the prose list is READ from ci.yml, never retyped");
@@ -1390,6 +1392,15 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
     const head = job.slice(0, job.indexOf("\n    steps:"));
     assert.ok(!head.includes(fastTier), `${name} is part of the fast tier and must not opt out`);
   }
+});
+
+test("desktop pack-smoke is full-tier only (ready PRs, not drafts)", () => {
+  const desktop = fs.readFileSync(new URL("../../.github/workflows/desktop.yml", import.meta.url), "utf8");
+  assert.match(desktop, /types: \[opened, synchronize, reopened, ready_for_review\]/,
+    "marking a draft ready must start pack-smoke when paths match");
+  const pack = desktop.slice(desktop.indexOf("\n  pack-smoke:\n"), desktop.indexOf("\n  release-build:\n"));
+  assert.match(pack, /github\.event\.pull_request\.draft == false/,
+    "pack-smoke must skip draft PRs so Electron work stays on the full tier");
 });
 
 test("a green fast-tier run pokes the train; a red or called one never does", () => {

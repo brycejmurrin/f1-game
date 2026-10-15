@@ -1122,6 +1122,26 @@ Two always-judged checks give the gate fixed names:
 |---|---|---|
 | **Draft PR** | `pull_request` + draft | Fast tier: Structural guards A/B shards + aggregator (incl. behind-ship on the aggregator), unit-plan / node slices, parts census, driving-model, change-aware `select`/`selected`. Heavy jobs skipped: geometry sweeps, wide smoke shards, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. |
 | **Ready PR** | `ready_for_review` / non-draft | Full tier on the same head: smoke + sweeps + ship-filter, plus path-gated renderer-macos / xr when the diff reaches them. Desktop pack-smoke is packaging-path-gated (`desktop/**`, `tools/desktop/**`, `desktop.yml` only — not `js/**` / `css/**`). Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
+
+**Check names (GitHub UI)** — fast tier on a **draft** PR or a **deploy-branch push** (`ci.yml` jobs unless noted):
+
+- `Reuse draft fast-tier?`, `Structural guards (tooling A)`, `Structural guards (tooling B)`, `Structural guards`
+- `Plan node unit slices`, `Pure-node unit suites (<slice>)` (six matrix legs when planned)
+- `Does this diff touch track survey inputs?` (`sweeps-parts`), `Characterization driving model` (when planned)
+- `Select specs for this change`, `Selected specs (…)` matrix legs when routed, `Selected specs (verdict)`
+- `CI` (aggregator `ci-verdict`; skipped jobs count as pass)
+- `Docs guards (prose-tree unit files)` (`docs-guards.yml` — runs on every PR including drafts; exits in seconds on mixed/code PRs)
+
+**Full tier** adds (ready/non-draft PR, `merge_group`, Pages train / `workflow_dispatch` with `concurrency_key`, nightly `schedule` where noted):
+
+- `Does this diff change anything that ships?`, `Smoke (page boots, __apex responds)`, `Per-circuit geometry sweeps` (+ four shard legs and roll-up)
+- `Does this diff touch the renderer?` → `Renderer specs on a real GPU (macos-latest, Metal)` when the diff reaches `js/render/**`
+- `Does this diff touch WebXR?` → `Emulated VR (IWER / xr-emulated)` when the diff reaches XR paths
+- `Pack smoke (ubuntu-latest)` (`desktop.yml`, packaging paths only)
+- `Golden menus on a runner (trial, non-blocking)` (nightly/dispatch only, advisory)
+- `Poke the release train` (deploy-branch push fast tier only — not PRs)
+
+Heavy jobs use one shared skip expression on deploy pushes and draft PRs (`github.event.pull_request.draft` inside `ci.yml`; `desktop.yml` uses `draft == false`). `ready_for_review` is listed on every `pull_request` trigger so marking ready starts the full tier on the same `head_sha` (draft fast runs may cancel — AGENTS.md rule 8 dedupe).
 | **Ship push** | push to deploy branch | Fast tier only; a green run pokes the Pages train from the tip, or from a superseded commit when no train is queued or running. Pushes share one no-cancel `ship-fast` group: the running fast tier finishes and only the newest waiting push stays queued (`docs/notes/CI-MERGE-BURST-2026-10-03.md`). |
 | **Pages train** | poke / dispatch / cron | Full gate against live `before_sha`; gate group never cancels. |
 | **Nightly** | `ci.yml` schedule `17 4 * * *` (04:17 UTC) | Rotating browser group (`nightly-group.mjs`) instead of smoke-only; renderer / gfx on real GPU; coverage for the ~61 specs `select-specs` never picks. `gpu-census.yml` runs on its own staggered cron (`47 5 * * *`, 05:47 UTC) for adapter identity. |
