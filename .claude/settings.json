@@ -131,10 +131,6 @@
       "Bash(curl http://127.0.0.1:*)",
       "Bash(curl http://localhost:*)"
     ],
-    "ask": [
-      "mcp__github__push_files",
-      "mcp__github__create_or_update_file"
-    ],
     "deny": [
       "Bash(git push --force*)",
       "Bash(git push -f *)",
