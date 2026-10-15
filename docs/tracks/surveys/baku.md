@@ -1,16 +1,6 @@
 # Baku City Circuit — survey (2026-10-14)
 
-**Branch:** `cursor/baku-survey-e759` · **Live:** https://brycejmurrin.github.io/f1-game/  
-**Theme:** `street_night` · **Shots:** 30 JPEGs in `artifacts/shots/tracks/baku/` (dry only; weather matrix deferred until shared survey tooling lands)
-
-## Code map
-
-| Layer | Path |
-|--------|------|
-| Def | `js/circuits/baku.js` |
-| Scenery | `js/circuits/scenery/baku.js` |
-| Brief | `docs/tracks/baku.md` |
-| Landmarks | `tests/data/landmarks/baku.json` |
+**Branch:** `cursor/baku-survey-e759` (rebased on shared shot tooling) · **Shots:** 36 JPEGs in `artifacts/shots/tracks/baku/`
 
 ## Audits
 
@@ -19,80 +9,64 @@ node tools/track/verify-track.cjs baku
 node tools/track/audit-circuit.cjs baku
 ```
 
-Surface folds **0**; ground flatCoplanar **0** after palace portal tweak (within baseline caps). Weather batch (`wet` / `rain` / `overcast` / `fog`) not captured on this branch.
-
-## Sector 1 — s≈0.00–0.30 (dry)
+## Sector anchors (dry · day)
 
 | | | |
 |:---:|:---:|:---:|
-| ![Start / Government House](../../../artifacts/shots/tracks/baku/s1-00-start-day-orbit.jpg)<br>**Start / Government House** · dry · day · orbit | ![Civic plaza](../../../artifacts/shots/tracks/baku/s1-01-plaza-day-orbit.jpg)<br>**Civic plaza** · dry · day · orbit | ![T2 squeeze](../../../artifacts/shots/tracks/baku/s1-02-t2-day-park.jpg)<br>**T2 left squeeze** · dry · day · park |
-| ![Flame Towers](../../../artifacts/shots/tracks/baku/s1-03-flame-towers-day-orbit.jpg)<br>**Flame Towers** · dry · day · orbit | | |
+| ![Start](../../../artifacts/shots/tracks/baku/sec-start-day-dry-orbit.jpg)<br>**Start / Government House** · dry · day · orbit | ![Flame Towers](../../../artifacts/shots/tracks/baku/sec-flame-day-dry-orbit.jpg)<br>**Flame Towers** · dry · day · orbit | ![Castle squeeze](../../../artifacts/shots/tracks/baku/sec-castle-day-dry-park.jpg)<br>**Castle squeeze** · dry · day · park |
+| ![Maiden Tower](../../../artifacts/shots/tracks/baku/sec-maiden-day-dry-orbit.jpg)<br>**Maiden Tower** · dry · day · orbit | ![Mid straight](../../../artifacts/shots/tracks/baku/sec-straight-day-dry-park.jpg)<br>**Neftchilar mid-straight** · dry · day · park | ![T1 braking](../../../artifacts/shots/tracks/baku/sec-t1-day-dry-park.jpg)<br>**T1 braking** · dry · day · park |
 
-## Sector 2 — s≈0.30–0.62 (dry)
-
-| | | |
-|:---:|:---:|:---:|
-| ![Old City approach](../../../artifacts/shots/tracks/baku/s2-04-old-city-day-park.jpg)<br>**Old City approach** · dry · day · park | ![İçərişəhər wall](../../../artifacts/shots/tracks/baku/s2-05-icheri-wall-day-trackside.jpg)<br>**İçərişəhər wall** · dry · day · trackside | ![Castle squeeze](../../../artifacts/shots/tracks/baku/s2-06-castle-day-park.jpg)<br>**Castle squeeze** · dry · day · park |
-| ![Castle gate](../../../artifacts/shots/tracks/baku/s2-07-castle-gate-day-eye.jpg)<br>**Castle gate towers** · dry · day · eye | ![Shirvanshah Palace](../../../artifacts/shots/tracks/baku/s2-08-palace-day-orbit.jpg)<br>**Shirvanshah Palace** · dry · day · orbit | ![Maiden Tower](../../../artifacts/shots/tracks/baku/s2-09-maiden-tower-day-orbit.jpg)<br>**Maiden Tower** · dry · day · orbit |
-
-## Sector 3 — s≈0.62–1.00 (dry)
+## Weather — Start / Government House (day)
 
 | | | |
 |:---:|:---:|:---:|
-| ![Seafront opens](../../../artifacts/shots/tracks/baku/s3-10-seafront-day-park.jpg)<br>**Seafront opens** · dry · day · park | ![Mid straight](../../../artifacts/shots/tracks/baku/s3-11-straight-mid-day-park.jpg)<br>**Neftchilar mid-straight** · dry · day · park | ![Glass canyon](../../../artifacts/shots/tracks/baku/s3-12-glass-canyon-day-orbit.jpg)<br>**Glass canyon (R)** · dry · day · orbit |
-| ![Finish bridge](../../../artifacts/shots/tracks/baku/s3-13-finish-bridge-day-orbit.jpg)<br>**Finish pedestrian bridge** · dry · day · orbit | ![T1 braking](../../../artifacts/shots/tracks/baku/s3-14-t1-braking-day-park.jpg)<br>**T1 braking zone** · dry · day · park | |
+| ![wet](../../../artifacts/shots/tracks/baku/wx-start-day-wet-orbit.jpg)<br>**Start** · **wet** · day · orbit | ![rain](../../../artifacts/shots/tracks/baku/wx-start-day-rain-orbit.jpg)<br>**Start** · **rain** · day · orbit | ![overcast](../../../artifacts/shots/tracks/baku/wx-start-day-overcast-orbit.jpg)<br>**Start** · **overcast** · day · orbit |
+| ![fog](../../../artifacts/shots/tracks/baku/wx-start-day-fog-orbit.jpg)<br>**Start** · **fog** · day · orbit | ![storm](../../../artifacts/shots/tracks/baku/wx-start-day-storm-orbit.jpg)<br>**Start** · **storm** · day · orbit | |
 
-## Lighting — Start / finish (s≈0.02)
-
-| | | |
-|:---:|:---:|:---:|
-| ![day](../../../artifacts/shots/tracks/baku/s1-00-start-day-orbit.jpg)<br>**Start** · dry · **day** | ![dusk](../../../artifacts/shots/tracks/baku/lt-start-dusk-orbit.jpg)<br>**Start** · dry · **dusk** | ![night](../../../artifacts/shots/tracks/baku/lt-start-night-orbit.jpg)<br>**Start** · dry · **night** |
-
-## Lighting — Flame Towers (s≈0.22)
+## Weather — Flame Towers (day)
 
 | | | |
 |:---:|:---:|:---:|
-| ![day](../../../artifacts/shots/tracks/baku/s1-03-flame-towers-day-orbit.jpg)<br>**Flame Towers** · dry · **day** | ![dusk](../../../artifacts/shots/tracks/baku/lt-flame-dusk-orbit.jpg)<br>**Flame Towers** · dry · **dusk** | ![night](../../../artifacts/shots/tracks/baku/lt-flame-night-orbit.jpg)<br>**Flame Towers** · dry · **night** |
-| ![dawn](../../../artifacts/shots/tracks/baku/lt-flame-dawn-orbit.jpg)<br>**Flame Towers** · dry · **dawn** | | |
+| ![wet](../../../artifacts/shots/tracks/baku/wx-flame-day-wet-orbit.jpg)<br>**Flame Towers** · **wet** · day · orbit | ![rain](../../../artifacts/shots/tracks/baku/wx-flame-day-rain-orbit.jpg)<br>**Flame Towers** · **rain** · day · orbit | ![overcast](../../../artifacts/shots/tracks/baku/wx-flame-day-overcast-orbit.jpg)<br>**Flame Towers** · **overcast** · day · orbit |
+| ![fog](../../../artifacts/shots/tracks/baku/wx-flame-day-fog-orbit.jpg)<br>**Flame Towers** · **fog** · day · orbit | ![storm](../../../artifacts/shots/tracks/baku/wx-flame-day-storm-orbit.jpg)<br>**Flame Towers** · **storm** · day · orbit | |
 
-## Lighting — Castle squeeze (s≈0.44)
-
-| | | |
-|:---:|:---:|:---:|
-| ![day](../../../artifacts/shots/tracks/baku/s2-06-castle-day-park.jpg)<br>**Castle squeeze** · dry · **day** | ![dusk](../../../artifacts/shots/tracks/baku/lt-castle-dusk-park.jpg)<br>**Castle squeeze** · dry · **dusk** | ![night](../../../artifacts/shots/tracks/baku/lt-castle-night-park.jpg)<br>**Castle squeeze** · dry · **night** |
-| ![dawn](../../../artifacts/shots/tracks/baku/lt-castle-dawn-park.jpg)<br>**Castle squeeze** · dry · **dawn** | | |
-
-## Lighting — Maiden Tower (s≈0.52)
+## Weather — Castle squeeze (day)
 
 | | | |
 |:---:|:---:|:---:|
-| ![day](../../../artifacts/shots/tracks/baku/s2-09-maiden-tower-day-orbit.jpg)<br>**Maiden Tower** · dry · **day** | ![dusk](../../../artifacts/shots/tracks/baku/lt-maiden-dusk-orbit.jpg)<br>**Maiden Tower** · dry · **dusk** | ![night](../../../artifacts/shots/tracks/baku/lt-maiden-night-orbit.jpg)<br>**Maiden Tower** · dry · **night** |
+| ![wet](../../../artifacts/shots/tracks/baku/wx-castle-day-wet-park.jpg)<br>**Castle squeeze** · **wet** · day · park | ![rain](../../../artifacts/shots/tracks/baku/wx-castle-day-rain-park.jpg)<br>**Castle squeeze** · **rain** · day · park | ![overcast](../../../artifacts/shots/tracks/baku/wx-castle-day-overcast-park.jpg)<br>**Castle squeeze** · **overcast** · day · park |
+| ![fog](../../../artifacts/shots/tracks/baku/wx-castle-day-fog-park.jpg)<br>**Castle squeeze** · **fog** · day · park | ![storm](../../../artifacts/shots/tracks/baku/wx-castle-day-storm-park.jpg)<br>**Castle squeeze** · **storm** · day · park | |
 
-## Lighting — Neftchilar straight (s≈0.72)
-
-| | | |
-|:---:|:---:|:---:|
-| ![day](../../../artifacts/shots/tracks/baku/s3-11-straight-mid-day-park.jpg)<br>**Mid straight** · dry · **day** | ![dusk](../../../artifacts/shots/tracks/baku/lt-straight-dusk-park.jpg)<br>**Mid straight** · dry · **dusk** | ![night](../../../artifacts/shots/tracks/baku/lt-straight-night-park.jpg)<br>**Mid straight** · dry · **night** |
-| ![dawn](../../../artifacts/shots/tracks/baku/lt-straight-dawn-park.jpg)<br>**Mid straight** · dry · **dawn** (orbit framing; park timed out in capture) | | |
-
-## Lighting — Seafront accents (dusk)
+## Weather — Neftchilar mid-straight (day)
 
 | | | |
 |:---:|:---:|:---:|
-| ![Glass canyon dusk](../../../artifacts/shots/tracks/baku/lt-glass-dusk-orbit.jpg)<br>**Glass canyon** · dry · **dusk** · orbit | ![Finish bridge dusk](../../../artifacts/shots/tracks/baku/lt-bridge-dusk-orbit.jpg)<br>**Finish bridge** · dry · **dusk** · orbit | |
+| ![wet](../../../artifacts/shots/tracks/baku/wx-straight-day-wet-park.jpg)<br>**Mid straight** · **wet** · day · park | ![rain](../../../artifacts/shots/tracks/baku/wx-straight-day-rain-park.jpg)<br>**Mid straight** · **rain** · day · park | ![overcast](../../../artifacts/shots/tracks/baku/wx-straight-day-overcast-park.jpg)<br>**Mid straight** · **overcast** · day · park |
+| ![fog](../../../artifacts/shots/tracks/baku/wx-straight-day-fog-park.jpg)<br>**Mid straight** · **fog** · day · park | ![storm](../../../artifacts/shots/tracks/baku/wx-straight-day-storm-park.jpg)<br>**Mid straight** · **storm** · day · park | |
 
-## Backlog (ranked)
+## Time of day — dry (hero views)
 
-| Pri | Issue | Lighting / weather notes |
-|-----|--------|-------------------------|
-| P1 | Government House clip severe @ s≈0.01 | Worse in **day** (flat ambient) |
-| P2 | Castle plinth 1.2 m clips @ s≈0.36–0.40 | Neutral |
-| P3 | Baku Eye `ferrisWheel` 2.2 m unsupported over water | Silhouette OK at **night** |
-| P4 | `night: true` brief vs real GP daylight | **day** shots look like noon, not sun |
-| P5 | Weather matrix not shot | Blocked until shared `shot.mjs` `--wx` batch |
-| P6 | **Night** capture flakes | `awaitSoftPresent` timeout on some park/dawn frames — retried |
+| | | |
+|:---:|:---:|:---:|
+| ![start dusk](../../../artifacts/shots/tracks/baku/lt-start-dusk-dry-orbit.jpg)<br>**Start** · dry · **dusk** · orbit | ![start night](../../../artifacts/shots/tracks/baku/lt-start-night-dry-orbit.jpg)<br>**Start** · dry · **night** · orbit | ![flame dusk](../../../artifacts/shots/tracks/baku/lt-flame-dusk-dry-orbit.jpg)<br>**Flame Towers** · dry · **dusk** · orbit |
+| ![flame night](../../../artifacts/shots/tracks/baku/lt-flame-night-dry-orbit.jpg)<br>**Flame Towers** · dry · **night** · orbit | ![flame dawn](../../../artifacts/shots/tracks/baku/lt-flame-dawn-dry-orbit.jpg)<br>**Flame Towers** · dry · **dawn** · orbit | ![castle dusk](../../../artifacts/shots/tracks/baku/lt-castle-dusk-dry-park.jpg)<br>**Castle squeeze** · dry · **dusk** · park |
+| ![castle night](../../../artifacts/shots/tracks/baku/lt-castle-night-dry-park.jpg)<br>**Castle squeeze** · dry · **night** · park | ![straight dusk](../../../artifacts/shots/tracks/baku/lt-straight-dusk-dry-park.jpg)<br>**Mid straight** · dry · **dusk** · park | ![straight night](../../../artifacts/shots/tracks/baku/lt-straight-night-dry-park.jpg)<br>**Mid straight** · dry · **night** · park |
+| ![straight dawn](../../../artifacts/shots/tracks/baku/lt-straight-dawn-dry-park.jpg)<br>**Mid straight** · dry · **dawn** · park | | |
 
-## Scenery fixes on branch
+## Weather / lighting notes (from frames)
 
-- Shirvanshah palace portal proud + hall width → flatCoplanar cleared.  
+| Issue | Where | Notes |
+|--------|--------|--------|
+| Wet sheen on tarmac | `wx-*-wet`, `wx-*-rain` | Readable on straight; castle walls stay matte |
+| Fog / storm horizon | `wx-*-fog`, `wx-*-storm` | Caspian void collapses to flat grey; Flame LED bands still visible |
+| Forced **day** on `street_night` | `sec-*-day` | Lamps/neon subdued vs **night** / **dusk** panels |
+| Night park camera | `lt-*-night` park | Chase cam; orbit used where park timed out previously |
+
+## Scenery fixes (branch)
+
+- Shirvanshah palace portal proud + hall width → flatCoplanar 0 (within baseline).  
 - Government House courtyard wash uses `terrainYAt`.
+
+## Backlog
+
+- Government House clip severe @ s≈0.01 · Baku Eye ferris unsupported over water · castle plinth clips.
