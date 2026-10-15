@@ -14,10 +14,10 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
-- Recorded radio audio refuses mismatched cached voice files after an update instead of playing incorrect clips or silent slices.
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
+- Recorded radio audio refuses mismatched cached voice files after an update instead of playing incorrect clips or silent slices.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
 - Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
 
