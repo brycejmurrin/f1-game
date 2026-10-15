@@ -261,7 +261,9 @@ without it to run `tools/gfx/gpu-game-check.mjs` — the portable sibling of
 **It GATES, it does not merely report** (2026-08-29). The workflow's Verdict step
 fails the job on: a check that did not finish, `gpuErrors > 0`, any failed
 env-probe face, a probe that stood down, or `softAdapter` true on an image the
-census called hardware. Before it existed the job was green whatever the game
+census called hardware (since 2026-10-14 also a TLX `softBlit` or WGX
+`softPresent` that is not false while the native present pin is in force; the
+step runs `tools/gfx/census-verdict.mjs`). Before it existed the job was green whatever the game
 said — run `33228195259` concluded "success" on the commit where this same
 macOS job reported `envFail: 81`. Appearance is reported and NOT gated:
 `meanLuma` goes to the job summary, because a brightness floor is the kind of
@@ -612,8 +614,10 @@ GitHub's Apple-silicon image (`macos-latest`) reports a HARDWARE adapter
 (Metal) on stock flags; ubuntu-latest is SwiftShader, windows-latest WARP, this
 container llvmpipe. Dispatch `.github/workflows/gpu-census.yml` —
 `census_only: true` for the adapter answer in seconds, without it to run
-`tools/gfx/gpu-game-check.mjs` and read the Verdict step, which GATES on GPU
-errors, failed env-probe faces, or `softAdapter` true on hardware. **Never pass
+`tools/gfx/gpu-game-check.mjs` and read the Verdict step
+(`tools/gfx/census-verdict.mjs`), which GATES on GPU errors, failed env-probe
+faces, `softAdapter` true on hardware, or — on hardware, with the native
+`wgxCapture=0` pin in force — a TLX soft blit or a WGX soft present. **Never pass
 `--use-angle=vulkan` on macOS** — it drops WebGPU to SwiftShader and silently
 turns a real-GPU run software. Census tables and what the real GPU has found:
 §There IS a real GPU above.
@@ -739,9 +743,19 @@ Store settings that use JSON decoding as JSON (for example
 
 ### Request the hardware check on the exact fixed tree
 
-The existing `.github/workflows/gpu-census.yml` supports a push request when
-workflow dispatch is unavailable. On a `claude/*` or `cursor/*` feature branch,
-change `.github/gpu-census-request.json` in the same commit as the code:
+Two routes; both run THAT branch's tree. Push the feature branch first.
+
+**Dispatch** (when the token may `workflow_dispatch`):
+`gh workflow run gpu-census.yml --ref <branch> -f images=macos-latest` (add
+`-f track=spa -f tod=night -f ls="apex26.<knob>=0" -f cam=chase` as needed), or the
+GitHub MCP `actions_run_trigger` with `workflow_id: gpu-census.yml`, `ref` and
+`inputs`. One census runs per branch at a time: a second dispatch QUEUES behind a
+running one instead of cancelling it, but GitHub keeps one pending run per group,
+so a third dispatch replaces the queued second — dispatch A/B arms one at a time.
+
+**Push request** (agent GH App tokens get a 403 on `workflow_dispatch`): on a
+`claude/*` or `cursor/*` feature branch, change `.github/gpu-census-request.json`
+in the same commit as the code:
 
 ```json
 {
@@ -754,15 +768,23 @@ change `.github/gpu-census-request.json` in the same commit as the code:
 }
 ```
 
-Push the feature branch, match the workflow's `head_sha` to that commit, and read
-its **Verdict** step plus `gpu-census-macos-latest` artifacts. `leg` is a request
-label that makes repeated requests a file change; it does not select graphics
-settings. Full census checks GLX, WGX, TLX WebGPU and TLX WebGL2. Require positive
-backend binding and zero GPU validation errors, and inspect adapter identity.
-Headless WGX/TLX WebGPU may still use readback presentation on real hardware;
-a headed hardware run is needed to sign off native presentation. Do not call
-census FPS a player-performance measurement or compare legs with different
-presentation paths.
+`leg` is a request label that makes repeated requests a file change; it does not
+select graphics settings. Only a non-merge commit on the branch's own first-parent
+line that edits the file runs the census (a request inherited by merge does not),
+and each push request has its own concurrency group, so two legs never cancel
+each other.
+
+The default images are `macos-latest` alone (the one real GPU; the software
+images need `census_only`). Match the run's `head_sha` to the pushed commit and
+read its **Verdict** step (`tools/gfx/census-verdict.mjs`) plus the
+`gpu-census-macos-latest` artifact (kept 7 days). The full census checks GLX, WGX,
+TLX WebGPU and TLX WebGL2 and fails on missing or unfinished legs, GPU/shader
+errors, failed env-probe faces, and — on hardware — absent counts, `softAdapter`
+true, WGX not bound, or a TLX `softBlit` / WGX `softPresent` that is not false
+while every leg's `apex26.wgxCapture=0` pin is in force (an `ls` that overrides
+the pin makes those two report-only). Inspect adapter identity. Do not call census
+FPS a player-performance measurement or compare legs with different presentation
+paths.
 
 Primary references: [Playwright browser selection](https://playwright.dev/docs/browsers),
 [Chrome headless modes](https://developer.chrome.com/docs/automation-and-testing/headless),
