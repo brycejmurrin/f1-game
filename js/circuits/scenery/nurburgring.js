@@ -123,6 +123,9 @@
       every(32, (k) => {
         const s = k / n;
         if (openArena(s) || schumacherS(s)) return;
+        // Guardrail replay corridor: broadleaf scatter clips replay cylinders
+        // (clip-audit 0.82 m @0.244; forestEdge owns the readable treeline).
+        if (s >= 0.23 && s <= 0.26) return;
         const h = hash(k * 53 + 9);
         if (h < 0.25) return;
         tree(k, h < 0.5 ? -1 : 1, 15 + h * 10, 10 + h * 7, h < 0.5 ? LEAF_D : LEAF);
