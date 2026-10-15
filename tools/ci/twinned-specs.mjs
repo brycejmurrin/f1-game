@@ -78,7 +78,6 @@ export const TWINNED = {
   "tests/specs/drift.spec.js":              "tests/unit/drift-vm.test.mjs",
   "tests/specs/elevation-tracks.spec.js":   "tests/unit/elevation-tracks-vm.test.mjs",
   "tests/specs/headless-api.spec.js":       "tests/unit/headless-api-vm.test.mjs",
-  "tests/specs/jump-start.spec.js":         "tests/unit/jump-start-vm.test.mjs",
   "tests/specs/longitudinal.spec.js":       "tests/unit/longitudinal-vm.test.mjs",
   "tests/specs/obs-act-edge.spec.js":       "tests/unit/obs-act-edge-vm.test.mjs",
   "tests/specs/offtrack.spec.js":           "tests/unit/offtrack-vm.test.mjs",

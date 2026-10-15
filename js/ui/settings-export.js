@@ -16,15 +16,13 @@
                node count does not grow.
 
    Loading any one overwrites what is stored and reloads the page, so the
-   button asks twice. SETTINGS may carry time-trial leaderboards in an optional
-   `ttlb` section (merged on import, never overwriting blindly). GARAGE and
-   SETTINGS still never carry career or season saves, ghosts, replays, or anything
-   account-shaped, in either direction.
+   button asks twice. SETTINGS and GARAGE still never carry career or season
+   saves, lap records, ghosts, or anything account-shaped, in either direction.
 
    SPEC below is the allowlist — every player-facing preference, tuner and
    control binding under the `apex26.` prefix, grouped the way SETTINGS is.
    Nothing else is ever read: the garage (parts, liveries, setup sheets, MY
-   TEAM), saves (career, season, ghosts, replays, daily bests), accounts
+   TEAM), saves (career, season, leaderboards, ghosts, daily bests), accounts
    and network (Spotify tokens, TURN credentials, relays) and the renderer's
    self-healing latches stay out by construction, and the unit test asserts
    that a poisoned store leaks none of them. Two lanes, like the store: `json`
@@ -256,11 +254,7 @@ const SPEC = [
   { k: "metricsLogLvl", lane: "raw", group: "metrics", def: "warn", src: "js/perf/metrics-overlay.js" },
 ];
 
-if (typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.ingestSettingsSpec) {
-  SaveSchemaRegistry.ingestSettingsSpec(SPEC);
-}
-
-const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, ghosts, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section (merged on import)";
+const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, leaderboards, ghosts, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags";
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 function same(a, b) {
@@ -332,86 +326,13 @@ function collect(mode, G) {
   try { const m = document.querySelector('meta[name="apex-build"]'); build = (m && m.content) || null; } catch (_) { /* no DOM */ }
   let desktop = null;
   try { desktop = document.body.classList.contains("desktop"); } catch (_) { /* no DOM */ }
-  const out = {
+  return {
     format: FORMAT, mode: all ? "all" : "changes", exportedAt: new Date().toISOString(), build,
     device: { desktop, userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || null },
     keys: { json: "went through store.set (JSON)", raw: "bare strings from store.rawSet; null = unset" },
     excluded: EXCLUDED,
     changed, settings, defaults, where,
   };
-  const ttlb = collectTtlb();
-  if (ttlb && Object.keys(ttlb).length) out.ttlb = ttlb;
-  return out;
-}
-
-// TIME-TRIAL LEADERBOARDS (apex26.ttlb.<trackId>). Optional in the settings
-// file: old backups without `ttlb` still import. Export is every board on disk;
-// import validates through GameStore.ttParseBoard (same filter as ttRead) and
-// merges per track via ttBoardAdd so caps and class limits stay enforced.
-const TTLB_TRACK_RE = /^[A-Za-z0-9_.-]{1,64}$/;
-const TTLB_TRACKS_MAX = 64;
-const TTLB_LAPS_MAX = 600;   // 10 laps x 6 classes x a few tracks of headroom
-function ttlbEntryKey(e) {
-  return JSON.stringify({ t: e.t, teamId: e.teamId, code: e.code, name: e.name, ts: e.ts, context: e.context || null });
-}
-function ttlbParseBoard(b) {
-  if (typeof GameStore !== "undefined" && GameStore.ttParseBoard) return GameStore.ttParseBoard(b);
-  let laps = [];
-  if (Array.isArray(b)) laps = b;
-  else if (b && b.v === 2 && Array.isArray(b.laps)) {
-    const cls = Array.isArray(b.classes) ? b.classes : [];
-    laps = b.laps.map((e) => {
-      if (!e || typeof e !== "object") return null;
-      const o = {};
-      for (const k of Object.keys(e)) if (k !== "c") o[k] = e[k];
-      if (Number.isInteger(e.c) && cls[e.c]) o.context = cls[e.c];
-      return o;
-    });
-  }
-  return laps.filter((e) => e && Number.isFinite(e.t) && e.t > 0);
-}
-function collectTtlb() {
-  const out = {};
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const full = localStorage.key(i);
-      if (!full || full.indexOf("apex26.ttlb.") !== 0) continue;
-      const trackId = full.slice(12);
-      if (!TTLB_TRACK_RE.test(trackId)) continue;
-      let raw = null;
-      try { raw = JSON.parse(localStorage.getItem(full)); } catch (_) { continue; }
-      const laps = ttlbParseBoard(raw);
-      if (laps.length) out[trackId] = laps;
-    }
-  } catch (_) { /* storage blocked */ }
-  return out;
-}
-function applyTtlb(bag) {
-  if (!bag || typeof bag !== "object" || Array.isArray(bag)) return { applied: 0, skipped: 0, rejected: 0 };
-  if (!GameStore || !GameStore.ttBoardAdd || !GameStore.ttBoard) {
-    return { applied: 0, skipped: 0, rejected: 0 };
-  }
-  const tracks = Object.keys(bag);
-  if (tracks.length > TTLB_TRACKS_MAX) return { applied: 0, skipped: tracks.length, rejected: tracks.length };
-  let applied = 0, skipped = 0, rejected = 0, lapsSeen = 0;
-  for (const trackId of tracks) {
-    if (!TTLB_TRACK_RE.test(trackId)) { skipped++; rejected++; continue; }
-    const raw = bag[trackId];
-    const laps = ttlbParseBoard(raw);
-    const rawLen = Array.isArray(raw) ? raw.length : (raw && raw.laps && Array.isArray(raw.laps) ? raw.laps.length : 0);
-    rejected += Math.max(0, rawLen - laps.length);
-    const seen = new Set(GameStore.ttBoard(trackId).map(ttlbEntryKey));
-    for (const lap of laps) {
-      if (lapsSeen >= TTLB_LAPS_MAX) { skipped++; continue; }
-      lapsSeen++;
-      const k = ttlbEntryKey(lap);
-      if (seen.has(k)) { skipped++; continue; }
-      GameStore.ttBoardAdd(trackId, lap);
-      seen.add(k);
-      applied++;
-    }
-  }
-  return { applied, skipped, rejected };
 }
 
 // THE GARAGE FILE: a SECOND file, deliberately not part of the settings one: the garage is what
@@ -502,10 +423,7 @@ function applySettings(file, G) {
       if (stored) applied++; else failed++;
     } catch (_) { failed++; }
   }
-  const ttlb = applyTtlb(file.ttlb);
-  applied += ttlb.applied;
-  skipped += ttlb.skipped;
-  return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, reason: null };
+  return { ok: true, applied, skipped, failed, reason: null };
 }
 // A FILE IS PLAYER INPUT AND THE GARAGE DOES NOT DEFEND ITSELF. isGarageKey
 // checks the KEY; nothing checked the VALUE, so any JSON at a garage-shaped key
@@ -920,7 +838,7 @@ function create(G) {
     const note = document.createElement("p");
     note.className = "adv-help";
     note.setAttribute("data-help", "keep");   // HELP TEXT: HIDE keeps it — it is the only word on what LOAD does
-    note.textContent = "Back up preferences, appearance profiles, tuners, control bindings and time-trial leaderboards with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads; leaderboards in the file are merged with yours (best laps kept). Photos, personal background images, career progress, ghosts, replays and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
+    note.textContent = "Back up preferences, appearance profiles, tuners and control bindings with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads. Photos, personal background images, career progress and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
 
     const shareNote = document.createElement("p");
     shareNote.className = "adv-help";
@@ -1095,8 +1013,8 @@ function create(G) {
  *  cannot leave an empty panel (title + Back only). */
 function ensureMounted() { if (_ui && typeof _ui.mount === "function") _ui.mount(); }
 
-return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer, collectTtlb, ttlbParseBoard,
-         applySettings, applyGarage, applyCareer, applyTtlb, resetGarage, isGarageKey, isCareerKey, garageValue, create,
+return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer,
+         applySettings, applyGarage, applyCareer, resetGarage, isGarageKey, isCareerKey, garageValue, create,
          ensureMounted, mount: ensureMounted,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };

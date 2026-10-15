@@ -54,13 +54,6 @@ export const ROTATION = Object.keys(GROUPS)
 // tooling-fast.mjs, and fails on a group that appears in none of them and is
 // not listed below — a NEW orphan can no longer be added silently.
 export const UNSCHEDULED = {
-  // An ALIAS, not coverage: every file in it is in tooling-fast, which ci.yml's
-  // guards job runs on every PR and deploy push. Its own workflow
-  // (docs-guards.yml) ran 615 times on 2026-10-14 to prove nothing new and was
-  // retired on 2026-10-15 once its required status context was removed
-  // (docs/notes/CI-CLOG-SURVEY-2026-10-15.md). The group stays as the local
-  // entry point the docs-only fast path and the agent-config skill call.
-  "test:docs-guards": "alias: every file runs in tooling-fast (ci.yml guards); the local docs-only entry point — its workflow retired 2026-10-15",
   // Both of these spawn the same audit CLI that a test:sweeps suite already
   // spawns, against the same fleet — but with `--gate`/`--all` rather than the
   // suite's ratcheted `--json`, so they fail on ANY floater or clip where the

@@ -390,11 +390,8 @@ test("Input.activeInputSource follows real activity, not connected-device presen
 // textContent and children; createElement for the rows.
 // `disk`, when given, backs the store (reads and writes land in it).
 // `pre(sb)` adds globals the module reads at create() time (SettingsNav).
-function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = null) {
+function bootUi(desktop, helpSlots = {}, disk = null, pre = null) {
   const { Input, key, sb, fire } = boot();
-  const deferTimers = !!(opts && opts.deferTimers);
-  const timerQueue = [];
-  let timerSeq = 1;
   const nodes = {};
   const mk = (tag = "div") => {
     let text = "";
@@ -420,20 +417,7 @@ function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = null) {
   sb.removeEventListener = (t, f) => { const l = winListeners[t] || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); };
   sb.GameAudio = null;
   if (pre) pre(sb);
-  if (deferTimers) {
-    sb.setTimeout = (f, ms = 0) => {
-      const id = timerSeq++;
-      timerQueue.push({ id, f, ms: Number(ms) || 0 });
-      return id;
-    };
-    sb.clearTimeout = (id) => {
-      const i = timerQueue.findIndex((t) => t.id === id);
-      if (i >= 0) timerQueue.splice(i, 1);
-    };
-  } else {
-    sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
-    sb.clearTimeout = () => {};
-  }
+  sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
   vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
   const store = disk
@@ -454,18 +438,7 @@ function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = null) {
   };
   // Input's listeners were registered before the swap above, the module's after.
   const fireAll = (t, e) => { fire(t, e); (winListeners[t] || []).forEach((f) => f(e || {})); };
-  const flushTimers = (throughMs = Infinity) => {
-    const due = timerQueue.filter((t) => t.ms <= throughMs).sort((a, b) => a.ms - b.ms);
-    for (const t of due) {
-      const i = timerQueue.indexOf(t);
-      if (i >= 0) timerQueue.splice(i, 1);
-      t.f();
-    }
-  };
-  return {
-    Input, kb, press, fire: fireAll, sb, $: sb.document.getElementById,
-    flushTimers, pendingTimers: () => timerQueue.length,
-  };
+  return { Input, kb, press, fire: fireAll, sb, $: sb.document.getElementById };
 }
 // The UI module reads Input from the same realm; boot() runs input.js in a
 // context whose globals are `sb`, so createContext(sb) is that same realm.
@@ -718,107 +691,6 @@ test("How to Play binding slots are painted from the live key and pad tables", (
   assert.equal(keySlot.kids[0].textContent, "Z", "keyboard slot uses the live key label");
   assert.equal(padSlot.kids[0].textContent, "Y", "controller slot uses the live pad label");
   assert.equal($("htp-inputs").dataset.activeInput, "keyboard", "help records the current input kind");
-});
-
-test("#1903: a pad re-render (gamepadconnected) disarms capture so A does not rebind", () => {
-  const { Input, $, fire, sb } = bootUi(true);
-  const { pad, press: padPress } = fakePad(sb, fire);
-  // BOOST's second slot is unset — a captured press would bind here; the default
-  // throttle second slot is already A (0), so it cannot prove disarm.
-  slotOf($("pm-pad"), "boost", 1).onclick();
-  assert.equal(slotOf($("pm-pad"), "boost", 1).dataset.armed, "1");
-  fire("gamepadconnected", { gamepad: pad });
-  assert.equal(slotOf($("pm-pad"), "boost", 1).dataset.armed, undefined, "render dropped the armed chip");
-  padPress(0);
-  Input.poll();
-  assert.deepEqual(plain(Input.getPadMap().boost), [2, null], "A was not bound onto the armed slot after reconnect");
-});
-
-test("#1903: KeyBinds.render disarms an armed pad slot", () => {
-  const { Input, kb, $, fire, sb } = bootUi(true);
-  const { press } = fakePad(sb, fire);
-  slotOf($("pm-pad"), "boost", 0).onclick();
-  kb.render();
-  press(2);
-  Input.poll();
-  assert.deepEqual(plain(Input.getPadMap().boost), [2, null], "X still boosts — capture was cleared");
-});
-
-test("#1902: CALIBRATE STICK defers save until the timer; cancel on RESET", () => {
-  const disk = {};
-  const { $, fire, sb, flushTimers, pendingTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
-  const pa = fakePad(sb, fire);
-  pa.pad.axes[0] = 0.08;
-  $("pm-pad-calib").onclick();
-  assert.equal(pendingTimers(), 1, "calibration waits 450 ms");
-  assert.equal(disk.padRest, undefined);
-  $("pm-pad-reset").onclick();
-  flushTimers(500);
-  assert.equal(disk.padRest, undefined, "RESET cancelled the pending save");
-});
-
-test("#1902: CALIBRATE STICK cancelled when leaving CONTROLS before save", () => {
-  const leaveFns = [];
-  const disk = {};
-  const { $, fire, sb, flushTimers } = bootUi(true, {}, disk, (g) => {
-    g.SettingsNav = { onLeave: (fn) => { leaveFns.push(fn); } };
-  }, { deferTimers: true });
-  const pa = fakePad(sb, fire);
-  pa.pad.axes[0] = 0.08;
-  $("pm-pad-calib").onclick();
-  for (const fn of leaveFns) fn("controls");
-  flushTimers(500);
-  assert.equal(disk.padRest, undefined);
-});
-
-test("#1902: CALIBRATE STICK cancelled on disarmAll (settings close)", () => {
-  const disk = {};
-  const { kb, $, fire, sb, flushTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
-  const pa = fakePad(sb, fire);
-  pa.pad.axes[0] = 0.08;
-  $("pm-pad-calib").onclick();
-  kb.disarmAll();
-  flushTimers(500);
-  assert.equal(disk.padRest, undefined);
-});
-
-test("#1902: CALIBRATE STICK cancelled on gamepad disconnect before save", () => {
-  const disk = {};
-  const { $, fire, sb, flushTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
-  const { pad } = fakePad(sb, fire);
-  pad.axes[0] = 0.08;
-  $("pm-pad-calib").onclick();
-  fire("gamepaddisconnected", { gamepad: pad });
-  flushTimers(500);
-  assert.equal(disk.padRest, undefined);
-});
-
-test("#1902: a second CALIBRATE press cancels the first timer", () => {
-  const disk = {};
-  const { $, fire, sb, flushTimers, pendingTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
-  const pa = fakePad(sb, fire);
-  pa.pad.axes[0] = 0.08;
-  $("pm-pad-calib").onclick();
-  const firstId = pendingTimers();
-  assert.equal(firstId, 1);
-  pa.pad.axes[0] = 0.12;
-  $("pm-pad-calib").onclick();
-  assert.equal(pendingTimers(), 1, "only the latest calibration is pending");
-  flushTimers(500);
-  assert.ok(Math.abs(disk.padRest["Xbox Wireless Controller"] - 0.12) < 1e-9, "saved offset matches the second sample");
-});
-
-test("#1902: CALIBRATE STICK does not save when CONTROLS is hidden before the timer", () => {
-  const disk = {};
-  const { $, fire, sb, flushTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
-  const pa = fakePad(sb, fire);
-  pa.pad.axes[0] = 0.08;
-  const panel = $("pm-panel-controls");
-  panel.hidden = false;
-  $("pm-pad-calib").onclick();
-  panel.hidden = true;
-  flushTimers(500);
-  assert.equal(disk.padRest, undefined);
 });
 
 test("a successful key capture rebuilds once, restores the changed slot's focus, and reports through a status", () => {

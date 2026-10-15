@@ -52,14 +52,14 @@ Lane A — this PR, no setting change needed:
 6. Delete `assemble-pit-lane.yml`; hud-survey merge `if:`; car-shot ubuntu gets `mesa-xvfb`; dependabot `directories: ["/", "/.github/actions/*"]`; cache pin → v6.1.0.
 7. Memory file `stacked-prs-land-bottom-up.md`: delete_branch_on_merge is TRUE, MERGE not SQUASH.
 8. AGENTS.md:42 "~5 min" → the measured figure until item 1 lands.
-9. ci.yml: C6 `filter: blob:none` on the five checkouts and a Mesa apt cache; C4 select-specs splits an oversize leg; C2 guards aggregator needs-only, poke-train out of ci-verdict, reuse-draft + unit-plan + filters folded into one plan job, `merge_group` out, `vars.DEPLOY_BRANCH`; C1 node-suites rebalanced (protection names first); C5 smoke cap 20, the three flaky specs; C8 history out of the file. Each with its `ci-coverage.test.mjs` edit. — C6/C4/C5/finding 7 landed in #1758; the C2 fold (reuse-draft, unit-plan and the three filters into `select`, the aggregator checkout-free, needed-only node rows on drafts) landed 2026-10-15 (`CI-CLOG-SURVEY-2026-10-15.md`).
+9. ci.yml: C6 `filter: blob:none` on the five checkouts and a Mesa apt cache; C4 select-specs splits an oversize leg; C2 guards aggregator needs-only, poke-train out of ci-verdict, reuse-draft + unit-plan + filters folded into one plan job, `merge_group` out, `vars.DEPLOY_BRANCH`; C1 node-suites rebalanced (protection names first); C5 smoke cap 20, the three flaky specs; C8 history out of the file. Each with its `ci-coverage.test.mjs` edit.
 10. From the Pages lane (pending): garage-before concurrency (coordinate — session 78934c9e owns the plan-5xx side in `tools/shot/garage-before.mjs`); cron cadence; train anatomy fixes.
 11. From the gpu-census lane (pending).
 12. hooks order-dependent agent-view tests (fix or quarantine by name).
 
 Lane B — Bryce, repository settings or policy (no PR can do these):
 0. C7: may a ship push reuse the PR's green selected-verdict when the merge tree it tested equals the pushed tree? (~680 job-min/day; it is the merge-interaction safety net.)
-1. Remove `Docs guards (prose-tree unit files)` from the deploy branch's required checks, THEN the workflow deletion in Lane A lands. — done 2026-10-15 (Bryce removed the context; `docs-guards.yml` deleted the same day).
+1. Remove `Docs guards (prose-tree unit files)` from the deploy branch's required checks, THEN the workflow deletion in Lane A lands.
 2. Settings → Pull requests: untick "Allow squash merging" and "Allow rebase merging".
 
 Not doing: weakening any test, widening the 900 s browser timeout, dual-dispatching Pages, re-enabling push CI on topic branches, the physics-core red (owned elsewhere).

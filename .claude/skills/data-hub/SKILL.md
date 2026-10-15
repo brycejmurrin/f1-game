@@ -51,7 +51,7 @@ that kills DataHub.
   rewrite fails **open** (empty hub, green UI).
 
 Export tab (`loadExport`): not a CSV, not the in-race trace buffer; OpenF1-only gather, hand-rolled zip,
-pinned by `tests/unit/data-export.test.mjs` (mock OpenF1 → unzip: file list, CRC32, JSON shape, empty/failed) → `references/export.md`.
+no unit test pins it (browser-only unverified: say so) → `references/export.md`.
 
 Season/year (schedule/results take no year, standings an optional one; `LAST SEASON` tag, wrong clock,
 stale `apex26.api.*` cache, mock answering every year as 2026) → `references/season-year.md`.

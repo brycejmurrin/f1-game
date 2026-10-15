@@ -822,14 +822,11 @@ test("launchPlan: awareness reads the lights, hands manage the getaway, the roll
   // Bounded whatever the roll — a reaction is never instant and never a nap.
   for (const r of [0, 0.13, 0.5, 0.87, 0.999]) for (const t of [sharp, green]) {
     const p = A.launchPlan(t, r);
-    assert.ok(p.react >= 0.05 && p.react <= 0.78, `react out of range: ${p.react}`);
-    assert.ok(p.grip >= 0.69 && p.grip <= 1.08, `grip out of range: ${p.grip}`);
+    assert.ok(p.react >= 0.05 && p.react <= 0.75, `react out of range: ${p.react}`);
+    assert.ok(p.grip >= 0.7 && p.grip <= 1.08, `grip out of range: ${p.grip}`);
   }
   // Two different rolls are two different launches (the per-race hash matters).
   assert.notEqual(A.launchPlan(sharp, 0.2).react, A.launchPlan(sharp, 0.8).react);
-  const reactEarly = A.launchPlan(sharp, 0.05).react;
-  const reactLate = A.launchPlan(sharp, 0.95).react;
-  assert.ok(reactLate - reactEarly > 0.2, `launch reaction spread must string the grid: ${reactLate - reactEarly}`);
   // Returned by value: the next plan does not rewrite the last car's.
   const p1 = A.launchPlan(sharp, 0.2); A.launchPlan(green, 0.9);
   assert.equal(p1.react, A.launchPlan(sharp, 0.2).react);
@@ -842,11 +839,11 @@ test("launchMul: nothing before the reaction, the getaway at it, ordinary after 
   assert.equal(A.launchMul(0.3, plan), 0.85);
   const mid = A.launchMul(1.8, plan);
   assert.ok(mid > 0.85 && mid < 1, `fade must be monotone: ${mid}`);
-  assert.equal(A.launchMul(3.5, plan), 1);
+  assert.equal(A.launchMul(3.3, plan), 1);
   assert.equal(A.launchMul(10, plan), 1);
   assert.equal(A.launchMul(0, null), 1, "no plan (a human, or before gridUp) is no effect");
-  assert.equal(A.launchDone(3.49, plan), false);
-  assert.equal(A.launchDone(3.51, plan), true);
+  assert.equal(A.launchDone(3.29, plan), false);
+  assert.equal(A.launchDone(3.31, plan), true);
   assert.equal(A.launchDone(0, null), true);
 });
 
@@ -963,18 +960,15 @@ test("attackOK: a straight is always a place to pass; a corner entry only at its
 
 // THE FIRST LAP (2026-10-01): a launching car, and for 20 s from the green,
 // leaves more headway and attacks at half the quality; nothing after.
-test("startCalm: full while launching, fades out by calmUntil, never for a car that did not launch", () => {
+test("startCalm: full while launching, fades out by 20 s from the green, never for a car that did not launch", () => {
   assert.equal(A.startCalm(true, undefined, 1), 1);
-  assert.equal(A.startCalm(false, 24, 5), 1, "well inside the window");
-  const fade = A.startCalm(false, 24, 20);
+  assert.equal(A.startCalm(false, 20, 5), 1, "well inside the window");
+  const fade = A.startCalm(false, 20, 16);
   assert.ok(fade > 0 && fade < 1, `fading: ${fade}`);
-  assert.equal(A.startCalm(false, 24, 24), 0, "and gone at calmUntil");
+  assert.equal(A.startCalm(false, 20, 20), 0, "and gone at 20 s");
   assert.equal(A.startCalm(false, undefined, 3), 0, "placed at speed, no launch: no calm");
-  assert.equal(A.startCalmS(), 24);
-  assert.ok(A.startGapT(1) > 0.4 && A.startGapT(0) === 0);
-  assert.equal(A.startGapT(1), 0.42, "lap-1 headway bump is pinned");
-  assert.equal(A.startQWinBonus(1, 5), 0, "qWin does not widen on calm — headway only");
-  assert.equal(A.startCalm(false, 32, 30), 0.2, "calm fades over 10 s, not a step");
+  assert.equal(A.startCalmS(), 20);
+  assert.ok(A.startGapT(1) > 0.1 && A.startGapT(0) === 0);
   const t = { craft: 0.75 };
   const zone = { traits: t, speed: 46, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 80, attackQ: 0.55 };
   assert.equal(A.attackOK(zone), true, "a good zone on lap 20");

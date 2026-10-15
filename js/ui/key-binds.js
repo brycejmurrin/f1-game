@@ -17,17 +17,6 @@ function create(G) {
   const tick = () => { if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiTick(); };
   const sections = [];
   let calibration = null;
-  const controlsPageActive = () => {
-    const panel = $("pm-panel-controls");
-    if (panel && panel.hidden) return false;
-    const calib = $("pm-pad-calib");
-    if (calib && calib.closest && calib.closest("[hidden]")) return false;
-    const host = $("pm-pad");
-    if (host && host.closest && host.closest("[hidden]")) return false;
-    return true;
-  };
-  const calibNote = $("pm-pad-calib-note");
-  const say = (t) => { if (calibNote) calibNote.textContent = t; };
   function cancelCalibration() {
     if (!calibration) return;
     clearTimeout(calibration.timer);
@@ -187,8 +176,7 @@ function create(G) {
     // The rows follow the CONTROLS page's setting-row grammar (label left, the
     // control cluster right, one line at every UI SIZE): label, then two chips.
     function render(focus) {
-      // A rebuild drops the armed chip from the DOM; disarm first so padCapture
-      // cannot steal the next button press (gamepad connect, brand switch, …).
+      // Replacing a listening slot must also remove its invisible capture.
       if (clearArmed()) setNote(dev.idle);
       host.textContent = "";
       let focusBtn = null;
@@ -397,6 +385,8 @@ function create(G) {
     SettingRow.paint($("pm-padbrand"), Input.padLabelMode(), BRANDS);
   }
 
+  const calibNote = $("pm-pad-calib-note");
+  const say = (t) => { if (calibNote) calibNote.textContent = t; };
   const calibBtn = $("pm-pad-calib");
   // With wheel capture stopped, this uses Input's live usage ranking and
   // configured-wheel preference, exactly as its calibration sampler does.
@@ -416,7 +406,7 @@ function create(G) {
       if (calibration !== request) return;
       const current = calibrationDevice();
       if (!current || current.id !== request.id || current.index !== request.index
-          || !controlsPageActive()) { cancelCalibration(); return; }
+          || (calibBtn.closest && calibBtn.closest("[hidden]"))) { cancelCalibration(); return; }
       calibration = null;
       if (Input.calibratePad()) {
         // Stored: the hint promises the offset applies "from then on", and it
