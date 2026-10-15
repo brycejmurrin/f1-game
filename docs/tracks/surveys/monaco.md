@@ -1,162 +1,112 @@
-# Monaco circuit survey — 2026-10-14
+# Monaco circuit survey — 2026-10-14 (updated)
 
-**Circuit id:** `monaco` · **Theme:** `street_day` · **Live:** [Monaco on GitHub Pages](https://brycejmurrin.github.io/f1-game/) (track picker → MONACO)
+**Circuit id:** `monaco` · **Theme:** `street_day` · **PR:** [monaco: survey + fixes](https://github.com/brycejmurrin/f1-game/pull/1887)
 
-**Evidence:** `node tools/track/audit-circuit.cjs monaco`, `node tools/track/ground-audit.cjs monaco --why`, `node tools/track/verify-track.cjs monaco`, and **32** headless TLX frames under `artifacts/shots/tracks/monaco/` (batch: `scratch/monaco-survey-day32.json`). **Weather variants** (`dry` / `wet` / `rain` / `overcast` / `fog`) are **deferred** until the shared tooling PR (`tools: shared shot tooling for circuit surveys`) lands `--wx` batch support; this pass uses stock `shot.mjs` **time-of-day only** (`day` | `dusk` | `dawn` | `night`).
+**36 committed survey JPEGs** under `artifacts/shots/tracks/monaco/` (`git add -f`). Captured with shared `shot.mjs` (`--jpeg --present-timeout 90 --capture-retries 4 --wait 120`), SwiftShader / TLX default.
 
-## Code map
+**Code fix:** `terraceStack` pastel rotation (`hash(seedK)`) in `js/circuits/scenery/monaco.js`.
 
-| Layer | Path | Role |
-|-------|------|------|
-| Circuit def | `js/circuits/monaco.js` | OSM centreline, `reverse: true`, `startFrac` 0.2516, `sceneryCoordinates: "source"`, `barrierGap` 2.0, `dressingExclusions`, `elevations` / `hwZones` / `turns`, `pal`, `cityStyle`, `kit` |
-| Scenery callback | `js/circuits/scenery/monaco.js` | `TrackScenery.monaco(api)` — landmarks, `waterField`, yachts, tunnel, Armco, `KRACE` / `KOLD` |
-| Engine | `js/track/scenery/build-props.js`, `js/track/circuit-meta.js` | Generic kit + picker meta |
-| Shared builders | `js/track/scenery/city.js`, `nature.js`, `structures.js` | Generic city/palms (two buried clusters on this circuit — engine emitters) |
-| Brief | `docs/tracks/monaco.md` | Design brief + landmark checklist |
-| Tests | `tests/data/landmarks/monaco.json`, `tests/specs/monaco-foundation.spec.js` | Required model ids + browser foundation |
-
-**Sectors (racing arc):** S1 ends ~0.32 (before tunnel), S2 ~0.68 (harbour half), S3 to line.
-
-## Theme and models
-
-Mediterranean pastels, tight Armco, three `waterField` harbour stations (racing 0.365 / 0.545 / 0.59), registered landmarks (Tabac, Mirabeau, Rascasse, Fairmont), mega-yachts + marina pontoons. Props ~258k tris at audit; verify-track reports guard drops (palms/buildings) on the narrow street — expected.
+**Audit:** `node tools/track/audit-circuit.cjs monaco` — ok; `verify-track` OK.
 
 ---
 
-## Panels — Sector 1 (dry · day)
+## Sector coverage — dry · day · midday
 
-| **Pit / start** · orbit · dry · day | **Sainte Dévote** · orbit · dry · day | **Beau Rivage** · orbit · dry · day |
+| **Pit / start** · orbit · dry · day | **Casino Square** · orbit · dry · day | **Fairmont hairpin** · orbit · dry · day |
 |:---:|:---:|:---:|
-| ![S1 pit](../../../artifacts/shots/tracks/monaco/s1-01-pit-start-day.jpg) | ![S1 T1](../../../artifacts/shots/tracks/monaco/s1-02-sainte-devote-day.jpg) | ![S1 climb](../../../artifacts/shots/tracks/monaco/s1-03-beau-rivage-day.jpg) |
+| ![](../../../artifacts/shots/tracks/monaco/s1-01-pit-start-day.jpg) | ![](../../../artifacts/shots/tracks/monaco/s1-04-casino-square-day.jpg) | ![](../../../artifacts/shots/tracks/monaco/s2-02-fairmont-hairpin-day.jpg) |
 
-| **Casino Square** · orbit · dry · day | **Massenet statue** · eye · dry · day | **Sector 1 crest** · cinematic · dry · day |
+| **Tunnel exit** · orbit · dry · day | **Port Hercule** · orbit wide · dry · day | **Tabac** · orbit · dry · day |
 |:---:|:---:|:---:|
-| ![Casino](../../../artifacts/shots/tracks/monaco/s1-04-casino-square-day.jpg) | ![Massenet](../../../artifacts/shots/tracks/monaco/s1-05-massenet-statue-day.jpg) | ![Crest](../../../artifacts/shots/tracks/monaco/s1-06-sector1-crest-day.jpg) |
+| ![](../../../artifacts/shots/tracks/monaco/s2-05-tunnel-exit-day.jpg) | ![](../../../artifacts/shots/tracks/monaco/s3-01-harbour-wide-day.jpg) | ![](../../../artifacts/shots/tracks/monaco/s3-02-tabac-day.jpg) |
 
 ---
 
-## Panels — Sector 2 (dry · day)
+## Hero — Casino Square (frac 0.22 · orbit)
 
-| **Mirabeau** · orbit · dry · day | **Fairmont hairpin** · orbit · dry · day | **Portier** · trackside · dry · day |
+| **Casino** · orbit · overcast · day | **Casino** · orbit · rain · day | **Casino** · orbit · wet · day |
 |:---:|:---:|:---:|
-| ![Mirabeau](../../../artifacts/shots/tracks/monaco/s2-01-mirabeau-day.jpg) | ![Hairpin](../../../artifacts/shots/tracks/monaco/s2-02-fairmont-hairpin-day.jpg) | ![Portier](../../../artifacts/shots/tracks/monaco/s2-03-portier-day.jpg) |
+| ![](../../../artifacts/shots/tracks/monaco/hero-casino-day-overcast.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-casino-day-rain.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-casino-day-wet.jpg) |
 
-| **Tunnel interior** · chase · dry · day | **Tunnel exit** · orbit · dry · day | **Nouvelle chicane** · orbit · dry · day |
+| **Casino** · orbit · dry · dusk | **Casino** · orbit · dry · night | |
 |:---:|:---:|:---:|
-| ![Tunnel](../../../artifacts/shots/tracks/monaco/s2-04-tunnel-interior-day.jpg) | ![Tunnel exit](../../../artifacts/shots/tracks/monaco/s2-05-tunnel-exit-day.jpg) | ![Chicane](../../../artifacts/shots/tracks/monaco/s2-06-nouvelle-chicane-day.jpg) |
+| ![](../../../artifacts/shots/tracks/monaco/hero-casino-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-casino-night-dry.jpg) | |
 
 ---
 
-## Panels — Sector 3 (dry · day)
+## Hero — Port Hercule (frac 0.65 · orbit wide)
 
-| **Port Hercule** · orbit wide · dry · day | **Tabac** · orbit · dry · day | **Swimming pool** · orbit · dry · day |
+| **Harbour** · orbit wide · overcast · day | **Harbour** · orbit wide · rain · day | **Harbour** · orbit wide · wet · day |
 |:---:|:---:|:---:|
-| ![Harbour](../../../artifacts/shots/tracks/monaco/s3-01-harbour-wide-day.jpg) | ![Tabac](../../../artifacts/shots/tracks/monaco/s3-02-tabac-day.jpg) | ![Pool](../../../artifacts/shots/tracks/monaco/s3-03-swimming-pool-day.jpg) |
+| ![](../../../artifacts/shots/tracks/monaco/hero-harbour-day-overcast.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-harbour-day-rain.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-harbour-day-wet.jpg) |
 
-| **Rascasse** · orbit · dry · day | **La Rascasse bar** · eye · dry · day | **Antony Noghès** · orbit · dry · day |
+| **Harbour** · orbit wide · dry · dusk | **Harbour** · orbit wide · dry · night | |
 |:---:|:---:|:---:|
-| ![Rascasse](../../../artifacts/shots/tracks/monaco/s3-04-rascasse-day.jpg) | ![Bar](../../../artifacts/shots/tracks/monaco/s3-05-rascasse-bar-day.jpg) | ![Noghes](../../../artifacts/shots/tracks/monaco/s3-06-antony-noghes-day.jpg) |
+| ![](../../../artifacts/shots/tracks/monaco/hero-harbour-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-harbour-night-dry.jpg) | |
 
 ---
 
-## Panels — Time of day (dry weather; five landmark views)
+## Hero — Tabac (frac 0.71 · orbit)
 
-Stock `__apex.setTimeOfDay` via batch `tod` field. No `raceWeather` override in this pass.
-
-### Casino Square (frac 0.22)
-
-| Day (sector panel) | Dusk `lv-casino-dusk-dry` | Dawn `lv-casino-dawn-dry` |
+| **Tabac** · orbit · overcast · day | **Tabac** · orbit · rain · day | **Tabac** · orbit · wet · day |
 |:---:|:---:|:---:|
-| ![Casino day](../../../artifacts/shots/tracks/monaco/s1-04-casino-square-day.jpg) | ![Casino dusk](../../../artifacts/shots/tracks/monaco/lv-casino-dusk-dry.jpg) | ![Casino dawn](../../../artifacts/shots/tracks/monaco/lv-casino-dawn-dry.jpg) |
+| ![](../../../artifacts/shots/tracks/monaco/hero-tabac-day-overcast.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-tabac-day-rain.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-tabac-day-wet.jpg) |
 
-| Night `lv-casino-night-dry` | | |
+| **Tabac** · orbit · dry · dusk | **Tabac** · orbit · dry · night | |
 |:---:|:---:|:---:|
-| ![Casino night](../../../artifacts/shots/tracks/monaco/lv-casino-night-dry.jpg) | | |
-
-### Port Hercule (frac 0.65)
-
-| Day | Dusk `lv-harbour-dusk-dry` | Dawn `lv-harbour-dawn-dry` |
-|:---:|:---:|:---:|
-| ![Harbour day](../../../artifacts/shots/tracks/monaco/s3-01-harbour-wide-day.jpg) | ![Harbour dusk](../../../artifacts/shots/tracks/monaco/lv-harbour-dusk-dry.jpg) | ![Harbour dawn](../../../artifacts/shots/tracks/monaco/lv-harbour-dawn-dry.jpg) |
-
-| Night `lv-harbour-night-dry` | | |
-|:---:|:---:|:---:|
-| ![Harbour night](../../../artifacts/shots/tracks/monaco/lv-harbour-night-dry.jpg) | | |
-
-### Tabac (frac 0.71)
-
-| Day | Dusk | Dawn |
-|:---:|:---:|:---:|
-| ![Tabac day](../../../artifacts/shots/tracks/monaco/s3-02-tabac-day.jpg) | ![Tabac dusk](../../../artifacts/shots/tracks/monaco/lv-tabac-dusk-dry.jpg) | ![Tabac dawn](../../../artifacts/shots/tracks/monaco/lv-tabac-dawn-dry.jpg) |
-
-| Night | | |
-|:---:|:---:|:---:|
-| ![Tabac night](../../../artifacts/shots/tracks/monaco/lv-tabac-night-dry.jpg) | | |
-
-### Tunnel exit (frac 0.55)
-
-| Day | Dusk | Dawn |
-|:---:|:---:|:---:|
-| ![Tunnel day](../../../artifacts/shots/tracks/monaco/s2-05-tunnel-exit-day.jpg) | ![Tunnel dusk](../../../artifacts/shots/tracks/monaco/lv-tunnel-exit-dusk-dry.jpg) | ![Tunnel dawn](../../../artifacts/shots/tracks/monaco/lv-tunnel-exit-dawn-dry.jpg) |
-
-| Night | | |
-|:---:|:---:|:---:|
-| ![Tunnel night](../../../artifacts/shots/tracks/monaco/lv-tunnel-exit-night-dry.jpg) | | |
-
-### Fairmont hairpin (frac 0.38)
-
-| Day | Dusk `lv-fairmont-dusk-dry` | Night `lv-fairmont-night-dry` |
-|:---:|:---:|:---:|
-| ![Fairmont day](../../../artifacts/shots/tracks/monaco/s2-02-fairmont-hairpin-day.jpg) | ![Fairmont dusk](../../../artifacts/shots/tracks/monaco/lv-fairmont-dusk-dry.jpg) | ![Fairmont night](../../../artifacts/shots/tracks/monaco/lv-fairmont-night-dry.jpg) |
+| ![](../../../artifacts/shots/tracks/monaco/hero-tabac-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-tabac-night-dry.jpg) | |
 
 ---
 
-## Panels — Weather / wet (planned; blocked on shared shot tooling)
+## Hero — Tunnel exit (frac 0.55 · orbit)
 
-After rebase onto **tools: shared shot tooling for circuit surveys**, re-run the same five landmark cameras with `wx` ∈ `overcast`, `rain`, `wet`, `fog` (midday) plus `storm` if desired. Planned ids: `lv-{casino,harbour,tabac,tunnel-exit,fairmont}-{overcast,rain,fog}.jpg`.
+| **Tunnel exit** · orbit · overcast · day | **Tunnel exit** · orbit · rain · day | **Tunnel exit** · orbit · wet · day |
+|:---:|:---:|:---:|
+| ![](../../../artifacts/shots/tracks/monaco/hero-tunnel-exit-day-overcast.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-tunnel-exit-day-rain.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-tunnel-exit-day-wet.jpg) |
+
+| **Tunnel exit** · orbit · dry · dusk | **Tunnel exit** · orbit · dry · night | |
+|:---:|:---:|:---:|
+| ![](../../../artifacts/shots/tracks/monaco/hero-tunnel-exit-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-tunnel-exit-night-dry.jpg) | |
 
 ---
 
-## Findings
+## Hero — Fairmont hairpin (frac 0.38 · orbit)
 
-### Audit (`audit-circuit.cjs monaco`)
+| **Fairmont** · orbit · overcast · day | **Fairmont** · orbit · rain · day | **Fairmont** · orbit · wet · day |
+|:---:|:---:|:---:|
+| ![](../../../artifacts/shots/tracks/monaco/hero-fairmont-day-overcast.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-fairmont-day-rain.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-fairmont-day-wet.jpg) |
 
-- Centreline OK, **0 folds**; float 0; clip at baseline (8 severe); coplanar 0; ground buried 4 (within baseline).
+| **Fairmont** · orbit · dry · dusk | **Fairmont** · orbit · dry · night | |
+|:---:|:---:|:---:|
+| ![](../../../artifacts/shots/tracks/monaco/hero-fairmont-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-fairmont-night-dry.jpg) | |
 
-### Visual / scenery
+---
 
-| Issue | Severity | Notes |
+## Hero — Nouvelle chicane (frac 0.64 · orbit)
+
+| **Chicane** · orbit · overcast · day | **Chicane** · orbit · rain · day | **Chicane** · orbit · wet · day |
+|:---:|:---:|:---:|
+| ![](../../../artifacts/shots/tracks/monaco/hero-chicane-day-overcast.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-chicane-day-rain.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-chicane-day-wet.jpg) |
+
+| **Chicane** · orbit · dry · dusk | **Chicane** · orbit · dry · night | |
+|:---:|:---:|:---:|
+| ![](../../../artifacts/shots/tracks/monaco/hero-chicane-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/monaco/hero-chicane-night-dry.jpg) | |
+
+---
+
+## Findings (summary)
+
+| Topic | Severity | Notes |
 |-------|----------|-------|
-| Hillside blocks floating above green terrain shelf | medium | Casino / Beau Rivage orbit — amphitheatre mesh ends before building bases |
-| `terraceStack` single pastel on all tiers | low | **Fixed** — `hash(seedK)` per stack |
-| Casino planter `place`+`prop` coplanar | cosmetic | flatCoplanar baseline |
-| Yacht hull shallow bury (~0.15 m) | cosmetic | within ground baseline |
-| Night: WINLIT bands read; street `lampPost` sparse on harbour promenade | low | expect fuller pass after dusk/night panels |
-| Rain/fog/overcast | — | not captured yet (tooling) |
+| Road / audit | — | 0 folds; float 0; clip/coplanar at baseline |
+| `terraceStack` pastels | fixed | `hash(seedK)` per stack |
+| Hillside blocks vs terrain shelf | medium | Casino orbit — amphitheatre shelf |
+| Rain / wet | visual | Streaks read on harbour and Tabac; wet road darkening visible |
+| Overcast / fog | visual | Overcast mutes sun; fog panel omitted from 36-cap set (re-add with storm on follow-up if needed) |
+| Night | visual | WINLIT bands on hotels; quay lamps sparse |
 
-### Weather / lighting backlog (post–shared-PR)
+## Ranked backlog
 
-- Capture wx matrix on five landmark views; check rain streaks vs harbour water, fog density vs `pal.fogDensity`, overcast sun mute, night lamp cap / missing pools on quay lamps.
-- Compare z-fight on wet reflective road near Tabac chicane.
-
-## Ranked improvements
-
-| Rank | Item | Risk | Scope |
-|------|------|------|-------|
-| 1 | **Done:** `terraceStack` palette seed | low | `scenery/monaco.js` |
-| 2 | Ground terrace / amphitheatre bases to `terrainYAt` | medium | `scenery/monaco.js` |
-| 3 | Harbour balcony buried slab guard | low | `scenery/monaco.js` |
-| 4 | wx survey panels + night lamp densify on quay | medium | scenery + follow-up shots |
-| 5 | Harbour basin polygon (not more `waterField` stations) | high | engine |
-
-## Fix applied (this PR)
-
-`terraceStack`: replace `K(a.c[0] | 0)` (always 0) with `hash(seedK + i * 11)`; pass lap node `k` as `seedK`.
-
-## Verification
-
-```sh
-node tools/track/verify-track.cjs monaco
-node tools/track/audit-circuit.cjs monaco
-# Browser (after capture idle): npm test -- tests/specs/monaco-foundation.spec.js
-```
+1. Seat terrace bases on `terrainYAt` (medium, scenery only)
+2. Add fog + storm hero frames when raising shot cap (low)
+3. Harbour water polygon vs more `waterField` stations (high, engine)
