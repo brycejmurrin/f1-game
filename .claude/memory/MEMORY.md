@@ -7,7 +7,7 @@ topic file. User preferences and corrections only — a measured lesson belongs 
 code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [PR auto-merge](pr-auto-merge.md) — never arm or merge on my own; Merge Desk arms MERGE-commit only (squash retired 2026-10-13); `MERGE-HOLD:` is the only veto line, never paste "do not merge"
 - [Small steps for API analysis](small-steps-for-api-analysis.md) — prefer small incremental queries over bulk fetch scripts
-- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — default never merge (mark ready at tip-green when asked to expedite); only on Bryce's explicit in-session "merge it asap": MERGE-commit via MCP, never squash, 1 h gate skipped and said so
+- [Merge fast, verify on CI](merge-fast-verify-on-ci.md) — default never merge (mark ready at tip-green when asked to expedite); only on Bryce's explicit in-session "merge it asap" / "push and merge asap override": MERGE-commit via MCP, never squash, 1 h gate (and the push hold, `APEX_PUSH_HOLD=0`) skipped and said so
 - [One subagent per skill](one-subagent-per-skill.md) — skill reviews: one Sonnet subagent per skill, never grouped
 - [GitHub Pro: 40 concurrent jobs](github-plan-pro-40-jobs.md) — account upgraded 2026-09-30; size CI against 40 standard / 5 macOS slots, not 20
 - [Stacked PRs land bottom-up](stacked-prs-land-bottom-up.md) — retarget by hand after each merge (no branch auto-delete), sync-pr on ratchets conflicts, ready one at a time (CI Watch arms, never the agent)
@@ -20,4 +20,5 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
 - [Foreground wait loop killed (137)](foreground-wait-loop-killed.md) — never block a foreground Bash on a multi-minute background run; end the turn and take the notification
 - [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch queues, a third replaces it; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps
+- [Orchestrator may spawn sessions](orchestrator-may-spawn-sessions.md) — fleet work: launch sibling sessions without asking, tell Bryce each time; respect a single denied launch
 - [Merge method: verify parents](merge-method-verify-parents.md) — a "merge" merge_pull_request landed as a squash (#1743); check two parents after every merge

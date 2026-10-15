@@ -25,6 +25,9 @@ permissions:
   issues: write
   pull-requests: read
 
+# One fleet-board run at a time (cancel-in-progress: false). who-is-on-it.mjs
+# skips workflow_dispatch while a run is already queued, so claim bursts do not
+# stack dispatches on the same sha.
 concurrency:
   group: fleet-board
   cancel-in-progress: false
