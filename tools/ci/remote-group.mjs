@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // remote-group.mjs — run one browser test group on GitHub's runners (sharded, llvmpipe) and stream its verdict here.
-// @doc One test:* browser group on 4 llvmpipe runners (browser-group.yml), shards packed by measured time; a line per shard, then `= group`.
+// @doc One test:* browser group on 4 llvmpipe runners (browser-group.yml), time-packed shards; line per shard, then `= group`.
 // Full description: Dispatches .github/workflows/browser-group.yml for one test:* browser group on the current (pushed) branch, finds the run, prints one `[remote-group]` line per shard as it finishes (a red names its failing tests from the shard's log), then a terminal `= group <verdict>` line. The shard plan is computed HERE (LPT over tests/data/spec-timings.json) and travels as the workflow's `plan` input, so there is no plan job; `--run-shard` is the workflow's shard step (validates the plan against package.json, then runs it). A live or green run of the same group on the same sha is reused, not re-dispatched (`--force`). Built for a Monitor or a background task.
 // @skill check-changes
 //
