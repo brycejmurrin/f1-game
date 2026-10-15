@@ -134,7 +134,7 @@
             const rr = ring + (hash(i * 5 + extra) - 0.5) * extra * 0.5;
             const x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
             const gy = (typeof terrainYAt === "function" && terrainYAt(x, z));
-            const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.5 : pyMin;
+            const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.25 : pyMin;
             mountain(x, z, baseY,
                      wMin + hf * wMin * 0.9, hMin + hf * hMin * 0.5,
                      { seg: 6, seed: i * 4 + extra, rough: 0.32, snowline: 1.4,
@@ -247,7 +247,9 @@
             [0.22, 10, 10], WIN_COOL, b);
           addBox(stage, vadd(rcBase, a.u, 28.4), [14, 0.7, 14], WHITE, b);
           addBox(stage, vadd(rcBase, a.u, 30.0), [7, 3.2, 7], [0.82, 0.84, 0.86], b);
-          addCyl(stage, vadd(rcBase, a.u, 31.8), 0.18, 7, STEEL, 4, b);
+          // Short mast on the RC roof (not a 7 m aerial): a tall thin cyl read as
+          // 31 m unsupported in ground-audit; the box stack below owns support.
+          addBox(stage, vadd(rcBase, a.u, 29.2), [0.35, 2.4, 0.35], STEEL, b);
           for (let g = 0; g < 25; g++) {
             const dz = (g - 12) * (PIT_LEN / 25);
             const col = (g % 2) ? [0.16, 0.16, 0.18] : [0.26, 0.26, 0.28];
@@ -453,7 +455,7 @@
         // Seat on local terrain, not lap pyMin — pyMin buried dune skirts
         // several metres under the ribbon (ground-audit worst ~2.3–5.7 m).
         const gy = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
-        const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.15 : a.c[1];
+        const baseY = (gy != null && Number.isFinite(gy)) ? gy + 0.35 : a.c[1];
         mountain(a.c[0], a.c[2], baseY, w, h,
           { seg: 6, seed: k * 4 + 28, rough: 0.40, snowline: 1.6,
             forest: DUNE, rock: DUNE_N, snow: DUNE_N });
@@ -482,7 +484,7 @@
           const h   =  2.5 + hash(k * 11 + side) * 2.5;
           const a = anchor(k, side, gap + w * 0.62);
           const gy = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
-          const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.15 : a.c[1];
+          const baseY = (gy != null && Number.isFinite(gy)) ? gy + 0.35 : a.c[1];
           mountain(a.c[0], a.c[2], baseY, w, h,
             { seg: 6, seed: k * 5 + side * 3 + 40, rough: 0.38, snowline: 1.6,
               forest: SAND, rock: SAND_D, snow: SAND_D });
