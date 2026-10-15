@@ -92,6 +92,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `script-loader.js` | `ScriptLoader` | tag | ScriptLoader: extracted runtime orchestration. |
 | `lazy-bundles.js` | `LazyBundles` | tag | LazyBundles: extracted runtime orchestration. |
 | `wake-lock.js` | `RaceWakeLock` | tag | RaceWakeLock: asynchronous screen wake-lock ownership. |
+| `save-schema-registry.js` | `SaveSchemaRegistry` | tag | SaveSchemaRegistry: manifest of every apex26.* persistence key. |
 | `store.js` | `GameStore` | tag | persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26.", plus the uncached raw-string lane the settings panels… |
 
 **`js/`**

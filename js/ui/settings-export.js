@@ -256,6 +256,10 @@ const SPEC = [
   { k: "metricsLogLvl", lane: "raw", group: "metrics", def: "warn", src: "js/perf/metrics-overlay.js" },
 ];
 
+if (typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.ingestSettingsSpec) {
+  SaveSchemaRegistry.ingestSettingsSpec(SPEC);
+}
+
 const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, ghosts, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section (merged on import)";
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
