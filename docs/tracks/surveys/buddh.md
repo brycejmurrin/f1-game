@@ -26,73 +26,76 @@ Centreline: OpenStreetMap stitch; ~5138 m; `reverse: false` (projected CCW for r
 
 ## Capture protocol
 
-- **Tool:** `node tools/shot/shot.mjs --batch` (stock CLI; `tod` only — no `weather` batch field until shared survey tooling lands).
-- **Renderer:** TLX / SwiftShader headless; local `npx serve -l 3456`.
-- **Count:** 33 JPEG frames under `artifacts/shots/tracks/buddh/` (max width 1280 px, q≈80, target 30–36).
-- **Time-of-day:** `day`, `dusk`, `night`, `dawn` on six key landmarks; other sector views **day only**.
-- **Weather:** `dry` only in filenames (`*-dry.jpg`). **Deferred:** `wet`, `rain`, `overcast`, `fog`, `storm` (engine supports via `__apex.race(id, tod, wx)` — see `js/race/weather-arc.js` `VALID` list). Re-capture after rebasing on PR *tools: shared shot tooling for circuit surveys*.
-
-**Note:** `night: false` on the def; night TOD still runs for lighting survey — flood lamps and grandstand read darker; no wet-line or storm particles in this pass.
+- **Tool:** `node tools/shot/shot.mjs --batch` on `origin/cursor/shared-shot-tooling-5b45` (`--weather`, `--tod`, `--jpeg`, `--present-timeout 90`, `--capture-retries 4`, `--wait 120`; SwiftShader default, no `APEX_GL=llvmpipe`).
+- **Count:** **34** JPEG frames under `artifacts/shots/tracks/buddh/` (≤1280 px, q≈80, &lt;300 KB each).
+- **Hero views (5):** main grandstand, T1 brake, double apex, east stands, final corner — TOD (**dawn/day/dusk/night**) and weather (**wet, rain, overcast, fog, storm** where listed below).
+- **Note:** `night: false` on def; night TOD still drives lamp/flood lighting. Labels match filename `{view}-{tod}-{weather}.jpg`.
 
 ---
 
-## Sector 1 — pit straight, main stand, T1–T3 (s ≈ 0–0.33)
+## Survey panels (34 frames)
 
 | | | |
 |:---:|:---:|:---:|
-| ![Overview](../../../artifacts/shots/tracks/buddh/overview-track-picker-day-dry.jpg) | ![Pit day](../../../artifacts/shots/tracks/buddh/s1-pit-day-dry.jpg) | ![Pit dusk](../../../artifacts/shots/tracks/buddh/s1-pit-dusk-dry.jpg) |
-| *overview / picker* | *s0.005 pit block* | *pit dusk* |
-| ![Grandstand day](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-dry.jpg) | ![Grandstand dusk](../../../artifacts/shots/tracks/buddh/s1-grandstand-dusk-dry.jpg) | ![Grandstand night](../../../artifacts/shots/tracks/buddh/s1-grandstand-night-dry.jpg) |
-| *main grandstand* | *golden hour* | *night lamps* |
-| ![Grandstand dawn](../../../artifacts/shots/tracks/buddh/s1-grandstand-dawn-dry.jpg) | ![T1 brake day](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-dry.jpg) | ![T1 dusk](../../../artifacts/shots/tracks/buddh/s1-t1-brake-dusk-dry.jpg) |
-| *dawn* | *T1 braking zone* | *T1 dusk* |
-| ![T1 night](../../../artifacts/shots/tracks/buddh/s1-t1-brake-night-dry.jpg) | ![T3 day](../../../artifacts/shots/tracks/buddh/s1-t3-day-dry.jpg) | ![Outfield day](../../../artifacts/shots/tracks/buddh/s1-outfield-day-dry.jpg) |
-| *T1 night* | *T2–3 infield* | *farmstead / temple band* |
-| ![Outfield dusk](../../../artifacts/shots/tracks/buddh/s1-outfield-dusk-dry.jpg) | | |
-| *outfield dusk* | | |
-
----
-
-## Sector 2 — drop and double apex (s ≈ 0.33–0.67)
+| ![overview-track-picker-day-dry.jpg](../../../artifacts/shots/tracks/buddh/overview-track-picker-day-dry.jpg) | ![s1-grandstand-dawn-dry.jpg](../../../artifacts/shots/tracks/buddh/s1-grandstand-dawn-dry.jpg) | ![s1-grandstand-day-dry.jpg](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-dry.jpg) |
+| *Track overview · day · dry* | *grandstand · dawn · dry* | *grandstand · day · dry* |
 
 | | | |
 |:---:|:---:|:---:|
-| ![T6 day](../../../artifacts/shots/tracks/buddh/s2-t6-day-dry.jpg) | ![Drop day](../../../artifacts/shots/tracks/buddh/s2-drop-day-dry.jpg) | ![Drop dusk](../../../artifacts/shots/tracks/buddh/s2-drop-dusk-dry.jpg) |
-| *T6–7 earthwork* | *run into bowl* | *drop dusk* |
-| ![Drop night](../../../artifacts/shots/tracks/buddh/s2-drop-night-dry.jpg) | ![Double apex day](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-dry.jpg) | ![Double apex dusk](../../../artifacts/shots/tracks/buddh/s2-double-apex-dusk-dry.jpg) |
-| *drop night* | *T10–11 terrace* | *double apex dusk* |
-| ![Double apex night](../../../artifacts/shots/tracks/buddh/s2-double-apex-night-dry.jpg) | ![T12 day](../../../artifacts/shots/tracks/buddh/s2-t12-day-dry.jpg) | ![T12 dusk](../../../artifacts/shots/tracks/buddh/s2-t12-dusk-dry.jpg) |
-| *double apex night* | *climb out* | *T12 dusk* |
-
----
-
-## Sector 3 — back straight, east stands, final corner (s ≈ 0.67–1.0)
+| ![s1-grandstand-day-fog.jpg](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-fog.jpg) | ![s1-grandstand-day-overcast.jpg](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-overcast.jpg) | ![s1-grandstand-day-rain.jpg](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-rain.jpg) |
+| *grandstand · day · fog* | *grandstand · day · overcast* | *grandstand · day · rain* |
 
 | | | |
 |:---:|:---:|:---:|
-| ![Haze day](../../../artifacts/shots/tracks/buddh/s3-haze-day-dry.jpg) | ![Haze dusk](../../../artifacts/shots/tracks/buddh/s3-haze-dusk-dry.jpg) | ![East stands day](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-dry.jpg) |
-| *outfield haze band* | *haze dusk* | *east grandstands* |
-| ![East dusk](../../../artifacts/shots/tracks/buddh/s3-east-stands-dusk-dry.jpg) | ![East night](../../../artifacts/shots/tracks/buddh/s3-east-stands-night-dry.jpg) | ![Final day](../../../artifacts/shots/tracks/buddh/s3-final-day-dry.jpg) |
-| *east dusk* | *east night* | *final corner* |
-| ![Final dusk](../../../artifacts/shots/tracks/buddh/s3-final-dusk-dry.jpg) | ![Final night](../../../artifacts/shots/tracks/buddh/s3-final-night-dry.jpg) | ![Main straight day](../../../artifacts/shots/tracks/buddh/s3-main-straight-day-dry.jpg) |
-| *final dusk* | *final night* | *main straight* |
-| ![Straight dusk](../../../artifacts/shots/tracks/buddh/s3-main-straight-dusk-dry.jpg) | ![Straight night](../../../artifacts/shots/tracks/buddh/s3-main-straight-night-dry.jpg) | |
-| *straight dusk* | *straight night* | |
+| ![s1-grandstand-day-storm.jpg](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-storm.jpg) | ![s1-grandstand-dusk-dry.jpg](../../../artifacts/shots/tracks/buddh/s1-grandstand-dusk-dry.jpg) | ![s1-grandstand-night-dry.jpg](../../../artifacts/shots/tracks/buddh/s1-grandstand-night-dry.jpg) |
+| *grandstand · day · storm* | *grandstand · dusk · dry* | *grandstand · night · dry* |
 
----
+| | | |
+|:---:|:---:|:---:|
+| ![s1-t1-brake-day-dry.jpg](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-dry.jpg) | ![s1-t1-brake-day-overcast.jpg](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-overcast.jpg) | ![s1-t1-brake-day-rain.jpg](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-rain.jpg) |
+| *t1 brake · day · dry* | *t1 brake · day · overcast* | *t1 brake · day · rain* |
 
-## Lighting matrix (key landmarks)
+| | | |
+|:---:|:---:|:---:|
+| ![s1-t1-brake-day-wet.jpg](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-wet.jpg) | ![s1-t1-brake-dusk-dry.jpg](../../../artifacts/shots/tracks/buddh/s1-t1-brake-dusk-dry.jpg) | ![s1-t1-brake-night-dry.jpg](../../../artifacts/shots/tracks/buddh/s1-t1-brake-night-dry.jpg) |
+| *t1 brake · day · wet* | *t1 brake · dusk · dry* | *t1 brake · night · dry* |
 
-| View | Day | Dusk | Night | Dawn |
-|------|-----|------|-------|------|
-| Main grandstand | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-night-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-grandstand-dawn-dry.jpg) |
-| T1 brake | ![](../../../artifacts/shots/tracks/buddh/s1-t1-brake-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-t1-brake-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s1-t1-brake-night-dry.jpg) | — |
-| Double apex | ![](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s2-double-apex-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s2-double-apex-night-dry.jpg) | — |
-| East stands | ![](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-east-stands-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-east-stands-night-dry.jpg) | — |
-| Final corner | ![](../../../artifacts/shots/tracks/buddh/s3-final-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-final-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-final-night-dry.jpg) | — |
-| Main straight | ![](../../../artifacts/shots/tracks/buddh/s3-main-straight-day-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-main-straight-dusk-dry.jpg) | ![](../../../artifacts/shots/tracks/buddh/s3-main-straight-night-dry.jpg) | — |
+| | | |
+|:---:|:---:|:---:|
+| ![s2-double-apex-day-dry.jpg](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-dry.jpg) | ![s2-double-apex-day-overcast.jpg](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-overcast.jpg) | ![s2-double-apex-day-rain.jpg](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-rain.jpg) |
+| *double apex · day · dry* | *double apex · day · overcast* | *double apex · day · rain* |
 
----
+| | | |
+|:---:|:---:|:---:|
+| ![s2-double-apex-day-storm.jpg](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-storm.jpg) | ![s2-double-apex-day-wet.jpg](../../../artifacts/shots/tracks/buddh/s2-double-apex-day-wet.jpg) | ![s2-double-apex-dusk-dry.jpg](../../../artifacts/shots/tracks/buddh/s2-double-apex-dusk-dry.jpg) |
+| *double apex · day · storm* | *double apex · day · wet* | *double apex · dusk · dry* |
+
+| | | |
+|:---:|:---:|:---:|
+| ![s2-double-apex-night-dry.jpg](../../../artifacts/shots/tracks/buddh/s2-double-apex-night-dry.jpg) | ![s3-east-stands-day-dry.jpg](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-dry.jpg) | ![s3-east-stands-day-fog.jpg](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-fog.jpg) |
+| *double apex · night · dry* | *east stands · day · dry* | *east stands · day · fog* |
+
+| | | |
+|:---:|:---:|:---:|
+| ![s3-east-stands-day-overcast.jpg](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-overcast.jpg) | ![s3-east-stands-day-rain.jpg](../../../artifacts/shots/tracks/buddh/s3-east-stands-day-rain.jpg) | ![s3-east-stands-dusk-dry.jpg](../../../artifacts/shots/tracks/buddh/s3-east-stands-dusk-dry.jpg) |
+| *east stands · day · overcast* | *east stands · day · rain* | *east stands · dusk · dry* |
+
+| | | |
+|:---:|:---:|:---:|
+| ![s3-east-stands-night-dry.jpg](../../../artifacts/shots/tracks/buddh/s3-east-stands-night-dry.jpg) | ![s3-final-day-dry.jpg](../../../artifacts/shots/tracks/buddh/s3-final-day-dry.jpg) | ![s3-final-day-fog.jpg](../../../artifacts/shots/tracks/buddh/s3-final-day-fog.jpg) |
+| *east stands · night · dry* | *final · day · dry* | *final · day · fog* |
+
+| | | |
+|:---:|:---:|:---:|
+| ![s3-final-day-overcast.jpg](../../../artifacts/shots/tracks/buddh/s3-final-day-overcast.jpg) | ![s3-final-day-rain.jpg](../../../artifacts/shots/tracks/buddh/s3-final-day-rain.jpg) | ![s3-final-dusk-dry.jpg](../../../artifacts/shots/tracks/buddh/s3-final-dusk-dry.jpg) |
+| *final · day · overcast* | *final · day · rain* | *final · dusk · dry* |
+
+| | | |
+|:---:|:---:|:---:|
+| ![s3-final-night-dry.jpg](../../../artifacts/shots/tracks/buddh/s3-final-night-dry.jpg) | | |
+| *final · night · dry* | | |
+
+
 
 ## Findings
 
@@ -110,14 +113,10 @@ Centreline: OpenStreetMap stitch; ~5138 m; `reverse: false` (projected CCW for r
 - **Clip audit:** **2 severe** (baseline): spectator terrace `addBox` ~s **0.494**; T4–5 scaffold `addCyl` ~s **0.310**. Minor farmstead cone ~s **0.13**.
 - **Float / ground:** 0 floating; `flatCoplanar 2` within baseline.
 
-### Weather / lighting (deferred capture)
+### Weather / lighting (captured)
 
-| Condition | Status | Notes |
-|-----------|--------|-------|
-| Dry + TOD variants | **Captured** (33 frames) | See grids above |
-| Wet / rain | **Not captured** | Await shared `shot.mjs` weather batch |
-| Overcast / fog / storm | **Not captured** | Same; check fog density vs `pal.fogDensity` on haze band |
-| Wet road shader + rain particles | **Not verified** | Backlog: kerb/runoff darkening, spray, sky mismatch |
+- Dry + TOD matrix on all five hero views; day-time **rain, overcast, fog, storm, wet** on subsets (see panels).
+- **Backlog:** runoff darkening vs wetness on kerbs; storm intensity vs east-stand visibility; fog + `pal.fogDensity` on haze band (no dedicated haze-frame after trim).
 
 ### Performance
 
