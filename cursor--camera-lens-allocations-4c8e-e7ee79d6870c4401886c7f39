@@ -1,0 +1,1 @@
+1792029755	Bryce Murrin	Camera lens allocations: OWNED js/camera/feel.js, js/camera/drive-broadcast.js, existing tests/unit/camera-feel.test.mjs only. Preserve lens behavior, motion settings and namespace isolation. No garage, lighting, renderer shaders, HUD, physics or other camera modules.  [cursor/camera-lens-allocations-4c8e; session e7ee79d6870c4401886c7f39]
