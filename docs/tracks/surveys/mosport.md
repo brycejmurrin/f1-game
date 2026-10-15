@@ -1,103 +1,86 @@
-# Mosport — circuit survey (2026-10-14)
+# Mosport — circuit survey (2026-10-15)
 
-**Branch:** `cursor/mosport-survey-021b` · **Brief:** [`docs/tracks/mosport.md`](../mosport.md) · **Live:** [f1-game on GitHub Pages](https://brycejmurrin.github.io/f1-game/)
+**Branch:** `cursor/mosport-survey-021b` · **Brief:** [`docs/tracks/mosport.md`](../mosport.md)
 
-Committed captures: `artifacts/shots/tracks/mosport/*.jpg` (JPEG q≈80, max width 1280px). **Weather** variants (wet / overcast / fog / rain) deferred until rebase on the shared shot-tooling PR; all frames here are **dry** with **time-of-day** where noted.
+**Shots:** `artifacts/shots/tracks/mosport/` — **36 JPEGs** (picker + 35 captures), q≈80, max width 1280px. Captured with shared `shot.mjs` (`--weather`, `--tod`, `--jpeg`, `--present-timeout 90`, `--capture-retries 4`).
 
 ---
 
 ## Code map
 
-| Layer | Path | Role |
-|--------|------|------|
-| Registry | `js/track/tracks.js` | `Tracks.LIST`; lazy scenery |
-| Def | `js/circuits/mosport.js` | OSM centreline, `sectors` [0.334, 0.666], `theme: "green"`, `night: false`, `lamp: "none"` |
-| Scenery | `js/circuits/scenery/mosport.js` | Landmarks + lap dressing per brief §4 |
-| Landmarks | `tests/data/landmarks/mosport.json` | pit garages, Moss bank, Whites tunnel, Event Centre |
+| Layer | Path |
+|--------|------|
+| Def | `js/circuits/mosport.js` |
+| Scenery | `js/circuits/scenery/mosport.js` |
+| Landmarks | `tests/data/landmarks/mosport.json` |
 
-**Sectors (clockwise racing `s`):** S1 `s < 0.334` · S2 `0.334–0.666` · S3 `s ≥ 0.666`
-
----
-
-## Theme and models
-
-Green Ontario summer; mixed woodland on −1; club-scale pit block and Event Centre; `modelGroup` heroes at Moss and Whites; moraine `mountain()` horizon belt.
+Sectors (clockwise): S1 `s < 0.334` · S2 `0.334–0.666` · S3 `s ≥ 0.666`
 
 ---
 
-## Findings (summary)
+## Findings
 
-| # | Issue | Severity |
-|---|--------|----------|
-| 1 | `trackside` at start/finish sits inside `grandstandEx` shell — use orbit/park | Fixed: stands pushed to gap 30/28 |
-| 2 | Night TOD very dark (`lamp: "none"`, `night: false`) | Expected; note for weather PR |
-| 3 | Weather matrix not shot yet | Follow-up after shared tooling PR |
-| 4 | Whites −1 apron | Fixed: tarmac `groundPatch` |
-| 5 | `flatCoplanar` 1 tyreWall pair | Fleet baseline; do not loosen |
+| Issue | Notes |
+|--------|--------|
+| Night / `lamp: "none"` | Night TOD is very dark; no trackside floods |
+| Fog / storm | Readability drops in Esses woods — expected |
+| Start/finish trackside | Prefer orbit; grandstands pushed to gap 30/28 |
+| flatCoplanar 1 | Fleet tyreWall baseline — not loosened |
 
 **Verify:** `node tools/track/verify-track.cjs mosport` · `node tools/track/audit-circuit.cjs mosport`
 
 ---
 
-## Ranked backlog
+## Panel grid — lap survey (dry · day)
 
-1. Weather/lighting batch (wet, overcast, fog, rain) after shot PR rebase  
-2. Optional floodlights on main straight (design)  
-3. Event Centre sightline from pit straight  
+| | | |
+|:---:|:---:|:---:|
+| ![picker](../../../artifacts/shots/tracks/mosport/00-track-picker-still.jpg)<br>picker still · dry · day | ![lap pit](../../../artifacts/shots/tracks/mosport/lap-pit-orbit-dry-day.jpg)<br>pit orbit · dry · day | ![lap clayton](../../../artifacts/shots/tracks/mosport/lap-clayton-park-dry-day.jpg)<br>Clayton park · dry · day |
+| ![lap moss](../../../artifacts/shots/tracks/mosport/lap-moss-orbit-dry-day.jpg)<br>Moss orbit · dry · day | ![lap andretti](../../../artifacts/shots/tracks/mosport/lap-andretti-park-dry-day.jpg)<br>Andretti park · dry · day | ![lap esses](../../../artifacts/shots/tracks/mosport/lap-esses-park-dry-day.jpg)<br>Esses park · dry · day |
+| ![lap whites](../../../artifacts/shots/tracks/mosport/lap-whites-orbit-dry-day.jpg)<br>Whites orbit · dry · day | | |
 
 ---
 
-## Panel grid — track picker and sectors (view · dry · day)
+## Panel grid — Pit orbit (hero)
 
 | | | |
 |:---:|:---:|:---:|
-| ![Picker](../../../artifacts/shots/tracks/mosport/00-track-picker-still.jpg)<br>picker · dry · day | ![S1 pit](../../../artifacts/shots/tracks/mosport/sector-s1-pit-day-dry.jpg)<br>pit paddock orbit · dry · day | ![S1 start](../../../artifacts/shots/tracks/mosport/sector-s1-start-day-dry.jpg)<br>start/finish orbit · dry · day |
-| ![S1 T1](../../../artifacts/shots/tracks/mosport/sector-s1-turn1-day-dry.jpg)<br>Turn 1 park · dry · day | ![S1 Clayton appr.](../../../artifacts/shots/tracks/mosport/sector-s1-clayton-approach-day-dry.jpg)<br>Clayton approach orbit · dry · day | ![S2 Clayton](../../../artifacts/shots/tracks/mosport/sector-s2-clayton-day-dry.jpg)<br>Clayton T2 park · dry · day |
-| ![S2 Quebec](../../../artifacts/shots/tracks/mosport/sector-s2-quebec-day-dry.jpg)<br>Quebec trackside · dry · day | ![S2 Moss run](../../../artifacts/shots/tracks/mosport/sector-s2-moss-run-day-dry.jpg)<br>run to Moss cinematic · dry · day | ![S2 Moss](../../../artifacts/shots/tracks/mosport/sector-s2-moss-bank-day-dry.jpg)<br>Moss bank orbit · dry · day |
-| ![S3 Andretti](../../../artifacts/shots/tracks/mosport/sector-s3-andretti-day-dry.jpg)<br>Andretti park · dry · day | ![S3 farm](../../../artifacts/shots/tracks/mosport/sector-s3-farmland-day-dry.jpg)<br>farmland eye · dry · day | ![S3 Esses](../../../artifacts/shots/tracks/mosport/sector-s3-esses-day-dry.jpg)<br>Esses park · dry · day |
-| ![S3 Whites](../../../artifacts/shots/tracks/mosport/sector-s3-whites-tunnel-day-dry.jpg)<br>Whites tunnel orbit · dry · day | ![S3 Event](../../../artifacts/shots/tracks/mosport/sector-s3-event-centre-day-dry.jpg)<br>Event Centre orbit · dry · day | |
+| ![wet](../../../artifacts/shots/tracks/mosport/pit-orbit-wet-day.jpg)<br>pit orbit · **wet** · day | ![rain](../../../artifacts/shots/tracks/mosport/pit-orbit-rain-day.jpg)<br>pit orbit · **rain** · day | ![overcast](../../../artifacts/shots/tracks/mosport/pit-orbit-overcast-day.jpg)<br>pit orbit · **overcast** · day |
+| ![fog](../../../artifacts/shots/tracks/mosport/pit-orbit-fog-day.jpg)<br>pit orbit · **fog** · day | ![storm](../../../artifacts/shots/tracks/mosport/pit-orbit-storm-day.jpg)<br>pit orbit · **storm** · day | ![dusk](../../../artifacts/shots/tracks/mosport/pit-orbit-dry-dusk.jpg)<br>pit orbit · dry · **dusk** |
+| ![night](../../../artifacts/shots/tracks/mosport/pit-orbit-dry-night.jpg)<br>pit orbit · dry · **night** | | |
 
 ---
 
-## Panel grid — lighting variants (dry weather; time of day)
-
-### Pit `s≈0.005` — orbit
+## Panel grid — Clayton park (hero)
 
 | | | |
 |:---:|:---:|:---:|
-| ![pit day](../../../artifacts/shots/tracks/mosport/wx-pit-day-dry.jpg)<br>pit orbit · dry · **day** | ![pit dusk](../../../artifacts/shots/tracks/mosport/wx-pit-dusk-dry.jpg)<br>pit orbit · dry · **dusk** | ![pit dawn](../../../artifacts/shots/tracks/mosport/wx-pit-dawn-dry.jpg)<br>pit orbit · dry · **dawn** |
-| ![pit night](../../../artifacts/shots/tracks/mosport/light-pit-night-dry.jpg)<br>pit orbit · dry · **night** | | |
-
-### Clayton `s≈0.1817` — park
-
-| | | |
-|:---:|:---:|:---:|
-| ![clay day](../../../artifacts/shots/tracks/mosport/wx-clayton-day-dry.jpg)<br>Clayton park · dry · **day** | ![clay dusk](../../../artifacts/shots/tracks/mosport/wx-clayton-dusk-dry.jpg)<br>Clayton park · dry · **dusk** | ![clay dawn](../../../artifacts/shots/tracks/mosport/wx-clayton-dawn-dry.jpg)<br>Clayton park · dry · **dawn** |
-| ![clay night](../../../artifacts/shots/tracks/mosport/light-clayton-night-dry.jpg)<br>Clayton park · dry · **night** | | |
-
-### Moss `s≈0.4817` — orbit +1
-
-| | | |
-|:---:|:---:|:---:|
-| ![moss day](../../../artifacts/shots/tracks/mosport/wx-moss-day-dry.jpg)<br>Moss orbit · dry · **day** | ![moss dusk](../../../artifacts/shots/tracks/mosport/wx-moss-dusk-dry.jpg)<br>Moss orbit · dry · **dusk** | ![moss dawn](../../../artifacts/shots/tracks/mosport/wx-moss-dawn-dry.jpg)<br>Moss orbit · dry · **dawn** |
-| ![moss night](../../../artifacts/shots/tracks/mosport/light-moss-night-dry.jpg)<br>Moss orbit · dry · **night** | | |
-
-### Andretti `s≈0.66` — park
-
-| | | |
-|:---:|:---:|:---:|
-| ![and day](../../../artifacts/shots/tracks/mosport/wx-andretti-day-dry.jpg)<br>Andretti park · dry · **day** | ![and dusk](../../../artifacts/shots/tracks/mosport/light-andretti-dusk-dry.jpg)<br>Andretti park · dry · **dusk** | ![and dawn](../../../artifacts/shots/tracks/mosport/light-andretti-dawn-dry.jpg)<br>Andretti park · dry · **dawn** |
-| ![and night](../../../artifacts/shots/tracks/mosport/light-andretti-night-dry.jpg)<br>Andretti park · dry · **night** | | |
-
-### Whites `s≈0.9183` — orbit
-
-| | | |
-|:---:|:---:|:---:|
-| ![wh day](../../../artifacts/shots/tracks/mosport/sector-s3-whites-tunnel-day-dry.jpg)<br>Whites orbit · dry · **day** | ![wh dusk](../../../artifacts/shots/tracks/mosport/light-whites-dusk-dry.jpg)<br>Whites orbit · dry · **dusk** | ![wh dawn](../../../artifacts/shots/tracks/mosport/light-whites-dawn-dry.jpg)<br>Whites orbit · dry · **dawn** |
-| ![wh night](../../../artifacts/shots/tracks/mosport/light-whites-night-dry.jpg)<br>Whites orbit · dry · **night** | | |
+| ![wet](../../../artifacts/shots/tracks/mosport/clayton-park-wet-day.jpg)<br>Clayton park · **wet** · day | ![rain](../../../artifacts/shots/tracks/mosport/clayton-park-rain-day.jpg)<br>Clayton park · **rain** · day | ![overcast](../../../artifacts/shots/tracks/mosport/clayton-park-overcast-day.jpg)<br>Clayton park · **overcast** · day |
+| ![fog](../../../artifacts/shots/tracks/mosport/clayton-park-fog-day.jpg)<br>Clayton park · **fog** · day | ![storm](../../../artifacts/shots/tracks/mosport/clayton-park-storm-day.jpg)<br>Clayton park · **storm** · day | ![dawn](../../../artifacts/shots/tracks/mosport/clayton-park-dry-dawn.jpg)<br>Clayton park · dry · **dawn** |
 
 ---
 
-## Fixes on this branch
+## Panel grid — Moss orbit (hero)
 
-`js/circuits/scenery/mosport.js` — start/finish grandstand gap; Whites −1 apron; spectator hill gap (ground-audit).
+| | | |
+|:---:|:---:|:---:|
+| ![wet](../../../artifacts/shots/tracks/mosport/moss-orbit-wet-day.jpg)<br>Moss orbit · **wet** · day | ![rain](../../../artifacts/shots/tracks/mosport/moss-orbit-rain-day.jpg)<br>Moss orbit · **rain** · day | ![overcast](../../../artifacts/shots/tracks/mosport/moss-orbit-overcast-day.jpg)<br>Moss orbit · **overcast** · day |
+| ![fog](../../../artifacts/shots/tracks/mosport/moss-orbit-fog-day.jpg)<br>Moss orbit · **fog** · day | ![storm](../../../artifacts/shots/tracks/mosport/moss-orbit-storm-day.jpg)<br>Moss orbit · **storm** · day | |
+
+---
+
+## Panel grid — Andretti park (hero)
+
+| | | |
+|:---:|:---:|:---:|
+| ![wet](../../../artifacts/shots/tracks/mosport/andretti-park-wet-day.jpg)<br>Andretti park · **wet** · day | ![rain](../../../artifacts/shots/tracks/mosport/andretti-park-rain-day.jpg)<br>Andretti park · **rain** · day | ![overcast](../../../artifacts/shots/tracks/mosport/andretti-park-overcast-day.jpg)<br>Andretti park · **overcast** · day |
+| ![fog](../../../artifacts/shots/tracks/mosport/andretti-park-fog-day.jpg)<br>Andretti park · **fog** · day | ![storm](../../../artifacts/shots/tracks/mosport/andretti-park-storm-day.jpg)<br>Andretti park · **storm** · day | |
+
+---
+
+## Panel grid — Whites orbit (hero)
+
+| | | |
+|:---:|:---:|:---:|
+| ![wet](../../../artifacts/shots/tracks/mosport/whites-orbit-wet-day.jpg)<br>Whites orbit · **wet** · day | ![rain](../../../artifacts/shots/tracks/mosport/whites-orbit-rain-day.jpg)<br>Whites orbit · **rain** · day | ![overcast](../../../artifacts/shots/tracks/mosport/whites-orbit-overcast-day.jpg)<br>Whites orbit · **overcast** · day |
+| ![fog](../../../artifacts/shots/tracks/mosport/whites-orbit-fog-day.jpg)<br>Whites orbit · **fog** · day | ![storm](../../../artifacts/shots/tracks/mosport/whites-orbit-storm-day.jpg)<br>Whites orbit · **storm** · day | ![night](../../../artifacts/shots/tracks/mosport/whites-orbit-dry-night.jpg)<br>Whites orbit · dry · **night** |
