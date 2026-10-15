@@ -798,6 +798,10 @@ function radioPaintedCollapse(root) {
   // floor wins over a ~7px cluster budget at phoneL broadcast @150%, and
   // announceLaneTick after fitHud can re-open a collapsed lane.
   const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
+  // Already collapsed: the writes below would repeat verbatim, so skip the
+  // rect reads (each forced a reflow after announceLane's style writes).
+  if (annPaint && annPaint.hasAttribute("data-lane-collapsed") && !document.body.classList.contains("hud-radio-top")
+    && root.style.getPropertyValue("--announce-lane-w") === "0px" && root.style.getPropertyValue("--announce-lane-shift") === "0%") return;
   if (annPaint && !annPaint.hidden) {
     const a = annPaint.getBoundingClientRect();
     const hit = (el) => {
