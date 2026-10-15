@@ -638,6 +638,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/model-pack-format.test.mjs",
   "tests/unit/move-tree.test.mjs",
   "tests/unit/net-audio-revs-vm.test.mjs",
+  "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/node-plan.test.mjs",
