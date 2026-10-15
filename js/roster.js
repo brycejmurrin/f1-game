@@ -171,7 +171,8 @@
     "js/race/race-radio.js",
     "js/race/start-lights.js",
     "js/race/marshal-panels.js",
-    "js/race/flying-start.js"
+    "js/race/flying-start.js",
+    "js/race/jump-start-penalty.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [
@@ -249,6 +250,7 @@
     "js/audio/race-mix-audition.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
+    "js/audio/ers-layer.js",
     "js/audio/engine.js",
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
@@ -277,6 +279,10 @@
     ],
     [
       "js/audio/tone-model.js",
+      "js/audio/engine.js"
+    ],
+    [
+      "js/audio/ers-layer.js",
       "js/audio/engine.js"
     ],
     [

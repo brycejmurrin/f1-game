@@ -324,7 +324,7 @@ function highlightsRig({ sound = true } = {}) {
   const tickCtx = vm.createContext({
     Math, performance: { now: () => 0 }, lastFrame: 0, paused: false, state: "results",
     gfx: { warming: () => false }, Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop }, onboard: { tick: noop },
-    netPlay: { tick: noop, active: () => false }, PerfGov: { tick: noop, recordSimulation: noop }, UiExperience: { resumeHolding: () => false },
+    netPlay: { tick: noop, active: () => false }, netStart: null, countT: 0, startLights: { countCredit: () => 0 }, PerfGov: { tick: noop, recordSimulation: noop }, UiExperience: { resumeHolding: () => false },
     director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, raceT: 3,
     GameAudio: audio.GameAudio, soundOn: sound, player, cars, rivalAudio,
     naturalGear: (v) => (v < 30 ? 2 : 6), rpmFor: (g, v) => Math.min(15000, 5000 + v * 1000 / g), isWetRoad: () => false, vTop: () => 90,

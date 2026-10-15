@@ -61,13 +61,13 @@ const MULTI_GLOBAL = {
   // Title-boot audio stub: installs the full LAZY_AUDIO surface so menus do not
   // throw; ensureAudio() reinjects the real modules (var reassignment).
   "js/audio/stub.js": [
-    "Announcer", "AudioPanel", "CarSfx", "DrivingCues", "GameAudio",
+    "Announcer", "AudioPanel", "CarSfx", "DrivingCues", "ErsLayer", "GameAudio",
     "GameAudioRadioFx", "GameAudioSignal", "GameAudioSoundtrack", "GameAudioToneModel",
     "RadioVoice", "RecordedAnnouncer", "RivalAudio", "VoicePack",
   ],
   // Title-boot race-session stub; ensureRaceSession() reinjects via `var`.
   "js/race/session-stub.js": [
-    "Damage", "Duel", "FlyingStart", "MarshalPanels", "PitLane", "RaceEngineer",
+    "Damage", "Duel", "FlyingStart", "JumpStartPenalty", "MarshalPanels", "PitLane", "RaceEngineer",
     "RaceFacts", "RaceRadio", "RadioLines", "Reliability", "SessionRecords",
     "Spotter", "StartLights",
   ],
@@ -83,10 +83,10 @@ const SHARED_GLOBALS = {
   TLXShaders: 8,  // the three/ TSL family does the same for the deferred backend
   // LAZY_AUDIO reinjection: stub.js then the real module (cap 2 each).
   GameAudio: 2, GameAudioSignal: 2, GameAudioSoundtrack: 2, GameAudioRadioFx: 2,
-  GameAudioToneModel: 2, CarSfx: 2, RivalAudio: 2, VoicePack: 2,
+  GameAudioToneModel: 2, CarSfx: 2, ErsLayer: 2, RivalAudio: 2, VoicePack: 2,
   RecordedAnnouncer: 2, DrivingCues: 2, RadioVoice: 2, Announcer: 2, AudioPanel: 2,
   // LAZY_RACE_SESSION reinjection: session-stub.js then the real module (cap 2).
-  Damage: 2, Duel: 2, FlyingStart: 2, MarshalPanels: 2, PitLane: 2, RaceEngineer: 2,
+  Damage: 2, Duel: 2, FlyingStart: 2, JumpStartPenalty: 2, MarshalPanels: 2, PitLane: 2, RaceEngineer: 2,
   RaceFacts: 2, RaceRadio: 2, RadioLines: 2, Reliability: 2, SessionRecords: 2,
   Spotter: 2, StartLights: 2,
 };

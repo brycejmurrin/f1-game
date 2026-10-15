@@ -123,7 +123,7 @@ var SessionRecords = {
 
 var StartLights = {
   _stub: true,
-  create: () => ({ update: function () {}, lampsFor: () => [] }),
+  create: () => ({ update: function () {}, lampsFor: () => [], countCredit: () => 0 }),
 };
 
 var MarshalPanels = {
@@ -136,4 +136,13 @@ var FlyingStart = {
   HANDOVER_S: 0, MARGIN_S: 0, MIN_RUN_M: 0, MAX_RUN_FRAC: 0,
   create: () => ({ update: function () {}, stop: function () {}, owns: () => false, active: () => false }),
   runUpMetres: () => 0,
+};
+
+var JumpStartPenalty = {
+  _stub: true,
+  create: () => ({
+    tickAtGreen: function () {},
+    tickReaction: function () {},
+    reactWindowOpen: () => false,
+  }),
 };

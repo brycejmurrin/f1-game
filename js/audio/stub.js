@@ -18,6 +18,7 @@ var GameAudio = (function () {
     _stub: true,
     onInterrupted: (fn) => { interrupted = typeof fn === "function" ? fn : null; },
     _interruptHook: () => interrupted,
+    context: () => null, sfxBus: () => null,
     init: noop, setEnabled: noop, setSfxEnabled: noop, setUiEnabled: noop,
     setMusicEnabled: noop, setMusicVolume: noop0, setSfxVolume: noop0,
     setMusicSource: noopStr, musicSource: noopStr, setMusicBackend: noop,
@@ -51,12 +52,20 @@ var GameAudioSoundtrack = { create: () => ({}) };
 var GameAudioRadioFx = { create: () => ({}), resetContext: function () {} };
 var GameAudioToneModel = { patchTune: function () {}, nameForTune: function () { return ""; } };
 var CarSfx = { create: () => ({ update: function () {}, levels: () => ({}), pitGuns: function () {} }) };
+var ErsLayer = {
+  attach: function () {}, detach: function () {}, silence: function () {},
+  update: function () {}, cueBoost: function () {}, inspect: function () { return {}; },
+  attached: function () { return false; }, deployLevel: function () { return 0; },
+  harvestLevel: function () { return 0; }, sustainLevel: function () { return 0; },
+  cueCount: function () { return 0; },
+};
 var RivalAudio = {
   create: () => ({
     collect: () => [], emitFieldSfx: function () {},
-    attach: function () {}, detach: function () {}, tick: function () {},
+    attach: function () {}, detach: function () {}, tick: function () {}, silence: function () {},
     passByState: () => [], passByVoices: () => [],
   }),
+  silence: function () {},
   sprayAhead: () => 0,
 };
 var VoicePack = { create: () => null };

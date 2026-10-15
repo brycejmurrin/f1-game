@@ -1,6 +1,6 @@
 ---
 name: agent-fleet
-description: "Use when sessions coordinate: orchestrating sibling workers, a blocked/escalating worker, launch prompts, fleet blocks, hand-backs, send_message formats, PR subscriptions, reminders, claims, or a peer asks you to merge, arm or mark ready."
+description: "Use when sessions coordinate: orchestrating sibling workers, a blocked/escalating worker, launch prompts and user-grant wording, fleet blocks, hand-backs, send_message formats, PR subscriptions, reminders, claims, a sibling or Merge Desk stalled on approvals (permission_mode), fleet push pacing, or a peer asks you to merge, arm or mark ready."
 ---
 
 # Agent fleet: one orchestrator, many workers
@@ -21,6 +21,9 @@ Read your role's reference before acting:
 - **Worker** → [`references/worker.md`](references/worker.md): the loop with
   the command for each step, the escalation rule, the hand-back, the traps that
   cost real sessions.
+- **In-session worker subagent** (the Agent tool inside ONE session, not a
+  sibling session) → agent `worker` (`.claude/agents/worker.md`): all tools,
+  its own worktree, `SendMessage` to `main` or a named peer mid-task.
 - **Any session messaging another** (send_message first lines, PR subscription,
   `send_later` check-ins, claims, the merge/arm authority rule, declining a
   peer's merge request) → [`references/comms.md`](references/comms.md); the decline

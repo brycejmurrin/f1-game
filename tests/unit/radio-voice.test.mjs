@@ -1253,3 +1253,74 @@ test("race mix audition stops only the preview generation it started", () => {
   const current = voice.previewGeneration(); assert.equal(voice.stopPreviewIfGeneration(current), true, "owner can cancel its own pending/current voice");
   assert.equal(voice.stopPreviewIfGeneration(current), false, "spent ownership cannot cancel a newer voice generation");
 });
+
+// ── #2189: the squelch plays through GameAudio's own context and SFX bus ────
+// audioCtx() asked GameAudio.context(), which GameAudio never exported, so the
+// real path fell through: null on a phone (squelch never fired) and a second,
+// unmixed `new AudioContext()` on desktop (no master, limiter, SFX volume or
+// hide-time suspend). Every other squelch test injects window.RadioSquelchCtx
+// and so never took that path; these load the REAL engine.js beside it.
+const ENGINE_FILES = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js",
+  "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"];
+async function loadWithEngine({ mobile = false } = {}) {
+  const { createRequire } = await import("node:module");
+  const fakeAudio = createRequire(import.meta.url)("./fake-audio-vm.cjs");
+  const sb = {
+    Math, JSON, Object, Array, Number, String, Set, Map, WeakMap, Promise, Date, Error,
+    parseFloat, parseInt, isFinite, Float32Array, console,
+    setTimeout: unrefTimeout, clearTimeout,
+    document: { addEventListener() {}, getElementById: () => null, documentElement: { lang: "en" }, hidden: false },
+    addEventListener() {}, removeEventListener() {}, navigator: {},
+    fetch: () => Promise.reject(new Error("no fetch")),
+    speechSynthesis: synthStub(), SpeechSynthesisUtterance: function (t) { this.text = t; },
+  };
+  sb.window = sb;
+  if (mobile) sb.GLX = { isMobile: true };
+  const audio = fakeAudio.install(sb);
+  const ctx = vm.createContext(sb);
+  seedLog(ctx);
+  vm.runInContext(ENGINE_FILES.map(read).join("\n").replace(/^const\b/gm, "var"), ctx, { filename: "engine.js" });
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const GameAudio = vm.runInContext("GameAudio", ctx);
+  const RV = vm.runInContext("RadioVoice", ctx);
+  GameAudio.init();
+  const saved = new Map([["radioVoice", true]]);
+  const G = { soundOn: true, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } };
+  return { GameAudio, RV, G, made: audio.made, sb };
+}
+
+for (const mobile of [false, true]) {
+  test(`squelch rides GameAudio's context and SFX bus, one AudioContext (#2189, ${mobile ? "phone" : "desktop"})`, async () => {
+    const { GameAudio, RV: R, G, made, sb } = await loadWithEngine({ mobile });
+    assert.equal(sb.RadioSquelchCtx, undefined, "the real path, not the test hook");
+    assert.equal(typeof GameAudio.context, "function", "GameAudio exports context()");
+    const gaCtx = GameAudio.context();
+    assert.ok(gaCtx, "init built GameAudio's context");
+    assert.equal(made.length, 1, "init builds exactly one AudioContext");
+    // Record what the squelch pool's gains connect to.
+    const bus = GameAudio.sfxBus();
+    const into = [];
+    const mk = gaCtx.createGain;
+    gaCtx.createGain = () => { const g = mk(); const c = g.connect; g.connect = (t) => { into.push(t); return c(t); }; return g; };
+    let bursts = 0;
+    const mkSrc = gaCtx.createBufferSource;
+    gaCtx.createBufferSource = () => { bursts++; return mkSrc(); };
+    const v = R.create(G);
+    assert.equal(v.say("BOX BOX BOX", 3, "info"), true);
+    await flush();
+    const s = v.debug().squelch;
+    assert.ok(s && s.play, "engineer line arms the squelch");
+    assert.equal(s.pool, mobile ? 1 : 2, "the pool was built (a phone gets the lite pool)");
+    assert.ok(s.fired.includes("open"), "the open lane fired");
+    assert.ok(bursts >= 1, "the open burst played on GameAudio's context");
+    assert.equal(made.length, 1, "no second AudioContext");
+    assert.ok(into.length && into.every((t) => t === bus), "every squelch voice lands on GameAudio's SFX bus");
+  });
+}
+
+test("the title stub exposes context() → null, and the squelch stays silent on it (#2189)", () => {
+  const sc = vm.createContext({});
+  vm.runInContext(read("js/audio/stub.js"), sc);
+  assert.equal(vm.runInContext("GameAudio.context()", sc), null);
+  assert.equal(vm.runInContext("GameAudio.sfxBus()", sc), null);
+});

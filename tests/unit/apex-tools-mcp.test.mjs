@@ -1597,7 +1597,8 @@ test("apex_track shot carries el and h: eye pitch / eye height, orbit aim height
   const ts = fs.readFileSync(path.join(ROOT, "tools/shot/track-session.mjs"), "utf8");
   assert.match(ts, /a\.eyeAt\(o\.frac, 0, o\.h == null \? 2\.5 : o\.h\)/);
   assert.match(ts, /a\.view\(\{ eye: r\.eye, yaw, pitch: o\.pitch \}\)/);
-  assert.match(ts, /a\.orbit\(o\.frac, o\.az, o\.el, o\.dist, o\.h == null \? 1\.5 : o\.h\)/);
+  assert.match(ts, /a\.orbit\(o\.frac, o\.az, o\.el, o\.dist, o\.h == null \? 1\.5 : o\.h, \{ clear: o\.clear \}\)/);
+  assert.match(ts, /clear: !op\.through/, "survey shots step round blockers like shot.mjs unless op.through");
 });
 
 test("apex-eval: the shapeOf helper it injects into the page parses (named fn expr, no source rewrite)", async () => {

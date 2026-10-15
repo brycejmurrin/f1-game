@@ -618,3 +618,34 @@ test("collection review owns immutable prepared input and refuses stale or cance
   C.cancelCollectionPreflight(canceled);
   assert.equal(C.commitCollectionPreflight(canceled).ok, false); assert.equal(writes.length, before);
 });
+
+// #2192: upsert({replace}) dropped the old circuit's board and ghosts even when the
+// store refused the write (quota): after a reload the old design was back with its
+// lap records gone for good. The drop now waits for a durable write.
+test("an edit under a full quota keeps the old circuit's board and ghosts until a durable write (#2192)", () => {
+  const cleared = [];
+  const s = boot({}, (ctx) => {
+    ctx.Ghost = { clear: (id) => cleared.push("ghost:" + id) };
+    ctx.InputGhost = { clear: (id) => cleared.push("input:" + id) };
+  });
+  const { C, data, ctx } = s;
+  const old = C.upsert(design({ pts: ellipse(36, 700, 450) })).id;
+  data["ttlb." + old] = [{ t: 80 }];
+  const durableWrite = ctx.GameStore.store.write;
+  ctx.GameStore.store.write = (k, v) => { data[k] = v; return { ok: true, durable: false, reason: "quota" }; };
+  const r = C.upsert(design({ pts: ellipse(36, 760, 455) }), { replace: old });
+  assert.equal(r.ok, true); assert.equal(r.durable, false);
+  assert.deepEqual(data["ttlb." + old], [{ t: 80 }], "the board survives a refused write");
+  assert.deepEqual(cleared, [], "no ghost is cleared on a refused write");
+  // remove() under the same refusal keeps them too.
+  const other = C.upsert(design({ pts: ellipse(36, 720, 450) })).id;
+  data["ttlb." + other] = [{ t: 81 }];
+  C.remove(other);
+  assert.deepEqual(data["ttlb." + other], [{ t: 81 }]);
+  // The next durable write carries the edit to disk, and only then do they go.
+  ctx.GameStore.store.write = durableWrite;
+  C.upsert(design({ pts: ellipse(36, 740, 450) }));
+  assert.equal(data["ttlb." + old], undefined, "dropped once the replacing design is durable");
+  assert.equal(data["ttlb." + other], undefined);
+  assert.deepEqual(cleared.sort(), ["ghost:" + old, "ghost:" + other, "input:" + old, "input:" + other].sort());
+});

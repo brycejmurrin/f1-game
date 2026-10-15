@@ -3,7 +3,7 @@
  * RendererBoot.start() awaits the XR probe, the backend script fetch and the
  * backend's create() (TLX: import("three/webgpu"), requestAdapter,
  * renderer.init → requestDevice) before any menu handler is wired; only
- * gpuAdapterAvailable had a cap. Each step now gives up after 8 s, the backend is
+ * gpuAdapterAvailable had a cap. Each step now gives up after BOOT_STEP_MS, the backend is
  * treated as unavailable and GLX takes the canvas. Time is a manual clock here.
  * Run: node --test tests/unit/renderer-boot-timeout.test.mjs
  */
@@ -13,6 +13,7 @@ import vm from "node:vm";
 import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("../../js/render/renderer-boot.js", import.meta.url), "utf8");
+const BOOT_STEP_MS = Number(src.match(/let ms = (\d+);/)?.[1] || 15000);
 const settle = () => new Promise((r) => setImmediate(r));
 
 const gfxSeam = vm.runInNewContext(readFileSync(new URL("../../js/render/gfx.js", import.meta.url), "utf8") + ";Gfx");
@@ -53,11 +54,12 @@ test("a Gfx.create() that never settles resolves start() with GLX, canary left a
   const started = h.rb.start();
   await settle();
   assert.equal(h.ls.get("apex26.gfxBackendProbe"), "three", "armed while create() is out");
-  h.fire(8000);
+  h.fire(BOOT_STEP_MS);
   const r = await started;
   assert.equal(r.bound, false);
   assert.deepEqual(h.calls, ["tlx.js", "GLX.init"], "GLX took the canvas");
-  assert.equal(h.warns.filter((m) => /backend three init gave no answer in 8 s/.test(m)).length, 1, "logged once");
+  const capSec = BOOT_STEP_MS / 1000;
+  assert.equal(h.warns.filter((m) => m.includes(`backend three init gave no answer in ${capSec} s`)).length, 1, "logged once");
   assert.equal(h.ls.get("apex26.gfxBackendProbe"), "three",
     "a hang is a strike candidate: the next boot's canary reverts it, so a hung device costs two boots, not every boot");
   assert.equal(h.ls.get("apex26.gfxBackend"), "three", "the pick itself is untouched");
@@ -67,7 +69,7 @@ test("a backend script fetch that never settles also falls through to GLX (netwo
   const h = boot({ loadBackend: (files) => (files.includes("tlx.js") ? new Promise(() => {}) : Promise.resolve()), gfxCreate: async () => { throw new Error("create must not run"); } });
   const started = h.rb.start();
   await settle();
-  h.fire(8000);
+  h.fire(BOOT_STEP_MS);
   const r = await started;
   assert.equal(r.bound, false);
   assert.ok(h.warns.some((m) => /backend script fetch gave no answer/.test(m)));
@@ -78,7 +80,7 @@ test("an XR capability probe that never settles does not hold the boot", async (
   const h = boot({ stored: null, xrDetect: () => new Promise(() => {}) });
   const started = h.rb.start();
   await settle();
-  h.fire(8000);
+  h.fire(BOOT_STEP_MS);
   const r = await started;
   assert.equal(r.gfx !== null && r.bound !== undefined, true, "start() resolved");
   assert.ok(h.warns.some((m) => /XR capability probe gave no answer/.test(m)));
@@ -104,7 +106,7 @@ test("missing GLX fallback script is bounded and failed fetch resolves unavailab
       loadBackend: () => fail ? Promise.reject(new Error("offline")) : new Promise(() => {}) });
     const started = h.rb.start();
     await settle();
-    if (!fail) h.fire(8000);
+    if (!fail) h.fire(BOOT_STEP_MS);
     assert.equal(await started, null);
     assert.equal(h.timers.filter((t) => t.live && t.ms >= 1000).length, 0);
   }

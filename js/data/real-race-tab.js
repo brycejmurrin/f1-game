@@ -882,17 +882,34 @@ const DataRealRace = (function () {
         });
       return true;
     }
+    // launch() synchronously accepts a staged race or refuses it. Keep the Hub
+    // and its downloaded positions until that handoff has actually succeeded.
+    function launchRace(script, options) {
+      const generation = bodyGen, request = requestGen;
+      const current = () => generation === bodyGen && request === requestGen && (!isOpen || isOpen());
+      if (!current()) return false;
+      let accepted = false;
+      try { accepted = typeof RealRace !== "undefined" && !!RealRace.launch && !!RealRace.launch(script, options); }
+      catch (e) { Log.warn("data", "real race launch: " + (e && e.message || e)); }
+      if (!current()) return false;
+      if (!accepted) {
+        traceError = "Could not start the race. Please try again."; updateReplayRow();
+        return false;
+      }
+      traceError = "";
+      if (close) close();
+      return true;
+    }
+
     /** WATCH / HIGHLIGHTS: the positions first (if not yet), then the replay in the DRIVE AS seat. */
     function watch(script, slot, fromLap, reel) {
       const myGen = bodyGen, seat = seatCode, camera = watchCamera;
       const go = (tr) => {
-        if (typeof RealRace === "undefined" || !RealRace.launch) return false;
         if (myGen !== bodyGen || (slot && slot.isConnected === false)) return false;
         if (isOpen && !isOpen()) return false;   // the positions landed after the hub closed (or a JUMP IN left it): nothing to watch from
         startLap = fromLap;
         Log.info("data", "real replay " + script.sessionKey + (reel ? " highlights" : " from " + fromLap) + " follow=" + seat);
-        if (close) close();
-        return !!RealRace.launch(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
+        return launchRace(script, { seat, laps: script.laps, startLap: fromLap, watch: true, camera, reel: !!reel, traces: tr, intro: true });   // intro: the pre-race card and announcer (js/race/real-race.js launch)
       };
       if (traceFits(traces, script)) return go(traces);
       return loadTraces(script, slot, go);
@@ -1114,11 +1131,9 @@ const DataRealRace = (function () {
     }
 
     function jumpIn(script, code) {
-      if (typeof RealRace === "undefined" || !RealRace.launch) { Log.warn("data", "RealRace is not loaded"); return false; }
       Log.info("data", "real race jump in " + script.sessionKey + " as " + code + " laps=" + simLaps(script) + " from=" + startLap);
       const tr = traceFits(traces, script) ? traces : null;
-      if (close) close();
-      return !!RealRace.launch(script, { seat: code, laps: simLaps(script), startLap, traces: tr, intro: true });   // intro: the pre-race card and announcer, as RACE! has
+      return launchRace(script, { seat: code, laps: simLaps(script), startLap, traces: tr, intro: true });   // intro: the pre-race card and announcer, as RACE! has
     }
 
     return { loadRealRace, scriptFor, jumpIn, lapEvents, watch, loadTraces, cancel,

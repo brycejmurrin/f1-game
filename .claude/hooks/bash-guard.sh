@@ -28,10 +28,14 @@
 #    the parsed argv (round 2, see "one parse" below).
 #  git push / gh — force, mirror, delete, deploy-branch pushes are blocked;
 #    `gh pr merge --squash|--rebase` is denied and other merges / ready flips
-#    ask (merge_policy.py, shared with github-mcp-guard.sh).
+#    ask (merge_policy.py, shared with github-mcp-guard.sh). A push while
+#    `tools/ci/queue-depth.mjs` says hold is refused (AGENTS.md rule 4;
+#    APEX_PUSH_HOLD=0 overrides) unless the push starts no CI (#2182), and an Actions run cancel (`gh run cancel`,
+#    …/actions/runs/<id>/cancel) is refused (APEX_RUN_CANCEL_OK=1 overrides).
 #  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
-#    .claude/agents; never a generated doc) runs only docs-integrity — no
-#    ratchet raise, no test:guards.
+#    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
+#    and artifacts/track-survey; never a generated doc) runs only
+#    docs-integrity — no ratchet raise, no test:guards.
 #
 # Exit 2 blocks with the reason on stderr; exit 0 lets the normal permission
 # flow decide.
@@ -91,6 +95,7 @@ for n,ln in enumerate(L):
         keep=bool(re.search(r"(^|[;&|(\s])(\S*/)?(sh|bash|dash|zsh|source|eval)(\s|$)",ln[:m.start()]) or re.search(r"\|\s*(\S*/)?(sh|bash|dash|zsh)(\s|$)",ln[m.end():]))
     out.append(ln)
 s="\n".join(out)
+hd=s
 res=[];i=0;n=len(s)
 while i<n:
     c=s[i]
@@ -105,8 +110,13 @@ while i<n:
         i=j+1
     else:
         res.append(c); i+=1
-sys.stdout.write("".join(res))
+sys.stdout.write(hd + "\n__APEX_SCAN_SPLIT__\n" + "".join(res))
 ')
+# SCANQ is the heredoc-stripped text WITH its quoted strings (2026-10-15): the
+# run-cancel rule reads a URL out of a quoted curl argument, but a heredoc body
+# (a test being written, a note) is never a command.
+SCANQ="${SCAN%%$'\n'__APEX_SCAN_SPLIT__$'\n'*}"
+SCAN="${SCAN#*$'\n'__APEX_SCAN_SPLIT__$'\n'}"
 # Prefixes that carry the verb: wrappers, a shell -c, an absolute path.
 # 15-F7: `timeout 5 pkill -f chrome` and `xargs pkill -f` are the same kill (timeout,
 # xargs and their flags/duration are wrappers; setsid/doas/stdbuf likewise).
@@ -136,9 +146,17 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 # node` (a digit before the f), `pkill -u root -f chrome` (a flag with an
 # argument) and `pkill --signal 9 -f chrome` (a long flag) walked past. Now ANY
 # non-separator words may precede the -f cluster: PKILL_F.
+#
+# 2026-10-15 (#2125): `pkill -f` was blocked only when the text also named
+# chrom/playwright/node/test-bg/npm, so `pkill -f "serve -l 3456"` passed and
+# killed its own shell (exit 144) twice in census siblings. Every `pkill -f X`
+# matches the hook-wrapped shell, whose argv contains X, whatever X is, so it
+# now blocks unconditionally. `killall` matches process NAMES, not command
+# lines, so it keeps the browser/test-tree scope.
 PKILL_F='pkill([[:space:]]+[^[:space:];&|()]+)*[[:space:]]+(-[A-Za-z0-9]*f[A-Za-z0-9]*|--full)'
-if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}(${PKILL_F}([[:space:]]|\$)|killall[[:space:]])" \
-   && printf '%s' "$SCAN" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
+if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}${PKILL_F}([[:space:]]|\$)" \
+   || { printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}killall[[:space:]]" \
+        && printf '%s' "$SCAN" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; }; then
   echo "BLOCKED: pkill -f / killall matches your own shell (its command line contains the pattern) and orphans Playwright's browsers. Stop a run with 'node tools/ci/test-bg.mjs --stop'; kill orphan Chrome by PID from a listed set: ps -eo pid,comm | awk '\$2==\"chrome\"{print \$1}'" >&2
   exit 2
 fi
@@ -274,6 +292,56 @@ print(json.dumps(d))
 trap emit_on_exit EXIT
 if [ -n "$GH_DECISION" ] && printf '%s' "$GH_DECISION" | grep -q '"deny"'; then exit 0; fi
 
+# --- cancelling an Actions run ---------------------------------------------------
+# NEVER (2026-10-15, docs/notes/CI-CLOG-SURVEY-2026-10-15.md): a queued run holds
+# no slot, so a cancel sweep frees nothing — it throws away the run's queue
+# position and the branch owner pushes a "retrigger" commit, which buys a new
+# run plus a docs-guards run at the back of the queue. 306 of 401 PR runs ended
+# cancelled that day. Your own superseded run is replaced by your next push and
+# a closed PR's runs are cancelled by the close; nothing else needs a cancel.
+# `gh run cancel` on SCAN (command position); the REST path on SCANQ (quoted
+# strings kept, heredoc bodies dropped: a quoted URL is blanked out of SCAN,
+# and a heredoc body is text being written). github-mcp-guard.sh is the MCP
+# door (actions_run_trigger cancel_workflow_run). APEX_RUN_CANCEL_OK=1 when the
+# user asked for the cancel.
+if [ "${APEX_RUN_CANCEL_OK:-}" != 1 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_RUN_CANCEL_OK=1'; then
+  if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}gh[[:space:]]+run[[:space:]]+cancel([[:space:]]|\$)" \
+     || printf '%s' "$SCANQ" | grep -Eq 'actions/runs/[^/[:space:]]+/(force-)?cancel'; then
+    echo "BLOCKED: cancelling an Actions run. A queued run holds no slot — a cancel only loses its queue position and buys a retrigger push (2026-10-15: 306 of 401 PR runs). Your own superseded run is replaced by your next push; a closed PR's runs are cancelled by the close. APEX_RUN_CANCEL_OK=1 <command> only when the user asked for this cancel." >&2
+    exit 2
+  fi
+fi
+
+# --- the queue hold on git push (AGENTS.md rule 4) -------------------------------
+# Prose until 2026-10-15: "if queue-depth.mjs says hold, commit locally only".
+# Enforced here on every `git … push` in the command (the same shape the
+# fallback regex above reads; heredoc bodies and quoted text are not commands).
+# The gauge is skipped when it cannot answer (no token, API down: rc 3 — the
+# push proceeds with a note), in a checkout whose origin is not this repository
+# (the hook's own tests), under APEX_GUARD_PROBE, and with APEX_PUSH_HOLD=0 in
+# the environment or the command, which is the override for "the user asked
+# for this push now". A hold reads as exit 1 and the push is refused with the
+# gauge's own line; retry when `node tools/ci/queue-depth.mjs` says ok.
+# A push that starts NO CI is not held (#2182, 2026-10-15): the gauge gets the
+# command (`--push`), resolves every destination branch, and answers
+# `= queue skip …` (exit 0) when each has no open PR or a draft PR without
+# `run-ci` — a handoff push before a long wait (rule 12) must not be lost to a
+# jammed queue. An unresolvable target or a failed PR lookup measures as before.
+PUSH_RE="(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"
+if [ -z "${APEX_GUARD_PROBE:-}" ] && [ "${APEX_PUSH_HOLD:-}" != 0 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_PUSH_HOLD=0' \
+   && printf '%s' "$SCAN" | grep -Eq "$PUSH_RE" \
+   && [ -f "$ROOT/tools/ci/queue-depth.mjs" ] \
+   && git -C "$ROOT" remote get-url origin 2>/dev/null | grep -q 'f1-game'; then
+  QLINE=$(cd "$ROOT" && timeout -k 5 "${APEX_QUEUE_TIMEOUT:-90}" node tools/ci/queue-depth.mjs --push "$SCAN" 2>/dev/null); QRC=$?
+  case "$QRC" in
+    0) case "$QLINE" in "= queue skip"*) echo "bash-guard: $QLINE" >&2 ;; esac ;;
+    1) echo "BLOCKED: ${QLINE:-= queue hold}" >&2
+       echo "AGENTS.md rule 4: a push now only adds queue wait for every session. Commit locally; push when 'node tools/ci/queue-depth.mjs' says ok (poll it, do not loop on pushes). APEX_PUSH_HOLD=0 git push … overrides when the user asked for this push now." >&2
+       exit 2 ;;
+    *) echo "bash-guard: queue-depth could not answer (rc $QRC: no token, API unreachable or timed out) — the push is not held." >&2 ;;
+  esac
+fi
+
 # --- guards before git commit ---------------------------------------------------
 # WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
 # `git( -C dir)? commit` on the raw text, so `git -c k=v commit`, `git
@@ -307,6 +375,24 @@ fi
 read -r _C_N C_RUN C_ALL C_GITDIR C_PATHS <<EOF
 $COMMIT_LINE
 EOF
+# `git add X && git commit` IN ONE COMMAND (2026-10-15 blocker census: 7 blocks
+# in 7 sessions). This hook runs before the whole command, so X is still
+# unstaged when the unstaged rule below reads the tree. A `git add` in the same
+# command counts as staged: its paths join the unstaged cover and the docs-only
+# set (never C_PATHS, the commit's own pathspec, which the ratchet rule reads);
+# -A/--all/-u/--update/./:/ stage everything, so they read like `commit -a`.
+ADD_PATHS=""; ADD_ALL=0
+set -f   # a glob pathspec stays a word, not this cwd's matches
+for w in $(printf '%s\n' "$SCAN" | grep -oE "(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:];&|()]+)?[[:space:]]+add([[:space:]]+[^;&|()[:space:]]+)*" \
+           | sed -E 's/^[;&|([:space:]]*git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+add//'); do
+  case "$w" in
+    -A|--all|-u|--update|.|:/) ADD_ALL=1 ;;
+    -*) ;;
+    *) ADD_PATHS="$ADD_PATHS $w" ;;
+  esac
+done
+set +f
+[ "$ADD_ALL" = 1 ] && C_ALL=1
 # Another host's adapter (.cursor/hooks/shell-guard.sh, used by Cursor and
 # Codex) sets APEX_COMMIT_GATE=githook when core.hooksPath is .githooks: the
 # git pre-commit hook runs this same gate there, so it is not run twice.
@@ -316,6 +402,19 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   if [ -n "$C_GITDIR" ] && [ "$C_GITDIR" != "-" ]; then
     R2="$(git -C "$C_GITDIR" rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$R2" ] && ROOT="$R2"
+  fi
+  # A LINKED WORKTREE BORROWS THE MAIN CHECKOUT'S node_modules (2026-10-15).
+  # EnterWorktree, `isolation: worktree` subagents and `git worktree add` make
+  # a tree with no node_modules, so every worker commit used to block here
+  # (census session_01CgCjzTvy729SeWsHzuv8eh). The dependencies are the same
+  # package.json, the link is git-ignored (`node_modules` in .gitignore), and
+  # the main checkout's install is what SessionStart already verified.
+  if [ ! -e "$ROOT/node_modules" ]; then
+    WT_COMMON="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    WT_MAIN="$([ -n "$WT_COMMON" ] && dirname "$WT_COMMON")"
+    if [ -n "$WT_MAIN" ] && [ "$WT_MAIN" != "$ROOT" ] && [ -d "$WT_MAIN/node_modules" ]; then
+      ln -s "$WT_MAIN/node_modules" "$ROOT/node_modules" 2>/dev/null || true
+    fi
   fi
   if [ -z "${APEX_GUARD_PROBE:-}" ] && [ ! -d "$ROOT/node_modules" ]; then
     echo "BLOCKED: node_modules is missing, so 'npm run test:guards' cannot run before this commit. Run the SessionStart install (bash tools/env/cloud-agent-install.sh) first." >&2
@@ -349,13 +448,13 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
   # js/game.js` with only docs/a.md staged used to take the docs-only path
   # and commit js/game.js unguarded. The named paths join the set judged.
   COMMITTED="$STAGED"
-  for p in $C_PATHS; do COMMITTED="$COMMITTED
+  for p in $C_PATHS $ADD_PATHS; do COMMITTED="$COMMITTED
 $p"; done
   GENERATED_DOCS=$(cd "$ROOT" && node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ')
   [ -n "$GENERATED_DOCS" ] || GENERATED_DOCS="tools/README.md docs/DEBUG-HOOKS.md docs/ARCHITECTURE.md docs/LIGHTING-TUNER-SLIDERS.md docs/notes/PREPUSH-GATE-LADDER.md"
   DOCS_ONLY=0
   # `--all` / -a stage at commit time: the index is not what will be committed.
-  if [ -n "$STAGED$C_PATHS" ] && [ "$C_ALL" != "1" ]; then
+  if [ -n "$STAGED$C_PATHS$ADD_PATHS" ] && [ "$C_ALL" != "1" ]; then
     DOCS_ONLY=1
     while IFS= read -r f; do
       [ -z "$f" ] && continue
@@ -365,7 +464,11 @@ $p"; done
       case " $GENERATED_DOCS " in
         *" $f "*) DOCS_ONLY=0; break ;;
       esac
-      printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$' || { DOCS_ONLY=0; break; }
+      # Survey assets count as prose (2026-10-15): image/report output in the
+      # track-survey-assets dirs only (docs/notes/SURVEY-ASSETS-BRANCH.md). That
+      # branch dropped ci.yml (#2234), so test:guards is red there by
+      # construction and every image commit needed APEX_SKIP_GUARDS=1.
+      printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$|^artifacts/(shots/(tracks|gallery)|track-survey)/.+\.(png|jpe?g|webp|json|html)$' || { DOCS_ONLY=0; break; }
     done <<EOF
 $COMMITTED
 EOF
@@ -399,7 +502,7 @@ EOF
       [ -z "$f" ] && continue
       case "$f" in .claude/memory/*) continue ;; esac
       covered=0
-      for p in $C_PATHS; do
+      for p in $C_PATHS $ADD_PATHS; do
         p="${p%/}"; case "$f" in "$p"|"$p"/*) covered=1 ;; esac
         [ "$p" = "." ] && covered=1
       done

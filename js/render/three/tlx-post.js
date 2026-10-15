@@ -127,6 +127,8 @@
     try { if (localStorage.getItem("apex26.tlxBloom11") === "0") bloom11 = false; } catch (_) { /* no storage: on */ }
     const hdrType = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
     bloom11 = bloom11 && hdr && THREE.UnsignedInt101111Type != null && THREE.RGBFormat != null;
+    // sceneHdr is fixed for the chain's life — hdr is decided once at factory time.
+    let _sceneHdr = hdr ? 1 : 0;
 
     // 1x1 no-op fallbacks (glx/post.js whiteTex/blackTex)
     function onePx(v) {
@@ -329,6 +331,7 @@
       trackMaterial,
     });
     ownTexture(P.composite && P.composite.grOffTex);   // the godray slot's own "off" black
+    if (P.composite && P.composite.U) P.composite.U.sceneHdr.value = _sceneHdr;
 
     // fullscreen runner
     quad = new THREE.QuadMesh();

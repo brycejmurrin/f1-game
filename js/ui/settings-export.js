@@ -16,13 +16,15 @@
                node count does not grow.
 
    Loading any one overwrites what is stored and reloads the page, so the
-   button asks twice. SETTINGS and GARAGE still never carry career or season
-   saves, lap records, ghosts, or anything account-shaped, in either direction.
+   button asks twice. SETTINGS may carry time-trial leaderboards in an optional
+   `ttlb` section (merged on import, never overwriting blindly). GARAGE and
+   SETTINGS still never carry career or season saves, ghosts, replays, or anything
+   account-shaped, in either direction.
 
    SPEC below is the allowlist — every player-facing preference, tuner and
    control binding under the `apex26.` prefix, grouped the way SETTINGS is.
    Nothing else is ever read: the garage (parts, liveries, setup sheets, MY
-   TEAM), saves (career, season, leaderboards, ghosts, daily bests), accounts
+   TEAM), saves (career, season, ghosts, replays, daily bests), accounts
    and network (Spotify tokens, TURN credentials, relays) and the renderer's
    self-healing latches stay out by construction, and the unit test asserts
    that a poisoned store leaks none of them. Two lanes, like the store: `json`
@@ -96,6 +98,7 @@ const SPEC = [
   { k: "motion", lane: "json", group: "a11y", def: null, src: "js/ui/title-fx.js REDUCE MOTION (null/auto = follow OS; reduce=ON; off; legacy on → auto)", oneOf: ["auto", "reduce", "off", "on"] },
   { k: "focusRing", lane: "json", group: "a11y", def: "high", src: "js/ui/a11y-opts.js KEYBOARD FOCUS", oneOf: ["standard", "high"] },
   { k: "cbCues", lane: "json", group: "a11y", def: "off", src: "js/ui/a11y-opts.js COLOURBLIND CUES", oneOf: ["off", "on"] },
+  { k: "holdMode", lane: "json", group: "a11y", def: { throttle: "hold", lookBack: "hold" }, src: "js/ui/a11y-opts.js GAS / LOOK BACK hold mode" },
   { k: "titleIntro", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js TITLE INTRO (full | quick | off)", oneOf: ["full", "quick", "off"] },
   { k: "menuWash", lane: "json", group: "appearance", def: "full", src: "js/ui/title-fx.js MENU WASH (full | soft | off)", oneOf: ["full", "soft", "off"] },
   { k: "titleArt", lane: "json", group: "appearance", def: "on", src: "js/ui/title-fx.js TITLE ART (on | soft | off)", oneOf: ["on", "soft", "off"] },
@@ -274,7 +277,11 @@ const SPEC = [
   { k: "metricsLogLvl", lane: "raw", group: "metrics", def: "warn", src: "js/perf/metrics-overlay.js" },
 ];
 
-const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, leaderboards, ghosts, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags";
+if (typeof SaveSchemaRegistry !== "undefined" && SaveSchemaRegistry.ingestSettingsSpec) {
+  SaveSchemaRegistry.ingestSettingsSpec(SPEC);
+}
+
+const EXCLUDED = "photo library and personal background images, garage (parts, liveries, setup sheets, MY TEAM), saves (career, season, ghosts, replays, daily challenge), accounts and network (Spotify, TURN, relays), renderer self-heal latches, developer flags. Time-trial leaderboards are optional in the ttlb section (merged on import)";
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 function same(a, b) {
@@ -346,13 +353,86 @@ function collect(mode, G) {
   try { const m = document.querySelector('meta[name="apex-build"]'); build = (m && m.content) || null; } catch (_) { /* no DOM */ }
   let desktop = null;
   try { desktop = document.body.classList.contains("desktop"); } catch (_) { /* no DOM */ }
-  return {
+  const out = {
     format: FORMAT, mode: all ? "all" : "changes", exportedAt: new Date().toISOString(), build,
     device: { desktop, userAgent: (typeof navigator !== "undefined" && navigator.userAgent) || null },
     keys: { json: "went through store.set (JSON)", raw: "bare strings from store.rawSet; null = unset" },
     excluded: EXCLUDED,
     changed, settings, defaults, where,
   };
+  const ttlb = collectTtlb();
+  if (ttlb && Object.keys(ttlb).length) out.ttlb = ttlb;
+  return out;
+}
+
+// TIME-TRIAL LEADERBOARDS (apex26.ttlb.<trackId>). Optional in the settings
+// file: old backups without `ttlb` still import. Export is every board on disk;
+// import validates through GameStore.ttParseBoard (same filter as ttRead) and
+// merges per track via ttBoardAdd so caps and class limits stay enforced.
+const TTLB_TRACK_RE = /^[A-Za-z0-9_.-]{1,64}$/;
+const TTLB_TRACKS_MAX = 64;
+const TTLB_LAPS_MAX = 600;   // 10 laps x 6 classes x a few tracks of headroom
+function ttlbEntryKey(e) {
+  return JSON.stringify({ t: e.t, teamId: e.teamId, code: e.code, name: e.name, ts: e.ts, context: e.context || null });
+}
+function ttlbParseBoard(b) {
+  if (typeof GameStore !== "undefined" && GameStore.ttParseBoard) return GameStore.ttParseBoard(b);
+  let laps = [];
+  if (Array.isArray(b)) laps = b;
+  else if (b && b.v === 2 && Array.isArray(b.laps)) {
+    const cls = Array.isArray(b.classes) ? b.classes : [];
+    laps = b.laps.map((e) => {
+      if (!e || typeof e !== "object") return null;
+      const o = {};
+      for (const k of Object.keys(e)) if (k !== "c") o[k] = e[k];
+      if (Number.isInteger(e.c) && cls[e.c]) o.context = cls[e.c];
+      return o;
+    });
+  }
+  return laps.filter((e) => e && Number.isFinite(e.t) && e.t > 0);
+}
+function collectTtlb() {
+  const out = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const full = localStorage.key(i);
+      if (!full || full.indexOf("apex26.ttlb.") !== 0) continue;
+      const trackId = full.slice(12);
+      if (!TTLB_TRACK_RE.test(trackId)) continue;
+      let raw = null;
+      try { raw = JSON.parse(localStorage.getItem(full)); } catch (_) { continue; }
+      const laps = ttlbParseBoard(raw);
+      if (laps.length) out[trackId] = laps;
+    }
+  } catch (_) { /* storage blocked */ }
+  return out;
+}
+function applyTtlb(bag) {
+  if (!bag || typeof bag !== "object" || Array.isArray(bag)) return { applied: 0, skipped: 0, rejected: 0 };
+  if (!GameStore || !GameStore.ttBoardAdd || !GameStore.ttBoard) {
+    return { applied: 0, skipped: 0, rejected: 0 };
+  }
+  const tracks = Object.keys(bag);
+  if (tracks.length > TTLB_TRACKS_MAX) return { applied: 0, skipped: tracks.length, rejected: tracks.length };
+  let applied = 0, skipped = 0, rejected = 0, lapsSeen = 0;
+  for (const trackId of tracks) {
+    if (!TTLB_TRACK_RE.test(trackId)) { skipped++; rejected++; continue; }
+    const raw = bag[trackId];
+    const laps = ttlbParseBoard(raw);
+    const rawLen = Array.isArray(raw) ? raw.length : (raw && raw.laps && Array.isArray(raw.laps) ? raw.laps.length : 0);
+    rejected += Math.max(0, rawLen - laps.length);
+    const seen = new Set(GameStore.ttBoard(trackId).map(ttlbEntryKey));
+    for (const lap of laps) {
+      if (lapsSeen >= TTLB_LAPS_MAX) { skipped++; continue; }
+      lapsSeen++;
+      const k = ttlbEntryKey(lap);
+      if (seen.has(k)) { skipped++; continue; }
+      GameStore.ttBoardAdd(trackId, lap);
+      seen.add(k);
+      applied++;
+    }
+  }
+  return { applied, skipped, rejected };
 }
 
 // THE GARAGE FILE: a SECOND file, deliberately not part of the settings one: the garage is what
@@ -411,9 +491,13 @@ function typeOk(v, def) {
 }
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
-  const groups = file.settings || {};
+  // A file is player input: a non-object `settings` or group is "nothing here",
+  // never a value to assign into (strict mode throws on a primitive, #2191).
+  const isPlain = (o) => o !== null && typeof o === "object" && !Array.isArray(o);
+  const groups = isPlain(file.settings) ? file.settings : {};
   // Legacy: REDUCE MOTION lived under appearance before ACCESSIBILITY.
-  if (groups.appearance && Object.prototype.hasOwnProperty.call(groups.appearance, "motion")
+  if (isPlain(groups.appearance) && Object.prototype.hasOwnProperty.call(groups.appearance, "motion")
+      && (groups.a11y == null || isPlain(groups.a11y))
       && !(groups.a11y && Object.prototype.hasOwnProperty.call(groups.a11y, "motion"))) {
     (groups.a11y ||= {}).motion = groups.appearance.motion;
   }
@@ -423,7 +507,7 @@ function applySettings(file, G) {
     // back: an older number would re-run migrations that have already run.
     if (row.info) continue;
     const g = groups[row.group];
-    if (!g || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
+    if (!isPlain(g) || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
     const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
     if (v === undefined) { skipped++; continue; }
     if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
@@ -443,7 +527,10 @@ function applySettings(file, G) {
       if (stored) applied++; else failed++;
     } catch (_) { failed++; }
   }
-  return { ok: true, applied, skipped, failed, reason: null };
+  const ttlb = applyTtlb(file.ttlb);
+  applied += ttlb.applied;
+  skipped += ttlb.skipped;
+  return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, reason: null };
 }
 // A FILE IS PLAYER INPUT AND THE GARAGE DOES NOT DEFEND ITSELF. isGarageKey
 // checks the KEY; nothing checked the VALUE, so any JSON at a garage-shaped key
@@ -841,8 +928,10 @@ function create(G) {
       disarm();
       pick((obj) => {
         if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
-        const r = apply(obj, revisions);
-        if (!r.ok) { flash(b, label, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
+        let r;
+        // A throw here would surface as an unhandled rejection over the game (#2191).
+        try { r = apply(obj, revisions); } catch (e) { Log.warn("ui", "file load threw", e && e.message); r = null; }
+        if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
         if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
@@ -870,12 +959,13 @@ function create(G) {
     const note = document.createElement("p");
     note.className = "adv-help";
     note.setAttribute("data-help", "keep");   // HELP TEXT: HIDE keeps it — it is the only word on what LOAD does
-    note.textContent = "Back up preferences, appearance profiles, tuners and control bindings with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads. Photos, personal background images, career progress and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
+    note.textContent = "Back up preferences, appearance profiles, tuners, control bindings and time-trial leaderboards with SAVE ALL. SAVE CHANGED exports only differences from the defaults. LOAD asks twice, then reloads; leaderboards in the file are merged with yours (best laps kept). Photos, personal background images, career progress, ghosts, replays and accounts are not included. For cars, setups and liveries, use the file buttons in GARAGE › TEAM.";
 
     const shareNote = document.createElement("p");
+    shareNote.id = "pm-share-code-help";
     shareNote.className = "adv-help";
     shareNote.setAttribute("data-help", "keep");
-    shareNote.textContent = "Paste an APXS1 / APXL1 / APXD1 share code (or a #share= link) to stage a setup, livery, or daily challenge. Ghosts still use APXG1 / #ghost=.";
+    shareNote.textContent = "Paste an APXS1 / APXL1 / APXD1 share code (or a #share= link) to stage a setup, livery, or daily challenge. Your previous setup or livery is kept after an import: paste UNDO here to restore it. Ghosts still use APXG1 / #ghost=.";
     // textarea — not <input>: settings-export tests pick the LOAD file input via
     // querySelector("input"), and a text field here would steal that match.
     const shareIn = document.createElement("textarea");
@@ -886,18 +976,25 @@ function create(G) {
     shareIn.autocomplete = "off";
     shareIn.placeholder = "paste APXS1 / APXL1 / APXD1 code";
     shareIn.setAttribute("aria-label", "Share code");
+    shareIn.setAttribute("aria-describedby", "pm-share-code-help pm-share-code-status");
+    const shareStatus = document.createElement("p");
+    shareStatus.id = "pm-share-code-status";
+    shareStatus.className = "adv-help";
+    shareStatus.setAttribute("data-help", "keep");
+    shareStatus.setAttribute("role", "status");
+    shareStatus.setAttribute("aria-live", "polite");
+    shareStatus.setAttribute("aria-atomic", "true");
     const shareBtn = document.createElement("button");
     shareBtn.type = "button";
     shareBtn.id = "pm-share-code-import";
     shareBtn.className = "sel-chip";
     shareBtn.textContent = "IMPORT SHARE CODE";
     shareBtn.onclick = () => {
-      if (typeof ShareCode === "undefined") { shareBtn.textContent = "UNAVAILABLE"; return; }
+      if (typeof ShareCode === "undefined") { shareStatus.textContent = "Share codes are unavailable. Reload the page and try again."; return; }
       const started = { n: 0 };
       const decoded = ShareCode.decode(shareIn.value);
       if (!decoded.ok) {
-        shareBtn.textContent = "INVALID CODE";
-        setTimeout(() => { shareBtn.textContent = "IMPORT SHARE CODE"; }, 1800);
+        shareStatus.textContent = ShareCode.messageFor(decoded);
         return;
       }
       const applied = ShareCode.apply(decoded, {
@@ -910,8 +1007,7 @@ function create(G) {
         openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
         openDaily: () => { if (G.openDailyPicker) G.openDailyPicker(); },
       });
-      shareBtn.textContent = applied && applied.ok && !started.n ? "IMPORTED" : "FAILED";
-      setTimeout(() => { shareBtn.textContent = "IMPORT SHARE CODE"; }, 1800);
+      shareStatus.textContent = ShareCode.messageFor(started.n ? { ok: false } : applied);
     };
 
     host.append(h,
@@ -925,7 +1021,7 @@ function create(G) {
         "Read an apex26-settings file back in. Only allowlisted keys are written; the garage, career and accounts are never touched.",
         (obj) => applySettings(obj, G), "SETTINGS", null, SETTINGS_MAX_BYTES),
       note,
-      shareNote, shareIn, shareBtn);
+      shareNote, shareIn, shareBtn, shareStatus);
   }
 
   // THE GARAGE PAIR LIVES IN THE GARAGE, not here: a player looking to back up
@@ -959,7 +1055,7 @@ function create(G) {
       }
       disarm();
       const r = resetGarage();
-      if (!r.ok) { flash(resetBtn, resetLabel, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
+      if (!r.ok) { flash(resetBtn, resetLabel, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
       Log.info("ui", "garage reset to shipped defaults", { applied: r.applied, skipped: r.skipped, failed: r.failed });
       if (r.failed) { flash(resetBtn, resetLabel, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
       if (!r.applied) { flash(resetBtn, resetLabel, "NOTHING TO RESET", 2200); return; }
@@ -1045,8 +1141,8 @@ function create(G) {
  *  cannot leave an empty panel (title + Back only). */
 function ensureMounted() { if (_ui && typeof _ui.mount === "function") _ui.mount(); }
 
-return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer,
-         applySettings, applyGarage, applyCareer, resetGarage, isGarageKey, isCareerKey, garageValue, create,
+return { FORMAT, GARAGE_FORMAT, CAREER_FORMAT, SPEC, collect, collectGarage, collectCareer, collectTtlb, ttlbParseBoard,
+         applySettings, applyGarage, applyCareer, applyTtlb, resetGarage, isGarageKey, isCareerKey, garageValue, create,
          ensureMounted, mount: ensureMounted,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null),
          careerRow: () => (_ui && _ui.careerRow ? _ui.careerRow() : null) };

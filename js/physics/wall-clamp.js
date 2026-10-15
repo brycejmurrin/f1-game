@@ -133,7 +133,7 @@ const WallClamp = (function () {
           const grindScrape = c.wasOnWall && Math.abs(c.speed) >= WALL_SCRAPE_SPEED;
           if (firstStrike || grindScrape) {
             const fxInc = firstStrike ? incidence : Math.max(incidence, 0.2);
-            GameAudio.collision(fxInc, !firstStrike || incidence < 0.45);
+            GameAudio.collision(fxInc, !firstStrike || incidence < 0.45, into);
             c.collideT = WALL_SFX_REARM;
             if (firstStrike && track.street) {
               if (addShake) addShake(0.1 + incidence * 0.3);
@@ -157,8 +157,16 @@ const WallClamp = (function () {
               const w = worldFromTrack(c.s, c.x, smp);
               if (w) { wx = w.x; wz = w.z; }
             }
-            const key = c._wireId != null ? (c._wireId | 0) + 10000
-              : ((((c.team && c.team.id) || 0) * 4 + (c.seat || 0)) | 0) + 10000;
+            // team.id is a STRING ("haas") — index it in Teams.LIST, never
+            // multiply it (NaN | 0 keyed the whole field 10000, #2170).
+            let key = c._wireId;
+            if (key == null) {
+              const id = c.team && c.team.id;
+              const list = typeof Teams !== "undefined" ? Teams.LIST : [];
+              const ti = list.findIndex((t) => t.id === id);
+              key = (ti < 0 ? list.length : ti) * 4 + (c.seat | 0);
+            }
+            key = (key | 0) + 10000;
             GameAudio.fieldContact(kind, fxInc, wx, wz, key);
           }
         }

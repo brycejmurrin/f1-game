@@ -22,6 +22,17 @@
 //   node tools/ci/ci-watch.mjs --pages               # …then follow pages.yml until a run containing the SHA ends
 //   node tools/ci/ci-watch.mjs --once                # print the current state and exit (no waiting)
 //   node tools/ci/ci-watch.mjs --interval 30         # seconds between polls (min 10, default 60)
+//   node tools/ci/ci-watch.mjs --since 2026-10-15T17:08:05Z   # count only runs created at/after this time
+//   node tools/ci/ci-watch.mjs --since none          # no floor (default: the PR's last trigger event)
+//
+// THE TRIGGER FLOOR (#2259, 2026-10-15). Started right after a `run-ci` label,
+// a watch printed `= ci passed` from the PREVIOUS run on the same head (the
+// draft's skipped run) because the run the label started was not listed yet
+// (PR #2224). A label, a ready flip or a reopen re-runs CI on the SAME sha, so
+// "newest run on the sha" can be a run from before the event. By default the
+// floor is the open PR's newest trigger event (triggerFloor): runs created
+// before it never count, and if no newer run appears within FLOOR_GRACE_MIN
+// the line is `= ci none` (exit 124), never the older run's verdict.
 //
 // Under Claude Code, arm it as a Monitor (every line is an event; re-arm on the
 // 30-min expiry — it resumes from the API, nothing is lost) or as ONE
@@ -55,6 +66,7 @@ export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
 export const DEFAULT_TIMEOUT_MIN = 120;     // no --timeout: CI (~15 min) + the gated Pages publish (median 23, p90 73 min)
 export const DEFAULT_INTERVAL_S = 60;       // seconds between polls; --interval overrides (min 10)
+export const FLOOR_GRACE_MIN = 5;           // minutes to wait for a run newer than the trigger floor
 const say = (...a) => console.log("[ci-watch]", ...a);
 
 /** url -> { etag, json }: the last 200 per URL, for If-None-Match. Bounded. */
@@ -96,6 +108,12 @@ export function api(pathQs, { run = spawnSync, env = process.env, gh, etags = ET
     return { json };
   } catch { return { error: "bad JSON" }; }
 }
+
+/** A ci.yml run started by a label other than run-ci on a draft (#2184): its
+ *  jobs all skip, so it concludes success while testing nothing. ci.yml's
+ *  `run-name` titles it `CI ignored: label <name>`; as the newest run on the
+ *  head it would hide the real verdict, so it never counts. Pure. */
+export const labelNoiseRun = (r) => /^CI ignored: label /.test(String(r?.display_title || ""));
 
 /** One run per workflow: the NEWEST by creation. A push run the PR run on the
  *  same head_sha cancelled seconds in (AGENTS.md rule 8's designed dedupe) is
@@ -194,11 +212,12 @@ function annotations(jobId) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] [--once] [--timeout <min>] [--interval <s>]
+exitIfHelp(argv, `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] [--once] [--timeout <min>] [--interval <s>] [--since <ISO>|none]
   Polls every workflow run for a SHA (default HEAD) every 60 s, with ETag conditional GETs (a 304 is free):
   one [ci-watch] line per job, a red\'s failing step,
   then one \`= ci <verdict>\` line (passed | failed | cancelled | superseded | none). --pages adds the Pages train.
-  --once polls one time and exits. Details: the header of this file and AGENTS.md §Watching CI and Pages.`);
+  --once polls one time and exits. --since: runs created earlier never count (default: the open PR's last
+  run-ci label / ready / reopen; none = no floor). Details: the header of this file and AGENTS.md §Watching CI and Pages.`);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 
 /** Expand `ref` (short sha, branch, HEAD) to a full 40-char commit id: local
@@ -255,14 +274,54 @@ export function openPrFor(sha, request = api) {
   } catch (error) { return unknown(`associated PR lookup: ${error.message || error}`); }
 }
 
-export async function watchSha(sha, { interval, deadline, once, request = api, now = Date.now, wait = sleep, report = say }) {
+/**
+ * The PR's newest event that starts a ci.yml run on the SAME head: `run-ci`
+ * labelled while the PR was a draft (any other label, or run-ci on a ready PR,
+ * starts only a `CI ignored` run — labelNoiseRun), `ready_for_review`, or
+ * `reopened`. Draft state is replayed backwards from `pr.draft` through
+ * ready_for_review / converted_to_draft. → { floor: ms|null } | { error }.
+ * https://docs.github.com/en/rest/issues/events#list-issue-events (oldest first, per_page max 100)
+ */
+export function triggerFloor(pr, request = api) {
+  const events = [];
+  for (let page = 1; page <= 10; page++) {
+    const r = request(`issues/${pr.number}/events?per_page=100&page=${page}`);
+    if (r?.error || !Array.isArray(r?.json)) return { floor: null, error: `PR #${pr.number} events: ${r?.error || "no event array"}` };
+    events.push(...r.json);
+    if (r.json.length < 100) break;
+  }
+  let draft = Boolean(pr.draft);
+  for (const e of events.slice().reverse()) {
+    const at = Date.parse(e?.created_at);
+    if (e?.event === "ready_for_review") { if (Number.isFinite(at)) return { floor: at }; draft = true; }
+    else if (e?.event === "reopened" && Number.isFinite(at)) return { floor: at };
+    else if (e?.event === "converted_to_draft") draft = false;
+    else if (e?.event === "labeled" && e.label?.name === "run-ci" && draft && Number.isFinite(at)) return { floor: at };
+  }
+  return { floor: null };
+}
+
+export async function watchSha(sha, { interval, deadline, once, since = null, grace = FLOOR_GRACE_MIN * 60_000, request = api, now = Date.now, wait = sleep, report = say }) {
   const seen = new Set(), announced = new Set();
   const start = now();
   const unknown = (message) => { report(`= ci unknown — API: ${message}`); return 3; };
   for (;;) {
     const r = request(`actions/runs?head_sha=${sha}&per_page=50`);
     if (r?.error || !Array.isArray(r?.json?.workflow_runs)) return unknown(r?.error || "workflow runs lookup returned no run array");
-    const runs = latestPerWorkflow(r.json.workflow_runs);
+    const listed = r.json.workflow_runs.filter((x) => !labelNoiseRun(x));
+    // #2259: a run from before the trigger floor does not cover it.
+    const fresh = since == null ? listed : listed.filter((x) => Date.parse(x.created_at) >= since);
+    if (since != null && !fresh.length && listed.length) {
+      const at = new Date(since).toISOString().replace(/\.000Z$/, "Z");
+      if (!announced.has("floor")) { announced.add("floor"); report(`ignoring ${listed.length} run(s) created before ${at} (the PR's last run-ci label / ready / reopen); waiting for the run it starts`); }
+      if (once || now() - start > grace) {
+        report(`= ci none — no run for ${sha.slice(0, 7)} created after ${at} within ${Math.round(grace / 60000)} min; the ${listed.length} older run(s) do not cover it, so theirs is not the verdict (re-arm, or --since none to read them)`);
+        return 124;
+      }
+      await wait(interval);
+      continue;
+    }
+    const runs = latestPerWorkflow(fresh);
     const jobsByRun = {};
     for (const run of runs) {
       if (!announced.has(run.id)) { announced.add(run.id); report(`${run.name} #${run.id} (${run.event}) ${run.status} ${run.html_url}`); }
@@ -311,7 +370,7 @@ export async function watchSha(sha, { interval, deadline, once, request = api, n
       }
       if (nv === "none") { report(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
       if (nv === "blocked") { report(`= ci blocked — PR #${pr.number} has merge conflicts, so GitHub starts no run for ${sha.slice(0, 7)}; merge the base (sync-pr.mjs) and push`); return 1; }
-      if (nv === "late") { report(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min; re-arm, or check the Actions tab`); return 124; }
+      if (nv === "late") { report(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min (mergeable_state ${pr.mergeable_state || "unknown"}: "unknown" is GitHub still computing, "dirty" starts no run); re-arm, or check the Actions tab`); return 124; }
     }
     // `running` and `none` are NOT green: under --once a scripted `&& next`
     // used to proceed on a run still in flight (2026-09-24).
@@ -369,7 +428,20 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   // until the task was killed, and a killed task leaves no verdict line.
   const tmin = +opt("--timeout", DEFAULT_TIMEOUT_MIN);
   const deadline = Date.now() + (tmin > 0 ? tmin : DEFAULT_TIMEOUT_MIN) * 60_000;
-  let code = await watchSha(sha, { interval, deadline, once: argv.includes("--once") });
+  // #2259: the trigger floor — explicit --since, else the open PR's last trigger event.
+  let since = null;
+  const sinceArg = opt("--since", null);
+  if (sinceArg === "none") since = null;
+  else if (sinceArg != null) {
+    since = Date.parse(sinceArg);
+    if (!Number.isFinite(since)) { say(`= ci unknown — invalid --since ${JSON.stringify(sinceArg)} (an ISO time, or none)`); process.exit(3); }
+  } else {
+    const lookup = openPrFor(sha);
+    const f = lookup.state === "found" ? triggerFloor(lookup.pr) : { floor: null, error: lookup.error };
+    if (f.error) say(`trigger floor unavailable (${f.error}) — every run on the sha counts`);
+    since = f.floor;
+  }
+  let code = await watchSha(sha, { interval, deadline, once: argv.includes("--once"), since });
   if (code === 0 && argv.includes("--pages") && !argv.includes("--once")) code = await watchPages(sha, { interval, deadline });
   process.exit(code);
 }

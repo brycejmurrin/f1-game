@@ -5,6 +5,7 @@
 // the text), and those are what a unit test can pin without touching the
 // remote. Importing the module must run nothing: the CLI entry is guarded on
 // argv[1]. Under a second.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -245,4 +246,15 @@ test("a board write pokes fleet.yml by REST workflow_dispatch on the deploy bran
     if (isQueuedQuery(args)) return { status: 0, stdout: "0\n" };
     return { status: null, error: new Error("ENOENT") };
   }), /not dispatched/);
+});
+
+test("--json reaches a pipe whole: the CLI sets exitCode, never process.exit() over unflushed stdout", () => {
+  // A 232-claim board printed ~92 KB of JSON; process.exit() cut it at the
+  // 64 KiB pipe boundary, mid-string (found 2026-10-14).
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/who-is-on-it.mjs"), "utf8");
+  assert.doesNotMatch(src, /process\.exit\(main\(\)\)/);
+  assert.match(src, /process\.exitCode = main\(\)/);
+  const out = execFileSync(process.execPath, ["tools/ci/who-is-on-it.mjs", "--no-fetch", "--json", "--hours", "1"],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 });
+  assert.ok(Array.isArray(JSON.parse(out).claims), "the whole document parses, however large the board");
 });

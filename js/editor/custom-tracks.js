@@ -247,7 +247,18 @@ const CustomTracks = (function () {
     }
     return { v: V, items };
   }
-  function write(items) { return store.write(KEY, { v: V, items }); }
+  // Circuits whose board and ghosts wait on a durable write (#2192): a refused
+  // write (quota) leaves the old design on disk, so its runs must outlive it.
+  const pendingDrops = new Set();
+  function write(items) {
+    const r = store.write(KEY, { v: V, items });
+    if (r && r.durable && pendingDrops.size) {
+      for (const id of pendingDrops) if (!items.some((x) => x.id === id)) dropRuns(id);
+      pendingDrops.clear();
+    }
+    return r;
+  }
+  function dropRunsOnceDurable(r, id) { if (r && r.durable) dropRuns(id); else pendingDrops.add(id); }
 
   /** A lap fraction measured along the CONTROL POLYGON's arc → the control
    *  INDEX fraction ((i + t) / N) at the same place, interpolated inside the
@@ -367,7 +378,7 @@ const CustomTracks = (function () {
     else { if (items.length >= LIMITS.items) return { ok: false, reason: "full", limit: LIMITS.items }; items.push(it); }
     it.updated = Date.now();
     const r = write(items);
-    if (origin >= 0) dropRuns(opts.replace);
+    if (origin >= 0) dropRunsOnceDurable(r, opts.replace);
     if (sync() >= 0 && sel) reselect(sel === (opts && opts.replace) ? it.id : sel);
     return { ok: true, id: it.id, replaced: origin >= 0 ? opts.replace : null, durable: !!(r && r.durable), reason: r && r.reason };
   }
@@ -377,7 +388,7 @@ const CustomTracks = (function () {
     const items = load().items.filter((x) => x.id !== id);
     const r = write(items);
     // Its time-trial board (GameStore.ttBoard key shape) and ghosts go with it.
-    dropRuns(id);
+    dropRunsOnceDurable(r, id);
     // Re-resolve by id: the tail re-syncs, so the removed circuit's index now
     // names its successor (or nothing) and every later custom slid down one.
     if (sync() >= 0 && sel) reselect(sel === id ? null : sel);

@@ -24,6 +24,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
+import { proxyFetch } from "../lib/proxy-fetch.mjs";   // #2188: Node fetch ignores HTTPS_PROXY
 
 export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
@@ -290,12 +291,12 @@ export function pickArtifactForRun(artifacts, runId) {
 
 // ── GitHub API (injectable) ────────────────────────────────────────────────
 
-let _fetch = globalThis.fetch.bind(globalThis);
+let _fetch = proxyFetch;
 let _delay = (ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
 
 /** @param {{ fetch?: typeof fetch, delay?: (ms: number) => Promise<void> }} [hooks] */
 export function setFlakeTallyTestHooks(hooks = {}) {
-  _fetch = hooks.fetch || globalThis.fetch.bind(globalThis);
+  _fetch = hooks.fetch || proxyFetch;
   _delay = hooks.delay || ((ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve()));
 }
 

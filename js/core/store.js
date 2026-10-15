@@ -117,6 +117,7 @@ const GameStore = (function () {
     // boot. Removal is what a get() of that key then answered anyway (the
     // default), and it is what the mirror below already did with it.
     write(k, v, options) {
+      schemaNoteWrite(k, "json");
       const key = "apex26." + k;
       // STRINGIFY ONCE, BEFORE ANYTHING IS TOUCHED. It ran twice (inside the try
       // and again for the mirror), so a BigInt or cyclic value threw out of
@@ -200,6 +201,7 @@ const GameStore = (function () {
       catch (e) { noteBroken(e, "read " + k); return def(); }
     },
     rawSet(k, v) {
+      schemaNoteWrite(k, "raw");
       const key = fullKey(k);
       this._cache.delete(key);   // a key lives in one lane; if one ever strays, the disk wins
       this.rawRev++;
@@ -279,6 +281,10 @@ const GameStore = (function () {
 
   function shortKey(k) { return k.indexOf("apex26.") === 0 ? k.slice("apex26.".length) : k; }
   function fullKey(k) { return "apex26." + shortKey(k); }
+  function schemaNoteWrite(k, lane) {
+    if (typeof SaveSchemaRegistry === "undefined" || !SaveSchemaRegistry.noteWrite) return;
+    SaveSchemaRegistry.noteWrite(shortKey(k), lane);
+  }
   // A FULL QUOTA MUST NOT COST A SAVE: the data hub's response cache
   // (apex26.api.*, js/data/api.js) and its real-race scripts (apex26.realrace.*,
   // js/data/real-race-tab.js) are disposable and could fill the whole 5 MiB
@@ -331,7 +337,7 @@ const GameStore = (function () {
   const MIRROR_RETRY_MS = 2000;     // one automatic retry; a later write/pagehide retries retained failures again
   const AUTHORED_KEY = /^apex26\.(?:customTeam|customLogo|(?:parts|setup|setupPresets)\.[A-Za-z0-9_-]{1,64}|livery\.(?:custom\.)?[A-Za-z0-9_-]{1,64})$/;
   const AUTHORED_ROW_BYTES = 512 * 1024, AUTHORED_TOTAL_BYTES = 2 * 1024 * 1024, AUTHORED_KEYS = 96;
-  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, skipped: 0, authoredBytes: 0, authoredKeys: 0, limitReason: null, ready: null };
+  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, settled: false, skipped: 0, authoredBytes: 0, authoredKeys: 0, limitReason: null, ready: null };
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
   let _mirrorPending = new Map();   // full key -> { v: JSON string or null for a delete, lsOk }
   // Compare the last COMMITTED/restored payload, not permanent key ownership:
@@ -526,7 +532,7 @@ const GameStore = (function () {
   // must neither win here nor overwrite the row when the queue flushes.
   function mirrorRestore() {
     const epoch = _foreignEpoch, foreignKeys = new Map(_foreignKeys);
-    if (typeof indexedDB === "undefined" || !indexedDB || typeof localStorage === "undefined") { _restoreDone = true; return Promise.resolve(0); }
+    if (typeof indexedDB === "undefined" || !indexedDB || typeof localStorage === "undefined") { _restoreDone = mirror.settled = true; return Promise.resolve(0); }
     return mirrorOpen().then((db) => new Promise((res) => {
       if (!db) { res([]); return; }
       let r;
@@ -604,7 +610,7 @@ const GameStore = (function () {
     }).catch((e) => {
       Log.warn("game", "durable mirror restore failed: " + ((e && e.message) || e));
       return 0;
-    }).then((n) => { _restoreDone = true; return n; });
+    }).then((n) => { _restoreDone = mirror.settled = true; return n; });
   }
 
   mirror.ready = mirrorRestore();
@@ -649,8 +655,7 @@ const GameStore = (function () {
   // repeated. v2 is {v:2, classes:[ctx…], laps:[{t,teamId,code,name,ts,c}]}
   // with `c` indexing classes (absent = the unversioned legacy class). Both
   // shapes read; the next write stores v2. Callers only ever see v1 rows.
-  function ttRead(trackId) {
-    const b = store.get("ttlb." + trackId, []);
+  function ttParseBoard(b) {
     let laps = [];
     if (Array.isArray(b)) laps = b;
     else if (b && b.v === 2 && Array.isArray(b.laps)) {
@@ -664,6 +669,9 @@ const GameStore = (function () {
       });
     }
     return laps.filter(e => e && Number.isFinite(e.t) && e.t > 0);
+  }
+  function ttRead(trackId) {
+    return ttParseBoard(store.get("ttlb." + trackId, []));
   }
   function ttWrite(trackId, laps) {
     const classes = [], at = new Map();
@@ -715,7 +723,7 @@ const GameStore = (function () {
     return SaveMigrate.migrateSeasonPoints(store, season);
   }
 
-  return { store, ttBoard, ttBoardAdd,
+  return { store, ttBoard, ttBoardAdd, ttRead, ttParseBoard,
            hexToRgb, rgbToHex, seasonDriverId,
            migrateSeasonPoints,
            migrateCareer: SaveMigrate.migrateCareer,

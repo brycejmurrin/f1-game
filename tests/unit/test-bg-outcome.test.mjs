@@ -75,3 +75,30 @@ test("proc stat zombie identity does not keep a completed background run alive",
   const named = captured.replace("(sh)", "(wrapper (with) spaces)");
   assert.deepEqual(procInfo(820854, () => named), info, "command parentheses do not shift stat fields");
 });
+
+test("a zombie supervisor is not a live run (#1921)", async () => {
+  /* A finished wrapper whose parent has not reaped it stays in /proc as state
+     Z: kill(pid, 0) succeeds and its start time still matches, so the run read
+     as live — `--wait` hung to 124 and the one-group cap refused the next
+     group although the log already ended `= bg exit 0`. Build a real zombie:
+     `sleep 0` exits under an exec'd parent that never waits on it. */
+  const { spawn } = await import("node:child_process");
+  const fs = await import("node:fs");
+  const parent = spawn("sh", ["-c", "sleep 0 & echo $!; exec sleep 30"], { stdio: ["ignore", "pipe", "ignore"] });
+  try {
+    const pid = Number(await new Promise((res) => parent.stdout.once("data", (b) => res(String(b).trim()))));
+    const stateOf = () => { try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim()[0]; } catch (_) { return null; } };
+    for (let i = 0; i < 100 && stateOf() !== "Z"; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(stateOf(), "Z", "the fixture is a real zombie");
+    const st = procStart(pid);
+    assert.match(String(st), /^\d+$/, "a zombie keeps its start time");
+    assert.equal(aliveRun({ pid, starttime: st }), false, "a zombie with a matching start time is not live");
+    assert.equal(aliveRun({ pid }), false, "nor is a legacy record");
+    assert.notEqual(outcome({ pid, starttime: st, log: "/nonexistent/test-bg-zombie.log" }), "running");
+  } finally { parent.kill("SIGKILL"); }
+  // Injected: dead states refuse, every other state keeps the identity checks.
+  const me = process.pid, st = procStart(me);
+  for (const s of ["Z", "X", "x"]) assert.equal(aliveRun({ pid: me, starttime: st }, { state: () => s }), false, `state ${s}`);
+  for (const s of ["R", "S", "D", "T"]) assert.equal(aliveRun({ pid: me, starttime: st }, { state: () => s }), true, `state ${s}`);
+  assert.equal(aliveRun({ pid: me, starttime: st }, { state: () => null }), true, "no /proc: the pid + start-time test stands");
+});

@@ -59,7 +59,13 @@ function load(hooks = {}) {
     wallAiScrub: () => 4,
   };
   ctx.TrackPit = { EXIT_WALL_W: 0.35 };
-  ctx.GameAudio = { collision: hooks.onCollision || (() => {}) };
+  ctx.GameAudio = {
+    collision: hooks.onCollision || (() => {}),
+    fieldContact: hooks.onFieldContact || (() => {}),
+  };
+  // Real team ids are strings (js/data/teams.js) — the wall SFX key must not
+  // multiply them (#2170: "haas" * 4 = NaN → every AI car keyed 10000).
+  ctx.Teams = { LIST: [{ id: "mercedes" }, { id: "ferrari" }, { id: "mclaren" }, { id: "haas" }] };
   ctx.Input = {
     vibrate: hooks.onVibrate || (() => {}),
     rumble: hooks.onRumble || (() => {}),
@@ -274,6 +280,27 @@ test("stationary pinned to wall: no scrape re-arm", () => {
     decayCollideT(c, ctx.dt);
   }
   assert.equal(audioHits, afterFirst, "stopped car must not re-arm");
+});
+
+// #2170: the non-player wall-contact cooldown key was ((team.id * 4 + seat) | 0)
+// + 10000 with a STRING team.id, so NaN | 0 put every car without a wire id on
+// key 10000 — one shared 0.25 s cooldown. Behavioural: cars from different teams
+// strike the wall, and the keys GameAudio.fieldContact receives must differ.
+// The branch sits inside WallClamp's c.human block, so the cars that reach it
+// are human non-player cars (a VS FRIEND rival); human:false AI never do.
+test("rival wall SFX: cars from different teams get distinct fieldContact keys (#2170)", () => {
+  const keys = [];
+  const { WallClamp } = load({ onFieldContact: (_k, _i, _x, _z, key) => { keys.push(key); } });
+  const mk = (teamId, seat) => noseInCar({ isPlayer: false, human: true, team: { id: teamId }, seat });
+  const cars = [mk("haas", 0), mk("ferrari", 1), mk("mclaren", 0), mk("haas", 1)];
+  for (const c of cars) WallClamp.apply(c, baseCtx({ soundOn: true }));
+  assert.equal(keys.length, cars.length, "every AI strike reaches fieldContact");
+  for (const k of keys) assert.ok(Number.isInteger(k) && k >= 10000, `key ${k} is an integer in the wall range`);
+  assert.equal(new Set(keys).size, keys.length, `distinct keys per car, got ${keys.join(",")}`);
+  // A netplay wire id still wins, unchanged.
+  keys.length = 0;
+  WallClamp.apply({ ...mk("haas", 0), _wireId: 7 }, baseCtx({ soundOn: true }));
+  assert.deepEqual(keys, [10007]);
 });
 
 // verify-physics #16: game.js called WallClamp.apply(c, { …, addShake(d){…} })

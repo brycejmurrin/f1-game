@@ -25,6 +25,15 @@ function create(G) {
     stickTimer = 0;
     stickGeneration++;
   }
+  const controlsPageActive = () => {
+    const panel = $("pm-panel-controls");
+    if (panel && panel.hidden) return false;
+    const calib = $("pm-pad-calib");
+    if (calib && calib.closest && calib.closest("[hidden]")) return false;
+    const host = $("pm-pad");
+    if (host && host.closest && host.closest("[hidden]")) return false;
+    return true;
+  };
   function cancelCalibration() {
     if (calibration) {
       clearTimeout(calibration.timer);
@@ -189,7 +198,8 @@ function create(G) {
     // The rows follow the CONTROLS page's setting-row grammar (label left, the
     // control cluster right, one line at every UI SIZE): label, then two chips.
     function render(focus) {
-      // Replacing a listening slot must also remove its invisible capture.
+      // A rebuild drops the armed chip from the DOM; disarm first so padCapture
+      // cannot steal the next button press (gamepad connect, brand switch, …).
       if (clearArmed()) setNote(dev.idle);
       host.textContent = "";
       let focusBtn = null;
@@ -431,7 +441,7 @@ function create(G) {
       stickTimer = 0;
       const current = calibrationDevice();
       if (!current || current.id !== request.id || current.index !== request.index
-          || (calibBtn.closest && calibBtn.closest("[hidden]"))) { cancelCalibration(); return; }
+          || !controlsPageActive()) { cancelCalibration(); return; }
       if (Input.padCalibrationOwner && owner !== Input.padCalibrationOwner()) {
         cancelCalibration();
         say("Controller changed — calibration cancelled. Press CALIBRATE STICK again for this controller.");

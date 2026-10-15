@@ -115,10 +115,14 @@ var RaceRadio = (function () {
     // facts only colour it (battles, the lead gap). Hooks: nameOf(car) — the
     // REAL driver's name (a seat car can wear another roster name) — and
     // radioBusy() — a team radio clip is playing.
-    let watch = null, timeline = 0, commentaryGeneration = 0;
+    let watch = null, timeline = 0, commentaryGeneration = 0, engineerGeneration = 0;
     let m = null;
     const queue = { eng: new Map(), tv: new Map() };
-    const log = [];
+    const log = [], drops = [];
+    function drop(c, reason) {
+      if (drops.length > 200) drops.shift();
+      drops.push({ t: +t.toFixed(1), ch: c.ch, id: c.id, reason });
+    }
 
     function freshMemory() {
       return {
@@ -144,7 +148,7 @@ var RaceRadio = (function () {
       facts.reset();
       lines = RadioLines.create((o.seed || 1) + ((G.raceRound | 0) * 7919));
       queue.eng.clear(); queue.tv.clear();
-      m = freshMemory(); evalT = 0; t = 0; last = null; live = false; log.length = 0;
+      m = freshMemory(); evalT = 0; t = 0; last = null; live = false; log.length = 0; drops.length = 0;
     }
     reset();
 
@@ -190,7 +194,8 @@ var RaceRadio = (function () {
     function best(ch) {
       let out = null;
       for (const [id, c] of queue[ch]) {
-        if (t > c.exp || (c.still && !c.still())) { queue[ch].delete(id); continue; }
+        if (t > c.exp) { drop(c, "expired"); queue[ch].delete(id); continue; }
+        if (c.still && !c.still()) { drop(c, "stale"); queue[ch].delete(id); continue; }
         if (c.hold && m.said.has(c.cdKey) && t - m.said.get(c.cdKey) < c.hold) continue;   // waits, is not dropped
         if (!out || c.tier > out.tier || (c.tier === out.tier && c.born > out.born)) out = c;
       }
@@ -202,13 +207,20 @@ var RaceRadio = (function () {
       const text = lines.pick(c.key, c.vars);
       if (!text) { queue[c.ch].delete(c.id); return false; }
       // Accepted cards may wait across a seek or the start of another race.
-      const gen = timeline, field = G.cars, watching = watch, cg = commentaryGeneration, still = c.still;
+      const gen = timeline, field = G.cars, watching = watch, cg = commentaryGeneration, eg = engineerGeneration, still = c.still;
       const valid = () => gen === timeline && field === G.cars && watch === watching
-        && (c.ch !== "tv" || (cg === commentaryGeneration && comm !== "off")) && (!still || still());
-      // Refused (a full card queue): an URGENT line stays queued and is offered
-      // again until its ttl — "LAST LAP" is a once line, and dropping it here
-      // lost it for the race. Anything else is dropped, as before.
-      if (!G.announce(text, durFor(text, kind), kind, valid)) { if (c.tier < 5) queue[c.ch].delete(c.id); return false; }
+        && (c.ch !== "tv" || (cg === commentaryGeneration && comm !== "off"))
+        && (c.ch !== "eng" || (eg === engineerGeneration && chat !== "off")) && (!still || still());
+      // Refused (camera drop or a full card queue): tier 5 and every engineer
+      // line stay queued and retry until ttl — dropping here was the
+      // announce-refused storm on chatty + commentary, and "LAST LAP" is a once
+      // line that must not be lost for the race. TV colour is shed.
+      if (!G.announce(text, durFor(text, kind), kind, valid)) {
+        if (c.ch === "eng" || c.tier >= 5) { drop(c, "announce-refused"); return false; }
+        drop(c, "announce-refused");
+        queue[c.ch].delete(c.id);
+        return false;
+      }
       queue[c.ch].delete(c.id);
       m.said.set(c.cdKey, t);
       if (c.once) m.once.add(c.once);
@@ -625,9 +637,11 @@ var RaceRadio = (function () {
       const e = best("eng");
       if (e) {
         const urgent = e.tier >= 5;
-        const kind = e.id === "flag" ? "warning" : urgent ? "race" : "info";
+        const kind = e.id === "flag" ? "warning" : urgent || e.tier >= 4 ? "race" : "info";
+        // announceBusy only means a card is on screen — announce() still queues.
+        // Gating here was the announce-refused storm: lines never reached the queue.
         const ok = urgent
-          || (!traffic && !G.announceBusy && t - m.eng >= GAP_S[lvl()] * (e.tier >= 3 ? 0.5 : 1) && !underLoad(p) && !(f.pitting && e.tier < 4));
+          || (!traffic && t - m.eng >= GAP_S[lvl()] * (e.tier >= 3 ? 0.5 : 1) && !underLoad(p) && !(f.pitting && e.tier < 4));
         // In a TV camera an "info" card is dropped by announce() (a film shot is
         // not captioned); the commentator speaks there instead, so hold it.
         const tvCam = TV_CAMS.indexOf(camId()) >= 0 && G.hudProfile !== "broadcast";
@@ -713,6 +727,8 @@ var RaceRadio = (function () {
 
     function setChat(v) {
       if (CHAT.indexOf(v) < 0) return chat;
+      // OFF discards both internal offers and accepted cards waiting to display.
+      if (v === "off" && chat !== "off") { engineerGeneration++; queue.eng.clear(); }
       chat = v; if (store && store.set) store.set("radioChat", v);
       return chat;
     }
@@ -747,7 +763,8 @@ var RaceRadio = (function () {
         facts: last && { pos: last.pos, n: last.n, lap: last.lap, toGo: last.toGo,
           ahead: S(last.ahead), gapA: last.gapA, rateA: last.rateA, behind: S(last.behind), gapB: last.gapB, rateB: last.rateB,
           leader: S(last.leader), leadGap: last.leadGap, caution: last.caution },
-        log: log.slice() }),
+        log: log.slice(), drops: drops.slice(),
+        dropCounts: drops.reduce((m, d) => { m[d.reason] = (m[d.reason] || 0) + 1; return m; }, {}) }),
     };
   }
 

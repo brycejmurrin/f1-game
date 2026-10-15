@@ -48,7 +48,7 @@ const WatchTransport = (function () {
       action(top, "prev", "Previous race event", "Ⅰ‹", () => replay.eventStep(-1));
       action(top, "next", "Next race event", "›Ⅰ", () => replay.eventStep(1));
       select(top, "speed", "SPEED", desc.speeds.map((s) => [String(s), s + "×"]), (v) => replay.setSpeed(+v));
-      select(top, "driver", "FOLLOWED DRIVER", desc.drivers.map((d) => [d.code, d.code + " · " + d.name]), (v) => { replay.follow(v); replay.setLocked(true); });
+      select(top, "driver", "FOLLOWED DRIVER", desc.drivers.map((d) => [d.code, d.code + " · " + d.name]), (v) => { if (replay.follow(v)) replay.setLocked(true); });
       const cameras = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
       select(top, "camera", "CAMERA", cameras.map((c) => [c.id, c.id === "tv" ? "TV AUTO" : c.label || c.id.toUpperCase()]), (id) => {
         if (id === "tv") { replay.setAuto(true); return; }   // WATCH owns its director; the live-race TV rig is inactive here
@@ -133,6 +133,13 @@ const WatchTransport = (function () {
       const focused = typeof document !== "undefined" && document.activeElement === refs.seek;
       if (!(focused && !s.paused && !scrubbing)) setAttr(refs.seek, "aria-valuetext", clock(s.T) + " of " + clock(s.duration));
       setText(refs.time, clock(s.T)); setVal(refs.speed, String(s.speed));
+      // These availability getters follow the posed cars, including after a
+      // rewind. Never let a refused selection lock the previous subject.
+      desc.drivers.forEach((d, i) => {
+        const option = refs.driver.children[i], unavailable = d.available === false;
+        if (option.disabled !== unavailable) option.disabled = unavailable;
+        setText(option, d.code + " · " + d.name + (unavailable ? " · UNAVAILABLE" : ""));
+      });
       if (s.follow) setVal(refs.driver, s.follow);
       const cams = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
       const b = s.broadcast;
@@ -144,8 +151,8 @@ const WatchTransport = (function () {
       const current = desc.events.find((e) => e.t >= s.T - 5);
       setText(refs.event, current ? (current.t > s.T ? "NEXT · " : "") + "L" + current.lap + " · " + current.text : s.finished ? "CHEQUERED FLAG" : "RACE IN PROGRESS");
       const lead = typeof RealReplay !== "undefined" ? RealReplay.LEAD_S : 8;
-      refs.prev.disabled = !desc.events.some((e) => e.t - lead < s.T - 1);
-      refs.next.disabled = !desc.events.some((e) => e.t - lead > s.T + 1);
+      refs.prev.disabled = !desc.events.some((e) => Math.max(desc.startT || 0, e.t - lead) < s.T - 1);
+      refs.next.disabled = !desc.events.some((e) => Math.max(desc.startT || 0, e.t - lead) > s.T + 1);
     }
     function stop() {
       if (root) root.remove(); root = null; refs = {}; desc = null; scrubbing = false; tickAt = 0; pendingSeek = null;

@@ -204,12 +204,14 @@ function load(options) {
   const live = String(store.get("careerSlot", "driver:0")).split(":");
   slotFlavour = flavourIn(live[0]);
   slotIdx = slotIn(live[1]);
+  pointerHeld = false;
+  const wanted = [slotFlavour, slotIdx];
   career = readSlot(slotFlavour, slotIdx);
   if (!career)
     outer: for (const f of FLAVOURS)
       for (let i = 0; i < SLOTS; i++) {
         const c = readSlot(f, i);
-        if (c) { slotFlavour = f; slotIdx = i; career = c; setLive({ migration: true }); break outer; }
+        if (c) { slotFlavour = f; slotIdx = i; career = c; holdPointer(wanted) || setLive({ migration: true }); break outer; }
       }
   calendarProtection = null;
   adoptCalendar(career);
@@ -224,7 +226,25 @@ function load(options) {
   identityChanged();
   return career;
 }
-function setLive(options) { store.set("careerSlot", `${slotFlavour}:${slotIdx}`, options); }
+function setLive(options) { pointerHeld = false; store.set("careerSlot", `${slotFlavour}:${slotIdx}`, options); }
+// #2193: a live slot whose key is missing at boot may still be in the IndexedDB
+// mirror. Falling through to another slot must not durably repoint careerSlot
+// before that restore runs (it skips a present key), or the player lands in a
+// different career for good. Play the fallback in memory; once the mirror
+// settles, persist it only if the wanted slot never came back — a restoredBatch
+// load() in between re-reads the untouched pointer and selects the original.
+let pointerHeld = false;
+function holdPointer(wanted) {
+  const m = store.mirror;
+  if (!m || m.settled !== false || !m.ready || typeof m.ready.then !== "function") return false;
+  pointerHeld = true;
+  m.ready.then(() => {
+    if (!pointerHeld) return;
+    pointerHeld = false;
+    if (!readSlot(wanted[0], wanted[1])) setLive({ migration: true });
+  });
+  return true;
+}
 let lastSave = { ok: true, durable: true, reason: null };
 function writeResult(key, value, options) {
   if (typeof store.write === "function") return store.write(key, value, options);

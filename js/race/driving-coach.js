@@ -696,11 +696,19 @@ const DrivingCoach = (function () {
         }
         if (!planned) emptyRow(decisions, "No rival is lining up a pass right now.");
       }
-      const note = $("pm-pit-estimate");
+      const watching = typeof RealRace !== "undefined" && !!RealRace.status().watch;
+      const panel = $("pm-pit-panel");
+      const pitHelp = $("pm-pit-help"), note = $("pm-pit-estimate");
+      if (panel) panel.hidden = watching;
+      if (watching) {
+        SettingRow.disable($("pm-pit-choice"), true);
+        if (pitHelp) pitHelp.textContent = "Pit strategy is unavailable while watching a replay.";
+        if (note) note.textContent = "Pit strategy is unavailable while watching a replay.";
+        return;
+      }
       const names = new Map(G.pits.ownedTyres().map(o => [o.id, o.label]));
       const compoundName = id => names.get(id) || id.replace(/_/g, " ");
       const selected = G.player && G.player.pitNext;
-      const pitHelp = $("pm-pit-help");
       // AUTO NAMES ITS PICK: the set pickFor would fit right now (the plan's
       // letter, never one that breaks the two-compound rule), so AUTO is a
       // choice the player can read rather than a surprise in the box.
@@ -730,7 +738,7 @@ const DrivingCoach = (function () {
     SettingRow.wire($("pm-drill"), { values: GOALS.map(g => g.slice()),
       read: () => drillMode, write: setPracticeGoal });
     SettingRow.wire($("pm-pit-choice"), { read: () => G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
-      write: v => { G.pits.selectNext(G.player, v); paint(); } });
+      write: v => { if (typeof RealRace !== "undefined" && RealRace.status().watch) return; G.pits.selectNext(G.player, v); paint(); } });
     const menu = $("pmsettings"), panel = $("pm-panel-driving");
     if (menu && panel && typeof MutationObserver === "function") {
       const observer = new MutationObserver(() => { if (!menu.hidden && !panel.hidden) paint(); });
