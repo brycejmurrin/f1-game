@@ -1383,6 +1383,33 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
   }
 }
 
+/* ---------- UI Fit r6: lighting over flyby stacked dock (#lighting / #lt-*) ----------
+   Survey rank 5: both inners are position:fixed to the same insets, so on a
+   short landscape dock they paint on top of each other and #lt-rows is
+   unusable (measured 852x344: two 380x307 sheets at 405,8). Standalone
+   lighting / camera / flyby keep their own carves; this block matches only
+   when BOTH #lighting and #flyby are open. Flyby tap floors (#1774) stay. */
+@layer components {
+  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner {
+    z-index: 43;
+  }
+  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-spread {
+    display: none;
+  }
+  body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #lighting-inner[data-density="compact"] #lt-rows {
+    min-height: max(132px, calc(3 * 44px));
+  }
+  @media (min-width: 800px) {
+    body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) {
+      --dock-w: min(calc(40 * var(--vwz)), 360px);
+    }
+    body:has(#lighting:not([hidden])):has(#flyby:not([hidden])) #flyby-inner {
+      left: calc((var(--sal) + 8px) / var(--sheet-eff-scale, var(--ui-scale)));
+      right: auto;
+    }
+  }
+}
+
 /* ---------- UI Fit r6: flyby editor compact tap floor (#flyby / #fb-* only) ----------
    Same root as r5/camera (#1530) and r6/lighting (#1740): compact flyby foot
    sat on --tap-min (RESET/COPY/DONE 80–156×36–38) and pose selects
