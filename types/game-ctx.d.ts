@@ -434,6 +434,8 @@ interface GameCtx {
   readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; chat(): string; comm(): string; trafficBusy(): boolean; debug(): Record<string, unknown> };
   /** What the loading card describes — the flyby editor previews the same object. */
   readonly loadingInfo: () => Record<string, unknown>;
+  /** The menu's race prep (world built, menuFinish done, program warm, car prep record), read-only — __apex.menuPrep. */
+  readonly menuPrep: () => Record<string, unknown>;
   /** js/ui/loading-screen.js, so the flyby editor can hold the card up and move it. */
   readonly loadingScreen: { run(info: Record<string, unknown>, go: () => void): void; stop(): void; hold(info: Record<string, unknown>): boolean; handoff(): boolean; card(): Record<string, number>; setCard(patch: Record<string, number>): Record<string, number>; resetCard(): Record<string, number>; progress(): number; active(): boolean; phase(): string };
 
@@ -880,6 +882,7 @@ declare const MarshalPanels: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
 declare const RealRace: GameModuleFactory;
 declare const FlyingStart: GameModuleFactory;
+declare const JumpStartPenalty: GameModuleFactory;
 declare const Broadcast: GameModuleFactory;
 declare const RealReplay: GameModuleFactory;
 declare const TitleMenu: GameModuleFactory;
