@@ -40,9 +40,9 @@
       const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, wMin, wVar, hMin, hVar, count, seg, fc, rc, rough] of [
         // seg 8 + low rough read as flat-faced light-green pyramids beside the stands (survey 2026-10-15):
-        // near/mid rings now use 14/12 facets, more rough, wider-and-lower profiles (slope ~0.25, was ~0.4).
-        [160, 290, 100, 32, 32, 44, 14, [0.17, 0.34, 0.20], [0.30, 0.36, 0.28], 0.55],    // near base — low rolling green wall
-        [310, 340, 120, 56, 54, 36, 12, [0.22, 0.38, 0.25], [0.36, 0.42, 0.32], 0.5],     // mid green ridge
+        // near/mid rings now use 11/10 facets, more rough, wider-and-lower profiles (slope ~0.25, was ~0.4).
+        [160, 290, 100, 32, 32, 44, 11, [0.17, 0.34, 0.20], [0.30, 0.36, 0.28], 0.55],    // near base — low rolling green wall
+        [310, 340, 120, 56, 54, 36, 10, [0.22, 0.38, 0.25], [0.36, 0.42, 0.32], 0.5],     // mid green ridge
         [500, 380, 140, 110, 85, 28, 8, [0.40, 0.50, 0.44], [0.45, 0.50, 0.45]],  // far hazed range
       ]) {
         const ring = rad + extra;
