@@ -558,7 +558,7 @@ test("publishing a changed top-control zoom requests one subsequent full fit", (
   assert.ok(start >= 0 && end > start);
   for (const [before, requested, cap, expected] of [
     [3, 3, 1.25, true], [1.25, 3, 1.25, false], [3, 3, 2, false],
-    [1.25, 3, Infinity, true], [1.25, 3, 1.2504, false],
+    [1.25, 3, Infinity, true], [1.25, 3, 1.2504, false], [1.6, 3, 1.8, true],
   ]) {
     let painted = String(before);
     const ctx = vm.createContext({ Math, zDockPub: before, btnFloor: 1, btnScale: requested, capDock: cap,

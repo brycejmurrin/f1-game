@@ -284,6 +284,11 @@
   --safe-r: calc(var(--sar) + var(--gut));
   --safe-b: calc(var(--sab) + var(--gut));
   --safe-l: calc(var(--sal) + var(--gut));
+  /* Usable box inside hardware on full-screen menus (#overlay, .screen hosts).
+     Any cap written against raw svh/vw must use these, not 100% of the
+     viewport — viewport-fit=cover includes the notch and home indicator. */
+  --safe-w: calc(100vw - var(--safe-l) - var(--safe-r));
+  --safe-h: calc(100 * var(--svhz) - var(--safe-t) - var(--safe-b));
   /* Software-keyboard occlusion, LAYOUT px. env() cannot see the keyboard —
      on iOS Safari and Chromium-Android it shrinks only the VISUAL viewport,
      so svh/dvh/lvh all miss it too. js/game/sheetshape.js watches

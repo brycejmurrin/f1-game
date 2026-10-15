@@ -1428,11 +1428,12 @@ function fitHud() {
     const controlsRoom = window.innerHeight - sat - sab - 4 * FIT_AIR;
     // Dock and CAM/PAUSE share one effective size. Solve their joint height
     // budget so increasing BUTTON SIZE can plateau, never shrink the pedals.
-    const heightCap = (height) => {
+    // CAM tops out at 150%; PAUSE above the right dock can reach 200%.
+    const heightCap = (height, topMax = 1.5) => {
       if (!height) return Infinity;
       if (controlsRoom <= height + 44) return (controlsRoom - 44) / height;
-      if (controlsRoom <= 1.5 * (height + 44)) return controlsRoom / (height + 44);
-      return (controlsRoom - 66) / height;
+      if (controlsRoom <= topMax * (height + 44)) return controlsRoom / (height + 44);
+      return (controlsRoom - 44 * topMax) / height;
     };
     // PLAN vs THE CLUSTER at HUD 200%. #hud-tyre is anchored on the left dock,
     // outside the centred cluster, so the viewport budget above never sees them
@@ -1493,7 +1494,7 @@ function fitHud() {
     const barW = barR && barR.width ? barR.width : window.innerWidth;
     const barGap = hudDockEl ? parseFloat(getComputedStyle(hudDockEl).columnGap) || 0 : 0;
     const controlsW = gL.w + gR.w;
-    capDock = Math.min(heightCap(gL.h), heightCap(gR.h),
+    capDock = Math.min(heightCap(gL.h), heightCap(gR.h, 2),
       controlsW ? (barW - 2 * barGap - 2 * FIT_AIR) / controlsW : Infinity);
     const dockZ = Math.min(Math.max(btnFloor, btnScale), Math.max(0.4, capDock));
     const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
@@ -1578,7 +1579,7 @@ function fitHud() {
   // Earlier tower/sector budgets saw the old CAM/PAUSE footprint. Refit on
   // the next HUD tick only when their clamped, published zoom changed.
   const dockAfter = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
-  if (Math.abs(Math.min(1.5, Math.max(1, zDockPub)) - Math.min(1.5, Math.max(1, dockAfter))) > 1e-6) {
+  if (Math.abs(Math.min(2, Math.max(1, zDockPub)) - Math.min(2, Math.max(1, dockAfter))) > 1e-6) {
     _fitKey = ""; _fitWait = 0;
   }
   // Publish --dock-r-w in the FINAL chrome zoom, after dock/top caps land.

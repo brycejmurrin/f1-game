@@ -70,10 +70,16 @@ function create(G) {
   let armedImport = "";   // `${flavour}:${i}` or `${flavour}:${i}:other` for cross-mode confirm
   let pendingImport = null; // { envelope, focusFlavour, revisions }
   let backupPicker = null;
+  let backupReadGeneration = 0; // only the latest picker/read in this screen visit may update its review
 
   function announce(msg) { if (G.announce) G.announce(msg); }
 
   function pickBackupFile(onJson) {
+    let pickerGeneration = ++backupReadGeneration;
+    if (pendingImport) {
+      armedImport = ""; pendingImport = null;
+      build();
+    }
     if (!backupPicker) {
       backupPicker = document.createElement("input");
       backupPicker.type = "file";
@@ -82,6 +88,9 @@ function create(G) {
       document.body.appendChild(backupPicker);
     }
     backupPicker.onchange = () => {
+      if (pickerGeneration !== backupReadGeneration) return;
+      const generation = ++backupReadGeneration;
+      pickerGeneration = generation;
       const f = backupPicker.files && backupPicker.files[0];
       if (!f) return;
       if (f.size > CareerBackup.MAX_BYTES) {
@@ -89,11 +98,12 @@ function create(G) {
         return;
       }
       const done = (text) => {
+        if (generation !== backupReadGeneration) return;
         let obj = null;
         try { obj = JSON.parse(text); } catch (_) { obj = null; }
-        onJson(obj, null, text);
+        onJson(obj, null, text, f.name);
       };
-      const fail = () => onJson(null, "read-failed");
+      const fail = () => { if (generation === backupReadGeneration) onJson(null, "read-failed"); };
       if (typeof f.text === "function") f.text().then(done, fail);
       else {
         const r = new FileReader();
@@ -115,6 +125,7 @@ function create(G) {
   }
 
   function runImport(pending, otherConfirmed) {
+    ++backupReadGeneration;
     const { envelope, focusFlavour, rawText, revisions } = pending;
     const result = CareerBackup.apply(envelope, {
       focusFlavour,
@@ -180,6 +191,7 @@ function create(G) {
     }
     open.onclick = () => {
       if (G.soundOn) GameAudio.uiSelect();
+      ++backupReadGeneration;
       armedDelete = "";
       armedImport = "";
       pendingImport = null;
@@ -243,12 +255,12 @@ function create(G) {
           runImport(pendingImport, false);
           return;
         }
-        pickBackupFile((obj, err, text) => {
+        pickBackupFile((obj, err, text, filename) => {
           if (err === "too-large") { announce("IMPORT FAILED — TOO LARGE"); return; }
           if (!obj) { announce("IMPORT FAILED — BAD FILE"); return; }
           const v = CareerBackup.validate(obj, text);
           if (!v.ok) { announce("IMPORT FAILED — " + String(v.reason || "error").toUpperCase()); return; }
-          pendingImport = { envelope: obj, focusFlavour: s.flavour, rawText: text, revisions: expectedRevisions() };
+          pendingImport = { envelope: obj, focusFlavour: s.flavour, rawText: text, filename, revisions: expectedRevisions() };
           armedImport = id;
           build();
         });
@@ -268,6 +280,7 @@ function create(G) {
           const round = Number.isInteger(c.season && c.season.round) ? Math.max(0, c.season.round) : 0;
           return `${c.year | 0 || 2026} · ${teamName || (team ? team.name : c.team || "Team unspecified")} · ${round} rounds completed`;
         };
+        if (pendingImport.filename) card.appendChild(el("div", "cr-note", `File: ${pendingImport.filename}`));
         card.appendChild(el("div", "cr-note", `Review restore — press ${otherArmed ? "ALL MODES?" : "IMPORT?"} to apply`));
         for (const row of preview.slots || []) {
           card.appendChild(el("div", "cr-note", `${mode} · Destination slot ${row.i + 1}`));
@@ -1512,6 +1525,7 @@ function create(G) {
 
   function openHub() {
     Log.info("ui", "CareerUI.openHub");
+    ++backupReadGeneration;
     picking = false;
     slotsOrigin = "hub";
     armedDelete = "";
@@ -1523,6 +1537,7 @@ function create(G) {
   // origin: "title" (default — title-flow openCareerSlots) or "hub" (hub CAREER MODES).
   function openSlots(origin) {
     Log.info("ui", "CareerUI.openSlots");
+    ++backupReadGeneration;
     picking = true;
     slotsOrigin = origin === "hub" ? "hub" : "title";
     armedDelete = "";
@@ -1540,6 +1555,7 @@ function create(G) {
   // in season-ui.js describes).
   function close() {
     Log.info("ui", "CareerUI.close");
+    ++backupReadGeneration;
     $("career").hidden = true;
     draft = null; draftFrom = null; armedDelete = "";
     armedImport = ""; pendingImport = null;
