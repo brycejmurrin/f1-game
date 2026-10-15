@@ -223,11 +223,26 @@ test("a board write pokes fleet.yml by REST workflow_dispatch on the deploy bran
   // push-triggered workflow from the pushed tree, which has no .github/), so
   // the claim tool dispatches it — measured live on #1518, 2026-10-14.
   const { pokeFleetBoard } = await import("../../tools/ci/who-is-on-it.mjs");
-  let seen;
-  assert.equal(pokeFleetBoard((cmd, args) => { seen = [cmd, ...args]; return { status: 0 }; }), "dispatched");
-  assert.deepEqual(seen.slice(0, 4), ["gh", "api", "-X", "POST"]);
-  assert.match(seen[4], /^repos\/[^/]+\/[^/]+\/actions\/workflows\/fleet\.yml\/dispatches$/);
-  assert.deepEqual(seen.slice(5), ["-f", "ref=claude/f1-game-project-26h3ng"]);
-  assert.match(pokeFleetBoard(() => ({ status: 1 })), /not dispatched/);
-  assert.match(pokeFleetBoard(() => ({ status: null, error: new Error("ENOENT") })), /not dispatched/);
+  const isQueuedQuery = (args) => args.some((a) => typeof a === "string" && a.includes("/runs?"));
+  const calls = [];
+  const fakeOk = (cmd, args) => {
+    calls.push([cmd, ...args]);
+    return { status: 0, stdout: isQueuedQuery(args) ? "0\n" : "" };
+  };
+  assert.equal(pokeFleetBoard(fakeOk), "dispatched");
+  const post = calls.find((c) => c.includes("POST"));
+  assert.deepEqual(post.slice(0, 4), ["gh", "api", "-X", "POST"]);
+  assert.match(post[4], /^repos\/[^/]+\/[^/]+\/actions\/workflows\/fleet\.yml\/dispatches$/);
+  assert.deepEqual(post.slice(5), ["-f", "ref=claude/f1-game-project-26h3ng"]);
+  assert.match(pokeFleetBoard((cmd, args) => (
+    { status: 0, stdout: isQueuedQuery(args) ? "1\n" : "" }
+  )), /already queued/);
+  assert.match(pokeFleetBoard((cmd, args) => {
+    if (isQueuedQuery(args)) return { status: 0, stdout: "0\n" };
+    return { status: 1 };
+  }), /not dispatched/);
+  assert.match(pokeFleetBoard((cmd, args) => {
+    if (isQueuedQuery(args)) return { status: 0, stdout: "0\n" };
+    return { status: null, error: new Error("ENOENT") };
+  }), /not dispatched/);
 });
