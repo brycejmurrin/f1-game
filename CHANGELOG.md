@@ -19,6 +19,10 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
 - Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
+- CONTINUE on a career names the save's own next circuit and round count, matching the career hub (#2160).
+- CONTINUE no longer offers yesterday's Daily, which opened today's on another circuit (#2155).
+- RACE IN PORTRAIT can be turned off again: SETTINGS › DISPLAY › RACE IN PORTRAIT (#2157).
+- A controller's D-pad Left/Right leaves the circuit search and pairing-code fields instead of doing nothing (#2161).
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
