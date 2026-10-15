@@ -396,6 +396,30 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
   );
 });
 
+test("non-HUD menu hosts pad with the safe-area tokens", () => {
+  const overlay = decl(css("css/title.css"), "#overlay", "padding");
+  for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) {
+    assert.ok(overlay.includes(`var(${t})`), `#overlay padding uses ${t}`);
+  }
+  const screen = decl(css("css/components.css"), ".screen", "padding");
+  for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) {
+    assert.ok(screen.includes(`var(${t})`), `.screen padding uses ${t}`);
+  }
+  const compactBtns = decl(
+    css("css/menus.css"),
+    /:where\(body\[data-density="compact"\]\) #menu-buttons/,
+    "max-height",
+  );
+  assert.match(
+    compactBtns,
+    /min\(100%,\s*calc\(100\s*\*\s*var\(--svhz\)\s*-\s*var\(--safe-t\)\s*-\s*var\(--safe-b\)/,
+    "compact title column caps to the padded overlay box, not raw svh alone",
+  );
+  const tk = css("css/tokens.css");
+  assert.match(decl(tk, ":root", "--safe-w"), /var\(--safe-l\)/);
+  assert.match(decl(tk, ":root", "--safe-h"), /var\(--safe-t\)/);
+});
+
 /* ── the tilt prompt and the input.js fixes it must keep ─────────────────── */
 
 const src = (p) => read(p).replace(/^const\b/gm, "var");
