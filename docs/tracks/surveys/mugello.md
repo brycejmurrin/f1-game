@@ -1,77 +1,64 @@
 # Mugello — circuit survey (2026-10-14)
 
-**Circuit id:** `mugello` · **Deploy brief:** [`docs/tracks/mugello.md`](../mugello.md) · **Live:** [Tuscan GP](https://brycejmurrin.github.io/f1-game/)
+**Circuit id:** `mugello` · **Shots:** 36 committed JPEGs in `artifacts/shots/tracks/mugello/`.
 
-**Survey shots:** 28 frames (dry / day), committed at `artifacts/shots/tracks/mugello/*__dry-day.jpg`. Weather/lighting matrix follows shared shot tooling PR.
-
-## Code map
-
-| Layer | Path |
-|--------|------|
-| Def | `js/circuits/mugello.js` |
-| Scenery | `js/circuits/scenery/mugello.js` |
-| Landmarks | `tests/data/landmarks/mugello.json` |
-
-## Dry day panels — Sector 1
+## Dry day — sector coverage (12)
 
 | | | |
 |:---:|:---:|:---:|
-| ![Climb to Poggio (chase)](../../../artifacts/shots/tracks/mugello/sector1-climb-park__dry-day.jpg) | ![Materassi trackside](../../../artifacts/shots/tracks/mugello/sector1-materassi__dry-day.jpg) | ![Pieve campanile](../../../artifacts/shots/tracks/mugello/sector1-pieve__dry-day.jpg) |
-| **Climb to Poggio (chase)**<br/>weather: dry · tod: day · cam: park · s≈0.19 | **Materassi trackside**<br/>weather: dry · tod: day · cam: trackside · s≈0.238 | **Pieve campanile**<br/>weather: dry · tod: day · cam: orbit · s≈0.235 |
+| ![Pieve campanile](../../../artifacts/shots/tracks/mugello/sector1-pieve__dry-day.jpg) | ![Poggio Secco orbit](../../../artifacts/shots/tracks/mugello/sector1-poggio__dry-day.jpg) | ![San Donato trackside](../../../artifacts/shots/tracks/mugello/sector1-san-donato__dry-day.jpg) |
+| **Pieve campanile**<br/>weather: dry · tod: day | **Poggio Secco orbit**<br/>weather: dry · tod: day | **San Donato trackside**<br/>weather: dry · tod: day |
 | | | |
 |:---:|:---:|:---:|
-| ![Poggio Secco orbit](../../../artifacts/shots/tracks/mugello/sector1-poggio__dry-day.jpg) | ![San Donato orbit](../../../artifacts/shots/tracks/mugello/sector1-san-donato-orbit__dry-day.jpg) | ![San Donato trackside](../../../artifacts/shots/tracks/mugello/sector1-san-donato__dry-day.jpg) |
-| **Poggio Secco orbit**<br/>weather: dry · tod: day · cam: orbit · s≈0.218 | **San Donato orbit**<br/>weather: dry · tod: day · cam: orbit · s≈0.15 | **San Donato trackside**<br/>weather: dry · tod: day · cam: trackside · s≈0.145 |
+| ![Arrabbiata + casale orbit](../../../artifacts/shots/tracks/mugello/sector2-arrabbiata-orbit__dry-day.jpg) | ![Casale hero](../../../artifacts/shots/tracks/mugello/sector2-casale__dry-day.jpg) | ![Casanova-Savelli trackside](../../../artifacts/shots/tracks/mugello/sector2-casanova__dry-day.jpg) |
+| **Arrabbiata + casale orbit**<br/>weather: dry · tod: day | **Casale hero**<br/>weather: dry · tod: day | **Casanova-Savelli trackside**<br/>weather: dry · tod: day |
+| | | |
+|:---:|:---:|:---:|
+| ![Valley sightline](../../../artifacts/shots/tracks/mugello/sector2-valley__dry-day.jpg) | ![Bucine trackside](../../../artifacts/shots/tracks/mugello/sector3-bucine__dry-day.jpg) | ![Tribuna Centrale](../../../artifacts/shots/tracks/mugello/sector3-centrale__dry-day.jpg) |
+| **Valley sightline**<br/>weather: dry · tod: day | **Bucine trackside**<br/>weather: dry · tod: day | **Tribuna Centrale**<br/>weather: dry · tod: day |
+| | | |
+|:---:|:---:|:---:|
+| ![Correntaio trackside](../../../artifacts/shots/tracks/mugello/sector3-correntaio__dry-day.jpg) | ![Pit straight orbit](../../../artifacts/shots/tracks/mugello/sector3-pit-orbit__dry-day.jpg) | ![Start/finish orbit](../../../artifacts/shots/tracks/mugello/sector3-start-orbit__dry-day.jpg) |
+| **Correntaio trackside**<br/>weather: dry · tod: day | **Pit straight orbit**<br/>weather: dry · tod: day | **Start/finish orbit**<br/>weather: dry · tod: day |
 
-## Dry day panels — Sector 2
-
-| | | |
-|:---:|:---:|:---:|
-| ![Arrabbiata chase](../../../artifacts/shots/tracks/mugello/sector2-arrabbiata-chase__dry-day.jpg) | ![Arrabbiata eye level](../../../artifacts/shots/tracks/mugello/sector2-arrabbiata-eye__dry-day.jpg) | ![Arrabbiata + casale orbit](../../../artifacts/shots/tracks/mugello/sector2-arrabbiata-orbit__dry-day.jpg) |
-| **Arrabbiata chase**<br/>weather: dry · tod: day · cam: park · s≈0.52 | **Arrabbiata eye level**<br/>weather: dry · tod: day · cam: eye · s≈0.495 | **Arrabbiata + casale orbit**<br/>weather: dry · tod: day · cam: orbit · s≈0.5 |
-| | | |
-|:---:|:---:|:---:|
-| ![Casale hero](../../../artifacts/shots/tracks/mugello/sector2-casale__dry-day.jpg) | ![Casanova orbit](../../../artifacts/shots/tracks/mugello/sector2-casanova-orbit__dry-day.jpg) | ![Casanova-Savelli trackside](../../../artifacts/shots/tracks/mugello/sector2-casanova__dry-day.jpg) |
-| **Casale hero**<br/>weather: dry · tod: day · cam: cinematic · s≈0.498 | **Casanova orbit**<br/>weather: dry · tod: day · cam: orbit · s≈0.32 | **Casanova-Savelli trackside**<br/>weather: dry · tod: day · cam: trackside · s≈0.312 |
-| | | |
-|:---:|:---:|:---:|
-| ![Forest edge](../../../artifacts/shots/tracks/mugello/sector2-forest-edge__dry-day.jpg) | ![Arrabbiata GA hill](../../../artifacts/shots/tracks/mugello/sector2-hill-58__dry-day.jpg) | ![Mid-lap valley orbit](../../../artifacts/shots/tracks/mugello/sector2-midlap-orbit__dry-day.jpg) |
-| **Forest edge**<br/>weather: dry · tod: day · cam: trackside · s≈0.55 | **Arrabbiata GA hill**<br/>weather: dry · tod: day · cam: trackside · s≈0.505 | **Mid-lap valley orbit**<br/>weather: dry · tod: day · cam: orbit · s≈0.42 |
-| | | |
-|:---:|:---:|:---:|
-| ![Savelli sector split](../../../artifacts/shots/tracks/mugello/sector2-savelli__dry-day.jpg) | ![Valley sightline](../../../artifacts/shots/tracks/mugello/sector2-valley__dry-day.jpg) |  |
-| **Savelli sector split**<br/>weather: dry · tod: day · cam: trackside · s≈0.34 | **Valley sightline**<br/>weather: dry · tod: day · cam: orbit · s≈0.36 |  |
-
-## Dry day panels — Sector 3
+## Hero weather & lighting (24 variants on 6 views)
 
 | | | |
 |:---:|:---:|:---:|
-| ![Bucine orbit](../../../artifacts/shots/tracks/mugello/sector3-bucine-orbit__dry-day.jpg) | ![Bucine trackside](../../../artifacts/shots/tracks/mugello/sector3-bucine__dry-day.jpg) | ![Tribuna Centrale](../../../artifacts/shots/tracks/mugello/sector3-centrale__dry-day.jpg) |
-| **Bucine orbit**<br/>weather: dry · tod: day · cam: orbit · s≈0.875 | **Bucine trackside**<br/>weather: dry · tod: day · cam: trackside · s≈0.88 | **Tribuna Centrale**<br/>weather: dry · tod: day · cam: eye · s≈0.005 |
+| ![San Donato trackside](../../../artifacts/shots/tracks/mugello/sector1-san-donato__dry-night.jpg) | ![San Donato trackside](../../../artifacts/shots/tracks/mugello/sector1-san-donato__overcast-day.jpg) | ![San Donato trackside](../../../artifacts/shots/tracks/mugello/sector1-san-donato__rain-day.jpg) |
+| **San Donato trackside**<br/>weather: dry · tod: night | **San Donato trackside**<br/>weather: overcast · tod: day | **San Donato trackside**<br/>weather: rain · tod: day |
 | | | |
 |:---:|:---:|:---:|
-| ![Correntaio orbit](../../../artifacts/shots/tracks/mugello/sector3-correntaio-orbit__dry-day.jpg) | ![Correntaio trackside](../../../artifacts/shots/tracks/mugello/sector3-correntaio__dry-day.jpg) | ![Main straight trackside](../../../artifacts/shots/tracks/mugello/sector3-main-straight__dry-day.jpg) |
-| **Correntaio orbit**<br/>weather: dry · tod: day · cam: orbit · s≈0.635 | **Correntaio trackside**<br/>weather: dry · tod: day · cam: trackside · s≈0.62 | **Main straight trackside**<br/>weather: dry · tod: day · cam: trackside · s≈0.04 |
+| ![San Donato trackside](../../../artifacts/shots/tracks/mugello/sector1-san-donato__wet-day.jpg) | ![Arrabbiata + casale orbit](../../../artifacts/shots/tracks/mugello/sector2-arrabbiata-orbit__dry-night.jpg) | ![Arrabbiata + casale orbit](../../../artifacts/shots/tracks/mugello/sector2-arrabbiata-orbit__overcast-day.jpg) |
+| **San Donato trackside**<br/>weather: wet · tod: day | **Arrabbiata + casale orbit**<br/>weather: dry · tod: night | **Arrabbiata + casale orbit**<br/>weather: overcast · tod: day |
 | | | |
 |:---:|:---:|:---:|
-| ![Pit lane eye](../../../artifacts/shots/tracks/mugello/sector3-pit-eye__dry-day.jpg) | ![Pit straight orbit](../../../artifacts/shots/tracks/mugello/sector3-pit-orbit__dry-day.jpg) | ![Start/finish orbit](../../../artifacts/shots/tracks/mugello/sector3-start-orbit__dry-day.jpg) |
-| **Pit lane eye**<br/>weather: dry · tod: day · cam: eye · s≈0.96 | **Pit straight orbit**<br/>weather: dry · tod: day · cam: orbit · s≈0.98 | **Start/finish orbit**<br/>weather: dry · tod: day · cam: orbit · s≈0 |
+| ![Arrabbiata + casale orbit](../../../artifacts/shots/tracks/mugello/sector2-arrabbiata-orbit__storm-day.jpg) | ![Arrabbiata + casale orbit](../../../artifacts/shots/tracks/mugello/sector2-arrabbiata-orbit__wet-day.jpg) | ![Casanova-Savelli trackside](../../../artifacts/shots/tracks/mugello/sector2-casanova__dry-dusk.jpg) |
+| **Arrabbiata + casale orbit**<br/>weather: storm · tod: day | **Arrabbiata + casale orbit**<br/>weather: wet · tod: day | **Casanova-Savelli trackside**<br/>weather: dry · tod: dusk |
 | | | |
 |:---:|:---:|:---:|
-| ![Grid chase](../../../artifacts/shots/tracks/mugello/sector3-start-park__dry-day.jpg) | ![Back straight chase](../../../artifacts/shots/tracks/mugello/sector3-straight-chase__dry-day.jpg) |  |
-| **Grid chase**<br/>weather: dry · tod: day · cam: park · s≈0 | **Back straight chase**<br/>weather: dry · tod: day · cam: park · s≈0.93 |  |
+| ![Casanova-Savelli trackside](../../../artifacts/shots/tracks/mugello/sector2-casanova__fog-day.jpg) | ![Casanova-Savelli trackside](../../../artifacts/shots/tracks/mugello/sector2-casanova__rain-day.jpg) | ![Casanova-Savelli trackside](../../../artifacts/shots/tracks/mugello/sector2-casanova__wet-day.jpg) |
+| **Casanova-Savelli trackside**<br/>weather: fog · tod: day | **Casanova-Savelli trackside**<br/>weather: rain · tod: day | **Casanova-Savelli trackside**<br/>weather: wet · tod: day |
+| | | |
+|:---:|:---:|:---:|
+| ![Bucine trackside](../../../artifacts/shots/tracks/mugello/sector3-bucine__dry-dawn.jpg) | ![Bucine trackside](../../../artifacts/shots/tracks/mugello/sector3-bucine__fog-day.jpg) | ![Bucine trackside](../../../artifacts/shots/tracks/mugello/sector3-bucine__rain-day.jpg) |
+| **Bucine trackside**<br/>weather: dry · tod: dawn | **Bucine trackside**<br/>weather: fog · tod: day | **Bucine trackside**<br/>weather: rain · tod: day |
+| | | |
+|:---:|:---:|:---:|
+| ![Bucine trackside](../../../artifacts/shots/tracks/mugello/sector3-bucine__wet-day.jpg) | ![Tribuna Centrale](../../../artifacts/shots/tracks/mugello/sector3-centrale__dry-dusk.jpg) | ![Tribuna Centrale](../../../artifacts/shots/tracks/mugello/sector3-centrale__dry-night.jpg) |
+| **Bucine trackside**<br/>weather: wet · tod: day | **Tribuna Centrale**<br/>weather: dry · tod: dusk | **Tribuna Centrale**<br/>weather: dry · tod: night |
+| | | |
+|:---:|:---:|:---:|
+| ![Tribuna Centrale](../../../artifacts/shots/tracks/mugello/sector3-centrale__rain-day.jpg) | ![Tribuna Centrale](../../../artifacts/shots/tracks/mugello/sector3-centrale__wet-day.jpg) | ![Start/finish orbit](../../../artifacts/shots/tracks/mugello/sector3-start-orbit__dry-dusk.jpg) |
+| **Tribuna Centrale**<br/>weather: rain · tod: day | **Tribuna Centrale**<br/>weather: wet · tod: day | **Start/finish orbit**<br/>weather: dry · tod: dusk |
+| | | |
+|:---:|:---:|:---:|
+| ![Start/finish orbit](../../../artifacts/shots/tracks/mugello/sector3-start-orbit__fog-day.jpg) | ![Start/finish orbit](../../../artifacts/shots/tracks/mugello/sector3-start-orbit__storm-day.jpg) | ![Start/finish orbit](../../../artifacts/shots/tracks/mugello/sector3-start-orbit__wet-day.jpg) |
+| **Start/finish orbit**<br/>weather: fog · tod: day | **Start/finish orbit**<br/>weather: storm · tod: day | **Start/finish orbit**<br/>weather: wet · tod: day |
 
-## Findings and fixes
+## Fixes & audit
 
-**Fixed:** vine soil burial; terrazza `openArea`; hill-stand plinth on `groundUnder`.
-
-**Open:** terrazza clip at cap (5 severe); no lamps (`lamp: "none"`).
-
-**Audit:** buried 6→3; `audit-circuit mugello` ok.
-
-## Weather / lighting (deferred)
-
-After shared tooling: 6 heroes × wet/rain/overcast/fog + dawn/dusk/night.
+Vine soil, terrazza `openArea`, hill-stand plinth. `audit-circuit mugello`: buried 6→3, clip at cap.
 
 ```sh
 node tools/track/verify-track.cjs mugello
