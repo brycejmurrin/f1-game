@@ -313,7 +313,7 @@
       for (const [s, side, gap] of [
         [0.030, -1, 24], [0.155, 1, 34], [0.383, -1, 30],
         [0.643, 1, 34], [0.732, -1, 38], [0.935, 1, 34],
-      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3, light: false });
+      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3 });
 
       for (const [i, s, gap] of [[0, 0.030, 46], [1, 0.045, 34], [2, 0.060, 46]]) {
         const a = anchor(K(s), 1, gap);
