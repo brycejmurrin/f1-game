@@ -399,7 +399,7 @@ const PhonePad = (function () {
                 dropRoom();
                 if (wasLinked && why !== "peer" && !deps.usingPrivateRelay()) {
                   relink = true; active = null; transport = null;
-                  Log.info("input", "phone pad dropped (" + why + ") — hosting " + code + " again");
+                  Log.info("input", "phone pad dropped (" + why + ") — hosting again");
                   if (ui.relinking) { try { ui.relinking(); } catch (e) { /* ui's problem */ } }
                   open();
                   return;
