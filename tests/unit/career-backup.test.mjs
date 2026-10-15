@@ -1352,3 +1352,34 @@ test("C8: a restored standalone season re-arms SeasonCal, so its next save is no
   const res = h.SeasonCal.save(stale);
   assert.notEqual(res.reason, "conflict", "SeasonCal still holds the pre-import revision");
 });
+
+for (const flavour of ["driver", "myteam"]) for (let i = 0; i < 3; i++) {
+  test(`import cannot replace future ${flavour}:${i} or partially write its bag`, () => {
+    const source = loadHarness();
+    fillSix(source);
+    const envelope = source.CareerBackup.build();
+    const target = loadHarness();
+    fillSix(target);
+    const key = `apex26.career.${flavour}.${i}`;
+    target.disk.set(key, JSON.stringify({ v: 2 ** 32, flavour, future: { intact: true } }));
+    target.foreign(key);
+    const before = [...target.disk.entries()];
+    const result = target.CareerBackup.apply(envelope, { otherFlavourConfirmed: true, liveSlot: "myteam:2" });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "newer-version");
+    assert.deepEqual([...target.disk.entries()], before);
+  });
+}
+
+test("a future schema in the last incoming backup row rejects the whole bag before writes", () => {
+  const source = loadHarness();
+  fillSix(source);
+  const envelope = source.CareerBackup.build();
+  envelope.slots[5].data.v = 2 ** 32;
+  const target = loadHarness();
+  fillSix(target);
+  const before = [...target.disk.entries()];
+  const result = target.CareerBackup.apply(envelope, { otherFlavourConfirmed: true });
+  assert.equal(result.reason, "newer-version");
+  assert.deepEqual([...target.disk.entries()], before);
+});

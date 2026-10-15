@@ -136,6 +136,7 @@ function migrateSlots() {
   const next = { driver: 0, myteam: 0 };
   for (const item of found) {
     const c = item.value;
+    if (c && Number(c.v) > GameStore.CAREER_V) continue;
     const f = flavourIn(c && c.flavour);
     // Never overwrite: a set that already holds saves is the current layout, and
     // a stale key left behind by a half-finished migration must not clobber it.
@@ -146,6 +147,10 @@ function migrateSlots() {
     next[f]++;
   }
 }
+const unsupportedSlot = (f, i) => {
+  const raw = store.get(slotKey(f, i), null);
+  return !!(raw && Number(raw.v) > GameStore.CAREER_V);
+};
 const readSlot = (f, i) => migrateCareer(store.get(slotKey(f, i), null));
 
 if (store.subscribe) store.subscribe((change) => {
@@ -206,6 +211,10 @@ function writeResult(key, value, options) {
   return { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
 }
 function save(options) {
+  if (unsupportedSlot(slotFlavour, slotIdx)) {
+    lastSave = { ok: false, durable: false, reason: "newer-version" };
+    return career;
+  }
   if (career) {
     // A storage event invalidates GameStore's parsed cache, but this module owns a
     // long-lived object reference. Never write that reference over a newer save
@@ -239,6 +248,9 @@ function clear() {
 }
 
 function slotInfo(c, f, i) {
+  if (unsupportedSlot(f, i)) return { flavour: f, i, used: true, unsupported: true,
+    live: false, teamName: "UPDATE REQUIRED", code: "", name: "Newer save",
+    year: "Newer build", round: 0, rounds: 0, money: 0, seasons: 0, wins: 0, titles: 0 };
   if (!c) return { flavour: f, i, used: false };
   const team = teamOf(c.team);
   const tally = tallyOf(c);
@@ -275,6 +287,10 @@ function firstFree(flavour) {
 function useSlot(flavour, i) {
   const f = flavourIn(flavour);
   const n = slotIn(i);
+  if (unsupportedSlot(f, n)) {
+    lastSave = { ok: false, durable: false, reason: "newer-version" };
+    return null;
+  }
   if (career && (f !== slotFlavour || n !== slotIdx)) save();
   slotFlavour = f;
   slotIdx = n;
@@ -324,7 +340,7 @@ function start(opts) {
   const target = o.slot != null ? slotIn(o.slot)
     : free >= 0 ? free
     : (flavour === slotFlavour ? slotIdx : -1);
-  if (target < 0) return null;
+  if (target < 0 || unsupportedSlot(flavour, target)) return null;
   // Save the career being left before the new one takes its place — starting a
   // career must not cost an unsaved change in the one you were playing.
   if (career && (flavour !== slotFlavour || target !== slotIdx)) save();

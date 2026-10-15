@@ -14,6 +14,9 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- Returning tabs refuse changed lazy scripts after a release, preventing mixed-version audio, race and multiplayer code.
+- Cached phone-controller links keep their own page offline, and updates preserve working offline Career access when its UI cannot be installed.
+- Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
