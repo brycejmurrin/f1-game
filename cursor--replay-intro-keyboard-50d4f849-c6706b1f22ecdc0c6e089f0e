@@ -1,0 +1,1 @@
+1792051885	t	READ-ONLY root-delegated WATCH shortcut teardown and stale transport camera lifecycle review; js/ui/watch-transport.js plus keyboard integration only. No source edits. Excludes PR2091 bounds/driver options, PR1978 AUTO/retirement, PR1948 recovery, PR2050.  [cursor/replay-intro-keyboard-50d4f849; session c6706b1f22ecdc0c6e089f0e]
