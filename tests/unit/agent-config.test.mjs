@@ -12,6 +12,7 @@
 // and emphasis reserved for one line.
 //
 // Run: node --test tests/unit/agent-config.test.mjs   (npm run test:tooling-fast)
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

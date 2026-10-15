@@ -6,6 +6,7 @@
 // totals per directory and extension); a real-git fixture under artifacts/
 // (never /tmp) proves the report on a full clone and the refusal on a shallow
 // one. The workflow is pinned read-only, dispatch-only and fetch-depth 0.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
