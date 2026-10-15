@@ -1,0 +1,329 @@
+{
+  "tag": "day-dry",
+  "shots": [
+    {
+      "ok": true,
+      "file": "s01-pit-straight",
+      "attempt": 1,
+      "frac": 0.02,
+      "cam": "orbit",
+      "az": 48,
+      "el": 20,
+      "dist": 125
+    },
+    {
+      "ok": true,
+      "file": "s01-grandstand",
+      "attempt": 1,
+      "frac": 0.02,
+      "cam": "trackside",
+      "side": 1,
+      "el": 12,
+      "dist": 85
+    },
+    {
+      "ok": true,
+      "file": "s01-pit-infield",
+      "attempt": 1,
+      "frac": 0.005,
+      "cam": "trackside",
+      "side": -1,
+      "el": 10,
+      "dist": 68
+    },
+    {
+      "ok": true,
+      "file": "s02-turn1-exit",
+      "attempt": 1,
+      "frac": 0.065,
+      "cam": "orbit",
+      "az": -25,
+      "el": 18,
+      "dist": 95
+    },
+    {
+      "ok": true,
+      "file": "s02-turn1-runoff",
+      "attempt": 1,
+      "frac": 0.072,
+      "cam": "trackside",
+      "side": 1,
+      "el": 8,
+      "dist": 55
+    },
+    {
+      "ok": true,
+      "file": "s02-back-straight",
+      "attempt": 1,
+      "frac": 0.19,
+      "cam": "eye",
+      "el": 6,
+      "dist": 0
+    },
+    {
+      "ok": true,
+      "file": "s02-back-empty",
+      "attempt": 1,
+      "frac": 0.205,
+      "cam": "orbit",
+      "az": 90,
+      "el": 14,
+      "dist": 160
+    },
+    {
+      "ok": true,
+      "file": "s02-turn3-braking",
+      "attempt": 1,
+      "frac": 0.3,
+      "cam": "trackside",
+      "side": 1,
+      "el": 10,
+      "dist": 72
+    },
+    {
+      "ok": true,
+      "file": "s02-turn3-orbit",
+      "attempt": 1,
+      "frac": 0.298,
+      "cam": "orbit",
+      "az": 55,
+      "el": 22,
+      "dist": 88
+    },
+    {
+      "ok": true,
+      "file": "s02-turn3-infield",
+      "attempt": 1,
+      "frac": 0.306,
+      "cam": "orbit",
+      "az": 115,
+      "el": 24,
+      "dist": 82
+    },
+    {
+      "ok": true,
+      "file": "s02-turns4-6",
+      "attempt": 1,
+      "frac": 0.43,
+      "cam": "orbit",
+      "az": 65,
+      "el": 28,
+      "dist": 105
+    },
+    {
+      "ok": true,
+      "file": "s02-shells-distant",
+      "attempt": 1,
+      "frac": 0.44,
+      "cam": "eye",
+      "el": 4,
+      "dist": 0
+    },
+    {
+      "ok": true,
+      "file": "s02-seawall-t7",
+      "attempt": 1,
+      "frac": 0.55,
+      "cam": "trackside",
+      "side": 1,
+      "el": 8,
+      "dist": 88
+    },
+    {
+      "ok": true,
+      "file": "s02-seawall-water",
+      "attempt": 1,
+      "frac": 0.56,
+      "cam": "orbit",
+      "az": -10,
+      "el": 12,
+      "dist": 130
+    },
+    {
+      "ok": true,
+      "file": "s03-turn8-stand",
+      "attempt": 1,
+      "frac": 0.589,
+      "cam": "trackside",
+      "side": -1,
+      "el": 10,
+      "dist": 62
+    },
+    {
+      "ok": true,
+      "file": "s03-marina-shells",
+      "attempt": 1,
+      "frac": 0.663,
+      "cam": "orbit",
+      "az": -42,
+      "el": 22,
+      "dist": 118
+    },
+    {
+      "ok": true,
+      "file": "s03-marina-cityfront",
+      "attempt": 1,
+      "frac": 0.65,
+      "cam": "trackside",
+      "side": -1,
+      "el": 12,
+      "dist": 75
+    },
+    {
+      "ok": true,
+      "file": "s03-stadium-entry",
+      "attempt": 1,
+      "frac": 0.723,
+      "cam": "trackside",
+      "side": 1,
+      "el": 8,
+      "dist": 48
+    },
+    {
+      "ok": true,
+      "file": "s03-stadium-t14",
+      "attempt": 1,
+      "frac": 0.76,
+      "cam": "trackside",
+      "side": -1,
+      "el": 10,
+      "dist": 58
+    },
+    {
+      "ok": true,
+      "file": "s03-turn15",
+      "attempt": 1,
+      "frac": 0.797,
+      "cam": "orbit",
+      "az": 30,
+      "el": 20,
+      "dist": 92
+    },
+    {
+      "ok": true,
+      "file": "s03-turn17",
+      "attempt": 1,
+      "frac": 0.864,
+      "cam": "trackside",
+      "side": -1,
+      "el": 9,
+      "dist": 52
+    },
+    {
+      "ok": true,
+      "file": "s03-footbridge",
+      "attempt": 1,
+      "frac": 0.885,
+      "cam": "orbit",
+      "az": 18,
+      "el": 22,
+      "dist": 98
+    },
+    {
+      "ok": true,
+      "file": "s03-footbridge-deck",
+      "attempt": 1,
+      "frac": 0.888,
+      "cam": "trackside",
+      "side": 1,
+      "el": 14,
+      "dist": 42
+    },
+    {
+      "ok": true,
+      "file": "map-context",
+      "attempt": 1,
+      "frac": 0.5,
+      "cam": "park"
+    },
+    {
+      "ok": true,
+      "file": "key-pit",
+      "attempt": 1,
+      "frac": 0.02,
+      "cam": "orbit",
+      "az": 35,
+      "el": 18,
+      "dist": 110
+    },
+    {
+      "ok": true,
+      "file": "key-turn3",
+      "attempt": 1,
+      "frac": 0.3,
+      "cam": "orbit",
+      "az": 70,
+      "el": 20,
+      "dist": 95
+    },
+    {
+      "ok": true,
+      "file": "key-marina",
+      "attempt": 1,
+      "frac": 0.663,
+      "cam": "orbit",
+      "az": -55,
+      "el": 18,
+      "dist": 105
+    },
+    {
+      "ok": true,
+      "file": "key-stadium",
+      "attempt": 1,
+      "frac": 0.76,
+      "cam": "orbit",
+      "az": 20,
+      "el": 25,
+      "dist": 85
+    },
+    {
+      "ok": true,
+      "file": "key-seawall",
+      "attempt": 1,
+      "frac": 0.55,
+      "cam": "orbit",
+      "az": 5,
+      "el": 15,
+      "dist": 115
+    },
+    {
+      "ok": true,
+      "file": "key-footbridge",
+      "attempt": 1,
+      "frac": 0.885,
+      "cam": "cinematic",
+      "el": 18,
+      "dist": 75
+    },
+    {
+      "ok": true,
+      "file": "sector1-overview",
+      "attempt": 1,
+      "frac": 0.08,
+      "cam": "orbit",
+      "az": 120,
+      "el": 35,
+      "dist": 200
+    },
+    {
+      "ok": true,
+      "file": "sector2-overview",
+      "attempt": 1,
+      "frac": 0.45,
+      "cam": "orbit",
+      "az": -80,
+      "el": 32,
+      "dist": 210
+    },
+    {
+      "ok": true,
+      "file": "sector3-overview",
+      "attempt": 1,
+      "frac": 0.78,
+      "cam": "orbit",
+      "az": 60,
+      "el": 30,
+      "dist": 195
+    }
+  ]
+}
