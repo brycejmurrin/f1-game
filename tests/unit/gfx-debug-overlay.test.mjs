@@ -27,6 +27,8 @@ const SRC = read("js/perf/gfx-debug-overlay.js");
 test("gfx-debug is opt-in and silent otherwise", () => {
   assert.match(SRC, /DevFlags\.get\("gfxdebug"\)/,
     "the overlay arms through the central DevFlags registry");
+  assert.match(SRC, /localStorage\.getItem\("apex26\.gfxDebug"\) === "1"/,
+    "without DevFlags (a page that skips dev-flags.js) the old ?gfxdebug=1 / storage read still arms it");
   // wanted() gates the ONLY install site. Without this the overlay would paint
   // for every player, which is how a debug aid becomes a shipped regression.
   assert.match(SRC, /if \(typeof document !== "undefined" && wanted\(\)\)/,

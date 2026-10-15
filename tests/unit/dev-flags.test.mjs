@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/core/dev-flags.js"), "utf8");
 
-function boot({ search = "", hash = "", store = {} } = {}) {
+function boot({ search = "", hash = "", store = {}, gameStore = null } = {}) {
   const disk = new Map(Object.entries(store).map(([k, v]) => ["apex26." + k, String(v)]));
   const loc = { search, hash };
   const sb = {
@@ -23,6 +23,7 @@ function boot({ search = "", hash = "", store = {} } = {}) {
       removeItem(k) { disk.delete(k); },
     },
   };
+  if (gameStore) sb.GameStore = { store: { raw: (k) => (k in gameStore ? gameStore[k] : null) } };
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(SRC, ctx, { filename: "js/core/dev-flags.js" });
@@ -45,6 +46,27 @@ test("metrics: full bool query, storage 1/0 only", () => {
   assert.equal(boot({ search: "?metrics=false" }).get("metrics"), false);
   assert.equal(boot({ store: { metrics: "1" } }).get("metrics"), true);
   assert.equal(boot({ store: { metrics: "0" } }).get("metrics"), false);
+});
+
+test("legacy =1 flags: the URL only turns ON — ?x=0 never overrides a stored \"1\" (old reader was query||storage)", () => {
+  assert.equal(boot({ search: "?upscale=0", store: { spatialUpscale: "1" } }).get("upscale"), true);
+  assert.equal(boot({ search: "?gfxdebug=0", store: { gfxDebug: "1" } }).get("gfxdebug"), true);
+  assert.equal(boot({ search: "?inputdebug=0", store: { inputDebug: "1" } }).get("inputdebug"), true);
+  assert.equal(boot({ search: "?upscale=0" }).get("upscale"), false);
+  assert.equal(boot({ search: "?UPSCALE=1" }).get("upscale"), false, "param names stay case-sensitive, as the old regex was");
+});
+
+test("metrics: yes/no is not a flag value; the param name is case-insensitive like the old /i reader", () => {
+  assert.equal(boot({ search: "?metrics=yes" }).get("metrics"), false);
+  assert.equal(boot({ search: "?metrics=no", store: { metrics: "1" } }).get("metrics"), true, "an unknown value defers to storage");
+  assert.equal(boot({ search: "?METRICS=ON" }).get("metrics"), true);
+});
+
+test("metrics storage goes through GameStore.store.raw when the store is up", () => {
+  // localStorage says off, the store says on: the store wins (metrics-overlay's old read()).
+  const D = boot({ store: { metrics: "0" }, gameStore: { "apex26.metrics": "1" } });
+  assert.equal(D.get("metrics"), true);
+  assert.equal(boot({ store: { metrics: "1" } }).get("metrics"), true, "no store yet: localStorage");
 });
 
 test("viz: string from query then storage", () => {

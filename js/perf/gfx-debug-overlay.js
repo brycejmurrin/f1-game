@@ -27,7 +27,10 @@ const GfxDebug = (() => {
 
   function wanted() {
     try {
-      return typeof DevFlags !== "undefined" && !!DevFlags.get("gfxdebug");
+      if (typeof DevFlags !== "undefined") return !!DevFlags.get("gfxdebug");
+      // Same read without the registry (a page or test that skips dev-flags.js).
+      return /[?&]gfxdebug=1/.test(location.search) ||
+        localStorage.getItem("apex26.gfxDebug") === "1";
     } catch (_) { return false; }
   }
 
