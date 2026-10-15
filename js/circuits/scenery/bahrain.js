@@ -189,9 +189,11 @@
 
       const duneWedge = (k, side, gap, w, h) => {
         const a = anchor(k, side, gap + w * 0.3);
+        const gy = terrainYAt(a.c[0], a.c[2]);
+        const baseY = (gy != null && Number.isFinite(gy)) ? gy - 0.12 : pyMin;
         const seg = 5 + Math.floor(hash(k * 19 + side * 29) * 4);        // 5-8
         const rough = 0.20 + hash(k * 23 + side * 31) * 0.20;            // 0.2-0.4
-        mountain(a.c[0], a.c[2], pyMin, w * 0.55, h, {
+        mountain(a.c[0], a.c[2], baseY, w * 0.55, h, {
           seg, seed: k * 3 + side * 17,
           rough, snowline: 99,
           forest: DUNE, rock: SAND_DARK, snow: DUNE_LIT,

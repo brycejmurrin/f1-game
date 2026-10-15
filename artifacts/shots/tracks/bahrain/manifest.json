@@ -1,0 +1,210 @@
+{
+  "circuit": "bahrain",
+  "count": 34,
+  "shots": [
+    {
+      "file": "s1-pit-chase-night-dry.jpg",
+      "view": "s1-pit-chase",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-pit-straight-dawn-dry.jpg",
+      "view": "s1-pit-straight",
+      "tod": "dawn",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-pit-straight-day-dry.jpg",
+      "view": "s1-pit-straight",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-pit-straight-day-wet.jpg",
+      "view": "s1-pit-straight",
+      "tod": "day",
+      "weather": "wet"
+    },
+    {
+      "file": "s1-pit-straight-dusk-dry.jpg",
+      "view": "s1-pit-straight",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-pit-straight-night-dry.jpg",
+      "view": "s1-pit-straight",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-sakhir-tower-day-dry.jpg",
+      "view": "s1-sakhir-tower",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-sakhir-tower-night-dry.jpg",
+      "view": "s1-sakhir-tower",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-t1-schumacher-dawn-dry.jpg",
+      "view": "s1-t1-schumacher",
+      "tod": "dawn",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-t1-schumacher-day-dry.jpg",
+      "view": "s1-t1-schumacher",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-t1-schumacher-day-rain.jpg",
+      "view": "s1-t1-schumacher",
+      "tod": "day",
+      "weather": "rain"
+    },
+    {
+      "file": "s1-t1-schumacher-dusk-dry.jpg",
+      "view": "s1-t1-schumacher",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "s1-t1-schumacher-night-dry.jpg",
+      "view": "s1-t1-schumacher",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t4-university-dawn-dry.jpg",
+      "view": "s2-t4-university",
+      "tod": "dawn",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t4-university-day-dry.jpg",
+      "view": "s2-t4-university",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t4-university-dusk-dry.jpg",
+      "view": "s2-t4-university",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t4-university-night-dry.jpg",
+      "view": "s2-t4-university",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t567-sweep-dawn-dry.jpg",
+      "view": "s2-t567-sweep",
+      "tod": "dawn",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t567-sweep-day-dry.jpg",
+      "view": "s2-t567-sweep",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t567-sweep-day-overcast.jpg",
+      "view": "s2-t567-sweep",
+      "tod": "day",
+      "weather": "overcast"
+    },
+    {
+      "file": "s2-t567-sweep-dusk-dry.jpg",
+      "view": "s2-t567-sweep",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t567-sweep-night-dry.jpg",
+      "view": "s2-t567-sweep",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t8-hairpin-dawn-dry.jpg",
+      "view": "s2-t8-hairpin",
+      "tod": "dawn",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t8-hairpin-day-dry.jpg",
+      "view": "s2-t8-hairpin",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t8-hairpin-dusk-dry.jpg",
+      "view": "s2-t8-hairpin",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "s2-t8-hairpin-night-dry.jpg",
+      "view": "s2-t8-hairpin",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "s3-final-corner-day-dry.jpg",
+      "view": "s3-final-corner",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "s3-final-corner-night-dry.jpg",
+      "view": "s3-final-corner",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "s3-midfield-dunes-night-dry.jpg",
+      "view": "s3-midfield-dunes",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "s3-t10-beyon-dawn-dry.jpg",
+      "view": "s3-t10-beyon",
+      "tod": "dawn",
+      "weather": "dry"
+    },
+    {
+      "file": "s3-t10-beyon-day-dry.jpg",
+      "view": "s3-t10-beyon",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "s3-t10-beyon-day-fog.jpg",
+      "view": "s3-t10-beyon",
+      "tod": "day",
+      "weather": "fog"
+    },
+    {
+      "file": "s3-t10-beyon-dusk-dry.jpg",
+      "view": "s3-t10-beyon",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "s3-t10-beyon-night-dry.jpg",
+      "view": "s3-t10-beyon",
+      "tod": "night",
+      "weather": "dry"
+    }
+  ]
+}
