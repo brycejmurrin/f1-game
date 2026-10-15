@@ -1076,3 +1076,11 @@ test("the intro's safety caps run on introNow(), which freezes while the tab is 
   const prep = game.slice(game.indexOf("async function introPrepare("), game.indexOf("async function introPrepare(") + 4000);
   assert.match(prep, /const lampAt = introNow\(\);[\s\S]*introNow\(\) - lampAt >= 30000/, "the lamp bake's cap too");
 });
+
+
+test("loading weather distinguishes storm from dry in normal, grid and mid-race cards", () => {
+  for (const real of [undefined, { story: { grid: true } }, { watch: true, story: { lap: 3, realLaps: 12 } }]) {
+    const rows = JSON.parse(JSON.stringify(LS.metaRows({ track: { lengthKm: 5 }, laps: 12, weather: "storm", tod: "day", real }, 10)));
+    assert.deepEqual(rows.find(([label]) => label === "WEATHER"), ["WEATHER", "STORM"]);
+  }
+});
