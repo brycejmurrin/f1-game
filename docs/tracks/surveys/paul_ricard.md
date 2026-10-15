@@ -2,7 +2,7 @@
 
 **Base brief:** `docs/tracks/paul_ricard.md`  
 **Live:** https://brycejmurrin.github.io/f1-game/  
-**Captures:** `../../../artifacts/shots/tracks/paul_ricard/` — **32 JPEGs** (q≈80, max width 1280px, each &lt;300 KB), force-added on branch `cursor/paul-ricard-survey-decf`. Weather variants (rain/fog/wet/overcast) deferred until shared shot batch tooling lands.  
+**Captures:** `../../../artifacts/shots/tracks/paul_ricard/` — **32 JPEGs** (q≈80, max width 1280px, each under 300 KB), force-added on branch `cursor/paul-ricard-survey-decf`. Weather variants (rain/fog/wet/overcast) deferred until shared shot batch tooling lands.  
 **VM audits:** `node tools/track/audit-circuit.cjs paul_ricard` (post-fix: all checks OK).
 
 ## Code map
