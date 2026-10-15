@@ -145,6 +145,15 @@ test("text scale 100% by default; 150% stamps data-text-scale", () => {
   assert.equal(html.dataset.textScale, undefined);
 });
 
+test("colourblind help mentions race HUD cues", () => {
+  const { panel, A } = load();
+  A.mountPanel();
+  const help = panel.children.find((n) => n.id === "pm-cbcues-help");
+  assert.ok(help);
+  assert.match(help.textContent, /race HUD/i);
+  assert.doesNotMatch(help.textContent, /follow-up|still under APPEARANCE/i);
+});
+
 test("colourblind cues off by default; on stamps data-cb-cues", () => {
   const { html, A } = load({ readyState: "loading" });
   assert.equal(A.cbCues(), "off");

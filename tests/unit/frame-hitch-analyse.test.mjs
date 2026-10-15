@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -407,6 +407,49 @@ test("analyseRaceEntrySpans names the race-entry span each long task and rAF gap
   assert.match(analyseRaceEntrySpans({ rep: { note: "no __apex.raceEntryProfile" } }).note, /no raceEntryProfile snapshot — no __apex/);
   assert.match(analyseRaceEntrySpans({ rep: { winT0: null } }).note, /never armed/);
   assert.match(analyseRaceEntrySpans().note, /not read/);
+});
+
+test("analyseRaceEntryLoaf keeps the longest LoAFs of race entry with their scripts' invokers, named by span (hunt 5 E)", () => {
+  // The shape the coordinator asked about: a ~1 s frame inside the stepped car
+  // warm whose script attribution says rAF callback vs await continuation.
+  const rep = { winT0: 1010, legs: [{ n: "scenery", ms: 100 }, { n: "resets", ms: 600 }],
+    marks: [{ n: "warmCarAssets:start", t: 2410 }, { n: "warmCarAssets:end", t: 4510 }, { n: "end", t: 12030 }] };
+  const censusMarks = { raceCall: 1000, trackReady: 2950 };
+  const loaf = [
+    { t: 400, d: 80, rs: 470, bd: 30, s: [{ it: "classic-script", inv: "https://x/js/boot-entry.js", fn: "", url: "https://x/js/boot-entry.js", t: 401, d: 70 }] },   // before race(): out
+    { t: 3500, d: 1012.4, rs: 4500, bd: 962.4, s: [
+      { it: "user-callback", inv: "FrameRequestCallback", fn: "frame", url: "http://h/js/entry.js", t: 3501, d: 160 },
+      { it: "resolve-promise", inv: "startRaceBody.then", fn: "startRaceBody", url: "http://h/js/entry.js", t: 3662, d: 840 }] },
+    { t: 1100, d: 120, rs: 0, bd: null, s: [] },
+    { t: 30000, d: 400, rs: 30390, bd: 350, s: [] },   // after the window: out
+  ];
+  const r = analyseRaceEntryLoaf({ loaf, supported: true, rep, censusMarks, win: { t0: 14000, t1: 34000 } });
+  assert.equal(r.supported, true);
+  assert.equal(r.windowMs, 13000); assert.equal(r.frames, 2); assert.equal(r.framesMs, 1132);
+  assert.deepEqual(Object.keys(r.byInvokerType), ["resolve-promise", "user-callback"], "ranked by script ms");
+  assert.deepEqual(r.byInvokerType["resolve-promise"], { scripts: 1, ms: 840 });
+  const w = r.longest[0];
+  assert.deepEqual(Object.keys(w), ["atMs", "startTime", "duration", "renderStart", "blockingDuration", "span", "scripts"]);
+  assert.equal(w.atMs, 2500); assert.equal(w.duration, 1012.4); assert.equal(w.renderStart, 3500); assert.equal(w.blockingDuration, 962.4);
+  assert.equal(w.span, "warmCarAssets");
+  assert.deepEqual(w.scripts[1], { invokerType: "resolve-promise", invoker: "startRaceBody.then", sourceFunctionName: "startRaceBody",
+    sourceURL: "http://h/js/entry.js", startTime: 2662, duration: 840 });
+  assert.equal(r.longest[1].renderStart, null, "a frame with no rendering step says so");
+  assert.equal(r.longest[1].span, "leg:resets (ensureRaceSession + ensureAudio lazy bundles)", "the span it overlaps most");
+  assert.match(r.summary, /^2 LoAF\(s\), 1132 ms in 13000 ms of race entry; scripts by invoker: resolve-promise 840 ms\/1, user-callback 160 ms\/1; longest 1012\.4 ms at \+2500 ms in warmCarAssets$/);
+  // Capped: never more than topN frames in the JSON.
+  const many = Array.from({ length: 40 }, (_, i) => ({ t: 2000 + i * 100, d: 50 + i, rs: 0, bd: 0, s: [] }));
+  const capped = analyseRaceEntryLoaf({ loaf: many, supported: true, rep, censusMarks });
+  assert.equal(capped.frames, 40); assert.equal(capped.longest.length, 20); assert.equal(capped.longest[0].duration, 89);
+  // Absence is named.
+  assert.match(analyseRaceEntryLoaf({ supported: false, loaf: [] }).note, /no long-animation-frame PerformanceObserver/);
+  assert.match(analyseRaceEntryLoaf({ loaf: null }).note, /no LoAF series/);
+  assert.match(analyseRaceEntryLoaf({ loaf: [], supported: true, rep: { note: "x" } }).note, /cannot be placed/);
+  assert.match(analyseRaceEntryLoaf({ loaf: [], supported: true, rep, censusMarks }).summary, /^no long animation frame in 12040 ms/);
+  // The gap rows carry the step's callback count (one long callback vs many short).
+  const g = analyseGapWork([{ at: 3400, gapMs: 1100, prevFrameMs: 1000, prevCallbacks: 7 }, { at: 9000, gapMs: 600, prevFrameMs: 5 }], { marks: censusMarks });
+  assert.equal(g.rows[0].prevCallbacks, 7);
+  assert.equal(g.rows[1].prevCallbacks, null, "an older recorder's row says unknown, not 0");
 });
 
 test("analyseDepthDiscard reads TLX's depth row over the window only, and is null-safe off TLX (hunt 4 A-P1)", () => {
