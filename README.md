@@ -49,26 +49,35 @@ link. The designer's HOW TO tab walks through it; the long form is
 
 ### Controls
 
-- **Mobile (tilt):** tilt the phone to steer — calibrates at the start
-  lights. On-screen **GAS** / **BRAKE** pedals (left), **BOOST** / **OT**
-  toggles (right). iOS asks motion permission on your first tap.
-- **Mobile (no gyro):** touch the left/right side of the screen to steer;
-  toggle TILT in the pause menu.
-- **Desktop:** `←`/`→` or `A`/`D` steer, `↑`/`W` throttle, `↓`/`S` brake,
-  `Space` toggle boost, `X` overtake, `C` change camera, `P`/`Esc` pause.
-  Manual gears: `E` up, `Q` down.
-- **Gamepad:** plug in or pair a controller (PS5 / Xbox / MFi — works on
-  desktop browsers and iOS&nbsp;14.5+ Safari) for low-latency analog steering.
-  Left stick steers, **RT**/**A** throttle, **LT**/**B** brake, **X** boost,
-  **Y** overtake, **RB**/**LB** shift up/down, **View/Back** camera,
-  **Menu/Start** pause. Supported pads also rumble on contact and kerbs.
-- **Camera:** the **CAM** button (top-right, next to pause) or the `C` key
-  cycle through **20 camera modes** — **CHASE** (close), **FAR** (pulled back),
-  **DRIFT**, **COCKPIT** (onboard driver's eye), **HOOD** (nose cam), and more
-  (overhead, heli, trackside, cinematic, T-cam…). Your choice is remembered.
+- **Keyboard:** `←`/`→` or `A`/`D` steer, `↑`/`W` gas, `↓`/`S` brake,
+  `Space` toggles boost, `X` overtake, `Z` active aero, `C` cycles the
+  camera, `B` look back (hold), `R` recover, `T` radio check, `M` mirror
+  on/off, `P` pause. `Esc` goes back while a menu is open and pauses the
+  race only when none is. Manual gears: `E` up, `Q` or Left Shift down
+  (either Shift key).
+- **Gamepad:** left stick or the D-pad steers. **RT**/**A** gas,
+  **LT**/**B** brake (the triggers are gradual), **X** boost, **Y**
+  overtake, D-pad up active aero, **RB**/**LB** shift up/down, **View**
+  camera, **RS** look back (hold), **LS** recover, D-pad down radio
+  check, **Menu**/**Start** pause. Mirror has no default button. Plug in
+  or pair a pad (PS5 / Xbox / MFi); supported pads rumble on contact and
+  kerbs.
+- **Mobile:** choose **SETTINGS › CONTROLS › STEERING INPUT** —
+  **TILT**, **BUTTONS** or **TOUCH** — and rotate to landscape to drive.
+  **TILT** rolls the phone to steer, calibrates at the lights, and uses
+  on-screen **GAS** and **BRAKE**; if motion permission is denied the
+  game switches to **BUTTONS**. **BUTTONS** holds an on-screen arrow
+  (slide back to ease it); the pedals sit opposite the arrows. **TOUCH**
+  is drag-to-steer from where the finger lands, with automatic gas: use
+  **BRAKE** to slow down, and a tap alone does not steer. Stuck or
+  facing the wrong way? Pause, then **RECOVER CAR**.
+- Manual gears (**SETTINGS › CONTROLS › GEARS: MANUAL**) work on desktop
+  and with **TILT**. **BUTTONS** and **TOUCH** keep gears automatic.
+- Rebind keyboard and controller actions in **SETTINGS › CONTROLS**.
 
-Throttle is manual — hold GAS to accelerate. BOOST and OVERTAKE are taps that
-toggle/activate rather than buttons you hold.
+The **CAM** button (top-right, next to pause) cycles cameras the same
+way `C` and **View** do. The choice is remembered. Boost is a tap that
+toggles; overtake is a tap that activates; look back is held.
 
 ### Handling & tuning
 
@@ -159,7 +168,7 @@ logic). Load order is defined in `tools/manifest.cjs`.
 ## Testing & development
 
 The project ships a **Playwright test suite** — 130+ Playwright specs — plus
-630+ `node --test` unit suites, covering rendering, physics, UI across screens,
+650+ `node --test` unit suites, covering rendering, physics, UI across screens,
 multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change
 needs, run those in the background, tail the log.

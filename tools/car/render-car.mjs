@@ -66,7 +66,9 @@
 //   --out=DIR             output dir. Default: scratch/renders/cars/<team>
 //   --w=900 --h=680       viewport size
 //   --gpu=1               draw on the HOST's GPU instead of pinning swiftshader
-//                         (for a runner with real silicon; useless in the container)
+//                         (for a runner with real silicon; useless in the container).
+//                         Without it, env APEX_GL=llvmpipe pins Mesa llvmpipe instead
+//                         (needs Mesa + a display: .github/actions/mesa-xvfb)
 //   --url=...             base URL. Default http://127.0.0.1:3456
 //
 // Examples:
@@ -85,6 +87,7 @@ import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from 
 import vm from 'node:vm';
 import { resolve, dirname } from 'node:path';
 import { exitIfHelp } from '../lib/cli-args.mjs';
+import { glStack } from '../lib/browser-workers.mjs';
 
 const RC_USAGE = `usage: node tools/car/render-car.mjs [--views=a,b,c] [--preset=<name>|list] [--team=<id>|all] [options]
   Headless batch renderer for tools/carview.html (needs a static server on :3456).
@@ -432,10 +435,16 @@ const shots = [];
 // at all, so this passes none either. The line below says which path ran, so a
 // log never leaves it ambiguous — a software frame is not evidence about a
 // player's machine.
+// APEX_GL=llvmpipe (car-shot.yml's ubuntu control, behind mesa-xvfb) swaps the
+// pin for Mesa llvmpipe through ANGLE's GL backend, the same flags as
+// playwright.config.js: SwiftShader ran that control into its 20-min cap twice
+// (runs 37094281675, 37087026592). Still software, still no GPU — a control.
 const GPU_ARGS = ['--enable-webgl', '--ignore-gpu-blocklist'];
+const SOFT_GL = glStack() === 'llvmpipe' ? 'llvmpipe' : 'swiftshader';
+const SOFT_ARGS = SOFT_GL === 'llvmpipe' ? ['--use-angle=gl', '--use-gl=angle'] : ['--use-angle=swiftshader'];
 const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}),
-  args: HOST_GPU ? GPU_ARGS : ['--use-angle=swiftshader', ...GPU_ARGS] });
-console.log(`renderer: ${HOST_GPU ? "the host's GPU (--gpu)" : 'swiftshader'}`);
+  args: HOST_GPU ? GPU_ARGS : [...SOFT_ARGS, ...GPU_ARGS] });
+console.log(`renderer: ${HOST_GPU ? "the host's GPU (--gpu)" : SOFT_GL}`);
 try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));
@@ -515,7 +524,7 @@ try {
     const shades = await blankCheck(dest);
     if (shades < 6) {
       console.error(`  ✗ ${file} — only ${shades} distinct colour${shades === 1 ? "" : "s"} in the centre: the canvas did not paint.`);
-      console.error(`    Chromium renders this through SwiftShader; check the launch flag is --use-angle=swiftshader.`);
+      console.error(`    Chromium renders this through ${SOFT_GL}; check the launch flag is ${SOFT_ARGS[0]}.`);
       process.exitCode = 3;
     } else console.log(`  ✓ ${file} (via=${via})`);
     shots.push({ file, label: s.label, group: s.group, tod: s.tod, team: s.team, via });

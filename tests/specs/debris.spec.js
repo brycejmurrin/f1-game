@@ -217,26 +217,25 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
         active: DebrisWorld.active(),
         enabled: st.enabled,
         ready: st.ready,
+        // Module-level ready (WASM imported + world built) — cache-independent.
+        // Prefer this over performance Resource Timing: a SW/precache hit or a
+        // late lazy import after the buffer closes leaves rapierFetches at 0
+        // while the side-world is healthy (DEFECT-LEDGER 2026-09-14; CI
+        // #1529 oversize-debris attempt1 flake on 1c696bb28).
+        rapierReady: typeof DebrisWorld.rapierReady === "function"
+          ? DebrisWorld.rapierReady() : !!st.ready,
         error: st.error,
         stepped: st.stepped,
         live: st.live,
-        rapierFetches: performance.getEntriesByType("resource")
-          .filter((e) => e.name.includes("rapier")).length,
-        // For the failure message: a resource-timing buffer that FILLED is the
-        // difference between "rapier never loaded" and "we stopped watching".
-        resourceCount: performance.getEntriesByType("resource").length,
       };
     });
     if (!r.ready) throw new Error("rapier load failed: " + r.error);
     expect(r.active).toBe(true);        // the one boolean game.js reads
     expect(r.enabled).toBe(true);
     expect(r.ready).toBe(true);
+    expect(r.rapierReady).toBe(true);
     expect(r.stepped).toBeGreaterThan(0);   // the burst made the side-world step
     expect(r.live).toBeGreaterThan(0);      // and spawn debris
-    expect(r.rapierFetches,
-      `no rapier resource entry among ${r.resourceCount} recorded — if that number is at the `
-      + "buffer cap the entry was dropped, not the fetch (boot() raises it to 3000)")
-      .toBeGreaterThan(0);
   });
 
   test("enable + wall hit spawns debris (lastImpact fires, live > 0)", async ({ page }) => {

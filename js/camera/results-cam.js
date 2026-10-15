@@ -63,10 +63,21 @@ const ResultsCam = (function () {
     let reel = [], reelIdx = 0, clipAge = 0;
     let replayApi = null;
     const anchor = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+    const bankScratch = { dy: 0, roll: 0 };
     const allowed = () => enabled(G) && (!eligible || eligible()) &&
       !(G.netPlay && G.netPlay.active && G.netPlay.active());
+    function highlightsPresentation(playing) {
+      if (typeof document === "undefined") return;
+      const results = document.getElementById("results"), button = document.getElementById("res-highlights");
+      if (results) {
+        if (playing) results.dataset.resultsPlayback = "playing";
+        else delete results.dataset.resultsPlayback;
+      }
+      if (button) button.textContent = playing ? "BACK TO RESULTS" : "HIGHLIGHTS";
+    }
     function endHighlights() {
       if (phase === "highlights" && replayApi) replayApi.endScrub();
+      highlightsPresentation(false);
     }
 
     function attachReplay(api) { replayApi = api || null; }
@@ -108,7 +119,11 @@ const ResultsCam = (function () {
       const pose = G.camPoseOf ? G.camPoseOf(p) : null;
       const extra = chequeredExtra(p);
       if (pose) { extra.carPos = pose.carPos; extra.carHead = pose.carHead; }
-      const v = G.camVantage("side", pose ? pose.s : (p.s || 0), pose ? pose.x : (p.x || 0), p.speed || 0, 0, extra);
+      const s = pose ? pose.s : (p.s || 0), x = pose ? pose.x : (p.x || 0);
+      // Match the side rig's smooth bank lift, including replayed highlight poses.
+      const bank = G.track && typeof Tracks !== "undefined" && Tracks.banking ? Tracks.banking(G.track, s, x, bankScratch, true) : null;
+      extra.bankDy = bank ? bank.dy : 0;
+      const v = G.camVantage("side", s, x, p.speed || 0, 0, extra);
       if (!v || !v.eye) return null;
       return { eye: v.eye, target: v.tgt || v.target || [p.px, p.py || 1, p.pz], fov: v.fov || 58 };
     }
@@ -155,6 +170,7 @@ const ResultsCam = (function () {
       }
       if (!reel.length || !buf.beginScrub(false)) return false;
       phase = "highlights"; reelIdx = 0; clipAge = 0; age = 0;
+      highlightsPresentation(true);
       applyHighlightFrame();
       return true;
     }
@@ -216,6 +232,7 @@ const ResultsCam = (function () {
         existing.hidden = !show;
         existing.disabled = !show;
         existing.title = show ? "" : "No recorded footage for highlights";
+        highlightsPresentation(phase === "highlights");
         return;
       }
       const menu = document.getElementById("res-menu");
@@ -227,7 +244,7 @@ const ResultsCam = (function () {
       b.title = show ? "" : "No recorded footage for highlights";
       b.type = "button";
       b.textContent = "HIGHLIGHTS";
-      b.onclick = () => { startHighlights(); };
+      b.onclick = () => { if (phase === "highlights") startOrbit(); else startHighlights(); };
       menu.parentNode.insertBefore(b, menu);
     }
 

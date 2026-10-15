@@ -55,7 +55,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
    Background, ONE Bash `run_in_background` task logging to `artifacts/logs/`: 2–15 min (`tooling-fast`, `deploy.mjs --gate-only`) and a browser group (`test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task; exit 1 = red, 124 = still running).
    While it runs, do work that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`; shared-contract files stay out of worktrees). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout.
    A `Monitor` expires at 30 min: early warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`); the verdict is rule 5's, never the waiter's or the process table's (`pgrep -f` matches its own shell).
-   Push once per green local cycle; no second push until CI reports — a push over a live CI run cancels it and loses its failures. If `apex-status/queue-depth.json` says hold, or >15 runs are queued, commit locally only.
+   Push once per green local cycle; no second push until CI reports — a push over a live CI run cancels it and loses its failures. If `node tools/ci/queue-depth.mjs` says `= queue hold` (JOBS, not runs: ≥ 40 Linux in flight, ≥ 10 queued or ≥ 5 macOS; exit 1), commit locally only.
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs` (it refuses any start at loadavg ≥ 3, and a second concurrent group).
    Anchor on `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`, never a looser pattern, the process table, or `| tail` on a live log.
 6. Stop a run with `node tools/ci/test-bg.mjs --stop` (`--stop --sweep` when its supervisor is dead); `bash-guard.sh` refuses a PID kill, which orphans every Chromium the run opened.
@@ -176,7 +176,7 @@ SYNC ONLY WHEN YOU MUST: GitHub reports CONFLICTING/DIRTY or a required tip chec
 `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge → `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it cures generated-file conflicts and stops on any other).
 It prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push (`--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops, `--train` adds the nightly rota).
 Shipping is a RELEASE TRAIN: a green fast tier pokes `pages.yml`, which gates the tip once and publishes exactly that
-commit (dispatch = "deploy now"; ≤ ~25 min; one green tip → one train, never dual-dispatch Pages). "Live?" = ancestor
+commit (dispatch = "deploy now"; gated publish median 23 min, p90 73; a train re-arms itself for a tip that went green mid-run; one green tip → one train, never dual-dispatch Pages). "Live?" = ancestor
 of the live `apex-sha` (agent `deploy-research`; `docs/TESTING.md` §Release train).
 
 ### Backlog
