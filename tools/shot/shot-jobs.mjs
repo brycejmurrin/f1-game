@@ -10,6 +10,58 @@ const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 /** Matches js/race/weather-arc.js VALID (storm needs live weather() after race). */
 export const WEATHERS = Object.freeze(["dry", "wet", "rain", "overcast", "fog", "storm"]);
 export const TODS = Object.freeze(["day", "dusk", "dawn", "night"]);
+const SURVEY_CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
+const WEATHER_SET = new Set(WEATHERS);
+const TOD_SET = new Set(TODS);
+
+/**
+ * Parse a committed survey JPEG basename (with or without extension) into station,
+ * time of day, weather, and optional camera slug. Shared by batch re-capture tooling.
+ */
+export function parseSurveyShotBasename(fileOrBase) {
+  const base = String(fileOrBase).replace(/\.jpe?g$/i, "");
+  let m = base.match(/^(.+?)__(day|dawn|dusk|night)-(dry|wet|rain|overcast|fog|storm)__(park|orbit|trackside|eye|cinematic)$/);
+  if (m) return { station: m[1], tod: m[2], weather: m[3], camHint: m[4] };
+  m = base.match(/^(.+)_(orbit|trackside|park|eye|cinematic)_(day|dawn|dusk|night)_(dry|wet|rain|overcast|fog|storm)$/);
+  if (m) return { station: m[1], camHint: m[2], tod: m[3], weather: m[4] };
+  m = base.match(/^(.+)__wx-(\w+)__tod-(\w+)$/);
+  if (m && WEATHER_SET.has(m[2]) && TOD_SET.has(m[3])) return { station: m[1], weather: m[2], tod: m[3] };
+  m = base.match(/^(.+)__(\w+)__(\w+)$/);
+  if (m && TOD_SET.has(m[2]) && WEATHER_SET.has(m[3])) return { station: m[1], tod: m[2], weather: m[3] };
+  m = base.match(/^(.+)-(\w+)-(\w+)-(orbit|trackside|park|eye|cinematic)$/);
+  if (m && TOD_SET.has(m[2]) && WEATHER_SET.has(m[3])) {
+    return { station: m[1], tod: m[2], weather: m[3], camHint: m[4] };
+  }
+  m = base.match(/^wx-(.+?)-(dry|wet|rain|overcast|fog|storm)-(day|dawn|dusk|night)$/);
+  if (m) return { station: `wx-${m[1]}`, weather: m[2], tod: m[3] };
+  m = base.match(/^wx-(.+?)-(day|dawn|dusk|night)-(dry|wet|rain|overcast|fog|storm)$/);
+  if (m) return { station: `wx-${m[1]}`, tod: m[2], weather: m[3] };
+  m = base.match(/^(.+)-(day|dawn|dusk|night)-(dry|wet|rain|overcast|fog|storm)$/);
+  if (m) return { station: m[1], tod: m[2], weather: m[3] };
+  m = base.match(/^(.+)-(\w+)-(\w+)$/);
+  if (m && TOD_SET.has(m[2]) && WEATHER_SET.has(m[3])) return { station: m[1], tod: m[2], weather: m[3] };
+  if (m && WEATHER_SET.has(m[2]) && TOD_SET.has(m[3])) return { station: m[1], weather: m[2], tod: m[3] };
+  m = base.match(/^(.+)__(\w+)-(\w+)$/);
+  if (m && TOD_SET.has(m[2]) && WEATHER_SET.has(m[3])) return { station: m[1], tod: m[2], weather: m[3] };
+  m = base.match(/^sec-(.+)-(\w+)-(\w+)-(\w+)$/);
+  if (m && TOD_SET.has(m[2]) && WEATHER_SET.has(m[3]) && SURVEY_CAMS.has(m[4])) {
+    return { station: `sec-${m[1]}`, tod: m[2], weather: m[3], camHint: m[4] };
+  }
+  m = base.match(/^tod-(.+)-(\w+)-(\w+)-(\w+)$/);
+  if (m && TOD_SET.has(m[2]) && WEATHER_SET.has(m[3]) && SURVEY_CAMS.has(m[4])) {
+    return { station: `tod-${m[1]}`, tod: m[2], weather: m[3], camHint: m[4] };
+  }
+  m = base.match(/^lt-(.+)-(\w+)-(\w+)-(\w+)$/);
+  if (m && TOD_SET.has(m[2]) && WEATHER_SET.has(m[3]) && SURVEY_CAMS.has(m[4])) {
+    return { station: `lt-${m[1]}`, tod: m[2], weather: m[3], camHint: m[4] };
+  }
+  if (/^sector-/.test(base)) return { station: base, tod: "day", weather: "dry", camHint: "orbit" };
+  if (/^hero-/.test(base)) return { station: base, tod: "day", weather: "dry" };
+  if (base === "picker-track-card" || base === "map-context") {
+    return { station: base, tod: "day", weather: "dry", camHint: "park" };
+  }
+  return { station: base, tod: "day", weather: "dry" };
+}
 
 /** Capture failures that a second/third attempt sometimes clears on software GL. */
 export function isRetryableCaptureError(err) {

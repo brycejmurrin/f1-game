@@ -17,10 +17,30 @@ import {
   WEATHERS,
   TODS,
   isRetryableCaptureError,
+  parseSurveyShotBasename,
 } from "../../tools/shot/shot-jobs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TMP = path.join(ROOT, "artifacts", "tmp", "shot-jobs-test");
+
+test("parseSurveyShotBasename: suzuka wx-overcast and singapore hero __cam", () => {
+  assert.deepEqual(parseSurveyShotBasename("wx-bridge-overcast-day.jpg"), {
+    station: "wx-bridge",
+    weather: "overcast",
+    tod: "day",
+  });
+  assert.deepEqual(parseSurveyShotBasename("hero-flyer__dawn-dry__park.jpg"), {
+    station: "hero-flyer",
+    tod: "dawn",
+    weather: "dry",
+    camHint: "park",
+  });
+  assert.deepEqual(parseSurveyShotBasename("sector-s1-dunlop-arch-day-dry.jpg"), {
+    station: "sector-s1-dunlop-arch",
+    tod: "day",
+    weather: "dry",
+  });
+});
 
 test("imageFormatFor: extension and --jpeg", () => {
   assert.equal(imageFormatFor("a.png").type, "png");
