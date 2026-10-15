@@ -1,1 +1,0 @@
-1792082738	Bryce Murrin	Release audit SW fixes: sw.js tests/unit/service-worker.test.mjs sw-internals.md; own-document offline navigation and optional lazy update retention  [cursor/release-sw-offline-d43e; session eb303a4fd26554264cbe04fb]
