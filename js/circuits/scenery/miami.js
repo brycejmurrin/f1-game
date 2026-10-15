@@ -10,7 +10,7 @@
         K, lapBounds, out, MAT, COL, n, pyMin, place, prop, backdrop, grandstandEx,
         building, tower, billboard, palm, bush, fence, wall, guardrail, tyreWall,
         bankedKerbStrip, marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
-        addCone, addFrustum, vadd, hash, onTrack, every, along, cityFront, forestEdge,
+        addCone, addFrustum, vadd, hash, onTrack, every, along, cityFront,
         runoffApron, modelGroup, overheadSpan, waterSurface, groundPatch, recordBarrier,
         scaffoldStand, bleacher, acacia, circuitKit, ledFacadeBands, terrainYAt, neonSign,
       } = api;
@@ -431,16 +431,15 @@
       wall(0.13, 0.19, -1, 3, 1.2, CONCRETE);
       fence(0.13, 0.19,  1, 3.5, 3.5, [0.78, 0.80, 0.82]);
       // Palm tree line behind the fence — gap >= fence dist + canopy radius to avoid clipping
-      forestEdge(0.13, 0.19, 1, 10, {
-        density: 0.45, hMin: 9, hMax: 14,
-        col: PALM_GREEN, col2: PALM_DARK, pineFrac: 0.0,
-      });
+      // (forestEdge only emits pine/broadleaf trees, so real palms via along())
+      along(0.13, 0.19, 16, (k) => palm(k, 1, 10 + (k & 1) * 2, 9 + hash(k * 17) * 4,
+                                        (k & 2) ? PALM_GREEN : PALM_DARK));
 
       for (let i = 0; i < 18; i++) {
         const k = K(0.18 + (i % 6) * 0.004);
-        palm(k, -1, 28 + (i % 4) * 7 + hash(i) * 4,   8 + hash(i * 7) * 5,
+        palm(k, -1, 28 + (i / 6 | 0) * 7 + hash(i) * 4,   8 + hash(i * 7) * 5,
           (i % 2) ? PALM_GREEN : PALM_DARK);
-        palm(K(0.18 + (i % 6) * 0.005), 1, 28 + (i % 3) * 6, 8 + hash(i * 3) * 4,
+        palm(K(0.18 + (i % 6) * 0.005), 1, 28 + (i / 6 | 0) * 6, 8 + hash(i * 3) * 4,
           (i % 2) ? PALM_DARK : PALM_GREEN);
       }
       cityFront(0.18, 0.26, -1, 54, {
@@ -556,11 +555,7 @@
         crowd: PASTELS, density: 0.6,
       });
 
-      // Marina promenade palms — placed via forestEdge so no barrier clipping
-      forestEdge(0.26, 0.38, 1, 5, {
-        density: 0.55, hMin: 9, hMax: 14,
-        col: PALM_GREEN, col2: PALM_DARK, pineFrac: 0.0,
-      });
+      // Marina promenade palms: palmRow(0.26, 0.38, ...) below (forestEdge renders cone trees, not palms)
 
       const STADIUM_STANDS = ["teal", "alu", "pastel"];
       for (let i = 0; i < 3; i++) {
@@ -587,7 +582,7 @@
         }, (campus) => {
           addBox(campus, vadd(a.c, a.u, 0.15), [30, 0.3, 58], [0.76, 0.78, 0.76], bv);
           for (let i = -1; i <= 1; i++) {
-            const p = vadd(vadd(a.c, a.t, i * 18), a.u, 3.2);
+            const p = vadd(vadd(a.c, a.t, i * 18), a.u, 3.25);
             addBox(campus, p, [22, 6.4, 12], (i === 0) ? WHITE : GREYWHITE, bv);
             addBox(campus, vadd(p, a.u, 3.5), [25, 0.7, 14],
               [CORAL, TEAL, PINK][i + 1], bv);
@@ -829,7 +824,7 @@
         addBox(out, vadd(a.c, a.u, 28), [8,   2.4, 2.8], [0.78, 0.80, 0.82], [a.r, a.u, a.t]);
         addCyl(out, vadd(a.c, a.u, 26), 2.8,  0.9, FLOOD_WH, 7, [a.r, a.u, a.t]);
         // light-pool patch at base
-        addBox(out, vadd(a.c, a.u, 0.06), [12, 0.2, 12], [0.96, 0.96, 0.88], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 0.35), [12, 0.2, 12], [0.96, 0.96, 0.88], [a.r, a.u, a.t]);
       }
 
       cityFront(0.87, 0.97, -1, 26, {

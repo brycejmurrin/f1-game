@@ -85,7 +85,7 @@ test("the sweep suites that rebuild the roster are scoped, listed, and hold the 
 
 test("ci.yml: the sweeps job scopes a circuit-only pull request and hands the ids to test:sweeps", () => {
   const ci = read(".github/workflows/ci.yml");
-  const job = ci.slice(ci.indexOf("\n  sweeps:\n"), ci.indexOf("\n  ship-filter:\n"));
+  const job = ci.slice(ci.indexOf("\n  sweeps:\n"), ci.indexOf("\n  sweeps-roll-up:\n"));
   // A pull request and the train (before_sha = live) scope; the job sits out
   // the deploy push (tests/unit/base-green.test.mjs pins the node plan's
   // push-side lookup).

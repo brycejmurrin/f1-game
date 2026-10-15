@@ -61,11 +61,10 @@
      behind the published cap under CI load → fitHud flipped caps. */
   transition-property: opacity, color, background-color, box-shadow, filter, text-shadow;
 }
-/* CAM / PAUSE follow BUTTON SIZE independently of HUD fitting. Cap the
-   top-row buttons at 150% so their own requested size cannot consume the
-   full timing lane; readouts clear their measured rectangles. */
+/* CAM / PAUSE share the dock's effective BUTTON SIZE, capped at 150%.
+   Readouts clear their measured rectangles independently of HUD scale. */
 :root {
-  --hud-btn-z: clamp(1, var(--hud-btn-scale, 1), 1.5);
+  --hud-btn-z: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5);
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
@@ -1280,6 +1279,9 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
    the attribute the JS sets could not actually hide it. Restated, as
    #cs-cam-panel and the dock groups already do. Found by the hidden-override
    guard in tests/unit/css-layers.test.mjs. */
+/* Race chrome over the canvas, not controls: a TOUCH steer that starts on the radio card or the start-light plate
+   must reach the canvas (js/input/input.js listens there). ARRANGE HUD still grabs the card (its own rule). */
+body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
 #lights[hidden] { display: none; }
 #lights {
   position: fixed;
@@ -1661,11 +1663,11 @@ body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top
    already carry; --hl-o keeps a corner piece growing away from its corner. */
 /* These rectangles are read immediately after fit() writes clearance. Geometry
    must never transition, including when reduced motion is not selected. */
-:is(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs) {
+:is(#minimap, #hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* fit() publishes screen-pixel clearance independently of the saved layout. */
-:is(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs), [data-hl] {
+:is(#minimap, #hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs), [data-hl] {
   translate: calc((var(--hl-x, 0) * 1vw + var(--hud-clear-x, 0px)) / var(--hud-z, 1)) calc((var(--hl-y, 0) * 1svh + var(--hud-clear-y, 0px)) / var(--hud-z, 1));
   scale: var(--hl-s, 1);
   transform-origin: var(--hl-o, center);
@@ -2209,7 +2211,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 /* Optional panels retain their text size when space only holds one row. */
 #hud-rel[data-col-compact] > div:not([data-col-row]),
 #hud-strat[data-col-compact] > div:not([data-k="next"]) { display: none; }
-:is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop] { display: none !important; }
+body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop] { display: none !important; }
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }
@@ -2351,6 +2353,9 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 @supports (anchor-name: --a) {
   @media (orientation: landscape) {
     body:not(.desktop) #dock-left { anchor-name: --apex-dock-left; }
+    /* LEFT-HANDED: row-reverse paints #dock-right on the left, so it is the left dock TYRES hangs from. */
+    body.mirror-controls:not(.desktop) #dock-left { anchor-name: none; }
+    body.mirror-controls:not(.desktop) #dock-right { anchor-name: --apex-dock-left; }
     body:not(.desktop) #hud-tyre {
       position: absolute;
       position-anchor: --apex-dock-left;
