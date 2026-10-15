@@ -568,10 +568,10 @@
    height, the toolbar becomes a column beside the map (never over it), the
    strip keeps its 48px grips and the foot message shares the button row. */
 @media (max-height: 500px) and (orientation: landscape) {
-  #trackdesigner .td-body { grid-template-columns: minmax(0, 1fr) minmax(240px, 40%); grid-template-rows: auto minmax(0, 1fr); }
+  #trackdesigner .td-body { grid-template-columns: minmax(0, 1fr) minmax(240px, 44%); grid-template-rows: auto minmax(0, 1fr); }
   #trackdesigner [data-role="mode-bar"] { grid-column: 2; grid-row: 1; }
   #trackdesigner [data-role="mode-bar"] > .td-chips { gap: 0; }
-  #trackdesigner [data-role="mode-bar"] .sel-chip { letter-spacing: 0; min-width: 44px; }
+  #trackdesigner [data-role="mode-bar"] .sel-chip { letter-spacing: 0; min-width: var(--tap-paint); }
   #trackdesigner .td-rail { grid-column: 2; grid-row: 2; }
   #trackdesigner .td-stage {
     grid-column: 1; grid-row: 1 / span 2;
