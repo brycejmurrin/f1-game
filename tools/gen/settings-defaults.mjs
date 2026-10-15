@@ -45,6 +45,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import * as espree from "espree";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TARGET = "js/data/settings-defaults.js";
@@ -69,29 +70,52 @@ const END = "  // @gen-settings-defaults end";
  *  default is a function or null cannot be pinned to one device's value. */
 export function readSpec(root = ROOT) {
   const src = fs.readFileSync(path.join(root, SPEC_SRC), "utf8");
-  const rows = [];
-  // `subsystem` is optional and sits after src, so a row without one still
-  // matches: [\s\S]*? stops at the first `}` that ends the row.
-  // src may itself contain ESCAPED QUOTES — js/ui/debris-opts.js's row says
-  // `(any value but \"1\" is off)` — so the src capture has to skip \X pairs
-  // rather than stop at the first quote. A naive [^"]* dropped that row from
-  // the parse entirely and the file's own key then read as "not in SPEC".
-  // …and `changed:` is a THIRD optional trailing property (a predicate, on the
-  // two controls rows whose value is a whole key/pad binding map). It had no
-  // branch here, so `keys` and `pad` were dropped from the parse — 84 rows of
-  // 86 — and apply() then refused both as "not in SPEC". A trailing-property
-  // TAIL rather than a third named alternative: the next optional property
-  // must not be a fourth silent drop.
-  const re = /\{ k: "([^"]+)", lane: "(\w+)", group: "(\w+)", def: (.*?), src: "((?:[^"\\]|\\.)*)"((?:,\s*\n?\s*\w+: [^\n]*?)*)\s*\}/g;
-  let m;
-  while ((m = re.exec(src))) {
-    const [, k, lane, group, def, , tail] = m;
-    const sub = /subsystem: "((?:[^"\\]|\\.)*)"/.exec(tail || "");
-    const subsystem = sub ? sub[1] : null;
-    rows.push({ k, lane, group, def: def.trim(), subsystem: subsystem || null,
-                adaptive: def.trim() === "null" || def.trim().startsWith("(") });
+  // Parse syntax only: never evaluate the browser IIFE or its normalizers.
+  // Nested defaults and multiline callbacks are ordinary object properties,
+  // so a new optional property cannot silently remove a row from the audit.
+  const ast = espree.parse(src, { ecmaVersion: "latest", sourceType: "script", range: true });
+  const specs = [];
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+    if (node.type === "VariableDeclarator" && node.id?.name === "SPEC") specs.push(node.init);
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === "object") visit(value);
+    }
   }
-  if (!rows.length) throw new Error(`${SPEC_SRC}: parsed no SPEC rows — the row shape changed`);
+  visit(ast);
+  if (specs.length !== 1 || specs[0]?.type !== "ArrayExpression")
+    throw new Error(`${SPEC_SRC}: expected one literal SPEC array`);
+  const keys = new Set();
+  const rows = specs[0].elements.map((row, i) => {
+    if (row?.type !== "ObjectExpression") throw new Error(`${SPEC_SRC}: SPEC row ${i} must be an object`);
+    const props = new Map();
+    for (const p of row.properties) {
+      if (p.type !== "Property" || p.computed || p.method || p.kind !== "init")
+        throw new Error(`${SPEC_SRC}: SPEC row ${i} has unsupported dynamic property`);
+      const key = p.key.type === "Identifier" ? p.key.name : p.key.value;
+      if (typeof key !== "string" || props.has(key))
+        throw new Error(`${SPEC_SRC}: SPEC row ${i} has invalid or duplicate property ${key}`);
+      props.set(key, p.value);
+    }
+    const string = (key) => {
+      const node = props.get(key);
+      if (node?.type !== "Literal" || typeof node.value !== "string")
+        throw new Error(`${SPEC_SRC}: SPEC row ${i} needs literal ${key}`);
+      return node.value;
+    };
+    const def = props.get("def");
+    if (!def) throw new Error(`${SPEC_SRC}: SPEC row ${i} has no default`);
+    const k = string("k");
+    if (keys.has(k)) throw new Error(`${SPEC_SRC}: duplicate SPEC key ${k}`);
+    keys.add(k);
+    return { k, lane: string("lane"), group: string("group"),
+      def: src.slice(def.range[0], def.range[1]),
+      subsystem: props.has("subsystem") ? string("subsystem") || null : null,
+      adaptive: (def.type === "Literal" && def.value === null)
+        || def.type === "ArrowFunctionExpression" || def.type === "FunctionExpression" };
+  });
+  if (!rows.length) throw new Error(`${SPEC_SRC}: parsed no SPEC rows`);
   return rows;
 }
 

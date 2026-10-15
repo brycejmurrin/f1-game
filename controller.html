@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-JY14wcU45C4f+AF3fi2l34ox75l3uDY+5v6zn0c4mhw=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-/nMr0RVelkQVEn0hG3/BMTYeww47jd8tB24DlEaj840=' 'sha256-W/czyTGjVSEJQj7oUl8NWsUHMTDHBcNm4osSTakhfmk=' 'sha256-L+EJ2fC207zzVsaozBIjxnStl6V6KWLNiDIPVk6uyEk=' 'sha256-Wxfah3tXog1BivJ4fF+VeEs7298qCmsAGvdrZ2XtpnI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <!-- Same generation marker as index.html: sw.js reads it before caching a navigation (a page with
      no marker is cached unconditionally, one with a stale marker is skipped). Stamped by the deploy. -->
@@ -128,8 +128,14 @@
      phone's roll; the controls stay put under the thumbs. */
   #ctl { position: absolute; inset: 0; display: none; perspective: 900px;
          padding: calc(6px + var(--sat)) calc(6px + var(--sar)) calc(6px + var(--sab)) calc(6px + var(--sal));
-         grid-template-columns: minmax(84px, 1fr) minmax(200px, 2.4fr) minmax(84px, 1fr); grid-template-rows: 1fr; gap: 8px; }
+         grid-template-columns: minmax(84px, 1fr) minmax(200px, 2.4fr) minmax(84px, 1fr); grid-template-rows: minmax(0, 1fr) auto; gap: 8px; }
   body.linked #ctl { display: grid; }
+  #phone-input-options { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 12px; font-size: 11px; text-align: center; }
+  #phone-input-options label { display: flex; align-items: center; gap: 6px; }
+  #steering-mode { min-height: 32px; color: var(--text); background: var(--plate-opaque); border: 1px solid var(--plate-line); border-radius: 4px; }
+  #input-age { color: var(--dim); font-variant-numeric: tabular-nums; }
+  #steering-strip { flex-basis: 100%; height: 44px; line-height: 42px; border: 1px solid var(--team-c); border-radius: 8px; background: var(--plate-opaque); }
+  #steering-strip:focus-visible { outline: 2px solid var(--team-c); outline-offset: 1px; }
   /* The rim sits BEHIND opaque controls and shows only in the gaps, so its
      turn reads as the wheel moving, never as the face bending. */
   #rim { position: absolute; left: 50%; top: 50%; width: min(96vw, 190vh); height: auto; aspect-ratio: 2 / 1;
@@ -359,6 +365,7 @@
   </div>
 </section>
 <section id="ctl" aria-label="Steering wheel controller">
+
   <div id="rim" aria-hidden="true">
     <svg viewBox="0 0 400 200" preserveAspectRatio="xMidYMid meet">
       <defs>
@@ -408,6 +415,11 @@
     <div id="brake" class="pedal" role="button" aria-label="Brake">BRAKE</div>
     <div id="gas" class="pedal" role="button" aria-label="Gas">GAS<small>AUTO</small></div>
   </div>
+  <div id="phone-input-options">
+    <label>STEERING <select id="steering-mode" aria-label="Phone steering mode"><option value="tilt">TILT</option><option value="touch">TOUCH STRIP</option></select></label>
+    <div><span id="input-health" role="status" aria-live="polite">WAITING FOR INPUT ACK</span> <span id="input-age" aria-live="off"></span></div>
+    <div id="steering-strip" role="slider" tabindex="0" aria-label="Touch steering: drag left or right, release to center" aria-valuemin="-1" aria-valuemax="1" aria-valuenow="0" hidden>DRAG TO STEER · RELEASE TO CENTER</div>
+  </div>
 </section>
 <!-- @gen-shell:controller -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
@@ -433,6 +445,7 @@ window.addEventListener("DOMContentLoaded", function () {
     return;
   }
   var ctl = PhonePad.pad({
+    steeringMode: $("steering-mode"), steer: $("steering-strip"), health: $("input-health"), healthAge: $("input-age"),
     body: document.body, status: status, codeIn: $("code"), connect: $("connect"),
     gas: $("gas"), brake: $("brake"), lookBack: $("b-look"), center: $("b-center"), rim: $("rim"),
     buttons: { shiftUp: $("b-shiftUp"), shiftDown: $("b-shiftDown"), overtake: [$("b-overtake"), $("b-ot-big")],
@@ -448,7 +461,7 @@ window.addEventListener("DOMContentLoaded", function () {
            body: document.body },
   }, {
     onOpen: function () {
-      $("link").textContent = "LINKED · TILT TO STEER";
+      $("link").textContent = "LINKED";
       // Landscape is where the wheel has room; the lock is best-effort
       // (Safari has no screen.orientation.lock at all).
       try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(function () {}); } catch (e) {}

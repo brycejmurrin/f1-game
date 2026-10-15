@@ -172,6 +172,20 @@ const SPEC = [
   { k: "padSaturation", lane: "json", group: "driving", def: 0, src: "js/input/steer-tuning.js (percent short of the rim that is full lock)" },
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },
   { k: "padAxes", lane: "json", group: "driving", def: null, src: "js/ui/key-binds.js wheel wizard (axis indices + signs)" },
+  { k: "padProfiles", lane: "json", group: "driving", def: { v: 1, devices: [], legacyClaimed: false }, src: "js/input/controller-profiles.js",
+    normalize: (v) => {
+      if (typeof ControllerProfiles === "undefined" || !isObj(v) || ("v" in v && v.v !== 1)
+          || (!("devices" in v) && !("legacyClaimed" in v))
+          || ("devices" in v && (!Array.isArray(v.devices) || v.devices.length > ControllerProfiles.MAX))
+          || ("v" in v && !Array.isArray(v.devices))
+          || ("legacyClaimed" in v && typeof v.legacyClaimed !== "boolean")) return undefined;
+      // CHANGED files carry only object fields off their defaults. Merge those
+      // defaults; full legacy v1 maps still let clean infer legacyClaimed.
+      const raw = Object.assign({ v: 1, devices: [], legacyClaimed: false }, v);
+      if (v.v === 1 && !("legacyClaimed" in v)) delete raw.legacyClaimed;
+      const clean = ControllerProfiles.clean(raw);
+      return clean.devices.length === raw.devices.length ? clean : undefined;
+    } },
   { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
   { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },
