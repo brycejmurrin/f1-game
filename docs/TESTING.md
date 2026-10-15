@@ -1085,10 +1085,18 @@ CI check-run named `Structural guards` — the aggregator after the
 `Structural guards (tooling A)` / `(tooling B)` halves — or a local
 full-suite stamp) and `node tools/ci/ready-full-cap.mjs` (refuse when ≥3
 ready PRs already have in-progress or queued full-tier `ci.yml`; draft
-fast-tier stays uncapped). Sync with `node tools/ci/sync-pr.mjs <branch>`
+fast-tier stays uncapped). On top of that desk cap, GitHub bounds the LEGS
+(2026-10-15): a ready PR's `selected` legs each join one of 12 fleet-wide
+`concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a
+field of every matrix row, `tools/ci/select-specs.mjs` LANES) and its smoke
+shard one lane per shard index, so at most 12 selected legs and one smoke run
+across every ready PR at once and the rest wait FIFO without holding a runner
+or being cancelled; the train, the nightly and a dispatch get a group of
+their own per leg and never wait behind PR work. Sync with
+`node tools/ci/sync-pr.mjs <branch>`
 once before the final CI run — do **not** enable auto-update-branch bots or a
-require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (on the
-Structural guards aggregator, PR only) prints how far the head is behind
+require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (at the end of
+Structural guards tooling B since 2026-10-15, PR only) prints how far the head is behind
 ship and emits a `::warning::` over 10 commits; it never fails the job.
 Deploy / Pages runs keep their own concurrency groups with
 `cancel-in-progress: false` so a publish is never cancelled by a later tick.
