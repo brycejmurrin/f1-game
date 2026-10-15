@@ -1,26 +1,70 @@
-/* Data Hub errorBlock — offline vs upstream vs cached copy. */
-import test from "node:test";
-import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "path";
-import { fileURLToPath } from "node:url";
+/* Render the real hub's failure/retry path; source text is not a UI oracle. */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import { makeDom } from '../helpers/mini-dom.mjs';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const HUB = fs.readFileSync(path.join(ROOT, "js/data/hub.js"), "utf8");
+function harness(online) {
+  const dom = makeDom();
+  let now = Date.now(), calls = 0;
+  const pending = [];
+  const navigator = { onLine: online };
+  const empty = () => Promise.resolve(dom.document.createElement('div'));
+  const create = (value) => ({ create: () => value });
+  class Clock extends Date { static now() { return now; } }
+  const ctx = vm.createContext({ document: dom.document, navigator, Date: Clock, queueMicrotask,
+    Log: { info() {}, warn() {} }, F1API: { cancelAll() {} },
+    DataSchedule: create({ loadSchedule: () => { calls++; return new Promise((resolve, reject) => pending.push({resolve, reject})); } }),
+    DataStandings: create({ loadStandings: empty }), DataResults: create({ loadResults: empty }),
+    DataLive: create({ loadLive: empty, stopLiveAuto() {}, disarmLiveAuto() {} }),
+    DataTelemetry: create({ loadTelemetry: empty, closeTelemPopup() {} }),
+    DataRealRace: create({ loadRealRace: empty, cancel() {} }), DataExport: create({ loadExport: empty }) });
+  for (const file of ['js/ui/dom.js', 'js/data/hub.js']) {
+    vm.runInContext(fs.readFileSync(new URL('../../' + file, import.meta.url), 'utf8'), ctx, { filename: file });
+  }
+  const hub = vm.runInContext('DataHub', ctx);
+  const root = dom.byId('datahub'); root.hidden = true;
+  hub.init(root);
+  const panel = () => root.querySelector('#dh-panel');
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  async function answer(ok, text = 'Race at Monza') {
+    const request = pending.shift(); assert.ok(request, 'the hub must actually request the tab');
+    if (ok) { const n = dom.document.createElement('div'); n.className = 'schedule-data'; n.textContent = text; request.resolve(n); }
+    else request.reject(new Error('service failed'));
+    await flush();
+  }
+  return {hub, root, panel, answer, flush, navigator, advance: () => { now += 7 * 3600000; },
+    calls: () => calls, click: n => { assert.ok(n, 'recovery control exists'); dom.dispatch(n, {type:'click'}); } };
+}
 
-test("errorBlock distinguishes offline, upstream, and cached copy", () => {
-  assert.match(HUB, /OFFLINE/);
-  assert.match(HUB, /SERVICE UNAVAILABLE/);
-  assert.match(HUB, /OFFLINE · CACHED/);
-  assert.match(HUB, /REFRESH FAILED · CACHED/);
-  assert.match(HUB, /dataset\.reason = reason/);
-  assert.match(HUB, /offline-cached/);
-  assert.match(HUB, /upstream-cached/);
-  assert.match(HUB, /offline copy/);
-});
-
-test("errorBlock still keeps stale node path in loadTab", () => {
-  assert.match(HUB, /KEEP the stale node/);
-  assert.match(HUB, /hasStale/);
-  assert.match(HUB, /Showing the last data/);
-});
+for (const online of [false, true]) for (const cached of [false, true]) {
+  test(`${online ? 'upstream' : 'offline'} failure ${cached ? 'retains cached data' : 'has no cached data'} and RETRY recovers`, async () => {
+    const h = harness(online);
+    h.hub.open('schedule');
+    if (cached) {
+      await h.answer(true);
+      h.hub.close(); h.advance(); h.hub.open('schedule');
+    }
+    await h.answer(false);
+    const error = h.panel().querySelector('.dh-error');
+    assert.ok(error, 'a failure renders an error instead of an empty tab');
+    assert.equal(error.getAttribute('role'), 'status');
+    assert.equal(error.dataset.reason, (online ? 'upstream' : 'offline') + (cached ? '-cached' : ''));
+    assert.equal(error.children.find(n => n.dataset.role === "title")?.textContent,
+      cached ? (online ? 'REFRESH FAILED · CACHED' : 'OFFLINE · CACHED') : (online ? 'SERVICE UNAVAILABLE' : 'OFFLINE'));
+    const messages = error.querySelectorAll('.dh-error-msg').map(n => n.textContent).join(' ');
+    assert.match(messages, cached ? /Showing the last data/ : online ? /F1 data service/ : /No network/);
+    assert.equal(!!h.panel().querySelector('.schedule-data'), cached, 'only a successful old answer supplies stale rows');
+    if (cached) assert.equal(h.panel().querySelector('.schedule-data').textContent, 'Race at Monza');
+    const before = h.calls();
+    h.navigator.onLine = true;
+    h.click(error.querySelector('.dh-retry'));
+    assert.equal(h.calls(), before + 1, 'RETRY starts a new request');
+    await h.answer(true, 'Fresh race at Spa');
+    assert.equal(h.panel().querySelector('.dh-error'), null);
+    assert.equal(h.panel().querySelector('.schedule-data').textContent, 'Fresh race at Spa');
+    h.hub.close(); h.hub.open('schedule'); await h.flush();
+    assert.equal(h.calls(), before + 1, 'reopening reuses the recovered successful answer');
+  });
+}

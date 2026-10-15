@@ -1,10 +1,11 @@
 // @ts-check
 // Player camera modes: cycling via the __apex.camera hook + the CAM button,
-// persistence, and that every mode renders a valid, distinct frame without crashing.
+// persistence, finite distinct rig poses, and representative rendered views.
 // Hook/control checks use headless builds; the representative pixel check explicitly renders.
 // Modes: chase, far, drift, cockpit, hood, overhead, heli, reverse, side,
 //        cinematic, low, tcam, rear, visor, trackside, rival, pitwall, drone, helmet.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { frameContent, frameDelta, screenshotPixels } from "../helpers/visual-oracle.js";
 import { screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
 
 
@@ -49,10 +50,11 @@ test.describe("Apex 26 — player camera modes", () => {
     expect(mode).toBe("hood");
   });
 
-  test("every camera mode renders without errors and produces a distinct frame", async ({ page, loadTrack }) => {
+  test("camera rigs have finite distinct poses and representative views render distinct frames", async ({ page, loadTrack }) => {
     test.slow();   // render-project test on CPU GL: needs more than the default budget
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
+    await page.setViewportSize({ width: 640, height: 360 });
     await loadTrack("monza", "day", "dry", { headless: true });
     await page.evaluate(() => { window.__apex.jump(0.0, 50, 0); window.__apex.snapCam(); });
     const MODES = ["chase", "far", "drift", "cockpit", "hood", "overhead", "heli",
@@ -66,10 +68,8 @@ test.describe("Apex 26 — player camera modes", () => {
     // and made it the slowest test in the suite by 3x. It is the compositor frame
     // that is expensive, not the encode — JPEG q60 was tried and came out WORSE.
     //
-    // So distinctness is asserted on the CAMERA STATE, which is what "a distinct
-    // frame" actually means here: different eye/target/fov vantages cannot
-    // render the same image. Pixels are still captured for a representative few,
-    // so a mode that produces a valid vantage but fails to DRAW is still caught.
+    // Check every rig's state; sample actual rendered content for three
+    // representative views below at a smaller viewport to bound capture cost.
     //
     // snapCam() is REQUIRED here: the rig only moves during render(), and step()
     // does not render — without it every mode reports the PREVIOUS vantage and all
@@ -79,31 +79,40 @@ test.describe("Apex 26 — player camera modes", () => {
       await page.evaluate((m) => { window.__apex.camera(m); window.__apex.snapCam(); }, mode);
       vantages[mode] = await page.evaluate(() => {
         const c = window.__apex.camState();
-        return [...c.eye, ...(c.tgt || c.target), c.fov].map((v) => +v.toFixed(2)).join(",");
+        const pose = [...c.eye, ...(c.tgt || c.target), c.fov];
+        if (!pose.every(Number.isFinite)) throw new Error("camera has non-finite pose");
+        return pose.map((v) => +v.toFixed(2)).join(",");
       });
     }
-    // A few real pixel captures, so "renders" is still verified end to end.
-    // ONE pixel capture, not three. Each locator.screenshot() is ~22 s solo and
-    // roughly double that with a sibling worker on this 4-core box, so three of
-    // them passed in isolation (116 s) but blew the 120 s budget in a full suite
-    // run (149 s). Distinctness between modes is already covered by the vantages
-    // above; this capture exists only to prove the renderer actually DRAWS, and
-    // one frame proves that as well as three.
+    // Representative chase, onboard and remote views must actually draw.
     const shots = {};
-    for (const mode of ["chase"]) {
-      await page.evaluate((m) => window.__apex.camera(m), mode);
-      await page.evaluate(() => { for (let i = 0; i < 30; i++) window.__apex.step(1 / 60, 1); });
-      await page.evaluate(() => window.__apex.snapCam(true));   // one real rendered frame after the headless state checks
-      await page.waitForTimeout(250);
-      shots[mode] = (await screenshotPresentedCanvas(page)).buf.toString("base64");
-      await page.evaluate(() => window.__apex.headless(true));
+    await page.evaluate(() => { window.__apex.freeze(true); window.__apex.headless(true); });
+    for (const mode of ["chase", "cockpit", "overhead"]) {
+      await page.evaluate(async (m) => {
+        const a = window.__apex;
+        a.camera(m);
+        const ready = GLX.softPresent?.() ? GLX.awaitSoftPresent(60_000) : null;
+        try {
+          a.snapCam(true); // arm and paint exactly this camera
+          a.headless(true); // snapCam(true) enables the live loop; quiet it now
+          if (ready) await ready;
+          else await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        } finally { a.headless(true); }
+      }, mode);
+      const chrome = await page.addStyleTag({ content: "body > :not(canvas):not(script):not(style) { visibility:hidden !important } dialog::backdrop { background:transparent !important }" });
+      try {
+        shots[mode] = await screenshotPixels(page, (await screenshotPresentedCanvas(page, { skipAwait: true })).buf);
+        expect(frameContent(shots[mode]).nonblank, `${mode} presented meaningful pixels`).toBe(true);
+      } finally { await chrome.evaluate(el => el.remove()); }
     }
+    await page.evaluate(() => { window.__apex.headless(true); window.__apex.freeze(false); });
     expect(errors).toEqual([]);
     // No two modes collapse to the same vantage...
     const vv = Object.values(vantages);
     expect(new Set(vv).size).toBe(vv.length);
-    // ...and the sampled mode drew a real, non-empty frame.
-    expect(Object.values(shots)[0].length).toBeGreaterThan(1000);
+    for (const [a, b] of [["chase", "cockpit"], ["chase", "overhead"], ["cockpit", "overhead"]]) {
+      expect(frameDelta(shots[a], shots[b]), `${a} and ${b} must present different views`).toBeGreaterThan(1);
+    }
   });
 
   // The chase rig has two branches: car-anchored when the player has a world

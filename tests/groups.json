@@ -1020,6 +1020,8 @@
     "tests/unit/uilayers-modal-order.test.mjs",
     "tests/unit/validation-cli.test.mjs",
     "tests/unit/vertex-pack.test.mjs",
+    "tests/unit/visual-oracle.test.mjs",
+    "tests/unit/vm-page-lifecycle.test.mjs",
     "tests/unit/voice-pack.test.mjs",
     "tests/unit/vstd-invariant.test.mjs",
     "tests/unit/wait-polling.test.mjs",
@@ -1815,6 +1817,7 @@
       "files": [
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/browser-ui-hunt.spec.js",
+        "tests/specs/css-player-smoke.spec.js",
         "tests/specs/hud-audit.spec.js",
         "tests/specs/hud-layout.spec.js",
         "tests/specs/menu-keyboard.spec.js",

@@ -1177,13 +1177,19 @@ so a flake is news, not a doubled bill — except a QUARANTINED spec, which
 `select-specs.mjs` schedules alone in its own leg with `--retries=1`
 (2026-10-10, R3-CI-HEALTH-4), so one quarantined flake cannot red an
 otherwise green leg. Under `APEX_FAIL_ON_FLAKY=1` (every
-browser job in `ci.yml`) a pass-on-retry is a red unless the spec is listed in
-`tests/data/flaky-quarantine.json` — the one `@quarantine` ledger (owner,
-since, why). Quarantined specs still run; they are excluded from blocking
-required runs. Agents fix real failures; re-run a failed job at most once and
+browser job in `ci.yml`) a pass-on-retry is a red unless its exact full test
+title matches an unexpired policy in `tests/data/flaky-quarantine.json`.
+The ledger names an accountable owner, evidence, expiry and review criteria.
+The scheduler still isolates the spec, but unrelated tests in it remain blocking.
+Quarantined tests still run and permanent failures remain red. Agents fix real failures; re-run a failed job at most once and
 only for timeout / infra errors; never skip a test or loosen a tolerance to
 get green. `tests/unit/flaky-quarantine.test.mjs` pins the ledger and the
 wiring.
+
+CSS-only changes select a one-boot title/touch/pause reachability smoke and
+relevant menu goldens; they do not discard the browser plan. A failed or cancelled selected
+matrix is red even if sibling JUnit is clean: missing execution evidence needs a
+successful rerun, including failures before the run-step marker.
 
 ## 4. Philosophy — debug-hooks first
 
@@ -1260,6 +1266,12 @@ comment saying why they are not one.
 ---
 
 ## 5. Coverage table
+
+| Test | What it covers |
+|---|---|
+| `visual-oracle.test.mjs` | Decoded RGBA content rejects solid black/white/transparent captures; motion rejects frozen frames and mismatched dimensions. |
+| `vm-page-lifecycle.test.mjs` | Real child processes fail on asynchronous teardown rejection, await afterAll, retain nested hook scope and continue cleanup after failures. |
+
 
 Every file below is asserted present in this table by
 `tests/unit/test-groups.test.mjs` — a new spec fails the tooling suite until it says
@@ -1553,6 +1565,7 @@ what it covers.
 |---|---|
 | `ui-audit.spec.js` | portrait + landscape screenshots of every screen |
 | `rotation-recovery.spec.js` | portrait-phone race blocker guidance, focus, controls escape and exit-race recovery |
+| `css-player-smoke.spec.js` | One landscape touch boot with shipped typography: title and active pedal/steering controls fit and own their hit targets; trusted pointer pause/resume works twice and releases the input gate. CSS-only changes select this small smoke plus relevant menu goldens, rather than the exhaustive UI suites. |
 | `ui-button-touch.spec.js` | button/touch steer mode: auto-throttle, disabled calibrate, race-settings layout; the lighting tuner's FREE CAMERA touch sticks (drag registers, no latch when the overlay is pulled away mid-hold, a cancelled scene drag releases) and its layout clearing the docked panel at every UI SIZE |
 | `photo-studio.spec.js` | Home shot and camera restoration, native CAPTURE/DONE, portrait/landscape UI 200% hit targets, paused-race scroll isolation, real keyboard accent listboxes, and two-tab native IndexedDB concurrent saves retaining exactly six durable photos. |
 | `ui-resize.spec.js` | live resize: `data-shape`/`data-pair`/`data-density` (`js/ui/sheet-shape.js`) converge correctly after the viewport, UI SIZE, or `zoom` changes mid-session, not just at first paint |

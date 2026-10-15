@@ -114,20 +114,7 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => new Promise((resolve) => {
           requestAnimationFrame(() => requestAnimationFrame(resolve));
         }));
-        // Wait for IDENTITY chrome + Titillium before shooting.
-        // css/fonts-hud.css and select/carsetup are print→all (#1101).
-        // .bigbtn is italic 800 (css/tokens.css); the title-critical sheet
-        // already ships italic 700 (synth-bolds 800). A used-face gate on
-        // NORMAL 700 can pass from fonts-hud while doors still paint
-        // system-ui (wider min-content → 2×2 wrap, GARAGE clipped).
-        // getComputedStyle().fontFamily is the specified stack, not the
-        // used face. Flip print sheets to all, FontFace-load the three
-        // title faces, then measure italic 800 vs Arial.
-        await page.evaluate(() => {
-          for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
-            if (link.media === "print") link.media = "all";
-          }
-        });
+        // Wait for production stylesheet activation; never repair the page.
         await page.waitForFunction(() => {
           const need = ["fonts-hud.css", "select.css", "carsetup.css"];
           const links = [...document.querySelectorAll('link[rel="stylesheet"]')];
@@ -137,19 +124,12 @@ for (const [shapeName, viewport] of SHAPES) {
           });
         }, null, { polling: 100, timeout: BOOT_MS });
         await page.evaluate(async () => {
-          const specs = [
-            ["normal", "600", "titillium-web-latin-600-normal.woff2"],
-            ["italic", "700", "titillium-web-latin-700-italic.woff2"],
-            ["normal", "700", "titillium-web-latin-700-normal.woff2"],
-          ];
-          for (const [style, weight, file] of specs) {
-            const face = new FontFace(
-              "Titillium Web",
-              `url("assets/fonts/${file}")`,
-              { style, weight, display: "swap" },
-            );
-            document.fonts.add(await face.load());
-          }
+          await Promise.all([
+            document.fonts.load('italic 800 48px "Titillium Web"'),
+            document.fonts.load('600 16px "Titillium Web"'),
+            document.fonts.load('700 16px "Titillium Web"'),
+          ]);
+          await document.fonts.ready;
         });
         await page.waitForFunction(() => {
           if (!document.fonts) return true;

@@ -19,6 +19,7 @@ import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverag
 // moved on, which is the drift it exists to catch pointing the wrong way. The
 // selector owns the value; this file checks ci.yml agrees with the selector.
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
+import { selectedGateVerdict } from "../../tools/ci/selected-gate-verdict.mjs";
 import { pickFastTier, treeOnlyGreen, rearmDecision, parseJobPages } from "../../tools/ci/pages-train.mjs";
 
 const SELECTED_TIMEOUT_MS = SELECTED_GATE.perTestTimeoutSec * 1000;
@@ -383,8 +384,8 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
 test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once per run", () => {
   const job = parseYAML(ciWorkflow).jobs["selected-verdict"];
   const script = job.steps.map((st) => st.run || "").join("\n");
-  // Verdict logic lives in selected-gate-verdict.mjs (cancel+clean junit →
-  // infra-retry; dropped > 0 still red off the train). Workflow stages junit
+  // Verdict logic lives in selected-gate-verdict.mjs (failed/cancelled legs
+  // remain red; dropped > 0 is red off the train). Workflow stages junit
   // BEFORE that script runs.
   assert.match(script, /selected-gate-verdict\.mjs/);
   assert.match(script, /junit-failed\.mjs/);
@@ -1952,8 +1953,13 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   // 2026-10-04) ANY dropped routed spec is a red off the train, whether or not
   // `selected` ran — the dropped-count used to be read only on a skip.
   assert.match(job, /GUARDS: \$\{\{ needs\.guards\.result \}\}/);
-  assert.match(job, /selected-gate-verdict\.mjs/, "verdict logic is the shared script (cancel+clean junit → infra-retry)");
-  assert.match(job, /CANCEL \+ CLEAN JUNIT IS INFRA-RETRY/, "documents the #1109 / run 37493213168 rule");
+  assert.match(job, /selected-gate-verdict\.mjs/, "verdict logic is the shared script");
+  // Execute the policy rather than requiring a comment that blesses a failure.
+  for (const result of ["cancelled", "failure"]) {
+    assert.equal(selectedGateVerdict({ select: "success", selected: result, guards: "success",
+      evidence: { started: [], junit: [], downloadFailed: false } }).ok, false,
+    "a selected leg with no execution evidence must remain red");
+  }
   assert.match(job, /Every shard's junit[\s\S]*One answer for the change-aware gate/,
     "junit is downloaded before the decision step");
   // It joins the Pages aggregate like every other job (no needs on the renderer chain).

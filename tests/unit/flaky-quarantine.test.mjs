@@ -23,13 +23,16 @@ test("every quarantine row names a spec that exists and carries since/owner/why"
     assert.match(row.since || "", /^\d{4}-\d{2}-\d{2}$/, `${row.spec}: since must be an ISO date`);
     assert.ok((row.owner || "").length >= 8, `${row.spec}: owner names who fixes it`);
     assert.ok((row.why || "").length >= 40, `${row.spec}: why must say what was measured`);
+    assert.ok(row.title.includes(" › TLX › "), "quarantine identifies the backend suite");
+    assert.ok(fs.readFileSync(path.join(ROOT, row.spec), "utf8").includes(row.title.split(" › ").at(-1)), "exact quarantined test still exists");
+    assert.match(row.expires, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(!seen.has(row.spec), `${row.spec}: listed twice`);
     seen.add(row.spec);
   }
 });
 
 test("the loader returns the quarantined spec paths, and an empty set for a missing file", () => {
-  const q = loadQuarantine();
+  const q = loadQuarantine(QUARANTINE, new Date("2026-10-15T00:00:00Z"));
   for (const row of FILE.quarantine) assert.ok(q.has(row.spec));
   assert.equal(q.size, FILE.quarantine.length);
   assert.equal(loadQuarantine(path.join(ROOT, "scratch", "no-such-quarantine.json")).size, 0);
@@ -38,6 +41,7 @@ test("the loader returns the quarantined spec paths, and an empty set for a miss
 test("verdict: a quarantined flake is reported, an unlisted one blocks, none means pass", () => {
   // Fixture keys, not repo paths: the verdict is plain set membership on key().spec.
   const q = new Set(["fixture/known.spec.js"]);
+  q.policies = [{spec: "fixture/known.spec.js", title: "wobbles"}];
   const known = { spec: "fixture/known.spec.js", title: "wobbles" };
   const fresh = { spec: "fixture/new.spec.js", title: "also wobbles" };
   assert.deepEqual(flakyVerdict([], q), { blocking: [], quarantined: [], fail: false });
@@ -166,4 +170,35 @@ test("the selected gate honours the quarantine: its specs get a leg of their own
   assert.ok(from > 0 && run.length > 0, "the selected job's run step is gone");
   assert.match(run, /APEX_FAIL_ON_FLAKY: 1/);
   assert.match(run, /--retries=\$\{\{ matrix\.retries \|\| 0 \}\}/);
+});
+
+test("real quarantine matches exact TLX title only and expires after review deadline", () => {
+  const row = FILE.quarantine[0];
+  assert.equal(row.owner, "brycejmurrin");
+  assert.match(row.evidence, /^https:\/\/github.com\/brycejmurrin\/f1-game\/actions\/runs\/\d+$/);
+  assert.ok(row.review.length > 40);
+  assert.ok(row.expires > row.since);
+  const active = loadQuarantine(QUARANTINE, new Date(row.expires + "T12:00:00Z"));
+  const known = {spec: row.spec, title: row.title};
+  assert.equal(flakyVerdict([known], active).fail, false);
+  for (const title of ["GLX renders the mirror pass", row.title + " new regression", "HUD rear-view mirror › TLX › TLX renders the mirror pass"]) {
+    assert.equal(flakyVerdict([{spec: row.spec, title}], active).fail, true, title);
+  }
+  const after = new Date(row.expires + "T00:00:00Z"); after.setUTCDate(after.getUTCDate() + 1);
+  assert.equal(flakyVerdict([known], loadQuarantine(QUARANTINE, after)).fail, true);
+ });
+
+test("invalid quarantine identity or review metadata cannot waive a failure", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "quarantine-policy-"));
+  const file = path.join(dir, "ledger.json");
+  const row = FILE.quarantine[0];
+  try {
+    for (const key of ["title", "owner", "review", "evidence", "expires"]) {
+      const invalid = {...row}; delete invalid[key];
+      fs.writeFileSync(file, JSON.stringify({quarantine: [invalid]}));
+      const q = loadQuarantine(file, new Date("2026-10-15T00:00:00Z"));
+      assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], q).fail, true, key);
+    }
+    assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], new Set([row.spec])).fail, true, "spec membership alone cannot waive a test");
+  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
 });
