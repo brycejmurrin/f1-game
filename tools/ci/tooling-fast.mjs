@@ -543,6 +543,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
+  // knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.
+  "tests/unit/knob-ab.test.mjs",
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/lamp-density.test.mjs",
