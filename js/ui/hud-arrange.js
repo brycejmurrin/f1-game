@@ -45,11 +45,11 @@ const HudArrange = (() => {
     return clamp(Math.round((s0 * d1 / d0) / 5) * 5, LIM.s[0], LIM.s[1]);
   }
   /* SHOW / HIDE: which per-element visibility toggles (js/ui/hud-elements.js)
-     a MOVE & SIZE piece maps to. The tower is four toggles shown or hidden
+     a MOVE & SIZE piece maps to. The tower is five toggles shown or hidden
      together; MAP, GAPS and MIRROR keep their own AUTO / ON / OFF rows and the
      flag / radio card are race messages, so those carry no toggle here. */
   const VIS = Object.freeze({
-    tower: ["pos", "lap", "time", "best"], sectors: ["sectors"], limits: ["limits"], gearbox: ["gear"],
+    tower: ["pos", "lap", "time", "best", "delta"], sectors: ["sectors"], limits: ["limits"], gearbox: ["gear"],
     speed: ["speed"], energy: ["energy"], tyre: ["tyre"], ot: ["ot"], aero: ["aero"], bb: ["bb"],
     damage: ["damage"], rel: ["rel"], strat: ["strat"], inputs: ["inputs"],
   });
@@ -110,7 +110,7 @@ const HudArrange = (() => {
       bar.setAttribute("aria-label", "Arrange HUD");
       bar.style.cssText = "position:fixed;z-index:9999;" +
         "display:flex;flex-wrap:wrap;box-sizing:border-box;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;" +
-        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:13px;width:max-content;max-width:calc(100vw - 24px);max-height:calc(100svh - 24px);overflow:auto;";
+        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:13px;width:max-content;max-width:calc(100vw - 24px - 2 * max(var(--sal,0px),var(--sar,0px)));max-height:calc(100svh - 24px - 2 * max(var(--sat,0px),var(--sab,0px)));overflow:auto;";
       const mk = (txt, aria, fn, id) => {
         const b = document.createElement("button");
         b.type = "button"; b.textContent = txt; b.id = id;
@@ -144,14 +144,13 @@ const HudArrange = (() => {
       bar.hidden = true;
       document.body.appendChild(bar);
     }
-    /* The toolbar covers whatever it sits on, and every edge has a readout: pick
-       the slot (top / bottom centre, top right, bottom left) that covers the
-       least of the pieces and controls, measured after each change. */
+    /* Prefer an edge, but use the middle when it covers less HUD content. */
     const SLOTS = [
       { top: "calc(8px + var(--sat,0px))", left: "50%", transform: "translateX(-50%)" },
       { bottom: "calc(8px + var(--sab,0px))", left: "50%", transform: "translateX(-50%)" },
       { top: "calc(8px + var(--sat,0px))", right: "calc(8px + var(--sar,0px))", transform: "none" },
       { bottom: "calc(8px + var(--sab,0px))", left: "calc(8px + var(--sal,0px))", transform: "none" },
+      { top: "50%", left: "50%", transform: "translate(-50%, -50%)" },
     ];
     function placeBar(rects) {
       if (!bar) return;
@@ -161,6 +160,7 @@ const HudArrange = (() => {
         { l: W / 2 - w / 2, t: H - 8 - h, r: W / 2 + w / 2, b: H - 8 },
         { l: W - 8 - w, t: 8, r: W - 8, b: 8 + h },
         { l: 8, t: H - 8 - h, r: 8 + w, b: H - 8 },
+        { l: W / 2 - w / 2, t: H / 2 - h / 2, r: W / 2 + w / 2, b: H / 2 + h / 2 },
       ];
       let best = 0, bestA = Infinity;
       for (let i = 0; i < boxes.length; i++) {
@@ -188,6 +188,7 @@ const HudArrange = (() => {
         visBtn.setAttribute("aria-pressed", off ? "true" : "false");
         visBtn.title = selected && !visIds(selected).length ? labelOf(selected) + " has its own setting in DISPLAY \u203a HUD" : "";
       }
+      placeBar(rectsNow());
     }
 
     /* ---- clash marks: HUD pieces against each other and against the touch controls ---- */
@@ -210,7 +211,6 @@ const HudArrange = (() => {
     }
     function markClashes() {
       const rects = rectsNow();
-      placeBar(rects);
       const pairs = clashes(rects);
       const hot = new Set();
       for (const [a, b] of pairs) { hot.add(a); hot.add(b); }
@@ -230,7 +230,16 @@ const HudArrange = (() => {
     function dragOrig(id) {
       const orig = current(id), el = id === "announce" ? elOf(id) : null;
       const r = el && el.getBoundingClientRect();
-      return r ? placedOrig(orig, r.left, r.top, window.innerWidth, window.innerHeight) : orig;
+      if (r) return placedOrig(orig, r.left, r.top, window.innerWidth, window.innerHeight);
+      // The first real map edit adopts its temporary screen-pixel clearance.
+      const map = id === "map" ? elOf(id) : null;
+      if (map && !map.hasAttribute("data-hl-user") && map.style.getPropertyValue) {
+        return Object.assign({}, orig, {
+          x: orig.x + (parseFloat(map.style.getPropertyValue("--hud-clear-x")) || 0) / window.innerWidth * 100,
+          y: orig.y + (parseFloat(map.style.getPropertyValue("--hud-clear-y")) || 0) / window.innerHeight * 100,
+        });
+      }
+      return orig;
     }
     function flush() {
       if (raf) {
@@ -243,6 +252,7 @@ const HudArrange = (() => {
     }
     /* Bind queued edits to the layout visible when the gesture started. */
     function queue(id, v) {
+      if (id === "map" && v.s != null) { const orig = dragOrig(id); v = Object.assign({ x: orig.x, y: orig.y }, v); }
       if (pending && pending.id !== id) flush();
       pending = { id, set: context.set, profile: context.profile,
         v: Object.assign(pending ? pending.v : {}, v) };
@@ -279,7 +289,8 @@ const HudArrange = (() => {
     function size(dir) {
       if (!selected) return;
       flush();
-      HudLayout.set(selected, { s: stepSize(current(selected).s, dir) }, context.set, context.profile);
+      const orig = selected === "map" ? dragOrig(selected) : current(selected);
+      HudLayout.set(selected, Object.assign({}, orig, { s: stepSize(orig.s, dir) }), context.set, context.profile);
       after();
     }
 
@@ -291,13 +302,37 @@ const HudArrange = (() => {
       ["flag", [[document.getElementById("hud-flag"), "YELLOW \u00b7 SECTOR 2"]]],
       ["limits", []],
       ["damage", []],
+      ["rel", [], true],
+      ["strat", [], true],
+      ["inputs", []],
     ];
     function reveal() {
       revealed = [];
-      for (const [id, texts] of SAMPLE) {
+      for (const [id, texts, preview] of SAMPLE) {
         const el = elOf(id);
-        if (!el || !el.hidden) continue;
-        const rec = { el, hidden: el.hidden, text: [] };
+        const optional = id === "rel" || id === "strat" || id === "inputs";
+        if (!el || (!el.hidden && !optional)) continue;
+        const rec = { el, hidden: el.hidden, text: [], children: [], drop: el.getAttribute("data-col-drop") };
+        if (optional) el.removeAttribute("data-col-drop");
+        if (preview && el.hidden) {
+          // Keep producer-owned nodes intact: its paint cache must still match on resume.
+          for (const child of el.children) { rec.children.push({ el: child, hidden: child.hidden }); child.hidden = true; }
+          rec.preview = document.createElement("div");
+          // Match the bounded producer rows and their compact-column selectors.
+          if (id === "rel") {
+            rec.preview.setAttribute("data-col-row", "");
+            for (const [k, text] of [["pos", "P2"], ["code", "YOU"], ["gap", "+0.8"], ["tyre", "M"], ["lap", ""]]) {
+              const cell = document.createElement("span"); cell.setAttribute("data-k", k); cell.textContent = text;
+              rec.preview.appendChild(cell);
+            }
+          } else {
+            rec.preview.setAttribute("data-k", "next");
+            const head = document.createElement("span"), value = document.createElement("b");
+            head.textContent = "NEXT"; value.textContent = "LAP 12";
+            rec.preview.appendChild(head); rec.preview.appendChild(value);
+          }
+          el.appendChild(rec.preview);
+        }
         for (const [t, txt] of texts) {
           if (!t) continue;
           rec.text.push({ el: t, text: t.textContent });
@@ -310,7 +345,10 @@ const HudArrange = (() => {
     function conceal() {
       for (const rec of revealed) {
         for (const t of rec.text) t.el.textContent = t.text;
+        if (rec.preview) rec.el.removeChild(rec.preview);
+        for (const child of rec.children) child.el.hidden = child.hidden;
         rec.el.hidden = rec.hidden;
+        if (rec.drop !== null) rec.el.setAttribute("data-col-drop", rec.drop);
       }
       revealed = [];
     }
@@ -349,6 +387,8 @@ const HudArrange = (() => {
           const option = document.createElement("option"); option.value = id; option.textContent = label;
           picker.appendChild(option);
         }
+        // Measure the visible toolbar after paintBar has filled its current text.
+        bar.hidden = false;
         after();
       }
       if (!editing && was) {
@@ -480,7 +520,7 @@ const HudArrange = (() => {
       const dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (dirs[e.key] && selected && e.target && e.target.id === "hud-arrange-move") {
         e.preventDefault(); e.stopPropagation(); flush();
-        const cur = current(selected), d = dirs[e.key], step = e.shiftKey ? 5 : 1;
+        const cur = dragOrig(selected), d = dirs[e.key], step = e.shiftKey ? 5 : 1;
         HudLayout.set(selected, { x: clamp(cur.x + d[0] * step, -50, 50), y: clamp(cur.y + d[1] * step, -50, 50) }, context.set, context.profile);
         after(); return;
       }
