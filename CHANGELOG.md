@@ -14,6 +14,8 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- WATCH HIGHLIGHTS: scrubbing or pressing NEXT now cuts to the right car for the coming highlight, and the replay clock no longer jumps back (#2196).
+- WATCH: the timeline reaches the formation and start footage before lights-out (#2202).
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
