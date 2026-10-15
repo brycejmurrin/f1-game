@@ -96,6 +96,14 @@ const DataTelemetry = (function () {
         const driverByNum = {};
         drivers.forEach(function (d) { driverByNum[d.num] = d; });
 
+        function selectionChanged() {
+          // A tray edit supersedes its loading snapshot. Keep this separate
+          // from syncChips: a successful load rebuilds the same summary too.
+          ++telGen;
+          if (telLanes) F1API.cancelAll();
+          syncChips();
+        }
+
         function syncChips() {
           drivers.forEach(function (d) {
             const selected = trayHas(d.num, meta.sessionKey);
@@ -128,7 +136,7 @@ const DataTelemetry = (function () {
             rm.addEventListener("click", function () {
               const idx = tray.findIndex(function (o) { return o.d.num === e.d.num && o.sessionKey === e.sessionKey; });
               if (idx !== -1) tray.splice(idx, 1);
-              syncChips();
+              selectionChanged();
             });
             row.appendChild(rm);
             summary.appendChild(row);
@@ -149,7 +157,7 @@ const DataTelemetry = (function () {
           if (tray.length > 1) {
             const clr = el("button", "dh-livebtn dh-lane-clear", "CLEAR SELECTION");
             clr.type = "button"; clr.dataset.block = "tight";
-            clr.addEventListener("click", function () { tray = []; syncChips(); });
+            clr.addEventListener("click", function () { tray = []; selectionChanged(); });
             summary.appendChild(clr);
           }
           detail.appendChild(summary);
@@ -168,7 +176,7 @@ const DataTelemetry = (function () {
           b.setAttribute("aria-label", "Select " + fullName);
           b.addEventListener("click", function () {
             trayToggle(d, meta);
-            syncChips();
+            selectionChanged();
           });
           chipByNum[d.num] = b;
           pick.appendChild(b);

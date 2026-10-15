@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], scheduleOnline = true } = {}) {
+function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], sessions, scheduleOnline = true } = {}) {
   let docRoot = null;
   const scrolls = [];
   class El {
@@ -53,6 +53,8 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     querySelector(s) { const c = s.replace(/^\./, ""); for (const ch of this.children) { if (ch._cls.has(c)) return ch; const r = ch.querySelector(s); if (r) return r; } return null; }
     find(pred) { for (const ch of this.children) { if (pred(ch)) return ch; const r = ch.find(pred); if (r) return r; } return null; }
     selects() { const out = []; (function walk(n) { n.children.forEach((c) => { if (c.tagName === "SELECT") out.push(c); walk(c); }); })(this); return out; }
+    showModal() { this.open = true; }
+    close() { this.open = false; this.dispatch("close"); }
     focus() {}
     scrollIntoView(o) { scrolls.push({ id: this.id, o }); }
   }
@@ -81,8 +83,8 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   function place(id, hidden) {
     const n = new El("dialog"); n.id = id; n.hidden = hidden !== false; byId[id] = n; docRoot.appendChild(n); return n;
   }
-  const pending = [], resultKeys = [];
-  const defer = (name, value) => new Promise((res) => pending.push({ name, res: () => res(value) }));
+  const pending = [], resultKeys = [], fastestKeys = [];
+  const defer = (name, value) => new Promise((res, reject) => pending.push({ name, res: () => res(value), reject }));
   const LATEST = latest !== undefined ? latest
     : { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race", dateStart: "2026-10-04T12:00:00Z" };
   const meetingYears = [];
@@ -91,10 +93,10 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     schedule: () => { scheduleCalls++; return scheduleOnline ? Promise.resolve([]) : Promise.reject(new Error("offline")); },
     latestSession: () => defer("latestSession", LATEST),
     meetings: (year) => { meetingYears.push(year); return defer("meetings", [{ meetingKey: 50, name: "Latest GP", dateStart: "2026-10-01" }, { meetingKey: 40, name: "Picked GP", dateStart: "2026-09-01" }]); },
-    sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
+    sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", sessions || [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
     sessionResult: (sk) => { resultKeys.push(sk); return defer("sessionResult", []); },
     sessionDrivers: () => defer("drivers", drivers),
-    fastestLap: () => defer("fastestLap", null),
+    fastestLap: (sessionKey, num) => { fastestKeys.push({ sessionKey, num }); return defer("fastestLap", null); },
     weather: () => defer("weather", null), livePositions: () => defer("pos", { values: [], cursor: null }),
     liveIntervals: () => defer("int", { values: {}, cursor: null }),
     cancelAll() { cancels++; }, cacheEntryT: () => null,
@@ -132,7 +134,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   DataHub.init(root);
   const content = () => root.find((n) => n.id === "dh-panel");
   const tab = (id) => root.find((n) => n.id === "dh-tab-" + id).dispatch("click");
-  return { DataHub, root, content, tab, settle, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, drain, flush, pending, resultKeys, scrolls, document, byId, place, meetingYears };
+  return { DataHub, root, content, tab, settle, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, drain, flush, pending, resultKeys, fastestKeys, scrolls, document, byId, place, meetingYears };
 }
 
 // LIVE booted on the latest session, the player has just picked "Picked GP"
@@ -312,8 +314,13 @@ async function startCompare(h) {
   chips.forEach((c) => c.dispatch("click"));
   const go = h.content().find((n) => n.classList.contains("dh-livebtn") && /COMPARE 2/.test(n.textContent));
   assert.ok(go, "COMPARE 2 LAPS is offered");
+  // Keep each mutation handler so it can be exercised against a deferred load,
+  // including summary buttons whose nodes LOAD subsequently detaches.
+  const remove = h.content().querySelector(".dh-lane-x");
+  const clear = h.content().querySelector(".dh-lane-clear");
   go.dispatch("click"); await h.flush();
   assert.equal(h.pending.filter((p) => p.name === "fastestLap").length, 2, "both lanes are fetching");
+  return { chips, remove, clear };
 }
 
 test("leaving TELEMETRY mid-COMPARE cancels the in-flight lane fetches once, and the tab rebuilds on return", async () => {
@@ -390,4 +397,74 @@ test("changing GP / SESSION with no lane in flight cancels nothing", async () =>
   sesSel.value = "500"; sesSel.dispatch("change"); await h.drain();
   gpSel.value = "40"; gpSel.dispatch("change"); await h.drain();
   assert.equal(h.cancels, before);
+});
+
+// A tray edit is a new intent even when the old provider ignores cancellation.
+// Resolve AND reject the old requests: neither completion owns the new detail.
+for (const mutation of ["chip", "remove", "clear"]) {
+  for (const outcome of ["success", "failure"]) {
+    test(`telemetry ${mutation} invalidates a pending comparison's late ${outcome}`, async () => {
+      const h = harness({ realTelemetry: true, drivers: TWO });
+      const controls = await startCompare(h);
+      const before = h.cancels;
+      (mutation === "chip" ? controls.chips[0] : controls[mutation]).dispatch("click");
+      assert.equal(h.cancels, before + 1, "the abandoned lanes release the provider queue immediately");
+      const detail = h.content().querySelector(".dh-telem-detail");
+      const selected = detail.textContent;
+      assert.match(selected, mutation === "clear" ? /Select one driver/ : /B Two/);
+      assert.equal(detail.querySelector(".dh-spinner"), null);
+      const old = h.pending.splice(0);
+      assert.equal(old.length, 2);
+      old.forEach((p) => outcome === "success" ? p.res() : p.reject(new Error("old lane failed")));
+      await h.flush(); await h.flush();
+      assert.equal(detail.textContent, selected, "late work preserves the current selection");
+      assert.equal(h.root.querySelector(".dh-tpopup"), null, "late success cannot resurrect a popup");
+      assert.equal(detail.querySelector(".dh-error"), null, "late failure cannot offer RETRY for old lanes");
+    });
+  }
+}
+
+test("a new telemetry load wins while cancelled lanes unwind, and its summary rebuild does not cancel it", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  const { chips } = await startCompare(h);
+  chips[0].dispatch("click");
+  const afterEdit = h.cancels;
+  h.content().find((n) => n.classList.contains("dh-livebtn") && n.textContent === "LOAD FASTEST LAP").dispatch("click");
+  await h.flush();
+  assert.equal(h.pending.length, 3);
+  h.pending.pop().res();                             // newest load finishes first
+  await h.flush(); await h.flush();
+  const popup = h.root.querySelector(".dh-tpopup");
+  assert.ok(popup && popup.open, "the current successful load opens its popup");
+  assert.match(popup.textContent, /B Two/);
+  assert.doesNotMatch(popup.textContent, /A One/);
+  assert.equal(h.cancels, afterEdit, "success calls syncChips without cancelling the new view");
+  const old = h.pending.splice(0);
+  old[0].res(); old[1].reject(new Error("cancelled old lane failed late"));
+  await h.flush(); await h.flush();
+  assert.equal(h.root.querySelector(".dh-tpopup"), popup, "out-of-order stale completions leave the current popup alone");
+  assert.equal(h.content().querySelector(".dh-error"), null);
+  h.DataHub.close();
+});
+
+test("tray mutation invalidation preserves a driver's cross-session comparison within one meeting", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO, sessions: [
+    { sessionKey: 499, meetingKey: 50, name: "Qualifying", type: "Qualifying" },
+    { sessionKey: 500, meetingKey: 50, name: "Race", type: "Race" }
+  ] });
+  h.DataHub.open("telemetry"); await h.drain();
+  h.content().querySelector(".dh-dchip").dispatch("click");
+  const [, session] = h.content().selects();
+  session.value = "499"; session.dispatch("change"); await h.drain();
+  h.content().querySelector(".dh-dchip").dispatch("click");
+  const go = h.content().find((n) => n.classList.contains("dh-livebtn") && /COMPARE 2/.test(n.textContent));
+  assert.ok(go, "the Race lane survives the session switch and Qualifying adds a second lane");
+  const before = h.cancels;
+  go.dispatch("click"); await h.drain();
+  assert.deepEqual(h.fastestKeys, [{ sessionKey: 500, num: 1 }, { sessionKey: 499, num: 1 }]);
+  assert.equal(h.cancels, before, "a successful current comparison is not cancelled by syncChips");
+  const popup = h.root.querySelector(".dh-tpopup");
+  assert.ok(popup && popup.open);
+  assert.match(popup.textContent, /A One R vs A One Q/);
+  h.DataHub.close();
 });

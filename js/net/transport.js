@@ -456,7 +456,7 @@ const NetTransport = (function () {
     // sent once per change and never repeated. All are a handful per session, so
     // the queue stays small.
     const EVENT_CRITICAL = {
-      go: 1, start: 1, result: 1, bye: 1,
+      go: 1, qgo: 1, start: 1, result: 1, bye: 1,
       armed: 1, left: 1, caution: 1, model: 1,
       quali: 1, lap: 1, settings: 1, hello: 1, ready: 1,
     };

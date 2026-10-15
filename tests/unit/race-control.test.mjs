@@ -876,3 +876,23 @@ test("classify(): a flagged finisher below 90 % of the winner's laps stays in th
   assert.deepEqual(order.map((c) => c.id), ["W", "NC", "NC2", "R", "O"],
     "unclassified follow by laps (flagged finishers first), then distance");
 });
+
+test("replay flag snapshots bypass live hazards and red restarts, and normal apply/reset release ownership", () => {
+  let queries = 0;
+  const RC = load({ active: () => true, hazards: () => { queries++; return hazards(20, 20); } });
+  const G = makeCtx(), rc = RC.create(G);
+  rc.apply({ level: 4, cause: "RECORDED RED", sinceT: 99, phase: "held", replay: true });
+  G.state = "count"; run(rc, 10);
+  assert.equal(rc.info().level, 4, "a recorded flag keeps ownership through starting lights");
+  G.state = "race"; run(rc, 180);
+  assert.equal(rc.info().level, 4); assert.equal(rc.info().sinceT, 99);
+  assert.equal(rc.takeRestart(), false); assert.equal(queries, 0);
+  rc.apply({ level: 0, replay: true }); run(rc, 1);
+  assert.equal(rc.info().level, 0, "recorded green also excludes live hazards"); assert.equal(queries, 0);
+  rc.apply({ level: 4, cause: "LIVE RED" }); run(rc, 15);
+  assert.equal(rc.takeRestart(), true, "ordinary apply retains the live red procedure");
+  rc.reset(); rc.apply({ level: 0, replay: true });
+  G.state = "menu"; rc.update(1 / 60); G.state = "race";
+  run(rc, 1);
+  assert.ok(queries > 0, "leaving even a green replay releases its authority for the next race");
+});
