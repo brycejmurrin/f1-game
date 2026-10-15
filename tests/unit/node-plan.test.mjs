@@ -143,9 +143,9 @@ test("ci.yml: the node-suites job plans on a pull request and guards exactly the
   // SIX SLICES (2026-09-30): the elevation twin is sharded across two runners
   // (APEX_CIRCUIT_SHARD, tools/lib/circuit-scope.cjs), game-vm-b is two
   // groups.json partitions, vm-page and node-slow stand alone.
-  // Matrix rows come from unit-plan / pick-unit-slices (path-gated runners),
+  // Matrix rows come from select's plan step / pick-unit-slices (path-gated runners),
   // not a static `slice:` list — same contract as ci-coverage + pick-unit-slices tests.
-  assert.match(nodeJob, /include: \$\{\{ fromJSON\(needs\.unit-plan\.outputs\.slices\) \}\}/);
+  assert.match(nodeJob, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
   for (const id of ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"])
     assert.match(step, new RegExp(`${id}\\)`), `case arm for ${id}`);
   assert.match(step, /vm-a1\)\n(?:\s+#.*\n)*\s+export APEX_CIRCUIT_SHARD=1\/2\n\s+if planned test:game-vm-a; then/, "vm-a1 is the first half of the roster");
