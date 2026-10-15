@@ -786,6 +786,58 @@ the pin makes those two report-only). Inspect adapter identity. Do not call cens
 FPS a player-performance measurement or compare legs with different presentation
 paths.
 
+The request file also takes `"cam"` (`helmet` | `chase` | `chase>cockpit`) and
+`"entry"` (`api` | `menu` | `menu-full`), allowlisted by the plan job like the
+dispatch choice lists.
+
+### Entering the race the player's way (`entry`, hunt 5 E, 2026-10-14)
+
+Until this input every leg started its race with `__apex.race(track)`, which
+skips the menu: `menuFinish` (js/game.js) never ran `prepareMenuCarAssets` (the
+car pre-build, PR #1755's flap and planted-wheel steps) or the TLX program warm
+(`warmPrograms`, whose `_warmKey` startRaceBody's `requestWarm` compares). Every
+race-entry row was the COLD entry no player gets. `entry` picks the path for all
+four legs (`gpu-game-check.mjs --entry`, parsing in `tools/lib/census-entry.mjs`):
+
+| entry | path |
+|---|---|
+| `api` (default) | `__apex.race(track[, tod])`, as every earlier census |
+| `menu` | title > RACE > RACE SETUP (time of day via `#rs-time-sel`), wait for `__apex.menuPrep()` (`done`, `warmFrames` 0, not `warming`) and the race-settings garage prewarm (30 s cap), then START RACE — under the harness's intro shortcut (700 ms card, no drive-out, no flyby) |
+| `menu-full` | the same at player pace (`?fullIntro=1`): garage drive-out and the 20 s flyby |
+
+The game JSON records `entry` and, on a menu leg, `menu` = `{ok, steps, prepReady,
+prepWaitMs, atGo: menuPrep() at the tap, garage}`; a prep that never settles is
+recorded (`prepReady: false`) and the race is started anyway. The Verdict prints a
+`menu:` row. `warmEnd` is tlx.js `memState().warm` read AFTER the driven window
+(`race.warm` is read at the race gate, before any camera switch), so a
+`cam=chase>cockpit` leg with `ls=apex26.tlxMirWarmLazy=1` reports the lazy mirror
+warm it paid as `warmEnd.mirrorLazy {ms, drawn, ok}` (Verdict row `mirwarm:`);
+`camSwitch.at` is the page clock of the switch, to join with the `gaps:` rows.
+
+Every leg also records **long animation frames** (`long-animation-frame`
+PerformanceObserver, Chrome 123+, ≥ 50 ms; [Chrome docs](https://developer.chrome.com/docs/web-platform/long-animation-frames))
+beside the `longtask` one, and writes the race-entry ones as `raceEntry.loaf`
+(`analyseRaceEntryLoaf`, tools/gfx/frame-hitch.mjs): `{frames, framesMs,
+byInvokerType, longest[≤20]: {atMs, startTime, duration, renderStart,
+blockingDuration, span, scripts: [{invokerType, invoker, sourceFunctionName,
+sourceURL, startTime, duration}]}}`, times in ms from race()/START RACE. It answers
+what a long task cannot: whether a block inside the stepped car warm was one rAF
+step (`user-callback`) or await continuations (`resolve-promise`, e.g.
+startRaceBody after `scheduler.yield`). Verdict row `loaf:`. The `gaps:` rows now
+carry `prevCallbacks` (`(N cb)`), the rAF callbacks in the step before the gap.
+
+**The race gate no longer waits for a warm nobody asked for.** It required
+`memState().warm.done`, but startRaceBody calls `RaceEntryProfile.requestWarm`
+only once the material pack has settled, and marks `warm:request`,
+`warm:skipped-menu` or `warm:noop`; with no warm mark (the pack gate skipped it), or
+skipped-menu / noop, there is no entry warm and `done` never came — runs
+491/492/502/503/505/507 all read "RACE NOT REACHED" and their spans came from an
+entry re-armed ~95 s later. `raceGate` (tools/lib/census-entry.mjs) now waits for
+`warm.done` only after `warm:request`; otherwise race state and `!warming` pass it.
+The game JSON records `race.warmMark` / `race.warmRequested` and the same as
+`raceEntry.warmMark` / `raceEntry.warmRequested`; the Verdict's `race:` row prints
+`entryWarm=<mark|none>`.
+
 Primary references: [Playwright browser selection](https://playwright.dev/docs/browsers),
 [Chrome headless modes](https://developer.chrome.com/docs/automation-and-testing/headless),
 [Chromium SwiftShader](https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md),
