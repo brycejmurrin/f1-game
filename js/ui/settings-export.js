@@ -124,6 +124,7 @@ const SPEC = [
   { k: "tlxEnvProbe", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js CAR REFLECTIONS (null = OFF)" },
   { k: "xr", lane: "raw", group: "display", def: "0", src: "js/xr/xr-opts.js", oneOf: ["0", "1"] },
   { k: "xrBackend", lane: "raw", group: "display", def: "webgl2", src: "js/xr/xr-opts.js", oneOf: ["webgl2", "webgpu"] },
+  { k: "xrInput", lane: "raw", group: "display", def: "controllers", src: "js/xr/xr-opts.js", oneOf: ["controllers", "existing"] },
   // HUD (js/game.js)
   { k: "hudProfile", lane: "json", group: "hud", def: "standard", oneOf: ["minimal", "standard", "broadcast"], src: "js/game.js" },
   { k: "hudMetricsLayout", lane: "json", group: "hud", def: "full", src: "js/game.js" },
