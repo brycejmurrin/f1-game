@@ -703,6 +703,13 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   min-width: 1.1em; text-align: center;
   color: var(--text); text-shadow: var(--hud-halo);
 }
+/* COLOURBLIND CUES (js/ui/hud-tyres.js): compound badge matches Data Hub chips. */
+:root[data-cb-cues="on"] #hud-tyre-code[data-compound] {
+  font-family: var(--font-hud); font-style: normal; letter-spacing: 0;
+  min-width: 1.6em; padding: 0 calc(var(--gap) / 6);
+  border: 1px solid var(--plate-line); border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--look-hud-bg) 55%, transparent);
+}
 .hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.06em; font-weight: 800; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 /* TEXT LARGER GROWS THE BAR. The label rides --fs-micro (16/18px at LARGE /
    LARGER) inside a bar whose height every layout pins in px (14-18), so the
@@ -1010,6 +1017,23 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    A plate with a blue edge rather than a blue field: light ink on the palette's
    blue misses AA, and the word does the work. */
 #hud-flag[data-flag="blue"] { background: var(--plate-opaque); color: var(--edit-ink); border-left: 6px solid var(--edit-fill); }
+/* COLOURBLIND CUES (js/ui/hud-readouts.js paintFlag): shape + letter beside chip text. */
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue] {
+  display: inline-flex; align-items: center; gap: calc(var(--gap) / 2);
+}
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue]::before {
+  flex: none; font-family: var(--font-hud); font-size: 0.95em; font-weight: 900;
+  line-height: 1; min-width: 1.15em; text-align: center;
+  border: 2px solid currentColor; border-radius: var(--r-xs);
+  padding: 0.08em 0.22em; box-sizing: border-box;
+}
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="yellow"]::before { content: "Y"; }
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="vsc"]::before {
+  content: "V"; background: repeating-linear-gradient(-45deg, transparent, transparent 2px, currentColor 2px, currentColor 3px);
+}
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="sc"]::before { content: "S"; border-radius: 50%; }
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="red"]::before { content: "R"; }
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="blue"]::before { content: "B"; border-radius: 50%; }
 @media (prefers-reduced-motion: reduce) {
   #hud-flag.flag-vsc { animation: none; }
   #hud-energy[data-ers="deploy"] #hud-energy-fill,
@@ -1124,6 +1148,18 @@ body:not(.desktop) #hud-sectors {
 .sec-row.sec-flash { animation: sec-flash 0.35s ease-out 1; }
 .sec-row.sec-flash-pb { border-left-color: var(--faster); }
 .sec-row.sec-flash-slow { border-left-color: var(--sec-slow); }
+/* COLOURBLIND CUES: sector split state as border pattern, not hue alone (★▼▲ stay). */
+:root[data-cb-cues="on"] .sec-row[data-sec-timing="session"] { border-left-style: double; border-left-width: 4px; }
+:root[data-cb-cues="on"] .sec-row[data-sec-timing="personal"] .sec-lbl::after {
+  content: "P"; font-size: 0.75em; margin-left: 0.15em; font-weight: 900;
+  border: 1px solid currentColor; border-radius: 2px; padding: 0 0.12em; vertical-align: 0.05em;
+}
+:root[data-cb-cues="on"] .sec-row[data-sec-timing="slow"] .sec-lbl::after {
+  content: "\25B2"; font-size: 0.85em; margin-left: 0.1em; font-style: normal;
+}
+:root[data-cb-cues="on"] .sec-row[data-sec-timing="session"] .sec-lbl::after {
+  content: "\2605"; font-size: 0.85em; margin-left: 0.1em; font-style: normal;
+}
 @keyframes sec-flash {
   0% { background: color-mix(in srgb, var(--text) 22%, transparent); }
   100% { background: transparent; }
@@ -1244,6 +1280,9 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
    the attribute the JS sets could not actually hide it. Restated, as
    #cs-cam-panel and the dock groups already do. Found by the hidden-override
    guard in tests/unit/css-layers.test.mjs. */
+/* Race chrome over the canvas, not controls: a TOUCH steer that starts on the radio card or the start-light plate
+   must reach the canvas (js/input/input.js listens there). ARRANGE HUD still grabs the card (its own rule). */
+body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
 #lights[hidden] { display: none; }
 #lights {
   position: fixed;
@@ -2315,6 +2354,9 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 @supports (anchor-name: --a) {
   @media (orientation: landscape) {
     body:not(.desktop) #dock-left { anchor-name: --apex-dock-left; }
+    /* LEFT-HANDED: row-reverse paints #dock-right on the left, so it is the left dock TYRES hangs from. */
+    body.mirror-controls:not(.desktop) #dock-left { anchor-name: none; }
+    body.mirror-controls:not(.desktop) #dock-right { anchor-name: --apex-dock-left; }
     body:not(.desktop) #hud-tyre {
       position: absolute;
       position-anchor: --apex-dock-left;
