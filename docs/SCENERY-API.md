@@ -365,9 +365,9 @@ snowline (0–1, fraction of height where snow starts; >1 = none), right, fwd }`
 ### Composite models — landscape & vegetation
 | Model | Builds |
 |---|---|
-| `mountain(x, z, baseY, w, h, opts)` | **organic** colour-zoned, snow-capped summit + foot skirt |
+| `mountain(x, z, baseY, w, h, opts)` | **organic** colour-zoned, snow-capped summit + foot skirt; `opts.profile:"massif"` (5 rings), `stretch`, `crest` opt-in; default = the original 3-ring cone |
 | `peak(x, z, baseY, w, h, col)` | simple clean pyramid summit |
-| `ridge(x, z, baseY, ang, len, w, h, col)` | mountain ridge prism along bearing `ang` (rad) |
+| `ridge(x, z, baseY, ang, len, w, h, col, opts?)` | mountain ridge prism along bearing `ang` (rad); `opts.profile:"massif"` (+`rough`, `crest`) = elongated rounded hill instead of gabled prisms |
 | `pine(k, side, dist, h, col)` | conifer: tapered trunk + 3 stacked cones |
 | `tree(k, side, dist, h, col, opts?)` | broadleaf; optional `crown: "lobed"`, `variant: 0..2` uses bounded opaque instance recipes with uniform scaling |
 | `palm(k, side, dist, h, frond)` | thin trunk + a crown of frond prisms |

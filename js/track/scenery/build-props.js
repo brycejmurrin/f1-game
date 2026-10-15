@@ -1716,20 +1716,26 @@ const TrackBuildProps = (function () {
     // tree gets a jittered brightness + a warm/cool hue drift, and a small
     // fraction of broadleaf trees turn autumnal gold/rust — so a stand of trees
     // reads as mixed natural foliage rather than identical clones.
+    // furniture.vary (default 1) scales the brightness/hue spread; 0 = every crown the authored `fol`.
+    // furniture.autumn (default 0.22) is the share of "broad" crowns turned rust; 0/false = none.
     const folVary = (base, seed) => {
-      const lift = 0.68 + hash(seed * 3.1) * 0.62;        // WIDE brightness spread (deep shade → bright young)
-      const warm = (hash(seed * 7.7) - 0.45) * 0.24;      // stronger yellow-green ↔ blue-green drift
+      const vs = fz.vary != null ? Math.max(0, fz.vary) : 1;
+      const l0 = 0.68 + hash(seed * 3.1) * 0.62;                    // WIDE brightness spread (deep shade → bright young)
+      const lift = vs === 1 ? l0 : 1 + (l0 - 1) * vs;               // vs === 1 keeps the exact original float
+      const warm = (hash(seed * 7.7) - 0.45) * 0.24 * vs;           // stronger yellow-green ↔ blue-green drift
       return [Math.max(0, Math.min(1, base[0] * lift + warm)),
               Math.max(0, Math.min(1, base[1] * lift + warm * 0.3)),
               Math.max(0, Math.min(1, base[2] * lift - warm * 0.7))];
     };
     const plantTree = (k, side, dist, h) => {
+      if (!fz.tree || fz.tree === "none") return;   // "none" must never fall through to "broad"
       const seed = k * 1.7 + side * 0.9 + dist;
       let col = folVary(fz.fol, seed);
-      if (fz.tree === "broad" && hash(seed * 5.5) < 0.22)
+      const autumn = fz.autumn === false ? 0 : fz.autumn != null ? fz.autumn : 0.22;
+      if (fz.tree === "broad" && hash(seed * 5.5) < autumn)
         col = [0.60 + hash(seed) * 0.28, 0.34 + hash(seed * 2.1) * 0.22, 0.10 + hash(seed * 3.3) * 0.10];
       const SPECIES = { cypress: 1, stonePine: 1, broadleafFall: 1, acacia: 1, plane: 1 };
-      const CROWNS = { vase: 1, weeping: 1, columnar: 1 };
+      const CROWNS = { vase: 1, weeping: 1, columnar: 1, lobed: 1 };
       const crownForm = CROWNS[fz.treeCrown] ? fz.treeCrown : "round";
       const kind = SPECIES[fz.tree] ? fz.tree
         : fz.tree === "palm" ? "palm" : fz.tree === "fir" ? "fir"
