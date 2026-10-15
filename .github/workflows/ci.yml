@@ -183,7 +183,7 @@ on:
     # geometry sweeps) on the same head, and the train gates the tip again.
     # `ready_for_review` is not a default type; the other three are.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     # NO paths-ignore HERE (2026-09-30). Branch protection on the deploy
     # branch requires this workflow's fast-tier jobs, and a required check
     # that never reports blocks the merge for good — so a prose-only PR,
@@ -326,11 +326,19 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+
+  draft-ci-skipped:
+    name: Draft push (CI skipped — add run-ci label)
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci') }}
+    steps:
+      - run: echo "No CI on draft synchronize without the run-ci label. Use workflow_dispatch or add label run-ci."
   guards-a:
     name: Structural guards (tooling A)
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    if: ${{ inputs.fast_tier_run == '' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
@@ -378,7 +386,7 @@ jobs:
     name: Structural guards (tooling B)
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    if: ${{ inputs.fast_tier_run == '' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.fast_tier_run == '') }}
     permissions:
       contents: read
       actions: read
@@ -444,7 +452,7 @@ jobs:
     name: Structural guards
     needs: [guards-a, guards-b]
     runs-on: ubuntu-latest
-    if: ${{ !cancelled() && inputs.fast_tier_run == '' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!cancelled() && inputs.fast_tier_run == '') }}
     timeout-minutes: 5
     # NO CHECKOUT, NO npm ci (2026-10-15): the ratchet / audit / coverage /
     # behind-ship steps run at the end of tooling B, where the tree and the
@@ -461,10 +469,13 @@ jobs:
           [ "$A" = success ] && [ "$B" = success ]
 
   node-suites:
-    # Name MUST be exactly `Pure-node unit suites (<slice>)` — those six
-    # strings are the deploy branch's required checks. Do not interpolate
-    # matrix.needed (or any other matrix key) into the name, or branch
-    # protection never sees the expected check (#454 a9a805839).
+    # Name `Pure-node unit suites (<slice>)`: the six strings WERE the deploy
+    # branch's required checks until 2026-10-15, when Bryce made `CI` the one
+    # required check (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §4 C). They are
+    # still what pages-train.mjs, ready-gate.mjs and the tests read, so keep
+    # them stable; a rename is a tool edit now, not a settings round. Do not
+    # interpolate matrix.needed (or any other matrix key) into the name
+    # (#454 a9a805839: the expected check never appeared).
     name: Pure-node unit suites (${{ matrix.slice }})
     needs: [select]
     runs-on: ubuntu-latest
@@ -476,10 +487,12 @@ jobs:
     # runs; an unneeded row (matrix.needed=false) skips checkout / npm ci /
     # plan below and reports green in seconds.
     # ready_for_review on the same head SHA: reuse-draft skips the work; names still report.
-    # A DRAFT PR emits only the needed rows (select's --needed-only), and when
-    # none is needed the job skips here: a draft cannot merge, so the required
-    # names owe it nothing. Every other event keeps all six rows reporting.
-    if: ${{ inputs.fast_tier_run == '' && (needs.select.outputs.any_node == 'true' || !(github.event_name == 'pull_request' && github.event.pull_request.draft)) }}
+    # A PULL REQUEST emits only the needed rows (select's --needed-only), and
+    # when none is needed the job skips here (2026-10-15: `CI` is the deploy
+    # branch's one required check, so the six names no longer have to report
+    # on a ready PR either). A deploy push and the train keep all six rows:
+    # pages-train.mjs's reuse check wants at least one expanded node row.
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.fast_tier_run == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -512,9 +525,10 @@ jobs:
         # shards (APEX_CIRCUIT_SHARD=i/2), game-vm-b is two time-balanced
         # partitions, and vm-page / node-slow stand alone. The ≈ 3 min wall that
         # split promised no longer holds: vm-b1 and page are the floor now.
-        # The slice names are the deploy branch's REQUIRED CHECKS
-        # ("Pure-node unit suites (<slice>)"): renaming one means editing the
-        # branch-protection rule in the same breath, or every PR blocks.
+        # The slice names ("Pure-node unit suites (<slice>)") were the deploy
+        # branch's REQUIRED CHECKS until 2026-10-15; `CI` alone is required
+        # now, so a rename is a tooling change (pick-unit-slices SLICES,
+        # pages-train, ready-gate, the tests), not a settings round.
         # Job wall, MEDIAN of 12 green ship pushes (38522092373..38580219820,
         # 2026-10-14; setup included; a skipped row's ~0.1 min is in the sample):
         #   vm-a1  game-vm-a, circuits 1,3,5,…      2.4 min
@@ -523,10 +537,21 @@ jobs:
         #   vm-b2  game-vm-b2                       4.0 min
         #   page   vm-page                          9.1 min
         #   slow   node-slow                        3.3 min
-        # Matrix rows come from select's plan step / pick-unit-slices. Every NODE_SLICE
-        # name is ALWAYS present (needed true|false): branch protection pins
-        # those six check names, and a subset left vm-a1/vm-a2 unreported on
-        # #454 (BLOCKED with an otherwise green CI). Unneeded rows exit 0.
+        # RE-BALANCED 2026-10-15 from per-script log timings of three green ship
+        # pushes (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §7): game-vm-b1 alone
+        # was 437 s against game-vm-b2's 220 s, and the ten "seconds each" riders
+        # had grown to 180 s (garage-unit 94, net-unit 33, audio-unit 33). The
+        # riders moved to vm-a1 / vm-a2 / slow and game-vm-b1/b2 were re-cut by
+        # per-file medians. Projected job wall (setup ~16 s included):
+        #   vm-a1 ~200 s, vm-a2 ~220 s, vm-b1 ~320 s, vm-b2 ~320 s, slow ~200 s,
+        #   page ~520 s — vm-page is the floor now (one TAP test, no per-spec
+        #   breakdown in the log); runner-minutes per push unchanged.
+        # Matrix rows come from select's plan step / pick-unit-slices. On a
+        # deploy push and the train every NODE_SLICE name is present (needed
+        # true|false) for pages-train.mjs's reuse check; a pull request lists
+        # only the needed rows (2026-10-15: `CI` is the one required check —
+        # until then a subset left vm-a1/vm-a2 unreported on #454, BLOCKED
+        # with an otherwise green CI). Unneeded rows exit 0.
         # node-plan.mjs (step below) still skips scripts INSIDE a needed runner.
         include: ${{ fromJSON(needs.select.outputs.slices) }}
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
@@ -614,8 +639,9 @@ jobs:
           # line: deploy.mjs and twinned-specs.mjs read this step's text.
           # `planned <script>` is the plan step's predicate (true on every
           # non-PR event); a skip prints SKIPPED <script> and the reason.
-          # matrix.needed=false: check name still reports (branch protection)
-          # but no work runs for a slice this diff does not select.
+          # matrix.needed=false (deploy push / train rows): the name still
+          # reports for pages-train.mjs's reuse check, but no work runs for a
+          # slice this diff does not select.
           if [ "${{ steps.reuse.outputs.reuse }}" = "true" ]; then
             echo "SKIPPED slice ${{ matrix.slice }} — draft fast-tier already green on this head SHA"
             exit 0
@@ -636,11 +662,49 @@ jobs:
               if planned test:game-vm-a; then
               npm run test:game-vm-a
               fi
+              unset APEX_CIRCUIT_SHARD   # the shard scopes the elevation twin only; riders see the whole roster
+              # RIDERS (2026-10-15): the ten former `fast`-slice scripts used to
+              # ride vm-b1, "the shorter half" of 2026-09-30. Measured on three
+              # green ship pushes 2026-10-15 (docs/notes/CI-CLOG-SURVEY-2026-10-15.md
+              # §7) they were 180 s on top of a game-vm-b1 that alone is 437 s, so
+              # vm-b1 set the wall at 10–12 min. They now sit on the three light
+              # rows, greedy by median: here net-unit 33 s, audio-unit 33 s,
+              # state-unit 5 s, desktop-unit 0.5 s beside a 112 s shard. Still
+              # always-on (never guarded by planned()); on a matched PR plan
+              # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;
+              # the `npm run` else-branch stays for gateNodeSuites / deploy.
+              # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).
+              # tools/ci/pick-unit-slices.mjs SLICE_SCRIPTS mirrors these arms and
+              # its test pins the two in step.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:net-unit --skip-tf; else
+              npm run test:net-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:audio-unit --skip-tf; else
+              npm run test:audio-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:state-unit --skip-tf; else
+              npm run test:state-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:desktop-unit --skip-tf; else
+              npm run test:desktop-unit
+              fi
               ;;
             vm-a2)
               export APEX_CIRCUIT_SHARD=2/2
               if planned test:game-vm-a; then
               npm run test:game-vm-a
+              fi
+              unset APEX_CIRCUIT_SHARD   # as in vm-a1
+              # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
+              # livery-contrast, body-split, cover-legibility, helmets) and three
+              # steering files (digital-steer, key-binds, settings-export) were in
+              # their groups and in NO gate — not tooling-fast, not this step, so
+              # deploy.mjs (which derives its node list from here) never ran them
+              # either. garage-unit is the heaviest rider (94 s median on a runner,
+              # 2026-10-15: the livery rasters), so it rides the 110 s shard alone;
+              # steering-unit (6 s) rides `slow`.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:garage-unit --skip-tf; else
+              npm run test:garage-unit
               fi
               ;;
             page)
@@ -654,29 +718,16 @@ jobs:
               if planned test:node-slow; then
               npm run test:node-slow
               fi
-              ;;
-            vm-b1)
-              # First of two time-balanced partitions of test:game-vm-b
-              # (tests/groups.json; test:game-vm-b is still the whole list locally).
-              # NODE_PLAN_SKIP_TF=1 drops the five VM files Structural guards
-              # already runs (tooling-fast: real-replay-vm 121 s, game-vm,
-              # physics-characterization-vm, red-flag-fuel-vm, session-entry-vm)
-              # — both jobs share one `if:`, so a matched plan ran them twice
-              # (test audit T5, 2026-10-05). --all / fail-safe keep npm run.
-              if planned test:game-vm-b1; then
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else
-              npm run test:game-vm-b1
+              # Riders (see vm-a1): steering-unit 6 s, mcp 5 s, service-worker 4 s,
+              # lifecycle-unit and agent-contract < 1 s, beside 168 s of node-slow.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:steering-unit --skip-tf; else
+              npm run test:steering-unit
               fi
-              fi
-              # The former `fast` slice: seconds each, so they ride with vm-b1, the
-              # shorter half (measured 2026-09-30 on a runner: b1 2.2 min, b2 3.9
-              # min WITH them — moved here to bring the wall to ~3 min).
-              # Always-on riders (seconds each). On a matched PR plan
-              # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;
-              # the `npm run` else-branch stays for gateNodeSuites / deploy.
-              # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:net-unit --skip-tf; else
-              npm run test:net-unit
+              # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
+              # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
+              # their fast-gate half is mcp-cli. environment-json stays gated here.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:mcp --skip-tf; else
+              npm run test:mcp
               fi
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:service-worker --skip-tf; else
               npm run test:service-worker
@@ -684,37 +735,25 @@ jobs:
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:lifecycle-unit --skip-tf; else
               npm run test:lifecycle-unit
               fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:state-unit --skip-tf; else
-              npm run test:state-unit
-              fi
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:agent-contract --skip-tf; else
               npm run test:agent-contract
               fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:audio-unit --skip-tf; else
-              npm run test:audio-unit
+              ;;
+            vm-b1)
+              # First of two time-balanced partitions of test:game-vm-b
+              # (tests/groups.json; test:game-vm-b is still the whole list locally).
+              # Re-cut 2026-10-15 by per-file runner medians (LPT over 59 files,
+              # ~850 s of serial test time each; survey note §7): the 2026-09-30
+              # cut measured 437 s vs 220 s on a runner. NODE_PLAN_SKIP_TF=1 drops
+              # the VM files Structural guards already runs (tooling-fast:
+              # real-replay-vm 98 s, game-vm, red-flag-fuel-vm here;
+              # physics-characterization-vm, session-entry-vm on b2) — both jobs
+              # share one `if:`, so a matched plan ran them twice (test audit T5,
+              # 2026-10-05). --all / fail-safe keep npm run.
+              if planned test:game-vm-b1; then
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else
+              npm run test:game-vm-b1
               fi
-              # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
-              # livery-contrast, body-split, cover-legibility, helmets) and three
-              # steering files (digital-steer, key-binds, settings-export) were in
-              # these two groups and in NO gate — not tooling-fast, not this step,
-              # so deploy.mjs (which derives its node list from here) never ran
-              # them either. Measured 2026-09-10: garage-unit 39 s, steering-unit
-              # 0.5 s. The sub-5 s files are in tooling-fast too; the two slow
-              # livery rasters (7-10 s each) run only here.
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:garage-unit --skip-tf; else
-              npm run test:garage-unit
-              fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:steering-unit --skip-tf; else
-              npm run test:steering-unit
-              fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:desktop-unit --skip-tf; else
-              npm run test:desktop-unit
-              fi
-              # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
-              # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
-              # their fast-gate half is mcp-cli. environment-json stays gated below.
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:mcp --skip-tf; else
-              npm run test:mcp
               fi
               ;;
             vm-b2)
@@ -838,7 +877,7 @@ jobs:
     name: Per-circuit geometry sweeps (${{ matrix.shard }}of4)
     runs-on: ubuntu-latest
     # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
-    if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     # FOUR suite shards (2026-10-14). Pages train 38500310338 spent 1118 s in
     # the single-runner Geometry sweeps step (1218 s job) while every browser
     # spec shard was done by ~529 s — ~11 min of train idle on this job alone.
@@ -1097,7 +1136,7 @@ jobs:
   sweeps-roll-up:
     name: Per-circuit geometry sweeps
     needs: [sweeps]
-    if: ${{ always() && !cancelled() && needs.sweeps.result != 'skipped' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (always() && !cancelled() && needs.sweeps.result != 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1108,7 +1147,7 @@ jobs:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
     # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
-    if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
     # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
     # branch and PR push: `inputs` is empty on a plain push, null coerces like
@@ -1211,6 +1250,13 @@ jobs:
     # its retry now meets this cap first: the job reads `cancelled`, which
     # ci-verdict.mjs fails exactly like `failure` — red either way, never green.
     timeout-minutes: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && 120 || 20 }}
+    # ONE LANE PER SHARD INDEX on pull requests (2026-10-15; same rule as the
+    # selected legs): ready PRs' smoke shards run one at a time fleet-wide and
+    # wait FIFO without a runner; the train / nightly / dispatch keep a group
+    # of their own.
+    concurrency:
+      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('smoke-lane-{0}', matrix.shard) || format('smoke-run-{0}-{1}', github.run_id, matrix.shard) }}
+      queue: max
     # The ship filter is ONE job now, not one copy per shard. `needs:` alone does
     # not skip this job — it must still RUN and report, because pages.yml's
     # `deploy: needs: ci` reads the aggregate of the jobs that ran and a skipped
@@ -1429,7 +1475,7 @@ jobs:
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
     # Also skipped when unit-plan says this diff does not need the characterization
     # (ci-verdict treats that skip as a pass).
-    if: ${{ inputs.fast_tier_run == '' && needs.select.outputs.driving == 'true' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.fast_tier_run == '' && needs.select.outputs.driving == 'true') }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1557,7 +1603,7 @@ jobs:
     # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
     # ready PR whose filter said the diff touches the renderer. Never a
     # draft PR or a bare topic-branch push — see the filter's header.
-    if: ${{ !inputs.concurrency_key && needs.select.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!inputs.concurrency_key && needs.select.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is
@@ -1646,7 +1692,7 @@ jobs:
   xr:
     name: Emulated VR (IWER / xr-emulated)
     needs: select
-    if: ${{ !inputs.concurrency_key && needs.select.outputs.xr == 'true' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!inputs.concurrency_key && needs.select.outputs.xr == 'true') }}
     runs-on: ubuntu-latest
     # Unmeasured on CI; local IWER suite is minutes. Cap generously.
     timeout-minutes: 25
@@ -1716,7 +1762,7 @@ jobs:
     # whenever the node matrix does (`fast_tier_run == ''`), so a dispatch
     # without a diff still gets its --all plan; the spec selection keeps its
     # own event test on the step.
-    if: ${{ inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.fast_tier_run == '' || github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || inputs.concurrency_key != '') }}
     # actions:read on top of the workflow default — the base-verdict step at the
     # end lists this workflow's runs on the deploy branch. A job that names
     # permissions gets ONLY what it names, hence contents too.
@@ -1753,15 +1799,16 @@ jobs:
       # `unit-plan`, until 2026-10-15 — one more queue hop before any node
       # row could start, p50 11.7 min on 2026-10-15.) pick-unit-slices.mjs
       # maps paths → runners, FAIL-SAFE → all; schedule / dispatch run --all.
-      # Every slice row is emitted (needed true|false) so the six REQUIRED
-      # check names report — except on a DRAFT PR, which cannot merge: there
-      # only the needed rows exist (--needed-only), and node-suites skips at
-      # the job level when none is (its `if:`).
+      # On a deploy push and the train every slice row is emitted (needed
+      # true|false) so the train's reuse check sees expanded node rows; a PULL
+      # REQUEST lists only the needed rows (--needed-only; `CI` is the one
+      # required check since 2026-10-15) and node-suites skips at the job
+      # level when none is (its `if:`).
       - name: Plan node unit slices
         id: plan
         if: ${{ inputs.fast_tier_run == '' }}
         env:
-          NEEDED_ONLY: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true }}
+          NEEDED_ONLY: ${{ github.event_name == 'pull_request' }}
           EVENT: ${{ github.event_name }}
           PUSH_BEFORE: ${{ github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
@@ -2134,7 +2181,7 @@ jobs:
     # — "If a job fails or is skipped, all jobs that need it are skipped".)
     needs: [select]
     # Drafts skip the matrix (required name is selected-verdict).
-    if: ${{ needs.select.outputs.any == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (needs.select.outputs.any == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft)) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2168,6 +2215,20 @@ jobs:
     # albert-park-foundation 110.1 s on an IDLE box (2026-09-04), so the first
     # failed every time the selector picked it and the second failed on any
     # contention. See tools/ci/select-specs.mjs SELECTED_GATE for the numbers.
+    # LANES (2026-10-15): on a PULL REQUEST every leg joins one of LANES
+    # (tools/ci/select-specs.mjs) fleet-wide concurrency groups with
+    # `queue: max`, so at most that many selected legs run at once across every
+    # ready PR and the rest wait FIFO without holding a runner or being
+    # cancelled (the workflow-level per-PR cancel still replaces a superseded
+    # run's queued legs). A run's own legs cycle through the lanes, so they
+    # never queue behind each other. The train, the nightly and a dispatch get
+    # a group of their own per leg (`run_id` + job index): a gate never waits
+    # behind PR legs. `queue: max` cannot be combined with cancel-in-progress
+    # in one block, and none is set here.
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency
+    concurrency:
+      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('selected-lane-{0}', matrix.lane) || format('selected-run-{0}-{1}', github.run_id, strategy.job-index) }}
+      queue: max
     timeout-minutes: ${{ matrix.timeout }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -2361,7 +2422,7 @@ jobs:
     # BEFORE deciding: failures in junit stay a hard fail; clean junit marks
     # infra-retry and exits 0. ci-verdict defers `selected` to this job when
     # this job is green, so the aggregator does not re-fail on the rollup.
-    if: ${{ !cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '')) }}
     steps:
       # Junit must land BEFORE the verdict: cancel/red with clean junit is
       # infra-retry (selected-gate-verdict.mjs). Carry-forward still uses the
@@ -2479,7 +2540,7 @@ jobs:
     # "re-bless, then confirm across a few runs", which a nightly and a
     # dispatch answer without a runner slot on every push while 200-290 jobs
     # queue (docs/notes/CI-CAPACITY-2026-09-29.md).
-    if: ${{ inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -2563,7 +2624,7 @@ jobs:
     # SKIPPED node-suites / driving-model ARE a pass when unit-plan said the
     # slice was not needed (path-filtered). A skip for any other reason (cancelled
     # parent, plan failure) is not a poke.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.select.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.select.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) && needs.select.outputs.dropped == '0' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.select.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.select.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) && needs.select.outputs.dropped == '0') }}
     permissions:
       actions: write
       contents: read
@@ -2643,8 +2704,9 @@ jobs:
   # needed job skipped by its `if:` is a pass here too, so each needed job
   # owns the rule for when skipping is honest (selected-verdict owns the
   # selected gate's — an empty or dropped plan — which is why it is needed
-  # here, not just `selected`). Branch protection should require `CI`: it is
-  # the only check that also carries smoke, the sweeps, renderer-macos and xr.
+  # here, not just `selected`). Branch protection requires `CI` and nothing
+  # else (Bryce, 2026-10-15; it was twelve names): it is the only check that
+  # also carries smoke, the sweeps, renderer-macos and xr.
   # tools/ci/ci-verdict.mjs.
   #
   # EVERY JOB BUT ONE: poke-train is not a verdict, it is the train's
@@ -2678,7 +2740,7 @@ jobs:
       - selected
       - selected-verdict
       - baseline-trial
-    if: ${{ !cancelled() }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!cancelled()) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

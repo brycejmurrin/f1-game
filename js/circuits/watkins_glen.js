@@ -21,7 +21,7 @@
     terrainOuter: 120,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.93, s1: 0.08 },
-      { kind: "foliage", s0: 0.24, s1: 0.34 },
+      { kind: "foliage", s0: 0.13, s1: 0.25 },
     ],
     pal: {
       zenith:        [0.28, 0.46, 0.72],
@@ -39,7 +39,7 @@
     // flatten or counter-grade these two elevation moves.
     elevations: [
       { s: 0.11, halfM: 320, rise: 9.0 },    // climb out of Turn 1
-      { s: 0.30, halfM: 380, rise: -12.0 },  // down through the Esses
+      { s: 0.19, halfM: 380, rise: -12.0 },  // down through the Esses (OSM "The Esses", lap 0.118-0.256; was seated on the back straight at 0.30)
       { s: 0.52, halfM: 340, rise: -8.0 },   // into the Boot
       { s: 0.70, halfM: 360, rise: 13.0 },   // the climb back out
       { s: 0.90, halfM: 300, rise: -5.0 },   // drop to the front straight
@@ -50,7 +50,7 @@
       { s0: 0.9208, s1: 0.9562, hw: 6.4, ease: 0.012 },  // the Anvil (index; arc 0.880-0.925)
     ],
     bankZones: [
-      { turn: 1, angleDeg: 4.5, widthM: 150 },   // the Esses; re-seated frac 0.24 (was 951 m off any apex)
+      { frac: 0.182, angleDeg: 4.5, widthM: 150 },   // the Esses, middle left-hander (turn: 1 resolves to T1, turns[] has no Esses apex)
       { frac: 0.620, angleDeg: 3.5, widthM: 130 },   // Toe of the Boot
       { turn: 10, angleDeg: 4.0, widthM: 130 },   // the Anvil; re-seated frac 0.9 (was 138 m off any apex)
     ],

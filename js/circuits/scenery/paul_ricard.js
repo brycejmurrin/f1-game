@@ -15,9 +15,11 @@
 
       const PINE = [0.14, 0.30, 0.16], PINE_D = [0.11, 0.24, 0.14];
       const SCRUB = [0.36, 0.40, 0.22], SCRUB_D = [0.30, 0.34, 0.19];
-      const BLUE = [0.36, 0.42, 0.66], RED = [0.62, 0.28, 0.26];
-      const BLUE_D = [0.29, 0.34, 0.56], LINE = [0.90, 0.90, 0.88];
-      const RED_D = [0.52, 0.23, 0.22];
+      // Blue is pushed off the brief's [0.36,0.42,0.66]: under TLX tonemapping that
+      // read as pale lilac (r ~ g), not the blue-tinted Blue Zone.
+      const BLUE = [0.22, 0.34, 0.66], RED = [0.58, 0.24, 0.22];
+      const BLUE_D = [0.18, 0.28, 0.57], LINE = [0.90, 0.90, 0.88];
+      const RED_D = [0.49, 0.20, 0.19];
       const ALU = [0.76, 0.78, 0.80], WHITE = [0.94, 0.94, 0.92];
       // ONE side convention for the whole file: side 1 = LEFT of the racing
       // line. transformSceneryApi negates `side` for anchor/place/bleacher & co
@@ -69,15 +71,16 @@
         let i = 0;
         along(0.0, 1.0, 15, (k, spacing) => {
           const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
-          // Same order as the corner patches above: blue from the kerb out, red
-          // as the deep band before the barrier.
+          // ONE colour per band: the old i&1 colour flip chequered the Blue Zone
+          // into lilac/blue plates. (drape still alternates its own 0.12 m
+          // residue per cell, which keeps overlapped faces off one plane.)
           // Draped, not runoffApron'd: one box at one anchor height across a
           // 30 m band put 203 + 144 + 113 of these wholly under the plateau.
           const ph = { phase: i };
           drape(k, side, 2.5, [9, 0.16, seg], BLUE, ph);
-          drape(k, side, 11.5, [30, 0.14, seg], (i & 1) ? BLUE : BLUE_D, ph);
-          drape(k, side, 41.5, [26, 0.12, seg], (i & 1) ? RED : RED_D, ph);
-          drape(k, side, 67.5, [22, 0.10, seg], (i & 1) ? RED_D : [0.47, 0.21, 0.20], ph);
+          drape(k, side, 11.5, [30, 0.14, seg], BLUE_D, ph);
+          drape(k, side, 41.5, [26, 0.12, seg], RED, ph);
+          drape(k, side, 67.5, [22, 0.10, seg], RED_D, ph);
           if (i % 3 === 0) drape(k, side, 12, [28, 0.10, 0.9], LINE, { res: 0.09, line: true });
           // A second lane-line further out, offset in phase, so the Blue Zone
           // reads as a marked run-off surface and never as open water.
@@ -306,10 +309,14 @@
       }
 
       const { cx, cz, radius: rad } = lapBounds();
+      // ridge() is a triangular prism, so a tall narrow one reads as a gabled
+      // roof. Width is set well past height (slope ~0.2-0.3) and the rings fade
+      // toward the haze colour with distance, so the massif reads as a low pale
+      // swell. A taper in the primitive itself is engine work (DEFERRED).
       for (const [extra, count, len, w, hMin, hVar, col] of [
-        [140, 40, 140, 44, 12, 7, [0.28, 0.34, 0.21]],
-        [250, 32, 190, 60, 26, 15, [0.34, 0.35, 0.28]],
-        [400, 24, 250, 80, 54, 32, [0.52, 0.50, 0.44]],   // pale limestone ridge
+        [140, 40, 150, 110, 7, 4, [0.43, 0.43, 0.33]],
+        [250, 32, 210, 170, 14, 8, [0.56, 0.55, 0.47]],
+        [400, 24, 280, 260, 26, 14, [0.70, 0.69, 0.62]],   // pale limestone ridge
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
@@ -320,22 +327,29 @@
         }
       }
 
-      groundPatch(K(0.50), 1, 104, [86, 0.16, 240], [0.60, 0.60, 0.59],
+      // The aerodrome stands along the Mistral straight (brief: hangars 0.40-0.45,
+      // runway parallel to the straight), not bunched at the chicane. AP is the
+      // apron/hangar centre; runway and taxiway are long patches over
+      // 0.36-0.48 and their dashes stop where the patches stop. K is authored-
+      // frame (this def has no _sceneryShift: nothing to compensate).
+      const AP = 0.43;
+      groundPatch(K(AP), 1, 104, [86, 0.16, 240], [0.60, 0.60, 0.59],
         { id: "paul-ricard-airfield-apron", samples: 10 });
-      groundPatch(K(0.50), 1, 196, [22, 0.16, 300], [0.44, 0.45, 0.46],
+      // One patch each (abutting patches' rim skirts lay coplanar tops: 231 spots).
+      groundPatch(K(0.42), 1, 196, [22, 0.16, 700], [0.44, 0.45, 0.46],
         { id: "paul-ricard-runway", samples: 10 });
-      groundPatch(K(0.50), 1, 166, [30, 0.16, 280], [0.52, 0.52, 0.51],
+      groundPatch(K(0.42), 1, 166, [30, 0.16, 580], [0.52, 0.52, 0.51],
         { id: "paul-ricard-taxiway", samples: 10 });
-      for (let i = 0; i < 9; i++) {
-        const a = anchor(K(0.40 + i * 0.025), 1, 196);
+      for (let i = 0; i < 10; i++) {
+        const a = anchor(K(0.368 + i * 0.011), 1, 196);
         addBox(out, vadd(a.c, a.u, 0.22), [1.2, 0.10, 14], LINE, [a.r, a.u, a.t]);
       }
       for (let i = 0; i < 10; i++) {
-        const a = anchor(K(0.41 + i * 0.020), 1, 166);
+        const a = anchor(K(0.375 + i * 0.010), 1, 166);
         addBox(out, vadd(a.c, a.u, 0.22), [1.0, 0.10, 8], [0.86, 0.74, 0.18], [a.r, a.u, a.t]);
       }
       {
-        const a = anchor(K(0.50), 1, 150);
+        const a = anchor(K(AP), 1, 150);
         const b = [a.r, a.u, a.t];
         modelGroup("paul-ricard-aerodrome", {
           center: vadd(a.c, a.u, 8), size: [46, 20, 150], basis: b,
@@ -351,7 +365,7 @@
             stage._mat = MAT.METAL;
             // Barrel roof, laid along the hangar's length like a real Nissen span.
             addCyl(stage, vadd(vadd(p, a.u, 8), a.t, -16.2), 13, 32.4,
-              [0.68, 0.70, 0.73], 10, [a.r, a.t, a.u]);
+              [0.68, 0.70, 0.73], 16, [a.r, a.t, a.u]);
             // Full-width sliding door band on the apron face.
             addBox(stage, vadd(vadd(p, a.r, -13.1), a.u, 3.4), [0.3, 6.4, 28],
               [0.40, 0.43, 0.48], b);
@@ -360,7 +374,7 @@
         }, { required: true });
       }
       {
-        const a = anchor(K(0.545), 1, 128);
+        const a = anchor(K(0.458), 1, 128);
         const b = [a.r, a.u, a.t];
         modelGroup("paul-ricard-airfield-tower", {
           center: vadd(a.c, a.u, 12), size: [12, 30, 12], basis: b,
@@ -386,7 +400,7 @@
         }, { required: true });
       }
       for (let i = 0; i < 3; i++) {
-        const a = anchor(K(0.465 + i * 0.022), 1, 118);
+        const a = anchor(K(AP - 0.015 + i * 0.015), 1, 118);
         const b = [a.r, a.u, a.t];
         modelGroup(`paul-ricard-lightplane-${i + 1}`, {
           center: vadd(a.c, a.u, 1.2), size: [12, 4, 9], basis: b,
