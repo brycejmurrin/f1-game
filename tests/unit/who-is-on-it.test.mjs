@@ -246,3 +246,14 @@ test("a board write pokes fleet.yml by REST workflow_dispatch on the deploy bran
     return { status: null, error: new Error("ENOENT") };
   }), /not dispatched/);
 });
+
+test("--json reaches a pipe whole: the CLI sets exitCode, never process.exit() over unflushed stdout", () => {
+  // A 232-claim board printed ~92 KB of JSON; process.exit() cut it at the
+  // 64 KiB pipe boundary, mid-string (found 2026-10-14).
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/who-is-on-it.mjs"), "utf8");
+  assert.doesNotMatch(src, /process\.exit\(main\(\)\)/);
+  assert.match(src, /process\.exitCode = main\(\)/);
+  const out = execFileSync(process.execPath, ["tools/ci/who-is-on-it.mjs", "--no-fetch", "--json", "--hours", "1"],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 });
+  assert.ok(Array.isArray(JSON.parse(out).claims), "the whole document parses, however large the board");
+});
