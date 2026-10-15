@@ -1,12 +1,8 @@
 # Silverstone — circuit survey (2026-10-14)
 
-**Live:** https://brycejmurrin.github.io/f1-game/  
-**Branch:** `cursor/silverstone-survey-745b`  
-**Frames:** 36 under `artifacts/shots/tracks/silverstone/` (JPEG q≈80, ≤1280 px, ≤300 KB each).
+**Branch:** `cursor/silverstone-survey-745b` · **Frames:** 36 (`artifacts/shots/tracks/silverstone/`, JPEG ≤1280 px, q≈80, <300 KB)
 
-### Capture status
-
-Sector **dry · day** sweep plus hero **lighting/weather** on five signatures. Reproducible `weather` batch + `artifacts/shots/**` gitignore lands in shared PR *tools: shared shot tooling for circuit surveys* — follow-up rebase for fog/overcast matrix.
+Captured with shared `shot.mjs` batch (`--present-timeout 90 --capture-retries 4 --wait 120`, SwiftShader). Sector sweep **day · dry**; six hero signatures with **dawn/dusk/night** and **wet/rain/overcast/fog/storm** mix.
 
 ## Code map
 
@@ -14,11 +10,10 @@ Sector **dry · day** sweep plus hero **lighting/weather** on five signatures. R
 |---|---|
 | Def | `js/circuits/silverstone.js` |
 | Scenery | `js/circuits/scenery/silverstone.js` |
-| Brief | `docs/tracks/silverstone.md` |
 
-## Sector and landmark panels (dry · day)
+## Sector panels (day · dry)
 
-### Sector 1 — Copse → Hangar
+### Sector 1
 
 | | | |
 |---|---|---|
@@ -27,7 +22,7 @@ Sector **dry · day** sweep plus hero **lighting/weather** on five signatures. R
 | ![hangar wide · day · dry](../../../artifacts/shots/tracks/silverstone/s1-hangar-wide__day-dry.jpg) | ![maggotts · day · dry](../../../artifacts/shots/tracks/silverstone/s1-maggotts__day-dry.jpg) |
 | hangar wide · day · dry | maggotts · day · dry |
 
-### Sector 2 — Stowe → Hamilton
+### Sector 2
 
 | | | |
 |---|---|---|
@@ -47,61 +42,49 @@ Sector **dry · day** sweep plus hero **lighting/weather** on five signatures. R
 | ![woodcote · day · dry](../../../artifacts/shots/tracks/silverstone/s3-woodcote__day-dry.jpg) |
 | woodcote · day · dry |
 
-## Hero viewpoint panels (lighting / weather)
+## Hero panels (weather · time of day)
 
-### Copse
-
-| | | |
-|---|---|---|
-| ![copse · day · rain](../../../artifacts/shots/tracks/silverstone/hero-copse__day-rain.jpg) | ![copse · day · wet](../../../artifacts/shots/tracks/silverstone/hero-copse__day-wet.jpg) | ![copse · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-copse__dusk-dry.jpg) |
-| copse · day · rain | copse · day · wet | copse · dusk · dry |
-| ![copse · night · dry](../../../artifacts/shots/tracks/silverstone/hero-copse__night-dry.jpg) |
-| copse · night · dry |
-
-### Maggotts
+### copse
 
 | | | |
 |---|---|---|
-| ![maggotts · day · dry](../../../artifacts/shots/tracks/silverstone/hero-maggotts__day-dry.jpg) | ![maggotts · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-maggotts__dusk-dry.jpg) | ![maggotts · night · dry](../../../artifacts/shots/tracks/silverstone/hero-maggotts__night-dry.jpg) |
-| maggotts · day · dry | maggotts · dusk · dry | maggotts · night · dry |
+| ![copse · dawn · dry](../../../artifacts/shots/tracks/silverstone/hero-copse__dawn-dry.jpg) | ![copse · day · rain](../../../artifacts/shots/tracks/silverstone/hero-copse__day-rain.jpg) | ![copse · night · dry](../../../artifacts/shots/tracks/silverstone/hero-copse__night-dry.jpg) |
+| copse · dawn · dry | copse · day · rain | copse · night · dry |
 
-### Hangar
-
-| | | |
-|---|---|---|
-| ![hangar · day · rain](../../../artifacts/shots/tracks/silverstone/hero-hangar__day-rain.jpg) | ![hangar · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-hangar__dusk-dry.jpg) | ![hangar · night · dry](../../../artifacts/shots/tracks/silverstone/hero-hangar__night-dry.jpg) |
-| hangar · day · rain | hangar · dusk · dry | hangar · night · dry |
-
-### Wing
+### maggotts
 
 | | | |
 |---|---|---|
-| ![wing · day · rain](../../../artifacts/shots/tracks/silverstone/hero-wing__day-rain.jpg) | ![wing · day · wet](../../../artifacts/shots/tracks/silverstone/hero-wing__day-wet.jpg) | ![wing · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-wing__dusk-dry.jpg) |
-| wing · day · rain | wing · day · wet | wing · dusk · dry |
-| ![wing · night · dry](../../../artifacts/shots/tracks/silverstone/hero-wing__night-dry.jpg) |
-| wing · night · dry |
+| ![maggotts · day · storm](../../../artifacts/shots/tracks/silverstone/hero-maggotts__day-storm.jpg) | ![maggotts · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-maggotts__dusk-dry.jpg) | ![maggotts · night · dry](../../../artifacts/shots/tracks/silverstone/hero-maggotts__night-dry.jpg) |
+| maggotts · day · storm | maggotts · dusk · dry | maggotts · night · dry |
 
-### Abbey
+### hangar
 
 | | | |
 |---|---|---|
-| ![abbey · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-abbey__dusk-dry.jpg) | ![abbey · night · dry](../../../artifacts/shots/tracks/silverstone/hero-abbey__night-dry.jpg) |
-| abbey · dusk · dry | abbey · night · dry |
+| ![hangar · day · fog](../../../artifacts/shots/tracks/silverstone/hero-hangar__day-fog.jpg) | ![hangar · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-hangar__dusk-dry.jpg) | ![hangar · night · dry](../../../artifacts/shots/tracks/silverstone/hero-hangar__night-dry.jpg) |
+| hangar · day · fog | hangar · dusk · dry | hangar · night · dry |
 
-### Village
+### wing
 
 | | | |
 |---|---|---|
-| ![village · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-village__dusk-dry.jpg) | ![village · night · dry](../../../artifacts/shots/tracks/silverstone/hero-village__night-dry.jpg) |
-| village · dusk · dry | village · night · dry |
+| ![wing · day · overcast](../../../artifacts/shots/tracks/silverstone/hero-wing__day-overcast.jpg) | ![wing · day · wet](../../../artifacts/shots/tracks/silverstone/hero-wing__day-wet.jpg) | ![wing · night · dry](../../../artifacts/shots/tracks/silverstone/hero-wing__night-dry.jpg) |
+| wing · day · overcast | wing · day · wet | wing · night · dry |
 
-## Findings (summary)
+### abbey
 
-- **audit-circuit:** 0 folds, 0 float, 0 severe clip; ~428k tris.
-- **Fixes (scenery):** T2 hangars inward; museum/marshal/helipad grounding.
-- **W1 night:** outfield dark except pit lamps (`hero-hangar__night-dry`).
-- **W2 rain/wet:** particles read; weak wet specular (engine).
-- **Pending:** full weather matrix after shared shot PR.
+| | | |
+|---|---|---|
+| ![abbey · dawn · dry](../../../artifacts/shots/tracks/silverstone/hero-abbey__dawn-dry.jpg) | ![abbey · day · rain](../../../artifacts/shots/tracks/silverstone/hero-abbey__day-rain.jpg) | ![abbey · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-abbey__dusk-dry.jpg) |
+| abbey · dawn · dry | abbey · day · rain | abbey · dusk · dry |
+
+### village
+
+| | | |
+|---|---|---|
+| ![village · day · fog](../../../artifacts/shots/tracks/silverstone/hero-village__day-fog.jpg) | ![village · dusk · dry](../../../artifacts/shots/tracks/silverstone/hero-village__dusk-dry.jpg) | ![village · night · dry](../../../artifacts/shots/tracks/silverstone/hero-village__night-dry.jpg) |
+| village · day · fog | village · dusk · dry | village · night · dry |
 
 ## Verification
 
