@@ -1,0 +1,282 @@
+[
+  {
+    "file": "s1-01-paddock-orbit__wx-dry__tod-day.jpg",
+    "slug": "s1-01-paddock-orbit",
+    "view": "Paddock orbit",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 128,
+    "reshoot": true
+  },
+  {
+    "file": "s1-02-start-stand__wx-dry__tod-day.jpg",
+    "slug": "s1-02-start-stand",
+    "view": "Start grandstand (trackside)",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 10,
+    "reshoot": true
+  },
+  {
+    "file": "s1-03-turn1-crest__wx-dry__tod-day.jpg",
+    "slug": "s1-03-turn1-crest",
+    "view": "Turn 1 crest",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 14,
+    "reshoot": true
+  },
+  {
+    "file": "s1-04-ski-skyline__wx-dry__tod-day.jpg",
+    "slug": "s1-04-ski-skyline",
+    "view": "Ski mountain skyline",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 118,
+    "reshoot": true
+  },
+  {
+    "file": "s1-05-esses-chase__wx-dry__tod-day.jpg",
+    "slug": "s1-05-esses-chase",
+    "view": "Esses (chase)",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 91,
+    "reshoot": true
+  },
+  {
+    "file": "s1-06-esses-tunnel__wx-dry__tod-day.jpg",
+    "slug": "s1-06-esses-tunnel",
+    "view": "Esses cutting (eye)",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 100,
+    "reshoot": true
+  },
+  {
+    "file": "s2-07-downhill-sweep__wx-dry__tod-day.jpg",
+    "slug": "s2-07-downhill-sweep",
+    "view": "Downhill sweep",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 108,
+    "reshoot": true
+  },
+  {
+    "file": "s2-08-t4-spectator-bank__wx-dry__tod-day.jpg",
+    "slug": "s2-08-t4-spectator-bank",
+    "view": "T4 spectator bank",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 87,
+    "reshoot": true
+  },
+  {
+    "file": "s2-09-t5-hardwood__wx-dry__tod-day.jpg",
+    "slug": "s2-09-t5-hardwood",
+    "view": "T5 hardwood run-off",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 94,
+    "reshoot": true
+  },
+  {
+    "file": "s2-10-lac-ouimet__wx-dry__tod-day.jpg",
+    "slug": "s2-10-lac-ouimet",
+    "view": "Lac Ouimet",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 145,
+    "reshoot": true
+  },
+  {
+    "file": "s2-11-carousel__wx-dry__tod-day.jpg",
+    "slug": "s2-11-carousel",
+    "view": "Carousel",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 134,
+    "reshoot": true
+  },
+  {
+    "file": "s3-12-hump-chase__wx-dry__tod-day.jpg",
+    "slug": "s3-12-hump-chase",
+    "view": "The Hump (chase)",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 114,
+    "reshoot": true
+  },
+  {
+    "file": "s3-14-climbing-90s__wx-dry__tod-day.jpg",
+    "slug": "s3-14-climbing-90s",
+    "view": "T8–T9 climbing 90°",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 112,
+    "reshoot": true
+  },
+  {
+    "file": "s3-15-bridge-chase__wx-dry__tod-day.jpg",
+    "slug": "s3-15-bridge-chase",
+    "view": "Bridge (chase)",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 117,
+    "reshoot": true
+  },
+  {
+    "file": "s3-16-namerow__wx-dry__tod-day.jpg",
+    "slug": "s3-16-namerow",
+    "view": "Namerow hairpin",
+    "tod": "day",
+    "weather": "dry"
+  },
+  {
+    "file": "s3-17-paddock-bend__wx-dry__tod-day.jpg",
+    "slug": "s3-17-paddock-bend",
+    "view": "Paddock Bend",
+    "tod": "day",
+    "weather": "dry"
+  },
+  {
+    "file": "lm-control-tower__wx-dry__tod-day.jpg",
+    "slug": "lm-control-tower",
+    "view": "Landmark: control tower",
+    "tod": "day",
+    "weather": "dry"
+  },
+  {
+    "file": "lm-hump-crest-cabin__wx-dry__tod-day.jpg",
+    "slug": "lm-hump-crest-cabin",
+    "view": "Landmark: Hump crest cabin",
+    "tod": "day",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-bridge__wx-overcast__tod-day.jpg",
+    "slug": "wx-bridge",
+    "view": "Hero: bridge chase",
+    "tod": "day",
+    "weather": "overcast"
+  },
+  {
+    "file": "wx-bridge__wx-rain__tod-day.jpg",
+    "slug": "wx-bridge",
+    "view": "Hero: bridge chase",
+    "tod": "day",
+    "weather": "rain"
+  },
+  {
+    "file": "wx-bridge__wx-dry__tod-dusk.jpg",
+    "slug": "wx-bridge",
+    "view": "Hero: bridge chase",
+    "tod": "dusk",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-carousel__wx-overcast__tod-day.jpg",
+    "slug": "wx-carousel",
+    "view": "Hero: Carousel",
+    "tod": "day",
+    "weather": "overcast"
+  },
+  {
+    "file": "wx-carousel__wx-dry__tod-dusk.jpg",
+    "slug": "wx-carousel",
+    "view": "Hero: Carousel",
+    "tod": "dusk",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-carousel__wx-dry__tod-night.jpg",
+    "slug": "wx-carousel",
+    "view": "Hero: Carousel",
+    "tod": "night",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-esses__wx-dry__tod-dawn.jpg",
+    "slug": "wx-esses",
+    "view": "Hero: esses tunnel",
+    "tod": "dawn",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-esses__wx-fog__tod-day.jpg",
+    "slug": "wx-esses",
+    "view": "Hero: esses tunnel",
+    "tod": "day",
+    "weather": "fog"
+  },
+  {
+    "file": "wx-esses__wx-storm__tod-day.jpg",
+    "slug": "wx-esses",
+    "view": "Hero: esses tunnel",
+    "tod": "day",
+    "weather": "storm"
+  },
+  {
+    "file": "wx-hump__wx-fog__tod-day.jpg",
+    "slug": "wx-hump",
+    "view": "Hero: The Hump chase",
+    "tod": "day",
+    "weather": "fog"
+  },
+  {
+    "file": "wx-hump__wx-dry__tod-dusk.jpg",
+    "slug": "wx-hump",
+    "view": "Hero: The Hump chase",
+    "tod": "dusk",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-hump__wx-dry__tod-night.jpg",
+    "slug": "wx-hump",
+    "view": "Hero: The Hump chase",
+    "tod": "night",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-namerow__wx-wet__tod-day.jpg",
+    "slug": "wx-namerow",
+    "view": "Hero: Namerow hairpin",
+    "tod": "day",
+    "weather": "wet"
+  },
+  {
+    "file": "wx-namerow__wx-dry__tod-dusk.jpg",
+    "slug": "wx-namerow",
+    "view": "Hero: Namerow hairpin",
+    "tod": "dusk",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-namerow__wx-dry__tod-night.jpg",
+    "slug": "wx-namerow",
+    "view": "Hero: Namerow hairpin",
+    "tod": "night",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-paddock__wx-rain__tod-day.jpg",
+    "slug": "wx-paddock",
+    "view": "Hero: paddock orbit",
+    "tod": "day",
+    "weather": "rain"
+  },
+  {
+    "file": "wx-paddock__wx-dry__tod-dusk.jpg",
+    "slug": "wx-paddock",
+    "view": "Hero: paddock orbit",
+    "tod": "dusk",
+    "weather": "dry"
+  },
+  {
+    "file": "wx-paddock__wx-dry__tod-night.jpg",
+    "slug": "wx-paddock",
+    "view": "Hero: paddock orbit",
+    "tod": "night",
+    "weather": "dry"
+  }
+]

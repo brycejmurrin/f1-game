@@ -1,0 +1,11 @@
+{"trackId":"montreal","track":"montreal","frac":0.52,"cam":"trackside","tod":"day","weather":"dry","out":"artifacts/shots/tracks/montreal/s2-hairpin__wx-dry__tod-day.jpg","el":14,"dist":42,"side":1}
+{"trackId":"montreal","track":"montreal","frac":0.52,"cam":"trackside","tod":"day","weather":"storm","out":"artifacts/shots/tracks/montreal/s2-hairpin__wx-storm__tod-day.jpg","el":14,"dist":42,"side":1}
+{"trackId":"montreal","track":"montreal","frac":0.52,"cam":"trackside","tod":"day","weather":"wet","out":"artifacts/shots/tracks/montreal/s2-hairpin__wx-wet__tod-day.jpg","el":14,"dist":42,"side":1}
+{"trackId":"montreal","track":"montreal","frac":0.52,"cam":"trackside","tod":"night","weather":"dry","out":"artifacts/shots/tracks/montreal/s2-hairpin__wx-dry__tod-night.jpg","el":14,"dist":42,"side":1}
+{"trackId":"montreal","track":"montreal","frac":0.38,"cam":"orbit","tod":"day","weather":"dry","out":"artifacts/shots/tracks/montreal/s2-skyline__wx-dry__tod-day.jpg","az":15,"el":22,"dist":88,"side":1}
+{"trackId":"montreal","track":"montreal","frac":0.7,"cam":"orbit","tod":"day","weather":"dry","out":"artifacts/shots/tracks/montreal/s3-backstraight__wx-dry__tod-day.jpg","az":50,"el":20,"dist":65,"side":1}
+{"trackId":"montreal","track":"montreal","frac":0.92,"cam":"trackside","tod":"day","weather":"dry","out":"artifacts/shots/tracks/montreal/s3-final-chicane__wx-dry__tod-day.jpg","el":12,"dist":40,"side":1}
+{"trackId":"montreal","track":"montreal","frac":0.99,"cam":"orbit","tod":"day","weather":"dry","out":"artifacts/shots/tracks/montreal/s3-pit-entry__wx-dry__tod-day.jpg","az":120,"el":22,"dist":70,"side":1}
+{"trackId":"montreal","track":"montreal","frac":0.97,"cam":"trackside","tod":"day","weather":"dry","out":"artifacts/shots/tracks/montreal/s3-woc__wx-dry__tod-day.jpg","el":12,"dist":38,"side":-1}
+{"trackId":"montreal","track":"montreal","frac":0.97,"cam":"trackside","tod":"day","weather":"rain","out":"artifacts/shots/tracks/montreal/s3-woc__wx-rain__tod-day.jpg","el":12,"dist":38,"side":-1}
+{"trackId":"montreal","track":"montreal","frac":0.97,"cam":"trackside","tod":"night","weather":"dry","out":"artifacts/shots/tracks/montreal/s3-woc__wx-dry__tod-night.jpg","el":12,"dist":38,"side":-1}

@@ -4,7 +4,29 @@
 **Brief:** `docs/tracks/mont_tremblant.md`  
 **Live:** [brycejmurrin.github.io/f1-game](https://brycejmurrin.github.io/f1-game/) (picker → MONT-TREMBLANT)
 
-**Captures:** **36** JPEG frames at `artifacts/shots/tracks/mont_tremblant/` (`git add -f`). Max width 1280 px, JPEG q≈80, each &lt;300 KB. Batch: `shot.mjs --jpeg --present-timeout 90 --capture-retries 4 --wait 120` (shared tooling).
+**Captures:** Re-shoot in progress ([#1862](https://github.com/brycejmurrin/f1-game/pull/1862)): `__wx-<weather>__tod-<time>.jpg` under [`artifacts/shots/tracks/mont_tremblant/`](../../../artifacts/shots/tracks/mont_tremblant/). Jobs: `docs/tracks/surveys/mont_tremblant-capture-jobs.json`.
+
+```sh
+node tools/shot/shot.mjs --batch artifacts/shots/tracks/mont_tremblant/capture-jobs.jsonl \
+  --jpeg --present-timeout 120 --capture-retries 4 --wait 180
+```
+
+**Re-shoot status:** **14 / 36** (run 2 — day-dry sector frames through Bridge chase).
+
+## Re-shoot panel grid (14 frames, run 2)
+
+| ![Paddock orbit](../../../artifacts/shots/tracks/mont_tremblant/s1-01-paddock-orbit__wx-dry__tod-day.jpg) | ![Start grandstand (trackside)](../../../artifacts/shots/tracks/mont_tremblant/s1-02-start-stand__wx-dry__tod-day.jpg) | ![Turn 1 crest](../../../artifacts/shots/tracks/mont_tremblant/s1-03-turn1-crest__wx-dry__tod-day.jpg) |
+| **Paddock orbit** · wx=dry · tod=day | **Start grandstand (trackside)** · wx=dry · tod=day | **Turn 1 crest** · wx=dry · tod=day |
+| ![Ski mountain skyline](../../../artifacts/shots/tracks/mont_tremblant/s1-04-ski-skyline__wx-dry__tod-day.jpg) | ![Esses (chase)](../../../artifacts/shots/tracks/mont_tremblant/s1-05-esses-chase__wx-dry__tod-day.jpg) | ![Esses cutting (eye)](../../../artifacts/shots/tracks/mont_tremblant/s1-06-esses-tunnel__wx-dry__tod-day.jpg) |
+| **Ski mountain skyline** · wx=dry · tod=day | **Esses (chase)** · wx=dry · tod=day | **Esses cutting (eye)** · wx=dry · tod=day |
+| ![Downhill sweep](../../../artifacts/shots/tracks/mont_tremblant/s2-07-downhill-sweep__wx-dry__tod-day.jpg) | ![T4 spectator bank](../../../artifacts/shots/tracks/mont_tremblant/s2-08-t4-spectator-bank__wx-dry__tod-day.jpg) | ![T5 hardwood run-off](../../../artifacts/shots/tracks/mont_tremblant/s2-09-t5-hardwood__wx-dry__tod-day.jpg) |
+| **Downhill sweep** · wx=dry · tod=day | **T4 spectator bank** · wx=dry · tod=day | **T5 hardwood run-off** · wx=dry · tod=day |
+| ![Lac Ouimet](../../../artifacts/shots/tracks/mont_tremblant/s2-10-lac-ouimet__wx-dry__tod-day.jpg) | ![Carousel](../../../artifacts/shots/tracks/mont_tremblant/s2-11-carousel__wx-dry__tod-day.jpg) | ![The Hump (chase)](../../../artifacts/shots/tracks/mont_tremblant/s3-12-hump-chase__wx-dry__tod-day.jpg) |
+| **Lac Ouimet** · wx=dry · tod=day | **Carousel** · wx=dry · tod=day | **The Hump (chase)** · wx=dry · tod=day |
+| ![T8–T9 climbing 90°](../../../artifacts/shots/tracks/mont_tremblant/s3-14-climbing-90s__wx-dry__tod-day.jpg) | ![Bridge (chase)](../../../artifacts/shots/tracks/mont_tremblant/s3-15-bridge-chase__wx-dry__tod-day.jpg) | |
+| **T8–T9 climbing 90°** · wx=dry · tod=day | **Bridge (chase)** · wx=dry · tod=day | |
+
+## Legacy captures (pre–#1862 filenames)
 
 ## Code map
 

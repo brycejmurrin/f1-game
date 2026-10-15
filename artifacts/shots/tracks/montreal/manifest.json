@@ -250,102 +250,113 @@
     "reshoot": true
   },
   {
-    "file": "s2-hairpin__day__dry.jpg",
+    "file": "s2-hairpin__wx-dry__tod-day.jpg",
     "id": "hairpin",
     "sector": "S2",
     "view": "L'Épingle hairpin",
     "tod": "day",
     "weather": "dry",
-    "kb": 95
+    "kb": 102,
+    "reshoot": true
   },
   {
-    "file": "s2-hairpin__day__storm.jpg",
+    "file": "s2-hairpin__wx-storm__tod-day.jpg",
     "id": "hairpin",
     "sector": "S2",
     "view": "L'Épingle hairpin",
     "tod": "day",
     "weather": "storm",
-    "kb": 49
+    "kb": 58,
+    "reshoot": true
   },
   {
-    "file": "s2-hairpin__day__wet.jpg",
+    "file": "s2-hairpin__wx-wet__tod-day.jpg",
     "id": "hairpin",
     "sector": "S2",
     "view": "L'Épingle hairpin",
     "tod": "day",
     "weather": "wet",
-    "kb": 71
+    "kb": 77,
+    "reshoot": true
   },
   {
-    "file": "s2-hairpin__night__dry.jpg",
+    "file": "s2-hairpin__wx-dry__tod-night.jpg",
     "id": "hairpin",
     "sector": "S2",
     "view": "L'Épingle hairpin",
     "tod": "night",
     "weather": "dry",
-    "kb": 86
+    "kb": 81,
+    "reshoot": true
   },
   {
-    "file": "s2-skyline__day__dry.jpg",
+    "file": "s2-skyline__wx-dry__tod-day.jpg",
     "id": "skyline",
     "sector": "S2",
     "view": "Downtown skyline",
     "tod": "day",
     "weather": "dry",
-    "kb": 109
+    "kb": 122,
+    "reshoot": true
   },
   {
-    "file": "s3-backstraight__day__dry.jpg",
+    "file": "s3-backstraight__wx-dry__tod-day.jpg",
     "id": "backstraight",
     "sector": "S3",
     "view": "Back straight",
     "tod": "day",
     "weather": "dry",
-    "kb": 68
+    "kb": 109,
+    "reshoot": true
   },
   {
-    "file": "s3-final-chicane__day__dry.jpg",
+    "file": "s3-final-chicane__wx-dry__tod-day.jpg",
     "id": "final-chicane",
     "sector": "S3",
     "view": "Final chicane",
     "tod": "day",
     "weather": "dry",
-    "kb": 90
+    "kb": 69,
+    "reshoot": true
   },
   {
-    "file": "s3-pit-entry__day__dry.jpg",
+    "file": "s3-pit-entry__wx-dry__tod-day.jpg",
     "id": "pit-entry",
     "sector": "S3",
     "view": "Pit entry / kit complex",
     "tod": "day",
     "weather": "dry",
-    "kb": 99
+    "kb": 109,
+    "reshoot": true
   },
   {
-    "file": "s3-woc__day__dry.jpg",
+    "file": "s3-woc__wx-dry__tod-day.jpg",
     "id": "woc",
     "sector": "S3",
     "view": "Wall of Champions",
     "tod": "day",
     "weather": "dry",
-    "kb": 89
+    "kb": 86,
+    "reshoot": true
   },
   {
-    "file": "s3-woc__day__rain.jpg",
+    "file": "s3-woc__wx-rain__tod-day.jpg",
     "id": "woc",
     "sector": "S3",
     "view": "Wall of Champions",
     "tod": "day",
     "weather": "rain",
-    "kb": 58
+    "kb": 55,
+    "reshoot": true
   },
   {
-    "file": "s3-woc__night__dry.jpg",
+    "file": "s3-woc__wx-dry__tod-night.jpg",
     "id": "woc",
     "sector": "S3",
     "view": "Wall of Champions",
     "tod": "night",
     "weather": "dry",
-    "kb": 68
+    "kb": 78,
+    "reshoot": true
   }
 ]

@@ -10,9 +10,9 @@ node tools/shot/shot.mjs --batch artifacts/shots/tracks/montreal/capture-jobs.js
   --jpeg --present-timeout 120 --capture-retries 4 --wait 180
 ```
 
-**Run 1 (this PR):** 25 / 36 frames re-captured (SwiftShader default; do not set `APEX_GL=llvmpipe` — black frames).
+**Re-shoot status:** **36 / 36** complete (runs 1–2, SwiftShader default — do not set `APEX_GL=llvmpipe`).
 
-## Re-shoot panel grid (25 frames, run 1)
+## Re-shoot panel grid (36 frames, #1862 tooling)
 
 | ![Jean-Doré lagoon](../../../artifacts/shots/tracks/montreal/ctx-lagoon__wx-dry__tod-day.jpg) | ![Mid-lap orbit](../../../artifacts/shots/tracks/montreal/ctx-orbit-mid__wx-dry__tod-day.jpg) | ![Mid-lap orbit](../../../artifacts/shots/tracks/montreal/ctx-orbit-mid__wx-overcast__tod-day.jpg) |
 | **Jean-Doré lagoon** · wx=dry · tod=day | **Mid-lap orbit** · wx=dry · tod=day | **Mid-lap orbit** · wx=overcast · tod=day |
@@ -30,10 +30,14 @@ node tools/shot/shot.mjs --batch artifacts/shots/tracks/montreal/capture-jobs.js
 | **Casino de Montréal** · wx=dry · tod=dusk | **Casino straight + basin** · wx=dry · tod=day | **La Ronde ferris wheel** · wx=dry · tod=day |
 | ![Floralies parterres](../../../artifacts/shots/tracks/montreal/s2-floralies__wx-dry__tod-day.jpg) | ![Casino footbridge](../../../artifacts/shots/tracks/montreal/s2-footbridge__wx-dry__tod-day.jpg) | ![Casino footbridge](../../../artifacts/shots/tracks/montreal/s2-footbridge__wx-dry__tod-dusk.jpg) |
 | **Floralies parterres** · wx=dry · tod=day | **Casino footbridge** · wx=dry · tod=day | **Casino footbridge** · wx=dry · tod=dusk |
-| ![Habitat 67](../../../artifacts/shots/tracks/montreal/s2-habitat__wx-dry__tod-day.jpg) | | |
-| **Habitat 67** · wx=dry · tod=day | | |
-
-**Remaining (run 2+):** hairpin, skyline, S3 heroes, and remaining weather matrix cells (11 frames).
+| ![Habitat 67](../../../artifacts/shots/tracks/montreal/s2-habitat__wx-dry__tod-day.jpg) | ![L'Épingle hairpin](../../../artifacts/shots/tracks/montreal/s2-hairpin__wx-dry__tod-day.jpg) | ![L'Épingle hairpin](../../../artifacts/shots/tracks/montreal/s2-hairpin__wx-storm__tod-day.jpg) |
+| **Habitat 67** · wx=dry · tod=day | **L'Épingle hairpin** · wx=dry · tod=day | **L'Épingle hairpin** · wx=storm · tod=day |
+| ![L'Épingle hairpin](../../../artifacts/shots/tracks/montreal/s2-hairpin__wx-wet__tod-day.jpg) | ![L'Épingle hairpin](../../../artifacts/shots/tracks/montreal/s2-hairpin__wx-dry__tod-night.jpg) | ![Downtown skyline](../../../artifacts/shots/tracks/montreal/s2-skyline__wx-dry__tod-day.jpg) |
+| **L'Épingle hairpin** · wx=wet · tod=day | **L'Épingle hairpin** · wx=dry · tod=night | **Downtown skyline** · wx=dry · tod=day |
+| ![Back straight](../../../artifacts/shots/tracks/montreal/s3-backstraight__wx-dry__tod-day.jpg) | ![Final chicane](../../../artifacts/shots/tracks/montreal/s3-final-chicane__wx-dry__tod-day.jpg) | ![Pit entry / kit complex](../../../artifacts/shots/tracks/montreal/s3-pit-entry__wx-dry__tod-day.jpg) |
+| **Back straight** · wx=dry · tod=day | **Final chicane** · wx=dry · tod=day | **Pit entry / kit complex** · wx=dry · tod=day |
+| ![Wall of Champions](../../../artifacts/shots/tracks/montreal/s3-woc__wx-dry__tod-day.jpg) | ![Wall of Champions](../../../artifacts/shots/tracks/montreal/s3-woc__wx-rain__tod-day.jpg) | ![Wall of Champions](../../../artifacts/shots/tracks/montreal/s3-woc__wx-dry__tod-night.jpg) |
+| **Wall of Champions** · wx=dry · tod=day | **Wall of Champions** · wx=rain · tod=day | **Wall of Champions** · wx=dry · tod=night |
 
 ## Legacy panel grids (pre–#1862 filenames)
 
