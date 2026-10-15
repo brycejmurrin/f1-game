@@ -1,0 +1,1 @@
+1792107721	Codex	#2311 deploy --train advisory ordering ONLY: tools/ci/deploy.mjs and tests/unit/deploy-tool.test.mjs. Root owns isolated fix; no Madrid/circuit/CI config edits. No workflow dispatch.  [cursor/train-health-before-plan-6c42; session codex-release-help-6c42]
