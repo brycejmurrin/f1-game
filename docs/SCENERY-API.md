@@ -729,6 +729,51 @@ rendered ribbon) and falls back to `groundYAt` (closed form) off-ribbon. The two
 disagree wherever the ribbon is carved or sags, so a model straddling that
 boundary tilts or floats.
 
+#### Partial-footprint review
+
+`node tools/track/ground-audit.cjs monaco --why --json` also reports advisory
+`advisory.footprintSupport` findings. The existing grounded checks can accept a whole
+building when its centre or one corner touches terrain; the Monaco city slab
+found in an eye-level capture had a downhill corner about 9 m above the land.
+
+The advisory checks substantial `addBox` masses (at least 3 m along each local
+axis), sampling the actual bottom face at four corners, four edge midpoints and
+the centre. Tilted faces retain each sample's own Y. A warning needs at least
+three unsupported samples more than 1.2 m above terrain, road or water. Findings
+are classified as `partialFootprint` when other samples have support, or
+`unsupportedFootprint` when none do. Contact with solid boxes is checked against
+their actual faces and followed down at that sample to ground; overlapping bounds
+or a nearby building alone cannot supply support. Missing surfaces are reported
+as unjudged samples. Arbitrary meshes may contain disconnected parts, so their
+vertical bounds cannot certify solid support; known-ground gaps with ambiguous
+mesh support produce `unverifiedFootprint` review findings. Other primitive types
+also remain unverified as load-bearing volumes (several omit their bottom caps).
+Thin roofs, bridge decks, signs and cantilever arms are
+outside this mass check. Entirely detached masses are checked too, because the
+old unsupported audit's bounding-box graph can inherit false nearby support.
+
+These are review warnings, **not additional baseline counts or exit failures**.
+`audit-circuit.cjs` retains the total and three compact example findings in its ground
+result, with a command for the complete report. It prints `WARN` when findings
+are present, even when the existing baseline checks pass.
+They describe gaps in sampled footprint coverage, not structural intent: an
+intentional large cantilever can still need review. Each JSON finding includes
+world bounds, all sampled gaps/contact states, the nearest racing node/fraction,
+and nearby screenshot jobs. `--why` adds the emitting source line.
+
+```sh
+node tools/track/ground-audit.cjs monaco --why --json --shots artifacts/footprint-jobs.json > artifacts/footprint-report.json
+node tools/shot/shot.mjs --batch artifacts/footprint-jobs.json --jpeg
+```
+
+`--shots` writes three nearby orbit views for each of the three worst warnings
+per circuit. These views aid inspection; they do not guarantee visibility or
+replace the exact world bounds in the report. An empty findings list produces
+an empty job list, so skip the capture command in that case. The geometric
+approach distinguishes [bounding boxes](https://threejs.org/docs/pages/Box3.html)
+from [triangle intersections](https://threejs.org/docs/pages/Ray.html); it adds
+no browser or Three.js dependency to the audit.
+
 ### 3. What to build
 
 #### 3.1 `seat()` — express intent, not arithmetic

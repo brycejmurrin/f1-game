@@ -12,9 +12,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { normalizeJob } from "../../tools/shot/shot-jobs.mjs";
 
 const require = createRequire(import.meta.url);
 const AC = require("../../tools/track/audit-circuit.cjs");
+const GA = require("../../tools/track/ground-audit.cjs");
 
 test("float verdict: floaters equal to the cap pass despite float-audit exiting 1", () => {
   assert.equal(AC.floatOk({ status: 1, error: null }, 2, 2), true);
@@ -51,4 +56,39 @@ test("CHECKS.ground: a missing baseline row is cap 0, matching ground-audit --ga
   assert.match(ground, /cap 0/, "documents absent = 0");
   assert.match(ground, /\?\s*base\[k\]\[id\]\s*:\s*0/, "ternary falls through to 0, not null");
   assert.doesNotMatch(ground, /cap\s*!=\s*null\s*&&/, "must not skip the compare when the row is absent");
+});
+
+test("CHECKS.ground: retain footprint advisories without treating them as baseline failures", () => {
+  const result = AC.CHECKS.ground("monaco");
+  assert.equal(result.ok, true);
+  assert.ok(Array.isArray(result.advisory.footprintSupport));
+  assert.equal(result.warnings, result.advisory.total);
+  assert.equal(result.advisory.footprintSupport.length, Math.min(3, result.warnings));
+  assert.equal(result.advisory.omitted, result.warnings - result.advisory.footprintSupport.length);
+  assert.ok(result.advisory.footprintSupport.every((f) => !Object.hasOwn(f, "samples") && !Object.hasOwn(f, "shots")),
+    "the health response carries compact examples; detailed sampling stays in the ground report");
+  assert.match(result.advisory.detailCommand, /ground-audit\.cjs monaco --why --json/);
+  assert.ok(result.warnings > 0, "this hillside has review warnings despite passing existing gates");
+  assert.match(result.summary, new RegExp(`footprint warnings ${result.warnings}`));
+  assert.ok(!Object.hasOwn(result.counts, "footprintSupport"));
+});
+
+test("footprint CLI: JSON remains parseable with source attribution, gates and review shot jobs", () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const artifacts = path.join(root, "artifacts");
+  fs.mkdirSync(artifacts, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(artifacts, "footprint-cli-"));
+  try {
+    const shots = path.join(dir, "shots.json");
+    const stdout = execFileSync(process.execPath, [path.join(root, "tools/track/ground-audit.cjs"),
+      "monaco", "--json", "--why", "--gate", "--shots", shots], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const [row] = JSON.parse(stdout);
+    assert.equal(row.id, "monaco");
+    assert.deepEqual(Object.keys(row.counts), GA.CHECKS, "advisories never enter ratcheted counts");
+    assert.ok(row.advisory.footprintSupport.length > 0);
+    assert.ok(row.advisory.footprintSupport.every((f) => f.source && f.source !== "?"));
+    const { jobs } = JSON.parse(fs.readFileSync(shots, "utf8"));
+    assert.equal(jobs.length, Math.min(3, row.advisory.footprintSupport.length) * 3);
+    assert.ok(jobs.map((job) => normalizeJob(job, { ROOT: root })).every((job) => job.trackId === "monaco"));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
