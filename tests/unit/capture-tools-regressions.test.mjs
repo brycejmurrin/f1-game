@@ -192,12 +192,12 @@ test('capture parsers reject nonfinite dimensions, scales and unknown flags; see
   assert.equal(parseCssPlayArgs(['--scale', '130']).scale, 130);
   assert.deepEqual(screenClicks({ clicks: ['#extra'] }, SCREENS.settings), [...SCREENS.settings.clicks, '#extra']);
   assert.deepEqual(screenClicks({ root: '#custom', clicks: ['#extra'] }, SCREENS.settings), ['#extra']);
-  assert.equal(parseCaptureArgs(['--seed=0', '--plan'], 'capture-bundle').seed, 0);
-  assert.throws(() => parseCaptureArgs(['--out', '/tmp/capture'], 'capture-bundle'), /out/);
-  assert.throws(() => parseCaptureArgs(['--track', 'unknown-track'], 'capture-bundle'), /unknown track/);
+  assert.equal(parseCaptureArgs(['--seed=0', '--plan'], 'lifecycle-census').seed, 0);
+  assert.throws(() => parseCaptureArgs(['--out', '/tmp/capture'], 'lifecycle-census'), /out/);
+  assert.throws(() => parseCaptureArgs(['--track', 'unknown-track'], 'lifecycle-census'), /unknown track/);
   mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
   const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-path-test-'));
-  try { symlinkSync(resolve(ROOT, 'js'), resolve(dir, 'source-link')); assert.throws(() => parseCaptureArgs(['--out', resolve(dir, 'source-link', 'bad')], 'capture-bundle'), /out real/); }
+  try { symlinkSync(resolve(ROOT, 'js'), resolve(dir, 'source-link')); assert.throws(() => parseCaptureArgs(['--out', resolve(dir, 'source-link', 'bad')], 'lifecycle-census'), /out real/); }
   finally { rmSync(dir, { recursive: true, force: true }); }
   for (const argv of [['monza', '--wat'], ['monza', 'before', 'NaN'], ['monza', 'before', '0,2'], ['monza', 'before', '0,,1']]) assert.throws(() => parseSurveyTrackArgs(argv));
 });

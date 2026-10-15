@@ -769,7 +769,7 @@ def cmd_look_survey(argv: list[str]) -> None:
     Outputs:
       artifacts/lighting/shots/<track>/<tod>-<wx>.png  — one per combo
       artifacts/lighting/shots/<track>/state.json       — lightState snapshot
-      docs/look-survey/<track>_grid.png                 — stitched sheet
+      docs/look-survey/<track>_grid.png                 — stitched sheet (commit on track-survey-assets)
         (run: python3 tools/lighting/look-survey-sheet.py <track>)
 
     loadTrack rebuilds only on day ↔ dawn/dusk/night flip; weather-only combos

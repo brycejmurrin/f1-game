@@ -220,8 +220,10 @@ const TrackGraph = (function () {
       // A pine is one object. Lower crown tiers can hit a doubled-back ribbon
       // (Fuji 120R / 300R / 30R-45R) while the trunk and upper cones clear it,
       // so the soup kept 10–28 m unsupported cones. Dry-run the guards; if any
-      // op would drop, plant nothing.
-      if (meta && meta.kind === "pine" && emit) {
+      // op would drop, plant nothing. `meta.whole` asks the same of any other
+      // all-or-nothing model (a lobed tree).
+      let whole = null;
+      if (meta && (meta.kind === "pine" || meta.whole) && emit) {
         const verd = m._whole || (m._whole = new Uint8Array(m.ops.length));
         out._dryRun = true;
         out._recVerdicts = verd;
@@ -229,19 +231,26 @@ const TrackGraph = (function () {
         const nLand = replay(m, place, emit, out);
         out._dryRun = false; out._recVerdicts = null;
         if (nLand !== m.ops.length) { dropped++; return 0; }
+        whole = verd;     // every op passed: these ARE the verdicts, never re-guard
       }
       const prefer = !!(out && out._preferInstance && emit);
-      let landed;
-      if (prefer) {
+      let landed, verd = whole;
+      if (prefer && whole) {
+        landed = m.ops.length;
+      } else if (prefer) {
         // The dry run records a per-op verdict (1=pass 0=culled 2=invalid) into
         // a per-model scratch; the fuse/absorb replay just below consumes it so
         // the guarded emitters skip the second round of finiteVec + road-guard
         // grid queries — deterministic in the same (model, place) by construction.
         out._dryRun = true;
-        out._recVerdicts = m._verd || (m._verd = new Uint8Array(m.ops.length));
+        out._recVerdicts = verd = m._verd || (m._verd = new Uint8Array(m.ops.length));
         out._vIdx = 0;
         landed = replay(m, place, emit, out);
         out._dryRun = false; out._recVerdicts = null;
+      } else if (whole) {
+        out._replayVerdicts = whole; out._vIdx = 0;
+        landed = replay(m, place, emit, out);
+        out._replayVerdicts = null;
       } else {
         landed = emit ? replay(m, place, emit, out) : 0;
       }
@@ -265,12 +274,12 @@ const TrackGraph = (function () {
           meta: meta || null,
         });
         if (prefer && !skipFuse) {
-          out._replayVerdicts = m._verd; out._vIdx = 0;
+          out._replayVerdicts = verd; out._vIdx = 0;
           replay(m, place, emit, out);           // fuse bakeOnly into the soup
           out._replayVerdicts = null;
         } else if (prefer && skipFuse) {
           out._absorbOnly = true;                // terrain seating, no triangles
-          out._replayVerdicts = m._verd; out._vIdx = 0;
+          out._replayVerdicts = verd; out._vIdx = 0;
           replay(m, place, emit, out);
           out._absorbOnly = false; out._replayVerdicts = null;
         }
