@@ -253,6 +253,17 @@ function _applyRaceBody() {
       G.frameSky.moon = 0;
       G._cloudBase = 0.44 + ovc * 0.42;     // modest broken cloud (sky shader adds the cumulus richness); overcast → heavy deck
       G.frame.exposure = 0.99 + clr * 0.05 - ovc * 0.08;
+      // PALETTE TINT (survey: spa/nurburgring/silverstone/anderstorp/qatar ignored def.palette
+      // under an explicit day): blend the circuit's own DAY sky (zenith/horizon/fog) in at
+      // DAY_PAL_BLEND. A night/dusk-authored palette (horizon luminance < 0.45) is skipped.
+      const _dp = G.track && G.track.def && G.track.def.palette;
+      if (_dp && _dp.horizon && _dp.zenith && (0.2126 * _dp.horizon[0] + 0.7152 * _dp.horizon[1] + 0.0722 * _dp.horizon[2]) >= 0.45) {
+        const _bl = (base, tgt) => base.map((v, i) => v + (tgt[i] - v) * DAY_PAL_BLEND);
+        G.frameSky.zenith = _bl(G.frameSky.zenith, _dp.zenith);
+        G.frameSky.horizon = _bl(G.frameSky.horizon, _dp.horizon);
+        if (_dp.fog && G.frame.fogColor) G.frame.fogColor = _bl(G.frame.fogColor, _dp.fog);
+        G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
+      }
     }
   } else {
     // "default" — the base sun/ambient come from the track palette (set ONCE at
@@ -431,11 +442,17 @@ function _applyRaceBody() {
         G.frame.exposure *= 0.86;
       } else {
         _dayWetGreyDeck(G, 0.88);
-        G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.62));
-        G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.72));
-        G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * 1.04));
-        G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * 1.04));
-        G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * 1.75;
+        // STORM vs RAIN (survey: mean frame diff ~5/255): a storm deck is DARK slate, not
+        // rain's light grey. Darken the deck (never below the day-storm luminance guard), cut ambient, thicken the haze.
+        const _dk = (c) => c.map((v) => v * STORM_DECK_DARK);
+        G.frameSky.zenith = _dk(G.frameSky.zenith); G.frameSky.horizon = _dk(G.frameSky.horizon);
+        G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
+        if (G.frame.fogColor) G.frame.fogColor = _dk(G.frame.fogColor);
+        G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.50));
+        G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.60));
+        G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * 0.80));
+        G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * 0.80));
+        G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * 2.6;
         G.frame.exposure = Math.max(G.frame.exposure != null ? G.frame.exposure : 1.0, 1.0);
       }
     } else if (!isNightSession) {
@@ -626,6 +643,10 @@ function floodEmit(sunY) {
 
 // Daytime wet weather: blend the sky palette toward the dry-overcast grey deck
 // (same targets as the overcast branch) so rain/storm never reads as night.
+// Share of the circuit palette's sky blended into an explicit day sky.
+const DAY_PAL_BLEND = 0.5;
+// Day-storm deck/haze brightness vs rain's (1 = same as rain).
+const STORM_DECK_DARK = 0.86;
 function _dayWetGreyDeck(G, mix) {
   if (!G.frameSky.zenith || !G.frameSky.horizon || mix <= 0) return;
   const w = clamp(mix, 0, 1);

@@ -318,9 +318,9 @@
         { rows: 7, fascia: [0.96, 0.42, 0.02] });   // Tarzan hairpin R
       grandstandEx(0.09, -1,  14, 26, null, orange,
         { livery: "orange", roof: "flat" }); // Tarzan exit L
-      grandstandEx(0.132, 1,   26, 38, null, orange,
+      grandstandEx(0.205, 1,   26, 38, null, orange,
         { livery: "steel", tiers: 2, roof: "cantilever", endWalls: true }); // Hugenholtz banked outside (+1)
-      duneDeck("zandvoort-deck-hugenholtz", 0.18, 1, 16, 5,
+      duneDeck("zandvoort-deck-hugenholtz", 0.236, 1, 16, 5,
         { rows: 6, fascia: [0.92, 0.90, 0.86] });   // Hugenholtz exit R
       grandstandEx(0.48, -1,  28, 34, null, orange,
         { livery: "orange", roof: "truss" }); // Scheivlak approach L (gap was 28 in previous pass)
@@ -631,25 +631,29 @@
         }
       });
 
+      // Sea glints: thin shore-parallel bands (a horizon line, not a pond), yawed a
+      // few degrees and tinted per site; the two groundPlane "peeks" read as
+      // rectangular ponds in the survey and are gone.
       for (const [s, dist, w, h] of [
-        [0.26, 132, 42, 2.2],
-        [0.32, 148, 50, 2.6],
-        [0.38, 138, 46, 2.4],
-        [0.44, 155, 52, 2.8],
-        [0.51, 142, 44, 2.2],
-        [0.58, 160, 48, 2.5],
-        [0.66, 150, 50, 2.6],
-        [0.72, 145, 46, 2.3],
-        [0.79, 165, 48, 2.4],
+        [0.26, 132, 96, 1.4],
+        [0.32, 148, 120, 1.6],
+        [0.38, 138, 104, 1.4],
+        [0.44, 155, 124, 1.7],
+        [0.51, 142, 100, 1.4],
+        [0.58, 160, 112, 1.5],
+        [0.66, 150, 118, 1.6],
+        [0.72, 145, 102, 1.4],
+        [0.79, 165, 110, 1.5],
       ]) {
         const a = anchor(K(s), 1, dist);
         if (onTrack(a.c[0], a.c[2], 18)) continue;
-        // Slightly raised so the patch peeks over the crest silhouette
-        addBox(out, vadd(a.c, a.u, h * 0.45), [w, h, w * 0.65], seaCol, [a.r, a.u, a.t]);
+        const j = hash(s * 977), yaw = (j - 0.5) * 0.12, cy = Math.cos(yaw), sy = Math.sin(yaw);
+        const tint = 0.9 + j * 0.2;
+        const t2 = [a.t[0] * cy + a.r[0] * sy, a.t[1] * cy + a.r[1] * sy, a.t[2] * cy + a.r[2] * sy];
+        const r2 = [a.r[0] * cy - a.t[0] * sy, a.r[1] * cy - a.t[1] * sy, a.r[2] * cy - a.t[2] * sy];
+        // long axis along the track (t), shallow in depth: raised just enough to peek over the dunes
+        addBox(out, vadd(a.c, a.u, h * 0.5 + 0.15), [7, h, w], [seaCol[0] * tint, seaCol[1] * tint, seaCol[2] * tint], [r2, a.u, t2]);
       }
-      // Two reflective water peeks (groundPlane) for stronger coastal silhouette beats
-      groundPlane(K(0.40), 1, 175, [70, 1.0, 55], seaCol, true);
-      groundPlane(K(0.70), 1, 185, [65, 1.0, 50], seaCol, true);
 
       runoffApron(K(0.040),  1, 4.5, [16, 0.32, 28], gravel);  // Tarzan outer
       runoffApron(K(0.055), -1, 5.0, [14, 0.32, 22], gravel);  // Tarzan exit
@@ -657,28 +661,28 @@
       runoffApron(K(0.520),  1, 5.5, [16, 0.32, 28], gravel);  // Scheivlak outer
       runoffApron(K(0.535), -1, 5.0, [14, 0.32, 24], gravel);  // Scheivlak exit
 
-      bankedKerbStrip(0.115, 0.185, -1, { saferGap: 7.2, kerbRed, kerbWht, saferCol });
-      bankedKerbStrip(0.120, 0.175,  1, { safer: false, kerbRed, kerbWht });
+      bankedKerbStrip(0.190, 0.230, -1, { saferGap: 7.2, kerbRed, kerbWht, saferCol });
+      bankedKerbStrip(0.194, 0.225,  1, { safer: false, kerbRed, kerbWht });
       bankedKerbStrip(0.885, 0.955,  1, { saferGap: 7.5, kerbRed, kerbWht, saferCol });
       bankedKerbStrip(0.890, 0.950, -1, { safer: false, kerbRed, kerbWht });
 
       // Catch / debris fencing in front of grandstands
       fence(0.00, 0.10, 1,  8.0, 4.2, fenceCol);
       fence(0.04, 0.09, -1, 8.0, 4.2, fenceCol);
-      fence(0.11, 0.19, 1,  8.0, 4.2, fenceCol);   // Hugenholtz outer-rim GA fence
+      fence(0.19, 0.23, 1,  8.0, 4.2, fenceCol);   // Hugenholtz outer-rim GA fence
       fence(0.48, 0.54, -1, 9.0, 4.0, fenceCol);
       fence(0.86, 0.99, 1,  8.0, 4.4, fenceCol);
       fence(0.94, 1.00, -1, 8.0, 4.2, fenceCol);
       recordBarrier(0.00, 0.10, 1, 8.0);
       recordBarrier(0.04, 0.09, -1, 8.0);
-      recordBarrier(0.11, 0.19, 1, 8.0);
+      recordBarrier(0.19, 0.23, 1, 8.0);
       recordBarrier(0.48, 0.54, -1, 9.0);
       recordBarrier(0.86, 0.99, 1, 8.0);
       recordBarrier(0.94, 1.00, -1, 8.0);
 
       // Steel armco guardrail on fast dune stretches
-      guardrail(0.21, 0.33, 1,  5.0, railRW);
-      guardrail(0.22, 0.31, -1, 5.0, [0.85, 0.86, 0.88]);
+      guardrail(0.235, 0.33, 1,  5.0, railRW);
+      guardrail(0.235, 0.31, -1, 5.0, [0.85, 0.86, 0.88]);
       guardrail(0.36, 0.47, 1,  6.0, [0.85, 0.86, 0.88]);
       guardrail(0.57, 0.66, -1, 5.0, railRW);
       guardrail(0.68, 0.80, 1,  5.0, [0.85, 0.86, 0.88]);
@@ -686,7 +690,7 @@
 
       // Tyre walls at corner exits (Tarzan, Hugenholtz, Scheivlak, Luyendyk)
       tyreWall(0.025, 0.065, 1,  4.6, [0.88, 0.42, 0.06]);
-      tyreWall(0.125, 0.18,  -1, 4.8, [0.30, 0.30, 0.32]);
+      tyreWall(0.192, 0.228, -1, 4.8, [0.30, 0.30, 0.32]);
       tyreWall(0.48,  0.54,  -1, 5.2, [0.18, 0.40, 0.65]);
       tyreWall(0.90,  0.96,  1,  5.0, [0.86, 0.38, 0.04]);
 
@@ -713,7 +717,7 @@
       gantry(0.005, 7.5, [0.12, 0.13, 0.16]);
       gantry(0.99,  6.5, [0.14, 0.14, 0.18]);
 
-      for (const [s, side, buntDist] of [[0.01, 1, 16], [0.132, 1, 26], [0.915, 1, 28], [0.588, 1, 14]]) {
+      for (const [s, side, buntDist] of [[0.01, 1, 16], [0.205, 1, 26], [0.915, 1, 28], [0.588, 1, 14]]) {
         const a = anchor(K(s), side, buntDist);
         if (onTrack(a.c[0], a.c[2], 6)) continue;
         const b = [a.r, a.u, a.t];
@@ -760,7 +764,7 @@
         // Pit straight main stand (s≈0.01, side=1, gap=12, len=36)
         for (const [s, side, gap, len] of [
           [0.01,  1,  16, 36],   // pit straight main R
-          [0.132, 1,   26, 38],   // Hugenholtz banked L (gap updated to match grandstand)
+          [0.205, 1,   26, 38],   // Hugenholtz banked L (gap updated to match grandstand)
           [0.915, 1,  28, 80],   // Arie Luyendyk massive R (gap updated to match grandstand)
           [0.588, 1,  14, 42],
         ]) {
