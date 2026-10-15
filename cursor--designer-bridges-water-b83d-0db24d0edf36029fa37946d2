@@ -1,0 +1,1 @@
+1792102178	Bryce Murrin	Track designer tab ownership and explicit bridge/water authoring. Own js/editor/designer.js props.js scenery-panel.js and focused designer tests/docs; no broad renderer changes.  [cursor/designer-bridges-water-b83d; session 0db24d0edf36029fa37946d2]
