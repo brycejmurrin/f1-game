@@ -788,7 +788,7 @@ Two tools exist for measuring and visualising slider effects. They use
 | Camera lock | Yes — `A.view({eye,target})` pinned between shots | No — each shot parks fresh |
 | renderClock | Pinned to 0 (no sky drift) | Not pinned |
 | Pixel diff | `filter.png`, `heat.png`, MAD/p99 stats | No — raw screenshots only |
-| Stitched sheet | `sheet.png` per knob | `docs/look-survey/<id>_grid.png` (via look-survey-sheet.py) |
+| Stitched sheet | `sheet.png` per knob | `docs/look-survey/<id>_grid.png` (via look-survey-sheet.py; commit on `track-survey-assets`) |
 | Can run together | **No** — check `pgrep -a chromium` first | **No** |
 
 ### slider-effect quick reference

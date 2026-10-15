@@ -118,12 +118,15 @@ test("a correction of numerical dust does not count as contact", async () => {
   // only car scrubbed — so an AI pair never mirrors each other into a standoff.
   const body = src.slice(src.indexOf("function _colResolvePair"), src.indexOf("function _colSepPair"));
   const both = body.match(/contactT = b\.contactT = 0\.22/g) || [];
-  assert.equal(both.length, 2, `expected the rear-end and the human-pair both-car arms, found ${both.length}`);
+  assert.equal(both.length, 1, `expected the human-pair both-car side arm, found ${both.length}`);
+  // The rear-end arm flags both cars too, except a net-owned one: its flag is its owner's (#2164).
+  assert.ok(body.includes("if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }"),
+    "the rear-end arm lost its CORR_EPS gate or its net-ownership guard");
   assert.ok(body.includes("if (a.human || b.human) a.contactT = b.contactT = 0.22;"), "the side branch lost its human-pair arm");
   assert.ok(body.includes("if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : a.kTurn ?? b.kTurn)) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }"),
     "the side branch no longer scrubs (once a frame) and flags exactly the yielder");
   // scrub() takes MAGNITUDE (a human reversing keeps its sign); for a car rolling forwards it is the old floor.
   assert.ok(src.includes("function scrub(v, d) { return v > 0 ? Math.max(0, v - d) : Math.min(0, v + d); }"), "scrub() lost its magnitude form");
-  for (const guard of ["if (corr > CORR_EPS) {", "if (corr > CORR_EPS) a.contactT"])
+  for (const guard of ["if (corr > CORR_EPS) {", "if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT"])
     assert.ok(body.includes(guard), `_colResolvePair lost its guard: ${guard}`);
 });

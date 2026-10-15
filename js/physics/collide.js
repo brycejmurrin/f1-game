@@ -413,7 +413,9 @@ const Collide = (() => {
     // momentum masses: a human car is "heavier" (0.5) so the AI cannot shove it
     // around, and between two humans they are equal so neither out-muscles the
     // other. The SPEED exchange uses those, because both cars are real and both
-    // genuinely slow down.
+    // genuinely slow down — except a net-owned car, whose momentum mass is 0 like
+    // body()'s invMass: its speed is its owner's, so the car we own takes the whole
+    // (1+e)·relV (#2164; a half share left the pair closing, a "welded" push).
     //
     // `sA`/`sB` are how much of the POSITIONAL correction each car absorbs, and a
     // car posed from the network takes none of it. Its owner integrates it on
@@ -441,10 +443,11 @@ const Collide = (() => {
     }
     function sepShares(a, b) {
       const hum = AiDrive.humanInvMass(!!track.street);
-      // A PARKED RETIREMENT (#2162) is a static body: no momentum share and no
-      // positional share, so the moving car takes the whole correction and impulse.
-      const iA = a.retired ? 0 : a.human ? hum : 1, iB = b.retired ? 0 : b.human ? hum : 1;
+      // Static bodies take no momentum or positional share, so the moving car
+      // takes the whole correction and impulse: a net-owned rival (#2164) and a
+      // PARKED RETIREMENT (#2162).
       const netA = netPlay.owns(a) || !!a.retired, netB = netPlay.owns(b) || !!b.retired;
+      const iA = netA ? 0 : a.human ? hum : 1, iB = netB ? 0 : b.human ? hum : 1;
       _sep.iA = iA; _sep.iB = iB; _sep.iSum = iA + iB;
       _sep.sA = netA ? 0 : (netB ? 1 : iA / _sep.iSum);
       _sep.sB = netB ? 0 : (netA ? 1 : iB / _sep.iSum);
@@ -464,7 +467,7 @@ const Collide = (() => {
       // Trace-owned replay cars keep their recorded pose and speed, including
       // overlaps and pit-lane positions. They are never local contact bodies.
       if (ownsPose(a) || ownsPose(b)) return null;
-      if (a.retired && b.retired) return null;   // two parked bodies: nothing to resolve (and iSum would be 0)
+      if ((a.retired || netPlay.owns(a)) && (b.retired || netPlay.owns(b))) return null;   // two static bodies (sepShares): nothing can move, and iSum would be 0
       // Net remotes draw from delayed sample() but contact must use predict()
       // (netplay tick writes _nOk/_nProg/_nX/_nSpd). Local cars keep prog/x/speed.
       const aProg = a._nOk ? a._nProg : a.prog;
@@ -587,7 +590,7 @@ const Collide = (() => {
           // later, leaving the pair with no resolver. owns() cars are
           // also skipped in _colSepPair; this is the same rule at the impulse.
           // notifyCar still queues a shunt; below threshold it no-ops (C3).
-          if (!(incidentSim.owns(a) || incidentSim.owns(b))) {
+          if (iSum > 0 && !(incidentSim.owns(a) || incidentSim.owns(b))) {
             // A real impulse: j = (1 + e) * relV / (invA + invB). The old 0.5 was
             // (1 + e) = 0.5, i.e. e = -0.5 — after it the cars were STILL closing at
             // half speed, and penetration plus the position passes ate the rest over
@@ -609,14 +612,14 @@ const Collide = (() => {
             // pace-scaled), while the AI behind still pays its whole share.
             const capV = AiDrive.humanPuntCap() * Math.max(G.PACE, 0.05);
             if (sgn >= 0) {
-              b.speed = floorFwd(b, b.speed - iB * jImp);
-              a.speed += iA * (a.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
+              if (iB) b.speed = floorFwd(b, b.speed - iB * jImp);
+              if (iA) a.speed += iA * (a.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
             } else {
-              a.speed = floorFwd(a, a.speed - iA * jImp);
-              b.speed += iB * (b.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
+              if (iA) a.speed = floorFwd(a, a.speed - iA * jImp);
+              if (iB) b.speed += iB * (b.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
             }
           }
-          if (corr > CORR_EPS) a.contactT = b.contactT = 0.22;   // see the side branch: settled pairs must let it decay
+          if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }   // see the side branch: settled pairs must let it decay
           if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
           // Debris hook (render-only side-world): closing speed = severity.
           if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
