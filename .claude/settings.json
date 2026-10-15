@@ -1,6 +1,11 @@
 {
   "permissions": {
     "allow": [
+      "mcp__github__update_pull_request",
+      "mcp__github__create_pull_request",
+      "mcp__github__pull_request_read",
+      "mcp__github__add_issue_comment",
+      "mcp__github__add_reply_to_pull_request_comment",
       "Bash(npm run test:*)",
       "Bash(npm test *)",
       "Bash(npm run gen)",
@@ -197,6 +202,29 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/skill-hint.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "^(code-hunter|finding-verifier|prior-art-scout|agent-surface-reviewer|bloat-auditor|physics-contract-auditor|ci-red-triage|ci-watcher)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-contract.py\"",
             "timeout": 10
           }
         ]
