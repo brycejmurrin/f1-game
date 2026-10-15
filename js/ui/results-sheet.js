@@ -658,17 +658,29 @@ function buildTTResults() {
     const code = action("res-ghost-copy-code", "COPY CODE");
     code.onclick = () => copy(code, "code", "Ghost code");
     const download = action("res-ghost-download", "DOWNLOAD");
-    download.onclick = () => {
+    download.onclick = async () => {
+      if (download.disabled) return;
       const file = GhostShare.fileExport(shareGhost, shareOpts);
       if (!file.ok) { download.textContent = "UNAVAILABLE"; return; }
-      const href = URL.createObjectURL(new Blob([file.text], { type: "application/json" }));
-      const a = document.createElement("a");
-      a.href = href; a.download = file.name; a.hidden = true;
-      document.body.appendChild(a); a.click(); a.remove();
-      // 10 s, the house idiom — see js/ui/settings-export.js. A 0 ms revoke can
-      // kill the object URL before the browser has finished reading it.
-      setTimeout(() => URL.revokeObjectURL(href), 10000);
-      download.textContent = "DOWNLOADED";
+      download.disabled = true;
+      download.textContent = "SAVING…";
+      try {
+        const blob = new Blob([file.text], { type: "application/json" });
+        if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+          await NativeDownload.saveBlob(blob, file.name);
+        } else {
+          const href = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = href; a.download = file.name; a.hidden = true;
+          document.body.appendChild(a); a.click(); a.remove();
+          // 10 s, the house idiom — see js/ui/settings-export.js. A 0 ms revoke can
+          // kill the object URL before the browser has finished reading it.
+          setTimeout(() => URL.revokeObjectURL(href), 10000);
+        }
+        download.textContent = "DOWNLOADED";
+      } catch (e) {
+        download.textContent = typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "CANCELLED" : "DOWNLOAD FAILED";
+      } finally { download.disabled = false; }
     };
   }
 

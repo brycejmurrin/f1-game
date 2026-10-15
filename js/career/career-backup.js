@@ -153,15 +153,12 @@ const CareerBackup = (function () {
     const name = filename || ("apex26-career-backup-" + Date.now() + ".json");
     const text = typeof envelope === "string" ? envelope : serialize(envelope);
     const blob = new Blob([text], { type: "application/json" });
-    // Prefer the Capacitor Share path when the native shim is viable; otherwise
-    // the click interceptor on NativeDownload still catches the <a download>.
+    // Native failures (including a dismissed chooser) stay failures. Falling
+    // back to an anchor invokes the native click interceptor a second time.
     if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable()
         && typeof NativeDownload.saveBlob === "function") {
       return NativeDownload.saveBlob(blob, name).then(function () {
         return { ok: true, name: name };
-      }).catch(function (err) {
-        log("warn", "career backup native download failed: " + ((err && err.message) || err));
-        return clickDownload(blob, name);
       });
     }
     return Promise.resolve(clickDownload(blob, name));
