@@ -43,9 +43,10 @@ const TLX = (function () {
     return true;
   }
 
-  // Capture the unpreserved backbuffer NOW, but wait off-thread for its bytes.
+  // Capture the unpreserved backbuffer NOW, but wait asynchronously for its bytes.
   // A timer around client-memory readPixels still blocked Photo for 100 s on
-  // software GL. PBO + fence polling avoids that synchronous GPU round trip.
+  // software GL. PBO + fence polling moves GPU waiting out of that call;
+  // the final client copy can still pay driver/command-stream overhead.
   // https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#use_non-blocking_async_data_readback
   const _captureReads = new WeakSet();
   async function readGlCapture(gl, w, h) {
