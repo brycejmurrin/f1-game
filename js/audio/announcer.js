@@ -755,7 +755,7 @@ var Announcer = (function () {
      * preview() (the editor's PLAY) and sample() do not land: an author
      * pressing PLAY wants to hear the read, not sit through the gap. */
     const LAND_MS = 600;
-    function speak(lines, budgetMs, landLast) {
+    function speak(lines, budgetMs, landLast, options) {
       // MASTER SOUND gates this like everything else. speechSynthesis is not in
       // the WebAudio graph, so nothing else silences it — a player who turned
       // sound off and then heard a voice would have found a bug, not a feature.
@@ -768,7 +768,7 @@ var Announcer = (function () {
       if (recorded && recordedOn()) {
         if (G.radio.stop) G.radio.stop();
         stop();
-        return recorded.play(parts, budgetMs, landLast);
+        return recorded.play(parts, budgetMs, landLast, options);
       }
       if (!synth || typeof Utter !== "function") return false;
       // Starting a read takes the channel deliberately; merely turning this
@@ -848,11 +848,11 @@ var Announcer = (function () {
       /** The editor's PLAY button: speaks regardless of the player's toggle,
        *  because pressing play in an authoring panel IS the consent. Master
        *  sound still gates it — that switch means silence. */
-      preview(info) { return speak(scriptFor(info), 0); },
+      preview(info) { return speak(scriptFor(info), 0, false, { allowPaused: true }); },
       /** The settings panel's TEST button, where there is no circuit to
        *  describe: one real line at the tune you just set, through the same
        *  speech path as the welcome, including its voice-selection ladder. */
-      sample() { return speak([(RadioVoice.SAMPLE && RadioVoice.SAMPLE[CHANNEL]) || "Welcome to Apex 26."], 0); },
+      sample() { return speak([(RadioVoice.SAMPLE && RadioVoice.SAMPLE[CHANNEL]) || "Welcome to Apex 26."], 0, false, { allowPaused: true }); },
       scriptFor,
       /** How long the WHOLE read of `info` takes, in ms, at this channel's
        *  tune — 0 when nothing will be said (announcer or sound off). The
