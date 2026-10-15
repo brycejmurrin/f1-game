@@ -329,6 +329,5 @@ test("a slot whose team is null still describes itself with strings (the CAREER 
   h.ctx.GameStore.store.set("career.driver.1", c);
   const row = h.Career.slots("driver").find((s) => s.i === 1);
   assert.equal(row.used, true);
-  assert.equal(typeof row.teamName, "string");
-  assert.doesNotThrow(() => String(row.teamName).toUpperCase());
+  assert.equal(row.teamName, "", "a null team describes itself as an empty name, not \"null\"");
 });

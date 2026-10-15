@@ -44,6 +44,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Returning tabs refuse changed lazy scripts after a release, preventing mixed-version audio, race and multiplayer code.
 - Cached phone-controller links keep their own page offline, and updates preserve working offline Career access when its UI cannot be installed.
 - Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
+
 - Career regulation changes refit cheaper owned parts when the fitted-cost cap falls, preserving research and credits while keeping the car within budget.
 
 ### Gameplay
