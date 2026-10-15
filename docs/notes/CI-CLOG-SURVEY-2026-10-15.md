@@ -218,3 +218,43 @@ found no boot regression. The fat-UI specs (career, career-season, career-hub, h
 every test owns its runner, one more job start per fat spec, bounded by the lanes.
 
 Re-measure with the same three numbers as §5 after a day of agent traffic.
+
+## 7. The node-suites wall, measured per script (2026-10-15, follow-up PR)
+
+The six `Pure-node unit suites (<slice>)` rows run on every deploy push and every train, so their slowest row is a
+floor under both. Per-script wall times from the job logs (start-to-next-start, which agrees with node's own
+`duration_ms` within 0.2 s) of the three newest green ship pushes on the deploy branch (runs 38688888761,
+38687112915, 38686034818; every script ran in full in all 18 jobs; ubuntu-24.04 hosted, 4 vCPU; setup ~15 s a row):
+
+| row | job median | its scripts (median s) |
+|---|---|---|
+| vm-a1 | 133 s | game-vm-a shard 1/2 112 |
+| vm-a2 | 130 s | game-vm-a shard 2/2 110 |
+| vm-b1 | 638 s | game-vm-b1 437 (498 over six runs) + the ten riders 180: garage-unit 94, net-unit 33, audio-unit 33, steering-unit 6, mcp 5, state-unit 5, service-worker 4, desktop-unit 0.5, lifecycle-unit 0.2, agent-contract 0.1 |
+| vm-b2 | 241 s | game-vm-b2 220 |
+| page | 525 s | vm-page 506 (one TAP test, no per-spec breakdown in the log) |
+| slow | 201 s | node-slow 168 |
+
+Two things the "time-balanced halves" story missed: `game-vm-b1` alone is twice `game-vm-b2` on a runner (the 367 s
+each in §5 of TESTING.md was a local `--jobs=4` number), and the "seconds each" riders had grown to three minutes.
+Per-file durations for the 59 `game-vm-b` files came from the same logs: TAP reports files in command-line order with
+a `duration_ms` per top-level test, attributed to files by test name (exact match, forward-fill for dynamic names;
+±10 s between adjacent files, totals exact). The big ones: race-flow-fixes-vm 208, car-fields-vm 190, ai-racecraft-vm
+~100, real-replay-vm 98, mechanics-integration-vm 72, game-round2-vm 68, agent-view-vm 64, quali-pace-parity-vm 62,
+race-settings-vm 52; the old b1 summed to 1087 s of serial test time, b2 to 626.
+
+What changed (this PR):
+
+- The ten riders moved off `vm-b1` onto the three light rows, greedy by median: `vm-a1` += net-unit, audio-unit,
+  state-unit, desktop-unit (~183 s of work); `vm-a2` += garage-unit (~204 s); `slow` += steering-unit, mcp,
+  service-worker, lifecycle-unit, agent-contract (~183 s). ci.yml case arms only; `pick-unit-slices.mjs`
+  `SLICE_SCRIPTS` now mirrors the arms (it listed the riders under `vm-b2` while ci.yml ran them on `vm-b1`, so a
+  `js/audio/` diff selected the wrong runner) and its test pins the two together.
+- `game-vm-b1` / `game-vm-b2` re-cut in `tests/groups.json` by the per-file medians (longest-processing-time, 29 + 30
+  files, ~850 s a side; `phone-pad-netplay-vm` stays on b2 so the 2026-09-29 replay test keeps its anchor). Projected
+  row wall ≈ 1.06 × max(sum/3, longest file): ~300 s each, ±15 %.
+- Projected job walls: page ~520 s (the floor now), vm-b1 ~320, vm-b2 ~320, vm-a2 ~220, vm-a1 ~200, slow ~200 — the
+  node gate's wall drops from vm-b1's 10.6 min (12.3 over twelve runs) to vm-page's 8.7, with the same runner-minutes.
+  The only lever below 8.7 min is splitting `adapted-specs.test.mjs` across two rows.
+
+Re-measure the six job medians after a day of deploy pushes; `SLICE_COST_P50_SEC` carries the projection until then.
