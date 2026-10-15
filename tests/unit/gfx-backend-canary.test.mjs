@@ -1107,8 +1107,8 @@ test("the GPU-census gate scopes hardware expectations, and only those", () => {
   // blocking — that is the whole point of 2f.
   r = runVerdict(script, { census: sw, legs: legs({ webgpu: { ...tlxLegJson(), error: "launch failed", gfx: undefined } }) });
   assert.match(r.out, /launch failed/, "a leg's error is printed even when it does not block");
-  const wf = read(".github/workflows/gpu-census.yml");
-  assert.match(wf, /rows\.push\(\s*`\$\{" "\.repeat\(8\)\}gfx:/);
+  const wf = read("tools/gfx/census-verdict.mjs");
+  assert.match(wf, /rows\.push\(`\$\{IND\}gfx:/);
 });
 
 test("GLX exports a real gpuErrors counter and the workflow fails on a missing one", () => {
@@ -1129,7 +1129,7 @@ test("GLX exports a real gpuErrors counter and the workflow fails on a missing o
   assert.ok(h.GLX.gpuFirstError(), "the first error is kept for the report");
   h.GLX.begin(h.frame()); h.GLX.present({});
   assert.equal(h.GLX.gpuErrors(), 2, "a clean present adds nothing");
-  const wf = read(".github/workflows/gpu-census.yml");
+  const wf = read("tools/gfx/census-verdict.mjs");
   assert.doesNotMatch(wf, /if\s*\(\s*\(\s*gfx\.gpuErrors\s*\|\|\s*0\s*\)\s*>\s*0\s*\)/,
     "the || 0 form treats an absent counter as zero — that was the bug");
 });
@@ -1176,25 +1176,20 @@ test("GLX honours SCREENSHOTS = NATIVE under automation: no preserveDrawingBuffe
     "#game-soft is read back by ?gfxdebug=1 every rebuild — the 2D context must say so (I7), as TLX's does");
 });
 
-// The Verdict step is a `node -e` script embedded in YAML, so nothing ever ran
-// it — every guard on it was a regex over its SOURCE. That is how three
-// vacuous clauses lived in it at once. Lift the real script out and execute it
-// against fixtures, so the tests below are about behaviour, not spelling.
+// The Verdict was a `node -e` script embedded in YAML, so nothing ever ran it
+// — every guard on it was a regex over its SOURCE. That is how three vacuous
+// clauses lived in it at once. It is tools/gfx/census-verdict.mjs now (audit
+// G4): the step runs that CLI, and the tests below run the SAME CLI against
+// fixtures, so they are about behaviour, not spelling.
+const VERDICT_TOOL = "tools/gfx/census-verdict.mjs";
 function verdictScript() {
   const wf = read(".github/workflows/gpu-census.yml");
   const at = wf.indexOf("Verdict — fail the job on what the game reported");
   assert.ok(at > 0, "the Verdict step is gone from gpu-census.yml");
-  const open = wf.indexOf("node -e '", at);
-  assert.ok(open > at, "the Verdict step no longer runs an inline node script");
-  const lines = wf.slice(wf.indexOf("\n", open) + 1).split("\n");
-  const end = lines.findIndex((l) => l.trim() === "'");
-  assert.ok(end > 0, "could not find the end of the inline script");
-  const body = lines.slice(0, end).join("\n");
-  // A silent empty extraction would make every case below pass vacuously —
-  // the exact failure this whole round is about. Refuse to hand one back.
-  assert.ok(body.length > 2000, `extracted only ${body.length} chars of Verdict script`);
-  assert.match(body, /const bad = \[\];/, "extracted text is not the Verdict script");
-  return body;
+  assert.ok(wf.indexOf(`run: node ${VERDICT_TOOL}`, at) > at, `the Verdict step no longer runs ${VERDICT_TOOL}`);
+  const src = read(VERDICT_TOOL);
+  assert.match(src, /const bad = \[\];/, "the tool is not the Verdict");
+  return path.join(ROOT, VERDICT_TOOL);
 }
 
 // Fixtures shaped like what tools/gfx/gpu-game-check.mjs actually writes: it reads
@@ -1204,7 +1199,8 @@ const tlxLegJson = (gfxOver = {}) => ({
   phase: "done", ok: true,
   gfx: {
     glx: true, gpuErrors: 0, gpuFirstError: null,
-    backendState: { api: "webgpu", softAdapter: false, headless: false },
+    // softBlit false: every hardware TLX leg since the wgxCapture=0 pin (66/66).
+    backendState: { api: "webgpu", softAdapter: false, headless: false, softBlit: false },
     envState: { on: true, face: 6, ready: true, blank: false, fail: 0, failMsg: "", gaveUp: false },
     ...gfxOver,
   },
@@ -1217,13 +1213,15 @@ const glxLegJson = (gfxOver = {}) => ({
 });
 // The native WGX leg (2026-09-02): gpu-game-check reports wgx (GLX.softPresent
 // exists — WGX bound), wgxSoftPresent and headlessUa; no TLX env/backend state.
+// wgxSoftPresent false: the swapchain, on every hardware run since the hunt 4
+// I3 pin (15/15); headlessUa true on every run (gpu-game-check is headless).
 const wgxLegJson = (gfxOver = {}) => ({
   phase: "done", ok: true,
-  gfx: { glx: true, gpuErrors: 0, gpuFirstError: null, wgx: true, wgxSoftPresent: true, headlessUa: true, ...gfxOver },
+  gfx: { glx: true, gpuErrors: 0, gpuFirstError: null, wgx: true, wgxSoftPresent: false, headlessUa: true, ...gfxOver },
   frame: { meanLuma: 0.4 },
 });
 
-function runVerdict(script, { census, legs }) {
+function runVerdict(script, { census, legs, ls = "" }) {
   const image = "macos-latest";
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-verdict-"));
   try {
@@ -1231,9 +1229,10 @@ function runVerdict(script, { census, legs }) {
     for (const [leg, json] of Object.entries(legs)) {
       fs.writeFileSync(path.join(dir, `game-${leg}-${image}.json`), JSON.stringify(json));
     }
-    const r = spawnSync(process.execPath, ["-e", script], {
+    // cwd = the artifact dir, env = the step's: exactly how the workflow runs it.
+    const r = spawnSync(process.execPath, [script], {
       cwd: dir, encoding: "utf8",
-      env: { ...process.env, IMAGE: image, GITHUB_STEP_SUMMARY: path.join(dir, "summary.md") },
+      env: { ...process.env, IMAGE: image, CENSUS_LS: ls, GITHUB_STEP_SUMMARY: path.join(dir, "summary.md") },
     });
     return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
@@ -1255,7 +1254,7 @@ test("gpu-game-check reports appearance, and can say when it could not measure i
   assert.match(ggc, /await import\("sharp"\)/,
     "sharp is loaded dynamically so a missing binary degrades to frameReadFailed");
 
-  const wf = read(".github/workflows/gpu-census.yml");
+  const wf = read("tools/gfx/census-verdict.mjs");
   assert.match(wf, /if \(g\.frameReadFailed\) rows\.push/,
     "the Verdict must print WHY appearance is missing, like the gfx:/ovl: rows");
 });
@@ -1323,23 +1322,33 @@ test("the GPU gate fails a census that measured nothing instead of calling it so
   assert.equal(soft.code, 0, `a measured software image must still pass:\n${soft.out}`);
 });
 
-test("the GPU gate holds the native WGX leg to bind + swapchain, but only a HEADED run to the swapchain", () => {
+test("the GPU gate holds the native WGX leg to bind + swapchain whenever the native pin is in force", () => {
   // Run 19 (2026-09-02, macos-latest) was the first census that ran WGX at all:
-  // bound, 0 GPU errors, the brightest leg — and soft-presenting, because WGX
-  // sniffs a HeadlessChrome UA as software by design. That is expected on a
-  // headless runner and a regression on a headed one; a fallback to GLX is a
-  // regression on any hardware run.
+  // bound, 0 GPU errors — and soft-presenting, because WGX treats a
+  // HeadlessChrome UA as software, so the gate exempted a headless UA. But
+  // gpu-game-check is ALWAYS headless (headlessUa true in 65/65 runs), so the
+  // exemption meant the swapchain clause could never fire. Since the hunt 4 I3
+  // pin (apex26.wgxCapture=0 on every leg) a headless hardware run takes the
+  // swapchain (15/15), so the PIN is the condition: off the swapchain with it
+  // in force fails; a dispatch that overrides it through `ls` is reported.
   const script = verdictScript();
   const hw = { anyHardware: true, runs: [] }, sw = { anyHardware: false, runs: [] };
   const legs = (wgx) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx });
   let r = runVerdict(script, { census: hw, legs: legs(wgxLegJson()) });
-  assert.equal(r.code, 0, `headless hardware + soft-present is the documented shape:\n${r.out}`);
-  assert.match(r.out, /expected: WGX blits under a headless UA by design/);
-  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ headlessUa: false })) });
-  assert.equal(r.code, 1, "HEADED hardware + soft-present must fail");
+  assert.equal(r.code, 0, `headless hardware on the swapchain is the pinned shape:\n${r.out}`);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgxSoftPresent: true })) });
+  assert.equal(r.code, 1, "headless hardware + soft-present with the pin in force must fail");
   assert.match(r.out, /WGX is soft-presenting/);
-  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ headlessUa: false, wgxSoftPresent: false })) });
-  assert.equal(r.code, 0, `headed hardware on the swapchain passes:\n${r.out}`);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgxSoftPresent: true, headlessUa: false })) });
+  assert.equal(r.code, 1, "HEADED hardware + soft-present must fail too");
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgxSoftPresent: undefined, wgxSoftPresentError: "boom" })) });
+  assert.equal(r.code, 1, "a bound WGX with NO softPresent state must not read as the swapchain");
+  assert.match(r.out, /NO softPresent state reported.*boom/);
+  r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgxSoftPresent: true })), ls: "apex26.instCellCache=1 apex26.wgxCapture=1" });
+  assert.equal(r.code, 0, `a dispatch that overrides the pin asked for the blit — reported, not gated:\n${r.out}`);
+  assert.match(r.out, /apex26\.wgxCapture=1 from the dispatch ls overrides the native pin/);
+  r = runVerdict(script, { census: sw, legs: legs(wgxLegJson({ wgxSoftPresent: true })) });
+  assert.equal(r.code, 0, `a software image soft-presents by design:\n${r.out}`);
   r = runVerdict(script, { census: hw, legs: legs(wgxLegJson({ wgx: false })) });
   assert.equal(r.code, 1, "hardware + WGX not bound must fail");
   assert.match(r.out, /WGX did not bind/);
@@ -1492,7 +1501,7 @@ test("the GPU gate fails a hardware TLX leg that stopped reporting an env count"
   assert.match(failed.out, /81 env-probe faces FAILED/);
 
   // Both banned shapes pinned out of the source, so neither can return quietly.
-  const wf = read(".github/workflows/gpu-census.yml");
+  const wf = read("tools/gfx/census-verdict.mjs");
   assert.doesNotMatch(wf, /if \(\(env\.fail \|\| 0\) > 0\)/,
     "the || 0 form treats an absent env counter as zero — that was the bug");
   assert.doesNotMatch(wf, /const hardware = !!\(census && census\.anyHardware\);/,

@@ -91,7 +91,7 @@ function radioHost(on = true) {
   let occupied = false;
   c.Spotter = { create: () => ({ update() {}, occupied: () => occupied }) };
   c.RaceFacts = { create: () => ({ reset() {}, observe: () => ({ f, ev: [] }), order: () => [], battles: () => [] }) };
-  for (const path of ["js/audio/battle-earcon.js", "js/race/radio-lines.js", "js/race/race-radio.js"]) {
+  for (const path of ["js/audio/radio-voice.js", "js/audio/battle-earcon.js", "js/race/radio-lines.js", "js/race/race-radio.js"]) {
     vm.runInContext(fs.readFileSync(root + path, "utf8"), c);
   }
   const said = [], data = { battleEarcon: on, radioChat: "off", commentary: "off", volRadio: 0.8 };
