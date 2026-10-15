@@ -814,19 +814,19 @@ test("bash-guard: `git add X && git commit` in one command counts X as staged (c
   const repo = scratchRepo("hook-addcommit-");
   const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
   try {
-    fs.mkdirSync(path.join(repo.dir, "js"), { recursive: true });
-    fs.writeFileSync(path.join(repo.dir, "js/game.js"), "1\n");
+    fs.mkdirSync(path.join(repo.dir, "js/core"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "1\n");
     repo.g("add", "-A"); repo.g("commit", "-qm", "code");
     fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
     let r = run("git add docs/PHYSICS.md && git commit -m x");
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stderr, /probe: commit docs-only/, "the added doc is the whole commit");
-    fs.writeFileSync(path.join(repo.dir, "js/game.js"), "2\n");
-    r = run("git add js/game.js && git commit -m x");
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "2\n");
+    r = run("git add js/core/log.js && git commit -m x");
     assert.equal(r.status, 2, "docs/PHYSICS.md is still unstaged");
     assert.match(r.stderr, /unstaged changes[\s\S]*docs\/PHYSICS\.md/);
-    assert.doesNotMatch(r.stderr, /^\s+js\/game\.js$/m, "the added file is not reported as unstaged");
-    r = run("git add js/game.js docs/PHYSICS.md && git commit -m x");
+    assert.doesNotMatch(r.stderr, /^\s+js\/core\/log\.js$/m, "the added file is not reported as unstaged");
+    r = run("git add js/core/log.js docs/PHYSICS.md && git commit -m x");
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stderr, /probe: commit code/, "a code path in the add makes it a code commit");
     for (const c of ["git add -A && git commit -m x", "git add . && git commit -m x", "git add -u; git commit -m x"]) {
@@ -836,6 +836,6 @@ test("bash-guard: `git add X && git commit` in one command counts X as staged (c
     }
     // no add in the command: the unstaged rule is unchanged
     assert.equal(run("git commit -m x").status, 2);
-    assert.equal(run("echo 'git add js/game.js' && git commit -m x").status, 2, "a quoted add is prose");
+    assert.equal(run("echo 'git add js/core/log.js' && git commit -m x").status, 2, "a quoted add is prose");
   } finally { repo.rm(); }
 });
