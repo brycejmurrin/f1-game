@@ -2,7 +2,7 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Eleven agents. Two older ones were folded
+single Claude tree to avoid drift). Twelve agents. Two older ones were folded
 away: `worktree-regression-check` into **verify-agent** `--base`, and
 `doc-drift-auditor` into the `total-audit` workflow's `docs-ref` / `docs-idx`
 lenses (`.claude/workflows/README.md`).
@@ -20,6 +20,7 @@ lenses (`.claude/workflows/README.md`).
 | **code-hunter** | Bug / perf / dead-code hunt over ONE slice, one agent per slice in parallel; takes the scout's list as `known:` and prints ≤ 12 `FINDING` rows as found, then `covered:` / `not covered:` / `measured:`. Node-only checks (`node --test` one file, VM runs under `timeout 180`); the whole run stays well under 10 min. The one opus pin. |
 | **agent-surface-reviewer** | Reviews ONE skill, agent, hook, rule file or AGENTS.md section (trigger, paths, commands, walkthrough, structure, enforcement) and writes a ≤ 60-line report to the `scratch/` path it is given; `retest <old report>` adds BEFORE/AFTER. Its one write is that report (hook-enforced: Write/Edit to `scratch/**.md` only, no Bash writes). Returns VERDICT + top 2 gaps. |
 | **finding-verifier** | Re-reads up to 15 `file:line — claim` rows on the current tree and returns `CONFIRMED / STALE / REFUTED / NEEDS-BROWSER` with evidence, then `refuted: k/N stale: k/N`. Run it before acting on any hunt, survey, review or audit finding; never fixes. |
+| **worker** | ONE scoped change handed off by the parent: every tool the session has (no `tools:` list, MCP included), its own worktree (`isolation: worktree`), node-only verification, commits on its branch, and coordinates mid-task with `SendMessage` (`main` for blocked / question / collision / scope / checkpoint, a named peer only for an interface it moves). Several run in parallel on disjoint OWNED paths; the spawn prompt names goal, OWNED, FORBIDDEN, verify command, peers, and whether it pushes. Never merges, arms, readies or cancels; no browser runs. Ends with a fixed `WORKER <name>:` report. |
 
 **Token routing:** prefer these over attaching fat skills. Deploy/version →
 `deploy-research` (not full `mcp-probe`). Pre-push verify → `verify-agent`;
@@ -27,7 +28,7 @@ same-red on tip → `verify-agent --base <ref>`. One circuit →
 `track-surveyor`. Stale prose → the `total-audit` workflow (`docs-ref` /
 `docs-idx` lenses), not a bespoke agent. Curvature / PACE semantics →
 `physics-contract-auditor`. Fat skill / extract / dead code → `bloat-auditor`
-(parent applies via **slim-bloat**). A red Actions run → `ci-red-triage`. The open-PR board → `ci-watcher` (acted on per skill `ci-watch`). A hunt → `prior-art-scout`, then one `code-hunter` per slice, then `finding-verifier` on the rows before anyone fixes. A skill / agent / hook / AGENTS.md edit → `agent-surface-reviewer`. Parent keeps edits, cache bump, and deploy FF.
+(parent applies via **slim-bloat**). A red Actions run → `ci-red-triage`. The open-PR board → `ci-watcher` (acted on per skill `ci-watch`). A hunt → `prior-art-scout`, then one `code-hunter` per slice, then `finding-verifier` on the rows before anyone fixes. A skill / agent / hook / AGENTS.md edit → `agent-surface-reviewer`. A scoped implementation to hand off and talk to while it runs → `worker` (one per disjoint path set, named so peers can message it). Parent keeps cache bump, PR readiness and deploy FF.
 
 **One prohibition line, not five blocks.** Every agent body ends with:
 "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no
@@ -49,6 +50,6 @@ and `background: true` keeps a Claude Code agent off the foreground;
 `tests/unit/skill-progressive.test.mjs`: `haiku` for scan-and-report agents
 (verify-agent, deploy-research, ci-watcher, prior-art-scout), `sonnet` for log triage,
 refactor and reachability judgement (ci-red-triage, bloat-auditor, physics-contract-auditor, finding-verifier, agent-surface-reviewer),
-`opus` for the one agent whose product is depth (code-hunter), `inherit` for track-surveyor. Every agent carries `maxTurns`; the two that run repeatedly
+`opus` for the one agent whose product is depth (code-hunter), `inherit` for track-surveyor and worker. Every agent carries `maxTurns`; the two that run repeatedly
 carry `memory: project` (`.claude/agent-memory/<name>/MEMORY.md`, tracked, one
 line per remembered fact with a SHA). The test asserts all of it.
