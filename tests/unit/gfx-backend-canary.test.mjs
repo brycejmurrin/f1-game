@@ -4088,7 +4088,9 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // startRace() itself is a re-entrancy-latch wrapper (start-race-latch
   // .test.mjs) around startRaceBody(), which still carries this whole flow.
   const sr = game.slice(game.indexOf("async function startRaceBody("), game.indexOf("function showTouchControls("));
-  assert.match(sr, /RaceEntryProfile\.span\("warmCarAssets", \(\) => warmCarAssets\(\)\);[\s\S]{0,160}?RaceEntryProfile\.span\("debrisPrime"/,
+  // Stepped since perf hunt 4 F3.3: awaited, then the stale check, then debris.
+  // render() draws nothing while it runs (_carWarm.busy), so no frame builds the cars it has not reached.
+  assert.match(sr, /_carWarm\.busy = true;\s*\n\s*try \{ await RaceEntryProfile\.spanAsync\("warmCarAssets", \(\) => warmCarAssetsAsync\([^\n]*\)\); \} finally \{ _carWarm\.busy = false; \}\s*\n\s*if \(stale\(\)\) return false;\s*\n\s*RaceEntryProfile\.span\("debrisPrime"/,
     "startRace warms car assets right before DebrisWorld.prime()");
   // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -5551,6 +5553,9 @@ test("selector car assets yield for costly work, skip cached waits, and cancel s
     // The shadow casters (warmCarAssets' gate): OFF for the cancel matrix, ON below.
     let casters = false;
     const shadowCastersWanted = () => casters;
+    // apex26.carWarmSlice=0: the prep's own matrix, without the FieldLod steps
+    // (those are car-presentation-canary.test.mjs's, over the real CarDraw).
+    const carWarmSliceOn = () => false;
     const teamMesh = (t, c, sil) => calls.push(["caster", c.num, sil, c.visSh || "sh"]);
     const cockpitShadowMesh = (t, c, key) => calls.push(["fpCaster", c.num, key]);   // the first-person caster (car-draw.js)
     const WORKS = { aero: "w", tyres: "w" };
