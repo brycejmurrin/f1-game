@@ -16,6 +16,8 @@
       const backdrop = (k, side, dist, sz, col) => {
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 6)) return;
+        // SRTM bowl: wide low boxes on steep nodes can bury 20+ m (ground-audit).
+        if (groundYAt(a.c[0], a.c[2]) - sz[1] * 0.5 < pyMin - 2) return;
         api.backdrop(k, side, dist, sz, col);
       };
 
@@ -406,9 +408,9 @@
         backdrop(K(0.35), -1, 50, [105, 28, 68], GM);
         backdrop(K(0.37), -1, 68, [120, 34, 78], GF);
         spectatorHill(0.195, 0.285, 1, 24, { rows: 3, rise: 1.2, depth: 2.0, step: 9,
-          density: 0.34, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
+          density: 0.42, crowd: RB_HILL_CROWD, grass: [0.30, 0.54, 0.24] });
         spectatorHill(0.305, 0.385, -1, 26, { rows: 3, rise: 1.2, depth: 2.0, step: 9,
-          density: 0.32, crowd: RB_HILL_CROWD, grass: [0.28, 0.50, 0.22] });
+          density: 0.40, crowd: RB_HILL_CROWD, grass: [0.28, 0.50, 0.22] });
         // Sparse pines crowning the Remus amphitheatre rim (keep bull clear at s≈0.10).
         forestEdge(0.21, 0.36, 1, 72, { density: 0.32, hMin: 9, hMax: 15,
           col: [0.10, 0.24, 0.12], col2: [0.16, 0.34, 0.15], pineFrac: 0.80 });
@@ -432,7 +434,7 @@
 
       // Farther out on the meadow: at gap 18 the slab sat 0.5 m into the SRTM
       // bowl (ground-audit buried @ :394).
-      building(Math.round(n * 0.55) % n, -1, 28, 12, 6, 15,
+      building(Math.round(n * 0.55) % n, -1, 32, 12, 6, 15,
         { wall: [0.48, 0.50, 0.52], window: [0.30, 0.35, 0.40], floor: 2 });
       // Alpine farmhouse roof (A-frame prism above the building).
       {
@@ -619,7 +621,7 @@
         { wall: [0.78, 0.80, 0.84], window: [0.16, 0.24, 0.34] });
       motorhome(K(0.02), -1, 46, 18, 8, 20,
         { wall: [0.90, 0.90, 0.92], window: [0.18, 0.28, 0.40] });
-      motorhome(K(0.055), -1, 42, 14, 7, 17,
+      motorhome(K(0.055), -1, 46, 14, 7, 17,
         { wall: [0.74, 0.76, 0.80], window: [0.20, 0.28, 0.38] });
 
       {

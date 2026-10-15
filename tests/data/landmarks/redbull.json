@@ -1,6 +1,8 @@
 {
-  "why": "Wave 6 — Red Bull Ring (Steiermark / Niki Lauda Kurve stand at T1)",
+  "why": "Red Bull Ring heroes — Wing, bull plaza, Steiermark / Niki Lauda Kurve stand",
   "ids": [
+    "redbull-wing",
+    "redbull-bull-plaza",
     "redbull-lauda-kurve-stand"
   ]
 }
