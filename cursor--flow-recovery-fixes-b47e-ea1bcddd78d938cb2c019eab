@@ -1,1 +1,0 @@
-1792018276	Bryce Murrin	Fix #1787-#1790 in parallel: OWNED js/career/career-ui.js,career-backup.js; js/ui/menu-nav.js,title-flow.js plus existing focused unit tests. No game.js, CSS, audio, renderer, or other live-owner paths. Parent owns integration and browser validation.  [cursor/flow-recovery-fixes-b47e; session ea1bcddd78d938cb2c019eab]
