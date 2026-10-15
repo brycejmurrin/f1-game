@@ -2,9 +2,9 @@
 
 Autódromo Internacional Nelson Piquet (1978–89 Brazilian GP, demolished 2012). Visual brief: `docs/tracks/jacarepagua.md`. Implementation map, capture evidence, and backlog.
 
-**Capture status:** 30 JPEG frames on disk at `artifacts/shots/tracks/jacarepagua/` (local agent run; **not committed** until shared PR `tools: shared shot tooling for circuit surveys` adds `!artifacts/shots/**` and batch `weather`/`tod`). **Follow-up:** rebase, re-run capped batch (30–36 frames), commit shots, add dusk/night/fog panels.
+**Capture status:** **31** JPEG survey frames committed under `artifacts/shots/tracks/jacarepagua/` (1280px max width, q≈80). Dusk / dawn / night panels still pending a follow-up batch after shared shot tooling.
 
-**Weather in game (for follow-up batch):** `__apex.weather()` accepts `dry`, `wet`, `rain`, `overcast`, `fog`, `storm` (`js/race/weather-arc.js`). `shot.mjs` batch will accept per-job `weather` + `tod` (`day`|`dusk`|`dawn`|`night`) after shared tooling lands.
+**Weather in game:** `__apex.weather()` — `dry`, `wet`, `rain`, `overcast`, `fog`, `storm` (`js/race/weather-arc.js`). Time of day via `setTimeOfDay` — `day`, `dusk`, `dawn`, `night`.
 
 ## Code map
 
@@ -23,91 +23,89 @@ Tropical coastal day palette; lagoon waterField; Pedra Branca + Tijuca ridge; JA
 
 ## Panel grids — dry midday (`day` / `dry`)
 
-Shot files live under `artifacts/shots/tracks/jacarepagua/` (gitignored until shared tooling PR). Tables list filenames only until the shared tooling PR commits JPEGs; then replace cells with markdown image embeds.
+Paths: `../../../artifacts/shots/tracks/jacarepagua/<file>.jpg`
 
 ### Sector 1 (start / T1 — s ≈ 0–0.39)
 
-| Pit orbit | Pit chase | Flag rank |
+| Pit orbit · dry · day | Pit chase · dry · day | Flag rank orbit · dry · day |
 |:---:|:---:|:---:|
-| `s1-pit-orbit.jpg` | `s1-pit-chase.jpg` | `s1-flags-orbit.jpg` |
+| ![Pit orbit](../../../artifacts/shots/tracks/jacarepagua/s1-pit-orbit.jpg) | ![Pit chase](../../../artifacts/shots/tracks/jacarepagua/s1-pit-chase.jpg) | ![Flags](../../../artifacts/shots/tracks/jacarepagua/s1-flags-orbit.jpg) |
 
-| T1 orbit | T1 trackside | *(reserved)* |
+| T1 orbit · dry · day | T1 trackside · dry · day | *(dusk/night pit — pending)* |
 |:---:|:---:|:---:|
-| `s1-t1-orbit.jpg` | `s1-t1-trackside.jpg` | *dusk/night pit — pending shared shot batch* |
+| ![T1 orbit](../../../artifacts/shots/tracks/jacarepagua/s1-t1-orbit.jpg) | ![T1 trackside](../../../artifacts/shots/tracks/jacarepagua/s1-t1-trackside.jpg) | — |
 
 ### Sector 2 (lagoon / infield — s ≈ 0.39–0.68)
 
-| Lagoon orbit | Lagoon shore eye | Infield chase |
+| Lagoon orbit · dry · day | Lagoon shore eye · dry · day | Infield chase · dry · day |
 |:---:|:---:|:---:|
-| `s2-lagoon-orbit.jpg` | `s2-lagoon-shore-eye.jpg` | `s2-infield-chase.jpg` |
+| ![Lagoon](../../../artifacts/shots/tracks/jacarepagua/s2-lagoon-orbit.jpg) | ![Shore](../../../artifacts/shots/tracks/jacarepagua/s2-lagoon-shore-eye.jpg) | ![Infield](../../../artifacts/shots/tracks/jacarepagua/s2-infield-chase.jpg) |
 
-| T3 chase | Morro housing orbit | Lap overview |
+| T3 chase · dry · day | Morro housing orbit · dry · day | Lap overview orbit · dry · day |
 |:---:|:---:|:---:|
-| `s2-t3-chase.jpg` | `s2-morro-orbit.jpg` | `lap-overview.jpg` |
+| ![T3](../../../artifacts/shots/tracks/jacarepagua/s2-t3-chase.jpg) | ![Morro](../../../artifacts/shots/tracks/jacarepagua/s2-morro-orbit.jpg) | ![Overview](../../../artifacts/shots/tracks/jacarepagua/lap-overview.jpg) |
 
 ### Sector 3 (back straight / late lap — s ≈ 0.68–1.0)
 
-| T9 orbit | Back straight chase | Final trackside |
+| T9 orbit · dry · day | Back straight chase · dry · day | Final trackside · dry · day |
 |:---:|:---:|:---:|
-| `s3-t9-orbit.jpg` | `s3-backstraight-chase.jpg` | `s3-final-trackside.jpg` |
+| ![T9](../../../artifacts/shots/tracks/jacarepagua/s3-t9-orbit.jpg) | ![Back straight](../../../artifacts/shots/tracks/jacarepagua/s3-backstraight-chase.jpg) | ![Final](../../../artifacts/shots/tracks/jacarepagua/s3-final-trackside.jpg) |
 
-| Paddock orbit | *(pending)* | *(pending)* |
+| Paddock orbit · dry · day | *(night pit stand — pending)* | *(final rain close-up — pending)* |
 |:---:|:---:|:---:|
-| `s3-paddock-orbit.jpg` | *pit stand night* | *final rain close-up* |
+| ![Paddock](../../../artifacts/shots/tracks/jacarepagua/s3-paddock-orbit.jpg) | — | — |
 
-## Panel grids — weather variants (day TOD, five anchor views)
+## Panel grids — weather variants (`day` TOD)
 
-Captured locally with experimental batch `weather` (re-validate after shared tooling rebase). **Missing:** `fog` on anchors, all `dusk`/`dawn`/`night` panels.
+### Pit straight orbit anchor
 
-### Pit straight (`s1-pit-orbit`)
-
-| dry | wet | rain |
+| dry · day | wet · day | rain · day |
 |:---:|:---:|:---:|
-| `s1-pit-orbit.jpg` | `s1-pit-orbit_day_wet.jpg` | `s1-pit-orbit_day_rain.jpg` |
+| ![pit dry](../../../artifacts/shots/tracks/jacarepagua/s1-pit-orbit.jpg) | ![pit wet](../../../artifacts/shots/tracks/jacarepagua/s1-pit-orbit_day_wet.jpg) | ![pit rain](../../../artifacts/shots/tracks/jacarepagua/s1-pit-orbit_day_rain.jpg) |
 
-| overcast | fog *(pending)* | night *(pending)* |
+| overcast · day | fog · day | *(night — pending)* |
 |:---:|:---:|:---:|
-| `s1-pit-orbit_day_overcast.jpg` | *shared batch* | *shared batch* |
+| ![pit overcast](../../../artifacts/shots/tracks/jacarepagua/s1-pit-orbit_day_overcast.jpg) | ![pit fog](../../../artifacts/shots/tracks/jacarepagua/s1-pit-orbit_day_fog.jpg) | — |
 
-### Turn 1 (`s1-t1-orbit`)
+### Turn 1 orbit anchor
 
-| dry | wet | rain |
+| dry · day | wet · day | rain · day |
 |:---:|:---:|:---:|
-| `s1-t1-orbit.jpg` | `s1-t1-orbit_day_wet.jpg` | `s1-t1-orbit_day_rain.jpg` |
+| ![t1 dry](../../../artifacts/shots/tracks/jacarepagua/s1-t1-orbit.jpg) | ![t1 wet](../../../artifacts/shots/tracks/jacarepagua/s1-t1-orbit_day_wet.jpg) | ![t1 rain](../../../artifacts/shots/tracks/jacarepagua/s1-t1-orbit_day_rain.jpg) |
 
-| overcast | fog *(pending)* | — |
+| overcast · day | *(fog — pending)* | — |
 |:---:|:---:|:---:|
-| `s1-t1-orbit_day_overcast.jpg` | *shared batch* | |
+| ![t1 overcast](../../../artifacts/shots/tracks/jacarepagua/s1-t1-orbit_day_overcast.jpg) | — | — |
 
-### Lagoon (`s2-lagoon-orbit`)
+### Lagoon orbit anchor
 
-| dry | wet | rain |
+| dry · day | wet · day | rain · day |
 |:---:|:---:|:---:|
-| `s2-lagoon-orbit.jpg` | `s2-lagoon-orbit_day_wet.jpg` | `s2-lagoon-orbit_day_rain.jpg` |
+| ![lagoon dry](../../../artifacts/shots/tracks/jacarepagua/s2-lagoon-orbit.jpg) | ![lagoon wet](../../../artifacts/shots/tracks/jacarepagua/s2-lagoon-orbit_day_wet.jpg) | ![lagoon rain](../../../artifacts/shots/tracks/jacarepagua/s2-lagoon-orbit_day_rain.jpg) |
 
-| overcast | fog *(pending)* | night+rain *(pending)* |
+| overcast · day | *(fog / night+rain — pending)* | — |
 |:---:|:---:|:---:|
-| `s2-lagoon-orbit_day_overcast.jpg` | *shared batch* | *shared batch* |
+| ![lagoon overcast](../../../artifacts/shots/tracks/jacarepagua/s2-lagoon-orbit_day_overcast.jpg) | — | — |
 
-### Back straight (`s3-backstraight-chase`)
+### Back straight chase anchor
 
-| dry | wet | rain |
+| dry · day | wet · day | rain · day |
 |:---:|:---:|:---:|
-| `s3-backstraight-chase.jpg` | `s3-backstraight-chase_day_wet.jpg` | `s3-backstraight-chase_day_rain.jpg` |
+| ![back dry](../../../artifacts/shots/tracks/jacarepagua/s3-backstraight-chase.jpg) | ![back wet](../../../artifacts/shots/tracks/jacarepagua/s3-backstraight-chase_day_wet.jpg) | ![back rain](../../../artifacts/shots/tracks/jacarepagua/s3-backstraight-chase_day_rain.jpg) |
 
-| overcast | fog *(pending)* | — |
+| overcast · day | *(fog — pending)* | — |
 |:---:|:---:|:---:|
-| `s3-backstraight-chase_day_overcast.jpg` | *shared batch* | |
+| ![back overcast](../../../artifacts/shots/tracks/jacarepagua/s3-backstraight-chase_day_overcast.jpg) | — | — |
 
-### Lap overview (`lap-overview`)
+### Lap overview orbit anchor
 
-| dry | wet | rain |
+| dry · day | wet · day | rain · day |
 |:---:|:---:|:---:|
-| `lap-overview.jpg` | `lap-overview_day_wet.jpg` | `lap-overview_day_rain.jpg` |
+| ![overview dry](../../../artifacts/shots/tracks/jacarepagua/lap-overview.jpg) | ![overview wet](../../../artifacts/shots/tracks/jacarepagua/lap-overview_day_wet.jpg) | ![overview rain](../../../artifacts/shots/tracks/jacarepagua/lap-overview_day_rain.jpg) |
 
-| overcast | fog *(pending)* | dusk *(pending)* |
+| overcast · day | *(fog / dusk — pending)* | — |
 |:---:|:---:|:---:|
-| `lap-overview_day_overcast.jpg` | *shared batch* | *shared batch* |
+| ![overview overcast](../../../artifacts/shots/tracks/jacarepagua/lap-overview_day_overcast.jpg) | — | — |
 
 ## Findings
 
@@ -125,13 +123,12 @@ Captured locally with experimental batch `weather` (re-validate after shared too
 
 | Sev | Issue | Evidence | Action |
 |-----|--------|----------|--------|
-| Med | **Night track lighting** | `floodMast(..., { light: false })`; `def.night: false` | After night panels: consider `light: true` on pit-straight masts only (circuit-scoped); verify lamp cap |
+| Med | **Night track lighting** | `floodMast(..., { light: false })`; `def.night: false` | Night panels + optional `light: true` on pit masts |
 | Med | **Broadcast compound** | Was `rejBox`-suppressed at `K(0.908), gap 78` | **Fixed:** `K(0.898), gap 96` |
 | Low | Morro speckle at distance | `s2-morro-orbit` / overview | Art pass — fewer clusters or darker skins |
-| Low | Wet road vs lagoon | Rain panels — confirm wet sheen on tarmac not fighting water albedo | Re-check after committed weather batch |
-| Low | Overcast haze | Overcast panels vs preset `fogDensityMul` | Compare to `jacarepagua\|day\|overcast` preset after rebase |
+| Low | Wet road vs lagoon | Rain panels | Wet sheen on tarmac vs lagoon albedo |
+| Low | Overcast haze | Overcast panels | Compare to `jacarepagua\|day\|overcast` preset |
 | Low | Motorhome clip | clip baseline at paddock RV row | Fleet `structures.js`; jacarepagua excludes RVs `s≈0.90–0.97` |
-| Info | Shots not in git | `artifacts/` gitignored | Commit after shared tooling PR |
 
 ### Strengths
 
@@ -144,8 +141,8 @@ Lagoon + palms read clearly; T1/T9 sand and terraces match brief; landmarks buil
 
 ## Ranked follow-ups
 
-1. Rebase on shared shot PR → commit 30–36 JPEGs + finish fog / dusk / night panels (6 frames).
-2. Night flood masts if panels confirm dark pit straight.
+1. Dusk / dawn / night panels (~6 frames) after shared shot batch tooling.
+2. Night flood masts if night panels confirm dark pit straight.
 3. Back-straight GA terraces (brief §5) within tris budget.
 4. Morro housing LOD/silhouette from `s2-morro-orbit`.
 
