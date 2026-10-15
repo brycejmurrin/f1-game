@@ -267,3 +267,29 @@ https://github.com/mrdoob/three.js/blob/dev/src/nodes/accessors/TextureNode.js).
   counts unchanged; `three.core.min.js` and `three.tsl.min.js` came out byte-identical to
   0.186.0, `three.webgpu.min.js` grew 26 bytes. Compare:
   https://github.com/mrdoob/three.js/compare/148ef33ecb6d2502ff796d4554abd1549c95d519...9b4a2ac29c63ccb43fd51c5661f2f873ac2c39b8
+
+## 14. Rejected pipeline error scopes and diagnostics stay within the owning pipeline
+
+The synchronous render/compute paths called `popErrorScope().then(success)` without
+handling rejection. The asynchronous paths used an async Promise executor: their
+`finally` resolved the outer compilation promise while a rejected await escaped
+through the executor's ignored return value. Both leaked `OperationError: Instance
+dropped in popErrorScope` independently of TLX's synchronous render catches.
+
+All four paths now handle scope rejection, mark the affected pipeline `error`, and
+report a reason capped at 300 characters. Sync paths await shader diagnostics in
+the same handled chain; async paths use an async function directly with a catch,
+so compilation promises settle after either failure. Existing validation and WGSL
+source diagnostics remain intact; failure to read compilation info is handled too.
+This does not suppress window errors, alter shaders, or classify rejection as a
+device loss. The existing device-loss recovery remains responsible for real loss.
+
+The canary executes the actual generated `WebGPUBackend.pipelineUtils` methods
+with GPUDevice mocks in both modes: rejected scopes, rejected diagnostics, ordinary
+validation, rejected asynchronous pipeline creation, and successful compilation.
+It checks no unhandled rejection, pipeline failure markers, balanced scopes,
+bounded logging, preserved shader excerpts, and settled compilation promises.
+
+Present in pristine three 0.186.1. API references checked 2026-10-15:
+- https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/popErrorScope
+- https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/Promise
