@@ -326,6 +326,78 @@ function pendingWatchHarness() {
   return { tab, requests, launches, script, flush, reopen: () => { opened = true; } };
 }
 
+async function launchRecoveryHarness() {
+  const store = new Map(), launches = [], order = [];
+  let opened = true, result = false, requests = 0;
+  const { D, findTeam } = load({ Tracks: { LIST: TRACKS },
+    localStorage: { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
+    F1API: { locationData: () => {
+      requests++;
+      return Promise.resolve(Array.from({ length: 102 }, (_, i) => ({ date: script.t0 + i * 1000, x: i * 10, y: i * 10 })));
+    }, cancelAll() {} },
+    RealRace: { replay: () => null, launch: (script, opts) => {
+      order.push("launch"); launches.push({ script, opts, opened });
+      if (result instanceof Error) throw result;
+      return result;
+    } },
+  });
+  const script = D.build(rawBaku(), findTeam, TRACKS);
+  script.drivers = script.drivers.slice(0, 1);
+  D.remember(script);
+  const dom = makeDom(), flush = () => new Promise((resolve) => setImmediate(resolve));
+  const tab = D.create({ el: dom.el, clear: dom.clear, emptyMsg: (t) => dom.el("div", null, t), spinner: () => dom.el("div"),
+    sel: { meta: { sessionKey: script.sessionKey, name: "Race", type: "Race" } },
+    ensureSession: () => Promise.resolve(), buildPicker: () => dom.el("div"),
+    teamChip: (c) => dom.el("span", null, c), fmtDateTime: (v) => v, findTeam,
+    isOpen: () => opened, close: () => { order.push("close"); opened = false; tab.cancel(); } });
+  const tree = await tab.loadRealRace(); await flush();
+  const nodes = (n) => [n, ...n.children.flatMap(nodes)];
+  const status = nodes(tree).find((n) => n.role === "status");
+  assert.ok(status, "the real replay status is rendered");
+  return { tab, script, launches, order, status, flush, nodes: nodes(tree),
+    opened: () => opened, requests: () => requests, result: (v) => { result = v; } };
+}
+
+test("WATCH launch failures keep cached and downloaded positions retryable in the open Hub", async (t) => {
+  for (const cached of [false, true]) for (const throws of [false, true]) {
+    await t.test(`${cached ? "cached" : "downloaded"} positions, ${throws ? "throw" : "refusal"}`, async () => {
+      const h = await launchRecoveryHarness();
+      if (cached) { h.tab.loadTraces(h.script, null, null); await h.flush(); }
+      h.result(throws ? new Error("launch fixture failure") : null);
+      assert.doesNotThrow(() => h.tab.watch(h.script, null, 1, true));
+      await h.flush(); // An unhandled launch rejection fails this node:test case.
+      assert.equal(h.launches.length, 1);
+      assert.equal(h.opened(), true, "a failed launch must not dismiss the Hub");
+      assert.deepEqual(h.order, ["launch"]);
+      assert.match(h.status.textContent, /could not start.*try again/i);
+      assert.equal(h.nodes.find((n) => n.text === "HIGHLIGHTS").disabled, false);
+      const positions = h.tab.traces();
+      assert.ok(positions, "usable downloaded positions survive the failed launch");
+      h.result({ watch: true });
+      assert.equal(h.tab.watch(h.script, null, 1, true), true);
+      assert.equal(h.requests(), 1, "retry launches with the loaded positions without another download");
+      assert.equal(h.launches[1].opts.traces, positions);
+      assert.ok(h.launches.every((l) => l.opened), "the launch is accepted before closing the Hub");
+      assert.deepEqual(h.order, ["launch", "launch", "close"]);
+      assert.equal(h.opened(), false);
+    });
+  }
+});
+
+test("JUMP IN launch refusal and exception keep its entry point open for retry", async (t) => {
+  for (const throws of [false, true]) await t.test(throws ? "throw" : "refusal", async () => {
+    const h = await launchRecoveryHarness();
+    h.result(throws ? new Error("jump in fixture failure") : null);
+    assert.equal(h.tab.jumpIn(h.script, h.script.drivers[0].code), false);
+    assert.equal(h.opened(), true);
+    assert.match(h.status.textContent, /could not start.*try again/i);
+    h.result({ seat: h.script.drivers[0].code });
+    assert.equal(h.tab.jumpIn(h.script, h.script.drivers[0].code), true);
+    assert.deepEqual(h.order, ["launch", "launch", "close"]);
+    assert.equal(h.requests(), 0, "driving does not require a positions download");
+  });
+});
+
 test("pending WATCH snapshots its seat, camera, session and lap before positions arrive", async () => {
   const h = pendingWatchHarness(), script = h.script(10);
   h.tab.setSeat("AAA"); h.tab.setWatchCamera("heli");
