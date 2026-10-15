@@ -1,1 +1,0 @@
-1792004919	Cursor Agent	UI Fit r6 flyby editor compact foot/pose-select tap floor (OWNED: css/tuner.css #fb-* / #flyby-inner only + tests/unit/ui-fit-flyby-*.test.mjs; FORBIDDEN: #ct-* #lt-* lighting/camera, hud/tokens/touch/carsetup/menus/settings, js/garage, js/ui/hud*, index.html)  [claude/f1-game-project-26h3ng; session 69acd09a9576b64b6aad3932]
