@@ -45,8 +45,8 @@ test("agent hero-abbey__dusk-dry filenames parse sector, tod, and weather", () =
 });
 
 test("raw GitHub URLs use the committed branch path", () => {
-  const url = rawGitHubUrl("brycejmurrin", "f1-game", "cursor/silverstone-survey-745b",
-    "artifacts/shots/tracks/silverstone/hero-abbey__dusk-dry.jpg");
+  const url = rawGitHubUrl("brycejmurrin", "f1-game", "cursor/silverstone-survey-a1",
+    "artifacts/shots/tracks/silverstone/silverstone-01-orbit-f00-day-dry.jpg");
   assert.match(url, /^https:\/\/raw\.githubusercontent\.com\/brycejmurrin\/f1-game\/cursor\//);
   assert.ok(!url.includes("/workspace"));
 });
@@ -54,7 +54,7 @@ test("raw GitHub URLs use the committed branch path", () => {
 test("collectSurveyBranchShots includes committed silverstone survey JPEGs", () => {
   const shots = collectSurveyBranchShots();
   assert.ok(
-    shots.some((s) => s.circuit === "silverstone" && s.sector === "hero-abbey" && s.tod === "dusk"),
+    shots.some((s) => s.circuit === "silverstone" && s.sector === "orbit-f00" && s.tod === "day"),
     `expected silverstone branch shots, got ${shots.length} total`,
   );
 });
