@@ -5,7 +5,7 @@
    Brief: docs/tracks/fuji.md. A conifer plateau on the eastern foothills of
    Mount Fuji; 2005-present layout, clockwise, infield +1. Two things identify
    the place and nothing else has to: the 1.475 km pit straight (s 0.00-0.25,
-   pale-clad kind-formed frontage) and the volcano itself (compressed ~3.2 km
+   pale-clad kind-formed frontage) and the volcano itself (compressed ~2.5 km
    west so fog still reads the snow cap).
 
    Block -> §4 brief rows implemented:
@@ -189,15 +189,16 @@
       //
       //    Distance compressed hard: fogDensity 0.0022 → fog wall ~1.4 km at
       //    eye level; 9400 m placed the cone past every survey frame (washed
-      //    or culled). 3200 m at 880 m relief subtends ~15° — readable snow
-      //    cap, never intersects the lap (lap radius ≪ 2 km).
+      //    or culled). 2500 m at 900 m relief subtends ~20° — snow cap clears
+      //    the haze band on the main-straight look-back (2026-10 survey); lap
+      //    radius ≪ 2 km so the cone still never intersects the track.
       const FUJI_BEARING = 266.1 * Math.PI / 180;
       const ux = -Math.sin(FUJI_BEARING), uz = Math.cos(FUJI_BEARING);
       const tx = -uz, tz = ux;
       const fA = anchor(K(0.120), -1, 0);
-      const FAR = 3200;
+      const FAR = 2500;
       const fx = fA.c[0] + ux * FAR, fz = fA.c[2] + uz * FAR;
-      const FUJI_BASE = pyMin - 40, FUJI_W = 2400, FUJI_H = 880;
+      const FUJI_BASE = pyMin - 40, FUJI_W = 2200, FUJI_H = 900;
       const emitFuji = (stage) => {
         // Narrow foot skirt — keep it rock-grey, not forest green, so the cone
         // does not read as a solid green hill under soft blit.
