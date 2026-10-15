@@ -3,7 +3,7 @@
 **Date:** 2026-10-14  
 **Branch:** `cursor/watkins-glen-survey-e49b` → `claude/f1-game-project-26h3ng`  
 **Live:** https://brycejmurrin.github.io/f1-game/  
-**Shots (committed):** `artifacts/shots/tracks/watkins_glen/*.jpg` (23 frames, day-dry sector pass + pit-terrace wet/rain/overcast samples)
+**Shots (committed):** `artifacts/shots/tracks/watkins_glen/*.jpg` (**36** JPEGs: 21 sector day/dry + 15 hero weather/tod variants; `shot.mjs --jpeg --wait 120 --present-timeout 90 --capture-retries 4`)
 
 ## Code map
 
@@ -55,34 +55,68 @@
 | ![Pit terrace](../../../artifacts/shots/tracks/watkins_glen/sector3-pit-terrace-orbit-day-dry.jpg) | ![Timing tower](../../../artifacts/shots/tracks/watkins_glen/sector3-timing-tower-orbit-day-dry.jpg) | ![Main gate](../../../artifacts/shots/tracks/watkins_glen/sector3-main-gate-orbit-day-dry.jpg) |
 | Pit terrace — orbit, day, dry | Timing tower — orbit, day, dry | Main gate — orbit, day, dry |
 
-## Panel grids — Weather / lighting samples (pit terrace anchor)
-
-Captured with manual `__apex.weather()` before shared batch tooling; Esses / Boot / Anvil matrix deferred.
+## Panel grids — Hero: pit terrace (orbit s≈0.975)
 
 | | | |
 |:---:|:---:|:---:|
+| ![Pit day dry](../../../artifacts/shots/tracks/watkins_glen/sector3-pit-terrace-orbit-day-dry.jpg) | ![Pit dusk](../../../artifacts/shots/tracks/watkins_glen/landmark-pit-terrace-orbit-dusk-dry.jpg) | ![Pit night](../../../artifacts/shots/tracks/watkins_glen/landmark-pit-terrace-orbit-night-dry.jpg) |
+| Pit terrace — orbit, **day**, dry | Pit terrace — orbit, **dusk**, dry | Pit terrace — orbit, **night**, dry |
 | ![Pit wet](../../../artifacts/shots/tracks/watkins_glen/landmark-pit-terrace-orbit-day-wet.jpg) | ![Pit rain](../../../artifacts/shots/tracks/watkins_glen/landmark-pit-terrace-orbit-day-rain.jpg) | ![Pit overcast](../../../artifacts/shots/tracks/watkins_glen/landmark-pit-terrace-orbit-day-overcast.jpg) |
 | Pit terrace — orbit, day, **wet** | Pit terrace — orbit, day, **rain** | Pit terrace — orbit, day, **overcast** |
+| ![Pit fog](../../../artifacts/shots/tracks/watkins_glen/landmark-pit-terrace-orbit-day-fog.jpg) | ![Pit storm](../../../artifacts/shots/tracks/watkins_glen/landmark-pit-terrace-orbit-day-storm.jpg) | |
+| Pit terrace — orbit, day, **fog** | Pit terrace — orbit, day, **storm** | |
+
+## Panel grids — Hero: Esses (chase s≈0.245)
+
+| | | |
+|:---:|:---:|:---:|
+| ![Esses day](../../../artifacts/shots/tracks/watkins_glen/sector1-esses-drive-day-dry.jpg) | ![Esses dusk](../../../artifacts/shots/tracks/watkins_glen/landmark-esses-drive-dusk-dry.jpg) | ![Esses night](../../../artifacts/shots/tracks/watkins_glen/landmark-esses-drive-night-dry.jpg) |
+| Esses — chase, **day**, dry | Esses — chase, **dusk**, dry | Esses — chase, **night**, dry |
+| ![Esses wet](../../../artifacts/shots/tracks/watkins_glen/landmark-esses-drive-day-wet.jpg) | ![Esses rain](../../../artifacts/shots/tracks/watkins_glen/landmark-esses-drive-day-rain.jpg) | ![Esses fog](../../../artifacts/shots/tracks/watkins_glen/landmark-esses-drive-day-fog.jpg) |
+| Esses — chase, day, **wet** | Esses — chase, day, **rain** | Esses — chase, day, **fog** |
+
+## Panel grids — Hero: Boot mid (orbit s≈0.52)
+
+| | | |
+|:---:|:---:|:---:|
+| ![Boot day](../../../artifacts/shots/tracks/watkins_glen/sector2-boot-mid-orbit-day-dry.jpg) | ![Boot dusk](../../../artifacts/shots/tracks/watkins_glen/landmark-boot-mid-orbit-dusk-dry.jpg) | ![Boot night](../../../artifacts/shots/tracks/watkins_glen/landmark-boot-mid-orbit-night-dry.jpg) |
+| Boot mid — orbit, **day**, dry | Boot mid — orbit, **dusk**, dry | Boot mid — orbit, **night**, dry |
+| ![Boot wet](../../../artifacts/shots/tracks/watkins_glen/landmark-boot-mid-orbit-day-wet.jpg) | | |
+| Boot mid — orbit, day, **wet** | | |
+
+## Panel grids — Hero: Anvil (orbit s≈0.90)
+
+| | | |
+|:---:|:---:|:---:|
+| ![Anvil day](../../../artifacts/shots/tracks/watkins_glen/sector3-anvil-orbit-day-dry.jpg) | ![Anvil dusk](../../../artifacts/shots/tracks/watkins_glen/landmark-anvil-orbit-dusk-dry.jpg) | |
+| The Anvil — orbit, **day**, dry | The Anvil — orbit, **dusk**, dry | |
 
 **Picker (repo asset):** `assets/stills/watkins_glen.webp`
 
 ---
 
-## Findings (day, dry)
+## Findings
 
 **Strengths:** Fall colour in Esses/Boot; pit complex readable; blue double Armco; audits clean.
 
-**Visual issues:** Generic tree row on Esses outside; busy pit hoarding panels; Seneca lake not track-visible (expected).
+**Visual issues (day, dry):** Generic tree row on Esses outside; busy pit hoarding panels; Seneca lake not track-visible (expected).
 
-**Weather samples:** Wet/rain/overcast at pit terrace show particle rain and muted sun; night/dusk matrix not captured on this branch yet.
+**Weather / lighting (from hero matrix):**
+
+| Issue | Where seen | Notes |
+|-------|------------|--------|
+| **Night pit very dark** | Pit terrace — night, dry | `furniture.lamp: "none"` — no flood masts; expected until lamp policy |
+| **Rain particles readable** | Pit / Esses — day, rain | Autumn foliage stays saturated; road wetness visible |
+| **Fog / storm mute distance** | Pit — day, fog/storm; Esses — day, fog | Boot woods flatten into grey; OK for atmosphere |
+| **Dusk golden lift** | All four heroes — dusk, dry | Matches `watkins_glen\|dusk\|dry` preset intent |
 
 ### Weather / lighting backlog
 
 | Issue | Notes |
 |-------|--------|
-| Night pit dark | `furniture.lamp: "none"` — no flood masts |
-| Dusk / night matrix | Follow-up after shared `shot.mjs` weather batch |
-| Rain on foliage | Tune after full wet matrix |
+| Night lamps | Def `furniture.lamp` or hand `lampPost` |
+| Anvil night / rain / fog | Not in 36-cap set; add if needed |
+| Footbridge dusk | Sector 2 day dry only |
 
 ## Fix applied (circuit-only)
 
@@ -95,7 +129,7 @@ Captured with manual `__apex.weather()` before shared batch tooling; Esses / Boo
 | P | Item |
 |---|------|
 | 1 | Esses generic tree bleed |
-| 2 | Complete 36-frame weather matrix (4 anchors) |
+| 2 | Footbridge + Anvil night/rain samples |
 | 3 | `api.bleacher` migration |
 | 4 | Night lamps policy |
 
