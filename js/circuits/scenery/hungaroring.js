@@ -85,7 +85,7 @@
         for (const [sf, side, gap] of [
           [0.045,  1, 54], [0.180, -1, 68], [0.215,  1, 50],
           [0.355, -1, 60], [0.420,  1, 72], [0.520,  1, 56],
-          [0.600, -1, 64], [0.700, -1, 52], [0.775,  1, 58],
+          [0.700, -1, 52], [0.775,  1, 58],
           [0.880,  1, 62], [0.940, -1, 56],
         ]) {
           const kk = K(sf);
@@ -535,8 +535,10 @@
       tree(K(0.092), 1, 70, 10, TREE2);
       hedge(0.035, 0.055, 1, 42, 3, TREE);
 
-      // Hungarian tricolour accent billboards (red/white/green)
-      billboard(K(0.04),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red accent (green twin dropped for tris)
+      // Hungarian tricolour accent billboards (red/white/green) — slim panels, low tris.
+      billboard(K(0.04),  1, 22, 8, 3.2, [0.85, 0.20, 0.20]);
+      billboard(K(0.042), 1, 26, 8, 3.2, [0.92, 0.92, 0.90]);
+      billboard(K(0.044), 1, 30, 8, 3.2, [0.22, 0.58, 0.28]);
 
       for (const [s, side] of [[0.07, 1], [0.12, -1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
         groundPatch(K(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE,
@@ -562,6 +564,8 @@
         for (const side of [-1, 1]) {
           const hh = hash(kk * 23 + side * 5);
           if (hh < 0.5) continue;
+          // Final-sector patches stacked on the same node (blanket x blanket at ~0.856).
+          if (sf > 0.84 && hh < 0.72) continue;
           const base = 40 + hh * 18;  // increased from 30 to clear road intrusion at frac ~0.432
           const col = CROWD[((kk + (side > 0 ? 1 : 0)) | 0) % CROWD.length];
           // Low, wide patch stepping up the slope — a distant crowd, not a slab.
@@ -715,19 +719,22 @@
         }
         // Village church: white nave + a tall spire, one atomic group so the spire
         // never stands without its nave.
-        const cf = vadd(vadd(base, a.t, 20), a.r, 60 * SD);
+        const cf = vadd(vadd(base.slice(), a.t, 20), a.r, 60 * SD);
         modelGroup("hungaroring-village-church", {
           center: vadd(vadd(cf, a.t, 2.25), a.u, 19), size: [14, 38, 27], basis: b,
         }, (stage) => {
           stage._mat = MAT.STONE;
           addBox(stage, vadd(cf, a.u, 8), [14, 16, 22], [0.90, 0.88, 0.82], b);
           stage._mat = MAT.ROOF;
-          addPrism(stage, vadd(cf, a.u, 17), [14, 4, 22], roofC, b);
+          addPrism(stage, vadd(cf, a.u, 17.05), [14, 3.6, 22], roofC, b);
           const tf = vadd(cf, a.t, 13);
+          const towerMidU = 13.35, towerH = 26;
           stage._mat = MAT.STONE;
-          addBox(stage, vadd(tf, a.u, 13), [5, 26, 5], [0.92, 0.90, 0.84], b);
+          // Lift the tower off the nave roof plane (ground-audit flatCoplanar at 723×728).
+          addBox(stage, vadd(tf, a.u, towerMidU), [5, towerH, 5], [0.92, 0.90, 0.84], b);
           stage._mat = MAT.METAL;
-          addCone(stage, vadd(tf, a.u, 26), 3.4, 12, roofC, 7, b);
+          // Cone base must meet the tower top within float-audit's 0.6 m EPS stack.
+          addCone(stage, vadd(tf, a.u, towerMidU + towerH / 2), 3.2, 11.5, roofC, 7, b);
           stage._mat = 0;
         });
       })();
