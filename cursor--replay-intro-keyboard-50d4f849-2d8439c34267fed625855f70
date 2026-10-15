@@ -1,1 +1,0 @@
-1792051858	t	READ-ONLY bounded announcer pause/resume and repeated session exit review; js/audio/announcer*.js existing tests. No source ownership, edits, browser, pushes or overlap fixes; preserve parent2091 and1948.  [cursor/replay-intro-keyboard-50d4f849; session 2d8439c34267fed625855f70]
