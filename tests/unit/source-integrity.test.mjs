@@ -309,9 +309,9 @@ test("portrait race blocker is an actionable accessible dialog", () => {
 // #2157: RACE IN PORTRAIT was a one-way door — nothing cleared apex26.portraitOk.
 // SETTINGS › DISPLAY › RACE IN PORTRAIT is its undo; turned OFF, the blocker returns.
 test("RACE IN PORTRAIT has a settings undo: on → off brings the blocker back", async () => {
-  const { symbolSource } = await import("../helpers/game-source.mjs");
+  const { symbolSource, gameSource } = await import("../helpers/game-source.mjs");
   const vm = await import("node:vm");
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = gameSource();
   assert.match(game, /SettingRow\.build\("pm-portrait", "RACE IN PORTRAIT"\)[\s\S]{0,400}SettingRow\.wire\(r\.row/,
     "the settings row is built and wired");
   const spec = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");

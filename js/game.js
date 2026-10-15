@@ -8781,7 +8781,7 @@ try {
   if (localStorage.getItem("apex26.portraitOk") === "1") document.body.classList.add("rotate-ok");
 } catch (_) { /* no storage: it asks again */ }
 { // Built here, under FULLSCREEN (the other orientation lever), so the shell's node count stays put.
-  const note = $("pm-fullscreen-note"), r = note && SettingRow.build("pm-portrait", "RACE IN PORTRAIT");
+  const note = $("pm-fullscreen-note"), r = note && note.after && SettingRow.build("pm-portrait", "RACE IN PORTRAIT");   // note.after: the node VM harness's stub DOM has none
   if (r) {
     const help = document.createElement("p");
     help.className = "adv-help";
