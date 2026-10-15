@@ -1510,6 +1510,18 @@ Use this to attribute the ~77 % of the freeze outside `loadTrack`
 (`docs/notes/PERF-OPTIONS-2026-09-16.md`). Instrumentation only — it does
 not change race-entry behaviour.
 
+### `raceEntryStages() → { entry, stages, windowMs, blockMs, … }`
+Summarises the armed `RaceEntryProfile` window as span rows (`introBuild`,
+`flyby`, `awaitIntroWarm`, `startRace` legs, …) plus block/longtask totals.
+Arms from the race-settings START tap (`beginUi`) through countdown. Use with
+`raceEntryProfile()` when you need raw marks; this is the stage table the
+`perf-race-entry` spec writes to `artifacts/perf-race-entry/*.json`.
+
+### `raceEntryStageDiff(raceSnap, practiceSnap) → { rows, entryRace, entryPractice }`
+Pairwise race vs practice stage table from two `raceEntryProfile()` snapshots
+(same shape `raceEntryStages()` uses internally). Rows include `raceMs`,
+`practiceMs`, and `deltaMs`, sorted by largest absolute delta first.
+
 ### `multiDraw(on?) → {supported, on, multiCalls, rangesSubmitted, drawElementsAvoided, perChunkDraws, consecutiveGroups, setGroups}`
 GLX `WEBGL_multi_draw` — the per-chunk `drawElements` calls collapsed into one
 `multiDrawElementsWEBGL` per light-set group. `multiDraw(true)` turns it on,

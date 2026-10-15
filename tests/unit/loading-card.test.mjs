@@ -875,7 +875,7 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   const game = gameSource();
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /const flyMs = loadingScreen\.nextFlyMs\(info\.readMs, info\.warmReady = !\(gfx && gfx\.warming && gfx\.warming\(\)\)\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
-  assert.match(intro, /loadingScreen\.run\(info, go\);/);
+  assert.match(intro, /loadingScreen\.run\(info,[\s\S]{0,120}go\(\)/, "flyby run still hands off to the same go() after profiling wrap");
   const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
   assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");
   assert.match(read("js/ui/loading-screen.js"), /flyMsFor\(readSkips\(\), info\.readMs, info\.warmReady\)/);
