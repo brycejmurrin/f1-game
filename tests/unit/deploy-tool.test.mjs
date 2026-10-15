@@ -3,6 +3,7 @@
 // source pages.yml is asserted against), the circuit-touch detector reads a
 // real diff, preflight refuses what the protocol refuses, and --help exits 0
 // without touching git. plan()/main() need the network and are not run here.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
@@ -486,7 +487,7 @@ test("the parts census derives its trigger, and every fail-safe branch RUNS it",
   // the last push's green census says nothing about the train's live..tip diff.
   assert.ok(!/^    if: .*fast_tier_run/m.test(job),
     "the train must census live..tip itself; a reused fast run only covered the last push's diff");
-  assert.match(job, /- if: (needs\.reuse-draft\.outputs\.reuse != 'true' && )?steps\.filter\.outputs\.parts == 'true'\n\s+run: npm run test:sweeps-parts/,
+  assert.match(job, /- if: (steps\.reuse\.outputs\.reuse != 'true' && )?steps\.filter\.outputs\.parts == 'true'\n\s+run: npm run test:sweeps-parts/,
     "the expensive step is what the filter gates");
 });
 
@@ -714,7 +715,7 @@ test("--targeted prints the suites for a change list, and nothing for a game.js-
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   assert.match(yml, /node tools\/ci\/geometry-paths\.mjs --targeted "\$CHANGED_FILE"/,
     "ci.yml's sweeps filter must read the targeted table, not retype it");
-  assert.match(yml, /- name: Targeted sweeps \(the suites that read this diff, no fleet rebuild\)\n\s+if: steps\.filter\.outputs\.geometry != 'true' && steps\.filter\.outputs\.targeted != ''/,
+  assert.match(yml, /- name: Targeted sweeps \(the suites that read this diff, no fleet rebuild\)\n\s+if: needs\.select\.outputs\.geometry == 'false' && needs\.select\.outputs\.geometry_targeted != ''/,
     "the targeted step runs exactly when the fleet does not and a suite was named");
   assert.equal(notCovered(false, ["tests/unit/car-front-wing-width.test.mjs"])[1],
     "test:sweeps (nothing in this union can move geometry; the targeted sweeps that read it ran: car-front-wing-width.test.mjs)");

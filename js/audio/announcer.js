@@ -174,7 +174,7 @@ var Announcer = (function () {
    *  circuit whose row says nothing about either. */
   function conditionsLine(weather, night, lore) {
     const wx = String(weather || "dry");
-    if (wx === "rain") return lore.wet || "Heavy rain, and it is going to decide this one.";
+    if (wx === "rain" || wx === "storm") return lore.wet || "Heavy rain, and it is going to decide this one.";
     if (wx === "wet") return lore.wet || "A wet track, and the racing line is the only dry part of it.";
     if (wx === "fog") return "Fog across the circuit — you will not see the corner until you are in it.";
     if (wx === "overcast") return "Grey overhead, cool track, and the tyres will take their time.";
@@ -456,12 +456,14 @@ var Announcer = (function () {
     const add = (t) => { if (t) out.push(t); };
     const event = broadcast(sum.event) || "the race";
     const w = sum.winner, you = sum.you;
-    if (you && you.pos === 1) {
+    if (you && !you.dsq && you.pos === 1) {
       add("And you win " + event + (sum.margin > 0 ? ", " + secs(sum.margin) + " seconds clear." : "!"));
     } else {
       add(w.name + " wins " + event + (sum.margin > 0 && sum.second ? ", " + secs(sum.margin) + " seconds ahead of " + surnameOf(sum.second) + "." : "."));
     }
-    if (you && you.pos > 1) {
+    if (you && you.dsq) {
+      add("You have been disqualified.");
+    } else if (you && you.pos > 1) {
       const d = you.grid > 0 ? you.grid - you.pos : 0;
       const tail = d >= 3 ? ", up " + d + " places from " + ordinal(you.grid) + " on the grid."
         : d <= -3 ? ", down from " + ordinal(you.grid) + " on the grid." : ".";
@@ -689,12 +691,12 @@ var Announcer = (function () {
       const sum = {
         event: info && info.sprint ? "the sprint" : ((info && info.gp) || t.gp) ? "the " + ((info && info.gp) || t.gp) : "", n: order.length,
         winner: { name: w.name || w.code || "" },
-        second: s2 && !s2.retired ? s2.name : "",
+        second: s2 && !s2.retired && !s2.dsq ? s2.name : "",
         // On the corrected clock, as the results sheet classifies: a +5 s penalty
         // is part of the margin, not seven seconds of daylight.
-        margin: s2 && !s2.retired && s2.finishT > 0 && w.finishT > 0 && (s2.lap | 0) >= (w.lap | 0)
+        margin: s2 && !s2.retired && !s2.dsq && s2.finishT > 0 && w.finishT > 0 && (s2.lap | 0) >= (w.lap | 0)
           ? (s2.finishT + (s2.penalty || 0)) - (w.finishT + (w.penalty || 0)) : 0,
-        you: you ? { pos: you.retired ? 0 : (you.finPos || order.indexOf(you) + 1), grid: you.gridPos || 0, dnf: !!you.retired } : null,
+        you: you ? { pos: you.retired || you.dsq ? 0 : (you.finPos || order.indexOf(you) + 1), grid: you.gridPos || 0, dnf: !!you.retired, dsq: !!you.dsq } : null,
         fastest: fast ? { name: fast.name || "", time: fast.best, you: !!fast.isPlayer } : null,
       };
       const lines = wrapRows(sum);
@@ -755,7 +757,7 @@ var Announcer = (function () {
      * preview() (the editor's PLAY) and sample() do not land: an author
      * pressing PLAY wants to hear the read, not sit through the gap. */
     const LAND_MS = 600;
-    function speak(lines, budgetMs, landLast) {
+    function speak(lines, budgetMs, landLast, options) {
       // MASTER SOUND gates this like everything else. speechSynthesis is not in
       // the WebAudio graph, so nothing else silences it — a player who turned
       // sound off and then heard a voice would have found a bug, not a feature.
@@ -768,7 +770,7 @@ var Announcer = (function () {
       if (recorded && recordedOn()) {
         if (G.radio.stop) G.radio.stop();
         stop();
-        return recorded.play(parts, budgetMs, landLast);
+        return recorded.play(parts, budgetMs, landLast, options);
       }
       if (!synth || typeof Utter !== "function") return false;
       // Starting a read takes the channel deliberately; merely turning this
@@ -788,7 +790,6 @@ var Announcer = (function () {
       if (want) {
         try { voice = (synth.getVoices() || []).find((v) => v.name === want.name) || null; } catch (_) { /* mid-teardown */ }
       }
-      const vol = volume();
       const gen = ++generation;
       const t0 = Date.now();
       // When the last line must START to finish LAND_MS before the budget ends.
@@ -807,15 +808,22 @@ var Announcer = (function () {
         say();
       };
       const say = () => {
+        const vol = volume();
+        if (!(vol > 0)) { stop(); return; }
         const u = new Utter(parts[i++]);
         u.voice = voice; u.pitch = tune.pitch; u.rate = tune.rate; u.volume = vol;
-        u.onend = () => { if (gen === generation) next(); };
+        // A terminal callback belongs to this line, even after next() hands
+        // the synth another one. Late/duplicate events must not advance or
+        // cancel its successor in the same read.
+        let settled = false;
+        u.onend = () => { if (gen === generation && !settled) { settled = true; next(); } };
         // A cancel from OUTSIDE (RadioVoice's hide handler shares the one
         // speechSynthesis) arrives as an interrupted/canceled error and does
         // not bump `generation` — advancing on it read the NEXT line into a
         // hidden tab. That ends the chain; any other error skips the line.
         u.onerror = (e) => {
-          if (gen !== generation) return;
+          if (gen !== generation || settled) return;
+          settled = true;
           const why = e && e.error;
           if (why === "interrupted" || why === "canceled") { speaking = null; generation++; return; }
           next();
@@ -843,11 +851,11 @@ var Announcer = (function () {
       /** The editor's PLAY button: speaks regardless of the player's toggle,
        *  because pressing play in an authoring panel IS the consent. Master
        *  sound still gates it — that switch means silence. */
-      preview(info) { return speak(scriptFor(info), 0); },
+      preview(info) { return speak(scriptFor(info), 0, false, { allowPaused: true }); },
       /** The settings panel's TEST button, where there is no circuit to
        *  describe: one real line at the tune you just set, through the same
        *  speech path as the welcome, including its voice-selection ladder. */
-      sample() { return speak([(RadioVoice.SAMPLE && RadioVoice.SAMPLE[CHANNEL]) || "Welcome to Apex 26."], 0); },
+      sample() { return speak([(RadioVoice.SAMPLE && RadioVoice.SAMPLE[CHANNEL]) || "Welcome to Apex 26."], 0, false, { allowPaused: true }); },
       scriptFor,
       /** How long the WHOLE read of `info` takes, in ms, at this channel's
        *  tune — 0 when nothing will be said (announcer or sound off). The

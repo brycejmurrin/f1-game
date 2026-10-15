@@ -370,6 +370,139 @@ test("legacy ID-only qualifying grids stay unstamped and retain their order", ()
   assert.deepEqual(Array.from(model.order(cars), (car) => car.driverId), ["haas:1", "haas:0"]);
 });
 
+function qualifyingWeekend() {
+  return {
+    round: 0, pts: {}, teamPts: {}, driverCodes: {},
+    config: { trackIds: ["t0", "t1"], quali: true },
+    qualiOrder: [{ id: "haas:1", t: 71.2, human: false }, { id: "haas:0", t: 72.4, human: true }],
+    qualiTrack: "t0", qualiMode: "season", qualiSeat: "haas:0|haas",
+  };
+}
+function beforeQualifying(season) {
+  const copy = JSON.parse(JSON.stringify(season));
+  for (const key of ["qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"]) delete copy[key];
+  return copy;
+}
+
+test("older backup preserves completed local qualifying, including the first racing seed", () => {
+  for (const seed of [undefined, 77]) {
+    const h = loadHarness(), weekend = qualifyingWeekend();
+    if (seed != null) weekend.seed = seed;
+    h.store.set("season", beforeQualifying(weekend));
+    const envelope = JSON.parse(h.CareerBackup.serialize(h.CareerBackup.build()));
+    // The seed is first assigned when racing starts, possibly after export.
+    h.store.set("season", { ...weekend, seed: 77 });
+    const revision = h.store.keyRevision("season");
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
+    const result = h.CareerBackup.apply(envelope);
+    assert.equal(result.ok, true);
+    assert.equal(result.applied.includes("season"), false);
+    assert.equal(h.store.keyRevision("season"), revision, "preservation must not rewrite the season");
+    assert.equal(h.store.get("season").seed, 77);
+    vm.runInContext(src("js/race/quali-model.js"), h.ctx);
+    const cars = [0, 1].map((i) => ({ driverId: "haas:" + i, team: { id: "haas" }, isPlayer: i === 0 }));
+    const model = h.ctx.Quali.create({ season: h.SeasonCal.load(), seasonMode: true, cars, track: { def: { id: "t0" } } });
+    assert.deepEqual(Array.from(model.order(cars), (car) => car.driverId), ["haas:1", "haas:0"]);
+    assert.equal(model.results()[1].t, 72.4);
+    assert.equal(model.results()[1].human, true);
+  }
+});
+
+test("qualifying preservation compares progress maps independently of insertion order", () => {
+  const h = loadHarness(), weekend = qualifyingWeekend();
+  weekend.pts = { "haas:0": 25, "haas:1": 18 };
+  const backup = beforeQualifying(weekend);
+  backup.pts = { "haas:1": 18, "haas:0": 25 };
+  backup.qualiOrder = []; // An empty grid is also no qualifying progress.
+  const envelope = envWith({ season: backup });
+  h.store.set("season", weekend);
+  assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
+  assert.equal(h.CareerBackup.apply(envelope).ok, true);
+  assert.equal(h.store.get("season").qualiOrder[1].t, 72.4);
+});
+
+test("qualifying protection does not retain unrelated, stale, incomplete or corrupt grids", () => {
+  const cases = [
+    ["another championship seed", { seed: 22 }, { seed: 11 }],
+    ["missing local championship seed", {}, { seed: 11 }],
+    ["changed calendar", {}, { config: { trackIds: ["t0", "t2"], quali: true } }],
+    ["changed rules", {}, { config: { trackIds: ["t0", "t1"], quali: true, laps: 5 } }],
+    ["later weekend stage", {}, { stage: "race" }],
+    ["same points but different driver", { pts: { "haas:0": 10 } }, { pts: { "haas:1": 10 } }],
+    ["changed team standings", {}, { teamPts: { haas: 10 } }],
+    ["changed driver identity", {}, { driverCodes: { "haas:0": "NEW" } }],
+    ["another incoming seat", {}, { qualiSeat: "haas:1|haas" }],
+    ["stale track", { qualiTrack: "t1" }, {}],
+    ["one-off GP grid", { qualiMode: "gp" }, {}],
+    ["career grid", { qualiMode: "career:driver:0" }, {}],
+    ["unstamped legacy grid", { qualiTrack: null, qualiMode: null, qualiSeat: null }, {}],
+    ["seat outside grid", { qualiSeat: "haas:9|haas" }, {}],
+    ["seat stamped for another team", { qualiSeat: "haas:0|other" }, {}],
+    ["no classification", { qualiOrder: [] }, {}],
+    ["missing teammate", { qualiOrder: [{ id: "haas:0", t: 72.4, human: true }] }, {}],
+    ["extra driver", { qualiOrder: [...qualifyingWeekend().qualiOrder, { id: "other:0", t: 75 }] }, {}],
+    ["duplicate classification", { qualiOrder: ["haas:0", "haas:0"] }, {}],
+    ["invalid time", { qualiOrder: [{ id: "haas:0", t: -1 }] }, {}],
+    ["invalid human marker", { qualiOrder: [{ id: "haas:0", human: "yes" }] }, {}],
+    ["invalid local seed", { seed: "77" }, {}],
+  ];
+  for (const [name, localChanges, incomingChanges] of cases) {
+    const h = loadHarness(), weekend = qualifyingWeekend();
+    h.store.set("season", { ...weekend, ...localChanges });
+    const envelope = envWith({ season: { ...beforeQualifying(weekend), ...incomingChanges } });
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: restore backup progress"), name);
+    const result = h.CareerBackup.apply(envelope);
+    assert.equal(result.ok, true, name);
+    assert.ok(result.applied.includes("season"), name);
+    assert.equal(h.store.get("season").qualiOrder, undefined, name);
+  }
+});
+
+test("qualifying completeness follows standalone real/custom/Legends field rules", () => {
+  for (const selected of ["haas", "custom", "legends"]) {
+    const h = loadHarness(), weekend = qualifyingWeekend();
+    h.ctx.Teams.LIST.push(
+      { id: "custom", custom: true, drivers: [{ code: "YOU" }] },
+      { id: "legends", legends: true, drivers: [{ code: "ONE" }, { code: "TWO" }, { code: "THREE" }] },
+    );
+    weekend.qualiSeat = selected + ":0|" + selected;
+    if (selected !== "haas") weekend.qualiOrder.push({ id: selected + ":0", t: 70, human: true });
+    h.store.set("season", weekend);
+    const envelope = envWith({ season: beforeQualifying(weekend) });
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"), selected);
+    assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), false, selected);
+    vm.runInContext(src("js/race/quali-model.js"), h.ctx);
+    const cars = weekend.qualiOrder.map(row => ({ driverId: row.id, team: { id: row.id.split(":")[0] },
+      isPlayer: row.id === selected + ":0" }));
+    const model = h.ctx.Quali.create({ season: h.SeasonCal.load(), seasonMode: true, cars, track: { def: { id: "t0" } } });
+    assert.equal(model.results().length, cars.length, selected);
+    assert.equal(model.order(cars).length, cars.length, selected);
+    // MY TEAM's career hire / another legend never belongs to this field.
+    const extra = selected === "haas" ? "custom:0" : selected + ":1";
+    h.store.set("season", { ...weekend, qualiOrder: [...weekend.qualiOrder, { id: extra, t: 80 }] });
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: restore backup progress"), extra);
+    assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), true, extra);
+  }
+});
+
+test("incoming qualifying and later progress replace local qualifying", () => {
+  for (const incoming of [
+    { ...qualifyingWeekend(), qualiOrder: [{ id: "haas:0", t: 70, human: true }, { id: "haas:1", t: 72, human: false }] },
+    { ...beforeQualifying(qualifyingWeekend()), round: 1 },
+    { ...beforeQualifying(qualifyingWeekend()), pts: { "haas:0": 25 } },
+  ]) {
+    const h = loadHarness();
+    h.store.set("season", qualifyingWeekend());
+    const envelope = envWith({ season: incoming });
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: restore backup progress"));
+    assert.equal(h.CareerBackup.apply(envelope).ok, true);
+    const restored = h.store.get("season");
+    assert.equal(restored.round, incoming.round);
+    assert.deepEqual(JSON.parse(JSON.stringify(restored.pts)), incoming.pts);
+    assert.deepEqual(restored.qualiOrder && JSON.parse(JSON.stringify(restored.qualiOrder)), incoming.qualiOrder);
+  }
+});
+
 test("malformed qualifying classifications refuse the whole backup before slot or season writes", () => {
   const valid = { round: 0, pts: {}, qualiOrder: [{ id: "haas:0", t: 71.2, human: true }],
     qualiTrack: "t0", qualiMode: "season", qualiSeat: "haas:0|haas" };
@@ -1218,4 +1351,47 @@ test("C8: a restored standalone season re-arms SeasonCal, so its next save is no
   assert.equal(JSON.parse(h.disk.get("apex26.season")).round, 4);
   const res = h.SeasonCal.save(stale);
   assert.notEqual(res.reason, "conflict", "SeasonCal still holds the pre-import revision");
+});
+
+// #2165: a Daily class key is Ghost.contextKey() — JSON of the car/tune config,
+// full of `{`, `"` and `,`. cleanDayEntry ran it through ID_RE and dropped every
+// class on import, so a fresh-device restore's share line read "NO LAP".
+test("import keeps the Daily per-class bests keyed by a JSON records context (#2165)", () => {
+  const context = JSON.stringify({ car: ["mclaren"], tune: [0.84] });
+  const a = loadHarness();
+  a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));
+  a.disk.set("apex26.daily.v1", JSON.stringify({
+    days: { "2026-10-15": { best: 80, laps: 1, classes: { [context]: { best: 80, laps: 1 } } } },
+  }));
+  a.Career.load();
+  const envelope = JSON.parse(JSON.stringify(a.CareerBackup.build()));
+  assert.equal(a.CareerBackup.validate(envelope).ok, true);
+
+  const b = loadHarness();
+  b.Career.load();
+  assert.equal(b.CareerBackup.apply(envelope, { focusFlavour: "driver" }).ok, true);
+  const daily = JSON.parse(b.disk.get("apex26.daily.v1"));
+  assert.deepEqual(daily.days["2026-10-15"].classes, { [context]: { best: 80, laps: 1 } }, "the class entry survives import");
+
+  vm.runInContext(src("js/race/daily-challenge.js"), b.ctx);
+  const d = vm.runInContext("DailyChallenge", b.ctx).create({
+    store: b.store, fmtTime: (t) => t.toFixed(3), startRace() {}, ttDistance: 3,
+    records: { key: () => context, restoreDaily() {}, prepareDaily() {} },
+  });
+  d.open("2026-10-15");
+  const line = d.shareText(null);
+  assert.match(line, / · 80\.000/, "the share line shows the restored lap");
+  assert.doesNotMatch(line, /NO LAP/);
+
+  // Hostile or oversized class keys still drop; the 8-per-day cap holds.
+  const classes = { constructor: { best: 1, laps: 1 }, prototype: { best: 1, laps: 1 }, ["x".repeat(4097)]: { best: 1, laps: 1 } };
+  for (let i = 0; i < 12; i++) classes[JSON.stringify({ car: ["c" + i] })] = { best: 70 + i, laps: 1 };
+  const c = loadHarness();
+  c.Career.load();
+  const env2 = JSON.parse(JSON.stringify(envelope));
+  env2.daily = { days: { "2026-10-15": { best: 70, laps: 12, classes } } };
+  assert.equal(c.CareerBackup.apply(env2, { focusFlavour: "driver" }).ok, true);
+  const kept = Object.keys(JSON.parse(c.disk.get("apex26.daily.v1")).days["2026-10-15"].classes);
+  assert.equal(kept.length, 8);
+  assert.ok(kept.every((k) => k.startsWith("{")), "no constructor / prototype / oversized key");
 });

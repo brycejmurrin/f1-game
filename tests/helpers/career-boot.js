@@ -1,14 +1,14 @@
 // @ts-check
 // Shared boot helpers for the career Playwright specs (virgin-page fixture).
 import { expect } from "@playwright/test";
-import { BOOT_MS } from "./fixtures.js";
+import { BOOT_MS, RACE_BUILD_MS, awaitTrackBuild } from "./fixtures.js";
 
-export { BOOT_MS };
+export { BOOT_MS, RACE_BUILD_MS };
 export const LANDSCAPE = { width: 844, height: 390 };
 
 export async function boot(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
   await page.evaluate(() => window.__apex.headless(true));
 }
 
@@ -19,7 +19,7 @@ export async function armRace(page, setup, arg) {
       const st = window.__apex.info().state;
       return (st === "race" || st === "count") && !!window.__apex.carAt(0);
     } catch (_) { return false; }
-  }, null, { polling: 100, timeout: BOOT_MS });
+  }, null, { polling: 100, timeout: RACE_BUILD_MS });
 }
 
 export async function selectPartCategory(page) {
@@ -57,5 +57,8 @@ export async function goRacing(page) {
   await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
   await page.locator("#q-sim").click();
   await page.locator("#q-go").click();
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  // UI race entry can exceed BOOT_MS on a loaded CI shard (bahrain ~54 s measured
+  // on run 38668575599 while parallel career specs run). Stall detection, not a
+  // wall clock — same contract as fixtures.js loadTrack / pit-lane specs.
+  await awaitTrackBuild(page);
 }

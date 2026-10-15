@@ -14,6 +14,26 @@ const GarageArrival = (function () {
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
    *  one was playing (js/garage/setup-camera.js startArrivalPreview). */
+  /* THE ANGLE MAP: a plan of the bay under GARAGE ANGLE — walls, the door, the
+   * pit lane, the parked car and the two interior eyes (EYE_L / EYE_R) with a
+   * cone toward the door — the chosen one(s) lit, so LEFT / RIGHT / CUT are a
+   * picture rather than a word. Pure: the inner SVG for an angle. Bay x maps to
+   * 10..110, z (back -6.4 .. door 6.4) to 8..92, the lane below the door. */
+  function angleMap(angle) {
+    const X = (x) => (60 + x * 100 / 10.8).toFixed(1), Z = (z) => (50 + z * 84 / 12.8).toFixed(1);
+    const on = (left) => angle === "cut" || angle === (left ? "left" : "right");
+    const eye = (e, left, n) => {
+      const lit = on(left), x = X(e[0]), z = Z(e[2]);
+      return `<path d="M${x} ${z}L${X(-2.7)} ${Z(6.4)}L${X(2.7)} ${Z(6.4)}Z" fill="currentColor" opacity="${lit ? 0.22 : 0.06}"/>`
+        + `<circle cx="${x}" cy="${z}" r="5" fill="${lit ? "#e10600" : "none"}" stroke="currentColor" stroke-width="1.5"/>`
+        + (angle === "cut" ? `<text x="${x}" y="${(+z + 3.5).toFixed(1)}" font-size="8" text-anchor="middle" fill="#fff">${n}</text>` : "");
+    };
+    return `<rect x="10" y="8" width="100" height="84" fill="none" stroke="currentColor" stroke-width="2"/>`
+      + `<line x1="${X(-2.7)}" y1="${Z(6.4)}" x2="${X(2.7)}" y2="${Z(6.4)}" stroke="#2a2a2e" stroke-width="4"/>`
+      + `<rect x="4" y="96" width="112" height="16" fill="currentColor" opacity="0.12"/>`
+      + `<rect x="${X(-0.9)}" y="${Z(-2.8)}" width="${(1.8 * 100 / 10.8).toFixed(1)}" height="${(5.6 * 84 / 12.8).toFixed(1)}" rx="3" fill="currentColor" opacity="0.5"/>`
+      + eye(EYE_L, true, angle === "cut" ? 1 : "") + eye(EYE_R, false, 2);
+  }
   function bindSettings($, store, opts = {}) {
     const preview = typeof opts.preview === "function" ? opts.preview : null;
     const read = () => settings(store.get("garageArrival", null));
@@ -24,6 +44,19 @@ const GarageArrival = (function () {
         const el = $("ga-" + key);
         if (key === "enabled") el.checked = value[key];
         else el.value = String(value[key]);
+      }
+      // The angle map lives next to the selector it explains (made once, here:
+      // the panel's markup is index.html's, this picture is the setting's).
+      const sel = $("ga-angle");
+      let map = $("ga-angle-map");
+      if (!map && sel && sel.insertAdjacentHTML) {
+        sel.insertAdjacentHTML("afterend", '<svg id="ga-angle-map" viewBox="0 0 120 116" role="img"></svg>');
+        map = $("ga-angle-map");
+      }
+      if (map) {
+        map.innerHTML = angleMap(value.angle);
+        if (map.setAttribute) map.setAttribute("aria-label", value.angle === "cut" ? "Two camera cut: left of the bay, then right"
+          : (value.angle === "left" ? "Left" : "Right") + " of the bay, looking out of the door");
       }
     }
     for (const key of fields) $("ga-" + key).onchange = () => {
@@ -181,5 +214,5 @@ const GarageArrival = (function () {
     skip.onclick = finish;
     return { start, step, cancel, finish, get state() { return state; } };
   }
-  return Object.freeze({ create, pose, poseOut, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
+  return Object.freeze({ create, pose, poseOut, angleMap, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();

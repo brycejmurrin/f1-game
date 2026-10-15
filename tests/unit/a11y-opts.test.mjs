@@ -116,10 +116,11 @@ test("shell declares ACCESSIBILITY door + empty panel; MOTION left Appearance", 
   assert.ok(MANIFEST.includes("js/ui/a11y-opts.js"));
 });
 
-test("export SPEC lists motion/focusRing/cbCues under a11y", () => {
+test("export SPEC lists motion/focusRing/cbCues/holdMode under a11y", () => {
   assert.match(EXPORT, /k:\s*"motion"[\s\S]*?group:\s*"a11y"/);
   assert.match(EXPORT, /k:\s*"focusRing"[\s\S]*?group:\s*"a11y"/);
   assert.match(EXPORT, /k:\s*"cbCues"[\s\S]*?group:\s*"a11y"/);
+  assert.match(EXPORT, /k:\s*"holdMode"[\s\S]*?group:\s*"a11y"/);
 });
 
 test("high focus is the default and stamps data-focus", () => {
@@ -128,6 +129,15 @@ test("high focus is the default and stamps data-focus", () => {
   assert.equal(html.dataset.focus, "high");
   A.setFocus("standard");
   assert.equal(html.dataset.focus, undefined);
+});
+
+test("colourblind help mentions race HUD cues", () => {
+  const { panel, A } = load();
+  A.mountPanel();
+  const help = panel.children.find((n) => n.id === "pm-cbcues-help");
+  assert.ok(help);
+  assert.match(help.textContent, /race HUD/i);
+  assert.doesNotMatch(help.textContent, /follow-up|still under APPEARANCE/i);
 });
 
 test("colourblind cues off by default; on stamps data-cb-cues", () => {
@@ -151,19 +161,25 @@ test("REDUCE MOTION AUTO follows OS; ON always; OFF overrides OS", () => {
   assert.equal(load({ stored: { motion: "on" } }).T.choice(), "auto", "legacy MOTION: ON → AUTO");
 });
 
-test("panel mounts three rows and wires them", () => {
-  const { wired, ids, A, T } = load();
+test("panel mounts five rows and wires them", () => {
+  const { wired, ids, A, T, written } = load();
   assert.ok(ids.get("pm-motion"));
   assert.ok(ids.get("pm-focus"));
   assert.ok(ids.get("pm-cbcues"));
+  assert.ok(ids.get("pm-hold-throttle"));
+  assert.ok(ids.get("pm-hold-lookback"));
   const idsWired = wired.map((w) => w.id).sort();
-  assert.deepEqual(idsWired, ["pm-cbcues", "pm-focus", "pm-motion"]);
+  assert.deepEqual(idsWired, ["pm-cbcues", "pm-focus", "pm-hold-lookback", "pm-hold-throttle", "pm-motion"]);
   ids.get("pm-motion")._spec.write("reduce");
   assert.equal(T.choice(), "reduce");
   ids.get("pm-focus")._spec.write("standard");
   assert.equal(A.focusRing(), "standard");
   ids.get("pm-cbcues")._spec.write("on");
   assert.equal(A.cbCues(), "on");
+  ids.get("pm-hold-throttle")._spec.write("toggle");
+  assert.equal(A.holdMode().throttle, "toggle");
+  assert.equal(written.holdMode.throttle, "toggle");
+  assert.equal(written.holdMode.lookBack, "hold");
 });
 
 test("HIGH focus CSS keys off data-focus", () => {

@@ -45,7 +45,7 @@ hit="$(printf '%s' "$json" | node -e '
     const self = process.env.GITHUB_RUN_ID || "";
     const r = runs.find((x) => x.status === "completed" && x.conclusion === "success"
       && String(x.id) !== self && x.path === ".github/workflows/ci.yml"
-      && x.event === "pull_request");
+      && x.event === "pull_request" && !/^CI ignored: label /.test(x.display_title || ""));
     if (r) process.stdout.write(`${r.id} ${r.run_started_at || r.created_at || ""}`);
   });')"
 if [ -n "$hit" ]; then
@@ -59,6 +59,23 @@ if [ -n "$hit" ]; then
   ' "$tip" "$started")"
   if [ "$moved" != same ]; then
     say "reuse-draft-fast: base $BASE_REF tip ($tip) is $moved against the draft run $hit (started $started) — merge-dependent checks must re-run"
+    echo "reuse=false"
+    exit 0
+  fi
+fi
+# A GREEN RUN IS NOT A RUN THAT TESTED ANYTHING (#2184, 2026-10-15). A draft
+# without run-ci concludes success with only the skip notice run, and so does
+# a label-noise run (every job skipped; ci.yml's `on:` note) — a skipped job
+# reports success. Reuse only a run whose tooling A shard really ran and passed.
+if [ -n "$hit" ]; then
+  ran="$(gh api "repos/$REPO/actions/runs/$hit/jobs?per_page=100" 2>/dev/null | node -e '
+    let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+      let jobs = []; try { jobs = JSON.parse(s).jobs || []; } catch (_) {}
+      const a = jobs.filter((j) => j.name === "Structural guards (tooling A)");
+      process.stdout.write(a.length && a.every((j) => j.conclusion === "success") ? "yes" : "no");
+    });')" || ran=no
+  if [ "$ran" != yes ]; then
+    say "reuse-draft-fast: ci.yml run $hit concluded success but its tooling A shard did not run and pass (a skip-only draft or label run) — run the fast tier"
     echo "reuse=false"
     exit 0
   fi

@@ -143,28 +143,39 @@ test("never returns null — a render or an actionable error", () => {
   }
 });
 
-test("errors before a track is loaded", () => {
+// The boot builds the menu flyby track, so "before a track is loaded" never
+// happens on its own: an either-branch test (error OR payload) always took the
+// payload branch and the NoTrackError paths went unexercised (#2173). Force the
+// no-track state by overriding the façade's `track` getter for one call, assert
+// the typed error, then the payload with the track back.
+function withNoTrack(fn) {
+  const d = Object.getOwnPropertyDescriptor(g.G, "track");
+  Object.defineProperty(g.G, "track", { get: () => null, configurable: true });
+  try { return fn(); } finally { Object.defineProperty(g.G, "track", d); }
+}
+function assertNoTrack(r) {
+  truthy(r);
+  assert.equal(r.ok, false);
+  assert.equal(r.error, "NoTrackError");
+  contains(r.fix, "race");
+}
+
+test("map never returns null — a grid, or NoTrackError with no track", () => {
   fresh();
-  const pl = g.apex.render({ what: "map" });
-  truthy(pl);
-  if (pl.ok === false) contains(pl.fix, "race");
-  else truthy(pl.grid);
+  assertNoTrack(withNoTrack(() => g.apex.render({ what: "map" })));
+  truthy(g.apex.render({ what: "map" }).grid);
 });
 
-test("errors before a track is loaded", () => {
+test("survey never returns null — a summary, or NoTrackError with no track", () => {
   fresh();
-  const s = g.apex.survey();
-  truthy(s);
-  if (s.ok === false) contains(s.fix, "race");
-  else truthy(s.summary);
+  assertNoTrack(withNoTrack(() => g.apex.survey()));
+  truthy(g.apex.survey().summary);
 });
 
-test("errors before a track is loaded, never returns null", () => {
+test("scene never returns null — a registry, or NoTrackError with no track", () => {
   fresh();
-  const s = g.apex.scene();
-  truthy(s);
-  if (s.ok === false) truthy(s.fix);
-  else truthy(s.registry);
+  assertNoTrack(withNoTrack(() => g.apex.scene()));
+  truthy(g.apex.scene().registry);
 });
 
 test("states the goal, the trade-offs and the constraints, compactly", () => {
