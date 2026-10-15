@@ -265,7 +265,9 @@ function makeGpuHarness(opts = {}) {
       return {};
     },
   };
-  const canvasTexture = { createView: () => ({ swapchain: true }) };
+  // setPresentViewFail(true): the swapchain view throws, so present() bails before its submit.
+  let failPresentView = false;
+  const canvasTexture = { createView: () => { if (failPresentView) throw new Error("injected present-view failure"); return { swapchain: true }; } };
   // A canvas is bound to ONE context type for life: once getContext("webgpu")
   // succeeds, getContext("webgl2") returns null on that element forever. That is
   // the whole reason a WGX refusal costs a page reload, and the old mock — which
@@ -421,6 +423,7 @@ function makeGpuHarness(opts = {}) {
     fireWindow(type) { windowListeners.get(type)?.(); },
     loseDevice: (info) => loseDevice(info || { reason: "unknown" }),
     setEncoderFail(v) { failEncoder = !!v; },
+    setPresentViewFail(v) { failPresentView = !!v; },
     scopeDepth: () => scopeStack.length,
     holdPops() { holdPops = true; },
     pendingPops: () => pendingPops.map((p) => p.filter),
@@ -3296,4 +3299,55 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
     assert.equal(gfx.materialMapState().albedo, true, `${label}: bound at once`);
   }
   assert.match(WGX_SOURCE, /_packAsync && typeof Assets !== "undefined" && Assets\.readLayerBytesAsync/, "the knob gates the seam");
+});
+
+// #2154: particles.js passes dirty=false when the pool did not change (held rain, an idle pool). GLX skips the
+// upload then; WGX re-wrote the VBO every frame. Slots ping-pong by call order, so the skip keys per slot.
+test("drawParticles(…, dirty=false) skips the VBO upload when its slot holds the same batch (#2154)", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const A = new Float32Array(400).fill(1), B = new Float32Array(200).fill(2);
+  const vbo = () => new Set(h.buffers.filter((b) => b.desc.usage === (8 | 2) /* VERTEX|COPY_DST in the mock */ && b.desc.size === 2560 * 4));
+  const frame = (calls) => {
+    assert.equal(gfx.begin({}), true);
+    const w0 = h.writes.length;
+    for (const c of calls) gfx.drawParticles(...c);
+    const set = vbo();
+    const n = h.writes.slice(w0).filter((w) => set.has(w.buffer)).length;
+    gfx.present({});
+    return n;
+  };
+  assert.equal(frame([[A, 400, false, true], [B, 200, true, true]]), 2, "a dirty frame uploads both slots");
+  assert.equal(frame([[A, 400, false, false], [B, 200, true, false]]), 0, "a clean frame uploads nothing");
+  assert.equal(frame([[A, 400, false, false], [B, 200, true, false]]), 0, "…and stays clean");
+  assert.equal(frame([[A, 400, false, true], [B, 200, true, false]]), 1, "dirty=true still uploads its slot");
+  assert.equal(frame([[A, 390, false, false], [B, 200, true, false]]), 1, "a changed count uploads");
+  assert.equal(frame([[B, 200, true, false]]), 1, "a batch that moved slot (only one group drawn) uploads");
+  assert.equal(frame([[B, 200, true, false]]), 0, "…then it is clean again on that slot");
+});
+
+// #2156: freeTexture retired unconditionally, and _retireFlush ran only after a submit — so a texture freed
+// outside a frame (title screen, a track switch) stayed resident until the next fully presented frame.
+test("freeTexture destroys at once outside a frame, after the submit inside one; a present that bails flushes (#2156)", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const px = new Uint8Array([128, 128, 128, 255]);
+  const idle = gfx.createTextureArray(1, [px], 17);
+  gfx.freeTexture(idle);
+  assert.equal(idle.texture.destroyed, true, "no frame recording: destroyed synchronously");
+
+  const inFrame = gfx.createTextureArray(1, [px], 17);
+  assert.equal(gfx.begin({}), true);
+  gfx.freeTexture(inFrame);
+  assert.equal(inFrame.texture.destroyed, false, "a draw recorded this frame may still reference it");
+  gfx.present({});
+  assert.equal(inFrame.texture.destroyed, true, "destroyed after the frame's submit");
+
+  const bailed = gfx.createTextureArray(1, [px], 17);
+  assert.equal(gfx.begin({}), true);
+  gfx.freeTexture(bailed);
+  h.setPresentViewFail(true);
+  gfx.present({});
+  h.setPresentViewFail(false);
+  assert.equal(bailed.texture.destroyed, true, "a present with no view submitted nothing, so it flushes the retire list");
 });

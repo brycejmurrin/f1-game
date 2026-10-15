@@ -1228,6 +1228,10 @@ const WGX = (function () {
     // submit; one shared buffer left both draws seeing sparks only.
     let particleUBO = [null, null], particleVBO = [null, null], _particleCap = [0, 0];
     let _particleBG = [null, null], _particleFlip = 0;
+    // Per-slot record of the batch last uploaded: { data, add, n }. A
+    // dirty=false draw that lands on a slot still holding the same batch skips
+    // the VBO upload (GLX _partLastAdd/_partLastN parity, keyed per ping-pong slot).
+    const _particleLast = [null, null];
     const _retiredBufs = [];   // buffers replaced MID-FRAME; destroyed after the frame's submit
     let skyPipelineMS = null;
 
@@ -3235,8 +3239,9 @@ const WGX = (function () {
     function freeTexture(t) {
       if (!t) return;
       // Retire, never destroy in-frame: a draw recorded earlier this frame may
-      // still reference the view (same list the VBO growth paths use).
-      if (t.texture) _retiredBufs.push(t.texture);
+      // still reference the view. Outside a frame nothing can, so destroy now
+      // (_freeBuf's test) rather than wait on a submit that may not come.
+      _freeBuf(t.texture);
       // drawDecal caches a bind group on the caller's token (tex._wgxDecalBG)
       // and guards on `!tex.view`. Leaving both in place after the texture is
       // destroyed lets a caller that frees then redraws slip past the guard and
@@ -4361,6 +4366,7 @@ const WGX = (function () {
       }
       _retiredBufs.length = 0;
     }
+    function _retireIdleFlush() { if (!(SHD && SHD.pendingEnc)) _retireFlush(); }
     function _capFinish(cap) {
       if (!cap) return;
       const req = _capReq; _capReq = null;
@@ -4418,9 +4424,12 @@ const WGX = (function () {
       // COPY_SRC rgba8 target on software (composited to #game via 2D blit).
       try {
         currentView = _acquirePresentView();
-        if (!currentView) { litPass = null; encoder = null; currentView = null; return; }
+        // Nothing submits on these bails, so the dropped encoder cannot reference
+        // the retired objects: flush them now — unless a pending shadow encoder,
+        // which rides a LATER submit, still might.
+        if (!currentView) { litPass = null; encoder = null; currentView = null; _retireIdleFlush(); return; }
       } catch (_) {
-        litPass = null; encoder = null; currentView = null; return;
+        litPass = null; encoder = null; currentView = null; _retireIdleFlush(); return;
       }
       _queueOutputProbe();
       const o = opts || {};
@@ -5251,7 +5260,7 @@ const WGX = (function () {
     // batch.visible — that is the MAIN-camera cull from the prior lit pass and
     // would drop casters behind the eye that still hit the light frustum.
 
-    function drawParticles(data, floatCount, additive) {
+    function drawParticles(data, floatCount, additive, dirty) {
       if (!litPass || !pParticle || !data || !(floatCount > 0)) return;
       const nVert = (floatCount / 10) | 0;
       if (nVert <= 0) return;
@@ -5266,8 +5275,15 @@ const WGX = (function () {
           size: _particleCap[i] * 4,
           usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
+        _particleLast[i] = null;
       }
-      device.queue.writeBuffer(particleVBO[i], 0, data, 0, floatCount);
+      // Slots follow call order, so a clean frame that draws only one blend
+      // group lands it on slot 0 — the key holds the batch, not just a flag.
+      const last = _particleLast[i], add = additive ? 1 : 0;
+      if (dirty !== false || !last || last.data !== data || last.add !== add || last.n !== floatCount) {
+        device.queue.writeBuffer(particleVBO[i], 0, data, 0, floatCount);
+        _particleLast[i] = { data, add, n: floatCount };
+      }
       const s = fxScratch;
       s.set(frameVPGpu, 0);
       const eye = frameEye || [0, 0, 0];
