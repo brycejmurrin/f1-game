@@ -16,6 +16,13 @@ function create(G) {
   const { $, store } = G;
   const tick = () => { if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiTick(); };
   const sections = [];
+  let calibration = null;
+  function cancelCalibration() {
+    if (!calibration) return;
+    clearTimeout(calibration.timer);
+    calibration = null;
+    say("Calibration cancelled — press CALIBRATE STICK to try again.");
+  }
 
   // The same activity report drives Help and first-run coaching prompts.
   const activeInputKind = () => Input.activeInputSource ? Input.activeInputSource()
@@ -78,6 +85,7 @@ function create(G) {
     const onScreen = () => !(host.closest && host.closest("[hidden]"));
     // A captured key code or button index lands here.
     function accept(v) {
+      if (!armed) return;
       if (!onScreen()) { disarm(true, false); return; }
       const { id, slot } = armed;
       const r = dev.set(id, slot, v);
@@ -132,6 +140,7 @@ function create(G) {
       setNote(`${row ? row.label : id}${slot ? " second" : ""} ${dev.noun} cleared — it is unset now.`);
     }
     function arm(id, slot, btn) {
+      cancelCalibration();
       if (armed && armed.btn === btn) { disarm(); return; }
       for (const s of sections) s.disarm(true, false);
       armed = { id, slot, btn };
@@ -167,6 +176,8 @@ function create(G) {
     // The rows follow the CONTROLS page's setting-row grammar (label left, the
     // control cluster right, one line at every UI SIZE): label, then two chips.
     function render(focus) {
+      // Replacing a listening slot must also remove its invisible capture.
+      if (clearArmed()) setNote(dev.idle);
       host.textContent = "";
       let focusBtn = null;
       for (const a of dev.list()) {
@@ -289,6 +300,8 @@ function create(G) {
     && (!Input.padAxesAreDefault || Input.padAxesAreDefault())
     && (!Input.padRest || Input.padRest() === 0);
   const resetController = () => {
+    cancelCalibration();
+    if (abortWheel) abortWheel();
     Input.resetPad();
     if (Input.setPadAxisMap) {
       Input.setPadAxisMap(null);
@@ -321,7 +334,7 @@ function create(G) {
   });
   // A pad that appears mid-session (gamepadconnected fires on its first press)
   // reveals the section and may rename the chips (a PlayStation pad).
-  if (pad) for (const ev of ["gamepadconnected", "gamepaddisconnected"]) window.addEventListener(ev, () => pad.render());
+  if (pad) for (const ev of ["gamepadconnected", "gamepaddisconnected"]) window.addEventListener(ev, () => { cancelCalibration(); pad.render(); });
   // The first physical key on a touch device reveals the KEYBOARD table.
   // Input.init (which sets the latch) is wired AFTER this create, so its
   // listener runs after this one for the same keydown: the check is deferred
@@ -375,12 +388,26 @@ function create(G) {
   const calibNote = $("pm-pad-calib-note");
   const say = (t) => { if (calibNote) calibNote.textContent = t; };
   const calibBtn = $("pm-pad-calib");
+  // With wheel capture stopped, this uses Input's live usage ranking and
+  // configured-wheel preference, exactly as its calibration sampler does.
+  function calibrationDevice() {
+    try { return Input.pickPad(navigator.getGamepads(), null, !Input.padAxesAreDefault()); }
+    catch (_) { return null; }
+  }
   if (calibBtn && Input.calibratePad) calibBtn.onclick = () => {
+    disarmAll();
     if (!Input.padPresent()) { say("No controller detected. Press a button on it first — a browser hides a pad until you do."); return; }
     // The press that ran this button is not the stick, so sample on the next
     // turn of the loop rather than the instant of the click.
     say("Let go of the stick…");
-    setTimeout(() => {
+    const device = calibrationDevice();
+    const request = calibration = { id: device && device.id, index: device && device.index, timer: 0 };
+    request.timer = setTimeout(() => {
+      if (calibration !== request) return;
+      const current = calibrationDevice();
+      if (!current || current.id !== request.id || current.index !== request.index
+          || (calibBtn.closest && calibBtn.closest("[hidden]"))) { cancelCalibration(); return; }
+      calibration = null;
       if (Input.calibratePad()) {
         // Stored: the hint promises the offset applies "from then on", and it
         // used to be lost on the next reload (loaded back below).
@@ -423,12 +450,6 @@ function create(G) {
       Input.beginAxisCapture(null);
       wheelBtn.textContent = "SET UP A WHEEL";
     };
-    /* BACK from the CONTROLS page must stop the wizard too: only closeSettings
-       disarmed it, so it kept re-mapping axes and zeroing the pedals from the
-       home page. SettingsNav.onLeave(fn) is called with the page id as it hides. */
-    if (typeof SettingsNav !== "undefined" && SettingsNav && SettingsNav.onLeave) {
-      SettingsNav.onLeave((id) => { if (id === "controls") abortWheel(); });
-    }
     const finish = (map, msg) => {
       running = false;
       clearTimeout(stepTimer);
@@ -449,6 +470,7 @@ function create(G) {
       if (pad) pad.render();
     };
     wheelBtn.onclick = () => {
+      cancelCalibration();
       if (running) {   // a second press abandons it and puts everything back
         abortWheel();
         say("Wheel setup cancelled — nothing changed.");
@@ -505,13 +527,20 @@ function create(G) {
   if (Input.setPadAxisMap) Input.setPadAxisMap(store.get("padAxes", null));
   if (Input.setPadRest) Input.setPadRest(store.get("padRest", 0));   // CALIBRATE STICK, persisted
 
+  function disarmAll() {
+    cancelCalibration();
+    for (const s of sections) s.disarm(true, false);
+    if (abortWheel) abortWheel();
+  }
+  // BACK hides only this settings page; CLOSE / RESUME call disarmAll too.
+  if (typeof SettingsNav !== "undefined" && SettingsNav && SettingsNav.onLeave) {
+    SettingsNav.onLeave((id) => { if (id === "controls") disarmAll(); });
+  }
+  window.addEventListener("blur", cancelCalibration);
   if (keys || pad) Log.info("ui", "KeyBinds.create");
   return {
     render() { for (const s of sections) s.render(); },
-    disarmAll() {
-      for (const s of sections) s.disarm(true, false);   // closeSettings: nothing stays armed into a race
-      if (abortWheel) abortWheel();
-    },
+    disarmAll,
   };
 }
 
