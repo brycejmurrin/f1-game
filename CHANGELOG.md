@@ -15,6 +15,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 ### Fixed
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
+- The default renderer no longer stalls while it loads the baked materials, and no longer leaks memory each time a car's wheels or team meshes are rebuilt (#2149, #2150).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
