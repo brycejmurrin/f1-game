@@ -10,7 +10,7 @@
         tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
-        cameraTower, sponsorHoarding, signBoard, cypress,
+        cameraTower, sponsorHoarding, signBoard, cypress, terrainYAt,
         addBox, addCyl, addCone, addFrustum } = api;
 
       const LEAF = [0.20, 0.44, 0.20], LEAF_D = [0.15, 0.36, 0.18];
@@ -92,8 +92,21 @@
           addCone(stage, vadd(a.c, a.u, 41), 2.2, 5, [0.98, 0.72, 0.28], 8, b);
         }, { required: true });
       }
-      waterSurface(K(0.115), 1, 74, [70, 0.18, 90], [0.30, 0.48, 0.66],
-        { id: "sochi-reflecting-pool" });
+      // waterSurface sits at pyMin - 0.8, i.e. under the plaza ground 58-90 m
+      // off the road (survey D2), and a groundPatch here is coplanar with the
+      // Medals Plaza patch it overlaps. Seat a thin slab on the REAL terrain
+      // (terrainYAt, world XZ) at the highest of its corners and centre.
+      {
+        const a = anchor(K(0.115), 1, 109);
+        let top = -Infinity;
+        for (const [dr, dt] of [[0, 0], [-35, -45], [35, -45], [-35, 45], [35, 45]]) {
+          const y = terrainYAt(a.c[0] + a.r[0] * dr + a.t[0] * dt, a.c[2] + a.r[2] * dr + a.t[2] * dt);
+          if (Number.isFinite(y)) top = Math.max(top, y);
+        }
+        if (top > -Infinity)
+          addBox(out, vadd(a.c, a.u, top - a.c[1] + 0.15), [70, 0.5, 90],
+            [0.30, 0.48, 0.66], [a.r, a.u, a.t]);
+      }
       // Jets standing in the pool: the Medals Plaza fountain is the centrepiece
       // the flame tower is aimed at, and a flat sheet of water alone does not
       // read as one.
@@ -197,13 +210,19 @@
         });
       }
 
+      // The three arcStands (declared below) own their side of the road; with the
+      // generic city blocks gone, planting here crowns clip their rows.
+      const STAND_SPANS = [[0.215, 0.295, 1], [0.510, 0.585, -1], [0.785, 0.855, 1]];
+      const inStand = (s, side) => STAND_SPANS.some(([a, b, sd]) => sd === side && s >= a && s <= b);
       every(32, (k) => {
         const s = k / n;
         if (s <= 0.30 || s >= 0.90) return;
         const h = hash(k * 31);
         if (h < 0.40) return;
-        tree(k, h < 0.5 ? -1 : 1, 12 + h * 12, 10 + h * 7, h < 0.5 ? LEAF_D : LEAF);
-        if (h > 0.78) tree(k, h > 0.90 ? -1 : 1, 30 + h * 18, 11 + h * 6, LEAF_D);
+        const side = h < 0.5 ? -1 : 1;
+        if (!inStand(s, side)) tree(k, side, 12 + h * 12, 10 + h * 7, h < 0.5 ? LEAF_D : LEAF);
+        const side2 = h > 0.90 ? -1 : 1;
+        if (h > 0.78 && !inStand(s, side2)) tree(k, side2, 30 + h * 18, 11 + h * 6, LEAF_D);
       });
       every(30, (k) => {
         const s = k / n;
@@ -397,10 +416,10 @@
       marshalPost(K(0.810), 1, 9);
 
       // Skip cambered park rails that bury jersey tops (guardrail jersey rail
-      // instance in structures.js).
+      // instance in structures.js). Right side at 8 m: 6 m buried 3 posts 0.43 m on camber (D6).
       for (const [s0, s1] of [[0.58, 0.79], [0.84, 0.92]]) {
         guardrail(s0, s1, -1, 6, [0.80, 0.81, 0.83]);
-        guardrail(s0, s1,  1, 6, [0.80, 0.81, 0.83]);
+        guardrail(s0, s1,  1, 8, [0.80, 0.81, 0.83]);
       }
       guardrail(0.30, 0.50, -1, 7.5, [0.80, 0.81, 0.83]);
       guardrail(0.30, 0.50,  1, 7.5, [0.80, 0.81, 0.83]);
@@ -410,12 +429,14 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      // Thinned Caucasus rings — vertex budget for Ice Cube + station.
+      // Caucasus: three layered rings, each taller and more haze-tinted than
+      // the last, long enough (count * len > the ring circumference) that the
+      // inland horizon closes instead of reading as separate boxes (survey D5).
       const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
-        [150, 20, 160, 50, 20, 12, [0.20, 0.36, 0.20]],
-        [280, 14, 230, 74, 60, 34, [0.26, 0.32, 0.30]],
-        [430, 10, 300, 96, 110, 60, [0.42, 0.45, 0.50]],   // high hazed Caucasus
+        [150, 22, 170, 50, 22, 14, [0.20, 0.36, 0.20]],
+        [300, 22, 420, 90, 80, 50, [0.30, 0.38, 0.38]],
+        [480, 18, 560, 130, 160, 110, [0.52, 0.58, 0.64]],   // high hazed Caucasus
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
@@ -449,7 +470,7 @@
       signBoard(K(0.255), 1, 7, "corner", 6);
       signBoard(K(0.545), -1, 7, "corner", 13);
       signBoard(K(0.815), 1, 7, "corner", 17);
-      sponsorHoarding(0.930, 0.075, 1, 5.0, { h: 1.2, step: 10 });
+      sponsorHoarding(0.930, 0.075, 1, 7.0, { h: 1.2, step: 10 });
       // Camera towers at the show corners — gaps bumped so monopole feet clear
       // cambered terrain (tighter gaps bury them ≤0.14 m).
       cameraTower(K(0.085), 1, 68, { h: 20 });

@@ -22,8 +22,13 @@
     dressingExclusions: [
       // Sochi runs through the Olympic Park — paved plaza, not vegetation.
       { kinds: ["foliage"], s0: 0.90, s1: 0.30 },
-      { kind: "foliage", s0: 0.42, s1: 0.58 },
-      { kind: "city", s0: 0.86, s1: 0.34 },
+      // No generic city blocks anywhere: the venues are bespoke modelGroups and
+      // the outer loop is broadleaf planting (brief §4), not a tower canyon.
+      { kind: "city" },
+      // Foliage may plant the outer loop but not through the arcStand rows
+      // (scenery/sochi.js: T13 left, T17 right).
+      { kind: "foliage", s0: 0.51, s1: 0.585, side: -1 },
+      { kind: "foliage", s0: 0.785, s1: 0.855, side: 1 },
     ],
     // Black Sea coast: soft humid light, hazy horizon, subtropical green.
     pal: {
