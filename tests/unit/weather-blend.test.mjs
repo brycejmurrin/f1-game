@@ -404,3 +404,20 @@ test("applyRaceSettings resolves floodEmit with the session, not on the next fra
   atmo.applyRaceSettings();
   assert.ok(G._lastFloodEmit > 0);
 });
+
+test("day FOG weather is opaque by ~500 m and its horizon IS the fog colour (survey: 'fog hazes ground only')", () => {
+  const { G, atmo } = boot();
+  G.raceTimeOfDay = "day"; G.raceWeather = "fog";
+  atmo.applyRaceSettings();
+  const d = G.frame.fogDensity, fd = 500 * d;
+  assert.ok(1 - Math.exp(-fd * fd) > 0.97, `exp² haze at 500 m must be >97 %, density ${d}`);
+  assert.deepEqual(host(G.frameSky.horizon), host(G.frame.fogColor), "sky horizon meets the fog colour seamlessly");
+});
+
+test("day OVERCAST fog colour follows the grey deck, not the clear-sky blue", () => {
+  const { G, atmo } = boot();
+  G.raceTimeOfDay = "day"; G.raceWeather = "overcast";
+  atmo.applyRaceSettings();
+  const f = G.frame.fogColor;
+  assert.ok(f[2] - f[0] < 0.12, `overcast fog must be near-neutral grey, got ${JSON.stringify(host(f))}`);
+});
