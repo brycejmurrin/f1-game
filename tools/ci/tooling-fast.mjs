@@ -152,8 +152,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // GL-aware capture / remote-group worker defaults (llvmpipe vs SwiftShader).
   "tests/unit/browser-workers.test.mjs",
   "tests/unit/build-client-drop.test.mjs",
-  // Circuit survey gallery: filename parsing, Pages stage pin, build smoke.
-  "tests/unit/build-gallery.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/cam-motion.test.mjs",
@@ -290,6 +288,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The STANDINGS tab: API row order, gap to P1, the head-to-head bar and the
   // empty state, on mini-dom with the real Dom.el. ~0.1 s.
   "tests/unit/data-standings.test.mjs",
+  "tests/unit/day-sky-palette-storm-deck.test.mjs",
   "tests/unit/debris-step-skip.test.mjs",
   "tests/unit/deep-link.test.mjs",
   // ...and a third of the same family: two widgets keyed on ONE sign convention
@@ -470,6 +469,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-sign-occlusion.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
+  "tests/unit/geom-mountain-lowmat.test.mjs",
   "tests/unit/geometry-paths-baseline.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
@@ -581,6 +581,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a NaN is not an error but a silently dropped declaration.
   "tests/unit/loading-card.test.mjs",
   "tests/unit/loading-screen-pack-gate.test.mjs",
+  // The garage -> flyby hand-off sweep: fires once, after the garage only, in the team colour.
+  "tests/unit/loading-wipe.test.mjs",
   // answerInFlight serializes acceptAnswer so a second SDP does not start a parallel negotiation (and is not blacklisted — the guest retries).
   "tests/unit/lobby-answer-flight.test.mjs",
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
@@ -689,6 +691,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
   "tests/unit/platform-session-install.test.mjs",
+  // Player collision stereo side: default centred blip path; optional pan via contact pool.
+  "tests/unit/player-collision-side.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
@@ -823,8 +827,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/sheetshape-registry.test.mjs",
   "tests/unit/shell-ids.test.mjs",
   "tests/unit/ship-filter-paths.test.mjs",
-  // The free cameras step round a hill, building or tree between eye and car (js/agent/shot-clear.js).
-  "tests/unit/shot-clear.test.mjs",
   // shot.mjs --batch / --jpeg / --raster parse (no Chromium).
   "tests/unit/shot-jobs.test.mjs",
   // The physics step's functions (update, updateCar…) compile under 48 KB of bytecode — TurboFan's

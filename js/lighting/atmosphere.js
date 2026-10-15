@@ -26,6 +26,8 @@ const { LT, buildTrackLights } = LightTune;
 const TUNE_DEFS = LightTune.TUNE_DEFS || [];
 
 const CLEAR_FOG_SCALE = 0.45;
+// Minimum FOG-weather density at the default FOG BOOST (3.0): exp² fog is 80 % at 300 m, 99 % at 500 m.
+const FOG_WX_MIN_DENSITY = 0.0042;
 
 // ── Blended weather ──────────────────────────────────────────────────────────
 // applyRaceSettings(blendS) cross-fades the session lighting from what the
@@ -251,6 +253,17 @@ function _applyRaceBody() {
       G.frameSky.moon = 0;
       G._cloudBase = 0.44 + ovc * 0.42;     // modest broken cloud (sky shader adds the cumulus richness); overcast → heavy deck
       G.frame.exposure = 0.99 + clr * 0.05 - ovc * 0.08;
+      // PALETTE TINT (survey: spa/nurburgring/silverstone/anderstorp/qatar ignored def.palette
+      // under an explicit day): blend the circuit's own DAY sky (zenith/horizon/fog) in at
+      // DAY_PAL_BLEND. A night/dusk-authored palette (horizon luminance < 0.45) is skipped.
+      const _dp = G.track && G.track.def && G.track.def.palette;
+      if (_dp && _dp.horizon && _dp.zenith && (0.2126 * _dp.horizon[0] + 0.7152 * _dp.horizon[1] + 0.0722 * _dp.horizon[2]) >= 0.45) {
+        const _bl = (base, tgt) => base.map((v, i) => v + (tgt[i] - v) * DAY_PAL_BLEND);
+        G.frameSky.zenith = _bl(G.frameSky.zenith, _dp.zenith);
+        G.frameSky.horizon = _bl(G.frameSky.horizon, _dp.horizon);
+        if (_dp.fog && G.frame.fogColor) G.frame.fogColor = _bl(G.frame.fogColor, _dp.fog);
+        G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
+      }
     }
   } else {
     // "default" — the base sun/ambient come from the track palette (set ONCE at
@@ -429,11 +442,17 @@ function _applyRaceBody() {
         G.frame.exposure *= 0.86;
       } else {
         _dayWetGreyDeck(G, 0.88);
-        G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.62));
-        G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.72));
-        G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * 1.04));
-        G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * 1.04));
-        G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * 1.75;
+        // STORM vs RAIN (survey: mean frame diff ~5/255): a storm deck is DARK slate, not
+        // rain's light grey. Darken the deck (never below the day-storm luminance guard), cut ambient, thicken the haze.
+        const _dk = (c) => c.map((v) => v * STORM_DECK_DARK);
+        G.frameSky.zenith = _dk(G.frameSky.zenith); G.frameSky.horizon = _dk(G.frameSky.horizon);
+        G.frame.skyZenith = G.frameSky.zenith; G.frame.skyHorizon = G.frameSky.horizon;
+        if (G.frame.fogColor) G.frame.fogColor = _dk(G.frame.fogColor);
+        G.frame.sunColor = G.frame.sunColor.map((v) => v * _mute(0.50));
+        G.frameSky.sunColor = G.frameSky.sunColor.map((v) => v * _mute(0.60));
+        G.frame.ambientSky = G.frame.ambientSky.map((v) => Math.min(1, v * 0.80));
+        G.frame.ambientGround = G.frame.ambientGround.map((v) => Math.min(1, v * 0.80));
+        G.frame.fogDensity = (G.frame.fogDensity || 0.0016) * 2.6;
         G.frame.exposure = Math.max(G.frame.exposure != null ? G.frame.exposure : 1.0, 1.0);
       }
     } else if (!isNightSession) {
@@ -466,11 +485,21 @@ function _applyRaceBody() {
     // Daytime overcast: grey the ZENITH too. Only the horizon was flattened above (and
     // only for "default"), so an explicit day kept the clear-sky blue overhead -- the
     // 52-circuit weather survey saw a saturated blue band under overcast on every track.
-    if (!isNightSession && G.raceTimeOfDay !== "dusk" && G.raceTimeOfDay !== "dawn") _dayWetGreyDeck(G, 0.85);
+    if (!isNightSession && G.raceTimeOfDay !== "dusk" && G.raceTimeOfDay !== "dawn") {
+      _dayWetGreyDeck(G, 0.85);
+      // The distance haze must match the grey deck it now meets: the TOD's clear-sky
+      // blue fog colour tinted far ground and towers blue under a grey sky.
+      if (G.frame.fogColor) G.frame.fogColor = G.frame.fogColor.map((v, i) => v + (G.frameSky.horizon[i] - v) * 0.85);
+    }
   } else if (G.raceWeather === "fog") {
     // Low-visibility mist: dense pale fog, muted sun, moderate cloud. No rain, dry grip.
     G.frameSky.cloud = Math.min(0.85, G._cloudBase + 0.35);
-    G.frame.fogDensity = (G.frame.fogDensity || 0.0017) * (LT.fogWxMul != null ? LT.fogWxMul : 3.0);
+    const _fogMul = LT.fogWxMul != null ? LT.fogWxMul : 3.0;
+    // FLOOR (2026-10-15 weather survey): a bright clear-day circuit base is ~0.0008, so
+    // x3 left 0.0024 — exp² haze only ~40 % at 300 m and 87 % at 600 m, so far
+    // towers and dunes read crisp under "fog". A real mist is opaque by ~500 m. The
+    // floor scales with the FOG BOOST knob (1 = no extra haze stays honest).
+    G.frame.fogDensity = Math.max((G.frame.fogDensity || 0.0017) * _fogMul, FOG_WX_MIN_DENSITY * _fogMul / 3.0);
     // A NIGHT fog must stay night — the same guard, for the same reason, as the
     // exposure floor below. This pale daylight grey is ~20x the night horizon
     // band ([0.04,0.03,0.06]) and fogWxMul has just TRIPLED the density on the
@@ -505,7 +534,11 @@ function _applyRaceBody() {
     const _fogFloor = isNightSession ? 0.95 : _twl ? 1.03 : 1.08;
     if (G.frame.exposure == null || G.frame.exposure < _fogFloor) G.frame.exposure = _fogFloor;
     // Daytime fog: same -- the zenith stayed clear-sky blue above a grey wall of fog.
-    if (!isNightSession && !_twl) _dayWetGreyDeck(G, 0.85);
+    if (!isNightSession && !_twl) {
+      _dayWetGreyDeck(G, 0.85);
+      // Seamless: the sky horizon IS the fog colour (default TOD already does it above).
+      G.frameSky.horizon = fc.slice(); G.frame.skyHorizon = G.frameSky.horizon;
+    }
   } else {
     G.frameSky.cloud = G._cloudBase;
     // Guarantee frame.exposure always has a value (default = 1.0 if nothing set above)
@@ -610,6 +643,10 @@ function floodEmit(sunY) {
 
 // Daytime wet weather: blend the sky palette toward the dry-overcast grey deck
 // (same targets as the overcast branch) so rain/storm never reads as night.
+// Share of the circuit palette's sky blended into an explicit day sky.
+const DAY_PAL_BLEND = 0.5;
+// Day-storm deck/haze brightness vs rain's (1 = same as rain).
+const STORM_DECK_DARK = 0.86;
 function _dayWetGreyDeck(G, mix) {
   if (!G.frameSky.zenith || !G.frameSky.horizon || mix <= 0) return;
   const w = clamp(mix, 0, 1);
