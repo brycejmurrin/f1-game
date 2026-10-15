@@ -390,12 +390,17 @@ test("Input.activeInputSource follows real activity, not connected-device presen
 // textContent and children; createElement for the rows.
 // `disk`, when given, backs the store (reads and writes land in it).
 // `pre(sb)` adds globals the module reads at create() time (SettingsNav).
-function bootUi(desktop, helpSlots = {}, disk = null, pre = null) {
+function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = null) {
   const { Input, key, sb, fire } = boot();
+  const deferTimers = !!(opts && opts.deferTimers);
+  const timerQueue = [];
+  let timerSeq = 1;
   const nodes = {};
   const mk = (tag = "div") => {
     let text = "";
     const n = { tagName: tag.toUpperCase(), hidden: false, dataset: {}, disabled: false, style: {}, kids: [], clears: 0, attrs: {},
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      removeAttribute(k) { delete this.attrs[k]; },
       setAttribute(k, v) { this.attrs[k] = String(v); }, append(...a) { this.kids.push(...a); }, appendChild(a) { this.kids.push(a); },
       addEventListener() {}, removeEventListener() {},
       focus() { sb.document.activeElement = this; } };
@@ -415,7 +420,20 @@ function bootUi(desktop, helpSlots = {}, disk = null, pre = null) {
   sb.removeEventListener = (t, f) => { const l = winListeners[t] || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); };
   sb.GameAudio = null;
   if (pre) pre(sb);
-  sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
+  if (deferTimers) {
+    sb.setTimeout = (f, ms = 0) => {
+      const id = timerSeq++;
+      timerQueue.push({ id, f, ms: Number(ms) || 0 });
+      return id;
+    };
+    sb.clearTimeout = (id) => {
+      const i = timerQueue.findIndex((t) => t.id === id);
+      if (i >= 0) timerQueue.splice(i, 1);
+    };
+  } else {
+    sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
+    sb.clearTimeout = () => {};
+  }
   vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
   const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
   const store = disk
@@ -436,7 +454,18 @@ function bootUi(desktop, helpSlots = {}, disk = null, pre = null) {
   };
   // Input's listeners were registered before the swap above, the module's after.
   const fireAll = (t, e) => { fire(t, e); (winListeners[t] || []).forEach((f) => f(e || {})); };
-  return { Input, kb, press, fire: fireAll, sb, $: sb.document.getElementById };
+  const flushTimers = (throughMs = Infinity) => {
+    const due = timerQueue.filter((t) => t.ms <= throughMs).sort((a, b) => a.ms - b.ms);
+    for (const t of due) {
+      const i = timerQueue.indexOf(t);
+      if (i >= 0) timerQueue.splice(i, 1);
+      t.f();
+    }
+  };
+  return {
+    Input, kb, press, fire: fireAll, sb, $: sb.document.getElementById,
+    flushTimers, pendingTimers: () => timerQueue.length,
+  };
 }
 // The UI module reads Input from the same realm; boot() runs input.js in a
 // context whose globals are `sb`, so createContext(sb) is that same realm.
@@ -689,6 +718,107 @@ test("How to Play binding slots are painted from the live key and pad tables", (
   assert.equal(keySlot.kids[0].textContent, "Z", "keyboard slot uses the live key label");
   assert.equal(padSlot.kids[0].textContent, "Y", "controller slot uses the live pad label");
   assert.equal($("htp-inputs").dataset.activeInput, "keyboard", "help records the current input kind");
+});
+
+test("#1903: a pad re-render (gamepadconnected) disarms capture so A does not rebind", () => {
+  const { Input, $, fire, sb } = bootUi(true);
+  const { pad, press: padPress } = fakePad(sb, fire);
+  // BOOST's second slot is unset — a captured press would bind here; the default
+  // throttle second slot is already A (0), so it cannot prove disarm.
+  slotOf($("pm-pad"), "boost", 1).onclick();
+  assert.equal(slotOf($("pm-pad"), "boost", 1).dataset.armed, "1");
+  fire("gamepadconnected", { gamepad: pad });
+  assert.equal(slotOf($("pm-pad"), "boost", 1).dataset.armed, undefined, "render dropped the armed chip");
+  padPress(0);
+  Input.poll();
+  assert.deepEqual(plain(Input.getPadMap().boost), [2, null], "A was not bound onto the armed slot after reconnect");
+});
+
+test("#1903: KeyBinds.render disarms an armed pad slot", () => {
+  const { Input, kb, $, fire, sb } = bootUi(true);
+  const { press } = fakePad(sb, fire);
+  slotOf($("pm-pad"), "boost", 0).onclick();
+  kb.render();
+  press(2);
+  Input.poll();
+  assert.deepEqual(plain(Input.getPadMap().boost), [2, null], "X still boosts — capture was cleared");
+});
+
+test("#1902: CALIBRATE STICK defers save until the timer; cancel on RESET", () => {
+  const disk = {};
+  const { $, fire, sb, flushTimers, pendingTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
+  const pa = fakePad(sb, fire);
+  pa.pad.axes[0] = 0.08;
+  $("pm-pad-calib").onclick();
+  assert.equal(pendingTimers(), 1, "calibration waits 450 ms");
+  assert.equal(disk.padRest, undefined);
+  $("pm-pad-reset").onclick();
+  flushTimers(500);
+  assert.equal(disk.padRest, undefined, "RESET cancelled the pending save");
+});
+
+test("#1902: CALIBRATE STICK cancelled when leaving CONTROLS before save", () => {
+  const leaveFns = [];
+  const disk = {};
+  const { $, fire, sb, flushTimers } = bootUi(true, {}, disk, (g) => {
+    g.SettingsNav = { onLeave: (fn) => { leaveFns.push(fn); } };
+  }, { deferTimers: true });
+  const pa = fakePad(sb, fire);
+  pa.pad.axes[0] = 0.08;
+  $("pm-pad-calib").onclick();
+  for (const fn of leaveFns) fn("controls");
+  flushTimers(500);
+  assert.equal(disk.padRest, undefined);
+});
+
+test("#1902: CALIBRATE STICK cancelled on disarmAll (settings close)", () => {
+  const disk = {};
+  const { kb, $, fire, sb, flushTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
+  const pa = fakePad(sb, fire);
+  pa.pad.axes[0] = 0.08;
+  $("pm-pad-calib").onclick();
+  kb.disarmAll();
+  flushTimers(500);
+  assert.equal(disk.padRest, undefined);
+});
+
+test("#1902: CALIBRATE STICK cancelled on gamepad disconnect before save", () => {
+  const disk = {};
+  const { $, fire, sb, flushTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
+  const { pad } = fakePad(sb, fire);
+  pad.axes[0] = 0.08;
+  $("pm-pad-calib").onclick();
+  fire("gamepaddisconnected", { gamepad: pad });
+  flushTimers(500);
+  assert.equal(disk.padRest, undefined);
+});
+
+test("#1902: a second CALIBRATE press cancels the first timer", () => {
+  const disk = {};
+  const { $, fire, sb, flushTimers, pendingTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
+  const pa = fakePad(sb, fire);
+  pa.pad.axes[0] = 0.08;
+  $("pm-pad-calib").onclick();
+  const firstId = pendingTimers();
+  assert.equal(firstId, 1);
+  pa.pad.axes[0] = 0.12;
+  $("pm-pad-calib").onclick();
+  assert.equal(pendingTimers(), 1, "only the latest calibration is pending");
+  flushTimers(500);
+  assert.ok(Math.abs(disk.padRest["Xbox Wireless Controller"] - 0.12) < 1e-9, "saved offset matches the second sample");
+});
+
+test("#1902: CALIBRATE STICK does not save when CONTROLS is hidden before the timer", () => {
+  const disk = {};
+  const { $, fire, sb, flushTimers } = bootUi(true, {}, disk, null, { deferTimers: true });
+  const pa = fakePad(sb, fire);
+  pa.pad.axes[0] = 0.08;
+  const panel = $("pm-panel-controls");
+  panel.hidden = false;
+  $("pm-pad-calib").onclick();
+  panel.hidden = true;
+  flushTimers(500);
+  assert.equal(disk.padRest, undefined);
 });
 
 test("a successful key capture rebuilds once, restores the changed slot's focus, and reports through a status", () => {
@@ -1229,4 +1359,138 @@ test("I-09: a right/middle mouse button neither presses a hold button nor fires 
   assert.equal(held, true, "touch holds");
   down("boost", { pointerType: "touch", button: 0 });
   assert.equal(taps, 1);
+});
+
+
+// Keep cancelled callbacks runnable: a queued callback must remain harmless
+// even after clearTimeout, and must not cancel a fresh request in its place.
+function delayedCalibration() {
+  let leave;
+  const disk = { padRest: 0.08 };
+  const r = bootUi(true, {}, disk, (sb) => { sb.SettingsNav = { onLeave: (fn) => { leave = fn; } }; });
+  const device = fakePad(r.sb, r.fire);
+  device.pad.index = 0;
+  device.pad.axes[0] = 0.08;
+  r.Input.poll();
+  const timers = [], cleared = [];
+  r.sb.setTimeout = (fn, ms) => { const id = timers.length + 1; timers.push({ fn, ms, id }); return id; };
+  r.sb.clearTimeout = (id) => cleared.push(id);
+  return { ...r, ...device, disk, timers, cleared, leave: (id) => leave(id) };
+}
+
+for (const reason of ["reset", "back", "close", "blur", "disconnect", "connect", "binding", "wheel"]) {
+  test(`pending stick calibration is cancelled by ${reason}, and a fresh attempt works`, () => {
+    const r = delayedCalibration();
+    const { $, Input, pad, disk, timers, cleared } = r;
+    $("pm-pad-calib").onclick();
+    assert.equal(timers[0].ms, 450);
+    if (reason === "reset") $("pm-pad-reset").onclick();
+    if (reason === "back") r.leave("controls");
+    if (reason === "close") r.kb.disarmAll();
+    if (reason === "blur") r.fire("blur");
+    if (reason === "disconnect") { pad.connected = false; r.fire("gamepaddisconnected", { gamepad: pad }); }
+    if (reason === "connect") r.fire("gamepadconnected", { gamepad: pad });
+    if (reason === "binding") slotOf($("pm-pad"), "boost", 0).onclick();
+    if (reason === "wheel") $("pm-pad-wheel").onclick();
+    assert.ok(cleared.includes(timers[0].id), "the pending timer is cleared");
+    const saved = JSON.stringify(disk), offsets = JSON.stringify(Input.padRestStore());
+    const note = $("pm-pad-calib-note").textContent;
+    pad.axes[0] = 0.3;
+    timers[0].fn();
+    assert.equal(JSON.stringify(Input.padRestStore()), offsets, "late callback cannot sample a moved stick");
+    assert.equal(JSON.stringify(disk), saved, "late callback cannot rewrite storage");
+    assert.equal($("pm-pad-calib-note").textContent, note, "late callback cannot replace the current prompt");
+    r.kb.disarmAll();
+    pad.connected = true;
+    r.fire("gamepadconnected", { gamepad: pad });
+    pad.axes[0] = 0.12;
+    $("pm-pad-calib").onclick();
+    const fresh = timers.at(-1);
+    timers[0].fn();
+    fresh.fn();
+    assert.equal(Input.padRest(), 0.12);
+    assert.equal(disk.padRest[pad.id], 0.12, "fresh calibration persists normally");
+  });
+}
+
+test("new calibration supersedes an earlier click; another settings page leaving does not cancel it", () => {
+  const { $, Input, pad, timers, leave } = delayedCalibration();
+  $("pm-pad-calib").onclick();
+  $("pm-pad-calib").onclick();
+  pad.axes[0] = 0.3;
+  timers[0].fn();
+  assert.equal(Input.padRest(), 0.08);
+  leave("audio");
+  pad.axes[0] = 0.15;
+  timers[1].fn();
+  assert.equal(Input.padRest(), 0.15);
+});
+
+test("calibration refuses a hidden page or a different active controller without connection events", () => {
+  for (const change of ["hidden", "other-id", "other-index"]) {
+    const { $, Input, pad, disk, timers, sb } = delayedCalibration();
+    $("pm-pad-calib").onclick();
+    const before = JSON.stringify(disk);
+    if (change === "hidden") $("pm-pad-calib").closest = () => ({});
+    else sb.navigator.getGamepads = () => [{ ...pad, id: change === "other-id" ? "Other pad" : pad.id,
+      index: change === "other-index" ? 1 : pad.index, axes: [0.3, 0, 0, 0] }];
+    timers[0].fn();
+    assert.equal(JSON.stringify(disk), before, change);
+    assert.equal(Input.padRestStore()[pad.id], 0.08, "the initiating pad's offset stays unchanged");
+  }
+});
+
+test("controller reconnect and generic render cancel an armed slot instead of leaving invisible capture", () => {
+  for (const change of ["reconnect", "render", "back"]) {
+    const r = delayedCalibration();
+    const { $, Input, pad, disk } = r;
+    const before = JSON.stringify(Input.getPadMap());
+    const old = slotOf($("pm-pad"), "boost", 0);
+    old.onclick();
+    assert.equal(old.dataset.armed, "1");
+    if (change === "reconnect") {
+      pad.connected = false;
+      r.fire("gamepaddisconnected", { gamepad: pad });
+      pad.connected = true;
+      r.fire("gamepadconnected", { gamepad: pad });
+    } else if (change === "render") r.kb.render();
+    else r.leave("controls");
+    assert.equal(old.dataset.armed, undefined);
+    assert.equal(slotOf($("pm-pad"), "boost", 0).dataset.armed, undefined);
+    r.press(0); Input.poll();
+    assert.equal(JSON.stringify(Input.getPadMap()), before, "the next A press cannot steal throttle for Boost");
+    assert.equal(disk.pad, undefined, "cancelled capture does not persist a binding");
+    r.release(0); Input.poll();
+    slotOf($("pm-pad"), "boost", 0).onclick();
+    r.press(0); Input.poll();
+    assert.equal(Input.getPadMap().boost[0], 0, "an explicitly rearmed slot still captures");
+    assert.equal(disk.pad.boost[0], 0);
+    assert.equal(Input.getPadMap().throttle[1], null, "normal explicit capture still resolves conflicts");
+  }
+});
+
+
+test("calibration cannot move to a second already-connected pad when its activity wins selection", () => {
+  const { $, Input, pad, disk, timers, sb, fire } = delayedCalibration();
+  let time = 100;
+  sb.performance.now = () => time;
+  const other = rawPad({ id: "Other connected pad", index: 1, axes: [0.2, 0, 0, 0] });
+  sb.navigator.getGamepads = () => [pad, other];
+  fire("gamepadconnected", { gamepad: other });
+  setBtn(pad, 0, true);
+  Input.poll();
+  setBtn(pad, 0, false);
+  Input.poll();
+  $("pm-pad-calib").onclick();
+  const saved = JSON.stringify(disk);
+  time += 100;
+  setBtn(other, 0, true);
+  Input.poll();
+  assert.equal(Input.pickPad(sb.navigator.getGamepads(), null, false).id, other.id);
+  timers[0].fn();
+  assert.equal(JSON.stringify(disk), saved);
+  assert.equal(Input.padRestStore()[other.id], undefined, "the second pad never receives the first pad's calibration");
+  $("pm-pad-calib").onclick();
+  timers.at(-1).fn();
+  assert.equal(disk.padRest[other.id], 0.2, "an intentional fresh attempt calibrates the now-active pad");
 });
