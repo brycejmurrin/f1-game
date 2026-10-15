@@ -400,7 +400,8 @@ test("warm: TLX compiles the flame / ERS lit keys during the lights", () => {
 });
 
 test("game.js swaps rivals to the one shared body mesh past tier 2", () => {
-  assert.match(gameSource(), /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/);
+  assert.match(gameSource(), /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/,
+    "past tier 2 the render loop shares one rival body (apex26.fieldLod=0 keeps per-seat meshes)");
 });
 
 test("warm: warmCarAssets builds the caster silhouette, the field wheels and the flame (not a whole-car mesh per rival)", () => {
