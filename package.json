@@ -69,7 +69,7 @@
     "setup:browsers": "bash tools/env/install-browsers.sh",
     "physics:sweep": "node tools/check/physics-tune-sweep.mjs",
     "wgx:capture": "node tools/gfx/gfx-probe.mjs --backend webgpu",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "prepare": "[ -n \"$GITHUB_ACTIONS\" ] || git config core.hooksPath .githooks || true"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

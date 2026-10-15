@@ -23,6 +23,20 @@ test("each host's hook config points at an executable guard that exists", () => 
   assert.match(codex.hooks.PreToolUse[0].hooks[0].command, /\.cursor\/hooks\/shell-guard\.sh/);
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   assert.match(pkg.scripts.prepare || "", /git config core\.hooksPath \.githooks/, "npm install must activate .githooks");
+  // Not on Actions: a workflow's own bot pushes (spec-timings.yml force-pushes its
+  // rolling side branch) are not an agent's, and pre-push refused them (4 of 11
+  // spec-timings runs red, 2026-10-14).
+  assert.match(pkg.scripts.prepare, /^\[ -n "\$GITHUB_ACTIONS" \] \|\| /, "CI installs leave core.hooksPath alone");
+  for (const [env, want] of [[{ GITHUB_ACTIONS: "true" }, ""], [{ GITHUB_ACTIONS: "" }, ".githooks"]]) {
+    const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "prepare-"));
+    try {
+      execFileSync("git", ["init", "-q", dir]);
+      execFileSync("sh", ["-c", pkg.scripts.prepare], { cwd: dir, env: { ...process.env, ...env } });
+      let got = "";
+      try { got = execFileSync("git", ["config", "core.hooksPath"], { cwd: dir, encoding: "utf8" }).trim(); } catch (_) { got = ""; }
+      assert.equal(got, want, `GITHUB_ACTIONS=${JSON.stringify(env.GITHUB_ACTIONS)}`);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
   for (const f of [".cursor/hooks/shell-guard.sh", ".githooks/pre-commit", ".githooks/pre-push", ".claude/hooks/bash-guard.sh"])
     assert.ok(fs.statSync(path.join(ROOT, f)).mode & 0o111, `${f} must be executable`);
 });
