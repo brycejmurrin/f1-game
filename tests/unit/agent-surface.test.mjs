@@ -326,3 +326,32 @@ test("no skill declares paths: — it replaces description triggering instead of
     assert.doesNotMatch(fm, /^paths:/m, `${d.name}: paths: hides the skill from chat-only asks (measured 2026-09-30)`);
   }
 });
+
+/* Saved workflows (.claude/workflows/*.js) run in the Workflow tool's async
+   harness, so `node --check` cannot parse them (top-level await/return,
+   `export const meta`). Parse each as an async function body instead, and pin
+   that every `agentType:` they name is a file in .claude/agents/ — a typo
+   there silently falls back to nothing at run time. code-survey and
+   total-audit route finders, verifiers and the prior-art seed through the
+   purpose-built agents (2026-10-14), so they must keep naming them. */
+const WORKFLOWS = path.join(ROOT, ".claude/workflows");
+test("every saved workflow parses and names only existing agentTypes", () => {
+  const agents = new Set(fs.readdirSync(path.join(ROOT, ".claude/agents"))
+    .filter((n) => n.endsWith(".md") && n !== "README.md").map((n) => n.replace(/\.md$/, "")));
+  const AsyncFunction = (async () => {}).constructor;
+  const named = {};
+  for (const f of fs.readdirSync(WORKFLOWS).filter((n) => n.endsWith(".js"))) {
+    const src = fs.readFileSync(path.join(WORKFLOWS, f), "utf8");
+    assert.match(src, /^export const meta = \{/m, `${f}: must start with export const meta`);
+    assert.doesNotThrow(() => new AsyncFunction("agent", "parallel", "pipeline", "phase", "log", "args", "budget", "workflow",
+      src.replace(/^export const meta/m, "const meta")), `${f}: does not parse as an async body`);
+    const titles = new Set([...src.matchAll(/\{\s*title:\s*'([^']+)'/g)].map((m) => m[1]));
+    for (const m of src.matchAll(/phase(?:\(|:\s*)'([^']+)'/g)) assert.ok(titles.has(m[1]), `${f}: phase '${m[1]}' has no meta.phases entry`);
+    named[f] = [...src.matchAll(/agentType\s*:\s*[^'"\n,}]*['"]([\w-]+)['"]/g)].map((m) => m[1]);
+    for (const t of named[f]) assert.ok(agents.has(t), `${f}: agentType '${t}' is not .claude/agents/${t}.md`);
+  }
+  for (const [f, want] of [["code-survey.js", ["code-hunter", "finding-verifier", "prior-art-scout"]],
+    ["total-audit.js", ["code-hunter", "finding-verifier", "prior-art-scout", "agent-surface-reviewer"]]]) {
+    for (const t of want) assert.ok((named[f] || []).includes(t), `${f}: no longer routes through ${t}`);
+  }
+});

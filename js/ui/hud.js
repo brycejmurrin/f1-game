@@ -1427,7 +1427,7 @@ function fitHud() {
     try { const cs = getComputedStyle(root); sat = parseFloat(cs.getPropertyValue("--sat")) || 0; sab = parseFloat(cs.getPropertyValue("--sab")) || 0; } catch (_) { /* mini-dom */ }
     const topButtons = 44 * Math.min(1.5, Math.max(1, btnScale));
     const roomL = window.innerHeight - sat - sab - topButtons - 4 * FIT_AIR;
-    const roomR = roomL;
+    const roomR = roomL - 44 * Math.max(0, Math.min(2, btnScale) - 1.5);   // PAUSE paints on past 150 % (touch-controls.css --tap-btn)
     // PLAN vs THE CLUSTER at HUD 200%. #hud-tyre is anchored on the left dock,
     // outside the centred cluster, so the viewport budget above never sees them
     // meet (852×393 @200%: the gearbox plate sat on PLAN). The tyre's left edge
@@ -2240,6 +2240,7 @@ function updateHud(force, dtMs) {
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
+      if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
       if (_secFlash[i] > 0) {
         _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
         hToggle(_secRows[i].parentElement, "sec-flash", _secFlash[i] > 0);
@@ -2312,6 +2313,7 @@ function updateHud(force, dtMs) {
       }
     }
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
+    if (_ro && _ro.paintFlag) _ro.paintFlag(els.flag, show ? (caution ? { caution: cn } : blueCar ? { blue: true } : null) : null);
     // A flag chip appearing or going re-picks the radio slot (radioUnderRight steps right of it).
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; if (_invalidateFit) _invalidateFit(); }
   }
