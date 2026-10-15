@@ -301,6 +301,31 @@ const OPENF1_SESSION_RESULT = (function () {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
+ * OpenF1 body for one URL — the same dispatch `setupApiMocks` installs.
+ * Node unit tests call this directly; the Playwright route JSON.stringifies it.
+ * @param {string} url
+ */
+export function openF1Fixture(url) {
+  const u = String(url);
+  if (u.includes("/session_result")) {
+    const m = /session_key=(\d+)/.exec(u);
+    return (m && OPENF1_SESSION_RESULT[m[1]]) || [];
+  }
+  if (u.includes("/sessions") && u.includes("session_key=latest")) return OPENF1_SESSIONS_LATEST;
+  if (u.includes("/sessions") && u.includes("meeting_key=")) return OPENF1_SESSIONS_MEETING_1234;
+  if (u.includes("/meetings")) return OPENF1_MEETINGS_2026;
+  if (u.includes("/drivers")) return OPENF1_DRIVERS;
+  if (u.includes("/weather")) return OPENF1_WEATHER;
+  if (u.includes("/position")) return OPENF1_POSITIONS;
+  if (u.includes("/laps")) return OPENF1_LAPS;
+  if (u.includes("/car_data")) return OPENF1_CAR_DATA;
+  if (u.includes("/location")) return OPENF1_LOCATION;
+  if (u.includes("/stints")) return OPENF1_STINTS;
+  if (u.includes("/pit")) return OPENF1_PITS;
+  return [];
+}
+
+/**
  * Intercept all F1 API requests and return mock data.
  * Must be called before page.goto() to ensure routes are registered first.
  * @param {import("@playwright/test").Page} page
@@ -321,24 +346,7 @@ export async function setupApiMocks(page) {
 
   // ── OpenF1: single handler dispatches by URL path ─────────────────────────
   await page.route("**api.openf1.org**", (route, request) => {
-    const url = request.url();
-    const json = (obj) => route.fulfill({ contentType: "application/json", body: JSON.stringify(obj) });
-
-    if (url.includes("/session_result")) {
-      const m = /session_key=(\d+)/.exec(url);
-      return json((m && OPENF1_SESSION_RESULT[m[1]]) || []);
-    }
-    if (url.includes("/sessions") && url.includes("session_key=latest"))  return json(OPENF1_SESSIONS_LATEST);
-    if (url.includes("/sessions") && url.includes("meeting_key="))        return json(OPENF1_SESSIONS_MEETING_1234);
-    if (url.includes("/meetings"))                                          return json(OPENF1_MEETINGS_2026);
-    if (url.includes("/drivers"))                                           return json(OPENF1_DRIVERS);
-    if (url.includes("/weather"))                                           return json(OPENF1_WEATHER);
-    if (url.includes("/position"))                                          return json(OPENF1_POSITIONS);
-    if (url.includes("/laps"))                                              return json(OPENF1_LAPS);
-    if (url.includes("/car_data"))                                          return json(OPENF1_CAR_DATA);
-    if (url.includes("/location"))                                          return json(OPENF1_LOCATION);
-    if (url.includes("/stints"))                                            return json(OPENF1_STINTS);
-    if (url.includes("/pit"))                                               return json(OPENF1_PITS);
-    return json([]);
+    const body = openF1Fixture(request.url());
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
 }
