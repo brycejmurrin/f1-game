@@ -1,0 +1,356 @@
+{
+  "job": {
+    "trackId": "okayama",
+    "frac": 0.5,
+    "cam": "orbit",
+    "az": 45,
+    "el": 18,
+    "dist": 45,
+    "side": 1,
+    "tod": "day",
+    "weather": "storm",
+    "showHud": false,
+    "through": false,
+    "team": null,
+    "out": "/home/user/f1-game/artifacts/shots/tracks/okayama/okayama-34-f50-orbit-day-storm.png",
+    "backend": "three",
+    "capture": {
+      "profile": "custom",
+      "width": null,
+      "height": null,
+      "viewport": null,
+      "dpr": 1,
+      "type": null,
+      "quality": null,
+      "scope": "scene",
+      "gpu": "swiftshader",
+      "gpuExplicit": false,
+      "browser": "auto",
+      "trace": false,
+      "tracePath": null,
+      "cacheAssets": false,
+      "reuse": true,
+      "isolated": false,
+      "seed": null,
+      "positionals": []
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "type": "png",
+    "raster": false
+  },
+  "browser": {
+    "requested": {
+      "gpu": "swiftshader",
+      "flavor": "auto"
+    },
+    "executable": {
+      "requestedFlavor": "auto",
+      "executablePath": "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+      "source": "newest:1194 under /opt/pw-browsers (browsers.json wants 1243, not installed)",
+      "flavor": "chromium",
+      "pid": 2206
+    },
+    "version": "141.0.7390.37",
+    "actual": {
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+      "vendor": "Google Inc. (Google)",
+      "software": true,
+      "devices": [
+        {
+          "vendorId": 65535,
+          "deviceId": 65535,
+          "vendorString": "Google Inc. (Google)",
+          "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+          "driverVendor": "SwANGLE",
+          "driverVersion": "5.0.0"
+        }
+      ],
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "enabled",
+        "webgl2": "enabled",
+        "webgpu": "unavailable_software",
+        "webnn": "disabled_off"
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "diag": {
+      "env": {
+        "backend": "three",
+        "backendState": {
+          "api": "webgpu",
+          "forceWebGL": false,
+          "pin": null,
+          "autoStayGL": false,
+          "hasGpu": true,
+          "gpuAdapterOk": true,
+          "gpuCanvasOk": true,
+          "canvasAlpha": null,
+          "isMobile": false,
+          "mobileTier": false,
+          "isWebKit": false,
+          "liteGpu": true,
+          "softwareGL": true,
+          "softAdapter": true,
+          "headless": true,
+          "forceHw": false,
+          "forceBatches": false,
+          "skipBatches": true,
+          "skipBatchesPin": false,
+          "gpuErrFrames": 0,
+          "envFail": 0,
+          "envFailMsg": "",
+          "softBlit": true,
+          "capPref": null,
+          "fx": {
+            "shadows": 22,
+            "marks": 0,
+            "skidVerts": 0,
+            "glow": 0,
+            "particles": 1015,
+            "decals": 16,
+            "lineVerts": 2952
+          },
+          "line": {
+            "meshes": 1,
+            "visible": 1,
+            "inScene": 1,
+            "geo": {
+              "index": 12282,
+              "indexType": "Uint32Array",
+              "range": 8850,
+              "pos": 4096,
+              "attrs": [
+                "position",
+                "lineAcross",
+                "lineSpeed",
+                "lineZone",
+                "lineAlong"
+              ],
+              "renderOrder": 7,
+              "bs": [
+                609.9
+              ]
+            }
+          },
+          "softRead": {
+            "gen": 90,
+            "lastMs": 2029,
+            "fails": 0,
+            "lastErr": null,
+            "abandoned": 0,
+            "pending": true
+          },
+          "gpuErrors": 0,
+          "gpuFirstError": null,
+          "gpuRecentErrors": [],
+          "presents": 16511,
+          "healed": false,
+          "ctxLost": false,
+          "calls": 0,
+          "arrayNearest": false,
+          "hasMaterialMaps": true,
+          "packLive": true,
+          "drawMatMode": 0
+        }
+      }
+    },
+    "seed": 1,
+    "renderClock": 280.7392000000497,
+    "render": {
+      "scale": 0.7000000000000001,
+      "fps": 60,
+      "floorMs": 16.6,
+      "auto": true,
+      "tier": 0,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 600,
+        "maxMs": 333.3,
+        "slow": 5
+      },
+      "frameTimes": {
+        "frames": 2048,
+        "p50": 16.70000000001164,
+        "p95": 16.79999999998836,
+        "p99": 33.40000000002328,
+        "maxMs": 1000,
+        "droppedSimS": 0.03333333333333333,
+        "physicsSteps": 5,
+        "windowFrames": 2048
+      },
+      "userTier": 0,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": false,
+      "tierFutile": false,
+      "tierHold": false
+    },
+    "camera": {
+      "eye": [
+        211.2332079143252,
+        19.382746625153274,
+        -349.7303806974791
+      ],
+      "target": [
+        222.60452270507812,
+        5.47698187828064,
+        -390.9889831542969
+      ],
+      "fov": 64.00019424290326,
+      "previousAnchor": [
+        222.60452606462377,
+        -390.98894132151946
+      ],
+      "nextAnchor": [
+        222.60452606462377,
+        -390.98894132151946
+      ],
+      "renderFrame": 16512,
+      "simulationTime": 4.066666666666656,
+      "renderTime": 280.7392000000497
+    },
+    "info": {
+      "state": "race",
+      "track": "okayama",
+      "n": 922,
+      "total": 3688.113349026031,
+      "timeTrial": false,
+      "seasonMode": false,
+      "flow": "gp",
+      "session": "race",
+      "career": false,
+      "practice": false,
+      "duel": false,
+      "raceQuali": false,
+      "raceGrid": "random",
+      "lapsTarget": 3,
+      "sectors": [
+        0.371,
+        0.599
+      ],
+      "turns": 11
+    }
+  },
+  "renderer": {
+    "requested": "three",
+    "matchesRequested": true,
+    "actual": "three",
+    "api": "webgpu",
+    "state": {
+      "api": "webgpu",
+      "forceWebGL": false,
+      "pin": null,
+      "autoStayGL": false,
+      "hasGpu": true,
+      "gpuAdapterOk": true,
+      "gpuCanvasOk": true,
+      "canvasAlpha": null,
+      "isMobile": false,
+      "mobileTier": false,
+      "isWebKit": false,
+      "liteGpu": true,
+      "softwareGL": true,
+      "softAdapter": true,
+      "headless": true,
+      "forceHw": false,
+      "forceBatches": false,
+      "skipBatches": true,
+      "skipBatchesPin": false,
+      "gpuErrFrames": 0,
+      "envFail": 0,
+      "envFailMsg": "",
+      "softBlit": true,
+      "capPref": null,
+      "fx": {
+        "shadows": 22,
+        "marks": 0,
+        "skidVerts": 0,
+        "glow": 0,
+        "particles": 1015,
+        "decals": 16,
+        "lineVerts": 2952
+      },
+      "line": {
+        "meshes": 1,
+        "visible": 1,
+        "inScene": 1,
+        "geo": {
+          "index": 12282,
+          "indexType": "Uint32Array",
+          "range": 8850,
+          "pos": 4096,
+          "attrs": [
+            "position",
+            "lineAcross",
+            "lineSpeed",
+            "lineZone",
+            "lineAlong"
+          ],
+          "renderOrder": 7,
+          "bs": [
+            609.9
+          ]
+        }
+      },
+      "softRead": {
+        "gen": 90,
+        "lastMs": 2029,
+        "fails": 0,
+        "lastErr": null,
+        "abandoned": 0,
+        "pending": true
+      },
+      "gpuErrors": 0,
+      "gpuFirstError": null,
+      "gpuRecentErrors": [],
+      "presents": 16511,
+      "healed": false,
+      "ctxLost": false,
+      "calls": 0,
+      "arrayNearest": false,
+      "hasMaterialMaps": true,
+      "packLive": true,
+      "drawMatMode": 0
+    },
+    "positive": true,
+    "signal": "live-backend-state-and-presented-scene-pixels"
+  },
+  "readiness": {
+    "mode": "source-generation",
+    "required": 93,
+    "shown": 93
+  },
+  "pixels": {
+    "brightFraction": 0.9733072916666666,
+    "centerBrightFraction": 0.9481907894736842,
+    "variance": 1439.0688399534065,
+    "black": false,
+    "blackHudOnly": false,
+    "meaningful": true,
+    "classification": "scene-content"
+  },
+  "image": {
+    "path": "/home/user/f1-game/artifacts/shots/tracks/okayama/okayama-34-f50-orbit-day-storm.png",
+    "bytes": 772867,
+    "via": "game-soft",
+    "scope": "scene"
+  }
+}

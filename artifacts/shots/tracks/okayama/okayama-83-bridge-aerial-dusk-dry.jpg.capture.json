@@ -1,0 +1,357 @@
+{
+  "job": {
+    "trackId": "okayama",
+    "frac": 0.995,
+    "cam": "orbit",
+    "az": 30,
+    "el": 68,
+    "dist": 55,
+    "side": 1,
+    "tod": "dusk",
+    "weather": "dry",
+    "showHud": false,
+    "through": false,
+    "team": null,
+    "out": "/home/user/f1-game/artifacts/shots/tracks/okayama/okayama-83-bridge-aerial-dusk-dry.jpg",
+    "backend": "three",
+    "capture": {
+      "profile": "custom",
+      "width": null,
+      "height": null,
+      "viewport": null,
+      "dpr": 1,
+      "type": null,
+      "quality": null,
+      "scope": "scene",
+      "gpu": "swiftshader",
+      "gpuExplicit": false,
+      "browser": "auto",
+      "trace": false,
+      "tracePath": null,
+      "cacheAssets": false,
+      "reuse": true,
+      "isolated": false,
+      "seed": null,
+      "positionals": []
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "type": "jpeg",
+    "quality": 85,
+    "raster": false
+  },
+  "browser": {
+    "requested": {
+      "gpu": "swiftshader",
+      "flavor": "auto"
+    },
+    "executable": {
+      "requestedFlavor": "auto",
+      "executablePath": "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+      "source": "newest:1194 under /opt/pw-browsers (browsers.json wants 1243, not installed)",
+      "flavor": "chromium",
+      "pid": 23899
+    },
+    "version": "141.0.7390.37",
+    "actual": {
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+      "vendor": "Google Inc. (Google)",
+      "software": true,
+      "devices": [
+        {
+          "vendorId": 65535,
+          "deviceId": 65535,
+          "vendorString": "Google Inc. (Google)",
+          "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+          "driverVendor": "SwANGLE",
+          "driverVersion": "5.0.0"
+        }
+      ],
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "enabled",
+        "webgl2": "enabled",
+        "webgpu": "unavailable_software",
+        "webnn": "disabled_off"
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "diag": {
+      "env": {
+        "backend": "three",
+        "backendState": {
+          "api": "webgpu",
+          "forceWebGL": false,
+          "pin": null,
+          "autoStayGL": false,
+          "hasGpu": true,
+          "gpuAdapterOk": true,
+          "gpuCanvasOk": true,
+          "canvasAlpha": null,
+          "isMobile": false,
+          "mobileTier": false,
+          "isWebKit": false,
+          "liteGpu": true,
+          "softwareGL": true,
+          "softAdapter": true,
+          "headless": true,
+          "forceHw": false,
+          "forceBatches": false,
+          "skipBatches": true,
+          "skipBatchesPin": false,
+          "gpuErrFrames": 0,
+          "envFail": 0,
+          "envFailMsg": "",
+          "softBlit": true,
+          "capPref": null,
+          "fx": {
+            "shadows": 1,
+            "marks": 0,
+            "skidVerts": 0,
+            "glow": 6,
+            "particles": 0,
+            "decals": 3,
+            "lineVerts": 2952
+          },
+          "line": {
+            "meshes": 1,
+            "visible": 1,
+            "inScene": 1,
+            "geo": {
+              "index": 12282,
+              "indexType": "Uint32Array",
+              "range": 8850,
+              "pos": 4096,
+              "attrs": [
+                "position",
+                "lineAcross",
+                "lineSpeed",
+                "lineZone",
+                "lineAlong"
+              ],
+              "renderOrder": 8,
+              "bs": [
+                609.9
+              ]
+            }
+          },
+          "softRead": {
+            "gen": 14,
+            "lastMs": 7008,
+            "fails": 0,
+            "lastErr": null,
+            "abandoned": 0,
+            "pending": true
+          },
+          "gpuErrors": 0,
+          "gpuFirstError": null,
+          "gpuRecentErrors": [],
+          "presents": 5890,
+          "healed": false,
+          "ctxLost": false,
+          "calls": 0,
+          "arrayNearest": false,
+          "hasMaterialMaps": true,
+          "packLive": true,
+          "drawMatMode": 0
+        }
+      }
+    },
+    "seed": 1,
+    "renderClock": 99.81240000000913,
+    "render": {
+      "scale": 1,
+      "fps": 44.9,
+      "floorMs": 17.2,
+      "auto": true,
+      "tier": 0,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 600,
+        "maxMs": 4416.5,
+        "slow": 3
+      },
+      "frameTimes": {
+        "frames": 2048,
+        "p50": 16.69999999999709,
+        "p95": 16.79999999998836,
+        "p99": 16.80000000000291,
+        "maxMs": 4416.5,
+        "droppedSimS": 0.03333333333333333,
+        "physicsSteps": 5,
+        "windowFrames": 2048
+      },
+      "userTier": 0,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": false,
+      "tierFutile": false,
+      "tierHold": false
+    },
+    "camera": {
+      "eye": [
+        -157.95855782049608,
+        52.315472370408585,
+        180.2818255626651
+      ],
+      "target": [
+        -173.11288818359364,
+        1.3203603692352774,
+        194.24049087524375
+      ],
+      "fov": 64.00000000000003,
+      "previousAnchor": [
+        -173.11288818359364,
+        194.24049087524375
+      ],
+      "nextAnchor": [
+        -173.11288818359364,
+        194.24049087524375
+      ],
+      "renderFrame": 5891,
+      "simulationTime": 1.5333333333333314,
+      "renderTime": 99.81240000000913
+    },
+    "info": {
+      "state": "race",
+      "track": "okayama",
+      "n": 922,
+      "total": 3688.113349026031,
+      "timeTrial": false,
+      "seasonMode": false,
+      "flow": "gp",
+      "session": "race",
+      "career": false,
+      "practice": false,
+      "duel": false,
+      "raceQuali": false,
+      "raceGrid": "random",
+      "lapsTarget": 3,
+      "sectors": [
+        0.371,
+        0.599
+      ],
+      "turns": 11
+    }
+  },
+  "renderer": {
+    "requested": "three",
+    "matchesRequested": true,
+    "actual": "three",
+    "api": "webgpu",
+    "state": {
+      "api": "webgpu",
+      "forceWebGL": false,
+      "pin": null,
+      "autoStayGL": false,
+      "hasGpu": true,
+      "gpuAdapterOk": true,
+      "gpuCanvasOk": true,
+      "canvasAlpha": null,
+      "isMobile": false,
+      "mobileTier": false,
+      "isWebKit": false,
+      "liteGpu": true,
+      "softwareGL": true,
+      "softAdapter": true,
+      "headless": true,
+      "forceHw": false,
+      "forceBatches": false,
+      "skipBatches": true,
+      "skipBatchesPin": false,
+      "gpuErrFrames": 0,
+      "envFail": 0,
+      "envFailMsg": "",
+      "softBlit": true,
+      "capPref": null,
+      "fx": {
+        "shadows": 1,
+        "marks": 0,
+        "skidVerts": 0,
+        "glow": 6,
+        "particles": 0,
+        "decals": 3,
+        "lineVerts": 2952
+      },
+      "line": {
+        "meshes": 1,
+        "visible": 1,
+        "inScene": 1,
+        "geo": {
+          "index": 12282,
+          "indexType": "Uint32Array",
+          "range": 8850,
+          "pos": 4096,
+          "attrs": [
+            "position",
+            "lineAcross",
+            "lineSpeed",
+            "lineZone",
+            "lineAlong"
+          ],
+          "renderOrder": 8,
+          "bs": [
+            609.9
+          ]
+        }
+      },
+      "softRead": {
+        "gen": 14,
+        "lastMs": 7008,
+        "fails": 0,
+        "lastErr": null,
+        "abandoned": 0,
+        "pending": true
+      },
+      "gpuErrors": 0,
+      "gpuFirstError": null,
+      "gpuRecentErrors": [],
+      "presents": 5890,
+      "healed": false,
+      "ctxLost": false,
+      "calls": 0,
+      "arrayNearest": false,
+      "hasMaterialMaps": true,
+      "packLive": true,
+      "drawMatMode": 0
+    },
+    "positive": true,
+    "signal": "live-backend-state-and-presented-scene-pixels"
+  },
+  "readiness": {
+    "mode": "source-generation",
+    "required": 16,
+    "shown": 16
+  },
+  "pixels": {
+    "brightFraction": 1,
+    "centerBrightFraction": 1,
+    "variance": 800.895912285112,
+    "black": false,
+    "blackHudOnly": false,
+    "meaningful": true,
+    "classification": "scene-content"
+  },
+  "image": {
+    "path": "/home/user/f1-game/artifacts/shots/tracks/okayama/okayama-83-bridge-aerial-dusk-dry.jpg",
+    "bytes": 111991,
+    "via": "game-soft",
+    "scope": "scene"
+  }
+}
