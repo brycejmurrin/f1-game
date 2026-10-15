@@ -46,6 +46,21 @@ const HudTyres = (function () {
     return out;
   }
 
+  function cbCuesOn() {
+    return typeof A11yOpts !== "undefined" && A11yOpts.cuesOn && A11yOpts.cuesOn();
+  }
+
+  /** S/M/H/I/W chip letter when COLOURBLIND CUES is on (A11yOpts.compoundLetter). */
+  function compoundChip(code) {
+    const raw = code ? String(code) : "";
+    if (!cbCuesOn()) return raw;
+    if (typeof A11yOpts !== "undefined" && A11yOpts.compoundLetter) {
+      const L = A11yOpts.compoundLetter(raw);
+      if (L) return L;
+    }
+    return raw ? raw.charAt(0) : "-";
+  }
+
   /** Write data-temp on #hud-tyre; the compound letter takes the colour and
    *  the glyph. With `extra` ({code, lapsLeft, spent, plan}) also writes the
    *  aria-label (#hud-tyre is role="img", so the label is all a reader gets). */
@@ -53,6 +68,14 @@ const HudTyres = (function () {
     if (!tyreEl || !tyreEl.dataset) return false;
     const s = state(info);
     if (tyreEl.dataset.temp !== s) tyreEl.dataset.temp = s;
+    const chip = tyreEl.querySelector ? tyreEl.querySelector("#hud-tyre-code") : null;
+    if (chip) {
+      if (cbCuesOn() && extra && extra.code) {
+        const L = compoundChip(extra.code);
+        if (chip.textContent !== L) chip.textContent = L;
+        if (chip.dataset && chip.dataset.compound !== L) chip.dataset.compound = L;
+      } else if (chip.dataset && chip.dataset.compound != null) delete chip.dataset.compound;
+    }
     if (extra && typeof tyreEl.setAttribute === "function") {
       const l = label(extra.code, s, extra.lapsLeft, extra.spent) + (extra.plan ? ", " + extra.plan : "");
       if (tyreEl.getAttribute("aria-label") !== l) tyreEl.setAttribute("aria-label", l);
@@ -60,6 +83,6 @@ const HudTyres = (function () {
     return true;
   }
 
-  return { BAND_FRAC, NAMES, band, state, label, paint };
+  return { BAND_FRAC, NAMES, band, state, label, compoundChip, paint };
 })();
 Object.freeze(HudTyres);
