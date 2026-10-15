@@ -59,7 +59,7 @@ Lane A — this PR, no setting change needed:
 
 Lane B — Bryce, repository settings or policy (no PR can do these):
 0. C7: may a ship push reuse the PR's green selected-verdict when the merge tree it tested equals the pushed tree? (~680 job-min/day; it is the merge-interaction safety net.)
-1. Remove `Docs guards (prose-tree unit files)` from the deploy branch's required checks, THEN the workflow deletion in Lane A lands.
+1. Remove `Docs guards (prose-tree unit files)` from the deploy branch's required checks, THEN the workflow deletion in Lane A lands. — done 2026-10-15 (Bryce removed the context; `docs-guards.yml` deleted the same day).
 2. Settings → Pull requests: untick "Allow squash merging" and "Allow rebase merging".
 
 Not doing: weakening any test, widening the 900 s browser timeout, dual-dispatching Pages, re-enabling push CI on topic branches, the physics-core red (owned elsewhere).

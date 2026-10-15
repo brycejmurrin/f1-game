@@ -272,6 +272,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/damage.test.mjs",
   "tests/unit/data-api-status.test.mjs",
+  // Data Hub EXPORT zip: mock OpenF1 → hand-rolled ZIP, CRC-32, empty/fail. ~0.3 s.
+  "tests/unit/data-export.test.mjs",
   "tests/unit/data-hub-layout.test.mjs",
   "tests/unit/data-hub-offline.test.mjs",
   // The shared session picker against a late answer (FIFO stub F1API, ~0.1 s).
@@ -286,6 +288,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The STANDINGS tab: API row order, gap to P1, the head-to-head bar and the
   // empty state, on mini-dom with the real Dom.el. ~0.1 s.
   "tests/unit/data-standings.test.mjs",
+  "tests/unit/day-sky-palette-storm-deck.test.mjs",
   "tests/unit/debris-step-skip.test.mjs",
   "tests/unit/deep-link.test.mjs",
   // ...and a third of the same family: two widgets keyed on ONE sign convention
@@ -356,8 +359,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
-  // The Cloud Agent bootstrap contract (.cursor/environment.json). The one docs-guards
-  // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5), ~0.3 s.
+  // The Cloud Agent bootstrap contract (.cursor/environment.json). The last docs-guards
+  // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5; the workflow retired 2026-10-15), ~0.3 s.
   "tests/unit/environment-json.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
@@ -466,6 +469,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-sign-occlusion.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
+  "tests/unit/geom-mountain-lowmat.test.mjs",
   "tests/unit/geometry-paths-baseline.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
@@ -577,6 +581,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a NaN is not an error but a silently dropped declaration.
   "tests/unit/loading-card.test.mjs",
   "tests/unit/loading-screen-pack-gate.test.mjs",
+  // The garage -> flyby hand-off sweep: fires once, after the garage only, in the team colour.
+  "tests/unit/loading-wipe.test.mjs",
   // answerInFlight serializes acceptAnswer so a second SDP does not start a parallel negotiation (and is not blacklisted — the guest retries).
   "tests/unit/lobby-answer-flight.test.mjs",
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
@@ -685,6 +691,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
   "tests/unit/platform-session-install.test.mjs",
+  // Player collision stereo side: default centred blip path; optional pan via contact pool.
+  "tests/unit/player-collision-side.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
@@ -723,6 +731,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/race-step-snap.test.mjs",
   // Race-radio card life vs RadioVoice speech budget (phrasebook, longest slots).
   "tests/unit/radio-duration.test.mjs",
+  // radio-lines phrasebook: slot fill, recent-history pick, variant counts.
+  "tests/unit/radio-lines.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
@@ -773,6 +783,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
   "tests/unit/save-migrate.test.mjs",
+  "tests/unit/save-schema-registry.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
   // The garage LIVE atlas on a LAZY_CIRCUIT stub: paintLive skips the map instead of
   // throwing, and ctxKey re-keys on hydration. VM, ~0.3 s.
@@ -797,6 +808,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/settings-export.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
   "tests/unit/settings-tabs.test.mjs",
+  "tests/unit/settings-ttlb-backup.test.mjs",
   // R19 guards. Both belong in the EDIT LOOP rather than a slow topical group:
   // each re-derives a fact the source depends on (which livery fields move a
   // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are
