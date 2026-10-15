@@ -1831,8 +1831,12 @@ body.lt-open:not(.pc-nopanel) #pc-bar {
   /* Every term in this element's own space: viewport units through --vwz, and
      --dock-px (a screen measurement) divided back down — see the note on the
      .pc-altcol offsets above. --sal is hardware, so it divides too. */
+  /* `--dock-w + 8px + --sar` IS `--dock-px / --ui-scale`, written without the
+     round trip: Chromium resolved `calc(1000px - var(--dock-px) / var(--ui-scale))`
+     110px short (min() inside the product), so at 844x390 + insets the bar
+     ran 59px into the panel and EXIT sat on FREE CAMERA (#2159). */
   max-width: max(160px, min(calc(70 * var(--vwz)), 720px,
-    calc(100 * var(--vwz) - var(--dock-px) / var(--ui-scale) - 40px - var(--sal) / var(--ui-scale))));
+    calc(100 * var(--vwz) - var(--dock-w) - 8px - var(--sar) - 40px - var(--sal) / var(--ui-scale))));
   gap: calc(var(--gap) * 2 / 3); padding: calc(var(--gap) * 0.5) 10px;
 }
 /* Same context: the tuner panel already carries plenty of on-screen text, so
@@ -1858,6 +1862,13 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
      (~32 local px, ~26 in the lt-open variant above) they painted ~12.8px /
      ~10.4px at UI SIZE 40%. Same floor as #pc-toggle two rules up. */
   min-height: var(--tap-min);
+}
+/* Compact, but not under the touch floor (#2158): the padding above painted
+   the three buttons (lt-open) 40 tall and the FOV track 32 at 844x390. */
+@media (pointer: coarse) {
+  body.lt-open:not(.pc-nopanel) :is(#pc-exit, #pc-panel, #pc-hud),
+  .pc-fovlab input[type="range"] { min-height: var(--tap-paint); }
+  .pc-fovlab input[type="range"] { height: var(--tap-paint); }
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
 #pc-panel, #pc-hud { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }

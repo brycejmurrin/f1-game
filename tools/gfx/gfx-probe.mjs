@@ -387,7 +387,13 @@ async function runProbeAttempt(attemptNum) {
         log("stale-check", "SKIPPED (--no-stale-check): canvas.png is one soft-present read, not proven live");
         if (frameStats) frameStats.stale = null;
       } else try {
-        await page.evaluate(() => { __apex.orbit(0.12, 120, 25, 60); });
+        // orbit() moves the camera without asking for a fresh blit, and a
+        // back-pressured soft present (#2226) renders nothing while a read is
+        // in flight — so request one, as snapCam()/mutateCaptureScene do.
+        await page.evaluate(() => {
+          __apex.orbit(0.12, 120, 25, 60);
+          if (GLX.invalidateSoftPresent) GLX.invalidateSoftPresent();
+        });
         await page.evaluate((n) => new Promise((res) => {
           let i = 0;
           const tick = () => { if (++i > n) res(); else requestAnimationFrame(tick); };
