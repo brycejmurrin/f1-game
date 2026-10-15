@@ -635,7 +635,7 @@
       wall(0.58, 0.96, -1, 5, 1.4, [0.76, 0.72, 0.64], 0.6);
       // Flame-orange emissive strip on the road face of the Caspian rail so the sea edge reads at night (survey #2).
       along(0.58, 0.96, 6, (k, spacing) => {
-        const q = anchor(k, -1, 4.75);
+        const q = anchor(k, -1, 4.85);
         if (onTrack(q.c[0], q.c[2], 0.5)) return;
         addBox(out, vadd(q.c, q.u, 0.15), [0.5, 1.5, spacing * 0.9], [1.1, 0.62, 0.18], [q.r, q.u, q.t]);
       });

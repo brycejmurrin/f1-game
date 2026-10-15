@@ -21,8 +21,6 @@
     sceneryCoordinates: "racing",
     dressingExclusions: [
       { kinds: ["city", "foliage", "lighting"], s0: 0.36, s1: 0.56 },
-      // The Absheron stands (scenery grandstandEx 0.99 / 0.04, side -1) own this stretch: engine neon towers clipped their steps by 6 m.
-      { kinds: ["city"], s0: 0.97, s1: 0.06, side: -1 },
       // Preserve the Caspian void on the left of Neftchilar Avenue.
       { kinds: ["city", "foliage", "lighting"], s0: 0.58, s1: 0.97, side: -1 },
     ],
