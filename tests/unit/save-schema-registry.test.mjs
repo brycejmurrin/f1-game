@@ -42,6 +42,9 @@ const PASSTHROUGH_FILES = new Set([
   "js/audio/spotify.js",
   "js/camera/cockpit-opts.js",
   "js/career/career.js",
+  "js/career/custom-team.js",   // identitySet/Get relays: keys are customTeam / livery.* below
+  "js/career/restore-points.js",   // writes the captured slot key back, never a new one
+  "js/car/custom-liveries.js",   // setIdentityValue relay for livery.* keys
   "js/race/pit-lane.js",
 ]);
 

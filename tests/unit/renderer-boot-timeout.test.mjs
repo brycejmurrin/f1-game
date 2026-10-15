@@ -121,7 +121,7 @@ for (const claimed of [false, true]) test(`timed-out alternate relinquishes publ
     assert.equal(owner.canvas.getContext("webgpu"),null,"late continuation cannot claim canvas");
     return {backend:"three"};
   }});
-  const pending=h.rb.start(); await settle(); h.fire(8000); const result=await pending;
+  const pending=h.rb.start(); await settle(); h.fire(BOOT_STEP_MS); const result=await pending;
   assert.equal(owner.active,false);
   if(claimed) assert.equal(result,null,"claimed timeout refuses same-page binding"); else assert.equal(result.bound,false);
   assert.equal(h.calls.includes("GLX.init"),!claimed,"claimed canvas takes existing safe reload/refusal path");

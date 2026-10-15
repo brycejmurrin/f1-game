@@ -14,21 +14,18 @@
         modelGroup, groundPatch, bleacher, onTrack, every, terrainYAt,
         circuitKit } = api;
 
-      // FRAME: every frac in this file is authored against the def's
-      // sceneryStartFrac (0.2250), not the racing line. The real start/finish
-      // (racing 0) sits at SF in this frame and the real T1 apex
-      // (def.turns[0]) at T1F; both are DERIVED from the built
-      // def._sceneryShift (0.26095 at the 4 m node grid) so they cannot go
-      // stale again (the old hard-coded 0.7297 came from a 0.27027 shift and
-      // put every SF-keyed prop ~50 m early). The pit complex, main
-      // grandstand, Sakhir Tower and T1 grandstand are keyed off these so
-      // they dress the real pit straight; the paddock/pit lane is on its
-      // RIGHT (+1), the main grandstand on its LEFT (-1).
-      const wrap01 = (x) => ((x % 1) + 1) % 1;
-      const SF = wrap01(1 - (api.def._sceneryShift || 0.27027));
-      const T1F = wrap01(SF + api.def.turns[0]);
-      // Final corner apex (def.turns[14] racing 0.8783) in this scenery frame.
-      const FC = wrap01(SF + api.def.turns[14]);
+      // Fractions stay in the scenery frame rooted at sceneryStartFrac.
+      // Its arc-length shift changes when the source trace is refined, so
+      // derive the pit straight and corner anchors from the built definition
+      // (the old hard-coded 0.7297 came from a 0.27027 shift and put every
+      // SF-keyed prop ~50 m early). Wrapped API helpers apply this shift once
+      // on their way to the road. The paddock/pit lane is on the RIGHT (+1),
+      // the main grandstand on its LEFT (-1).
+      const wrapFrac = (f) => ((f % 1) + 1) % 1, wrap01 = wrapFrac;
+      const shift = def._sceneryShift || 0;
+      const SF = wrapFrac(-shift);
+      const T1F = wrapFrac(def.turns[0] - shift);
+      const FC = wrapFrac(def.turns[def.turns.length - 1] - shift);
 
       if (circuitKit) {
         circuitKit.hospitality({
