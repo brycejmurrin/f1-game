@@ -323,6 +323,7 @@
       tyreWall(0.4780, 0.4960, -1, 12.0, TYRE_Y);
       // No near mixedWood at Moss: the hairpin folds -1 trees into the +1 bank
       // in world space (clip 2.6 m). Far belt only, well outside the fold.
+      forestEdge(0.4600, 0.5250, -1, 50, { col: LEAF_D, spacing: 20 });   // mid belt: Moss is the enclosed low point
       forestEdge(0.4600, 0.5250, -1, 72, { col: LEAF_D, spacing: 22 });
       forestEdge(0.4700, 0.5150, -1, 92, { col: CONIF, spacing: 26 });
 
@@ -545,7 +546,10 @@
         // rock on the top 38% of hills this size — Oak Ridges moraine, mixed Ontario bush
         // carries neither.
         mountain(a[0], a[2], (y === null ? a[1] : y) + dy, w, h,
-          { rough: 0.20, snowline: 2, forest: [0.16, 0.30, 0.18] });
+          { rough: 0.20, snowline: 2, forest: [0.16, 0.30, 0.18],
+            // rock covers every zone above 34% of height on a 50-77 m hill: the default
+            // grey-brown read as a flat tan slab, so tint it wooded.
+            rock: [0.19, 0.31, 0.19] });
       };
       farHill(0.1, 1, 1178, 1967, 68, -32);
       farHill(0.3, -1, 1302, 1640, 58, -30);

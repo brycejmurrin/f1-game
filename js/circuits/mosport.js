@@ -63,6 +63,9 @@
       fogColor:      [0.64, 0.68, 0.70],
       fogDensity:    0.0028,
       grass:         [0.20, 0.40, 0.19],
+      // Sandy-green verge: the engine default runoff [0.55,0.42,0.28] rendered ~20 m of bare tan
+      // dirt both sides, against the brief's "almost no run-off, sandy shoulders".
+      runoff:        [0.40, 0.41, 0.25],
       sunDir:        [0.48, 0.54, 0.44],
     },
 
