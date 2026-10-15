@@ -4,7 +4,6 @@
     "anderstorp": 2,
     "bahrain": 19,
     "baku": 1,
-    "brands_hatch": 3,
     "buenos_aires": 1,
     "catalunya": 5,
     "cota": 10,
@@ -35,12 +34,11 @@
     "spa": 5,
     "suzuka": 2,
     "zandvoort": 4,
-    "zolder": 7
+    "zolder": 5
   },
   "unsupported": {
     "bahrain": 1,
     "baku": 1,
-    "brands_hatch": 1,
     "imola": 1,
     "jeddah": 4,
     "mexico": 3,
@@ -53,7 +51,7 @@
     "anderstorp": 4,
     "bahrain": 1,
     "baku": 1,
-    "brands_hatch": 4,
+    "brands_hatch": 3,
     "buddh": 2,
     "buenos_aires": 4,
     "cota": 3,
