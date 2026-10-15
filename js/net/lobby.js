@@ -21,6 +21,7 @@ const NetLobby = (function () {
     let pendingId = null;
     const MAX_GUESTS = 3;
     let role = null;
+    const EVICT_GRACE_MS = 1500;         // removeGuest: wait this long for the guest's close (its ack)
     const hostEvictingIds = new Set();   // guest ids the host is removing (stay in room, fresh code)
     let hostRemovedMe = false;           // guest: host sent LEFT { evicted } before the transport died
     let pollTimer = null;
@@ -217,6 +218,7 @@ const NetLobby = (function () {
         const tGone = transports.get(id);
         const wasHostEvict = !!(tGone && tGone._hostEvict) || hostEvictingIds.has(id);
         const wasHostEvictGuest = hostRemovedMe || !!(tGone && tGone._hostRemovedMe);
+        if (tGone && tGone._evictTimer) { clearTimeout(tGone._evictTimer); tGone._evictTimer = null; }
         if (tGone) { try { tGone.close(); } catch (e) { /* already gone */ } }
         transports.delete(id);
         const s = sessions.get(id);
@@ -632,7 +634,12 @@ const NetLobby = (function () {
         if (role !== "guest" || !d) return;
         if (d.evicted) {
           hostRemovedMe = true;
-          if (t) t._hostRemovedMe = true;
+          if (t) {
+            t._hostRemovedMe = true;
+            // Our close is the host's ack (removeGuest); its close handler
+            // reads hostRemovedMe and says "removed", not "host left".
+            try { t.close(); } catch (e) { /* already closing */ }
+          }
           return;
         }
         if (d.from == null || d.from === id) return;
@@ -1167,7 +1174,9 @@ const NetLobby = (function () {
       li.className = "vs-driver vs-roster-seat";
       const dot = document.createElement("span");
       dot.className = "vs-roster-dot" + (ready ? " on" : "");
+      dot.setAttribute("role", "img");
       dot.setAttribute("aria-label", ready ? "Ready" : "Not ready");
+      dot.title = ready ? "Ready" : "Not ready";
       const who = span("vs-who", peerId == null ? "You" : rosterTeamShort(profile));
       const frag = document.createDocumentFragment();
       frag.appendChild(dot);
@@ -1268,14 +1277,17 @@ const NetLobby = (function () {
       b.className = "vs-roster-remove";
       b.dataset.rosterRemove = id;
       b.textContent = "Remove";
-      b.setAttribute("aria-label", "Remove this player from the room");
+      const v = _verify.get(id);
+      b.setAttribute("aria-label", v
+        ? "Remove this player — do it if their screen does not show " + v
+        : "Remove this player from the room");
+      if (hostEvictingIds.has(id)) b.disabled = true;
       b.addEventListener("click", () => removeGuest(id));
       el.appendChild(b);
       return el;
     }
 
-    // The verification code on a DIRECT connection's row; the host also gets
-    // REMOVE, for a guest whose screen shows a different code (a middleman).
+    // The verification code on a DIRECT connection's row.
     function verifyRow(el, id) {
       const v = _verify.get(id);
       if (!v) return el;
@@ -1283,13 +1295,8 @@ const NetLobby = (function () {
       tag.dataset.verify = v;
       tag.title = "Verification code: it must match the code on their screen";
       el.appendChild(tag);
-      if (role === "host") {
-        const b = document.createElement("button");
-        b.type = "button"; b.dataset.verifyRemove = id; b.textContent = "REMOVE";
-        b.setAttribute("aria-label", "Remove this player — their code is not " + v);
-        b.addEventListener("click", () => removeGuest(id));
-        el.appendChild(b);
-      }
+      // The host's Remove button is hostRemoveRow's — one per row, which also
+      // covers "their screen shows a different code" (a middleman).
       return el;
     }
     function removeGuest(id) {
@@ -1302,7 +1309,18 @@ const NetLobby = (function () {
         try { sess.sendEvent(NetPlay.EV.LEFT, { evicted: true }); } catch (e) { /* leaving */ }
       }
       Log.info("net", "host removed " + id);
-      try { t.close(); } catch (e) { /* its close handler is the cleanup */ }
+      // ACK BEFORE CLOSE: shutdown() drops the SCTP queue (pc.close()), so a
+      // LEFT sent and closed in one breath never reaches the guest, who then
+      // reads "The host left the room". The guest closes its own end on
+      // LEFT { evicted } — that close is the ack; EVICT_GRACE_MS is the
+      // fallback for a guest that never answers.
+      if (!sess) { try { t.close(); } catch (e) { /* its close handler is the cleanup */ } return true; }
+      if (t._evictTimer) return true;
+      t._evictTimer = setTimeout(() => {
+        t._evictTimer = null;
+        try { t.close(); } catch (e) { /* its close handler is the cleanup */ }
+      }, EVICT_GRACE_MS);
+      renderRoom();
       return true;
     }
 

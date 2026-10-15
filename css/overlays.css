@@ -626,22 +626,9 @@ body:has(dialog[open]) #save-warning { display: none; }
 #vsfriend .vs-who { flex: 0 0 auto; opacity: 0.6; width: 3.2em; }
 #vsfriend .vs-car { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #vsfriend .vs-swatch { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 2px; }
-/* "choosing" and "READY" occupy the same slot, so the row does not jump width
-   when someone commits. */
-#vsfriend .vs-ready {
-  flex: 0 0 auto;
-  width: 5.2em;
-  text-align: right;
-  font-size: var(--fs-micro);
-  letter-spacing: var(--ls-3);
-  text-transform: uppercase;
-  opacity: 0.5;
-}
-#vsfriend .vs-ready.on { opacity: 1; color: #7CFC7C; }
 /* The 4-letter verification code (lobby.js verifyRow): read aloud and compared
    with the other screen, so it reads like the room code, not like a label. */
 #vsfriend .vs-driver [data-verify] { flex: 0 0 auto; font-weight: 700; letter-spacing: var(--ls-3); }
-#vsfriend .vs-driver [data-verify-remove] { flex: 0 0 auto; font-size: var(--fs-micro); }
 #vsfriend #vs-start[disabled] { opacity: 0.4; filter: saturate(0.3); }
 
 /* VS FRIEND waiting-room seat roster (scoped to #vsfriend). */
@@ -686,8 +673,7 @@ body:has(dialog[open]) #save-warning { display: none; }
 }
 #vsfriend .vs-roster .vs-who { width: 2.6em; }
 #vsfriend .vs-roster .vs-driver [data-verify] { letter-spacing: var(--ls-2); }
-#vsfriend .vs-roster .vs-driver .vs-roster-remove,
-#vsfriend .vs-roster .vs-driver [data-roster-remove] {
+#vsfriend .vs-roster .vs-driver .vs-roster-remove {
   flex: 0 0 auto;
   font-size: var(--fs-micro);
   margin-left: auto;

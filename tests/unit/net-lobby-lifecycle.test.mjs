@@ -1341,13 +1341,16 @@ test("a connection shows its verification code, and only the HOST can remove tha
     const [id] = Object.keys(codes);
     assert.equal(h.lobby.removeGuest("nobody"), false, "an unknown id is a no-op");
     assert.equal(h.lobby.removeGuest(id), true, "the host removes the guest whose code differs");
-    assert.equal(closed, 1, "by closing that guest's transport");
+    assert.equal(closed, 0, "LEFT { evicted } goes out first: the close waits for the guest's ack");
+    assert.equal(h.lobby.removeGuest(id), true, "a second tap while waiting is a no-op");
+    await new Promise((r) => setTimeout(r, 1700));
+    assert.equal(closed, 1, "a silent guest is closed after the grace window");
     assert.equal(Object.keys(h.lobby.verifyCodes()).length, 0, "and its code goes with it");
   } finally { h.lobby.cancel(); }
 });
 
 test("a guest the host evicts sees a dedicated message, not 'host left'", async () => {
-  let guestTransport = null;
+  let guestTransport = null, closedByGuest = false;
   const made = [];
   const h = harness({
     scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
@@ -1358,7 +1361,7 @@ test("a guest the host evicts sees a dedicated message, not 'host left'", async 
     const t = {
       status: "open",
       onClose(fn) { closers.push(fn); },
-      close() { for (const fn of closers) fn(); },
+      close() { closedByGuest = true; for (const fn of closers) fn(); },
     };
     guestTransport = t;
     return t;
@@ -1371,8 +1374,9 @@ test("a guest the host evicts sees a dedicated message, not 'host left'", async 
     assert.equal(made.length, 1);
     const EV = h.context.NetPlay.EV;
     made[0].deliver(EV.LEFT, { evicted: true });
-    assert.equal(guestTransport._hostRemovedMe, true, "LEFT { evicted } tags the transport before it closes");
-    guestTransport.close();
+    // No manual close: the guest closes its own end on LEFT { evicted } (the
+    // host's ack), and that close handler reads the eviction tag.
+    assert.equal(closedByGuest, true, "the guest closed its own end");
     assert.match(h.status.textContent, /removed you from the room/i);
     assert.doesNotMatch(h.status.textContent, /host left the room/i);
   } finally { h.lobby.cancel(); }
@@ -1382,6 +1386,7 @@ test("host remove: evicting the last guest keeps the host in the waiting room", 
   const { h } = await connectedHost();
   try {
     assert.equal(h.lobby.removeGuest("g1"), true);
+    await new Promise((r) => setTimeout(r, 1700));   // no ack from the fake guest: the grace close
     assert.equal(h.lobby.status().guests, 0);
     assert.match(h.status.textContent, /removed/i);
     assert.equal(h.elements.get("vs-room").hidden, false, "not sent back to the pick screen");
