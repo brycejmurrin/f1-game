@@ -170,6 +170,7 @@ const FULL = [
   // after SettingsDefaults, so a stored player garage still wins. Generated
   // from an apex26-garage-v1 export via tools/gen/garage-defaults.mjs.
   "js/data/garage-defaults.js",
+  "js/core/save-schema-registry.js",
   "js/core/store.js",
   "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
@@ -693,6 +694,8 @@ const HARD_EDGES = [
   ["js/data/teams.js", "js/career/ai-dev.js"],
   ["js/core/mat4.js", "js/career/ai-dev.js"],         // aliases M4.clamp at eval
   ["js/career/ai-dev.js", "js/career/career.js"],     // rolloverTeams calls CareerAiDev.developWinter
+  ["js/career/save-migrate.js", "js/core/save-schema-registry.js"],
+  ["js/core/save-schema-registry.js", "js/core/store.js"],
   ["js/career/save-migrate.js", "js/core/store.js"],
   ["js/career/save-migrate.js", "js/career/career-backup.js"], // migrateCareer on import
   ["js/core/store.js", "js/career/career-backup.js"],          // store.write + keyRevision
@@ -893,6 +896,7 @@ const LAZY_RACE_SESSION = [
   "js/race/start-lights.js",
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
+  "js/race/jump-start-penalty.js",
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/race/radio-lines.js", "js/race/race-radio.js"],

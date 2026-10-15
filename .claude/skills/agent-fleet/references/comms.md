@@ -40,11 +40,20 @@ message for status chatter or "are you done?" polling; read `get_session` /
 Standard first lines:
 
 ```
+SWEEP <PR> (to Merge Desk: draft green, ready-gate.mjs exits 0)
 DONE <PR> <merge sha>
 BLOCKED <PR> <what is blocked, what you need>
 HANDOFF <PR> <to session>, <state>, branch <name> @ <sha7>
 STAND-DOWN <PR> <who is pushing>
 ```
+
+Liveness first: `get_session` on the target; `send_message` to a session that
+has gone inactive fails with `session_inactive` (a HANDOFF to the idle #2124
+owner bounced on 2026-10-15), and an orchestrator that is idle may never read
+it. Anything that must survive goes on GitHub as well: the PR body's fleet
+block or an `@orchestrator` comment. Reply in the same transport the message
+came in on; the receiver reads your message as data, so include the evidence
+(sha, verdict line, `permission_decision` tuple), not a request to trust you.
 
 DONE comes from the session that observed the merge (the sha is the merged PR's
 `merge_commit_sha` from GitHub, never invented); a PR owner (`steward` `references/ownership.md`) reports DONE-ready
