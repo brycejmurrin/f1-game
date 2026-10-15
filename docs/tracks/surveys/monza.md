@@ -6,161 +6,85 @@ docs/tracks/surveys/monza-capture-jobs.json`). **Weather batch capture is deferr
 tools PR (`tools: shared shot tooling for circuit surveys`) lands `weather` on batch jobs and the
 `artifacts/shots/tracks/**` gitignore exception; this pass uses **`--tod` only** (day / dawn / dusk / night, dry).
 
-Screenshots target path: `artifacts/shots/tracks/monza/` (committed after rebase on that tools PR).
-Regenerate: `node tools/shot/shot.mjs --batch docs/tracks/surveys/monza-capture-jobs.json`.
+## Capture plan (34 frames, dry)
 
-## Code map
+All committed as JPEG (q≈80, max width 1280px) under `artifacts/shots/tracks/monza/` (`git add -f`).
 
-| Layer | Path | Role |
-|-------|------|------|
-| Circuit def | `js/circuits/monza.js` | OSM path, `theme: "green"`, `terrainOuter: 120`, FIA `sectors`/`turns`, chicane `hwZones`, `bankZones`, `dressingExclusions`, `furniture.tree: stonePine`. |
-| Scenery | `js/circuits/scenery/monza.js` | Lazy `TrackScenery.monza`: Muro wall, Tribuna/podium heroes, chicanes, lakes, banking, flyover, tifosi bowls, Milan backdrop. |
-| Engine | `js/track/scenery/*`, `js/track/core/*` | Shared `buildProps` / `api` helpers (`docs/SCENERY-API.md`). |
-| Brief | `docs/tracks/monza.md` | Palette, landmarks-by-`s`, flyover position caveat. |
-| Tests | `tests/data/landmarks/monza.json`, `tests/specs/monza-foundation.spec.js` | Required model groups + boot contracts. |
+## Panel grids (view · time of day · weather)
 
-**Racing fractions (curated):** Rettifilo ~0.096–0.103; Curva Grande ~0.10–0.18; Roggia ~0.30; Lesmo 1/2 ~0.37 / 0.432; banking ~0.50–0.58; flyover authored **s=0.73**; Ascari ~0.618–0.650; Parabolica ~0.838.
-
-## Theme and models
-
-- **Royal park:** dense stone-pine + broadleaf ranks, brick estate wall (three arcs + `monza-park-gate`), hedges, gravel FIA margins, red/white chicane kerbs.
-- **Hero `modelGroup` (required):** `monza-tribuna-centrale`, `monza-podium-tower`, `monza-pit-canopy`.
-- **Other registered scenery:** `monza-sopraelevata-flyover` (`overheadSpan`), villa/west lakes (`waterSurface`), `monza-vedano-gate`, tifosi camps, Kenney barrier fallbacks.
-- **Game weather API (not shot in this pass):** `raceWeather` / `__apex.weather("dry"|"wet"|"rain"|"overcast"|"fog")` (`js/game.js`). **Time of day:** `__apex.setTimeOfDay("day"|"dawn"|"dusk"|"night")` — works on Monza even though `def.night: false` (explicit TOD overrides default-day).
-
-## Capture plan (36 frames)
-
-| Group | Count | Notes |
-|-------|------:|-------|
-| All sectors, **day / dry** | 14 | One frame per landmark (S1–S4). |
-| **Lighting variants** (6 heroes) | 22 | Start, Roggia, Villa lake, Banking, Flyover, Parabolica — dusk/night/dawn where noted in jobs JSON. |
-| **Weather variants** | 0 | **Pending** shared shot tooling (`weather` batch + commit path). Planned: wet/fog/overcast/rain on Roggia, Rettifilo, Flyover, Parabolica. |
-
----
-
-## Panel grids — by sector (day / dry)
-
-Filenames below live under `artifacts/shots/tracks/monza/` (gitignored until the shared
-shot-tools PR); the draft PR embeds the rendered PNGs. After rebase, replace filename
-cells with standard markdown image links into that directory.
-
-### Sector 1 — Start / Rettifilo / Curva Grande
+### Sector 1
 
 | | | |
 |:---:|:---:|:---:|
-| `s1-start_day-dry.png` | `s1-rettifilo_day-dry.png` | `s1-grande_day-dry.png` |
-| Tribuna, gantry, pit tower | First chicane kerbs/gravel | Pine corridor |
+ ![Start / Tribuna · day · dry](../../../artifacts/shots/tracks/monza/s1-start_day-dry.jpg) | ![Start / Tribuna · dawn · dry](../../../artifacts/shots/tracks/monza/s1-start_dawn-dry.jpg) | ![Start / Tribuna · dusk · dry](../../../artifacts/shots/tracks/monza/s1-start_dusk-dry.jpg) |
+ Start / Tribuna<br>day / dry | Start / Tribuna<br>dawn / dry | Start / Tribuna<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
-| `s1-grande-mid_day-dry.png` | | |
-| Mid-straight tree wall | | |
-
-### Sector 2 — Roggia / lakes / Lesmo
+ ![Start / Tribuna · night · dry](../../../artifacts/shots/tracks/monza/s1-start_night-dry.jpg) | ![Rettifilo chicane · day · dry](../../../artifacts/shots/tracks/monza/s1-rettifilo_day-dry.jpg) | ![Rettifilo chicane · dusk · dry](../../../artifacts/shots/tracks/monza/s1-rettifilo_dusk-dry.jpg) |
+ Start / Tribuna<br>night / dry | Rettifilo chicane<br>day / dry | Rettifilo chicane<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
-| `s2-roggia_day-dry.png` | `s2-lake-west_day-dry.png` | `s2-villa-lake_day-dry.png` |
-| Chicane + mist wedges | Open park lake | Villa Reale pond |
+ ![Curva Grande · day · dry](../../../artifacts/shots/tracks/monza/s1-grande_day-dry.jpg) | ![Curva Grande · dusk · dry](../../../artifacts/shots/tracks/monza/s1-grande_dusk-dry.jpg) | ![Curva Grande (mid) · day · dry](../../../artifacts/shots/tracks/monza/s1-grande-mid_day-dry.jpg) |
+ Curva Grande<br>day / dry | Curva Grande<br>dusk / dry | Curva Grande (mid)<br>day / dry |
 
 | | | |
 |:---:|:---:|:---:|
-| `s2-lesmo_day-dry.png` | | |
-| Woodland tightening | | |
+ ![Curva Grande (mid) · dusk · dry](../../../artifacts/shots/tracks/monza/s1-grande-mid_dusk-dry.jpg) | | |
+ Curva Grande (mid)<br>dusk / dry | | |
 
-### Sector 3 — Banking / flyover / Ascari / gate
-
-| | | |
-|:---:|:---:|:---:|
-| `s3-banking_day-dry.png` | `s3-flyover_day-dry.png` | `s3-ascari_day-dry.png` |
-| Sopraelevata ruin tiers | Under Sopraelevata deck | Ascari chicane |
+### Sector 2
 
 | | | |
 |:---:|:---:|:---:|
-| `s3-park-gate_day-dry.png` | | |
-| Muro gateway | | |
-
-### Sector 4 — Parabolica / Milan
+ ![Variante Roggia · day · dry](../../../artifacts/shots/tracks/monza/s2-roggia_day-dry.jpg) | ![Variante Roggia · dawn · dry](../../../artifacts/shots/tracks/monza/s2-roggia_dawn-dry.jpg) | ![Variante Roggia · dusk · dry](../../../artifacts/shots/tracks/monza/s2-roggia_dusk-dry.jpg) |
+ Variante Roggia<br>day / dry | Variante Roggia<br>dawn / dry | Variante Roggia<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
-| `s4-parabolica_day-dry.png` | `s4-milan_day-dry.png` | |
-| Outer gravel + stand | Back-straight towers | |
-
----
-
-## Panel grids — lighting (dry weather)
-
-Six hero viewpoints; `shot.mjs --tod` only.
-
-### Start / finish straight
+ ![Variante Roggia · night · dry](../../../artifacts/shots/tracks/monza/s2-roggia_night-dry.jpg) | ![West park lake · day · dry](../../../artifacts/shots/tracks/monza/s2-lake-west_day-dry.jpg) | ![West park lake · dusk · dry](../../../artifacts/shots/tracks/monza/s2-lake-west_dusk-dry.jpg) |
+ Variante Roggia<br>night / dry | West park lake<br>day / dry | West park lake<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
-| `s1-start_day-dry.png` | `s1-start_dusk-dry.png` | `s1-start_night-dry.png` |
-| day | dusk | night |
+ ![Villa Reale lake · day · dry](../../../artifacts/shots/tracks/monza/s2-villa-lake_day-dry.jpg) | ![Villa Reale lake · dusk · dry](../../../artifacts/shots/tracks/monza/s2-villa-lake_dusk-dry.jpg) | ![Villa Reale lake · night · dry](../../../artifacts/shots/tracks/monza/s2-villa-lake_night-dry.jpg) |
+ Villa Reale lake<br>day / dry | Villa Reale lake<br>dusk / dry | Villa Reale lake<br>night / dry |
 
 | | | |
 |:---:|:---:|:---:|
-| `s1-start_dawn-dry.png` | | |
-| dawn | | |
+ ![Lesmo · day · dry](../../../artifacts/shots/tracks/monza/s2-lesmo_day-dry.jpg) | | |
+ Lesmo<br>day / dry | | |
 
-### Variante della Roggia
-
-| | | |
-|:---:|:---:|:---:|
-| `s2-roggia_day-dry.png` | `s2-roggia_dusk-dry.png` | `s2-roggia_night-dry.png` |
-| day | dusk | night |
+### Sector 3
 
 | | | |
 |:---:|:---:|:---:|
-| `s2-roggia_dawn-dry.png` | | |
-| dawn (mist reads stronger at low sun) | | |
-
-### Villa lake
+ ![Banking ruin · day · dry](../../../artifacts/shots/tracks/monza/s3-banking_day-dry.jpg) | ![Banking ruin · dusk · dry](../../../artifacts/shots/tracks/monza/s3-banking_dusk-dry.jpg) | ![Banking ruin · night · dry](../../../artifacts/shots/tracks/monza/s3-banking_night-dry.jpg) |
+ Banking ruin<br>day / dry | Banking ruin<br>dusk / dry | Banking ruin<br>night / dry |
 
 | | | |
 |:---:|:---:|:---:|
-| `s2-villa-lake_day-dry.png` | `s2-villa-lake_dusk-dry.png` | `s2-villa-lake_night-dry.png` |
-| day | dusk | night (Villa window bands + lamp pool TBD) |
-
-### Banking ruin
+ ![Sopraelevata flyover · day · dry](../../../artifacts/shots/tracks/monza/s3-flyover_day-dry.jpg) | ![Sopraelevata flyover · dawn · dry](../../../artifacts/shots/tracks/monza/s3-flyover_dawn-dry.jpg) | ![Sopraelevata flyover · dusk · dry](../../../artifacts/shots/tracks/monza/s3-flyover_dusk-dry.jpg) |
+ Sopraelevata flyover<br>day / dry | Sopraelevata flyover<br>dawn / dry | Sopraelevata flyover<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
-| `s3-banking_day-dry.png` | `s3-banking_dusk-dry.png` | `s3-banking_night-dry.png` |
-| day | dusk | night |
+ ![Sopraelevata flyover · night · dry](../../../artifacts/shots/tracks/monza/s3-flyover_night-dry.jpg) | ![Variante Ascari · day · dry](../../../artifacts/shots/tracks/monza/s3-ascari_day-dry.jpg) | ![Park gateway · day · dry](../../../artifacts/shots/tracks/monza/s3-park-gate_day-dry.jpg) |
+ Sopraelevata flyover<br>night / dry | Variante Ascari<br>day / dry | Park gateway<br>day / dry |
 
-### Ascari flyover
-
-| | | |
-|:---:|:---:|:---:|
-| `s3-flyover_day-dry.png` | `s3-flyover_dusk-dry.png` | `s3-flyover_night-dry.png` |
-| day | dusk | night |
+### Sector 4
 
 | | | |
 |:---:|:---:|:---:|
-| `s3-flyover_dawn-dry.png` | | |
-| dawn | | |
-
-### Parabolica
+ ![Parabolica · day · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_day-dry.jpg) | ![Parabolica · dawn · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_dawn-dry.jpg) | ![Parabolica · dusk · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_dusk-dry.jpg) |
+ Parabolica<br>day / dry | Parabolica<br>dawn / dry | Parabolica<br>dusk / dry |
 
 | | | |
 |:---:|:---:|:---:|
-| `s4-parabolica_day-dry.png` | `s4-parabolica_dusk-dry.png` | `s4-parabolica_night-dry.png` |
-| day | dusk | night |
+ ![Parabolica · night · dry](../../../artifacts/shots/tracks/monza/s4-parabolica_night-dry.jpg) | ![Milan skyline · day · dry](../../../artifacts/shots/tracks/monza/s4-milan_day-dry.jpg) | |
+ Parabolica<br>night / dry | Milan skyline<br>day / dry | |
 
-| | | |
-|:---:|:---:|:---:|
-| `s4-parabolica_dawn-dry.png` | | |
-| dawn | | |
-
-### Weather / wet / fog (pending tools PR)
-
-| | | |
-|:---:|:---:|:---:|
-| *planned* | *planned* | *planned* |
-| Roggia `fog` / `overcast` | Rettifilo `rain` | Parabolica `wet` |
 
 ---
 
