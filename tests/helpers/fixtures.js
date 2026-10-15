@@ -97,6 +97,7 @@ import { test as base, expect } from "@playwright/test";
 import { makeVmTest } from "./vm-page.js";
 // Opt-in V8 coverage (APEX_JS_COVERAGE=1); both are no-ops otherwise.
 import { COVERAGE, startCoverage, stopCoverage } from "./js-coverage.js";
+import { syncFactoryMcLarenSeat } from "./factory-seat.js";
 
 /* APEX_VM_PAGE=1 swaps the BACKEND, not the specs: `test` then comes from
  * tests/helpers/vm-page.js and the same spec file runs under
@@ -249,6 +250,7 @@ const pwTest = base.extend({
       // (physics-hotpath, run 2048, twice). Opt-in, because ~54 callers include
       // the ones whose subject IS the frame.
       if (opts.headless) await page.evaluate(() => window.__apex.headless(true));
+      await syncFactoryMcLarenSeat(page);
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
       await awaitTrackBuild(page);
       await page.evaluate(() => window.__apex.go());
@@ -499,6 +501,7 @@ const pwSharedTest = pwTest.extend({
   loadTrack: async ({ page }, use) => {
     await use(async (id = "monza", tod = "day", wx = "dry") => {
       await ensureLive(page);
+      await syncFactoryMcLarenSeat(page);
       await page.evaluate(({ i, t, w }) => {
         window.__apexLoadTrack = "pending";
         Promise.resolve(window.__apex.race(i, t, w)).then(

@@ -639,6 +639,44 @@ test("a PASSING commit tells the model which guard path ran: additionalContext +
   } finally { repo.rm(); }
 });
 
+test("a commit in a linked worktree borrows the main checkout's node_modules instead of blocking (2026-10-15)", () => {
+  // EnterWorktree, `isolation: worktree` workers and `git worktree add` make a tree with no
+  // node_modules; every worker commit blocked on it (census session_01CgCjzTvy729SeWsHzuv8eh).
+  const repo = scratchRepo("hook-wt-");
+  const wt = repo.dir + "-wt";
+  try {
+    fs.mkdirSync(path.join(repo.dir, "tools/check"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tests/unit"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, ".gitignore"), "node_modules\n");
+    fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), "process.exit(0);\n");
+    fs.writeFileSync(path.join(repo.dir, "package.json"), JSON.stringify({ scripts: { "test:guards": "true" } }));
+    fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "import { test } from 'node:test'; test('ok', () => {});\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
+    fs.mkdirSync(path.join(repo.dir, "node_modules/.bin"), { recursive: true });
+    repo.g("worktree", "add", "-q", wt, "-b", "wt-branch");
+    assert.equal(fs.existsSync(path.join(wt, "node_modules")), false, "a fresh worktree has no node_modules");
+    fs.writeFileSync(path.join(wt, "docs/PHYSICS.md"), "note from the worktree\n");
+    spawnSync("git", ["add", "docs/PHYSICS.md"], { cwd: wt });
+    const r = hook("bash-guard.sh", bashCall("git commit -m x", { cwd: wt }), { cwd: wt, env: { APEX_GUARD_PROBE: "" } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stderr, /node_modules is missing/);
+    assert.equal(fs.realpathSync(path.join(wt, "node_modules")), fs.realpathSync(path.join(repo.dir, "node_modules")));
+    assert.equal(spawnSync("git", ["status", "--porcelain"], { cwd: wt, encoding: "utf8" }).stdout.includes("node_modules"), false,
+      "the borrowed link is git-ignored");
+    // the main checkout itself is never linked to anything
+    fs.rmSync(path.join(repo.dir, "node_modules"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note main\n");
+    repo.g("add", "docs/PHYSICS.md");
+    const m = hook("bash-guard.sh", bashCall("git commit -m x", { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
+    assert.equal(m.status, 2, "a main checkout with no install still blocks");
+    assert.match(m.stderr, /node_modules is missing/);
+  } finally {
+    spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: repo.dir });
+    fs.rmSync(wt, { recursive: true, force: true });
+    repo.rm();
+  }
+});
+
 // ── THE CLOG OF 2026-10-15 (docs/notes/CI-CLOG-SURVEY-2026-10-15.md) ────────
 // 306 of 401 PR runs that day ended cancelled, 142 of them in 17 one-minute
 // sweeps under the owner's account, and every sweep was followed by a
@@ -649,7 +687,8 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command), { env });
   for (const c of ["gh run cancel 38683549544", "gh run cancel 1 --repo o/r", "gh api -X POST repos/o/r/actions/runs/123/cancel",
     "curl -X POST -H 'Authorization: Bearer x' https://api.github.com/repos/o/r/actions/runs/123/cancel",
-    "curl -X POST \"https://api.github.com/repos/o/r/actions/runs/123/cancel\"", "bash -c 'gh run cancel 5'"]) {
+    "curl -X POST \"https://api.github.com/repos/o/r/actions/runs/123/cancel\"", "bash -c 'gh run cancel 5'",
+    "gh api -X POST repos/o/r/actions/runs/123/force-cancel", "gh api -X POST \"repos/o/r/actions/runs/$id/cancel\""]) {
     const r = run(c);
     assert.equal(r.status, 2, `must block: ${c} (${r.stderr})`);
     assert.match(r.stderr, /BLOCKED: cancelling an Actions run/);
@@ -661,6 +700,7 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   assert.equal(run("APEX_RUN_CANCEL_OK=1 gh run cancel 1").status, 0, "the user asked: command override");
   const mcp = (tool_input, env = {}) => decisionOf(hook("github-mcp-guard.sh", { tool_name: "mcp__github__actions_run_trigger", tool_input }, { env }));
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }), "deny");
+  assert.equal(mcp({ method: "force_cancel_workflow_run", run_id: 1 }), "deny");
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_RUN_CANCEL_OK: "1" }), null, "the user asked");
   assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }), "ask", "a re-run is at most once, infra only");
   assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }), "ask");
