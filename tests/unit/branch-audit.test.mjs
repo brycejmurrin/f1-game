@@ -5,6 +5,7 @@
 // unrelated history — is pinned against REAL git in a throwaway repo under
 // artifacts/ (never /tmp, AGENTS.md), because a verdict built on a misread
 // merge-tree would delete work. Importing the module runs nothing. ~1 s.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";

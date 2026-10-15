@@ -184,7 +184,9 @@ const HudRelative = (function () {
     let k = "";
     for (let i = 0; i < ROWS; i++) k += rows[i].car ? "1" : "0";
     const w = doc.defaultView || (typeof window !== "undefined" ? window : null);
-    k += "|" + (w ? w.innerWidth + "x" + w.innerHeight : "");
+    // GameHud's cached viewport: a live innerWidth read after the tick's writes
+    // forces a layout on mobile Chrome (#1395, #2151).
+    k += "|" + (typeof GameHud !== "undefined" && GameHud.vpKey ? GameHud.vpKey() : w ? w.innerWidth + "x" + w.innerHeight : "");
     const el = doc.documentElement;
     k += "|" + (el && el.style && el.style.getPropertyValue ? el.style.getPropertyValue("--hud-z-top") : "");
     k += "|" + (doc.body ? doc.body.className : "");
@@ -311,5 +313,7 @@ const HudRelative = (function () {
       + ", tyre " + tyre + (laps > 0 ? ", " + lapWord(laps) + " up" : laps < 0 ? ", " + lapWord(-laps) + " down" : "");
   }
 
-  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, rows });
+  /** Re-fit only when something fitKey sees moved since the last fit (or when forced). */
+  function refit(force) { if (force || fitKey() !== fitSeen) fitRows(); }
+  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, refit, rows });
 })();

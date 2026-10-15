@@ -16,15 +16,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 const src = (p) => read(p).replace(/^const\b/gm, "var");
 
-function boot() {
+function boot(opts = {}) {
   const dom = makeDom();
   const rawCreate = dom.document.createElement;
-  let gbrCalls = 0;
+  let gbrCalls = 0, gcsCalls = 0;
   const wrapRect = (el) => {
     if (!el || el._laneRectWrapped) return el;
     el._laneRectWrapped = true;
     const orig = el.getBoundingClientRect.bind(el);
-    el.getBoundingClientRect = () => { gbrCalls++; return orig(); };
+    el._gbr = 0;
+    el.getBoundingClientRect = () => { gbrCalls++; el._gbr++; return orig(); };
     return el;
   };
   dom.document.createElement = (tag) => {
@@ -49,7 +50,7 @@ function boot() {
     TrackMaps: { drsZones: () => [], sectorColors: () => ["#ffd700", "#c0c0c0", "#cd9b5a"] },
     setTimeout: () => 1, clearTimeout: () => {},
     performance: { now: () => 1000 },
-    getComputedStyle: () => ({ getPropertyValue: () => "", transform: "none", columnGap: "0px", rowGap: "0px" }),
+    getComputedStyle: () => { gcsCalls++; return { getPropertyValue: () => "", transform: "none", columnGap: "0px", rowGap: "0px" }; },
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
@@ -70,7 +71,8 @@ function boot() {
   };
   els.minimap.getContext = () => new Proxy({}, { get: () => () => {}, set: () => true });
   // desktop: fitHud early-return skips phonePaintedClash rect walks
-  dom.document.body.classList.add("in-race", "desktop");
+  dom.document.body.classList.add("in-race");
+  if (!opts.phone) dom.document.body.classList.add("desktop");
 
   const mk = (cls, parent) => {
     const e = wrapRect(dom.document.createElement("div"));
@@ -100,7 +102,7 @@ function boot() {
   gaps._rect = R(200, 80, 120, 60);
   els.gapA._rect = R(200, 80, 120, 30);
   els.gapB._rect = R(200, 110, 120, 30);
-  els.hudSectors._rect = R(980, 70, 220, 70);
+  els.hudSectors._rect = opts.phone ? R(880, 70, 220, 70) : R(980, 70, 220, 70);
   els.flag._rect = R(400, 70, 160, 40);
   els.announce._rect = R(400, 120, 200, 80);
   els.pausebtn._rect = R(1180, 8, 40, 40);
@@ -133,7 +135,9 @@ function boot() {
     nat: () => hud.updateHud(false, 100),
     force: () => hud.updateHud(true),
     gbrCalls: () => gbrCalls,
-    resetGbr: () => { gbrCalls = 0; },
+    gcsCalls: () => gcsCalls,
+    resetGbr: () => { gbrCalls = 0; gcsCalls = 0; for (const el of [els.announce, $("btn-boost"), gaps, top]) el._gbr = 0; },
+    $,
     misses: () => hud.laneRectMisses(),
     resetMisses: () => hud.resetLaneRectMisses(),
   };
@@ -210,4 +214,49 @@ test("delayed primary packing invalidates the cached tyre lane rectangle", () =>
   assert.ok(h.misses() > 0, "a packed tyre changes the lane's clipper geometry without a settings edit");
   h.resetMisses(); h.nat();
   assert.equal(h.misses(), 0, "the unchanged packed layout reuses the cache again");
+});
+
+// #2151: the 10 Hz block ran radioPaintedCollapse AFTER the tick's DOM writes,
+// so every tick with a radio card up read #announce (and up to four clash
+// targets) — a forced layout per tick on a real page. Same-key phone ticks
+// also measured BOOST in _boostOnRightHalf four times (fitHud's pre-check, its
+// phonePaintedClash, and phoneFitStampSync's two identical probes).
+test("PERF #2151: phone ticks with a radio card up → no painted-collapse re-read, BOOST measured once per probe", () => {
+  const h = boot({ phone: true });
+  const boost = h.$("btn-boost");
+  boost._rect = { left: 1180, top: 400, right: 1240, bottom: 460, width: 60, height: 60 };
+  h.els.announce.textContent = "RADIO: BOX THIS LAP";
+  assert.equal(h.els.announce.hidden, false, "the card is up");
+  // Attribute each rect read to the function that made it (the frame above the stub).
+  const by = {};
+  for (const el of [h.els.announce, boost]) {
+    const g = el.getBoundingClientRect;
+    el.getBoundingClientRect = () => {
+      const fn = (new Error().stack.split("\n")[2] || "").trim().split(" ")[1];
+      by[el.id + ":" + fn] = (by[el.id + ":" + fn] || 0) + 1;
+      return g();
+    };
+  }
+  const reads = (k) => by[k] || 0;
+  for (let i = 0; i < 4; i++) h.force();
+  h.nat();
+  for (const k in by) delete by[k];
+  const N = 20;
+  for (let i = 0; i < N; i++) h.nat();
+  assert.ok(reads("announce:radioPaintedCollapse") <= 1,
+    `radioPaintedCollapse read #announce ${reads("announce:radioPaintedCollapse")}× over ${N} ticks (want ≤ 1)`);
+  // One measure in fitHud's same-key probe (shared with its phonePaintedClash),
+  // one in phoneFitStampSync's post-write stamp probe.
+  assert.ok(reads("btn-boost:_boostOnRightHalf") <= 2 * N,
+    `_boostOnRightHalf measured BOOST ${reads("btn-boost:_boostOnRightHalf")}× over ${N} ticks (want ≤ ${2 * N})`);
+  // A new message is a real change: it re-measures once, then caches again.
+  h.els.announce.textContent = "RADIO: PUSH NOW";
+  for (const k in by) delete by[k];
+  for (let i = 0; i < N; i++) h.nat();
+  const re = reads("announce:radioPaintedCollapse");
+  assert.ok(re >= 1 && re <= 2, `new card text re-measures, then settles (${re}× over ${N} ticks)`);
+  // A forced refresh (probes, jump) always measures.
+  for (const k in by) delete by[k];
+  h.force();
+  assert.ok(reads("announce:radioPaintedCollapse") >= 1, "forced update measures");
 });
