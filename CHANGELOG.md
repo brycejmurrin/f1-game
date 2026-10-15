@@ -1,8 +1,42 @@
 # Changelog
 
-Player-facing notes for recent merges. Older history lives in git and the PR list.
+Player-facing changes for each shipped build. Add one section per exact `build` number from `version.json` (for example `1695` — not a date range or approximate build).
 
-## 2026-10-14 (build ~1695)
+Under each build, use only these categories:
+
+- **New** — new player-visible features or content
+- **Improved** — clearer UX, visuals, or performance without fixing a regression
+- **Fixed** — bugs and regressions
+- **Removed** — features or UI removed on purpose
+
+Do not list internal refactors, agent workflows, CI, or tooling. Older history lives in git and merged PRs.
+
+## 1695
+
+### Fixed
+- VS FRIEND: running into the back of your friend's car is one clean bump, so you no longer stay glued to their gearbox for several frames (#2164).
+- A rival's pass-by whoosh no longer keeps hissing under the pause menu, the results sheet or the title screen (#2187).
+- The team-radio key-up squelch now plays on phones, and on desktop it follows the master and SFX volume (#2189).
+- Data Hub: a session with no data yet (Results on a race weekend, WATCH & DRIVE, Telemetry, Live) now says nothing is published yet instead of showing a load failure with a RETRY that never works (#2185).
+- Data Hub: a tab served from the stored copy after a failed refresh shows that copy's age and "offline copy" instead of "updated just now"; the Schedule's NEXT marker moves on once a race ends; large telemetry downloads are no longer fetched again on every visit (#2190).
+- Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
+- Blue flags: letting one lapping car through no longer counts toward a penalty for the next one in the queue (#2163).
+- Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
+- A car handed back after a heavy shunt never drives backwards at speed (#2167).
+- AI cars hold their line under the Safety Car and VSC instead of weaving to defend (#2175).
+- HUD editing restores hidden readouts and keeps its toolbar within the screen.
+- The game still opens when the browser blocks access to saved data at startup.
+- Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
+- Data Hub cancels superseded telemetry selections, clears old session content when a Grand Prix or year has no data, and keeps keyboard navigation inside telemetry dialogs.
+- Rotating a phone while editing the HUD keeps Settings accessible afterward.
+- Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
+- Restoring a career backup keeps your Daily Challenge class bests, so the share line no longer reads NO LAP (#2165).
+- A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
+- Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
+- A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
+- Track Designer on a landscape phone: the map gets most of the screen and UNDO / FIT VIEW sit beside it instead of covering it (#2152).
+- Touch: sliders, dropdowns and fold-out rows (OVERALL SPEED, Spotify, EXTRA PAINT, EXTRA FUNDS, free-camera FOV) are big enough to tap (#2158).
+- Free camera with the lighting panel open: the camera bar no longer covers the panel's FREE CAMERA button on a phone (#2159).
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
@@ -34,7 +68,6 @@ Player-facing notes for recent merges. Older history lives in git and the PR lis
 - Open-rim tyre recipes retargeted after the cover opt-in (#1473)
 - Open-rim fixed disc and caliper stay visible in FieldLod lite (#1500)
 - Car materials and body geometry moved toward pure-move paths (#1466)
-- Vendored three.js bumped 0.186.0 → 0.186.1 with local patches re-applied (#1488)
 
 ### Performance
 - Garage on phone sheds the bay present cost (#1441)
@@ -50,20 +83,3 @@ Player-facing notes for recent merges. Older history lives in git and the PR lis
 
 ### Audio
 - Results HIGHLIGHTS montage plays engine notes with the field (#1462)
-
-### Tooling & CI
-- Agent-view tests wait for a rendered frame instead of a fixed rAF count (#1457)
-- LoopHealth fault caps and quiet expiry covered by unit tests (#1463)
-- Shipped-seat harness: game-vm seat option, player-dyn --seat, shipped twin test (#1474)
-- Batch shots no longer save the previous framing; --hud reaches the image (#1484)
-- Per-circuit geometry sweeps shard across 4 parallel runners (#1498)
-- Perf hunt 4 research note: dynamic-buffer re-upload, lamp-shadow reach, census, first-draw stall (#1456)
-- Skills survey: path/key/flag fixes and missing recipes across 29 skills (#1478)
-- PR board encodes merge-commit-only, MERGE-HOLD, the 2-armed cap, and a PLAN column (#1481)
-
-### Agent process
-- Open the draft PR at the first commit with a live Plan checklist (#1451)
-- Ready-gate checks the PR Plan checklist; fleet and steward skills follow the live-Plan rule (#1461)
-- Merge-commit-only rule; MERGE-HOLD is the one PR-body veto (#1458)
-- Player usage paths and session return loops mapped in docs (#1452)
-- AGENTS.md under Codex’s 32 KiB cap; merge/push guards, fail-closed hooks, coordination skills (#1499)

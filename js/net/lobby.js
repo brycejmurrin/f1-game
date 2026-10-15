@@ -1382,6 +1382,7 @@ const NetLobby = (function () {
         say("That is four players — the grid is full.", true);
         return { ok: false, error: "room_full" };
       }
+      invalidateOperations();
       resetSteps();        // the consumed invite/QR/answer, and a camera left running from the last sub-step
       show("pick");
       if ($("vs-join")) $("vs-join").hidden = true;
@@ -1439,7 +1440,14 @@ const NetLobby = (function () {
       if (!peek.ok) { say(peek.message, true); return { ok: false, error: peek.error, message: peek.message }; }
       // A join still waiting on the relay credentials is not "no connection":
       // wait for the transport it is about to build (joinP, above join()).
-      if (!transport && joinP) { say("Preparing your answer…", false, true); await joinP; }
+      if (!transport && joinP) {
+        // Observe the join's generation without superseding the join itself.
+        // CLOSE or another route may replace its transport while ICE settles.
+        const joiningGen = operationGeneration;
+        say("Preparing your answer…", false, true);
+        await joinP;
+        if (!operationCurrent(joiningGen)) return cancelledResult();
+      }
       if (!transport) { say(noConnectionMsg(), true); return { ok: false, error: "no_transport" }; }
       const pending = transport;
       const pc = pending.pc;
@@ -1509,9 +1517,10 @@ const NetLobby = (function () {
 
     const {
       codeFrom, deliver, scan, stopScan, pasteInto, copy, handOff,
-      drawQr, drawAnswerQr, shareInvite, shareAnswer, canShare,
+      drawQr, drawAnswerQr, shareInvite, shareAnswer, canShare, resetSteps,
     } = LobbyCodes.create({
       els, $, say, makeAnswer, acceptAnswer, cancelledResult,
+      getOperation: () => operationGeneration,
       has, focusInto, shownStep,
     });
 
@@ -1921,19 +1930,6 @@ const NetLobby = (function () {
       return null;
     }
 
-    // Clear invite/QR/answer widgets per attempt (retry used to show a dead peer).
-    function resetSteps() {
-      const e = els();
-      for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
-      if (e.answerHint) e.answerHint.hidden = true;
-      if (e.answerActions) e.answerActions.hidden = true;
-      if (e.answerRaw) e.answerRaw.hidden = true;
-      if (e.answerWait) e.answerWait.hidden = false;
-      if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
-      if (e.answerQrWrap) e.answerQrWrap.hidden = true;
-      stopScan();
-    }
-
     function open() {
       const block = blockingTitleSheet();
       if (block) {
@@ -2038,11 +2034,19 @@ const NetLobby = (function () {
       on("vs-paste-answer", () => pasteInto("answer"));
       on("vs-scan-cancel", () => { stopScan(); say(""); });
       on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
-      on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
+      // Withdraw READY BEFORE the garage opens (#1919): the garage edits G.driverIdx
+      // live, and a host seeing our old profile as READY could start with it.
+      // Exit (roomChanged("car")) re-announces; READY again is the player's call.
+      on("vs-edit-car", () => {
+        if (!G.openGarageFrom) return;
+        if (selfReady) setReady(false);
+        G.openGarageFrom("vsfriend");
+      });
       on("vs-ready", tiltToo(() => setReady(!selfReady)));
       on("vs-invite-more", inviteAnother);
       on("vs-code-host", tiltToo(() => codeHost()));   // never the click event as opts
       on("vs-code-join", () => {
+        invalidateOperations();
         const privateRelay = NetRendezvous.usingPrivateRelay();
         showCodeStep("input", privateRelay ? "Paste their private room token" : "Enter their code",
           privateRelay ? "Paste all 32 characters shared by your friend. Both players need the same private relay configured." : "Six letters and numbers.");

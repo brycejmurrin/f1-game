@@ -32,10 +32,25 @@
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 import { writeFileSync } from "node:fs";
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
-const argv = process.argv.slice(2);
-const flag = (n, d) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : d; };
+// cli-args ends a space-form value at a leading "-", so `--az -90` would read
+// as the default; fold a numeric space-form value into `--az=-90` first (the
+// same fix as stitch-osm-ring's --bbox).
+const NUMERIC = ["--count", "--frac", "--az", "--dist", "--el"];
+const argv = process.argv.slice(2).reduce((out, tok, i, all) => {
+  if (NUMERIC.includes(tok) && /^-?[\d.]/.test(all[i + 1] || "")) out.push(`${tok}=${all[i + 1]}`);
+  else if (!(i > 0 && NUMERIC.includes(all[i - 1]) && /^-?[\d.]/.test(tok))) out.push(tok);
+  return out;
+}, []);
+// --help and a typo'd flag answer before the server binds or Chromium launches (#1708).
+exitIfHelp(argv, `usage: node tools/gfx/batch-visible-probe.mjs [track=cota] [--match "tyre-stack|tecpro"] [--count 70]
+         [--frac 0.635] [--az 90] [--dist 40] [--el 14] [--hw] [--dump] [--json out.json]
+  Is one instanced scenery batch submitted and lit-visible? Launches Chromium.
+  --hw leaves the backend pins alone (real GPU); verdict line: = batch <track> ...`);
+const F = parseFlags(argv, ["--match", "--count", "--frac", "--az", "--dist", "--el", "--json", "--hw", "--dump"]);
+const flag = (n, d) => F.flag(n, d);
 const track = argv[0] && !argv[0].startsWith("--") ? argv[0] : "cota";
 const hw = argv.includes("--hw");
 const match = flag("--match", "tyre-stack|tecpro");

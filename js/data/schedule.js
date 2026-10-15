@@ -37,6 +37,17 @@ const DataSchedule = (function () {
     return r.date >= new Date(now).toISOString().slice(0, 10);
   }
 
+  // When the current NEXT stops being upcoming: a reused Schedule node must be
+  // rebuilt then, or the chip sits on a finished race for the node's MAX_AGE.
+  function nextFlipAt(items, now) {
+    for (const r of items || []) {
+      if (!isUpcoming(r, now)) continue;
+      const at = raceInstant(r);
+      return Number.isFinite(at) ? at + RACE_MS : Date.parse(r.date + "T00:00:00Z") + 24 * 3600 * 1000;
+    }
+    return Infinity;
+  }
+
   function bindOverflowTitle(node, text) {
     if (!node || !node.addEventListener) return;
     node.addEventListener("mouseenter", function () {
@@ -105,12 +116,13 @@ const DataSchedule = (function () {
           grid.appendChild(raceRow(r, isNext));
         }
         wrap.appendChild(grid);
+        wrap.nextFlipAt = nextFlipAt(items, now);   // hub.js rebuilds a reused node after this
         return wrap;
       });
     }
     return { loadSchedule };
   }
 
-  return { create, raceInstant, fmtDate, dateLabel, isUpcoming };
+  return { create, raceInstant, fmtDate, dateLabel, isUpcoming, nextFlipAt };
 })();
 Object.freeze(DataSchedule);

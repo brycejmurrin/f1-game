@@ -492,6 +492,26 @@ test("BLOCKED storage: a read that throws is remembered, not retried (and re-log
   assert.equal(logs, 1, "one log line, not one per frame");
 });
 
+test("BLOCKED storage: a throwing global getter does not abort boot when IndexedDB exists", async () => {
+  const idb = fakeIndexedDb([["apex26.career.driver.0", JSON.stringify({ money: 7 })]]);
+  const ctx = {
+    Log: { info() {}, warn() {} }, indexedDB: idb, setTimeout, clearTimeout,
+  };
+  vm.createContext(ctx);
+  vm.runInContext('Object.defineProperty(globalThis, "localStorage", { get() { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); } });', ctx);
+  assert.throws(() => vm.runInContext("typeof localStorage", ctx), { name: "SecurityError" },
+    "the VM global must invoke the denied storage getter");
+  seedSaveMigrate(ctx);
+  assert.doesNotThrow(() => vm.runInContext(SRC + ";this.GS=GameStore;", ctx),
+    "store.js must finish boot even when the global storage getter throws");
+  assert.equal(await ctx.GS.store.mirror.ready, 0);
+  assert.equal(ctx.GS.store.mirror.settled, true,
+    "denied storage must settle recovery before career boot checks the mirror");
+  assert.equal(idb.opens, 0, "restore cannot write into blocked localStorage");
+  assert.equal(ctx.GS.store.get("career.driver.0", null), null,
+    "the live store still answers defaults while storage is blocked");
+});
+
 test("a restored newer row that LANDED makes this session its owner: its later saves replace the row, no rollback next boot", async () => {
   // Bug hunt 2026-09-29: the restore wrote the quota-refused row back to disk
   // but did not mark this session as its owner, so the flush guard refused
@@ -720,12 +740,41 @@ test("standalone season migration yields to recovery but an explicit replacement
     const disk = new Map([[key, JSON.stringify({ round: 0, pts: {} })]]);
     const h = loadCareerMirrored({ disk, seed: [[key, JSON.stringify({ round: 1, pts: { "haas:0": 25 } }), false]] });
     h.SeasonCal.load();
-    if (explicit) h.SeasonCal.applyConfig(h.SeasonCal.config());
+    // An unchanged APPLY now preserves the championship. Change a normalized
+    // rule to exercise an intentional replacement while recovery is pending.
+    if (explicit) {
+      const result = h.SeasonCal.applyConfig({ ...h.SeasonCal.config(), laps: 10 });
+      assert.equal(result.ok, true);
+      assert.equal(result.season.config.laps, 10);
+    }
     await h.store.mirror.ready;
     await h.store.mirrorFlush();
     assert.equal(JSON.parse(disk.get(key)).round, explicit ? 0 : 1);
     assert.equal(JSON.parse(h.idb.rows.get(key)).round, explicit ? 0 : 1);
+    if (explicit) {
+      assert.equal(JSON.parse(disk.get(key)).config.laps, 10);
+      assert.equal(JSON.parse(h.idb.rows.get(key)).config.laps, 10);
+    }
   }
+});
+
+test("unchanged standalone setup APPLY still recovers a newer mirror save", async () => {
+  const key = "apex26.season";
+  const recovered = JSON.stringify({ round: 1, pts: { "haas:0": 25 } });
+  const disk = new Map([[key, JSON.stringify({ round: 0, pts: {} })]]);
+  const h = loadCareerMirrored({ disk, seed: [[key, recovered, false]] });
+  const season = h.SeasonCal.load();
+  const revision = h.store.keyRevision("season");
+  const result = h.SeasonCal.applyConfig(h.SeasonCal.config());
+  assert.equal(result.ok, true);
+  assert.equal(result.season, season, "unchanged setup preserves the current championship object");
+  assert.equal(h.store.keyRevision("season"), revision, "no explicit replacement is queued");
+  await h.store.mirror.ready;
+  await h.store.mirrorFlush();
+  assert.equal(disk.get(key), recovered, "disk keeps the recovered round and its points");
+  assert.equal(h.idb.rows.get(key), recovered, "IDB must not be overwritten by the older no-op setup");
+  assert.equal(h.store.get("season").round, 1, "the session reads the recovered championship too");
+  assert.equal(h.store.get("season").pts["haas:0"], 25);
 });
 
 test("a stale deletion cannot remove a peer's newer mirror-only career", async () => {

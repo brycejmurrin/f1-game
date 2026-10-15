@@ -61,11 +61,10 @@
      behind the published cap under CI load → fitHud flipped caps. */
   transition-property: opacity, color, background-color, box-shadow, filter, text-shadow;
 }
-/* CAM / PAUSE follow BUTTON SIZE independently of HUD fitting. Cap the
-   top-row buttons at 150% so their own requested size cannot consume the
-   full timing lane; readouts clear their measured rectangles. */
+/* CAM / PAUSE share the dock's effective BUTTON SIZE, capped at 150%.
+   Readouts clear their measured rectangles independently of HUD scale. */
 :root {
-  --hud-btn-z: clamp(1, var(--hud-btn-scale, 1), 1.5);
+  --hud-btn-z: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5);
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
@@ -703,6 +702,13 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   min-width: 1.1em; text-align: center;
   color: var(--text); text-shadow: var(--hud-halo);
 }
+/* COLOURBLIND CUES (js/ui/hud-tyres.js): compound badge matches Data Hub chips. */
+:root[data-cb-cues="on"] #hud-tyre-code[data-compound] {
+  font-family: var(--font-hud); font-style: normal; letter-spacing: 0;
+  min-width: 1.6em; padding: 0 calc(var(--gap) / 6);
+  border: 1px solid var(--plate-line); border-radius: var(--r-xs);
+  background: color-mix(in srgb, var(--look-hud-bg) 55%, transparent);
+}
 .hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.06em; font-weight: 800; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 /* TEXT LARGER GROWS THE BAR. The label rides --fs-micro (16/18px at LARGE /
    LARGER) inside a bar whose height every layout pins in px (14-18), so the
@@ -1010,6 +1016,23 @@ body.hud-prof-broadcast:has(#hud-mirror-chip:not([hidden])) :is(#announce, #hud-
    A plate with a blue edge rather than a blue field: light ink on the palette's
    blue misses AA, and the word does the work. */
 #hud-flag[data-flag="blue"] { background: var(--plate-opaque); color: var(--edit-ink); border-left: 6px solid var(--edit-fill); }
+/* COLOURBLIND CUES (js/ui/hud-readouts.js paintFlag): shape + letter beside chip text. */
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue] {
+  display: inline-flex; align-items: center; gap: calc(var(--gap) / 2);
+}
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue]::before {
+  flex: none; font-family: var(--font-hud); font-size: 0.95em; font-weight: 900;
+  line-height: 1; min-width: 1.15em; text-align: center;
+  border: 2px solid currentColor; border-radius: var(--r-xs);
+  padding: 0.08em 0.22em; box-sizing: border-box;
+}
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="yellow"]::before { content: "Y"; }
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="vsc"]::before {
+  content: "V"; background: repeating-linear-gradient(-45deg, transparent, transparent 2px, currentColor 2px, currentColor 3px);
+}
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="sc"]::before { content: "S"; border-radius: 50%; }
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="red"]::before { content: "R"; }
+:root[data-cb-cues="on"] #hud-flag[data-flag-cue="blue"]::before { content: "B"; border-radius: 50%; }
 @media (prefers-reduced-motion: reduce) {
   #hud-flag.flag-vsc { animation: none; }
   #hud-energy[data-ers="deploy"] #hud-energy-fill,
@@ -1124,6 +1147,18 @@ body:not(.desktop) #hud-sectors {
 .sec-row.sec-flash { animation: sec-flash 0.35s ease-out 1; }
 .sec-row.sec-flash-pb { border-left-color: var(--faster); }
 .sec-row.sec-flash-slow { border-left-color: var(--sec-slow); }
+/* COLOURBLIND CUES: sector split state as border pattern, not hue alone (★▼▲ stay). */
+:root[data-cb-cues="on"] .sec-row[data-sec-timing="session"] { border-left-style: double; border-left-width: 4px; }
+:root[data-cb-cues="on"] .sec-row[data-sec-timing="personal"] .sec-lbl::after {
+  content: "P"; font-size: 0.75em; margin-left: 0.15em; font-weight: 900;
+  border: 1px solid currentColor; border-radius: 2px; padding: 0 0.12em; vertical-align: 0.05em;
+}
+:root[data-cb-cues="on"] .sec-row[data-sec-timing="slow"] .sec-lbl::after {
+  content: "\25B2"; font-size: 0.85em; margin-left: 0.1em; font-style: normal;
+}
+:root[data-cb-cues="on"] .sec-row[data-sec-timing="session"] .sec-lbl::after {
+  content: "\2605"; font-size: 0.85em; margin-left: 0.1em; font-style: normal;
+}
 @keyframes sec-flash {
   0% { background: color-mix(in srgb, var(--text) 22%, transparent); }
   100% { background: transparent; }
@@ -1244,6 +1279,9 @@ body[data-density="compact"]:not(.hud-mirror-on.hud-mirror-side):not(.hud-radio-
    the attribute the JS sets could not actually hide it. Restated, as
    #cs-cam-panel and the dock groups already do. Found by the hidden-override
    guard in tests/unit/css-layers.test.mjs. */
+/* Race chrome over the canvas, not controls: a TOUCH steer that starts on the radio card or the start-light plate
+   must reach the canvas (js/input/input.js listens there). ARRANGE HUD still grabs the card (its own rule). */
+body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
 #lights[hidden] { display: none; }
 #lights {
   position: fixed;
@@ -1370,6 +1408,17 @@ body:not(.desktop) #announce {
 body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-side) #announce {
   left: calc(var(--announce-lane-x, 50% * var(--hud-z)) / var(--hud-z));
   transform: translateX(var(--announce-lane-shift, -50%));
+}
+/* PORTRAIT FALLBACK — after the 50% / -50% centre so it wins the cascade
+   (css-prefers-cascade). That centre clears the map at HUD 100% on 390 and
+   overlaps it at HUD 150% (card 97.5–292.5 vs map 8.9–122.5, Pages
+   38622878195). Pin the left edge past the map column; a published lane
+   still wins. :not([data-radio-corner]) steps aside for radioUnderRight. */
+@media (orientation: portrait) and (max-width: 500px) {
+  body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-side) #announce {
+    left: calc(var(--announce-lane-x, 34% * var(--hud-z)) / var(--hud-z));
+    transform: translateX(var(--announce-lane-shift, 0%));
+  }
 }
 /* The plate. Italic is the racing number's own convention, not emphasis. */
 #announce-num {
@@ -1614,11 +1663,11 @@ body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top
    already carry; --hl-o keeps a corner piece growing away from its corner. */
 /* These rectangles are read immediately after fit() writes clearance. Geometry
    must never transition, including when reduced motion is not selected. */
-:is(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs) {
+:is(#minimap, #hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* fit() publishes screen-pixel clearance independently of the saved layout. */
-:is(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs), [data-hl] {
+:is(#minimap, #hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs), [data-hl] {
   translate: calc((var(--hl-x, 0) * 1vw + var(--hud-clear-x, 0px)) / var(--hud-z, 1)) calc((var(--hl-y, 0) * 1svh + var(--hud-clear-y, 0px)) / var(--hud-z, 1));
   scale: var(--hl-s, 1);
   transform-origin: var(--hl-o, center);
@@ -1782,8 +1831,12 @@ body.lt-open:not(.pc-nopanel) #pc-bar {
   /* Every term in this element's own space: viewport units through --vwz, and
      --dock-px (a screen measurement) divided back down — see the note on the
      .pc-altcol offsets above. --sal is hardware, so it divides too. */
+  /* `--dock-w + 8px + --sar` IS `--dock-px / --ui-scale`, written without the
+     round trip: Chromium resolved `calc(1000px - var(--dock-px) / var(--ui-scale))`
+     110px short (min() inside the product), so at 844x390 + insets the bar
+     ran 59px into the panel and EXIT sat on FREE CAMERA (#2159). */
   max-width: max(160px, min(calc(70 * var(--vwz)), 720px,
-    calc(100 * var(--vwz) - var(--dock-px) / var(--ui-scale) - 40px - var(--sal) / var(--ui-scale))));
+    calc(100 * var(--vwz) - var(--dock-w) - 8px - var(--sar) - 40px - var(--sal) / var(--ui-scale))));
   gap: calc(var(--gap) * 2 / 3); padding: calc(var(--gap) * 0.5) 10px;
 }
 /* Same context: the tuner panel already carries plenty of on-screen text, so
@@ -1809,6 +1862,13 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
      (~32 local px, ~26 in the lt-open variant above) they painted ~12.8px /
      ~10.4px at UI SIZE 40%. Same floor as #pc-toggle two rules up. */
   min-height: var(--tap-min);
+}
+/* Compact, but not under the touch floor (#2158): the padding above painted
+   the three buttons (lt-open) 40 tall and the FOV track 32 at 844x390. */
+@media (pointer: coarse) {
+  body.lt-open:not(.pc-nopanel) :is(#pc-exit, #pc-panel, #pc-hud),
+  .pc-fovlab input[type="range"] { min-height: var(--tap-paint); }
+  .pc-fovlab input[type="range"] { height: var(--tap-paint); }
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
 #pc-panel, #pc-hud { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
@@ -2162,7 +2222,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 /* Optional panels retain their text size when space only holds one row. */
 #hud-rel[data-col-compact] > div:not([data-col-row]),
 #hud-strat[data-col-compact] > div:not([data-k="next"]) { display: none; }
-:is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop] { display: none !important; }
+body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop] { display: none !important; }
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }
@@ -2304,6 +2364,9 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 @supports (anchor-name: --a) {
   @media (orientation: landscape) {
     body:not(.desktop) #dock-left { anchor-name: --apex-dock-left; }
+    /* LEFT-HANDED: row-reverse paints #dock-right on the left, so it is the left dock TYRES hangs from. */
+    body.mirror-controls:not(.desktop) #dock-left { anchor-name: none; }
+    body.mirror-controls:not(.desktop) #dock-right { anchor-name: --apex-dock-left; }
     body:not(.desktop) #hud-tyre {
       position: absolute;
       position-anchor: --apex-dock-left;

@@ -31,6 +31,8 @@ export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const CI_PATH = ".github/workflows/ci.yml";
 /** Max ready PRs allowed to hold an in-progress or queued full-tier ci.yml run. */
 export const MAX_LIVE = 3;
+/** Run statuses that hold or wait for runners (the REST `status` filter's live values). */
+export const LIVE_RUN_STATUSES = ["in_progress", "queued", "pending", "waiting", "requested"];
 
 /**
  * @param {string} pathQs
@@ -145,7 +147,10 @@ export function measure(opts = {}) {
   // ci.yml's pull_request runs only, and every page (15-F11): the repo-wide first 100 runs
   // filled with other workflows and sibling fan-out in a merge burst, so older queued ready-PR
   // runs fell off and the count read under the cap.
-  for (const status of ["in_progress", "queued"]) {
+  // Every LIVE run status (#2266): a full tier waiting on browser lanes sits in
+  // `pending` (run 38801834191, 2026-10-15) and was missing from the count.
+  // https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-workflow
+  for (const status of LIVE_RUN_STATUSES) {
     for (let page = 1; page <= 10; page++) {
       const r = request(`actions/workflows/ci.yml/runs?event=pull_request&status=${status}&per_page=100&page=${page}`);
       if (r.error) return { ok: false, error: r.error, count: null, cap: opts.cap ?? MAX_LIVE, slots: [] };
@@ -162,7 +167,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   exitIfHelp(argv, `usage: node tools/ci/ready-full-cap.mjs [--cap N] [--exclude <branch>] [--json]
 
 Merge Desk: refuse marking a draft ready when ≥N (default ${MAX_LIVE}) ready PRs
-already have in-progress or queued full-tier ci.yml. Draft fast-tier is uncapped.
+already have live (in_progress / queued / pending / waiting / requested) full-tier ci.yml. Draft fast-tier is uncapped.
 Exit 0 = room, 1 = refuse, 2 = bad args, 3 = API/token.`);
   const args = parseArgs(argv);
   if (args.error) {

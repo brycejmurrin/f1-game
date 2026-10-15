@@ -110,3 +110,11 @@ test("writeSurveyIndex writes readable gallery", () => {
 test("MAX_SURVEY_SHOTS is 32", () => {
   assert.equal(MAX_SURVEY_SHOTS, 32);
 });
+
+test("buildTrackShotSurveyPlan: weather is validated and reaches every shot (null = leave as booted)", () => {
+  assert.ok(buildTrackShotSurveyPlan({ preset: "quick" }).shots.every((s) => s.weather === null));
+  assert.ok(buildTrackShotSurveyPlan({ preset: "quick", weather: "fog" }).shots.every((s) => s.weather === "fog"));
+  const custom = buildTrackShotSurveyPlan({ weather: "rain", shots: [{ frac: 0.2 }, { frac: 0.4, weather: "overcast" }] });
+  assert.deepEqual(custom.shots.map((s) => s.weather), ["rain", "overcast"]);
+  assert.throws(() => buildTrackShotSurveyPlan({ preset: "quick", weather: "snow" }), /weather invalid/);
+});

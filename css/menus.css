@@ -522,7 +522,11 @@ html[data-home-live] :where(body[data-density="compact"]) #overlay #menu-brand :
    separate. This block is reachability only. */
 :where(body[data-density="compact"]) #overlay { gap: var(--gap); }
 :where(body[data-density="compact"]) #menu-buttons {
-  max-height: calc(100 * var(--svhz) - 2 * var(--gut));
+  /* Parent #overlay already pads with --safe-*; min(100%, …) caps to that box
+     while the svhz term keeps the static pin (ui-improve-pass) and still
+     subtracts notch/home via --safe-t/b when the overlay gutter is thinner
+     than the token (measured 844×390, inset 47/21). */
+  max-height: min(100%, calc(100 * var(--svhz) - var(--safe-t) - var(--safe-b) - 2 * var(--gut)));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -616,7 +620,11 @@ body[data-shape="tall"]:has(#home-motion:not([hidden])):has(#install-chip:not([h
    --safe-t and put the wordmark under the status bar and the Dynamic Island on
    every notched phone (measured on an iPhone, 2026-09-23: "APEX 26" painted
    over the clock). */
-:where(body[data-shape="tall"]) #overlay { padding-block-start: calc(var(--sat) + var(--gap) * 0.5); }
+:where(body[data-shape="tall"]) #overlay {
+  /* Never less than --safe-t: a bare sat+gap pass put the wordmark under the
+     Dynamic Island when --gut was smaller than the token gutter. */
+  padding-block-start: max(var(--safe-t), calc(var(--sat) + var(--gap) * 0.5));
+}
 /* THE PORTRAIT PHONE IS THREE BANDS: brand, doors, cars. Redesigned
    2026-09-23 from an iPhone report against the previous pass: the wordmark sat
    under the status bar (the safe-area fix is on the tall #overlay rule above),

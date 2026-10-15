@@ -1,5 +1,7 @@
 @layer components {
 /* Apex 26 — select styles. Load order: tools/manifest.cjs CSS. */
+/* Host #select.screen — safe-area padding from css/components.css (--safe-t/r/b/l).
+   Viewport-height caps here use var(--safe-h), not raw svh. */
 /* ---------- select screen ---------- */
 /* THE CIRCUIT PICKER IS A BROADCAST GRAPHIC. A strip of national flags across
    the top (#sel-shelf: the filter/search toolbar, then #sel-tracks, the one
@@ -408,7 +410,7 @@
      UI SIZE 200%. */
   aspect-ratio: auto;
   width: 100%;
-  height: min(52cqw, max(calc(var(--chip-h) * 3), calc(46 * var(--svhz))));
+  height: min(52cqw, max(calc(var(--chip-h) * 3), min(calc(46 * var(--svhz)), var(--safe-h))));
   align-self: start;
 }
 @container sheet (min-width: 620px) {
@@ -529,7 +531,7 @@
      keeps a still worth looking at — and over the 110px the outline needs. */
   #sel-inner[data-shape="tall"] #sel-track-section { container: sel-room / size; }
   #sel-inner[data-shape="tall"] #sel-hero {
-    height: min(52cqw, max(calc(var(--chip-h) * 3), calc(46 * var(--svhz))), max(calc(var(--chip-h) * 2.6), 60cqh));
+    height: min(52cqw, max(calc(var(--chip-h) * 3), min(calc(46 * var(--svhz)), var(--safe-h))), max(calc(var(--chip-h) * 2.6), 60cqh));
   }
 }
 #sel-hero {

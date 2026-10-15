@@ -35,15 +35,17 @@ function extractFn(src, name) {
   throw new Error(`unbalanced braces reading ${name}()`);
 }
 
-function loadMenuNav({ document, layer } = {}) {
+function loadMenuNav({ document, layer, zoom } = {}) {
   const ctx = {
     window: null,
     document: document || { readyState: "loading", addEventListener() {} },
     Log: { info() {} },
+    getComputedStyle: (el) => ({ overflowY: el._overflowY || "auto", overflowX: "hidden" }),
   };
   ctx.window = ctx;
   ctx.window.UiLayers = { shown: () => true, top: () => layer || null };
   ctx.window.Log = ctx.Log;
+  if (zoom) ctx.window.CssZoom = { of: () => zoom, toLocalDelta: (_el, px) => px / zoom };
   ctx.window.addEventListener = () => {};
   vm.runInNewContext(SRC, ctx, { filename: "menunav.js" });
   return ctx.window.MenuNav;
@@ -170,6 +172,71 @@ test("onWheel pans a horizontal strip before the vertical ancestor walk", () => 
   assert.match(wheel, /if \(overStrip\) \{[\s\S]*scrollStrip\(strip, dy\)/);
 });
 
+for (const horizontal of [true, false]) for (const zoom of [0.4, 1, 2]) {
+  test(`page keys carry focus through a ${horizontal ? "horizontal strip" : "vertical pane"} at ${zoom} scale`, () => {
+    const dom = makeDom({ readyState: "loading" });
+    const layer = dom.byId("overlay"), pane = dom.makeElement("div");
+    layer.appendChild(pane);
+    if (horizontal) pane.setAttribute("data-orientation", "horizontal");
+    else pane.className = "pane";
+    const scroll = horizontal ? "scrollLeft" : "scrollTop";
+    pane[scroll] = 0;
+    Object.defineProperty(pane, "clientWidth", { value: horizontal ? 300 : 100 });
+    Object.defineProperty(pane, "clientHeight", { value: horizontal ? 100 : 300 });
+    pane.scrollWidth = horizontal ? 2000 : 100;
+    pane.scrollHeight = horizontal ? 100 : 2000;
+    const rect = (along, size) => {
+      const left = 20 + (horizontal ? along : 0) * zoom;
+      const top = 30 + (horizontal ? 0 : along) * zoom;
+      const width = (horizontal ? size : 100) * zoom;
+      const height = (horizontal ? 100 : size) * zoom;
+      return { left, top, right: left + width, bottom: top + height, width, height };
+    };
+    pane.getBoundingClientRect = () => rect(0, 300);
+    const controls = Array.from({ length: 20 }, (_, i) => {
+      const button = dom.makeElement("button");
+      button.id = `circuit-${i}`;
+      pane.appendChild(button);
+      button.getBoundingClientRect = () => rect(i * 100 - pane[scroll], 80);
+      // Model nearest scrolling: a stale focus after paging would snap back
+      // when the following arrow calls focusItem's scrollIntoView.
+      button.scrollIntoView = () => {
+        const pos = i * 100;
+        if (pos < pane[scroll]) pane[scroll] = pos;
+        else if (pos + 80 > pane[scroll] + 300) pane[scroll] = pos + 80 - 300;
+      };
+      const focus = button.focus;
+      button.focus = options => {
+        focus();
+        if (!options?.preventScroll) button.scrollIntoView();
+      };
+      return button;
+    });
+    const nav = loadMenuNav({ document: dom.document, layer, zoom });
+    const key = name => {
+      const event = { key: name, preventDefault() { this.defaultPrevented = true; } };
+      nav.onKeyDown(event);
+      assert.equal(event.defaultPrevented, true, `${name} is handled`);
+    };
+    controls[0].focus({ preventScroll: true });
+    key("PageDown");
+    assert.equal(pane[scroll], 270, "page distance remains 90% in local pixels at every scale");
+    assert.equal(dom.document.activeElement, controls[3], "focus moves to the first fully visible control");
+    key(horizontal ? "ArrowRight" : "ArrowDown");
+    assert.equal(dom.document.activeElement, controls[4]);
+    assert.equal(pane[scroll], 270, "next arrow stays on the new page instead of snapping back");
+
+    pane[scroll] = 900;
+    controls[11].focus({ preventScroll: true });
+    key("PageUp");
+    assert.equal(pane[scroll], 630, "focus transfer does not reverse the backward page");
+    assert.equal(dom.document.activeElement, controls[7], "backward paging also keeps focus visible");
+    key(horizontal ? "ArrowLeft" : "ArrowUp");
+    assert.equal(dom.document.activeElement, controls[6]);
+    assert.equal(pane[scroll], 600, "the next arrow continues backward from the new page");
+  });
+}
+
 test("pickSideways: mid-list ArrowLeft lands in the adjacent column at similar height", () => {
   const { pickSideways } = loadMenuNav();
   const from = { id: "zandvoort", x: 400, y: 300 };
@@ -244,3 +311,31 @@ test("step(): chip-row Left/Right stay in-group until an end, then fall through"
   assert.equal(step(a, -1, 0, list).id, "rail",
     "Left off the first chip falls through to the spatial sideways pass");
 });
+
+for (const className of ["dh-tpopup-body", "dh-telem-main", "dh-telem-side"]) {
+  test(`telemetry modal pages its ${className} region and contains wheel gestures at the edge`, () => {
+    const dom = makeDom({ readyState: "loading" });
+    const hub = dom.byId("datahub"), popup = dom.makeElement("dialog"), pane = dom.makeElement("div");
+    hub.appendChild(popup); popup.appendChild(pane); pane.className = className;
+    Object.defineProperty(pane, "clientHeight", { value: 200 }); pane.scrollHeight = 800;
+    const first = dom.makeElement("button"), last = dom.makeElement("button");
+    pane.append(first, last);
+    first._rect = { left: 0, top: 0, right: 100, bottom: 40, width: 100, height: 40 };
+    last._rect = { left: 0, top: 300, right: 100, bottom: 340, width: 100, height: 40 };
+    const close = dom.makeElement("button"); popup.appendChild(close);
+    const nav = loadMenuNav({ document: dom.document, layer: popup });
+    first.focus();
+    const key = { key: "PageDown", preventDefault() { this.defaultPrevented = true; } };
+    nav.onKeyDown(key);
+    assert.equal(pane.scrollTop, 180, "paging addresses the popup region");
+    assert.equal(key.defaultPrevented, true);
+    const end = { key: "End", preventDefault() {} }; nav.onKeyDown(end);
+    assert.equal(dom.document.activeElement, last, "End stays in the region, not the header or the hub");
+    pane.scrollTop = 600;
+    let redirects = 0;
+    popup.querySelectorAll = () => { redirects++; return []; };
+    nav.onWheel({ target: first, deltaY: 100, deltaMode: 0, preventDefault() {} });
+    assert.equal(redirects, 1, "edge wheel only checks horizontal strips; it must not seek another pane");
+    assert.equal(pane.scrollTop, 600);
+  });
+}

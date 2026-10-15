@@ -63,15 +63,23 @@ test("explicit GPU stacks avoid fallback pins and divide Mesa threads across wor
   assert.equal(hardware.env.LIBGL_ALWAYS_SOFTWARE, undefined);
   assert.equal(hardware.env.GALLIUM_DRIVER, undefined);
   assert.equal(hardware.env.VK_DRIVER_FILES, undefined);
-  const mesa = captureGpuOptions({ gpu: 'llvmpipe', env: {}, cpus: 8, workers: 4 });
+  const mesa = captureGpuOptions({ gpu: 'llvmpipe', env: {}, cpus: 8, workers: 4, exists: () => true });
   assert.equal(mesa.env.LP_NUM_THREADS, '2');
   assert.equal(mesa.env.LIBGL_ALWAYS_SOFTWARE, '1');
   assert.equal(mesa.env.GALLIUM_DRIVER, 'llvmpipe');
   assert.ok(mesa.args.includes('--use-angle=gl'));
-  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: { LP_NUM_THREADS: '3' }, cpus: 8, workers: 4 }).env.LP_NUM_THREADS, '3');
+  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: { LP_NUM_THREADS: '3' }, cpus: 8, workers: 4, exists: () => true }).env.LP_NUM_THREADS, '3');
   assert.throws(() => captureGpuOptions({ gpu: 'llvmpipe', env: { LP_NUM_THREADS: 'bogus' } }), /LP_NUM_THREADS/);
   assert.equal(defaultCaptureWorkers({ env: { APEX_GPU: 'hardware' }, cpus: 8 }), 4);
   assert.equal(defaultCaptureWorkers({ env: { APEX_GPU: 'lavapipe' }, cpus: 4 }), 1);
+});
+
+test("llvmpipe without /dev/dri fails fast instead of falling back to SwiftShader", () => {
+  const noDri = (file) => file !== '/dev/dri';
+  assert.throws(() => captureGpuOptions({ gpu: 'llvmpipe', env: {}, exists: noDri }), /llvmpipe needs \/dev\/dri \(CI only\)/);
+  // GitHub's runners reach llvmpipe through Mesa + Xvfb (docs/notes/CI-RENDERING-PERFORMANCE.md).
+  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: { GITHUB_ACTIONS: 'true' }, exists: noDri }).env.GALLIUM_DRIVER, 'llvmpipe');
+  assert.doesNotThrow(() => captureGpuOptions({ gpu: 'swiftshader', env: {}, exists: noDri }));
 });
 
 test("lavapipe uses the current Vulkan loader override and rejects missing ICD", () => {
@@ -124,4 +132,14 @@ test("RENDER_HEAVY_SPEC_IDS stays aligned with playwright.config.js RENDER_SPECS
   assert.ok(block, "RENDER_SPECS list");
   const ids = [...block[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]);
   assert.deepEqual([...RENDER_HEAVY_SPEC_IDS].sort(), [...ids].sort());
+});
+
+test("CI retries run isolated at the end of the shard; local runs keep immediate (#1716)", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const read = (ci) => execFileSync(process.execPath, ["--input-type=module", "-e",
+    "const c = (await import(process.argv[1])).default; process.stdout.write(JSON.stringify({ r: c.retries, s: c.retryStrategy }))",
+    path.join(ROOT, "playwright.config.js")],
+  { cwd: ROOT, encoding: "utf8", env: { ...process.env, CI: ci ? "true" : "" } });
+  assert.deepEqual(JSON.parse(read(true)), { r: 1, s: "isolated" });
+  assert.deepEqual(JSON.parse(read(false)), { r: 0, s: "immediate" });
 });

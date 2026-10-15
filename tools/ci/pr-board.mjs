@@ -16,8 +16,8 @@
  *   FOREIGN-ARM  auto-merge armed with a method other than MERGE (squash, rebase)
  *   SYNC         mergeable_state dirty (merge conflict with the deploy branch)
  *   FIX          ci.yml failed on the head, or the Structural guards check failed
- *   ARM          ready, not armed, Structural guards passed, ci not failed, no
- *                MERGE-HOLD line, fewer than MAX_ARMED PRs armed
+ *   ARM          ready, not armed, Structural guards passed, ci succeeded with
+ *                full-tier job evidence, no MERGE-HOLD, fewer than MAX_ARMED armed
  *   READY        draft, ci green, Structural guards passed, Plan closed, a
  *                full-tier slot is free
  *   NONE         armed (MERGE) and healthy
@@ -63,7 +63,10 @@ const BAD_JOB = new Set(["failure", "timed_out", "startup_failure"]);
  * @returns {{ state: "none"|"queued"|"in_progress"|"success"|"failure"|"cancelled", runId: number|null }}
  */
 export function ciState(runs) {
-  const list = (runs || []).filter((r) => r && (r.path ? r.path.endsWith("/ci.yml") : true));
+  // A label-noise run (#2184: ci-watch.mjs labelNoiseRun) skips every job and
+  // concludes success; as the newest run it would read a red head as green.
+  const list = (runs || []).filter((r) => r && (r.path ? r.path.endsWith("/ci.yml") : true)
+    && !/^CI ignored: label /.test(String(r.display_title || "")));
   if (!list.length) return { state: "none", runId: null };
   const byId = (a, b) => (b.id || 0) - (a.id || 0);
   const live = list.filter((r) => LIVE.has(r.status)).sort(byId);
@@ -100,9 +103,11 @@ export function decide(row, ctx = {}) {
   const gateOk = row.gate === "passed";
   if (!row.draft) {
     if (row.armed) return { action: "NONE", why: "armed (MERGE) and healthy" };
+    if (row.ci !== "success") return { action: "WAIT", why: `ready, ci ${row.ci}: the full tier is not green on the head` };
+    if (row.fullTier !== true) return { action: "WAIT", why: "ready, no successful full-tier job evidence on this CI run" };
     if (gateOk && row.hold) return { action: "WAIT", why: "ready and green, but the body carries MERGE-HOLD:" };
     if (gateOk && (ctx.armed ?? 0) >= MAX_ARMED) return { action: "WAIT", why: `ready and green, but ${MAX_ARMED} PRs are already armed` };
-    if (gateOk) return { action: "ARM", why: "ready, Structural guards passed, ci not failed" };
+    if (gateOk) return { action: "ARM", why: "ready, Structural guards passed, ci succeeded" };
     return { action: "WAIT", why: `ready, Structural guards ${row.gate}` };
   }
   if (row.ci === "queued" || row.ci === "in_progress") return { action: "WAIT", why: `draft, ci ${row.ci}` };
@@ -118,9 +123,17 @@ export function decide(row, ctx = {}) {
 /** Just the verb. */
 export const suggest = (row, ctx) => decide(row, ctx).action;
 
+/** Required full-tier jobs must all have run successfully in the selected run. */
+export function fullTierPassed(jobs = []) {
+  const required = ["CI", "Selected specs (verdict)", "Per-circuit geometry sweeps"];
+  const passed = (rows) => rows.length > 0 && rows.every((j) => j.conclusion === "success");
+  return required.every((name) => passed(jobs.filter((j) => j?.name === name)))
+    && passed(jobs.filter((j) => String(j?.name || "").startsWith("Smoke (page boots, __apex responds)")));
+}
+
 /**
  * Rows from collected facts. Pure: inject what the API returned.
- * @param {Array<{ pr: object, runs?: object[], jobs?: object[], checkRuns?: object[] }>} items
+ * @param {Array<{ pr: object, runs?: object[], jobs?: object[], jobsRunId?: number, checkRuns?: object[] }>} items
  *   pr = the pulls/{n} object (needs number, title, draft, head.sha/ref, auto_merge, mergeable_state)
  * @param {{ cap?: { cap:number, count:number, ok?:boolean } }} [opts]
  */
@@ -145,6 +158,7 @@ export function evaluate(items, opts = {}) {
       mergeMethod: pr.auto_merge?.merge_method ?? null,
       ci: ci.state,
       ciRunId: ci.runId,
+      fullTier: ci.state === "success" && it.jobsRunId === ci.runId && fullTierPassed(it.jobs),
       failing,
       gate: gate.state,
       gateEvidence: gate.evidence,
@@ -223,12 +237,17 @@ export function measure(opts = {}) {
     if (checks.error) return fail(`PR #${n} check-runs: ${checks.error}`);
     let jobs = [];
     const ci = ciState(runs);
-    if ((ci.state === "failure" || ci.state === "cancelled") && ci.runId) {
-      const j = request(`actions/runs/${ci.runId}/jobs?per_page=100`);
-      if (j.error) return fail(`PR #${n} jobs: ${j.error}`);
-      jobs = j.json?.jobs || [];
+    if (ci.runId && (ci.state === "failure" || ci.state === "cancelled"
+        || (ci.state === "success" && !pr.draft && !pr.auto_merge))) {
+      for (let page = 1; ; page++) {
+        const j = request(`actions/runs/${ci.runId}/jobs?per_page=100&page=${page}`);
+        if (j.error) return fail(`PR #${n} jobs: ${j.error}`);
+        const batch = j.json?.jobs || [];
+        jobs.push(...batch);
+        if (batch.length < 100) break;
+      }
     }
-    items.push({ pr, runs, jobs, checkRuns: checks.json?.check_runs || [] });
+    items.push({ pr, runs, jobs, jobsRunId: ci.runId, checkRuns: checks.json?.check_runs || [] });
   }
   const result = evaluate(items, { cap: capV });
   return { ok: true, ...result, capLine: capLine(capV) };

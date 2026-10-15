@@ -251,8 +251,11 @@ function paintHudDelta(player, timeTrial) {
   const ghostT = ref && (!ghost || (player.lap | 0) >= 1) ? ref.timeAt(player.s) : null;
   if (ghostT == null || !(player.lapTime >= 0)) {
     hData(box, "pending", "");
+    if (_deltaShown && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just lost a box (TT restart, lap 0, lost ghost)
+    _deltaShown = false;
     return;
   }
+  _deltaShown = true;
   const wasPending = box.dataset ? box.dataset.pending != null : box.hasAttribute && box.hasAttribute("data-pending");
   hData(box, "pending", null);
   if (wasPending && _invalidateFit && !document.body.classList.contains("desktop")) _invalidateFit();   // the touch tower just grew a box
@@ -441,6 +444,7 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " " + t + (/\d/.te
 const FIT_AIR = 10;              // px of daylight required between two clusters
 const ROW_AIR = 2;               // px between the tower's bottom and the sector plate's top (touch)
 let _fitKey = "", _fitWait = 0, _fitRetry = 0, _fitClearSeq = 0, _hlEls = [];
+let _fitPending = false;   // invalidateFit mid-tick: do not publish --hud-fit-stamp until the next fitHud
 // _fitStamped: a stamp is published and no clash has voided it since.
 // _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
 let _fitStamped = false, _fitClashRun = 0;
@@ -491,6 +495,10 @@ function syncComputedRootVars() {
   _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
 }
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
+// LEFT-HANDED (body.mirror-controls) flips #hud-dock (row-reverse), so #dock-right paints on the LEFT. The fit
+// reasons in screen sides, so pick each handle by the side it is painted on (re-picked at every fit).
+let _dockMir = null, _deltaShown = false;   // _deltaShown: DELTA has painted a number since it last went pending
+function pickDocks() { const m = document.body.classList.contains("mirror-controls"); if (_dockL && m === _dockMir) return; _dockMir = m; const a = document.getElementById("dock-left"), b = document.getElementById("dock-right"); _dockL = m ? b : a; _dockR = m ? a : b; }
 // THE BUDGET IS THE UN-MOVED LAYOUT. MOVE & SIZE (js/ui/hud-layout.js) paints a
 // player offset on top of each element with `translate` / `scale` (data-hl,
 // --hl-x/-y in screen %, --hl-s, origin --hl-o), and getBoundingClientRect
@@ -790,6 +798,10 @@ function radioPaintedCollapse(root) {
   // floor wins over a ~7px cluster budget at phoneL broadcast @150%, and
   // announceLaneTick after fitHud can re-open a collapsed lane.
   const annPaint = typeof document !== "undefined" ? document.getElementById("announce") : null;
+  // Already collapsed: the writes below would repeat verbatim, so skip the
+  // rect reads (each forced a reflow after announceLane's style writes).
+  if (annPaint && annPaint.hasAttribute("data-lane-collapsed") && !document.body.classList.contains("hud-radio-top")
+    && root.style.getPropertyValue("--announce-lane-w") === "0px" && root.style.getPropertyValue("--announce-lane-shift") === "0%") return;
   if (annPaint && !annPaint.hidden) {
     const a = annPaint.getBoundingClientRect();
     const hit = (el) => {
@@ -813,6 +825,24 @@ function radioPaintedCollapse(root) {
       void annPaint.offsetHeight;
     }
   }
+}
+// PERF #2151: the 10 Hz call runs AFTER the tick's text writes, so its rect
+// reads forced a layout every tick a card was up. Re-measure only when what
+// places the card changes (fit key, lane key and vars, card text/class) or on
+// the 3 s backstop; a forced update always measures.
+let _rpcKey = "", _rpcWait = 0;
+function radioPaintedKey(root) {
+  const a = document.getElementById("announce");
+  if (!a || a.hidden) return "";
+  const v = (n) => root.style.getPropertyValue(n);
+  return _fitKey + "|" + _laneKey + "|" + v("--announce-lane-w") + v("--announce-lane-x") + v("--announce-lane-shift")
+    + "|" + a.className + (a.hasAttribute("data-lane-collapsed") ? "c" : "") + "|" + a.textContent + "|" + document.body.className;
+}
+function radioPaintedCollapseTick(root, force) {
+  const k = radioPaintedKey(root);
+  if (!force && k && k === _rpcKey && --_rpcWait > 0) return;
+  radioPaintedCollapse(root);
+  _rpcKey = radioPaintedKey(root); _rpcWait = 30;
 }
 // THE MIRROR AS PAINTED, for the centre column under it. The flag and the
 // radio card clear the mirror through --mir-bot (css/hud.css), which is built
@@ -847,11 +877,41 @@ function _boostOnRightHalf() {
   if ((br.left + br.right) / 2 < window.innerWidth / 2) return null;
   return boost;
 }
-/** Painted phone readout-on-control clashes the spec measures (not budget math). */
-function phonePaintedClash() {
+let _hudGaps = null;
+/** True when the gap plate is painted beside the map and still rects onto the tower. */
+function towerGapsPaintedClash() {
   if (document.body.classList.contains("desktop")) return false;
+  if (document.documentElement.dataset.gapDrop) return false;
+  const tower = _hudTop || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
+  if (!_hudGaps || !_hudGaps.isConnected) _hudGaps = document.querySelector(".hud-gaps");
+  const gaps = _hudGaps, bc = document.body.classList;
+  // css/hud.css hides the strip outright under these: no computed-style read needed.
+  if (!tower || !gaps || gaps.hidden || bc.contains("hud-hide-gaps") || bc.contains("bc-on")) return false;
+  try {
+    const gs = getComputedStyle(gaps);
+    if (gs.display === "none" || gs.visibility === "hidden") return false;
+  } catch (_) { return false; }
+  const gr = gaps.getBoundingClientRect();
+  if (!(gr.width && gr.height)) return false;
+  const tr = tower.getBoundingClientRect();
+  if (!(tr.width && tr.height)) return false;
+  return _hudRectsHit(tr, gr);
+}
+/** Drop the gap strip under the tower when the painted boxes still overlap (hud-layout: .hud-top+.hud-gaps). */
+function gapPaintedDrop() {
+  if (!towerGapsPaintedClash()) return false;
+  _gapDrop = true;
+  document.documentElement.dataset.gapDrop = "1";
+  const gaps = document.querySelector(".hud-gaps");
+  if (gaps) void gaps.offsetHeight;
+  return true;
+}
+/** Painted phone readout-on-control clashes the spec measures (not budget math). */
+function phonePaintedClash(boostIn) {
+  if (document.body.classList.contains("desktop")) return false;
+  if (towerGapsPaintedClash()) return true;
   const sectors = els.hudSectors;
-  const boost = _boostOnRightHalf();
+  const boost = boostIn !== undefined ? boostIn : _boostOnRightHalf();   // a caller that already measured it this tick passes it
   if (sectors && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
   const rel = typeof document !== "undefined" ? document.getElementById("hud-rel") : null;
   if (rel && !rel.hidden) {
@@ -882,9 +942,8 @@ function phoneFitStampSync(scale, force) {
   if (!_hudTop) {
     _hudTop = document.querySelector(".hud-top");
     _hudBottom = document.querySelector(".hud-bottom");
-    _dockL = document.getElementById("dock-left");
-    _dockR = document.getElementById("dock-right");
   }
+  pickDocks();
   const bumpDock = () => {
     const boost = _boostOnRightHalf();
     if (!boost) return false;
@@ -923,8 +982,13 @@ function phoneFitStampSync(scale, force) {
     void secEl.offsetHeight;
     return true;
   };
-  if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
-  for (let pass = 0; pass < 8 && phonePaintedClash(); pass++) {
+  // REL's own tick already re-fit it if its key moved; fitRows writes then reads,
+  // so an unconditional call here forced a layout every phone tick (#2151).
+  if (typeof HudRelative !== "undefined") { if (HudRelative.refit) HudRelative.refit(force); else if (HudRelative.fitRows) HudRelative.fitRows(); }
+  // One probe per pass: the verdict after the last pass feeds the stamp below.
+  let clash = phonePaintedClash();
+  for (let pass = 0; pass < 8 && clash; pass++, clash = phonePaintedClash()) {
+    if (gapPaintedDrop()) continue;
     if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
     bumpDock();
     shrinkSectors();
@@ -933,7 +997,7 @@ function phoneFitStampSync(scale, force) {
   // wakes sheet-shape's watchScale observer, so the 10 Hz tick must not rewrite
   // it while nothing changed. A new stamp means "a clash cleared" (or a probe
   // asked via syncPhoneFit, whose waiters need a fresh value each call).
-  if (!phonePaintedClash()) {
+  if (!clash && !_fitPending) {
     if (force || !_fitStamped) {
       _fitClearSeq = (_fitClearSeq + 1) | 0;
       hStyle(root, "--hud-fit-stamp", String(_fitClearSeq));
@@ -999,10 +1063,10 @@ function fitHud() {
     // Same-key backoff must not lock a short --dock-r-w while wrap-reverse
     // still crawls BOOST left under load (CI oversize APEX_WORKERS=2:
     // #hud-sectors+btn-boost after the wait already saw clearance).
-    let clash = false;
+    let clash = false, boost;
     if (!document.body.classList.contains("desktop") && els.hudSectors && !els.hudSectors.hidden) {
       const s = els.hudSectors.getBoundingClientRect();
-      const boost = _boostOnRightHalf();
+      boost = _boostOnRightHalf();
       const b = boost ? boost.getBoundingClientRect() : null;
       // Only a RIGHT-half BOOST can clash with the sectors plate's dock inset.
       if (b && b.width && s.width && s.right > b.left - 8) clash = true;
@@ -1015,7 +1079,7 @@ function fitHud() {
         }
       }
     }
-    if (!clash && phonePaintedClash()) clash = true;
+    if (!clash && phonePaintedClash(boost)) clash = true;
     if (!clash) { _fitClashRun = 0; return; }
     // A clash the fit cannot resolve (REL x BRAKE when hud-relative's cap guard
     // refuses, S3 x BOOST at high HUD SIZE) re-opened the full fit, up to 8
@@ -1031,6 +1095,7 @@ function fitHud() {
   // tick ≈ 3 s between forced layout reads while nothing changed.
   if (key !== _fitKey) _fitClashRun = 0;
   _fitKey = key; _fitWait = 30;
+  _fitPending = false;
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css:
   // 0.82, 0.92 on the narrow tier), so the base the cap is judged against and
   // the divisor for its measured widths are that floor, not 1 — a flat 1 here
@@ -1074,7 +1139,8 @@ function fitHud() {
     }
     return hi > lo ? (hi - lo) / zoomDiv(el, pub) : wide(el, pub);
   };
-  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
+  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); }
+  pickDocks();
   const top = wide(_hudTop, zTopPub);
   // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
   // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)
@@ -1425,9 +1491,16 @@ function fitHud() {
     const barR = hudDockEl ? hudDockEl.getBoundingClientRect() : null;
     let sat = 0, sab = 0;
     try { const cs = getComputedStyle(root); sat = parseFloat(cs.getPropertyValue("--sat")) || 0; sab = parseFloat(cs.getPropertyValue("--sab")) || 0; } catch (_) { /* mini-dom */ }
-    const topButtons = 44 * Math.min(1.5, Math.max(1, btnScale));
-    const roomL = window.innerHeight - sat - sab - topButtons - 4 * FIT_AIR;
-    const roomR = roomL - 44 * Math.max(0, Math.min(2, btnScale) - 1.5);   // PAUSE paints on past 150 % (touch-controls.css --tap-btn)
+    const controlsRoom = window.innerHeight - sat - sab - 4 * FIT_AIR;
+    // Dock and CAM/PAUSE share one effective size. Solve their joint height
+    // budget so increasing BUTTON SIZE can plateau, never shrink the pedals.
+    // CAM tops out at 150%; PAUSE above the right dock can reach 200%.
+    const heightCap = (height, topMax = 1.5) => {
+      if (!height) return Infinity;
+      if (controlsRoom <= height + 44) return (controlsRoom - 44) / height;
+      if (controlsRoom <= topMax * (height + 44)) return controlsRoom / (height + 44);
+      return (controlsRoom - 44 * topMax) / height;
+    };
     // PLAN vs THE CLUSTER at HUD 200%. #hud-tyre is anchored on the left dock,
     // outside the centred cluster, so the viewport budget above never sees them
     // meet (852×393 @200%: the gearbox plate sat on PLAN). The tyre's left edge
@@ -1487,9 +1560,10 @@ function fitHud() {
     const barW = barR && barR.width ? barR.width : window.innerWidth;
     const barGap = hudDockEl ? parseFloat(getComputedStyle(hudDockEl).columnGap) || 0 : 0;
     const controlsW = gL.w + gR.w;
-    capDock = Math.min(gL.h ? roomL / gL.h : Infinity, gR.h ? roomR / gR.h : Infinity,
+    capDock = Math.min(heightCap(gL.h), heightCap(gR.h, 2),
       controlsW ? (barW - 2 * barGap - 2 * FIT_AIR) / controlsW : Infinity);
     const dockZ = Math.min(Math.max(btnFloor, btnScale), Math.max(0.4, capDock));
+    const roomL = controlsRoom - 44 * Math.min(1.5, Math.max(1, dockZ));
     // Readouts adapt to the stable controls, never the reverse.
     const roomW = barW - controlsW * dockZ - 2 * barGap - 2 * FIT_AIR;
     if (bottom && roomW > 0) capBot = Math.min(capBot, roomW / bottom);
@@ -1568,6 +1642,12 @@ function fitHud() {
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css),
   // so a cap between BUTTON SIZE and that floor still has to be written.
   set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));
+  // Earlier tower/sector budgets saw the old CAM/PAUSE footprint. Refit on
+  // the next HUD tick only when their clamped, published zoom changed.
+  const dockAfter = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
+  if (Math.abs(Math.min(2, Math.max(1, zDockPub)) - Math.min(2, Math.max(1, dockAfter))) > 1e-6) {
+    _fitKey = ""; _fitWait = 0; _fitPending = true;
+  }
   // Publish --dock-r-w in the FINAL chrome zoom, after dock/top caps land.
   // CSS: right = 10px + sar/--hud-z + --dock-r-w (dock-r-w is NOT re-divided).
   // Use the LEFTMOST painted right-dock control / BOOST — wrap-reverse
@@ -2200,7 +2280,7 @@ function updateHud(force, dtMs) {
   announceLaneTick(document.documentElement, force);
   // Lane re-pick can clear data-lane-collapsed; re-assert painted clearance
   // over SPEED/GEAR (phoneL broadcast @150%).
-  radioPaintedCollapse(document.documentElement);
+  radioPaintedCollapseTick(document.documentElement, force);
   paintHudDelta(player, timeTrial);
   if (typeof HudRelative !== "undefined") HudRelative.tick(G, player);   // opt-in RELATIVE box (js/ui/hud-relative.js)
   if (typeof HudStrategy !== "undefined") HudStrategy.tick(G, player);   // opt-in STRATEGY panel (js/ui/hud-strategy.js)
@@ -2240,6 +2320,7 @@ function updateHud(force, dtMs) {
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
+      if (_ro && _ro.paintSectorRow) _ro.paintSectorRow(_secRows[i].parentElement, t, sb, pb);
       if (_secFlash[i] > 0) {
         _secFlash[i] = Math.max(0, _secFlash[i] - 0.1);
         hToggle(_secRows[i].parentElement, "sec-flash", _secFlash[i] > 0);
@@ -2312,6 +2393,7 @@ function updateHud(force, dtMs) {
       }
     }
     if (_blue !== !!blueCar) { _blue = !!blueCar; hData(els.flag, "flag", _blue ? "blue" : null); }
+    if (_ro && _ro.paintFlag) _ro.paintFlag(els.flag, show ? (caution ? { caution: cn } : blueCar ? { blue: true } : null) : null);
     // A flag chip appearing or going re-picks the radio slot (radioUnderRight steps right of it).
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; if (_invalidateFit) _invalidateFit(); }
   }
@@ -2609,6 +2691,7 @@ function resetRace() {
 // for the tick.
 function invalidateFit() {
   _fitKey = ""; _fitRetry = 0;
+  _fitPending = true;
   invalidateLaneRects();   // MOVE & SIZE / HUD ELEMENTS / scale — clippers moved
   if (!_hudTop || document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;
@@ -2646,6 +2729,7 @@ return {
   create,
   invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
   syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
+  vpKey: () => vpW() + "x" + vpH(),   // the cached viewport, for 10 Hz keys that must not force a layout (#2151)
 };
 })();
 Object.freeze(GameHud);

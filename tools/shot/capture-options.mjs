@@ -53,7 +53,8 @@ export function parseCaptureOptions(argv = [], env = process.env) {
   const browser = oneOf("browser", browserAliases[raw.browser] || raw.browser || "auto", ["auto", "chromium", "shell"]);
   const options = { profile, width, height, viewport: width != null && height != null ? { width, height } : null,
     dpr, type, quality, scope: oneOf("scope", raw.scope || "scene", ["scene", "page"]),
-    gpu, gpuExplicit: raw.gpu != null, browser, trace: !!raw.trace,
+    gpu, // An env-chosen stack (APEX_GPU/APEX_GL) is a request too: verify it, never accept a silent SwiftShader fallback.
+    gpuExplicit: raw.gpu != null || !!(env.APEX_GPU || env.APEX_GL), browser, trace: !!raw.trace,
     tracePath: typeof raw.trace === "string" ? raw.trace : null,
     cacheAssets: !!raw["cache-assets"], reuse: !raw.isolated, isolated: !!raw.isolated,
     seed: raw.seed == null ? (profile === "comparison" ? 1 : null) : range("seed", raw.seed, 0, 4294967295), positionals };
@@ -73,9 +74,9 @@ export function captureContextOptions(options, fallback) {
   return { viewport: captureViewport(options, fallback), deviceScaleFactor: options.dpr ?? 1 };
 }
 export function captureLaunchOptions(options, runtime = {}) {
+  if (runtime.backend === "webgpu" && options.gpu === "llvmpipe") throw new Error("capture: llvmpipe is WebGL-only; use lavapipe for software WebGPU");
   const launch = captureGpuOptions({ ...runtime, gpu: options.gpu });
   if (runtime.backend === "webgpu") {
-    if (options.gpu === "llvmpipe") throw new Error("capture: llvmpipe is WebGL-only; use lavapipe for software WebGPU");
     if (options.gpu === "swiftshader") launch.args = [...new Set([...launch.args, ...WEBGPU_CHROMIUM_ARGS.filter((arg) => arg !== "--headless=new")])];
   }
   return { ...launch, browserFlavor: options.browser };

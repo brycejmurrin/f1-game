@@ -261,14 +261,20 @@ const CareerBackup = (function () {
     return o;
   }
   function num(v, lo, hi) { return typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : null; }
-  function idMap(raw, max, take) {
+  // A Daily class key is Ghost.contextKey(): JSON of the car/tune config, never an
+  // ID (#2165). Bounded and never a prototype name; the 8-per-day cap still holds.
+  const CLASS_KEY_MAX = 4096;
+  function classKey(k) {
+    return k.length > 0 && k.length <= CLASS_KEY_MAX && k !== "__proto__" && k !== "constructor" && k !== "prototype";
+  }
+  function idMap(raw, max, take, keyOk = (k) => ID_RE.test(k)) {
     const out = {};
     const src = plain(raw);
     if (!src) return out;
     let n = 0;
     for (const id of Object.keys(src)) {
       if (n >= max) break;
-      if (!ID_RE.test(id)) continue;
+      if (!keyOk(id)) continue;
       const v = take(src[id]);
       if (v === undefined) continue;
       out[id] = v;
@@ -363,7 +369,7 @@ const CareerBackup = (function () {
     if (own(e, "best")) out.best = cleanBest(e.best);
     if (own(e, "laps")) out.laps = num(e.laps, 0, 1e6) | 0;
     if (!nested && isObj(e.classes)) {
-      out.classes = idMap(e.classes, 8, (v) => cleanDayEntry(v, true));
+      out.classes = idMap(e.classes, 8, (v) => cleanDayEntry(v, true), classKey);
     }
     return out;
   }
@@ -493,10 +499,57 @@ const CareerBackup = (function () {
     if (isObj(sz.pts)) for (const k of Object.keys(sz.pts)) n += Number.isFinite(sz.pts[k]) ? sz.pts[k] : 0;
     return n;
   }
+  function sameSeasonValue(a, b) {
+    if (a === b) return true;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every(k => own(b, k) && sameSeasonValue(a[k], b[k]));
+  }
+  function completeSeasonGrid(order, seat) {
+    if (typeof Teams === "undefined" || !Teams.isReal || !Array.isArray(Teams.LIST)) return false;
+    if (!Teams.LIST.some(team => team.id === seat[1])) return false;
+    const ids = new Set(order.map(row => typeof row === "string" ? row : row.id));
+    if (!ids.has(seat[0]) || !seat[0].startsWith(seat[1] + ":")) return false;
+    // game.js gridTeams/seatsFor: standalone races use every real team plus
+    // the player's custom/Legends team. Legends contributes ONE car, with
+    // seat ID 0 regardless of the selected legend; Career's hired seat is out.
+    let count = 0;
+    for (const team of Teams.LIST) if (Teams.isReal(team) || team.id === seat[1]) {
+      const n = Array.isArray(team.drivers) ? (team.legends ? Math.min(1, team.drivers.length) : team.drivers.length) : 0;
+      if (!n) return false;
+      for (let i = 0; i < n; i++) if (!ids.has(team.id + ":" + i)) return false;
+      count += n;
+    }
+    return ids.size === count;
+  }
+  function qualifyingAhead(local, incoming) {
+    // Qualifying adds progress without changing the round or points. Only
+    // protect an intact, stamped grid for the same championship/weekend;
+    // a backup carrying its own grid remains an intentional replacement.
+    if (incoming.qualiOrder != null && (!Array.isArray(incoming.qualiOrder) || incoming.qualiOrder.length)) return false;
+    const a = cleanExtra("season", local), b = cleanExtra("season", incoming);
+    if (!a.ok || !b.ok) return false;
+    const mine = a.value, theirs = b.value, order = mine.qualiOrder;
+    if (!order || !order.length || mine.qualiMode !== "season" || !mine.qualiSeat
+        || !mine.config || !mine.config.quali || mine.qualiTrack !== mine.config.trackIds[mine.round]) return false;
+    const seat = mine.qualiSeat.split("|");
+    if (!completeSeasonGrid(order, seat)) return false;
+    for (const key of ["qualiTrack", "qualiMode", "qualiSeat"]) {
+      if (incoming[key] != null && incoming[key] !== mine[key]) return false;
+    }
+    // A first racing draw stamps the seed after a pre-weekend export. Once
+    // the backup has one, a different/missing local seed means another season.
+    if (incoming.seed != null && incoming.seed !== mine.seed) return false;
+    if (local.seed != null && local.seed !== mine.seed) return false;
+    for (const key of ["qualiOrder", "qualiTrack", "qualiMode", "qualiSeat", "seed"]) {
+      delete mine[key]; delete theirs[key];
+    }
+    return sameSeasonValue(mine, theirs);
+  }
   function seasonAhead(local, incoming) {
     if (!isObj(local)) return false;
     const a = local.round | 0, b = incoming.round | 0;
-    return a !== b ? a > b : seasonPts(local) > seasonPts(incoming);
+    return a !== b ? a > b : seasonPts(local) > seasonPts(incoming) || qualifyingAhead(local, incoming);
   }
 
   // Badges are earned once and never revoked: import is a UNION of the two
@@ -686,7 +739,7 @@ const CareerBackup = (function () {
       // recordWrite tracks durable/issues the same way slot restores do (#1296).
       const extra = (k) => (envelope[k] != null && isObj(envelope[k]) && progressExtras ? cleanExtra(k, envelope[k]).value : null);
       const season = extra("season");
-      if (season && !seasonAhead(s.get("season", null), season)) {
+      if (season && !seasonAhead(s.get("season", null), envelope.season)) {
         recordWrite("season", s.write("season", season));
         seasonWritten = true;
       }
