@@ -60,6 +60,8 @@ test("loading circuits one after another keeps one world in memory and does not 
   test.setTimeout(360000);
   await page.addInitScript(() => {
     try { localStorage.setItem("apex26.gfxBackend", "three"); } catch (_) {}
+    // software GL on a busy runner: TLX init measured > 8 s (run 38660546141) — give it room so the pick is actually TLX
+    try { localStorage.setItem("apex26.gfxBootStepMs", "45000"); } catch (_) {}
   });
   await page.addInitScript(censusInitScript);
   const cdp = await page.context().newCDPSession(page);

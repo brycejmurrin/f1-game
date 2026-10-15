@@ -233,15 +233,20 @@ const RealReplay = (function () {
         cars.set(c, { num: d ? d.num : null, d, tr: tr && tr.n ? tr : null, posed: false, parked: false });
       }
       if (![...cars.values()].some((f) => f.tr)) return false;
-      const list = highlightsFor(script);
-      const reel = o.reel ? reelFor(list) : null;
+      const traces = [...cars.values()].filter((f) => f.tr).map((f) => f.tr);
+      const startT = Math.max(-30, Math.min(0, ...traces.map((tr) => tr.t[0])));
+      const duration = Math.max(0, ...traces.map((tr) => tr.end));
+      // The script can outlast a partial positions download. Only offer moments
+      // whose footage exists, before nearby-event suppression chooses the cuts.
+      const list = highlightsFor(script).filter((h) => h.t >= startT && h.t <= duration);
+      const events = reelFor(list), reel = o.reel && events.length ? events : null;
       let T = 0;
       const lead = (script.drivers || []).find((d) => d.pos === 1) || (script.drivers || [])[0];
       if (o.startLap > 1 && lead && Array.isArray(lead.lapStart) && lead.lapStart[o.startLap - 1] != null) T = lead.lapStart[o.startLap - 1];
       if (reel && reel.length) T = reel[0].t - LEAD_S;
+      T = clamp(T, startT, duration);
       run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
-      run.duration = Math.max(0, ...[...cars.values()].map((f) => f.tr ? f.tr.end : 0));
-      run.events = reelFor(list);
+      run.startT = startT; run.duration = duration; run.events = events;
       run.savedCamera = G.camMode;
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
       const auto = o.camera === "auto";   // the TV director cuts the shots (Broadcast)
@@ -324,7 +329,7 @@ const RealReplay = (function () {
     }
     function seekTo(t, highlight) {
       if (!run || !Number.isFinite(t)) return;
-      const T = clamp(t, -30, run.duration);
+      const T = clamp(t, run.startT, run.duration);
       if (run.reel) { const i = run.reel.findIndex((h) => h.t + HOLD_S >= T); run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i; }
       reposition(T, highlight, true);
     }
@@ -364,14 +369,14 @@ const RealReplay = (function () {
     function eventStep(dir) {
       if (!run) return null;
       const list = run.events;
-      const h = dir < 0 ? list.slice().reverse().find((e) => e.t - LEAD_S < run.T - 1) : list.find((e) => e.t - LEAD_S > run.T + 1);
+      const h = dir < 0 ? list.slice().reverse().find((e) => Math.max(run.startT, e.t - LEAD_S) < run.T - 1) : list.find((e) => Math.max(run.startT, e.t - LEAD_S) > run.T + 1);
       if (!h) return null;
       seekTo(h.t - LEAD_S, h);
       return h.text;
     }
 
     function cutTo(h) {
-      reposition(h.t - LEAD_S, h);
+      reposition(clamp(h.t - LEAD_S, run.startT, run.duration), h);
     }
     function skip() { if (!run || !run.reel) return; run.reelIdx++; if (run.reelIdx < run.reel.length) cutTo(run.reel[run.reelIdx]); else finish(); }
 
@@ -562,7 +567,7 @@ const RealReplay = (function () {
       if (G.raceT != null) G.raceT = Math.max(0, run.T);
       if (run.reel) {
         const h = run.reel[run.reelIdx];
-        if (!h || run.T > h.t + HOLD_S) skip();
+        if (!h || run.T > Math.min(run.duration, h.t + HOLD_S)) skip();
         return;
       }
       // A missing or truncated winner download must not end another driver's
@@ -579,7 +584,7 @@ const RealReplay = (function () {
     }
 
     const api = { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, setPaused, eventStep, isRunning: () => !!run,
-             describe: () => run ? { name: run.script.name || run.script.circuit || "REAL RACE", drivers: [...run.cars.values()].filter((f) => f.tr && f.d).map((f) => ({ code: f.d.code, name: f.d.name })), events: run.events, speeds: SPEEDS } : null,
+             describe: () => run ? { name: run.script.name || run.script.circuit || "REAL RACE", startT: run.startT, drivers: [...run.cars.entries()].filter(([, f]) => f.tr && f.d).map(([c, f]) => ({ code: f.d.code, name: f.d.name, get available() { return !c.retired; } })), events: run.events, speeds: SPEEDS } : null,
              setLocked: (v) => (bc && run ? bc.setLocked(v) : false),
              // The in-game AUTO camera (js/camera/mode-switch.js): hand the picture to the
              // TV director, ask who has it, or take it (a shot picked by the viewer).
