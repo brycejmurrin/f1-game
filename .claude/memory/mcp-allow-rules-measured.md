@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 1a3325fb-8665-5c57-a3a8-40281e9219f1
-  modified: 2026-10-15T09:55:31.762Z
+  modified: 2026-10-15T10:22:53.913Z
 ---
 
 Measured 2026-10-15 on deploy tip abb1acd (session_01QTnGarENnxSWFxr7iFjub6):
@@ -17,7 +17,10 @@ Measured 2026-10-15 on deploy tip abb1acd (session_01QTnGarENnxSWFxr7iFjub6):
   "no prompt seen" in a sibling proves nothing.
 - Bare `mcp__<server>` entries match github, claude-code-remote, TinyFish,
   Context7, Claude_Docs but NOT the `.mcp.json` stdio servers (apex-tools,
-  chrome-devtools, playwright-official); `mcp__<server>__*` does match them.
+  chrome-devtools, playwright-official). `mcp__<server>__*` matched only from
+  `.claude/settings.local.json`; in the project file (#2124) both still
+  prompted at 10:21Z. Do not claim it fixed until a session that starts on a
+  tip with those lines reads `rule`+`config` for them.
 - MDN and BrowserStack connectors prompt in default mode whatever the rule
   (bare, tool, wildcard, connector UUID, 10 spellings tried): fix is the
   per-connector tool permission at https://claude.ai/customize/connectors, not

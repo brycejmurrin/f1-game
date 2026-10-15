@@ -44,8 +44,17 @@ Probe session session_01QTnGarENnxSWFxr7iFjub6; one read-only call per server.
 Round 2, the same calls with `mcp__apex-tools__*` and
 `mcp__chrome-devtools__list_pages` added in an untracked
 `.claude/settings.local.json` (the file reloads live): both became
-rule / user_permanent. That is the fix #2124 shipped as `mcp__<server>__*`
-for every live server (bare names kept).
+rule / user_permanent. #2124 shipped `mcp__<server>__*` for every live server
+in the PROJECT file on that evidence, and it did not hold: at 10:21Z, with
+those lines in `.claude/settings.json` on disk since 10:00Z,
+`mcp__chrome-devtools__list_pages` and `mcp__playwright-official__browser_tabs`
+both prompted (accept, no reason, user_temporary) in the same session. The
+`user_permanent` source marks the local settings file, which these servers
+honour; the project file's rules for the `.mcp.json` stdio servers did not
+match. Not yet known: whether a session that STARTS on a tip carrying the
+wildcards behaves differently (this one switched branches mid-session).
+Until that is measured, approve these three servers once per session with
+"don't ask again".
 
 Rounds 3 and 4, auto mode off so prompts were real: MDN and BrowserStack still
 prompted with `mcp__MDN__search`, `mcp__mcp_browserstack_com__*`, the connector
