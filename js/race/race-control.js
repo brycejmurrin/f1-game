@@ -233,9 +233,11 @@ const RaceControl = (function () {
     // OVERTAKE after a neutralisation (Art. B7.2.2c): disabled while the Safety
     // Car is out, re-enabled only once the field has crossed the Line after it
     // comes in — approximated by the LEADER's next crossing. The leader's lap
-    // at the hand-back; null = no hold. A red flag rewinds every lap by one at
-    // the standing restart (redFlagRestart), so its hold is one lap lower and
-    // the first crossing after the resumption re-enables it (B7.2.2b).
+    // at the hand-back; null = no hold. A red flag's standing restart
+    // (redFlagRestart) rewinds the leader's lap by one and says so (rewound()),
+    // lowering the hold with it, so the first crossing after the resumption
+    // re-enables it (B7.2.2b). A declined restart (a car has finished) rewinds
+    // nothing, so the hold stays at the leader's lap (#2166).
     let otHoldLap = null;
     let lowGripNoted = false;   // the "LOW GRIP — OVERTAKE OFF" banner has run this race
     // A SCRIPTED flag (js/race/real-race.js replays a real race's safety-car
@@ -278,7 +280,7 @@ const RaceControl = (function () {
       logFlag(prev, next);
       if (prev >= 3 && next < 3) {
         const leader = G.ranked && G.ranked[0];
-        otHoldLap = leader ? (leader.lap | 0) - (prev === 4 ? 1 : 0) : null;
+        otHoldLap = leader ? (leader.lap | 0) : null;
       }
     }
 
@@ -565,6 +567,8 @@ const RaceControl = (function () {
     // ticking update() — all 45 s of it landed on the green running after the
     // restart, where a lap-1 pile-up got no yellow, VSC or SC.
     function clearHold() { capHoldT = 0; capHoldLevel = 0; }
+    // game.js redFlagRestart rewound the leader's lap: a pending hold follows it.
+    function rewound() { if (otHoldLap != null) otHoldLap -= 1; }
 
     // OVERTAKE (Art. B7.2.2): enabled once the leader has crossed the Line after
     // the start (b), disabled only by the SAFETY CAR or a red flag (c) — a local
@@ -602,7 +606,7 @@ const RaceControl = (function () {
     return {
       update, apply, reset, setEnabled, otEnabled, otDetectOpen, lowGrip, info, hold,
       get level() { return caution.level; },
-      takeRestart, clearHold,
+      takeRestart, clearHold, rewound,
       get enabled() { return enabled; },
     };
   }
