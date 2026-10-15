@@ -474,6 +474,42 @@ test("fit clamps pieces that share an offset as ONE block, so neighbours keep th
   assert.equal(ot.props["--hl-x"], aero.props["--hl-x"], "one correction for the whole block");
 });
 
+test("fit: a block the edge clamp brings back pushes the neighbour it lands on, and only then", () => {
+  // Desktop cockpit, HUD 150 % at 1440x900 (hud-mock 2026-10-14): ENERGY + TYRES ship at -30,-4 and TYRES runs
+  // off the left edge; the clamp brought it back onto BRAKE BIAS (-18,0, its own block). At 100 % the clamp
+  // leaves TYRES short of BRAKE BIAS, so BRAKE BIAS must keep its own offset.
+  const run = (tyreW) => {
+    const mk = (left, w, top, h, ship) => {
+      const props = {}, attrs = { "data-hl": "" };
+      return { props,
+        style: { setProperty(k, v) { props[k] = v; }, removeProperty(k) { delete props[k]; } },
+        setAttribute(k, v) { attrs[k] = v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute(k) { return k in attrs; },
+        getBoundingClientRect() { const x = left + (parseFloat(props["--hl-x"] || ship) - ship) * 14.4; return { left: x, right: x + w, top, bottom: top + h, width: w, height: h }; } };
+    };
+    const tyre = mk(4 - tyreW - 6, tyreW, 582, 75, -30), energy = mk(80, 285, 582, 27, -30), bb = mk(129, 92, 639, 40, -18);
+    const written = { hudLayout: { v: 2, cockpit: { tyre: { x: -30, y: -4, s: 150 }, energy: { x: -30, y: -4, s: 150 }, bb: { x: -18, y: 0, s: 150 } }, other: {} } };
+    const blank = { style: { setProperty() {}, removeProperty() {} }, setAttribute() {}, removeAttribute() {}, hasAttribute: () => false };
+    const by = { "#hud-tyre": tyre, "#hud-energy": energy, "#hud-bb": bb };
+    const ctx = {
+      console, window: { innerWidth: 1440, innerHeight: 900 },
+      document: { readyState: "complete", getElementById: () => null, addEventListener() {}, body: { classList: { contains: () => true } },
+        querySelector: (sel) => by[sel] || blank },
+      GameStore: { store: { get: (k, d) => (k in written ? written[k] : d), set: (k, v) => { written[k] = v; } } },
+    };
+    vm.createContext(ctx);
+    vm.runInContext(SRC + "; this.HudLayout = HudLayout;", ctx);
+    ctx.HudLayout.setCam("cockpit");
+    ctx.HudLayout.fit();
+    return { tyre: tyre.getBoundingClientRect(), bb: bb.getBoundingClientRect(), bbX: bb.props["--hl-x"] };
+  };
+  const at150 = run(195);
+  assert.ok(at150.tyre.left >= 4 - 1e-6, "TYRES back on screen: " + at150.tyre.left);
+  assert.ok(at150.bb.left >= at150.tyre.right, `BRAKE BIAS (${at150.bb.left}) clear of TYRES (..${at150.tyre.right})`);
+  const at100 = run(120);
+  assert.ok(at100.tyre.right < 129, "at 100 % the clamped TYRES stops short of BRAKE BIAS: " + at100.tyre.right);
+  assert.equal(at100.bbX, "-18", "BRAKE BIAS keeps its own offset when nothing lands on it");
+});
+
 test("fit clamps a size-only piece on its own, not as one block with every other size-only piece", () => {
   // BIG + TOWER SIZE 200 at 844 wide: the tower (centred, grown to 640) and the
   // map (top-left, grown) both carry offset 0,0. Grouped as one "0,0" block their
