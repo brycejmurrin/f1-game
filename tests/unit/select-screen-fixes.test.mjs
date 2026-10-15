@@ -51,7 +51,12 @@ function boot(disk = {}, o = {}) {
     innerWidth: 1000, innerHeight: 600, requestAnimationFrame: () => 0,
     Tracks: { LIST }, Teams: { LIST: TEAMS }, Flags: { svg: () => "" },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
-    TrackMaps: { corners: () => [], direction: () => "CW", elevRange: () => 0, drsZones: () => [], aspect: () => 1.5, elevProfile: () => null },
+    TrackMaps: {
+      corners: () => [], direction: () => "CW", elevRange: () => 0,
+      drsZones: o.trackMapsDrs || (() => []),
+      aspect: () => 1.5, elevProfile: () => null,
+      fitCanvas: () => ({ w: 100, h: 60 }), draw() {},
+    },
   };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/select-screen.js"), sb, { filename: "js/ui/select-screen.js" });
@@ -64,7 +69,8 @@ function boot(disk = {}, o = {}) {
   const G = {
     $, store, cssCol: () => "#000", fmtTime: String, ttBoard: () => [], tickUi() {}, scheduleFlybyTrack() {},
     els: { select: $("select"), selTracks, selGo: $("sel-go"), selTitle: $("sel-title"), selTrackSection: $("sel-track-section"),
-      selCircuitLabel: $("sel-circuit-label"), selPreviewMap: null, selTeams },
+      selCircuitLabel: $("sel-circuit-label"), selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
+      selPreviewGp: $("sel-preview-gp"), selPreviewMeta: $("sel-preview-meta"), selPreviewRec: $("sel-preview-rec"), selTeams },
     trackIdx: 1, teamIdx: 0, driverIdx: 0, timeTrial: false, seasonMode: false, netRoom: false, daily: null, soundOn: false,
     announce() {}, buildSetup: () => { built++; }, ...o,
   };
@@ -135,4 +141,31 @@ test("M3: unstarring a circuit that is NOT active still filters as before", () =
   h.dom.dispatch(imola, { type: "keydown", key: "f", bubbles: true });
   assert.equal(h.G.trackIdx, 1);
   assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["1"]);
+});
+
+test("CLASSICS filter refreshes the hero preview when the active circuit is hidden", () => {
+  const h = boot({}, { trackIdx: 1 });
+  assert.equal(h.G.els.selPreviewName.textContent, "Spa");
+  h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === "classic")
+    .onclick({ stopPropagation() {} });
+  assert.equal(h.G.trackIdx, 2);
+  assert.equal(h.G.els.selPreviewName.textContent, "Imola", "preview follows the snapped classic");
+});
+
+test("DRS zone labels name an S/F wrap with arrow markers", () => {
+  const h = boot({}, {
+    trackIdx: 0,
+    trackMapsDrs: () => [{ a: 0.93, b: 0.1, wrap: true }],
+  });
+  h.LIST[0].lengthKm = 5.771;
+  const menus = h.menus;
+  assert.equal(menus.drsZoneWraps({ a: 0.5, b: 0.4 }), true);
+  assert.equal(menus.drsZoneWraps({ a: 0.2, b: 0.8 }), false);
+  const html = menus.drsZoneRangeHtml({ a: 0.93, b: 0.09, wrap: true }, 5771);
+  assert.match(html, /5367 m.*S\/F.*519 m/);
+  assert.match(html, /crossing start\/finish/);
+  h.menus.openTrackDetail();
+  const list = h.dom.byId("track-detail-drs-list").innerHTML;
+  assert.match(list, /Zone 1:.*S\/F/);
+  assert.doesNotMatch(list, /5370 m &ndash; 519 m/);
 });

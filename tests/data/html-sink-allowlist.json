@@ -8,6 +8,10 @@
     "Audited 2026-09-25."
   ],
   "sites": {
+    "js/garage/arrival.js::map.innerHTML": {
+      "count": 1,
+      "reason": "GARAGE ANGLE plan of the bay: angleMap(value.angle) where value is settings(), which only returns \"cut\" | \"left\" | \"right\" for angle; every other part is a number from EYE_L / EYE_R / the bay constants formatted with toFixed, or a literal."
+    },
     "js/game.js::sum.innerHTML": {
       "count": 1,
       "reason": "HUD fold summary: hudProfile / hudMetricsLayout are validated against HUD_PROFILES / HUD_MET_LAYOUTS at load and in the G setters; every other part is a literal."

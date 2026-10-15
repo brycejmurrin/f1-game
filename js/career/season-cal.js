@@ -195,7 +195,10 @@ function restart() {
   activeSeason = season;
   return season;
 }
-// Applying a new setup replaces a saved championship. Resolve the revision
+function matchesConfig(season, next) {
+  return !!(season && season.config && JSON.stringify(normalize(season.config)) === JSON.stringify(normalize(next)));
+}
+// Applying a changed setup replaces a saved championship. Resolve the revision
 // before changing either the active rules or the new season's in-memory state.
 function applyConfig(next) {
   const now = currentRevision();
@@ -203,6 +206,13 @@ function applyConfig(next) {
     seasonConflict = true;
     lastSave = { ok: false, durable: false, reason: "conflict" };
     return Object.assign({ season: null }, lastSave);
+  }
+  // APPLY without a rules change must not spend a driven qualifying grid or
+  // reset standings. Completed championships use this screen to start again,
+  // even with the same rules. Always pass the revision guard above first.
+  if (canRace(activeSeason) && matchesConfig(activeSeason, next)) {
+    if (!matchesConfig({ config: config() }, next)) setConfig(next);
+    return Object.assign({}, lastSave, { season: activeSeason, ok: true });
   }
   const snap = frozenConfig(next);
   const season = { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {}, config: snap };
@@ -696,7 +706,7 @@ function shuffled(ids, seed) {
 
 return {
   SPRINT_POINTS, CLASSIC_POINTS, SHORT_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
-  config, setConfig, resetConfig, applyConfig, fresh, normalize,
+  config, setConfig, resetConfig, applyConfig, matchesConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
