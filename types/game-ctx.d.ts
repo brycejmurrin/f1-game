@@ -243,7 +243,6 @@ type QualiRow = Opaque;
 interface ScaleState { pct: number; stored: unknown; min: number; max: number; [key: string]: unknown; }
 
 /** What drawAeroFlaps() is handed in the garage: the resolved level and style. */
-interface FlapArgs { aLvl: number; style: string | null; }
 
 /** A resolved parts setup for one team — Parts.resolveSetup()/getTeamParts(). */
 type PartsSetup = Opaque;
@@ -568,7 +567,6 @@ interface GameCtx {
   readonly setupPan: (strafe: number, dolly: number) => void;
   readonly nudgeSetupCam: (dAz: number, dEl: number, zoom?: number) => void;
   readonly nudgeSetupZoom: (mul: number) => void;
-  readonly setupFlapArgs: () => FlapArgs;
   readonly setSetupAero: (on: boolean, opts?: { keepCam?: boolean }) => void;
   readonly setupPreviewXOn: boolean;
 

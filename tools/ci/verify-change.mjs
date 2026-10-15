@@ -40,6 +40,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pick, DEPLOY_BRANCH, validateSelectionArgs, selectionReceipt } from "./pick-tests.mjs";
+import { proxyFetch } from "../lib/proxy-fetch.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -207,9 +208,10 @@ if (plan.fast.toolingFast) {
 // A PUSH OVER A LIVE ci.yml RUN CANCELS IT, and a cancelled job runs no
 // `if: always()` step, so its failures are never carried forward. Two of the
 // three cancelled runs inspected on 2026-09-16 had hidden a real red that way.
-// Best effort, unauthenticated (a public repo's runs list needs no token; the
-// GitHub API is reachable from the container through the proxy), 3 s cap, and
-// silent on any failure — an advisory, never a gate.
+// Best effort, unauthenticated (a public repo's runs list needs no token), 3 s
+// cap, and silent on any failure — an advisory, never a gate. Through
+// proxyFetch (#2188): a bare Node fetch ignores HTTPS_PROXY, was rate-limited
+// in cloud containers and returned null, so this warning never fired there.
 async function liveCiRuns() {
   try {
     const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
@@ -217,7 +219,7 @@ async function liveCiRuns() {
     const m = url.match(/github\.com[:/]([^/]+\/[^/.]+)/);
     if (!m || !branch || branch === "HEAD") return null;
     const api = `https://api.github.com/repos/${m[1]}/actions/runs?branch=${encodeURIComponent(branch)}&status=in_progress&per_page=5`;
-    const res = await fetch(api, { signal: AbortSignal.timeout(3000), headers: { Accept: "application/vnd.github+json", "User-Agent": "apex26-verify-change" } });
+    const res = await proxyFetch(api, { signal: AbortSignal.timeout(3000), timeoutMs: 3000, headers: { Accept: "application/vnd.github+json", "User-Agent": "apex26-verify-change" } });
     if (!res.ok) return null;
     const runs = ((await res.json()).workflow_runs || []).filter((r) => /ci\.yml$/.test(r.path || ""));
     return { branch, runs: runs.map((r) => ({ id: r.id, sha: (r.head_sha || "").slice(0, 8), url: r.html_url })) };
