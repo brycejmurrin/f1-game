@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { fnSource } from "../helpers/fn-source.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -275,7 +276,7 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
   assert.match(src, /let _softBlitSeq = 0/);
   assert.match(src, /let _softDisplayPending = false, _softDisplayEpoch = 0/);
   assert.match(src, /if \(_softHold \|\| _softDisplayPending\) return null/);
-  assert.match(src, /_softDisplayPending = true;\s*return \{ buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen \}/);
+  assert.match(src, /_softDisplayPending = true;\s*_softDisplaySince = _softNow\(\);\s*return \{ buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen \}/);
   assert.match(src, /epoch === _softDisplayEpoch && seq === _softBlitSeq &&[^]*?_displayCanvas\.width === w[^]*?_displayCanvas\.height === h/);
   assert.match(src, /const release = function \(\) \{ _softDisplayPending = false; \}/);
   const resize = src.slice(src.indexOf("function resize()"), src.indexOf("function setRenderScale"));
@@ -285,6 +286,42 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
     "WGX suppresses its own backing-store resize signal through the shared cache");
   // Size split: present jitter uses pw/ph vs presentW/H; render jitter uses rw/rh vs width/height.
   assert.match(resize, /Math\.abs\(r?w - width\) <= 1 && Math\.abs\(r?h - height\) <= 1/);
+});
+
+test("WGX soft present back-pressures frames and the car pass while a read waits (#2226)", () => {
+  // Measured 2026-10-15 on SwiftShader (montreal): ~500 frames queued ahead of
+  // the first map, so the next blit never landed inside gfx-probe's 60 s.
+  const src = read("js/render/webgpu/wgx.js");
+  const grab = (re, what) => { const m = src.match(re); assert.ok(m, what); return m[0]; };
+  const held = grab(/function _softFrameHeld\(\) \{[^]*?\n    \}/, "_softFrameHeld");
+  const gate = grab(/if \(_softGpu && _softDisplayPending\) \{\s*if \(_softFrameHeld\(\)\) return false;[^}]*\}/, "begin() hold");
+  const car = grab(/const carShadowBegin = \(\.\.\.a\) => \{[^]*?\n    \};/, "carShadowBegin gate");
+  assert.ok(src.indexOf(gate) < src.indexOf("encoder = device.createCommandEncoder();\n        _passSamples"),
+    "begin() refuses before it records any frame work");
+  const make = new Function("SHD", `
+    let _softGpu = true, _softDisplayPending = false, _softDisplaySince = 0, now = 0;
+    const SOFT_HOLD_MAX_MS = ${grab(/const SOFT_HOLD_MAX_MS = \d+/, "bound").split("= ")[1]};
+    const _softNow = () => now;
+    ${held}
+    ${car}
+    function begin() { ${gate} return true; }
+    return { begin, carShadowBegin,
+      set: (o) => { if ("pending" in o) { _softDisplayPending = o.pending; _softDisplaySince = now; } if ("gpu" in o) _softGpu = o.gpu; },
+      at: (t) => { now = t; } };`);
+  const calls = { begin: 0, keep: 0 };
+  const W = make({ carShadowBegin() { calls.begin++; }, carShadowKeep() { calls.keep++; return true; } });
+  assert.equal(W.begin(), true, "no read in flight: frames render");
+  W.set({ pending: true });
+  let drawn = 0;
+  for (let t = 0; t <= 60000; t += 16) { W.at(t); if (W.begin()) drawn++; W.carShadowBegin([], 1); }
+  assert.ok(drawn >= 2 && drawn <= 4, "a stuck read lets one frame through per bound, never a flood (" + drawn + ")");
+  assert.equal(calls.begin, 0, "no car-shadow submission while a read waits");
+  assert.ok(calls.keep > 3000, "the held car map stays armed (KEEP)");
+  W.set({ pending: false }); W.carShadowBegin([], 1);
+  assert.equal(W.begin(), true); assert.equal(calls.begin, 1, "both resume once the read lands");
+  W.set({ gpu: false, pending: true }); W.carShadowBegin([], 1);
+  assert.equal(W.begin(), true, "hardware presentation is never held");
+  assert.equal(calls.begin, 2);
 });
 
 test("all renderers share zero/reveal, orientation, and UI-scale CSS-size semantics", () => {
@@ -413,7 +450,7 @@ test("GLX and TLX clamp the present size to the driver limit before deriving the
   const resize = glx.slice(glx.indexOf("  function resize() {"), glx.indexOf("  function setRenderScale("));
   assert.ok(resize.length > 0, "found GLX resize()");
   const clampAt = resize.search(/if \(maxDim > 0 && \(presentW > maxDim \|\| presentH > maxDim\)\)/);
-  const rwAt = resize.indexOf("const rw = Math.max(1, Math.round(presentW * renderScale));");
+  const rwAt = resize.search(/(?:const|let) rw = Math\.max\(1, Math\.round\(presentW \* renderScale\)\);/);
   assert.ok(clampAt > 0 && rwAt > 0 && clampAt < rwAt, "the uniform clamp precedes the rw/rh derivation");
   assert.match(resize, /const k = Math\.min\(maxDim \/ presentW, maxDim \/ presentH\);/, "one factor for both axes keeps aspect");
 
@@ -425,3 +462,105 @@ test("GLX and TLX clamp the present size to the driver limit before deriving the
   const wgx = read("js/render/webgpu/wgx.js");
   assert.doesNotMatch(wgx, /GLX and TLX do not clamp at all/, "the WGX comment must not describe a gap that is closed");
 });
+
+function captureHarness(opts = {}) {
+  const state = new Map(), jobs = [], buffers = [], fences = [];
+  let clock = 0, copied = 0, submitted = 0;
+  const gl = Object.fromEntries(['PIXEL_PACK_BUFFER', 'PIXEL_PACK_BUFFER_BINDING', 'PACK_ALIGNMENT',
+    'PACK_ROW_LENGTH', 'PACK_SKIP_PIXELS', 'PACK_SKIP_ROWS', 'STREAM_READ', 'BUFFER_SIZE', 'RGBA',
+    'UNSIGNED_BYTE', 'SYNC_GPU_COMMANDS_COMPLETE', 'ALREADY_SIGNALED', 'CONDITION_SATISFIED',
+    'TIMEOUT_EXPIRED', 'WAIT_FAILED'].map((k, i) => [k, i + 1]));
+  const binding = { external: true }, laterBinding = { renderer: true };
+  state.set(gl.PIXEL_PACK_BUFFER_BINDING, binding);
+  const names = [gl.PACK_ALIGNMENT, gl.PACK_ROW_LENGTH, gl.PACK_SKIP_PIXELS, gl.PACK_SKIP_ROWS];
+  names.forEach((n, i) => state.set(n, [8, 7, 2, 1][i]));
+  const frame = Uint8Array.from({ length: 24 }, (_, i) => i + 1);
+  Object.assign(gl, {
+    getParameter: (n) => state.get(n),
+    createBuffer() { if (opts.refuseBuffer) return null; const b = { deleted: 0 }; buffers.push(b); return b; },
+    bindBuffer(_t, b) { state.set(gl.PIXEL_PACK_BUFFER_BINDING, b); },
+    bufferData(_t, size) { state.get(gl.PIXEL_PACK_BUFFER_BINDING).size = size; },
+    getBufferParameter: () => opts.refuseAllocation ? 0 : state.get(gl.PIXEL_PACK_BUFFER_BINDING).size,
+    pixelStorei: (n, v) => state.set(n, v),
+    readPixels(_x, _y, w, h, _format, _type, offset) {
+      assert.equal(offset, 0, 'GPU-buffer offset, never a synchronous client-memory read');
+      assert.deepEqual(names.map((n) => state.get(n)), [4, 0, 0, 0]);
+      if (opts.submitThrows) throw new Error('submit failed');
+      state.get(gl.PIXEL_PACK_BUFFER_BINDING).data = frame.slice(0, w * h * 4); submitted++;
+    },
+    fenceSync() { if (opts.refuseFence) return null; const f = { deleted: 0 }; fences.push(f); return f; },
+    flush() {}, isContextLost: () => !!opts.lost,
+    clientWaitSync(_s, flags, timeout) {
+      assert.equal(flags, 0); assert.equal(timeout, 0, 'no blocking fence wait');
+      return opts.waitFailed ? gl.WAIT_FAILED : opts.ready ? gl.CONDITION_SATISFIED : gl.TIMEOUT_EXPIRED;
+    },
+    getBufferSubData(_t, _offset, dst) {
+      assert.ok(opts.ready, 'no client copy before GPU completion');
+      if (opts.copyThrows) throw new Error('copy failed');
+      dst.set(state.get(gl.PIXEL_PACK_BUFFER_BINDING).data); copied++;
+    },
+    deleteBuffer(b) { b.deleted++; }, deleteSync(s) { s.deleted++; },
+  });
+  const src = read('js/render/three/tlx.js');
+  const sb = { _captureReads: new WeakSet(), performance: { now: () => clock },
+    setTimeout: (fn) => { jobs.push(fn); }, Uint8ClampedArray, ownGL: gl, renderer: { backend: {} }, W: 2, H: 3 };
+  vm.runInNewContext(`${fnSource(src, 'async function readGlCapture(gl, w, h) {')}
+    const gfx = { ${fnSource(src, 'capturePixels() {')} }; globalThis.capture = () => gfx.capturePixels();`, sb);
+  return { opts, gl, sb, frame, state, names, binding, laterBinding, buffers, fences, jobs,
+    capture: sb.capture, copied: () => copied, submitted: () => submitted,
+    advance: (ms) => { clock += ms; },
+    tick: async () => { assert.ok(jobs.length, 'poll scheduled'); jobs.shift()(); await Promise.resolve(); await Promise.resolve(); },
+  };
+}
+
+test('TLX WebGL capture snapshots now, waits without blocking, restores GL state and returns independent top-down pixels', async () => {
+  const h = captureHarness();
+  const p = h.capture();
+  assert.equal(h.submitted(), 1, 'snapshot issued before the canvas can be cleared by compositing');
+  assert.equal(h.copied(), 0);
+  assert.equal(h.state.get(h.gl.PIXEL_PACK_BUFFER_BINDING), h.binding);
+  assert.deepEqual(h.names.map((n) => h.state.get(n)), [8, 7, 2, 1]);
+  await assert.rejects(h.capture(), /already in progress/);
+  assert.equal(h.buffers.length, 1, 'concurrent captures cannot multiply pending buffers');
+  await h.tick();
+  assert.equal(h.copied(), 0, 'a pending fence yields again');
+  h.frame.fill(0); h.sb.W = 1; h.sb.H = 1;
+  h.gl.bindBuffer(h.gl.PIXEL_PACK_BUFFER, h.laterBinding);
+  h.opts.ready = true; await h.tick();
+  const shot = await p;
+  assert.equal(shot.width, 2); assert.equal(shot.height, 3, 'resize does not change an in-flight snapshot');
+  assert.deepEqual([...shot.data], [...Array.from({ length: 8 }, (_, i) => i + 17),
+    ...Array.from({ length: 8 }, (_, i) => i + 9), ...Array.from({ length: 8 }, (_, i) => i + 1)]);
+  assert.equal(h.state.get(h.gl.PIXEL_PACK_BUFFER_BINDING), h.laterBinding, 'preserve intervening renderer state');
+  assert.equal(h.buffers[0].deleted, 1); assert.equal(h.fences[0].deleted, 1); assert.equal(h.jobs.length, 0);
+  const held = [...shot.data], again = h.capture(); await h.tick(); await again;
+  assert.deepEqual([...shot.data], held, 'later shots do not overwrite a held image');
+});
+
+test('TLX WebGL capture accepts a slow valid GPU fence beyond twenty seconds', async () => {
+  const h = captureHarness(), result = h.capture().then((shot) => ({ shot }), (error) => ({ error }));
+  h.advance(20001); await h.tick();
+  assert.equal(h.copied(), 0);
+  assert.equal(h.buffers[0].deleted, 0, 'slow work stays pending rather than forcing a canvas fallback');
+  h.opts.ready = true; await h.tick();
+  const { shot, error } = await result;
+  assert.equal(error, undefined); assert.equal(shot.width, 2); assert.equal(shot.height, 3);
+  assert.equal(h.buffers[0].deleted, 1); assert.equal(h.fences[0].deleted, 1); assert.equal(h.jobs.length, 0);
+});
+
+for (const fault of ['refuseBuffer', 'refuseAllocation', 'submitThrows', 'refuseFence', 'waitFailed', 'lost', 'copyThrows', 'timeout']) {
+  test(`TLX WebGL capture releases owned resources on ${fault}`, async () => {
+    const opts = { ready: fault === 'copyThrows' }, h = captureHarness(opts);
+    if (fault !== 'timeout') opts[fault] = true;
+    const p = h.capture(), rejected = assert.rejects(p, /capture|submit|copy/);
+    if (h.jobs.length) { if (fault === 'timeout') h.advance(120001); await h.tick(); }
+    await rejected;
+    assert.equal(h.state.get(h.gl.PIXEL_PACK_BUFFER_BINDING), h.binding);
+    assert.deepEqual(h.names.map((n) => h.state.get(n)), [8, 7, 2, 1]);
+    for (const b of h.buffers) assert.equal(b.deleted, 1);
+    for (const f of h.fences) assert.equal(f.deleted, 1);
+    assert.equal(h.jobs.length, 0, 'failed captures leave no polling timer');
+    for (const k of Object.keys(opts)) delete opts[k]; opts.ready = true;
+    const retry = h.capture(); await h.tick(); await retry;
+  });
+}

@@ -394,3 +394,17 @@ test("hiding a non-dialog layer lifts #overlay's inert BEFORE refocusing the ope
   assert.equal(h.overlay.inert, false);
   assert.equal(h.doc.activeElement, h.opener, "focus went back to the opener on the title");
 });
+
+test("a dynamic nested modal owns navigation until it closes, then the hub resumes", () => {
+  const U = fakeDom([{ id: "datahub" }, { id: "telemetry-popup" }], ["datahub", "telemetry-popup"]);
+  assert.equal(U.top().id, "telemetry-popup", "native dialogs need no static layer ID to own input");
+  U._nodes.get("telemetry-popup").close();
+  assert.equal(U.top().id, "datahub", "closing the inner dialog returns navigation to its host");
+});
+
+test("an unsupported :modal selector retains ordinary layer ranking", () => {
+  const U = fakeDom([{ id: "overlay", z: 10 }, { id: "datahub", z: 40 }], []);
+  const query = U._doc.querySelectorAll;
+  U._doc.querySelectorAll = (selector) => { if (selector === ":modal") throw new SyntaxError("unsupported"); return query(selector); };
+  assert.equal(U.top().id, "datahub");
+});

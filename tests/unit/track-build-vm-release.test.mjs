@@ -188,7 +188,9 @@ const STRIP = {
   //   (deeper pole + brace arm on every post; roofs reseated, no new strip)
   // → bank zones on Massenet T3 / Mirabeau T7 (2026-10-10; were on Ste Devote
   //   T1 / T4): same emission, the 3° camber re-seats roadside prims, −46 survive
-  monaco: { before: 279837, after: 258617 },
+  // → survey fixes (2026-10-15, #2049: night far fill, mountains, landmark boxes, sailboats in
+  //   scenery/monaco.js): +702 emitted / +702 survive (280539/259319); the strip share is unchanged
+  monaco: { before: 280539, after: 259319 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

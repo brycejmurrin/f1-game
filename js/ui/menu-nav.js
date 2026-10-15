@@ -31,7 +31,7 @@ window.MenuNav = (function () {
 
   // Scroll regions, same list ScrollFade watches — `.pane` first and by class,
   // because that is the design system's own name for "a scroll region".
-  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-panel,#track-detail";
+  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,.dh-tpopup-body,.dh-telem-main,.dh-telem-side,#track-detail-panel,#track-detail";
 
   // `summary` is a real control: the fold headers on the DISPLAY / STEERING /
   // MUSIC settings pages open with Enter (native) or the pad's A (padActivate
