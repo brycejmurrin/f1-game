@@ -233,7 +233,7 @@
       // 0.142-0.17 = racing 0.10-0.13), facing the valley floor (racing ≈0.14)
       // and the Raidillon climb. Was authored 0.068-0.092 = racing 0.026-0.05,
       // the La Source exit, before the elevation fix put the valley where it is.
-      for (const [s, gp, len] of [[0.142, 8, 30], [0.154, 9, 32], [0.166, 9, 28]]) {
+      for (const [s, gp, len] of [[0.142, 8, 28], [0.156, 9, 30], [0.170, 9, 26]]) {
         grandstandEx(s, 1, gp, len, GOLD3, [0.96, 0.46, 0.08],
           { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD3 });
       }
@@ -288,7 +288,7 @@
       // indexes its own footprint against the treelines.
       // The relocated bank spans authored .146–.170; the matching OPEN
       // window below keeps the deep forest ranks clear of its footprint.
-      spectatorHill(0.146, 0.170, 1, 24, { rows: 5, rise: 1.5, density: 0.6, step: 6,
+      spectatorHill(0.148, 0.172, 1, 26, { rows: 5, rise: 1.5, density: 0.6, step: 6,
         grass: [0.22, 0.36, 0.18], riser: [0.34, 0.33, 0.30] });
       sponsorHoarding(0.10, 0.18, -1, 3, { h: 1.2 });
       ardennesTerrace("spa-terrace-kemmel", K(0.135), -1, 14, 6, { rows: 5 });
@@ -537,7 +537,9 @@
           addBox(stage, vadd(a.c, a.u, 24.7), [6, 0.6, 6], [0.30, 0.30, 0.34], b);  // roof slab
           addCyl(stage, vadd(a.c, a.u, 24.8), 0.12, 6, [0.42, 0.42, 0.46], 4, b);   // flag mast
           stage._mat = 0;
-          addBox(stage, vadd(vadd(a.c, a.u, 18), a.r, -side * 4.05), [0.2, 2.4, 2.4],
+          // On the glazed box face (not 4 m lateral): a detached slab read as a
+          // 15 m float in ground-audit and clipped forest pines at the pit loop.
+          addBox(stage, vadd(vadd(a.c, a.r, -side * 2.75), a.u, 23), [0.18, 1.8, 1.8],
                  [0.94, 0.93, 0.88], b);                                           // trackside clock face
         }, { required: true });
       }
@@ -671,7 +673,7 @@
           "1": [
             [0.975, 1.001, 0, 200], [0.0, 0.045, 0, 200],   // pit straight / La Source stands
             [0.060, 0.116, 0, 80],    // La Source exit stand 0.068, camp
-            [0.127, 0.143, 30, 76],   // camp K(0.135)
+            [0.108, 0.155, 0, 82],    // Kemmel terrace, camp, Gold-3 row (deep ranks)
             [0.136, 0.174, 0, 80],    // Gold-3 row, grass bank, jumbotron, catch fence
             [0.168, 0.214, 0, 72],    // old Eau Rouge road + its own trees
             [0.200, 0.220, 52, 92],   // chalets
@@ -682,11 +684,11 @@
             [0.812, 0.829, 30, 68],   // camp
             [0.838, 0.862, 0, 52],    // concrete stand 0.848, Blanchimont shelter
             [0.886, 0.900, 0, 20],    // Blanchimont camera tower
-            [0.897, 0.936, 0, 50],    // Blanchimont terrace, Bus Stop stand
+            [0.885, 0.972, 0, 68],    // Blanchimont terrace, Bus Stop, pit-loop motorhomes
           ],
           "-1": [
-            [0.975, 1.001, 0, 200], [0.0, 0.118, 0, 200],   // paddock, old pits, village, brook
-            [0.123, 0.147, 0, 76],    // Kemmel terrace, chalet
+            [0.925, 1.001, 0, 82], [0.0, 0.118, 0, 200],   // Bus Stop loop, paddock, village
+            [0.105, 0.162, 0, 88],    // Kemmel terrace, camp, Gold-3 approach
             [0.170, 0.196, 0, 30],    // Eau Rouge brook, bridge, base wall
             [0.186, 0.218, 0, 36],    // Raidillon terrace (inside bank)
             [0.345, 0.358, 0, 20],    // Les Combes camera tower
@@ -746,7 +748,7 @@
       }
 
       // Sparse fir accents on pit / Les Combes verges (not broadleaf oaks).
-      for (const [s, side] of [[0.01, 1], [0.16, 1], [0.30, -1], [0.62, 1], [0.78, -1]]) {
+      for (const [s, side] of [[0.01, 1], [0.22, 1], [0.30, -1], [0.62, 1], [0.78, -1]]) {
         for (let j = 0; j < 3; j++) {
           const kk = (K(s) + j) % n;
           const hv = hash(kk * 5 + j);
@@ -880,7 +882,7 @@
             }, (stage) => {
               stage._mat = MAT.STONE;
               addBox(stage, vadd(a.c, a.u, 4.6), [10, 9.2, 20], STONE_W, b);
-              addBox(stage, vadd(vadd(a.c, a.t, -11), a.u, 8.0), [7, 16, 7], STONE_W, b);
+              addBox(stage, vadd(vadd(a.c, a.t, -11), a.u, 8.06), [7, 16, 7], STONE_W, b);
               stage._mat = 0;
               addPrism(stage, vadd(a.c, a.u, 12.4), [10.6, 5.4, 20.4], SLATE_D, b);
               addPyramid(stage, vadd(vadd(a.c, a.t, -11), a.u, 15.8), [7.4, 9.5, 7.4],
