@@ -80,7 +80,7 @@ var RaceRadio = (function () {
     // facts only colour it (battles, the lead gap). Hooks: nameOf(car) — the
     // REAL driver's name (a seat car can wear another roster name) — and
     // radioBusy() — a team radio clip is playing.
-    let watch = null, timeline = 0, commentaryGeneration = 0;
+    let watch = null, timeline = 0, commentaryGeneration = 0, engineerGeneration = 0;
     let m = null;
     const queue = { eng: new Map(), tv: new Map() };
     const log = [];
@@ -164,9 +164,10 @@ var RaceRadio = (function () {
       const text = lines.pick(c.key, c.vars);
       if (!text) { queue[c.ch].delete(c.id); return false; }
       // Accepted cards may wait across a seek or the start of another race.
-      const gen = timeline, field = G.cars, watching = watch, cg = commentaryGeneration, still = c.still;
+      const gen = timeline, field = G.cars, watching = watch, cg = commentaryGeneration, eg = engineerGeneration, still = c.still;
       const valid = () => gen === timeline && field === G.cars && watch === watching
-        && (c.ch !== "tv" || (cg === commentaryGeneration && comm !== "off")) && (!still || still());
+        && (c.ch !== "tv" || (cg === commentaryGeneration && comm !== "off"))
+        && (c.ch !== "eng" || (eg === engineerGeneration && chat !== "off")) && (!still || still());
       // Refused (a full card queue): an URGENT line stays queued and is offered
       // again until its ttl — "LAST LAP" is a once line, and dropping it here
       // lost it for the race. Anything else is dropped, as before.
@@ -654,6 +655,8 @@ var RaceRadio = (function () {
 
     function setChat(v) {
       if (CHAT.indexOf(v) < 0) return chat;
+      // OFF discards both internal offers and accepted cards waiting to display.
+      if (v === "off" && chat !== "off") { engineerGeneration++; queue.eng.clear(); }
       chat = v; if (store && store.set) store.set("radioChat", v);
       return chat;
     }
