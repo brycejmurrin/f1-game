@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DEBRIS_SRC = readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8");
@@ -557,10 +558,37 @@ test("after a red flag OVERTAKE returns at the leader's first crossing after the
   assert.equal(rc.info().level, 0);
   assert.equal(rc.takeRestart(), true);
   rc.otEnabled();   // a read BEFORE the regrid must not spend the hold
-  leader.lap = 9;   // redFlagRestart rewinds the classification lap
+  leader.lap = 9;   // redFlagRestart rewinds the classification lap...
+  rc.rewound();     // ...and says so
   assert.equal(rc.otEnabled(), false, "held off from the grid");
   leader.lap = 10;
   assert.equal(rc.otEnabled(), true, "re-enabled once the leader crosses the Line");
+});
+
+test("a red flag whose restart is declined (a car has finished) still holds OVERTAKE to the next crossing (#2166)", () => {
+  // redFlagRestart returns false once any car has finished: no re-grid, no
+  // lap rewound, so a hold that assumed the rewind was spent at once.
+  let hz = hazards(16, 2);
+  const leader = { lap: 10 };
+  const rc = load({ active: () => true, hazards: () => hz }).create(makeCtx({ ranked: [leader] }));
+  run(rc, 1);
+  assert.equal(rc.info().level, 4);
+  hz = hazards(0, 0);
+  run(rc, 14);
+  assert.equal(rc.info().level, 0);
+  assert.equal(rc.takeRestart(), true);
+  // game.js: clearHold(), redFlagRestart() declines, rewound() never runs.
+  rc.clearHold();
+  assert.equal(rc.otEnabled(), false, "held off: the leader has not crossed since the flag");
+  leader.lap = 11;
+  assert.equal(rc.otEnabled(), true, "re-enabled at the leader's next crossing");
+});
+
+test("game.js redFlagRestart lowers the hold only on the path that rewinds the lap", () => {
+  const body = symbolSource("function redFlagRestart()");
+  assert.match(body, /if \(state !== "race" \|\| !track \|\| cars\.some\(\(c\) => c\.finished\)\) return false;/);
+  assert.match(body, /raceCtl\.rewound\(\);/);
+  assert.ok(body.indexOf("raceCtl.rewound()") > body.indexOf("c.lap = lapNew"), "after the rewind, past the decline");
 });
 
 test("it is inert when the side-world is down or the race is not running", () => {
