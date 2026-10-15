@@ -734,6 +734,7 @@
     "js/garage/scene-prims.js",
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",
+    "js/garage/scene-crew.js",
     "js/garage/scene.js",
     "js/circuits/bahrain.js",
     "js/circuits/monaco.js",

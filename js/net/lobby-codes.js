@@ -112,6 +112,7 @@ const LobbyCodes = (function () {
    * @param {(code?: string) => any} api.makeAnswer
    * @param {(code?: string) => any} api.acceptAnswer
    * @param {() => {ok:false,error:string}} api.cancelledResult
+   * @param {() => number} [api.getOperation]
    * @param {(box: Element|null, el: Element|null) => boolean} [api.has]
    * @param {(host: Element|null) => void} [api.focusInto]
    * @param {(e: object) => Element|undefined} [api.shownStep]
@@ -143,6 +144,19 @@ const LobbyCodes = (function () {
         : !!(e.scan && e.scan.contains && e.scan.contains(document.activeElement));
       if (e.scan) e.scan.hidden = true;
       if (hadFocus && focusInto && shownStep) focusInto(shownStep(e));
+    }
+
+    // Clear invite/QR/answer widgets per attempt (retry used to show a dead peer).
+    function resetSteps() {
+      const e = els();
+      for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
+      if (e.answerHint) e.answerHint.hidden = true;
+      if (e.answerActions) e.answerActions.hidden = true;
+      if (e.answerRaw) e.answerRaw.hidden = true;
+      if (e.answerWait) e.answerWait.hidden = false;
+      if ($("vs-qr-wrap")) $("vs-qr-wrap").hidden = true;
+      if (e.answerQrWrap) e.answerQrWrap.hidden = true;
+      stopScan();
     }
 
     async function scan(kind) {
@@ -179,13 +193,19 @@ const LobbyCodes = (function () {
       return res;
     }
 
+    let pasteGeneration = 0;
     async function pasteInto(kind) {
+      const paste = ++pasteGeneration;
+      const operation = api.getOperation ? api.getOperation() : null;
+      const current = () => paste === pasteGeneration && (!api.getOperation || operation === api.getOperation());
       let text = "";
       try { text = await ApexClipboard.read(); }
       catch (err) {
+        if (!current()) return cancelledResult();
         say("Could not read the clipboard — paste into the box instead.", true);
         return { ok: false, error: "denied" };
       }
+      if (!current()) return cancelledResult();
       if (!codeFrom(text)) { say("There is no code on the clipboard.", true); return { ok: false, error: "empty" }; }
       return deliver(kind, text);
     }
@@ -244,7 +264,7 @@ const LobbyCodes = (function () {
     }
 
     return {
-      codeFrom, deliver, scan, stopScan, pasteInto, copy, handOff,
+      codeFrom, deliver, scan, stopScan, pasteInto, copy, handOff, resetSteps,
       paintQr, drawQr, drawAnswerQr, shareInvite, shareAnswer, canShare,
     };
   }

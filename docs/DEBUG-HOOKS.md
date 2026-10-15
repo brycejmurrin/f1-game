@@ -5218,6 +5218,13 @@ opt-in **`TLX`** backend:
 localStorage.setItem('apex26.gfxBackend','three'); location.reload()
 ```
 
+**Boot step timeout (localStorage only):** `apex26.gfxBootStepMs` is read once at
+load in `js/render/renderer-boot.js`. It can only **raise** the default 8 s
+per-step cap for XR probe / backend script / `Gfx.create` (never lower it); values
+above 60 s are clamped. Software-GL CI and specs that measure TLX boot (e.g.
+`track-switch-memory.spec.js`) set `45000` by hand when SwiftShader needs longer
+than 8 s. There is no in-game writer — set before reload.
+
 On TLX, `window.scene`, `camera`, `renderer` and `THREE` are published on boot
 (look for the `[TLX] … exposed` console line), so the extension finds the scene
 and the usual console workflow applies:
