@@ -38,11 +38,16 @@ const SurveyHud = (function () {
     return false;
   }
 
+  function pageStorage() {
+    try { return typeof localStorage !== "undefined" ? localStorage : null; }
+    catch (_) { return null; }   // even typeof can invoke a denied browser getter
+  }
+
   /** Live enabled() against the page's location + localStorage (showUnavailable). */
   function armed() {
     return enabled(
       typeof location !== "undefined" ? location : null,
-      typeof localStorage !== "undefined" ? localStorage : null);
+      pageStorage());
   }
 
   /** Place touch groups into the docks so layout is measurable without Input. */
@@ -206,7 +211,7 @@ const SurveyHud = (function () {
     const loc = hooks.location || (typeof location !== "undefined" ? location : null);
     const store = ("localStorage" in hooks)
       ? hooks.localStorage
-      : (typeof localStorage !== "undefined" ? localStorage : null);
+      : pageStorage();
     if (!enabled(loc, store)) return false;
     const surveyHooks = {
       $: hooks.$, els: hooks.els, document: hooks.document,

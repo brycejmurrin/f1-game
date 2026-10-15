@@ -25,13 +25,18 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - A car handed back after a heavy shunt never drives backwards at speed (#2167).
 - AI cars hold their line under the Safety Car and VSC instead of weaving to defend (#2175).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
+- The game still opens when the browser blocks access to saved data at startup.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
+- Data Hub cancels superseded telemetry selections, clears old session content when a Grand Prix or year has no data, and keeps keyboard navigation inside telemetry dialogs.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
 - Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
 - Restoring a career backup keeps your Daily Challenge class bests, so the share line no longer reads NO LAP (#2165).
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
 - Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
 - A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
+- Track Designer on a landscape phone: the map gets most of the screen and UNDO / FIT VIEW sit beside it instead of covering it (#2152).
+- Touch: sliders, dropdowns and fold-out rows (OVERALL SPEED, Spotify, EXTRA PAINT, EXTRA FUNDS, free-camera FOV) are big enough to tap (#2158).
+- Free camera with the lighting panel open: the camera bar no longer covers the panel's FREE CAMERA button on a phone (#2159).
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
