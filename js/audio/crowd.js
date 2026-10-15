@@ -425,3 +425,4 @@ var CrowdAudio = (function () {
     _bedGain() { return bedGain; },
   };
 })();
+Object.freeze(CrowdAudio);
