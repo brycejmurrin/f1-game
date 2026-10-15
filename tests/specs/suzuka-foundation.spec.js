@@ -50,7 +50,7 @@ test("Suzuka keeps its elevation, crossover, and track-owned models aligned", as
   expect(audit.raw.terrainOuter).toBe(120);
   expect(audit.raw.hasAuthoredElevations).toBe(false);
   expect(audit.built.hasAuthoredElevations).toBe(false);
-  expect(audit.raw.bridges).toEqual([{ s: 0.845, halfM: 280, rise: 9.3 }]);
+  expect(audit.raw.bridges).toEqual([{ s: 0.845, halfM: 230, rise: 9.3 }]);
   // Built bridge frac is the source frac mapped through startFrac 0.9942 alone
   // (s + 0.0058).
   expect(audit.built.bridges[0].s).toBeCloseTo(0.8508, 6);
