@@ -108,7 +108,7 @@ function editor(pieceId = "piece", options = {}) {
   const ids = new Map(), listeners = {}, frames = new Map(), writes = [], observers = [];
   let frame = 0, set = 'chase', profile = 'standard';
   class El {
-    constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.hidden = false; this.style = { removeProperty() {} }; this.isConnected = true; }
+    constructor(tag = 'div') { this.tagName = tag; this.children = []; this.attrs = {}; this.hidden = false; this.style = { removeProperty(k) { delete this[k]; } }; this.isConnected = true; }
     set id(v) { this._id = v; ids.set(v, this); } get id() { return this._id; }
     setAttribute(k, v) { this.attrs[k] = v; } getAttribute(k) { return this.attrs[k] ?? null; }
     hasAttribute(k) { return k in this.attrs; } removeAttribute(k) { delete this.attrs[k]; }
@@ -118,6 +118,14 @@ function editor(pieceId = "piece", options = {}) {
     contains(e) { return this === e || this.children.some(c => c.contains(e)); }
     closest(sel) { return sel === "#" + pieceId && this.id === pieceId ? this : null; }
     getBoundingClientRect() { return { left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20 }; }
+    get offsetWidth() {
+      if (this.hidden || this.id !== 'hud-arrange-bar') return 0;
+      return options.toolbarSize ? options.toolbarSize(ids).width : 320;
+    }
+    get offsetHeight() {
+      if (this.hidden || this.id !== 'hud-arrange-bar') return 0;
+      return options.toolbarSize ? options.toolbarSize(ids).height : 52;
+    }
     focus() { doc.activeElement = this; }
   }
   const body = new El(); body.dataset = {};
@@ -286,4 +294,43 @@ test('editor: tower hide/show includes DELTA and leaves SPEED independent', () =
   assert.equal(vis.textContent, 'HIDE', 'a delta-only tower is visible');
   vis.onclick();
   assert.deepEqual([...e.on], ['speed']);
+});
+
+
+test('editor: initial toolbar avoids the HUD using its visible content-sized box', () => {
+  const piece = { left: 110, top: 10, right: 210, bottom: 70, width: 100, height: 60 };
+  const e = editor('speed', { on: true, rect: piece, toolbarSize: ids => {
+    // The populated toolbar is wider and taller than either its empty shell
+    // or the hidden element's zero-size box. Size must include the live hint.
+    const current = ids.get('hud-arrange-name').textContent === 'Piece 100%' &&
+      ids.get('hud-arrange-hint').textContent === 'drag to move · pinch or − + to size';
+    return current ? { width: 800, height: 100 } : { width: 200, height: 52 };
+  } });
+  e.api.setEditing(true);
+  const bar = e.ids.get('hud-arrange-bar');
+  assert.equal(bar.hidden, false);
+  assert.equal(bar.offsetWidth, 800);
+  assert.equal(bar.offsetHeight, 100);
+  // Derive the painted slot from its actual dimensions and positioning.
+  const left = bar.style.left === '50%' ? (1000 - bar.offsetWidth) / 2 :
+    bar.style.right ? 1000 - 8 - bar.offsetWidth : 8;
+  const top = bar.style.top ? 8 : 500 - 8 - bar.offsetHeight;
+  const overlap = Math.max(0, Math.min(left + bar.offsetWidth, piece.right) - Math.max(left, piece.left)) *
+    Math.max(0, Math.min(top + bar.offsetHeight, piece.bottom) - Math.max(top, piece.top));
+  assert.equal(overlap, 0, 'the visible toolbar fits below the HUD rather than using a fictitious narrow top slot');
+  assert.ok(top > piece.bottom);
+});
+
+test('editor: toolbar uses the clear middle when every edge covers HUD content', () => {
+  const top = { left: 100, top: 8, right: 900, bottom: 108, width: 800, height: 100 };
+  const bottom = { left: 100, top: 392, right: 900, bottom: 492, width: 800, height: 100 };
+  const e = editor('speed', { on: true, rect: top, toolbarSize: () => ({ width: 800, height: 100 }) });
+  const control = e.doc.createElement('button'); control.getBoundingClientRect = () => bottom;
+  e.doc.querySelectorAll = () => [control];
+  e.api.setEditing(true);
+  const bar = e.ids.get('hud-arrange-bar');
+  assert.equal(bar.style.top, '50%'); assert.equal(bar.style.left, '50%');
+  assert.equal(bar.style.transform, 'translate(-50%, -50%)');
+  const painted = { top: (500 - bar.offsetHeight) / 2, bottom: (500 + bar.offsetHeight) / 2 };
+  assert.ok(painted.top > top.bottom && painted.bottom < bottom.top, 'neither edge readout is obscured');
 });

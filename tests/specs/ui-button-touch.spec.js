@@ -719,6 +719,33 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
   // the player this exists for, and the shape where pieces meet the docks.
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
+  test.describe("desktop toolbar placement", () => {
+    test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+
+    test("entry uses the populated toolbar size without a later position jump", async ({ page }) => {
+      await page.addInitScript(() => localStorage.setItem("apex26.textSize", '"large"'));
+      await page.goto("/");
+      await waitReady(page);
+      await page.evaluate(() => window.__apex.headless(true));
+      await openPauseSettings(page);
+      await page.evaluate(() => window.__apex.camera("chase"));
+      await page.locator("#pm-open-display").click();
+      await page.locator("#pm-hud-details > summary").click();
+      await page.locator("#pm-hud-arrange").click();
+      const bar = page.locator("#hud-arrange-bar");
+      const before = await bar.boundingBox();
+      expect(before).not.toBeNull();
+      // Re-evaluate the same selection: neither content nor HUD changed.
+      await page.locator("#hud-arrange-element").dispatchEvent("change");
+      const after = await bar.boundingBox();
+      expect(after).not.toBeNull();
+      expect(Math.abs(after.x - before.x)).toBeLessThan(1);
+      expect(Math.abs(after.y - before.y)).toBeLessThan(1);
+      expect(after.width).toBe(before.width);
+      expect(after.height).toBe(before.height);
+    });
+  });
+
   test("drag moves a piece, − / + size it, RESET restores it, DONE gives the pause card back", async ({ page }) => {
     await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
     await page.goto("/");
@@ -890,6 +917,11 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.evaluate(() => window.__apex.camera("chase"));
     await page.locator("#pm-open-display").click();
     await page.locator("#pm-hud-details > summary").click();
+    await page.evaluate(() => {
+      for (const [name, value] of [["--sal", "59px"], ["--sar", "59px"], ["--sab", "21px"]]) {
+        document.documentElement.style.setProperty(name, value);
+      }
+    });
     await page.locator("#pm-hud-arrange").click();
     await page.evaluate(() => {
       for (const id of ["rel", "strat", "inputs"]) HudLayout.set(id, { s: 200 });
@@ -898,6 +930,12 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     });
     // The fit still detects a lack of room, but cannot remove editor handles.
     expect(await page.locator("[data-hl-arr][data-col-drop]").count()).toBeGreaterThan(0);
+    const toolbar = await page.locator("#hud-arrange-bar").boundingBox();
+    expect(toolbar).not.toBeNull();
+    expect(toolbar.x).toBeGreaterThanOrEqual(59);
+    expect(toolbar.x + toolbar.width).toBeLessThanOrEqual(LANDSCAPE.width - 59);
+    expect(toolbar.y).toBeGreaterThanOrEqual(0);
+    expect(toolbar.y + toolbar.height).toBeLessThanOrEqual(LANDSCAPE.height - 21);
     const picker = page.locator("#hud-arrange-element");
     for (const id of ["rel", "strat", "inputs"]) {
       await picker.selectOption(id);

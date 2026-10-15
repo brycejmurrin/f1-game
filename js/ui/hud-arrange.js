@@ -110,7 +110,7 @@ const HudArrange = (() => {
       bar.setAttribute("aria-label", "Arrange HUD");
       bar.style.cssText = "position:fixed;z-index:9999;" +
         "display:flex;flex-wrap:wrap;box-sizing:border-box;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;" +
-        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:13px;width:max-content;max-width:calc(100vw - 24px);max-height:calc(100svh - 24px);overflow:auto;";
+        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:13px;width:max-content;max-width:calc(100vw - 24px - 2 * max(var(--sal,0px),var(--sar,0px)));max-height:calc(100svh - 24px - 2 * max(var(--sat,0px),var(--sab,0px)));overflow:auto;";
       const mk = (txt, aria, fn, id) => {
         const b = document.createElement("button");
         b.type = "button"; b.textContent = txt; b.id = id;
@@ -144,14 +144,13 @@ const HudArrange = (() => {
       bar.hidden = true;
       document.body.appendChild(bar);
     }
-    /* The toolbar covers whatever it sits on, and every edge has a readout: pick
-       the slot (top / bottom centre, top right, bottom left) that covers the
-       least of the pieces and controls, measured after each change. */
+    /* Prefer an edge, but use the middle when it covers less HUD content. */
     const SLOTS = [
       { top: "calc(8px + var(--sat,0px))", left: "50%", transform: "translateX(-50%)" },
       { bottom: "calc(8px + var(--sab,0px))", left: "50%", transform: "translateX(-50%)" },
       { top: "calc(8px + var(--sat,0px))", right: "calc(8px + var(--sar,0px))", transform: "none" },
       { bottom: "calc(8px + var(--sab,0px))", left: "calc(8px + var(--sal,0px))", transform: "none" },
+      { top: "50%", left: "50%", transform: "translate(-50%, -50%)" },
     ];
     function placeBar(rects) {
       if (!bar) return;
@@ -161,6 +160,7 @@ const HudArrange = (() => {
         { l: W / 2 - w / 2, t: H - 8 - h, r: W / 2 + w / 2, b: H - 8 },
         { l: W - 8 - w, t: 8, r: W - 8, b: 8 + h },
         { l: 8, t: H - 8 - h, r: 8 + w, b: H - 8 },
+        { l: W / 2 - w / 2, t: H / 2 - h / 2, r: W / 2 + w / 2, b: H / 2 + h / 2 },
       ];
       let best = 0, bestA = Infinity;
       for (let i = 0; i < boxes.length; i++) {
@@ -188,6 +188,7 @@ const HudArrange = (() => {
         visBtn.setAttribute("aria-pressed", off ? "true" : "false");
         visBtn.title = selected && !visIds(selected).length ? labelOf(selected) + " has its own setting in DISPLAY \u203a HUD" : "";
       }
+      placeBar(rectsNow());
     }
 
     /* ---- clash marks: HUD pieces against each other and against the touch controls ---- */
@@ -210,7 +211,6 @@ const HudArrange = (() => {
     }
     function markClashes() {
       const rects = rectsNow();
-      placeBar(rects);
       const pairs = clashes(rects);
       const hot = new Set();
       for (const [a, b] of pairs) { hot.add(a); hot.add(b); }
@@ -375,6 +375,8 @@ const HudArrange = (() => {
           const option = document.createElement("option"); option.value = id; option.textContent = label;
           picker.appendChild(option);
         }
+        // Measure the visible toolbar after paintBar has filled its current text.
+        bar.hidden = false;
         after();
       }
       if (!editing && was) {
