@@ -15,13 +15,18 @@ import {
   resolveContainedChild,
   resolveRepoDefault,
 } from "../lib/output-paths.mjs";
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
-const arg = (key, fallback) => {
-  const hit = process.argv.find((value) => value.startsWith(`--${key}=`));
-  return hit ? hit.slice(key.length + 3) : fallback;
-};
+// --help and a typo'd flag must answer before Chromium launches (#1708).
+const ARGV = process.argv.slice(2);
+exitIfHelp(ARGV, `usage: node tools/car/audit-parts.mjs [--cats=engine,aero] [--team=mclaren] [--url=http://127.0.0.1:3456]
+  Renders every catalog option of each category (and every factory preset)
+  through tools/carview.html into scratch/renders/parts/. Needs a static server
+  on --url and launches Chromium (PW_CHROMIUM overrides the executable).`);
+const F = parseFlags(ARGV, ["--cats", "--team", "--url"]);
+const arg = (key, fallback) => F.flag(`--${key}`, fallback);
 const TEAM = assertSafePathToken(arg("team", "mclaren"), "team");
 const URL = arg("url", "http://127.0.0.1:3456");
 const EXE = process.env.PW_CHROMIUM;

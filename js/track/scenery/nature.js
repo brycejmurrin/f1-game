@@ -343,14 +343,8 @@ const SceneryNature = (function () {
       }
       if (spotOccupied(a.c[0], a.c[2], false)) return false;
       const segments = ctx.lod(4, 3), trunkSegments = ctx.lod(5, 4);
-      // Check the same guarded primitive calls graph replay will use. Runtime
-      // dry runs write no vertices; the temporary arrays also suit VM emitters.
-      const trial = { pos: [], nrm: [], col: [], mat: [], idx: [], _dryRun: true };
-      if (addCyl(trial, o, 0.4 * s, 6.7 * s, [0.32, 0.23, 0.13], trunkSegments, b) === false) return false;
-      for (const [x, z, y, radius, lower, cap] of lobes) {
-        if (addFrustum(trial, at(x, y, z), 0.08 * s, radius * s, lower * s, col, segments, b) === false ||
-            addCone(trial, at(x, y + lower, z), radius * s, cap * s, col, segments, b) === false) return false;
-      }
+      // `whole`: graph.instance dry-runs the guarded primitives once and plants
+      // nothing unless every one passes, then reuses those verdicts (#2178).
       const landed = ctx.instance(`tree-lobed|${variant}|${segments}`, {
         o, r: a.r, u: a.u, t: a.t, s: [s, s, s], col,
       }, (rec) => {
@@ -361,7 +355,7 @@ const SceneryNature = (function () {
           rec.frustum([x, y, z], 0.08, radius, lower, TrackGraph.NODE_COLOR, segments);
           rec.cone([x, y + lower, z], radius, cap, TrackGraph.NODE_COLOR, segments);
         }
-      }, { kind: "tree", k, side, h, crown: "lobed", variant }, { roundNormals: true });
+      }, { kind: "tree", k, side, h, crown: "lobed", variant, whole: true }, { roundNormals: true });
       out._mat = 0; out._matAt = null;
       if (!landed) return false;
       spotTaken(a.c[0], a.c[2]);
@@ -882,9 +876,13 @@ const SceneryNature = (function () {
                  opts.forest || [0.20, 0.34, 0.20], 9, null);   // skirt
       addMountain(out, [x, baseY, z], w * 0.5, h, opts);
     };
-    const ridge = (x, z, baseY, ang, len, w, h, col) => {
-      // Skip if footprint half-extent reaches tarmac.
-      if (onTrack(x, z, Math.max(len, w) * 0.5 + ROAD_SKIRT)) {
+    // ridge(x, z, baseY, ang, len, w, h, col, opts?) — opts.profile ("massif") swaps the default flat-topped
+    // prism pair (reads as gabled blocks) for an elongated, noise-roughened rounded hill (addMountain with
+    // stretch = len/w); opts.rough (default 0.22) / opts.crest (default 0.35) shape it. Omitted = unchanged.
+    const ridge = (x, z, baseY, ang, len, w, h, col, opts) => {
+      const hill = opts && opts.profile;
+      // Skip if footprint half-extent reaches tarmac (a rounded hill's noisy foot reaches ~1.3x further).
+      if (onTrack(x, z, Math.max(len, w) * 0.5 * (hill ? 1.3 : 1) + ROAD_SKIRT)) {
         ctx.noteSuppressed("ridge", `ridge SUPPRESSED at x=${x.toFixed(0)} z=${z.toFixed(0)}: len=${len} w=${w}`);
         return;
       }
@@ -905,6 +903,13 @@ const SceneryNature = (function () {
       // the equivalent for its skirt (`baseY - 2`); ridge() was the sibling that
       // never got it.
       const SINK = 2;
+      if (hill) {
+        addMountain(out, [x, baseY - SINK, z], w * 0.5, h + SINK, {
+          profile: opts.profile, stretch: len / w, right: r, fwd: f, seed: Math.round(x * 0.37 + z * 0.29),
+          rough: opts.rough != null ? opts.rough : 0.22, crest: opts.crest != null ? opts.crest : 0.35,
+          forest: col, rock: col, snow: col, snowline: 9 });
+        return;
+      }
       addPrism(out, [x, baseY - SINK, z], [w, h + SINK, len], col, [r, [0, 1, 0], f]);
       const jr = hash(x * 0.13 + z * 0.11 + ang);
       const a2 = ang + (jr - 0.5) * 0.6;
@@ -1426,7 +1431,7 @@ const SceneryNature = (function () {
     // edge stays at least `gap` beyond the road edge — i.e. the per-tree `dist`
     // accounts for the canopy radius (which grows with tree height), so a tree
     // called at small gap can never poke its canopy through a wall/hedge/fence.
-    //   opts: { spacing, density, hMin, hMax, col, col2, pineFrac }
+    //   opts: { spacing, density, hMin, hMax, col, col2, pineFrac, palmFrac, palmCol, crown, treeOptions }
     // Canopy outer radius for a species at height h — the SINGLE source of truth
     // for "how far does this tree's foliage actually reach sideways". Both
     // forestEdge() and the FURN roadside scatter derive placement from it.
@@ -1493,21 +1498,28 @@ const SceneryNature = (function () {
       // quantises to whole nodes (round(stepM / 4)), so the honest grid is
       // multiples of 4 m: spacing 15 → 16 m, spacing 24 → 24 m.
       const step = opts.spacing != null ? Math.max(ds, opts.spacing) : 7 - dens * 4;
-      const detailed = opts.treeOptions && opts.treeOptions.crown === "lobed" ? opts.treeOptions : null;
+      // opts.crown:"lobed" is shorthand for treeOptions:{crown:"lobed"}; opts.palmFrac (default 0) turns
+      // that share of the line into palms (frond colour = opts.palmCol || col2).
+      const treeOpts = opts.treeOptions || (opts.crown === "lobed" ? { crown: "lobed" } : null);
+      const detailed = treeOpts && treeOpts.crown === "lobed" ? treeOpts : null;
+      const palmFrac = opts.palmFrac > 0 ? Math.min(1, opts.palmFrac) : 0;
+      const palmCol = opts.palmCol || treeCol;
       const limit = detailed && detailed.maxDetailed !== undefined ? detailed.maxDetailed : 30;
       let accepted = 0;
       ctx.along(s0, s1, step, (k) => {
         const s = hash(k * 4.3 + side * 1.1);
         const h = hMin + s * (hMax - hMin);
-        const isPine = hash(k * 6.7 + side * 0.7) < pineFrac;
-        const canopy = canopyR(isPine ? "pine" : "broad", h);
+        const isPalm = palmFrac > 0 && hash(k * 2.3 + side * 3.7) < palmFrac;
+        const isPine = !isPalm && hash(k * 6.7 + side * 0.7) < pineFrac;
+        const canopy = canopyR(isPalm ? "palm" : isPine ? "pine" : "broad", h);
         // dist so the canopy's inner edge sits `gap` beyond the road edge
         const dist = gap + canopy;
         // stagger a back row slightly for depth on the densest treelines
         const back = (dens > 0.6 && hash(k * 8.9 + side) < 0.4) ? canopy * 1.4 : 0;
         const d = clearTreeDist(k, side, dist + back, canopy);
         if (d == null) return;
-        if (isPine) pine(k, side, d, h, pineCol);
+        if (isPalm) palm(k, side, d, h, palmCol);
+        else if (isPine) pine(k, side, d, h, pineCol);
         else if (detailed && Number.isInteger(limit) && limit > 0 && limit <= 60 && accepted < limit) {
           const result = tree(k, side, d, h, treeCol, detailed);
           if (result === true) accepted++;

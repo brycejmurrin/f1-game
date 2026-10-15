@@ -13,6 +13,7 @@
  *
  * Run: node --test tests/unit/census-verdict.test.mjs
  */
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -172,7 +173,8 @@ test("the Verdict step runs the tool with the image and the job's CENSUS_LS", ()
   const v = steps.find((s) => /^Verdict — /.test(s.name || ""));
   assert.equal(v.run, "node tools/gfx/census-verdict.mjs");
   assert.equal(v.env.IMAGE, "${{ matrix.image }}");
-  assert.equal(v.if, "${{ always() && needs.plan.outputs.census_only != 'true' }}");
+  assert.equal(v.if, "${{ !cancelled() && needs.plan.outputs.census_only != 'true' }}",
+    "a failed producer still reaches the verdict; cancellation must not fabricate a hardware failure");
   assert.equal(WF.jobs.census.env.CENSUS_LS, "${{ needs.plan.outputs.ls }}", "the gate reads the dispatch ls from the job env");
   // The files the legs write are the files the tool reads.
   const jsons = steps.map((s) => String(s.run || "").match(/--json "game-(\w+)-\$\{\{ matrix\.image \}\}\.json"/)).filter(Boolean).map((m) => m[1]);

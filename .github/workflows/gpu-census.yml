@@ -471,7 +471,7 @@ jobs:
       # softAdapter true, WGX not bound, or TLX/WGX off the native present path.
       # It reads IMAGE, CENSUS_LS (job env) and GITHUB_STEP_SUMMARY.
       - name: Verdict — fail the job on what the game reported
-        if: ${{ always() && needs.plan.outputs.census_only != 'true' }}
+        if: ${{ !cancelled() && needs.plan.outputs.census_only != 'true' }}
         shell: bash
         env:
           IMAGE: ${{ matrix.image }}

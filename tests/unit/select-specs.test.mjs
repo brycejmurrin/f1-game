@@ -6,12 +6,13 @@
 // the job will see every day. The skip list is load-bearing: a selector that
 // silently drops the expensive spec reads as "covered", which is the same
 // lie the coverage reporter exists to catch from the other side.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SPILL_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
-  FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST,
+  FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST, FAT_UI_MIN_PIECES,
   SOLO_OWN_TIMEOUT_SEC, SELECTED_SETUP_MIN, SELECTED_WRAP_MIN, piecesToFitCap,
   partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, racingCircuitIds, foundationSpec, CIRCUIT_FILTERED_TESTS, CIRCUIT_DEF,
@@ -244,7 +245,7 @@ test("terrain and ordinary parts leftovers use only spare over-budget capacity (
   assert.deepEqual(terrainJobs.map((j) => j.shard), Array.from({ length: nTerrain }, (_, i) => `${i + 1}/${nTerrain}`));
   assert.ok(terrainJobs.every((j) => j.specs === terrain && j.perTest === SELECTED_GATE.perTestTimeoutSec),
     "existing slow-pool sharding and per-test limits apply");
-  assert.ok(jobs.every((j) => j.timeout <= (j.workers > 1 ? FAT_UI_SELECTED_JOB_MIN : MAX_SELECTED_JOB_MIN)));
+  assert.ok(jobs.every((j) => j.timeout <= (/(career|career-season|career-hub|hud-layout)\.spec\.js/.test(j.specs) ? FAT_UI_SELECTED_JOB_MIN : MAX_SELECTED_JOB_MIN)));
   const exhausted = plan(2); // 720 - 87 < 638: the earlier slow candidate wins.
   assert.deepEqual(exhausted.overBudgetRun.map((s) => s.file), [slow]);
   assert.deepEqual(exhausted.skipped.map((s) => s.file), [terrain], "unused but insufficient capacity still drops by name");
@@ -333,7 +334,7 @@ test("a saturated wide plan runs props-over-road and parts-physics without displ
   const propJobs = jobs.filter((j) => j.specs.split(" ").includes(props));
   assert.deepEqual(propJobs.map((j) => j.shard), ["1/2", "2/2"], "both road-prop shards run");
   assert.equal(jobs.filter((j) => j.specs.split(" ").includes(parts)).length, 1, "parts runs in one job");
-  assert.ok(jobs.every((j) => j.timeout <= (j.workers > 1 ? FAT_UI_SELECTED_JOB_MIN : MAX_SELECTED_JOB_MIN)),
+  assert.ok(jobs.every((j) => j.timeout <= (/(career|career-season|career-hub|hud-layout)\.spec\.js/.test(j.specs) ? FAT_UI_SELECTED_JOB_MIN : MAX_SELECTED_JOB_MIN)),
     "existing ordinary and fat-UI job caps stay unchanged");
 });
 
@@ -898,7 +899,9 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
     "the selected job must pass matrix.circuits to APEX_CIRCUITS, or the circuit lane runs the whole fleet");
   // The deploy gate runs it now: no caller-key exclusion on the plan job.
   const selectJob = /\n  select:\n[\s\S]*?\n  selected:\n/.exec(yml)?.[0] || "";
-  assert.ok(selectJob && !/concurrency_key == ''/.test(selectJob),
+  // The JOB's `if:` (the ship-filter STEP inside it sits out the fast tier on purpose since 2026-10-15).
+  const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
+  assert.ok(selectJob && selectJobIf && !/concurrency_key == ''/.test(selectJobIf),
     "the select job must not skip itself on the Pages call — exact-commit deploys need the change-aware gate too");
 });
 
@@ -1328,7 +1331,10 @@ test("full HUD leg has its modeled timeout margin through artifact cleanup", () 
     "setup and artifact cleanup cannot consume the test work budget");
 });
 
-test("career / hud-layout run 2 workers a leg, and split by native --shard only when one leg cannot fit its cap", () => {
+test("career / hud-layout run as ≥2 native --shard pieces of ONE worker each (never two workers on one runner)", () => {
+  // 2026-10-15: the two-worker leg starved its own boots on a 2-vCPU llvmpipe
+  // runner (Pages 38695272346 oversize-career: no __apex in 45 s while the
+  // sibling worker ran three track builds; 36/37 passed, siblings green).
   // Two workers per leg, billed at FAT_UI_SEC_PER_TEST (PR #1075 37446472987).
   // ONE leg while it fits; C4 (2026-10-14): ship 38525816649's
   // oversize-hud-layout billed 945 s under the 18 min ceiling and was killed
@@ -1350,10 +1356,12 @@ test("career / hud-layout run 2 workers a leg, and split by native --shard only 
       .filter((j) => j.specs.includes(f));
     assert.ok(jobs.length >= 1, `${f} runs`);
     const billed = jobs.reduce((t, j) => t + j.sec, 0);
-    assert.ok(billed >= (n * FAT_UI_SEC_PER_TEST) / 2 - jobs.length,
-      `${f} billed ${billed}s must floor at ~${FAT_UI_SEC_PER_TEST}s/test / 2 workers (PR #1075 37446472987)`);
+    assert.ok(billed >= n * FAT_UI_SEC_PER_TEST - jobs.length,
+      `${f} billed ${billed}s must floor at ~${FAT_UI_SEC_PER_TEST}s/test (PR #1075 37446472987), one worker`);
+    assert.ok(jobs.length >= FAT_UI_MIN_PIECES, `${f} runs as at least ${FAT_UI_MIN_PIECES} pieces (${jobs.length})`);
+    assert.deepEqual(jobs.map((j) => j.shard), jobs.map((_, i) => `${i + 1}/${jobs.length}`), `${f} pieces are native shards`);
     for (const j of jobs) {
-      assert.equal(j.workers, 2, `${f} runs two workers so wall time halves`);
+      assert.equal(j.workers, 1, `${f} runs ONE worker per piece: two Chromiums starve each other on a 2-vCPU runner`);
       assert.equal(j.specs, f, `${f} never shares a leg`);
       assert.equal(j.timeout, shardCapMin(j.sec, j.perTest, FAT_UI_SELECTED_JOB_MIN),
         `${f} kill timer must use the fat-UI ceiling`);
@@ -1361,17 +1369,10 @@ test("career / hud-layout run 2 workers a leg, and split by native --shard only 
       assert.ok(j.sec / 60 + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN <= j.timeout,
         `${j.name}: ${j.sec}s of work + setup + wrap-up must fit its ${j.timeout} min cap`);
     }
-    const one = (n * FAT_UI_SEC_PER_TEST) / 2 / 60 + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN <= FAT_UI_SELECTED_JOB_MIN;
-    if (one) {
-      assert.equal(jobs.length, 1, `${f} fits one leg and must not pay a second setup`);
-      assert.equal(jobs[0].shard, "", `${f}: one leg carries no --shard`);
-    } else {
-      assert.ok(jobs.length > 1, `${f} cannot fit one leg`);
-      assert.deepEqual(jobs.map((j) => j.shard), jobs.map((_, i) => `${i + 1}/${jobs.length}`),
-        `${f} is split as native --shard i/${jobs.length}`);
-      assert.equal(jobs.length, piecesToFitCap((n * FAT_UI_SEC_PER_TEST) / 2, n, FAT_UI_SELECTED_JOB_MIN),
-        "no more pieces than the cap needs");
-    }
+    // Exactly the pieces the cap needs, never fewer than FAT_UI_MIN_PIECES
+    // (one worker each, so the whole spec is billed at FAT_UI_SEC_PER_TEST).
+    assert.equal(jobs.length, Math.max(FAT_UI_MIN_PIECES, piecesToFitCap(n * FAT_UI_SEC_PER_TEST, n, FAT_UI_SELECTED_JOB_MIN)),
+      `${f}: no more pieces than the cap needs, and never fewer than ${FAT_UI_MIN_PIECES}`);
   }
   const terrain = "tests/specs/terrain-over-road.spec.js";
   const tJobs = shards(fit([terrain], 30, { rank: () => 0, db: EMPTY }), EMPTY)
@@ -1381,7 +1382,7 @@ test("career / hud-layout run 2 workers a leg, and split by native --shard only 
     `terrain job cap ${tJobs.map((j) => j.timeout)} exceeds ${MAX_SELECTED_JOB_MIN}`);
 });
 
-test("C4: a fat-UI leg that cannot fit its cap splits into native --shard pieces; one that fits stays one leg", () => {
+test("C4: a fat-UI leg that cannot fit its cap splits into more native --shard pieces; one that fits stays at FAT_UI_MIN_PIECES", () => {
   // Ship 38525816649 / 38522250272: oversize-hud-layout expected 945 / 923 s
   // and was killed by the then-18 min job cap (39/42 and still running, 0
   // failed); the verdict then read "left no junit". ff0e80e9d later raised
@@ -1392,14 +1393,16 @@ test("C4: a fat-UI leg that cannot fit its cap splits into native --shard pieces
   const n = declaredTests(hud);
   const room = FAT_UI_SELECTED_JOB_MIN - SELECTED_SETUP_MIN - SELECTED_WRAP_MIN;
   const plan = (billedSec) => {
-    const db = { specs: { [hud]: { s: [1, 2, 3].map((i) => [`2026-10-1${i}T00:00:00Z`, "llvmpipe", 2 * billedSec, n]) } } };
+    // One worker per piece bills the measured time as is (it was halved for two workers until 2026-10-15).
+    const db = { specs: { [hud]: { s: [1, 2, 3].map((i) => [`2026-10-1${i}T00:00:00Z`, "llvmpipe", billedSec, n]) } } };
     return shards({ selected: [], oversize: [{ file: hud, tests: n, rank: 0 }] }, db, new Set());
   };
-  // The measured 945 s leg: fits the current cap, so one leg with no --shard.
+  // The measured 945 s leg: fits the current cap, so exactly FAT_UI_MIN_PIECES
+  // one-worker pieces (2026-10-15; it was one two-worker leg).
   if (945 / 60 <= room) {
     const one = plan(945);
-    assert.equal(one.length, 1, `945 s fits ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: one leg`);
-    assert.equal(one[0].shard, "", "one leg carries no --shard");
+    assert.equal(one.length, FAT_UI_MIN_PIECES, `945 s fits ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: the minimum pieces`);
+    assert.deepEqual(one.map((j) => j.shard), one.map((_, i) => `${i + 1}/${one.length}`), "native shards");
   }
   // A leg ~2.2x the room cannot fit: it splits, bills the whole spec, every piece fits.
   const big = Math.round(room * 60 * 2.2);
@@ -1407,12 +1410,12 @@ test("C4: a fat-UI leg that cannot fit its cap splits into native --shard pieces
   const total = jobs.reduce((t, j) => t + j.sec, 0);
   assert.ok(total >= big - jobs.length, `the plan still bills the whole spec (${total}s of ${big}s)`);
   assert.ok(jobs.length >= 2, `a ${big} s fat leg cannot fit ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: ${jobs.length} leg(s)`);
-  assert.equal(jobs.length, piecesToFitCap(big, n, FAT_UI_SELECTED_JOB_MIN), "no more pieces than the cap needs");
+  assert.equal(jobs.length, Math.max(FAT_UI_MIN_PIECES, piecesToFitCap(big, n, FAT_UI_SELECTED_JOB_MIN)), "no more pieces than the cap needs (and never fewer than FAT_UI_MIN_PIECES)");
   for (const j of jobs) {
     assert.ok(Math.ceil(j.sec / 60) + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN <= j.timeout, `${j.name}: ${j.sec}s + setup + wrap > ${j.timeout} min`);
     assert.ok(j.timeout <= FAT_UI_SELECTED_JOB_MIN, `${j.name}: cap ${j.timeout} above the fat-UI ceiling`);
     assert.match(j.shard, /^\d+\/\d+$/, "a native Playwright shard, not a re-packed file list");
-    assert.equal(j.workers, 2);
+    assert.equal(j.workers, 1);
   }
   // The packed-leg ceiling is unchanged by this split; only ff0e80e9d moved the fat-UI one.
   assert.equal(MAX_SELECTED_JOB_MIN, 18);

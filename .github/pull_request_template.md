@@ -1,3 +1,5 @@
+CHANGELOG: add a player-facing entry under the current `build` in CHANGELOG.md, or write `no player-facing change`.
+
 ## Goal
 <!-- Written when the PR opens, before the work is done; edit only if the ask changes.
      What the user asked for, in their words, and the change this branch makes to

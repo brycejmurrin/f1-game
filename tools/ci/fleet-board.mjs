@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // fleet-board.mjs — the backlog's phone view and the claim mirror, run hourly by .github/workflows/fleet.yml.
-// @doc Fleet board: one pinned issue listing ready / claimed / blocked issues, open PRs and live claims; mirrors claims onto the `claimed` label; syncs .github/labels.json.
+// @doc Fleet board: pinned issue of ready/claimed/blocked issues, PRs, live claims; mirrors the `claimed` label; syncs labels.
 // Full description: Reads the open issues and PRs (gh api) and the live claims on claude/claims-board (who-is-on-it.mjs), then (1) syncs the labels in .github/labels.json, (2) keeps the `claimed` label true — an open issue is claimed while a live claim names `#<n>` or an open PR body says `Closes #<n>`, and gets `ready` back when neither holds — and (3) rewrites the pinned "Fleet board" issue. Without --apply it only prints.
 // @skill ci-watch
 //
@@ -103,7 +103,12 @@ export function readLabels(root = ROOT) {
   const list = JSON.parse(fs.readFileSync(path.join(root, ".github/labels.json"), "utf8"));
   for (const l of list) {
     if (!/^[0-9a-f]{6}$/i.test(l.color || "")) throw new Error(`label ${l.name}: color must be 6 hex digits`);
-    if (!l.name || !l.description) throw new Error(`label ${JSON.stringify(l)}: name and description required`);
+    if (typeof l.name !== "string" || !l.name || typeof l.description !== "string" || !l.description)
+      throw new Error(`label ${JSON.stringify(l)}: name and description must be non-empty strings`);
+    for (const [field, max] of [["name", 50], ["description", 100]]) {
+      const length = Array.from(l[field]).length;
+      if (length > max) throw new Error(`label ${JSON.stringify(l.name)}: ${field} must be ${max} characters or fewer (got ${length})`);
+    }
   }
   return list;
 }

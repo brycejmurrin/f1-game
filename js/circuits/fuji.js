@@ -1,5 +1,5 @@
 /* Apex 26 — FUJI circuit definition (data only). Retired circuit (`classic: true`).
-   Japanese GP 2007-2008. Mount Fuji to the north; the 1.475 km pit straight is the longest in the set.
+   Japanese GP 2007-2008. Mount Fuji to the west (bearing 266.1°); the 1.475 km pit straight is the longest in the set.
 
    Centreline: OpenStreetMap (ODbL-1.0), stitched by tools/track/stitch-osm-ring.mjs
    and projected by tools/track/import-circuit-path.mjs. The bacinger/f1-circuits
