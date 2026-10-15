@@ -65,7 +65,7 @@
 (window.TrackScenery = window.TrackScenery || {})["okayama"] =
   function (api) {
       const { n, hash, every, anchor, onTrack, terrainYAt,
-        tree, bush, hedge, forestEdge, building, grandstandEx, spectatorHill,
+        tree: rawTree, bush, hedge, forestEdge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
         sponsorHoarding, place, ridge, groundPatch,
         modelGroup, vadd, MAT, seat, indexSolid, overheadSpan, addBox, addCyl } = api;
@@ -123,6 +123,14 @@
                          [0.20, 0.34, 0.56], [0.64, 0.64, 0.66], [0.30, 0.44, 0.34]];
       // Canopy mix used by the full-lap tree wall and every clump behind it.
       const CANOPY    = [LEAF, LEAF_D, LEAF_M, LEAF_L, LEAF_B, LEAF_Y, LEAF_M, LEAF_D];
+      // Species by colour (survey a1: every tree rendered as a fir cone). Dark
+      // sugi (CEDAR) keeps the conifer; bamboo is a narrow columnar clump; the
+      // rest are lobed broadleaf crowns. maxDetailed bounds the lobed vert cost.
+      const tree = (k, side, dist, h, col) =>
+        col === CEDAR ? rawTree(k, side, dist, h, col)
+          : rawTree(k, side, dist, h, col,
+              col === BAMBOO || col === BAMBOO_D ? { crown: "columnar" }
+                : { crown: "lobed", maxDetailed: 40 });
 
       // Wooded hillside behind the treeline. ridge() needs world x/z plus a
       // finite heading, and refuses to build within ~47 m of the road — so the
@@ -232,7 +240,7 @@
           const ranks = h > 0.86 ? 3 : 2;
           for (let r = 0; r < ranks; r++) {
             const hr = hash(k * 7 + r * 53 + (side < 0 ? 13 : 71));
-            const dist = 13 + r * 8.5 + hr * 4.5;
+            const dist = 12 + r * 8.5 + hr * 4.5;
             const a = anchor(k, side, dist);
             if (!Number.isFinite(a.c[0]) || !Number.isFinite(a.c[2])) continue;
             if (onTrack(a.c[0], a.c[2], 6)) continue;
@@ -340,13 +348,20 @@
       // facilities guide + area_info.pdf). overheadSpan owns the deck; a
       // track-centred modelGroup was footprint-rejected. ENKEI paddock bridge
       // left out — exact frac UNCERTAIN.
+      // Re-keyed 0.995 -> 0.048 (survey a1): at 0.995 it sat 18 m before the
+      // line and read as a second start gantry; 0.048 is the control tower's
+      // frac, so it is the tower <-> main-stand link the brief names. The
+      // piers now stand 3.5 m beyond the road edge (~11 m), clear of the
+      // 8.1-9.9 m barrier band, and the deck is concrete with a dark soffit
+      // so it no longer matches the red/black gantry.
       overheadSpan({
-        id: "okayama-dunlop-bridge", frac: 0.995,
-        clearance: 5.8, thickness: 0.85, depth: 3.2,
-        color: STEEL, required: true,
+        id: "okayama-dunlop-bridge", frac: 0.048,
+        clearance: 5.8, thickness: 0.85, depth: 3.2, supportGap: 3.5,
+        color: CONC, supportColor: WALL_GREY, soffitColor: [0.10, 0.10, 0.12],
+        required: true,
       });
-      for (let i = 0; i < 6; i++)                     // paddock apron slabs
-        pad(0.006 + i * 0.010, 1, 22, [26, 0.08, 22], APRON, 0);
+      for (let i = 0; i < 6; i++)                     // paddock apron slabs, alternating tone
+        pad(0.006 + i * 0.010, 1, 22, [26, 0.08, 22], i & 1 ? APRON_L : APRON, 0);
       cameraTower(K(0.0660), 1, 14);
       for (let i = 0; i < 5; i++)                     // tool carts on the pit wall
         safeBox(0.020 + i * 0.0085, 1, 6.8, [1.6, 1.1, 0.9],
@@ -363,7 +378,7 @@
       //    closing immediately behind its top row. Behind and beside it: the
       //    commentary box, a scoreboard, the sponsor run at the stand foot and
       //    a pair of open terraces where the covered bank runs out.
-      grandstandEx(0.015, -1, 10, 110, null, null);
+      grandstandEx(0.015, -1, 10, 80, null, null);
       forestEdge(0.985, 0.075, -1, 30, { col: LEAF, h: 12, rows: 2 });
       hill(0.030, -1, 62, 150, 34, 14, [0.27, 0.39, 0.22]);
       hill(0.010, -1, 62, 120, 26, 11, [0.29, 0.41, 0.23]);
