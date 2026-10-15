@@ -195,6 +195,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-ui-lazy.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
+  // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
+  // plus its plan gate (nightly skip, push request) executed on a scratch repo; < 1 s.
+  "tests/unit/census-verdict.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/change-kind.test.mjs",
   "tests/unit/changed-files.test.mjs",
@@ -817,6 +820,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
+  "tests/unit/skill-hint-hook.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
   "tests/unit/skill-routing-eval.test.mjs",
@@ -867,6 +871,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,
   // a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.
   "tests/unit/storm-weather.test.mjs",
+  // SubagentStop report-contract hook (.claude/hooks/subagent-contract.py): spawns it on fake payloads, < 1 s.
+  "tests/unit/subagent-contract-hook.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
   // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
   "tests/unit/survey-hud.test.mjs",
