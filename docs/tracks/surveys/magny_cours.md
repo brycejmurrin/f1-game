@@ -9,12 +9,11 @@
 | Batch | Frames | Path | Status |
 |--------|--------|------|--------|
 | Sector + landmarks (day · dry) | 16 | `artifacts/shots/tracks/magny_cours/s1-*` … `s3-*` | **Committed** (`git add -f`) |
-| Time-of-day heroes (dawn / dusk / night · dry) | 18 | `artifacts/shots/tracks/magny_cours/tod-*` | **Committed** |
-| Weather matrix (wet / rain / overcast / fog) | ~20 planned | same tree | **Deferred** — needs shared `shot.mjs --weather` batch after tooling PR |
+| Hero weather / lighting (5 views) | 20 | `pit-*`, `ferme-*`, `adelaide-*`, `chateau-*`, `lycee-*` | **Committed** — `shot.mjs --batch` after rebase on shared shot tooling |
 
-**34** JPEGs total (q≈80, max width 1280px, each &lt;300 KB). Labels: `view · time-of-day · weather`.
+**36** JPEGs total (`--jpeg --present-timeout 90 --capture-retries 4 --wait 120`, SwiftShader). Each q≈80, max width 1280px, &lt;300 KB. Labels: `view · time-of-day · weather`.
 
-Engine weather enum (`js/game.js`): `dry` | `wet` | `rain` | `overcast` | `fog`. Time of day: `dawn` | `day` | `dusk` | `night`. Circuit `furniture.lamp: "none"` and `night: false` — night frames are intentionally dark (backlog W1).
+Engine weather: `dry` | `wet` | `rain` | `overcast` | `fog` | `storm`. Time of day: `dawn` | `day` | `dusk` | `night`. Circuit `furniture.lamp: "none"` — night heroes stay very dark (W1).
 
 ---
 
@@ -51,7 +50,7 @@ Sectors (racing lap `s`, curated splits `sectors: [0.335, 0.693]`):
 
 ---
 
-## Panel grids (committed shots, 34 frames)
+## Panel grids (committed shots, 36 frames)
 
 Path: `artifacts/shots/tracks/magny_cours/` (JPEG q80, max width 1280px).
 
@@ -76,29 +75,52 @@ Path: `artifacts/shots/tracks/magny_cours/` (JPEG q80, max width 1280px).
 | ![chateau deau · day · dry](../../../artifacts/shots/tracks/magny_cours/s3-chateau-deau-day-dry.jpg)<br/>chateau deau · day · dry | ![imola seq · day · dry](../../../artifacts/shots/tracks/magny_cours/s3-imola-seq-day-dry.jpg)<br/>imola seq · day · dry | ![lycee · day · dry](../../../artifacts/shots/tracks/magny_cours/s3-lycee-day-dry.jpg)<br/>lycee · day · dry |
 | ![main straight · day · dry](../../../artifacts/shots/tracks/magny_cours/s3-main-straight-day-dry.jpg)<br/>main straight · day · dry | — | — |
 
-### Time of day (dry weather)
+### Hero weather and lighting (pit · ferme · Adelaide · Château · Lycée)
+
+#### pit
 
 | | | |
 |:---:|:---:|:---:|
-| ![adelaide · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-adelaide-dawn-dry.jpg)<br/>adelaide · dawn · dry | ![adelaide · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-adelaide-dusk-dry.jpg)<br/>adelaide · dusk · dry | ![adelaide · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-adelaide-night-dry.jpg)<br/>adelaide · night · dry |
-| ![chateau · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-chateau-dawn-dry.jpg)<br/>chateau · dawn · dry | ![chateau · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-chateau-dusk-dry.jpg)<br/>chateau · dusk · dry | ![chateau · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-chateau-night-dry.jpg)<br/>chateau · night · dry |
-| ![ferme · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-ferme-dawn-dry.jpg)<br/>ferme · dawn · dry | ![ferme · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-ferme-dusk-dry.jpg)<br/>ferme · dusk · dry | ![ferme · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-ferme-night-dry.jpg)<br/>ferme · night · dry |
-| ![lycee · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-lycee-dawn-dry.jpg)<br/>lycee · dawn · dry | ![lycee · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-lycee-dusk-dry.jpg)<br/>lycee · dusk · dry | ![lycee · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-lycee-night-dry.jpg)<br/>lycee · night · dry |
-| ![pit · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-dawn-dry.jpg)<br/>pit · dawn · dry | ![pit · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-dusk-dry.jpg)<br/>pit · dusk · dry | ![pit · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-night-dry.jpg)<br/>pit · night · dry |
-| ![pit straight · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-straight-dawn-dry.jpg)<br/>pit straight · dawn · dry | ![pit straight · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-straight-dusk-dry.jpg)<br/>pit straight · dusk · dry | ![pit straight · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-straight-night-dry.jpg)<br/>pit straight · night · dry |
+| ![pit · day · rain](../../../artifacts/shots/tracks/magny_cours/pit-day-rain.jpg)<br/>pit · day · rain | ![pit · day · wet](../../../artifacts/shots/tracks/magny_cours/pit-day-wet.jpg)<br/>pit · day · wet | ![pit · dusk · dry](../../../artifacts/shots/tracks/magny_cours/pit-dusk-dry.jpg)<br/>pit · dusk · dry |
+| ![pit · night · dry](../../../artifacts/shots/tracks/magny_cours/pit-night-dry.jpg)<br/>pit · night · dry | — | — |
 
-## Weather / lighting backlog (post–tooling PR)
+#### ferme
 
-| ID | Condition | Expected issue | Severity |
-|----|-----------|----------------|----------|
-| W1 | `night` + `dry` | No `lamp` furniture — pit straight and Adelaide likely **too dark**; no mast glow | Medium — dress or accept for `night:false` classic |
-| W2 | `night` + `wet` | Wet sheen without lamps — readability loss on grey Technopôle | Medium |
-| W3 | `fog` / `rain` at dawn | Presets bump `mistDensity` / `fogDensityMul` — check sky vs `pal.fogColor` mismatch | Low (lighting-tuner) |
-| W4 | `overcast` midday | Intended look per brief; verify grass saturation not neon | Low |
-| W5 | Wet / rain | Spray and grip HUD only; scenery props should be unchanged — watch **z-fight** on wet reflective road | Low |
+| | | |
+|:---:|:---:|:---:|
+| ![ferme · dawn · dry](../../../artifacts/shots/tracks/magny_cours/ferme-dawn-dry.jpg)<br/>ferme · dawn · dry | ![ferme · day · fog](../../../artifacts/shots/tracks/magny_cours/ferme-day-fog.jpg)<br/>ferme · day · fog | ![ferme · day · overcast](../../../artifacts/shots/tracks/magny_cours/ferme-day-overcast.jpg)<br/>ferme · day · overcast |
+| ![ferme · night · wet](../../../artifacts/shots/tracks/magny_cours/ferme-night-wet.jpg)<br/>ferme · night · wet | — | — |
 
-Weather panels (planned filenames after rebase):  
-`wx-pit-day-{rain,wet,fog,overcast}.jpg`, same for `adelaide`, `ferme`, `chateau`, `lycee` (5 views × 4 wx = 20 frames).
+#### adelaide
+
+| | | |
+|:---:|:---:|:---:|
+| ![adelaide · day · storm](../../../artifacts/shots/tracks/magny_cours/adelaide-day-storm.jpg)<br/>adelaide · day · storm | ![adelaide · day · wet](../../../artifacts/shots/tracks/magny_cours/adelaide-day-wet.jpg)<br/>adelaide · day · wet | ![adelaide · dusk · dry](../../../artifacts/shots/tracks/magny_cours/adelaide-dusk-dry.jpg)<br/>adelaide · dusk · dry |
+| ![adelaide · night · dry](../../../artifacts/shots/tracks/magny_cours/adelaide-night-dry.jpg)<br/>adelaide · night · dry | — | — |
+
+#### chateau
+
+| | | |
+|:---:|:---:|:---:|
+| ![chateau · dawn · dry](../../../artifacts/shots/tracks/magny_cours/chateau-dawn-dry.jpg)<br/>chateau · dawn · dry | ![chateau · day · fog](../../../artifacts/shots/tracks/magny_cours/chateau-day-fog.jpg)<br/>chateau · day · fog | ![chateau · day · rain](../../../artifacts/shots/tracks/magny_cours/chateau-day-rain.jpg)<br/>chateau · day · rain |
+| ![chateau · night · dry](../../../artifacts/shots/tracks/magny_cours/chateau-night-dry.jpg)<br/>chateau · night · dry | — | — |
+
+#### lycee
+
+| | | |
+|:---:|:---:|:---:|
+| ![lycee · day · overcast](../../../artifacts/shots/tracks/magny_cours/lycee-day-overcast.jpg)<br/>lycee · day · overcast | ![lycee · day · storm](../../../artifacts/shots/tracks/magny_cours/lycee-day-storm.jpg)<br/>lycee · day · storm | ![lycee · dusk · dry](../../../artifacts/shots/tracks/magny_cours/lycee-dusk-dry.jpg)<br/>lycee · dusk · dry |
+| ![lycee · night · dry](../../../artifacts/shots/tracks/magny_cours/lycee-night-dry.jpg)<br/>lycee · night · dry | — | — |
+
+## Weather / lighting notes (from hero frames)
+
+| ID | Condition | Observed / expected | Severity |
+|----|-----------|---------------------|----------|
+| W1 | `night` + `dry` | Pit and Adelaide heroes **very dark** — no circuit lamps (`lamp: "none"`) | Medium — optional flood masts |
+| W2 | `night` + `wet` | Ferme night-wet: wet road read but outfield trees silhouette only | Medium |
+| W3 | `fog` / `storm` day | Ferme fog and Adelaide/Lycée storm: sky desaturates; landmarks still readable | Low |
+| W4 | `overcast` / `rain` day | Grass stays vivid; Technopôle grey reads well under flat light | Low |
+| W5 | Wet / rain day | No new prop z-fight in captures; road sheen only | Low |
 
 ---
 
@@ -124,7 +146,7 @@ Weather panels (planned filenames after rebase):
 |---|------|------|--------|
 | 0 | `vaultStand` terrain footing | Low | Done |
 | 1 | Ferme yard clearance | Low | Done |
-| 2 | Weather + committed shot grid | — | **Follow-up** after tooling PR |
+| 2 | Weather + committed shot grid (36 frames) | — | **Done** |
 | 3 | `startFrac` / grid | Medium | Open |
 | 4 | Hedge coplanar split | Low | Open |
 | 5 | Optional flood masts (night) | Medium | Open |
