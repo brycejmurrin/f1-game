@@ -371,6 +371,19 @@ if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUA
     R2="$(git -C "$C_GITDIR" rev-parse --show-toplevel 2>/dev/null || true)"
     [ -n "$R2" ] && ROOT="$R2"
   fi
+  # A LINKED WORKTREE BORROWS THE MAIN CHECKOUT'S node_modules (2026-10-15).
+  # EnterWorktree, `isolation: worktree` subagents and `git worktree add` make
+  # a tree with no node_modules, so every worker commit used to block here
+  # (census session_01CgCjzTvy729SeWsHzuv8eh). The dependencies are the same
+  # package.json, the link is git-ignored (`node_modules` in .gitignore), and
+  # the main checkout's install is what SessionStart already verified.
+  if [ ! -e "$ROOT/node_modules" ]; then
+    WT_COMMON="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    WT_MAIN="$([ -n "$WT_COMMON" ] && dirname "$WT_COMMON")"
+    if [ -n "$WT_MAIN" ] && [ "$WT_MAIN" != "$ROOT" ] && [ -d "$WT_MAIN/node_modules" ]; then
+      ln -s "$WT_MAIN/node_modules" "$ROOT/node_modules" 2>/dev/null || true
+    fi
+  fi
   if [ -z "${APEX_GUARD_PROBE:-}" ] && [ ! -d "$ROOT/node_modules" ]; then
     echo "BLOCKED: node_modules is missing, so 'npm run test:guards' cannot run before this commit. Run the SessionStart install (bash tools/env/cloud-agent-install.sh) first." >&2
     exit 2
