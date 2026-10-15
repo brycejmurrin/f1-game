@@ -129,6 +129,20 @@ async function waitPhoneHudFitClearance(page, opts, timeoutMs = 30_000) {
 }
 
 /** Touch: fitHud + sectors/BOOST clearance before box probes (CI parallel load). */
+async function waitTowerClearsGaps(page, timeoutMs = 30_000) {
+  await page.waitForFunction(() => {
+    const top = document.querySelector(".hud-top");
+    const gaps = document.querySelector(".hud-gaps");
+    if (!top || !gaps || top.hidden || gaps.hidden) return true;
+    const tr = top.getBoundingClientRect();
+    const gr = gaps.getBoundingClientRect();
+    if (!(tr.width > 0 && gr.width > 0)) return true;
+    const hit = tr.left < gr.right - 0.5 && gr.left < tr.right - 0.5
+      && tr.top < gr.bottom - 0.5 && gr.top < tr.bottom - 0.5;
+    return !hit;
+  }, null, { polling: 100, timeout: timeoutMs });
+}
+
 async function waitTouchSectorsClearBoost(page, timeoutMs = 30_000) {
   await page.waitForFunction(async () => {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -156,6 +170,10 @@ async function race(page, steer, manual, ins, opts) {
   await page.evaluate(([s, m, prof, lay, hudSc, btnSc]) => {
     localStorage.setItem("apex26.steerMode", JSON.stringify(s));
     localStorage.setItem("apex26.manual", JSON.stringify(m));
+    // Race-radio card life grew with #1802; silence chatter so fitHud is not
+    // still chasing a live banner while this spec measures static geometry.
+    localStorage.setItem("apex26.radioChat", JSON.stringify("off"));
+    localStorage.setItem("apex26.commentary", JSON.stringify("off"));
     // THE PROFILE IS A BOOT KEY. Every case below used the DEFAULT profile on a
     // chase camera, so the whole broadcast layout — which re-anchors `.hud-top`
     // from centre to the top-LEFT corner, into #minimap's own slot — was never
@@ -266,6 +284,15 @@ async function race(page, steer, manual, ins, opts) {
         };
         if (hit(sec) || hit(document.querySelector(".hud-top"))) return false;
       }
+      const top = document.querySelector(".hud-top");
+      const gaps = document.querySelector(".hud-gaps");
+      if (top && gaps && top.getBoundingClientRect().width > 0 && gaps.getBoundingClientRect().width > 0) {
+        const tr = top.getBoundingClientRect();
+        const gr = gaps.getBoundingClientRect();
+        const towerGaps = tr.left < gr.right - 0.5 && gr.left < tr.right - 0.5
+          && tr.top < gr.bottom - 0.5 && gr.top < tr.bottom - 0.5;
+        if (towerGaps) return false;
+      }
       // Notch safe box: a mid-fit #minimap / #hud-sectors can sit under --sal
       // for one tick. Require both inside the injected safe insets.
       const sal = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sal")) || 0;
@@ -294,6 +321,7 @@ const measure = async (page, ctrl, hud, W, H, ins) => {
   });
   await waitPhoneHudFitClearance(page);
   await waitTouchSectorsClearBoost(page);
+  await waitTowerClearsGaps(page);
   await page.waitForFunction(() => {
     const ann = document.getElementById("announce");
     const sectors = document.getElementById("hud-sectors");
