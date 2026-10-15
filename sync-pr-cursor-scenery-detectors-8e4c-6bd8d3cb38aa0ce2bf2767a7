@@ -1,1 +1,1 @@
-1792047877	Cursor Agent	PR #1946 coord root: no push (draft CI pause); do NOT publish 6a21929 — await root 767398f handoff  [sync-pr-cursor-scenery-detectors-8e4c; session 6bd8d3cb38aa0ce2bf2767a7]
+1792049319	Cursor Agent	PR #1946 handoff ack: publish 767/ee807 when root pushes ref + pause lifts; never 6a21929 or 3e02391  [sync-pr-cursor-scenery-detectors-8e4c; session 6bd8d3cb38aa0ce2bf2767a7]
