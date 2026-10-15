@@ -48,6 +48,20 @@ test("Windows target is NSIS x64; mac dmg+zip arm64+x64; linux AppImage+deb", ()
   assert.deepEqual(cfg.linux.target, ["AppImage", "deb"]);
 });
 
+test("release artifact uploads retain every configured installer format", () => {
+  const workflow = fs.readFileSync(path.join(ROOT, ".github/workflows/desktop.yml"), "utf8");
+  const upload = workflow.split("- name: Upload installer artifacts")[1].split(/\n      - name:/)[0];
+  const extensions = { nsis: "exe", dmg: "dmg", zip: "zip", AppImage: "AppImage", deb: "deb" };
+  for (const platform of [cfg.win, cfg.mac, cfg.linux]) {
+    for (const target of platform.target) {
+      const kind = typeof target === "string" ? target : target.target;
+      assert.ok(extensions[kind], `unknown installer format ${kind}`);
+      assert.ok(upload.includes(`desktop/dist/*.${extensions[kind]}`),
+        `${kind} installers must survive the release runner`);
+    }
+  }
+});
+
 test("mac entitlements exist and NSCameraUsageDescription is set", () => {
   const ent = path.join(ROOT, "desktop", cfg.mac.entitlements);
   assert.equal(cfg.mac.entitlements, cfg.mac.entitlementsInherit);
