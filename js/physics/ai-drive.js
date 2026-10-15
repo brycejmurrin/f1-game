@@ -610,12 +610,12 @@ const AiDrive = (function () {
   const _launch = { react: 0, grip: 1 };
   function launchPlan(t, roll) {
     const r = roll || 0, r2 = (r * 7919) % 1;
-    _launch.react = clamp(lerp(0.52, 0.16, t.awareness) + (r - 0.5) * 0.22, 0.05, 0.75);
+    _launch.react = clamp(lerp(0.54, 0.15, t.awareness) + (r - 0.5) * 0.26, 0.05, 0.78);
     const hands = 0.5 * t.craft + 0.5 * clamp((t.skill - 0.9) * 10, 0, 1);
-    _launch.grip = clamp(lerp(0.80, 1.0, hands) + (r2 - 0.5) * 0.2, 0.7, 1.08);
+    _launch.grip = clamp(lerp(0.79, 1.0, hands) + (r2 - 0.5) * 0.22, 0.69, 1.08);
     return { react: _launch.react, grip: _launch.grip };
   }
-  const LAUNCH_FADE = 3;   // seconds over which the getaway becomes ordinary acceleration
+  const LAUNCH_FADE = 3.2;   // seconds over which the getaway becomes ordinary acceleration
   function launchMul(tSince, plan) {
     if (!plan) return 1;
     if (tSince < plan.react) return 0;
@@ -629,16 +629,20 @@ const AiDrive = (function () {
   // and attacked into it as if it were lap 20. A launching car — and for
   // START_CALM s from the green — leaves START_GAP_T s more headway and
   // attacks at START_ATTACK of the quality (attackOK); calm fades over the
-  // last 8 s and nothing changes after. `until` is game.js's c.calmUntil,
+  // last 10 s and nothing changes after. `until` is game.js's c.calmUntil,
   // set when the launch ends, so a car placed at speed (a test rig, a rolling
   // start) never had a launch and is never calm.
-  const START_CALM = 20, START_GAP_T = 0.2, START_ATTACK = 0.5;
+  const START_CALM = 24, START_GAP_T = 0.42, START_ATTACK = 0.45;
   function startCalm(launching, until, t) {
     if (launching) return 1;
-    return until > t ? clamp((until - t) / 8, 0, 1) : 0;
+    return until > t ? clamp((until - t) / 10, 0, 1) : 0;
   }
   function startCalmS() { return START_CALM; }
   function startGapT(calm) { return START_GAP_T * (calm || 0); }
+  // Calm is already zero after startCalmS, but widening qWin during the opening
+  // seconds reshapes the whole race (measured: +0.7 s Bahrain normal ai-pace).
+  // Lap-1 headway is startGapT only.
+  function startQWinBonus() { return 0; }
 
   // PACE PHASE. Two AI cars of equal pace ran in lockstep for a whole race:
   // identical vmax, identical acceleration, so the gap between them never
@@ -1611,7 +1615,7 @@ const AiDrive = (function () {
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
     otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
-    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
+    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, startQWinBonus, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,

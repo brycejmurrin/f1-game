@@ -9,8 +9,8 @@
     classic: true,
     // Upstream it-1914 already runs clockwise (San Donato at T1 is a right).
     reverse: false,
-    // The trace opens on the 682 m main straight — Mugello's longest — and its
-    // first vertex is the line itself.
+    // The trace opens on the main straight — Mugello's longest, measured ~1.18 km
+    // (|k|<0.0015 from s 0.910) — and its first vertex is the line itself.
     // Start/finish line. Snapped to the real one: v0 convention; T1 measured RIGHT, matches San Donato.
     // A start line is always on a straight: docs/tracks/START-LINES.md.
     // No sceneryStartFrac: the scenery is authored against this line (pit
@@ -33,6 +33,8 @@
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.92, s1: 0.18 },  // pit straight through San Donato
       { kind: "foliage", s0: 0.36, s1: 0.46 },
+      { kind: "foliage", s0: 0.286, s1: 0.342 },  // Casanova terrazza: engine scatter cones cut its tiers (clip 0.301/0.334)
+      { kind: "foliage", s0: 0.852, s1: 0.906 },  // Bucine terrazza (clip 0.888)
     ],
     // Tuscan hill light: warm, golden, slightly hazy; cypress-dark greens.
     pal: {
@@ -44,6 +46,7 @@
       ambientGround: [0.30, 0.28, 0.20],
       fogColor:      [0.76, 0.72, 0.62],
       grass:         [0.24, 0.42, 0.19],
+      runoff:        [0.37, 0.39, 0.23],  // dry Tuscan grass-gravel verge, not the default tan (survey defect 4)
       sunDir:        [0.44, 0.64, 0.32],
     },
     elevations: [
@@ -69,10 +72,11 @@
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
     // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
-    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
+    // turns: the N strongest curvature peaks (Arrabbiata 1/2 at 0.476/0.521 are wide, R~85-97 m, so
+    // added by hand over the duplicate T5 0.2277 and T12 0.7137 halves of the T4-T5 and T11-T12 corners) of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
     sectors: [0.34, 0.666],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
-    turns: [0.1447, 0.1557, 0.1967, 0.2187, 0.2277, 0.3002, 0.3187, 0.3857, 0.5927, 0.6162, 0.6982, 0.7137, 0.7552, 0.7732, 0.8572],
+    turns: [0.1447, 0.1557, 0.1967, 0.2187, 0.3002, 0.3187, 0.3857, 0.476, 0.521, 0.5927, 0.6162, 0.6982, 0.7552, 0.7732, 0.8572],
     furniture: { tree: "cypress", fol: [0.20, 0.44, 0.20], lamp: "none" },  // Tuscan broadleaf behind the cypress ranks
     kit: { marshal: "cabin",     rail: "armco",       fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["crimson", "terracotta", "concrete"],  // Ferrari red over Tuscan clay

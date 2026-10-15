@@ -259,7 +259,10 @@ jobs:
     # 360-minute default (2026-10-04). Time queued for the lock does not count;
     # the job is a full-history checkout, staging and deploy-pages, whose own
     # deployment `timeout` input defaults to 10 minutes — this sits above it.
-    timeout-minutes: 25
+    # 30 since 2026-10-14 (process-review fix 1). Deploy job only: the `ci`
+    # gate is a reusable-workflow call (no job-level timeout allowed) whose
+    # p90 is 73 min; its jobs carry their own caps in ci.yml.
+    timeout-minutes: 30
     # The only job that needs a Pages token: deploy-pages requests the
     # deployment with pages: write and authenticates with an OIDC token.
     permissions:
