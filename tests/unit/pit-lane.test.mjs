@@ -1651,3 +1651,18 @@ test("bay circuits' working lane is untouched by the no-bay fix (byte-identical 
     }
   });
 }
+
+
+test("release GO retains qualifying closing traffic without changing pit state", () => {
+  const { pits, G, zone, car } = commitSession();
+  const c = car(0); c.s = zone.sOut - 20; c.pitState = "out"; c.pitOutT = 1; c.speed = 10;
+  const o = { s: c.s - 30, speed: 60, code: "RIV", pitState: "none" };
+  G.cars = [c, o]; const before = JSON.stringify(c);
+  assert.equal(pits.cue(c).text, "GO — RIV CLOSING");
+  assert.equal(pits.cue(c).phase, "served"); assert.equal(JSON.stringify(c), before);
+  for (const bad of [{ retired: true }, { finished: true }, { pitState: "lane" }, { s: c.s + 10 }]) {
+    G.cars = [c, { ...o, ...bad }]; assert.equal(pits.cue(c).text, "GO GO GO");
+  }
+  G.cars = [c, o]; c.pitOutT = 0;
+  assert.equal(pits.cue(c).text, "MERGE — RIV CLOSING");
+});

@@ -408,6 +408,7 @@ const FULL = [
   "js/ui/update-check.js",  // UpdateCheck: in-session version.json re-check + UPDATE READY chip (call-time; script-loader asks it)
   "js/ui/race-message-history.js",
   "js/ui/controller-profile-controls.js",
+  "js/ui/condition-cue-controls.js",
   "js/game.js",
 ];
 

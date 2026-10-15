@@ -105,6 +105,9 @@ interface CarState {
   isPlayer: boolean;
   mods: CarMods | null;
   aeroLoad: number | null;
+  /** Evidence from the latest human PlayerForces application. */
+  _dirtyAirMul?: number;
+  _coachAssisted?: boolean;
   seat: number;
   /** Arc position (m) and lateral offset (m, +right). */
   s: number;

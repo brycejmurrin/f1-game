@@ -56,8 +56,9 @@ const CarFields = (function () {
     ["render side: LOD tier, wheel spin, wheel visibility",
       ["_lodTier", "wheelSpin", "wheelSpinF", "_whlVis"]],
     ["player force model (js/physics/player-forces.js) and its HUD/coach readouts",
-      ["vertLoad", "axFrac", "axFracF", "axFracR", "_aeroGrip", "slipFactor", "lateralAccel", "slipFront", "slipRear",
-        "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear", "frontUtil", "rearUtil", "skidIntensity"]],
+      ["vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "_aeroGrip", "slipFactor", "lateralAccel", "slipFront", "slipRear",
+        "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear", "frontUtil", "rearUtil", "skidIntensity",
+        "_cueConditionGrip", "_cueCornering", "_cueBraking"]],
     ["AI overtake planner (game.js ai-drive pass plan/side/best)",
       ["passPlan", "passSide", "passBest"]],
     ["player under-/over-slip dwell timer (player-forces.js)",
@@ -102,9 +103,10 @@ const CarFields = (function () {
       "wheelLock", "steerSm", "brakeDemand", "throttleDemand", "steerCommand", "brakeHeat", "exhaustPop", "_pushD",
       "_secIdx", "_secT0", "_prevS", "_preColS", "_preColX", "_preColSpd", "skidIntensity", "passSide", "passBest",
       "_lapTimeAtLine", "fxSparkI", "kerbSndT", "kerbHapT", "pitWorked", "_otS", "_otLap", "aiBias", "holdOff",
-      "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_aeroGrip", "slipFactor",
+      "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
       "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
-      "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT"]],
+      "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT",
+      "_cueConditionGrip", "_cueCornering", "_cueBraking"]],
   ];
   const WARM = [];
   for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);
@@ -124,6 +126,7 @@ const CarFields = (function () {
   // https://v8.dev/blog/react-cliff (shapes and field tracking), V8 src/objects/lookup.cc CanStayConst,
   // src/objects/map-updater.cc GeneralizeField (kFieldConstGroup).
   const MUTABLE_GROUPS = [
+    ["the latest human force application: coach assistance flag", ["_coachAssisted"]],
     ["the first pit stop (pit-lane.js): its state machine, arming, reason, abort timer, commit, box slot, fitted set, " +
       "next plan, count, replans, the rival-stop note — and the boost flag the stop clears",
       ["pitState", "pitArmed", "pitWhy", "pitAbortT", "pitCommitted", "pitPos0", "pitFitted", "pitNext", "pitStops",
@@ -188,6 +191,8 @@ const CarFields = (function () {
     if (!("axFrac" in c)) c.axFrac = undefined;
     if (!("axFracF" in c)) c.axFracF = undefined;
     if (!("axFracR" in c)) c.axFracR = undefined;
+    if (!("_dirtyAirMul" in c)) c._dirtyAirMul = undefined;
+    if (!("_coachAssisted" in c)) c._coachAssisted = undefined;
     if (!("_aeroGrip" in c)) c._aeroGrip = undefined;
     if (!("slipFactor" in c)) c.slipFactor = undefined;
     if (!("lateralAccel" in c)) c.lateralAccel = undefined;
@@ -201,6 +206,9 @@ const CarFields = (function () {
     if (!("frontUtil" in c)) c.frontUtil = undefined;
     if (!("rearUtil" in c)) c.rearUtil = undefined;
     if (!("skidIntensity" in c)) c.skidIntensity = undefined;
+    if (!("_cueConditionGrip" in c)) c._cueConditionGrip = undefined;
+    if (!("_cueCornering" in c)) c._cueCornering = undefined;
+    if (!("_cueBraking" in c)) c._cueBraking = undefined;
     if (!("passPlan" in c)) c.passPlan = undefined;
     if (!("passSide" in c)) c.passSide = undefined;
     if (!("passBest" in c)) c.passBest = undefined;

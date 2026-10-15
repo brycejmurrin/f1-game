@@ -735,7 +735,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `acesD` | TONE CURVE MIDS | 0.2 … 1.2 | 0.59 | `uAcesD` |   | — |
 | `acesE` | TONE CURVE BLACK | 0.02 … 0.45 | 0.14 | `uAcesE` |   | — |
 | `chromAb` | CHROMATIC AB. | 0 … 15 | 0 | `uChromAb` |   | — |
-| `grain` | FILM GRAIN | 0 … 0.3 | 0 | `uGrain` |   | — |
+| `grain` | FILM GRAIN | 0 … 0.3 | 0 | `uGrain` |   | race-insights.js×6 |
 | `lensDirt` | LENS DIRT | 0 … 1 | 0.15 | `uLensDirt` | ✓ | — |
 | `flareMul` | LENS FLARE | 0 … 2.5 | 1 | — | ✓ | game.js×2, post.js×2 |
 | `flareStreak` | FLARE STREAK | 2 … 10 | 7 | `uFlareStreak` | ✓ | — |

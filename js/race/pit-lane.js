@@ -702,8 +702,8 @@ var PitLane = (function () {
         // the limit into traffic at racing speed. GO for a moment
         // after the release; MERGE, naming the car, while one is closing on
         // the track side; otherwise the metres to the end of the road.
-        if ((c.pitOutT || 0) > 0) return { phase: "served", text: "GO GO GO", dist: 0, frac: 1 };
         const o = closingCar(c);
+        if ((c.pitOutT || 0) > 0) return { phase: "served", text: o ? "GO — " + (o.code || "CAR") + " CLOSING" : "GO GO GO", dist: 0, frac: 1 };
         if (o) return { phase: "merge", text: "MERGE — " + (o.code || "CAR") + " CLOSING", dist: 0, frac: 1 };
         const m = toExit(c);
         return m > 0 ? { phase: "out", text: "EXIT " + Math.round(m) + "m", dist: m, frac: clamp(1 - m / exitLen(c), 0, 1) } : null;

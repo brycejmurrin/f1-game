@@ -32,7 +32,7 @@ function load(over = {}) {
     active: () => true,
     rapierReady: () => true,
     worldGen: () => 1,
-    promoteCarDynamic: (i, lin) => { promoted.push(i); launched[i] = lin; return true; },
+    promoteCarDynamic: (i, lin) => { promoted.push(i); launched[i] = lin; return !over.failPromotion; },
     demoteCarKinematic: () => {},
     carBodyPose: () => pose,
   };
@@ -40,15 +40,18 @@ function load(over = {}) {
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Map, Set, Uint8Array,
     isNaN, isFinite, console, DebrisWorld,
+    TrackPit: { EXIT_WALL_W: 0.35 },
     Tracks: {
       sample: over.sample || (() => {}),
       wallAt: () => wall,
+      postLimits: over.postLimits || (() => {}),
     },
   });
   seedLog(ctx);
   // js/core/mat4.js first — the shared scalar helpers (M4.clamp) incidentsim.js binds at eval.
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
   vm.runInContext(RACE_SRC, ctx, { filename: "js/race/race-control.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/contact-geometry.js"), "utf8"), ctx);
   vm.runInContext(SRC, ctx, { filename: "js/physics/incident-sim.js" });
   const IncidentSim = vm.runInContext("IncidentSim", ctx);
   const mkCar = (s) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0,
@@ -365,6 +368,7 @@ test("an AI car spun round but still sliding forwards is handed back driving for
   ctx.DebrisWorld = { active: () => true, rapierReady: () => true, worldGen: () => 1,
     promoteCarDynamic() { return true; }, demoteCarKinematic() {}, carBodyPose() { return pose; } };
   vm.createContext(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/contact-geometry.js"), "utf8"), ctx);
   vm.runInContext(SRC + "\nglobalThis.IncidentSim = IncidentSim;", ctx);
   const car = { human: false, s: 500, x: 0, speed: 40, vLat: 0, yawRateCur: 0, head: 0, px: 0, pz: 500, prog: 500 };
   const G = { cars: [car], track: { total: 5000 }, smp: {}, PACE: 1, vTop: () => 72, lapsTarget: 5, raceT: 10,
@@ -381,6 +385,141 @@ test("an AI car spun round but still sliding forwards is handed back driving for
   assert.equal(IS.owns(car), false, "handed back");
   assert.ok(car.speed > 0, `handed back at ${car.speed} m/s — an AI car rolling forwards must not reverse`);
 });
+
+test('rejection reasons explain threshold, selected kind and ownership without widening gates', () => {
+  const { sim, cars } = load();
+  sim.notifyCar(cars[0], cars[1], 10);
+  sim.setFlags({ r2Airborne: true, r3Contact: false, c1Pileup: false });
+  sim.notifyCar(cars[0], cars[1], 20); sim.preStep(1 / 60);
+  assert.equal(sim.status().rejected.belowThreshold, 1);
+  assert.equal(sim.status().rejected.disabledKind, 1);
+  assert.equal(sim.status().promoted, 0);
+  sim.notifyCar(cars[0], cars[1], 30); sim.preStep(1 / 60);
+  sim.notifyCar(cars[0], cars[1], 30); sim.preStep(1 / 60);
+  assert.equal(sim.status().rejected.ownershipFilter, 2);
+  const copy = sim.status().rejected; copy.disabledKind = 99;
+  assert.equal(sim.status().rejected.disabledKind, 1);
+  sim.reset(); assert.ok(Object.values(sim.status().rejected).every(n => n === 0));
+  sim.setFlags({ r2Airborne: false, r3Contact: false, c1Pileup: false });
+  sim.notifyCar(cars[0], cars[1], 30);
+  assert.equal(sim.status().rejected.inactive, 1);
+});
+
+test('failed dynamic promotion is counted per car', () => {
+  const { sim, cars } = load({ failPromotion: true });
+  sim.notifyCar(cars[0], cars[1], 30); sim.preStep(1 / 60);
+  assert.equal(sim.status().rejected.failedPromotion, 2);
+  assert.equal(sim.status().promoted, 0);
+});
+
+test('takeover and incident caps report the rejected work', () => {
+  const { sim, cars } = load();
+  while (cars.length < 10) cars.push({ ...cars[0], s: 100 + cars.length });
+  for (let i = 1; i < cars.length; i++) sim.notifyCar(cars[i - 1], cars[i], 30);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().promoted, 8);
+  assert.equal(sim.status().rejected.takeoverCap, 2);
+  sim.reset();
+  for (let i = 0; i < 5; i++) sim.notifyWall(cars[i], 1, 100);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().count, 3);
+  assert.equal(sim.status().rejected.incidentCap, 2);
+});
+
+// The Rapier pose is intentionally beyond a solid feature but inside wallAt.
+// Validate takeover itself, including world writeback, on both lateral sides.
+for (const side of [-1, 1]) {
+  for (const kind of ["pit-road", "pit-lane", "exit-road", "exit-lane", "post-road", "post-outside"]) {
+    test(`takeover uses complete ${kind} boundary (side ${side})`, () => {
+      const isExit = kind.startsWith("exit"), isPost = kind.startsWith("post");
+      const lane = kind.endsWith("lane") || kind.endsWith("outside");
+      const wallLat = isExit ? 11 : 12;
+      const input = lane ? wallLat + 0.2 : wallLat - 0.2;
+      const expected = isPost ? (lane ? 14 : 10) : lane ? (isExit ? 12.3 : 14) : wallLat - (isExit ? 1.15 : 1.1);
+      const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 10, vz: 0 };
+      const { sim, cars, G } = load({ pose, wallAt: 30,
+        trackFrom: () => ({ s: 100, x: side * input }),
+        worldFromTrack: (s, x) => ({ x, z: s }),
+        postLimits: (_tr, _s, _x, out) => Object.assign(out, {
+          r: side > 0 && !lane ? 10 : 30, l: side < 0 && !lane ? 10 : 30,
+          minOut: lane ? 14 : 0, side,
+        }),
+      });
+      Object.assign(G.track, { n: 1, hw: [10], posts: isPost ? [{}] : [],
+        pit: isPost ? null : { side, painted: false, v: [isExit ? 0.5 : 1], w: [1],
+          bands: { verge: 2 }, off: { fastIn: 3 }, sOut: 90, exitRoadM: 30 },
+      });
+      cars[0].x = side * input;
+      sim.notifyWall(cars[0], side, 60);
+      sim.preStep(1 / 60);
+      assert.equal(sim.owns(cars[0]), true);
+      sim.postStep(1 / 60);
+      assert.equal(cars[0].x, side * expected);
+      assert.equal(cars[0].px, side * expected);
+      assert.equal(cars[0].pz, 100);
+      assert.equal(sim.owns(cars[0]), true, "boundary correction retains takeover");
+      assert.equal(sim.status().fallbacks, 0, "boundary correction is not an anomalous teleport");
+    });
+  }
+}
+
+for (const side of [-1, 1]) for (const lane of [false, true]) {
+  test(`takeover retains validated barrier side across raw crossings and moving faces (${side}, lane ${lane})`, () => {
+    const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 18, vz: 0 };
+    let s = 100, rawX = lane ? 14 : 11.9;
+    const { sim, cars, G } = load({ pose, wallAt: 30,
+      trackFrom: () => ({ s, x: side * rawX }), worldFromTrack: (s, x) => ({ x, z: s }),
+    });
+    const p = { side, painted: false, v: [1, 1, 0, 0], w: [1, 1, 0, 0],
+      bands: { verge: 2 }, off: { fastIn: 3 }, sOut: 0, exitRoadM: 200 };
+    Object.assign(G.track, { total: 400, n: 4, hw: [10, 10, 10, 10], pit: p, posts: [] });
+    Object.assign(cars[0], { s, x: side * (lane ? 14 : 10.5) });
+    sim.notifyWall(cars[0], side, 60); sim.preStep(1 / 60);
+    for (rawX of lane ? [12.2, 11.9, 10, 15] : [11.9, 12.2, 15, 13]) {
+      sim.postStep(1 / 60);
+      assert.equal(cars[0].x, side * (lane ? Math.max(rawX, 14) : 10.9));
+      assert.equal(sim.owns(cars[0]), true);
+    }
+    // The exit face recedes beneath the old road-side x: using that x against
+    // the NEW face would wrongly turn the road-side car into a lane-side car.
+    p.v[0] = 0.1; s = 0;
+    rawX = lane ? 9 : 13;
+    sim.postStep(1 / 60);
+    assert.equal(cars[0].x, side * (lane ? 11.5 : 10.2 - 1.15), "moving exit uses previous face for side and current face for clearance");
+    rawX = lane ? 9 : 13;
+    sim.postStep(1 / 60);
+    assert.equal(cars[0].x, side * (lane ? 11.5 : 10.2 - 1.15));
+    s = 200; rawX = lane ? 9 : 13;
+    sim.postStep(1 / 60);
+    assert.equal(cars[0].x, side * rawX, "legal opening permits lateral movement");
+    assert.equal(sim.status().fallbacks, 0);
+  });
+}
+
+for (const side of [-1, 1]) for (const outside of [false, true]) {
+  test(`takeover cannot swap sides through a gantry footprint (${side}, outside ${outside})`, () => {
+    const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 18, vz: 0 };
+    let rawX = outside ? 11 : 13;
+    const { sim, cars, G } = load({ pose, wallAt: 30,
+      trackFrom: () => ({ s: 100, x: side * rawX }), worldFromTrack: (s, x) => ({ x, z: s }),
+      postLimits: (_t, _s, x, out) => Object.assign(out, {
+        r: side > 0 && x * side < 12 ? 10 : 30,
+        l: side < 0 && x * side < 12 ? 10 : 30,
+        minOut: x * side >= 12 ? 14 : 0, side,
+      }),
+    });
+    G.track.posts = [{}];
+    cars[0].x = side * (outside ? 14 : 10);
+    sim.notifyWall(cars[0], side, 60); sim.preStep(1 / 60);
+    for (let tick = 0; tick < 5; tick++) {
+      rawX = outside ? 11 - tick * 0.2 : 13 + tick * 0.2;
+      sim.postStep(1 / 60);
+      assert.equal(cars[0].x, side * (outside ? 14 : 10));
+      assert.equal(sim.owns(cars[0]), true);
+    }
+    assert.equal(sim.status().fallbacks, 0);
+  });
+}
 
 /* ── the ANOMALY handback shares the settled one's speed floor (#2167) ──────
  * The degrade path restores the last validated snapshot, whose speed is

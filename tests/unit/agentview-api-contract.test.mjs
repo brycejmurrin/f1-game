@@ -187,3 +187,25 @@ test("neither raster loop paints an object the camera is INSIDE", () => {
     + "agentview-raster.js; found " + guards.length + ". An onboard camera must "
     + "not report the car it is sitting inside.");
 });
+
+test("episode metadata makes prior-episode delta requests return full worlds", () => {
+  const Tracks = { sample(t, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s;
+    out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.hw = 6; },
+    curvature: () => 0, wallAt: () => 6 };
+  const get = evalGlobals(["js/agent/agentview-raster.js", "js/agent/agentview.js"], { Tracks });
+  const player = { px: 0, pz: 0, s: 0, x: 0, head: 0, speed: 0, prog: 0, lap: 0, isPlayer: true };
+  const view = get("AgentView").create({ wrapS: s => s, gripMult: () => 1,
+    LONG_GRIP: 34, update() {}, els: {}, camVantage() {},
+    track: { total: 4000, n: 400, def: { id: "stub", name: "Stub" } },
+    player, cars: [player], state: "race", raceWeather: "dry" });
+  const first = view.world({ detail: "brief" });
+  assert.equal(first.episodeId, 0);
+  const delta = view.world({ detail: "brief", since: first.seq });
+  assert.equal(delta.deltaBase, first.seq);
+  assert.equal(view.beginEpisode(), 1);
+  const next = view.world({ detail: "brief", since: delta.seq });
+  assert.equal(next.episodeId, 1); assert.equal(next.deltaBase, null);
+  assert.deepEqual(next.ego, first.ego);
+  assert.equal(view.rollout({ seconds: 0.05 }).episodeId, 1);
+  assert.equal(view.beginEpisode(), 2);
+});
