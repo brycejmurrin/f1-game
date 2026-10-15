@@ -28,8 +28,8 @@ Then watch CI (rule 12). Auto memory is ON (synced to `.claude/memory/`) for cor
 ## Verification — scale it to the change
 One browser GROUP costs 10–40 minutes of serialized SwiftShader here, so running more than the change needs is slower
 feedback, not extra safety (`docs/TESTING.md`; the measurements behind every rule below:
-`docs/notes/TESTING-FIELD-NOTES.md`). `APEX_GL=llvmpipe` boots GLX/TLX ~2.7× faster when Mesa is installed (no
-`navigator.gpu`; `docs/notes/CI-RENDERING-PERFORMANCE.md`).
+`docs/notes/TESTING-FIELD-NOTES.md`). `APEX_GL=llvmpipe` is a CI-runner speed-up (GLX/TLX ~2.7×, no
+`navigator.gpu`): it needs `/dev/dri`, which this container lacks (`ls /dev/dri`; `docs/notes/CI-RENDERING-PERFORMANCE.md`).
 
 | change touches | verify with |
 |---|---|
