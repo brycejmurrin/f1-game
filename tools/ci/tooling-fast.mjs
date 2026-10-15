@@ -362,6 +362,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The Cloud Agent bootstrap contract (.cursor/environment.json). The last docs-guards
   // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5; the workflow retired 2026-10-15), ~0.3 s.
   "tests/unit/environment-json.test.mjs",
+  // Job 6: MGU-K electric deploy/harvest + overtake boost cue (fake-audio VM).
+  "tests/unit/ers-audio-layer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
@@ -475,6 +477,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/ghost-share.test.mjs",
   "tests/unit/ghost.test.mjs",
+  // #1807: a git hook's GIT_DIR / GIT_INDEX_FILE must not reach fixture git (a decoy
+  // repo stays untouched; every fixture-repo test imports the scrub first). ~2.5 s.
+  "tests/unit/git-fixture-env.test.mjs",
   "tests/unit/global-registry.test.mjs",
   // Round-2: GLX createTexture resets UNPACK flags and frees the texture when texImage2D throws (mock).
   "tests/unit/glx-failure-paths.test.mjs",
@@ -636,6 +641,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/model-pack-format.test.mjs",
   "tests/unit/move-tree.test.mjs",
   "tests/unit/net-audio-revs-vm.test.mjs",
+  "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/node-plan.test.mjs",
@@ -667,7 +673,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pause-hud-layout.test.mjs",
   "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
+  "tests/unit/perf-frametime.test.mjs",
   "tests/unit/perf-governor.test.mjs",
+  "tests/unit/perf-race-entry.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/perf-try.test.mjs",
   // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a

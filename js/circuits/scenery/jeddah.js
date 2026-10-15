@@ -27,8 +27,8 @@
       const DARKPOLE= [0.09, 0.09, 0.12];   // lamp-pole shaft
       const POOLAMB = [0.44, 0.38, 0.22];   // amber pool on tarmac
 
-      const WALL_INL = [[0.17, 0.18, 0.23], [0.19, 0.20, 0.25],
-                        [0.15, 0.16, 0.21], [0.21, 0.21, 0.26]];
+      const WALL_INL = [[0.27, 0.28, 0.34], [0.30, 0.31, 0.37],
+                        [0.25, 0.26, 0.32], [0.33, 0.33, 0.39]];
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -269,7 +269,7 @@
         marshalPost(K(s), side, 3.5);   // gap is to the hut CENTRE, guard onTrack(c, 3): 2.4 never built
       }
 
-      waterBand(0.06, 0.375, 1, 35, 260, 12, SEA, { id: "jeddah-red-sea" });
+      waterBand(0.06, 0.375, 1, 35, 550, 12, SEA, { id: "jeddah-red-sea" });
       waterBand(0.43, 0.64, 1, 22, 150, 12, [0.018, 0.035, 0.080],
         { id: "jeddah-marina-water" });
       for (let i = 0; i < 11; i++) {
@@ -443,19 +443,19 @@
       cityFront(0.04, 0.24, -1, 64, {
         minH: 10, maxH: 22, depth: 14,
         palette: WALL_INL, lit: true,
-        step: 55, floor: 4,
+        step: 55, floor: 3,
       });
       cityFront(0.35, 0.48, -1, 72, {
         minH: 12, maxH: 24, depth: 14,
         palette: WALL_INL, lit: true,
-        step: 55, floor: 4,
+        step: 55, floor: 3,
       });
       // gap 78 buried one facade unit (terrain bulge inland ~0.24 m); 64 matches
       // the near row and keeps the gold-window strip on higher ground.
       cityFront(0.56, 0.74, -1, 64, {
         minH: 10, maxH: 22, depth: 14,
         palette: WALL_INL, lit: true, windowCol: WINGOLD,
-        step: 55, floor: 4,
+        step: 55, floor: 3,
       });
 
       // ── JEDDAH SKYLINE — Blue Sail + twin gold + antenna cluster ──────────
@@ -527,7 +527,7 @@
       cityFront(0.245, 0.335, -1, 68, {
         minH: 11, maxH: 23, depth: 14,
         palette: WALL_INL, lit: true, windowCol: WINCOOL,
-        step: 68, floor: 4,
+        step: 68, floor: 3,
       });
 
       // Golden Tower hotel cue near T1 — warm-lit mid-rise facing the canyon.

@@ -24,9 +24,15 @@
 //
 // Run: node tools/gfx/chunk-share-census.mjs [track]
 import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
+// --help and a typo'd flag answer before the server binds or Chromium launches (#1708).
+exitIfHelp(process.argv.slice(2), `usage: node tools/gfx/chunk-share-census.mjs [track=vegas]
+  Boots the game at night on LOW in Chromium and prints, per baked LampChunks
+  table: empty chunks, adjacent-equal lamp-list pairs and the longest equal run (JSON).`);
+parseFlags(process.argv.slice(2), []);
+const TRACK = process.argv[2] || "vegas";
 const srv = await startStaticServer(process.cwd());
 const browser = await launchChromium();
-const TRACK = process.argv[2] || "vegas";
 try {
   const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
   await page.goto(srv.url + "index.html", { waitUntil: "domcontentloaded", timeout: 90000 });

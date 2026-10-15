@@ -460,6 +460,7 @@ var GameAudio = (function () {
     sfxBus.gain.value = sfxBusTarget();
     sfxBus.connect(master);
     attachRivalPassBy();
+    attachErsLayer();
 
     // iOS Safari starts contexts suspended; resume inside the gesture.
     // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
@@ -626,11 +627,21 @@ var GameAudio = (function () {
     } catch (e) { /* stub / mid-teardown */ }
   }
 
+  function attachErsLayer() {
+    if (!ctx || !sfxBus) return;
+    try {
+      if (typeof ErsLayer !== "undefined" && typeof ErsLayer.attach === "function") {
+        ErsLayer.attach(ctx, sfxBus);
+      }
+    } catch (e) { /* stub / mid-teardown */ }
+  }
+
   function init() {
     // init is only ever called from a user gesture
     if (ctx) {
       resumeIfNeeded(true);
       attachRivalPassBy();
+      attachErsLayer();
       Log.info("audio", "GameAudio.init state=" + (ctx && ctx.state));
       return;
     }
@@ -713,6 +724,7 @@ var GameAudio = (function () {
       const p = dying && dying.close();
       if (p && p.catch) p.catch((e) => { Log.debug("audio", "old context close rejected on rebuild:", e && e.message); });
     } catch (e) { /* already closed */ }
+    if (typeof ErsLayer !== "undefined" && ErsLayer.detach) ErsLayer.detach();
     ctx = null;
     master = null;
     sfxBus = null;
@@ -1342,6 +1354,8 @@ var GameAudio = (function () {
     if (whineGain) whineGain.gain.setTargetAtTime(0, t0, 0.06);
     if (harvGain) harvGain.gain.setTargetAtTime(0, t0, 0.06);
     if (ersGain) ersGain.gain.setTargetAtTime(0, t0, 0.04);
+    if (typeof ErsLayer !== "undefined" && ErsLayer.silence) ErsLayer.silence(t0);
+    if (typeof RivalAudio !== "undefined" && RivalAudio.silence) RivalAudio.silence(t0);   // pass-by whoosh (#2187)
     if (windGain) windGain.gain.setTargetAtTime(0, t0, 0.06);
     if (skidGain) skidGain.gain.setTargetAtTime(0, t0, 0.04);
     if (scrubGain) scrubGain.gain.setTargetAtTime(0, t0, 0.04);
@@ -1809,20 +1823,31 @@ var GameAudio = (function () {
     soundtrack.duckForEngine(rev, t);
     const low = energy < 0.2 ? energy / 0.2 : 1;
     const partBias = ph.ersDeploy != null ? 0.8 + 0.4 * clamp01(ph.ersDeploy) : 1;
-    const ersLvl = (deploy > 0 && layers.ers)
-      ? (0.012 + 0.026 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias * tune.boost
-        * (0.42 + 0.58 * Math.max(s, 0.04))
-      : 0;
-    // Cached on the node, same idiom as lfoG/limGain above: ersLvl is 0 whenever
-    // the car isn't deploying. The time constant varies with deploy>0, but a
-    // 0->0 call is a no-op regardless of time constant, so gating on the
-    // cached TARGET alone (not the tau) is still correct.
-    if (ersGain._apexErsTgt !== ersLvl) {
-      ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
-      ersGain._apexErsTgt = ersLvl;
+    // Electric MGU-K + boost cue live in ErsLayer (fixed nodes). When the
+    // module is loaded, mute the legacy ersOsc so the two never stack.
+    if (typeof ErsLayer !== "undefined" && ErsLayer.update) {
+      ErsLayer.update({
+        t, deploy, energy, brake: brkDem, ax: ph.ax || 0, speed: s,
+        layerOn: layers.ers, ersOn: ph.ersOn !== false,
+        boost: deploy > 0 || !!ph.boostOn || !!ph.otOn, otOn: !!ph.otOn,
+        boostTune: tune.boost, partBias,
+      });
+      if (ersGain && ersGain._apexErsTgt !== 0) {
+        ersGain.gain.setTargetAtTime(0, t, 0.10);
+        ersGain._apexErsTgt = 0;
+      }
+    } else {
+      const ersLvl = (deploy > 0 && layers.ers)
+        ? (0.012 + 0.026 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias * tune.boost
+          * (0.42 + 0.58 * Math.max(s, 0.04))
+        : 0;
+      if (ersGain._apexErsTgt !== ersLvl) {
+        ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
+        ersGain._apexErsTgt = ersLvl;
+      }
+      if (deploy > 0)
+        aimParam(ersOsc.frequency, (2600 + rev * 1100 + s * 1500) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
     }
-    if (deploy > 0)
-      aimParam(ersOsc.frequency, (2600 + rev * 1100 + s * 1500) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
 
     // Part-throttle ICE harvest and full-pack regen clip: a shallow ignition cut.
     const partThr = thr > 0.1 && thr < 0.72 && deploy < 0.05 && s > 0.08;
@@ -1983,7 +2008,11 @@ var GameAudio = (function () {
   function feedReplayScrub(player, scrubbing, cars, gearOf, rpmFor, rivalAudio, isWet, vTop) {
     if (!player) return;   // SOUND off or no car: leave everything as it is
     if (!scrubbing) {
-      if (_scrubWas) { stopEngine(); setRivals([]); _scrubWas = false; }
+      if (_scrubWas) {
+        stopEngine(); setRivals([]); _scrubWas = false;
+        // stopEngine skips an engine already off; the scrub's whoosh must still close (#2187).
+        if (typeof RivalAudio !== "undefined" && RivalAudio.silence) RivalAudio.silence();
+      }
       return;
     }
     _scrubWas = true;
@@ -2512,6 +2541,7 @@ var GameAudio = (function () {
 
   // whoosh: filtered noise sweeping up + a rising saw underneath
   function deployBoost() {
+    if (typeof ErsLayer !== "undefined" && ErsLayer.cueBoost) ErsLayer.cueBoost(now());
     boostPeak = 0.3 * tune.boost;
     boostFired++;
     if (!sfxOk() || !(boostPeak > 0)) return;   // BOOST at 0 is a silent deploy, not a zero-height envelope
@@ -2833,6 +2863,10 @@ var GameAudio = (function () {
     radioLeadS: radio.radioLeadS,
     radioFxMax: radio.radioFxMax,
     radioChannels: radio.radioChannels,
+    // The live context and SFX bus, for leaf modules that schedule their own
+    // nodes (radio-voice squelch, #2189). null before init / after teardown.
+    context: () => ctx,
+    sfxBus: () => sfxBus,
     setEnabled,
     enabled,
     startEngine,
@@ -2972,7 +3006,11 @@ var GameAudio = (function () {
     limiterHz() { return limOsc ? +limOsc.frequency.value.toFixed(2) : 0; },
     // The cut's pitch sag, in cents of swing, and the levels behind the trims.
     limiterCents() { return limPitch ? +limPitch.gain.value.toFixed(3) : 0; },
-    ersLevel() { return ersGain ? +ersGain.gain.value : 0; },
+    ersLevel() {
+      if (typeof ErsLayer !== "undefined" && ErsLayer.attached && ErsLayer.attached()) return ErsLayer.deployLevel();
+      return ersGain ? +ersGain.gain.value : 0;
+    },
+    ersAudio() { return (typeof ErsLayer !== "undefined" && ErsLayer.inspect) ? ErsLayer.inspect() : null; },
     harvestLevel() { return harvGain ? +harvGain.gain.value : 0; },
     harvestCoastLevel() { return +harvCoastLevel.toFixed(5); },
     harvestBrakeLevel() { return +harvBrakeLevel.toFixed(5); },
