@@ -4,7 +4,7 @@
 **Brief:** `docs/tracks/mont_tremblant.md`  
 **Live:** [brycejmurrin.github.io/f1-game](https://brycejmurrin.github.io/f1-game/) (picker → MONT-TREMBLANT)
 
-**Captures:** **42** JPEG frames committed at `artifacts/shots/tracks/mont_tremblant/` (`git add -f`; parent `artifacts/` remains gitignored). Max width 1280 px, JPEG q≈80, each &lt;300 KB.
+**Captures:** **36** JPEG frames at `artifacts/shots/tracks/mont_tremblant/` (`git add -f`). Max width 1280 px, JPEG q≈80, each &lt;300 KB. Batch: `shot.mjs --jpeg --present-timeout 90 --capture-retries 4 --wait 120` (shared tooling).
 
 ## Code map
 
@@ -17,7 +17,7 @@
 
 **Frame debt:** `_sceneryShift` ≈ 0.28 — paddock/start use `sl()`; Hump, Bridge, Namerow, esses use authored `K(s)`.
 
-**Harness weather (for follow-up):** `__apex.race(track, tod, weather)` and `__apex.weather("dry"|"wet"|"rain"|"overcast"|"fog")` (`js/agent/apex.js`). Batch `shot.mjs` on deploy branch supports `--tod` only until the shared tooling PR.
+**Harness:** `shot.mjs` batch supports `--tod dawn|day|dusk|night` and `--weather dry|wet|rain|overcast|fog|storm` (per-job `tod` / `weather` fields).
 
 ## Theme and models
 
@@ -25,7 +25,7 @@ Laurentian enclosure (armco + conifers), club-scale paddock, natural banks over 
 
 ---
 
-## By sector and landmarks — day dry (22 frames)
+## By sector and landmarks — day dry (18 frames)
 
 | | | |
 |:---:|:---:|:---:|
@@ -33,24 +33,29 @@ Laurentian enclosure (armco + conifers), club-scale paddock, natural banks over 
 | <br/>**Ski mountain skyline · day · dry**<br/>![Ski mountain skyline · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s1-04-ski-skyline__day-dry.jpg) | <br/>**Esses (chase) · day · dry**<br/>![Esses (chase) · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s1-05-esses-chase__day-dry.jpg) | <br/>**Esses cutting (eye) · day · dry**<br/>![Esses cutting (eye) · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s1-06-esses-tunnel__day-dry.jpg) |
 | <br/>**Downhill sweep · day · dry**<br/>![Downhill sweep · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s2-07-downhill-sweep__day-dry.jpg) | <br/>**T4 spectator bank · day · dry**<br/>![T4 spectator bank · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s2-08-t4-spectator-bank__day-dry.jpg) | <br/>**T5 hardwood run-off · day · dry**<br/>![T5 hardwood run-off · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s2-09-t5-hardwood__day-dry.jpg) |
 | <br/>**Lac Ouimet · day · dry**<br/>![Lac Ouimet · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s2-10-lac-ouimet__day-dry.jpg) | <br/>**Carousel · day · dry**<br/>![Carousel · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s2-11-carousel__day-dry.jpg) | <br/>**The Hump (chase) · day · dry**<br/>![The Hump (chase) · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-12-hump-chase__day-dry.jpg) |
-| <br/>**Hump skyline · day · dry**<br/>![Hump skyline · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-13-hump-skyline__day-dry.jpg) | <br/>**T8–T9 climbing 90° · day · dry**<br/>![T8–T9 climbing 90° · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-14-climbing-90s__day-dry.jpg) | <br/>**Bridge (chase) · day · dry**<br/>![Bridge (chase) · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-15-bridge-chase__day-dry.jpg) |
-| <br/>**Namerow hairpin · day · dry**<br/>![Namerow hairpin · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-16-namerow__day-dry.jpg) | <br/>**Paddock Bend · day · dry**<br/>![Paddock Bend · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-17-paddock-bend__day-dry.jpg) | <br/>**Landmark: bridge deck · day · dry**<br/>![Landmark: bridge deck · day · dry](../../../artifacts/shots/tracks/mont_tremblant/lm-bridge-deck__day-dry.jpg) |
-| <br/>**Landmark: control tower · day · dry**<br/>![Landmark: control tower · day · dry](../../../artifacts/shots/tracks/mont_tremblant/lm-control-tower__day-dry.jpg) | <br/>**Landmark: Hump crest cabin · day · dry**<br/>![Landmark: Hump crest cabin · day · dry](../../../artifacts/shots/tracks/mont_tremblant/lm-hump-crest-cabin__day-dry.jpg) | <br/>**Landmark: Namerow bank · day · dry**<br/>![Landmark: Namerow bank · day · dry](../../../artifacts/shots/tracks/mont_tremblant/lm-namerow-bank__day-dry.jpg) |
-| <br/>**Landmark: Paddock Bend stand · day · dry**<br/>![Landmark: Paddock Bend stand · day · dry](../../../artifacts/shots/tracks/mont_tremblant/lm-paddock-bend-stand__day-dry.jpg) |  |  |
+| <br/>**T8–T9 climbing 90° · day · dry**<br/>![T8–T9 climbing 90° · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-14-climbing-90s__day-dry.jpg) | <br/>**Bridge (chase) · day · dry**<br/>![Bridge (chase) · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-15-bridge-chase__day-dry.jpg) | <br/>**Namerow hairpin · day · dry**<br/>![Namerow hairpin · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-16-namerow__day-dry.jpg) |
+| <br/>**Paddock Bend · day · dry**<br/>![Paddock Bend · day · dry](../../../artifacts/shots/tracks/mont_tremblant/s3-17-paddock-bend__day-dry.jpg) | <br/>**Landmark: control tower · day · dry**<br/>![Landmark: control tower · day · dry](../../../artifacts/shots/tracks/mont_tremblant/lm-control-tower__day-dry.jpg) | <br/>**Landmark: Hump crest cabin · day · dry**<br/>![Landmark: Hump crest cabin · day · dry](../../../artifacts/shots/tracks/mont_tremblant/lm-hump-crest-cabin__day-dry.jpg) |
 
-## By weather and time of day — anchor views (20 frames)
+## By weather and time of day — hero views (18 frames)
 
-Anchor re-shoots (experimental pre–shared-tooling batch). Filenames: `__<tod>-<weather>`.
+Six anchors × three `tod`/`weather` pairs (`weather()` applied per batch group).
 
 | | | |
 |:---:|:---:|:---:|
-| <br/>**Wx matrix: bridge chase · day · overcast**<br/>![Wx matrix: bridge chase · day · overcast](../../../artifacts/shots/tracks/mont_tremblant/wx-bridge__day-overcast.jpg) | <br/>**Wx matrix: bridge chase · day · rain**<br/>![Wx matrix: bridge chase · day · rain](../../../artifacts/shots/tracks/mont_tremblant/wx-bridge__day-rain.jpg) | <br/>**Wx matrix: bridge chase · dusk · dry**<br/>![Wx matrix: bridge chase · dusk · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-bridge__dusk-dry.jpg) |
-| <br/>**Wx matrix: bridge chase · night · dry**<br/>![Wx matrix: bridge chase · night · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-bridge__night-dry.jpg) | <br/>**Wx matrix: esses tunnel · day · overcast**<br/>![Wx matrix: esses tunnel · day · overcast](../../../artifacts/shots/tracks/mont_tremblant/wx-esses__day-overcast.jpg) | <br/>**Wx matrix: esses tunnel · day · rain**<br/>![Wx matrix: esses tunnel · day · rain](../../../artifacts/shots/tracks/mont_tremblant/wx-esses__day-rain.jpg) |
-| <br/>**Wx matrix: esses tunnel · dusk · dry**<br/>![Wx matrix: esses tunnel · dusk · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-esses__dusk-dry.jpg) | <br/>**Wx matrix: esses tunnel · night · dry**<br/>![Wx matrix: esses tunnel · night · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-esses__night-dry.jpg) | <br/>**Wx matrix: The Hump chase · day · fog**<br/>![Wx matrix: The Hump chase · day · fog](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__day-fog.jpg) |
-| <br/>**Wx matrix: The Hump chase · day · overcast**<br/>![Wx matrix: The Hump chase · day · overcast](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__day-overcast.jpg) | <br/>**Wx matrix: The Hump chase · day · rain**<br/>![Wx matrix: The Hump chase · day · rain](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__day-rain.jpg) | <br/>**Wx matrix: The Hump chase · day · wet**<br/>![Wx matrix: The Hump chase · day · wet](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__day-wet.jpg) |
-| <br/>**Wx matrix: The Hump chase · dusk · dry**<br/>![Wx matrix: The Hump chase · dusk · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__dusk-dry.jpg) | <br/>**Wx matrix: The Hump chase · dusk · wet**<br/>![Wx matrix: The Hump chase · dusk · wet](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__dusk-wet.jpg) | <br/>**Wx matrix: The Hump chase · night · dry**<br/>![Wx matrix: The Hump chase · night · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__night-dry.jpg) |
-| <br/>**Wx matrix: The Hump chase · night · wet**<br/>![Wx matrix: The Hump chase · night · wet](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__night-wet.jpg) | <br/>**Wx matrix: paddock orbit · day · overcast**<br/>![Wx matrix: paddock orbit · day · overcast](../../../artifacts/shots/tracks/mont_tremblant/wx-paddock__day-overcast.jpg) | <br/>**Wx matrix: paddock orbit · day · rain**<br/>![Wx matrix: paddock orbit · day · rain](../../../artifacts/shots/tracks/mont_tremblant/wx-paddock__day-rain.jpg) |
-| <br/>**Wx matrix: paddock orbit · dusk · dry**<br/>![Wx matrix: paddock orbit · dusk · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-paddock__dusk-dry.jpg) | <br/>**Wx matrix: paddock orbit · night · dry**<br/>![Wx matrix: paddock orbit · night · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-paddock__night-dry.jpg) |  |
+| <br/>**Hero: bridge chase · day · overcast**<br/>![Hero: bridge chase · day · overcast](../../../artifacts/shots/tracks/mont_tremblant/wx-bridge__day-overcast.jpg) | <br/>**Hero: bridge chase · day · rain**<br/>![Hero: bridge chase · day · rain](../../../artifacts/shots/tracks/mont_tremblant/wx-bridge__day-rain.jpg) | <br/>**Hero: bridge chase · dusk · dry**<br/>![Hero: bridge chase · dusk · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-bridge__dusk-dry.jpg) |
+| <br/>**Hero: Carousel · day · overcast**<br/>![Hero: Carousel · day · overcast](../../../artifacts/shots/tracks/mont_tremblant/wx-carousel__day-overcast.jpg) | <br/>**Hero: Carousel · dusk · dry**<br/>![Hero: Carousel · dusk · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-carousel__dusk-dry.jpg) | <br/>**Hero: Carousel · night · dry**<br/>![Hero: Carousel · night · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-carousel__night-dry.jpg) |
+| <br/>**Hero: esses tunnel · dawn · dry**<br/>![Hero: esses tunnel · dawn · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-esses__dawn-dry.jpg) | <br/>**Hero: esses tunnel · day · fog**<br/>![Hero: esses tunnel · day · fog](../../../artifacts/shots/tracks/mont_tremblant/wx-esses__day-fog.jpg) | <br/>**Hero: esses tunnel · day · storm**<br/>![Hero: esses tunnel · day · storm](../../../artifacts/shots/tracks/mont_tremblant/wx-esses__day-storm.jpg) |
+| <br/>**Hero: The Hump chase · day · fog**<br/>![Hero: The Hump chase · day · fog](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__day-fog.jpg) | <br/>**Hero: The Hump chase · dusk · dry**<br/>![Hero: The Hump chase · dusk · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__dusk-dry.jpg) | <br/>**Hero: The Hump chase · night · dry**<br/>![Hero: The Hump chase · night · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-hump__night-dry.jpg) |
+| <br/>**Hero: Namerow hairpin · day · wet**<br/>![Hero: Namerow hairpin · day · wet](../../../artifacts/shots/tracks/mont_tremblant/wx-namerow__day-wet.jpg) | <br/>**Hero: Namerow hairpin · dusk · dry**<br/>![Hero: Namerow hairpin · dusk · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-namerow__dusk-dry.jpg) | <br/>**Hero: Namerow hairpin · night · dry**<br/>![Hero: Namerow hairpin · night · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-namerow__night-dry.jpg) |
+| <br/>**Hero: paddock orbit · day · rain**<br/>![Hero: paddock orbit · day · rain](../../../artifacts/shots/tracks/mont_tremblant/wx-paddock__day-rain.jpg) | <br/>**Hero: paddock orbit · dusk · dry**<br/>![Hero: paddock orbit · dusk · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-paddock__dusk-dry.jpg) | <br/>**Hero: paddock orbit · night · dry**<br/>![Hero: paddock orbit · night · dry](../../../artifacts/shots/tracks/mont_tremblant/wx-paddock__night-dry.jpg) |
+
+### Weather / lighting backlog
+
+| Issue | Notes |
+|--------|--------|
+| Night track lamps | `furniture.lamp: "none"` — night heroes rely on preset ambient only |
+| Montreal donor presets | Fog/rain/overcast may not match Laurentian sky (`docs/LIGHTING.md`) |
+| Storm + fog in esses | Verify rain particles and exposure in hero frames |
 
 ## Findings (geometry + dress)
 
@@ -65,9 +70,9 @@ Anchor re-shoots (experimental pre–shared-tooling batch). Filenames: `__<tod>-
 ### Ranked improvements (circuit-scoped)
 
 1. Done — Paddock Bend van footing.  
-2. After tooling PR — weather matrix + lighting backlog above.  
-3. Clip 0.473 — further bush winnow on −1 s∈[0.46,0.50] if baseline ever tightens.  
-4. Montreal donor replacement when look-survey slot opens.
+2. Done — 36-frame survey with official `shot.mjs` weather/TOD batch.  
+3. Clip 0.473 — further bush winnow if baseline tightens.  
+4. Montreal donor / lamp policy when look-survey opens.
 
 ## Verification
 
