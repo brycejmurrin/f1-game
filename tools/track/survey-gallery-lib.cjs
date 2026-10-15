@@ -93,15 +93,20 @@ function branchHasTrackShots(root, ref) {
 
 function listBranchTrackImages(root, branch) {
   const ref = branch.startsWith("origin/") ? branch : `origin/${branch}`;
-  const list = execFileSync(
-    "git",
-    ["ls-tree", "-r", "--name-only", ref, "--", "artifacts/shots/tracks/"],
-    { cwd: root, encoding: "utf8", maxBuffer: 32 << 20 },
-  );
-  return list
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((f) => IMAGE_EXT.test(f));
+  try {
+    const list = execFileSync(
+      "git",
+      ["ls-tree", "-r", "--name-only", ref, "--", "artifacts/shots/tracks/"],
+      { cwd: root, encoding: "utf8", maxBuffer: 32 << 20 },
+    );
+    return list
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((f) => IMAGE_EXT.test(f));
+  } catch (_) {
+    // Open survey PR heads from `gh` may not be fetched yet (CI runs fetch; local may not).
+    return [];
+  }
 }
 
 function readGitBlob(root, branch, repoPath) {
