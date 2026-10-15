@@ -147,7 +147,6 @@
     LAZY_AGENT: [
     "js/agent/agentview-raster.js",
     "js/agent/agentview.js",
-    "js/agent/shot-clear.js",
     "js/agent/apex.js"
   ],
     LAZY_EDGES: [
@@ -735,6 +734,7 @@
     "js/garage/scene-prims.js",
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",
+    "js/garage/scene-crew.js",
     "js/garage/scene.js",
     "js/circuits/bahrain.js",
     "js/circuits/monaco.js",
