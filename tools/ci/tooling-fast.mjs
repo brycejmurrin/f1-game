@@ -362,6 +362,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The Cloud Agent bootstrap contract (.cursor/environment.json). The last docs-guards
   // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5; the workflow retired 2026-10-15), ~0.3 s.
   "tests/unit/environment-json.test.mjs",
+  // Job 6: MGU-K electric deploy/harvest + overtake boost cue (fake-audio VM).
+  "tests/unit/ers-audio-layer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
@@ -636,6 +638,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/model-pack-format.test.mjs",
   "tests/unit/move-tree.test.mjs",
   "tests/unit/net-audio-revs-vm.test.mjs",
+  "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/node-plan.test.mjs",
@@ -668,6 +671,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",
+  "tests/unit/perf-race-entry.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/perf-try.test.mjs",
   // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a

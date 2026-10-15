@@ -102,6 +102,11 @@
             // Roof slab floating above the louvres on a shadow gap.
             addBox(stage, vadd(vadd(a.c, a.r, -2.0), a.u, 11.3), [19, 0.55, 30], WHITE, b);
             addBox(stage, vadd(vadd(a.c, a.r, -11.2), a.u, 11.1), [0.7, 0.9, 30], SHADE, b);
+            // Rooftop plant: breaks up the flat slab (survey D7).
+            stage._mat = MAT.METAL;
+            for (let v = 0; v < 3; v++)
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, 1.5), a.t, (v - 1) * 8), a.u, 12.3),
+                [3.2, 1.2, 2.4], [0.62, 0.64, 0.68], b);
             stage._mat = 0;
           }, { required: true });
         }
@@ -152,9 +157,10 @@
             center: vadd(a.c, a.u, 10), size: [18, 22, 160], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
-            // Stepped rear shell — rows rise away from the track.
-            addBox(stage, vadd(vadd(a.c, a.r, 4.0), a.u, 5.5), [10, 11, 150], WHITE, b);
-            addBox(stage, vadd(vadd(a.c, a.r, 7.5), a.u, 12.0), [8, 8, 140], BONE, b);
+            // No shell boxes here: grandstandEx above already builds the stepped
+            // rear shell BEHIND its seating (gap+6..12.5). A 10 m x 11 m box at
+            // gap 13..23 swallowed the raked tiers and read as a blank wall
+            // (survey D1). This group carries only glazing, canopy and fascia.
             stage._mat = MAT.GLASS;
             addBox(stage, vadd(vadd(a.c, a.r, 9.2), a.u, 14.5), [0.4, 3.2, 120], GLASS_S, b);
             stage._mat = MAT.METAL;
@@ -311,9 +317,9 @@
       }
 
       for (const [s, side, gap] of [
-        [0.030, -1, 24], [0.155, 1, 34], [0.383, -1, 30],
+        [0.030, -1, 32], [0.155, 1, 34], [0.383, -1, 30],
         [0.643, 1, 34], [0.700, -1, 36], [0.935, 1, 34],
-      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3, light: false });
+      ]) floodMast(K(s), side, gap, { h: 40, cool: true, pool: false, arms: 3 });
 
       for (const [i, s, gap] of [[0, 0.030, 46], [1, 0.045, 34], [2, 0.060, 46]]) {
         const a = anchor(K(s), 1, gap);

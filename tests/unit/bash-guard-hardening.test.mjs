@@ -731,8 +731,14 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }), "deny");
   assert.equal(mcp({ method: "force_cancel_workflow_run", run_id: 1 }), "deny");
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_RUN_CANCEL_OK: "1" }), null, "the user asked");
-  assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }), "ask", "a re-run is at most once, infra only");
-  assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }), "ask");
+  const noDesk = { APEX_MERGE_DESK: "" };
+  assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }, noDesk), "ask", "a re-run is at most once, infra only");
+  assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }, noDesk), "ask");
+  // Bryce 2026-10-15 ("all tools and mcps enabled", "Fix for me"): settings.json sets
+  // APEX_MERGE_DESK=1 for every session, so a re-run passes silently; cancels stay denied.
+  for (const method of ["rerun_failed_jobs", "rerun_workflow_run"])
+    assert.equal(mcp({ method, run_id: 1 }, { APEX_MERGE_DESK: "1" }), null, `desk passes ${method}`);
+  assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_MERGE_DESK: "1" }), "deny", "the desk never cancels");
   assert.equal(mcp({ method: "run_workflow", workflow_id: "ci.yml", ref: "x" }), null, "a dispatch passes");
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
