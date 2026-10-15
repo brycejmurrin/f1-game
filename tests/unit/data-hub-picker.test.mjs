@@ -20,7 +20,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], scheduleOnline = true } = {}) {
+function harness({ motion, latest = undefined, realTelemetry = false, drivers = [], scheduleOnline = true,
+                   emptyMeeting = null, emptyYear = null } = {}) {
   let docRoot = null;
   const scrolls = [];
   class El {
@@ -54,6 +55,8 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     find(pred) { for (const ch of this.children) { if (pred(ch)) return ch; const r = ch.find(pred); if (r) return r; } return null; }
     selects() { const out = []; (function walk(n) { n.children.forEach((c) => { if (c.tagName === "SELECT") out.push(c); walk(c); }); })(this); return out; }
     focus() {}
+    showModal() { this.open = true; }
+    close() { this.open = false; }
     scrollIntoView(o) { scrolls.push({ id: this.id, o }); }
   }
   docRoot = new El("html");
@@ -82,7 +85,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     const n = new El("dialog"); n.id = id; n.hidden = hidden !== false; byId[id] = n; docRoot.appendChild(n); return n;
   }
   const pending = [], resultKeys = [];
-  const defer = (name, value) => new Promise((res) => pending.push({ name, res: () => res(value) }));
+  const defer = (name, value) => new Promise((res, reject) => pending.push({ name, res: () => res(value), reject }));
   const LATEST = latest !== undefined ? latest
     : { sessionKey: 500, meetingKey: 50, year: 2026, name: "Race", type: "Race", dateStart: "2026-10-04T12:00:00Z" };
   const meetingYears = [];
@@ -90,11 +93,12 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   const F1API = {
     schedule: () => { scheduleCalls++; return scheduleOnline ? Promise.resolve([]) : Promise.reject(new Error("offline")); },
     latestSession: () => defer("latestSession", LATEST),
-    meetings: (year) => { meetingYears.push(year); return defer("meetings", [{ meetingKey: 50, name: "Latest GP", dateStart: "2026-10-01" }, { meetingKey: 40, name: "Picked GP", dateStart: "2026-09-01" }]); },
-    sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
+    meetings: (year) => { meetingYears.push(year); return defer("meetings", year === emptyYear ? [] : [{ meetingKey: 50, name: "Latest GP", dateStart: "2026-10-01" }, { meetingKey: 40, name: "Picked GP", dateStart: "2026-09-01" }]); },
+    sessionsForMeeting: (mk) => defer("sessions(" + mk + ")", mk === emptyMeeting ? [] : [{ sessionKey: mk * 10, meetingKey: mk, name: "Race", type: "Race", dateStart: "2026-09-01T12:00:00Z" }]),
     sessionResult: (sk) => { resultKeys.push(sk); return defer("sessionResult", []); },
     sessionDrivers: () => defer("drivers", drivers),
     fastestLap: () => defer("fastestLap", null),
+    driverStandings: () => defer("driverStandings", []), constructorStandings: () => defer("constructorStandings", []),
     weather: () => defer("weather", null), livePositions: () => defer("pos", { values: [], cursor: null }),
     liveIntervals: () => defer("int", { values: {}, cursor: null }),
     cancelAll() { cancels++; }, cacheEntryT: () => null,
@@ -132,7 +136,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   DataHub.init(root);
   const content = () => root.find((n) => n.id === "dh-panel");
   const tab = (id) => root.find((n) => n.id === "dh-tab-" + id).dispatch("click");
-  return { DataHub, root, content, tab, settle, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, drain, flush, pending, resultKeys, scrolls, document, byId, place, meetingYears };
+  return { DataHub, root, content, tab, settle, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, setEmptyMeeting: (v) => { emptyMeeting = v; }, drain, flush, pending, resultKeys, scrolls, document, byId, place, meetingYears };
 }
 
 // LIVE booted on the latest session, the player has just picked "Picked GP"
@@ -390,4 +394,114 @@ test("changing GP / SESSION with no lane in flight cancels nothing", async () =>
   sesSel.value = "500"; sesSel.dispatch("change"); await h.drain();
   gpSel.value = "40"; gpSel.dispatch("change"); await h.drain();
   assert.equal(h.cancels, before);
+});
+
+for (const outcome of ["success", "error"]) test(`deselecting a pending telemetry driver ignores its late ${outcome}`, async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO });
+  h.DataHub.open("telemetry"); await h.drain();
+  const chip = h.content().find((n) => n.classList.contains("dh-dchip"));
+  chip.dispatch("click");
+  h.content().find((n) => n.classList.contains("dh-livebtn") && /LOAD FASTEST LAP/.test(n.textContent)).dispatch("click");
+  await h.flush();
+  const request = h.pending.shift();
+  assert.equal(request.name, "fastestLap");
+  const before = h.cancels;
+  chip.dispatch("click");
+  assert.match(h.content().querySelector(".dh-telem-detail").textContent, /Select one driver/);
+  if (outcome === "success") request.res(); else request.reject(new Error("late network failure"));
+  await h.drain();
+  assert.equal(!!h.root.querySelector(".dh-tpopup"), false, "old selection cannot open a modal");
+  assert.equal(!!h.content().querySelector(".dh-error"), false, "old selection cannot replace the tray with an error");
+  assert.match(h.content().querySelector(".dh-telem-detail").textContent, /Select one driver/);
+  assert.equal(h.cancels, before + 1, "abandoned lane work releases the transport");
+  h.DataHub.close();
+});
+
+for (const tab of ["results", "live", "telemetry"]) for (const empty of ["meeting", "year"]) {
+  test(`${tab}: a successful empty ${empty} clears the previous session and survives sibling visits`, async () => {
+    const year = new Date().getFullYear() - 1;
+    const h = harness({ realTelemetry: true, drivers: TWO,
+      emptyMeeting: empty === "meeting" ? 40 : null, emptyYear: empty === "year" ? year : null,
+      latest: { sessionKey: 500, meetingKey: 50, year: new Date().getFullYear(), name: "OLD SESSION", type: "Race", circuit: "OLD CIRCUIT" } });
+    h.DataHub.open(tab); await h.drain();
+    assert.match(h.content().textContent, /OLD SESSION/);
+    if (empty === "meeting") {
+      const gp = h.content().selects()[0]; gp.value = "40"; gp.dispatch("change");
+    } else {
+      h.content().find((n) => n.tagName === "BUTTON" && n.textContent === String(year)).dispatch("click");
+    }
+    await h.drain();
+    assert.doesNotMatch(h.content().textContent, /OLD SESSION|OLD CIRCUIT/);
+    assert.match(h.content().textContent, /no data/);
+    assert.ok(h.content().querySelector(".dh-empty"), "the old body is replaced by the tab's empty state");
+    h.tab(tab === "results" ? "live" : "results"); await h.flush();
+    assert.equal(h.pending.some((p) => p.name === "latestSession"), false, "empty explicit selection must not revert to latest");
+    await h.drain();
+    assert.doesNotMatch(h.content().textContent, /OLD SESSION|OLD CIRCUIT/);
+    assert.ok(h.content().querySelector(".dh-picker"), "an empty selection keeps its picker available");
+    h.tab(tab); await h.drain();
+    if (empty === "meeting") {
+      const gp = h.content().selects()[0]; gp.value = "50"; gp.dispatch("change");
+    } else {
+      h.content().find((n) => n.tagName === "BUTTON" && n.textContent === String(year + 1)).dispatch("click");
+    }
+    await h.drain();
+    assert.match(h.content().textContent, /Race/);
+    assert.doesNotMatch(h.content().selects()[1].textContent, /no data/);
+    h.DataHub.close();
+  });
+}
+
+for (const empty of ["meeting", "year"]) for (const nextTab of ["standings", "telemetry"]) {
+  test(`a detached empty ${empty} stays selected while ${nextTab}'s current load settles`, async () => {
+    const year = new Date().getFullYear() - 1;
+    const h = harness({ realTelemetry: true, drivers: TWO, emptyMeeting: empty === "meeting" ? 40 : null,
+      emptyYear: empty === "year" ? year : null });
+    h.DataHub.open("results"); await h.drain();
+    if (empty === "meeting") {
+      const gp = h.content().selects()[0]; gp.value = "40"; gp.dispatch("change");
+    } else h.content().find((n) => n.tagName === "BUTTON" && n.textContent === String(year)).dispatch("click");
+    h.tab(nextTab); await h.flush();
+    await h.settle(empty === "meeting" ? "sessions(40)" : "meetings");
+    await h.drain();
+    assert.equal(!!h.content().querySelector(".dh-loading"), false, "the abandoned pick did not invalidate the current loader");
+    h.resultKeys.length = 0;
+    h.tab("results"); await h.flush();
+    assert.equal(h.pending.some((p) => p.name === "latestSession"), false, "the detached empty pick remains pinned");
+    await h.drain();
+    assert.deepEqual(h.resultKeys, [], "the previous race is not fetched again");
+    assert.ok(h.content().querySelector(".dh-empty"));
+    assert.match(h.content().textContent, /no data/);
+    h.DataHub.close();
+  });
+}
+
+for (const tab of ["results", "live", "telemetry"]) {
+  test(`${tab}: a pinned empty meeting hydrates its body when sessions become available on rebuild`, async () => {
+    const h = harness({ realTelemetry: true, drivers: TWO, emptyMeeting: 40 });
+    h.DataHub.open(tab); await h.drain();
+    const gp = h.content().selects()[0]; gp.value = "40"; gp.dispatch("change"); await h.drain();
+    assert.ok(h.content().querySelector(".dh-empty"));
+    h.DataHub.close(); h.setEmptyMeeting(null);
+    h.DataHub.open(tab); await h.drain();
+    assert.equal(h.content().selects()[1].children.some((op) => op.textContent === "Race"), true);
+    const body = h.content().querySelector(tab === "results" ? ".dh-res-body" : ".dh-split-L");
+    assert.match(body.textContent, /Race/, "the selected session and rendered body agree");
+    if (tab !== "results") assert.ok(h.content().querySelector(".dh-live-title"), "session metadata is rendered outside the picker");
+    if (tab === "telemetry") assert.ok(h.content().querySelector(".dh-dchip"));
+    h.DataHub.close();
+  });
+}
+
+test("detached hydration cannot invalidate or strand the newly loading session tab", async () => {
+  const h = harness({ realTelemetry: true, drivers: TWO, emptyMeeting: 40 });
+  h.DataHub.open("results"); await h.drain();
+  const gp = h.content().selects()[0]; gp.value = "40"; gp.dispatch("change"); await h.drain();
+  h.DataHub.close(); h.setEmptyMeeting(null);
+  h.DataHub.open("results"); await h.flush();
+  h.tab("telemetry"); await h.flush();
+  await h.drain();
+  assert.equal(!!h.content().querySelector(".dh-loading"), false);
+  assert.ok(h.content().querySelector(".dh-dchip"), "the attached tab hydrates even if the detached picker filled shared metadata first");
+  h.DataHub.close();
 });
