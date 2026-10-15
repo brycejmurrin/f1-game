@@ -98,3 +98,53 @@ test("rapid pre-validation failures retain the call gap instead of decoding each
   f.tick(2);
   assert.equal(f.requests.length, 2, "the pending warning retries once the gap expires");
 });
+
+for (const pending of ["still there", "side change", "initial warning"]) {
+  test(`invalid ${pending} retains only warnings previously heard`, () => {
+    const f = fixture(); f.tick();
+    if (pending !== "initial warning") {
+      f.finish(true);
+      if (pending === "still there") f.tick(45);
+      else { f.rival.x = 2; f.tick(); }
+    }
+    const delayed = f.requests.at(-1);
+    f.rival.s += 30;
+    assert.equal(delayed.options.valid(), false, "the delayed call no longer describes traffic");
+    f.finish(); f.tick();
+    const clear = f.requests.filter(r => r.text === "Clear.");
+    assert.equal(clear.length, pending === "initial warning" ? 0 : 1,
+      "clear follows an earlier heard warning, never an invalid initial warning");
+  });
+}
+
+test("real VoicePack drops stale still-there audio but retains the heard warning for clear", async () => {
+  const starts = [], decoders = [];
+  const timers = new Map(); let timerId = 0;
+  const ctx = vm.createContext({ Promise, Map, Set,
+    setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); },
+    Log: { info() {} }, fetch: async () => ({ ok: true,
+      json: async () => ({ clips: { "car left": [0, 1, 0.5], "still there": [1, 1, 0.5], clear: [2, 1, 0.5] } }),
+      arrayBuffer: async () => new ArrayBuffer(3) }),
+    GameAudio: { now: () => 0, decodeClip: () => new Promise(resolve => decoders.push(resolve)),
+      radioVoice: () => { starts.push(true); return { end: 1, stop() {} }; } },
+  });
+  for (const file of ["js/audio/voice-pack.js", "js/race/spotter.js"])
+    vm.runInContext(fs.readFileSync(new URL(`../../${file}`, import.meta.url), "utf8"), ctx);
+  const pack = ctx.VoicePack.create({}); pack.ensure("george");
+  const drain = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+  await drain(); assert.equal(pack.ready("george"), true);
+  const player = { s: 100, x: 0, speed: 50 }, rival = { s: 100, x: -2 };
+  const spotter = ctx.Spotter.create({ state: "race", soundOn: true, player, cars: [player, rival],
+    track: { total: 1000 }, vTop: () => 100, store: { get: () => true }, radio: { pack, volume: () => 1 } });
+  const calls = [];
+  const tick = n => { for (let i = 0; i < n; i++) { const key = spotter.update(0.1); if (key) calls.push(key); } };
+  tick(10); decoders.shift()({ duration: 0.5 }); await drain();
+  assert.equal(starts.length, 1, "the initial warning actually reached audio"); pack.stop("spotter");
+  tick(45); assert.equal(calls.at(-1), "still there");
+  rival.s += 30; decoders.shift()({ duration: 0.5 }); await drain();
+  assert.equal(starts.length, 1, "stale still-there is not played");
+  tick(10); assert.equal(calls.at(-1), "clear");
+  decoders.shift()({ duration: 0.5 }); await drain();
+  assert.equal(starts.length, 2, "clear reaches audio after the heard initial warning");
+  pack.stop("spotter");
+});
