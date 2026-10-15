@@ -40,6 +40,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Track Designer on a landscape phone: the map gets most of the screen and UNDO / FIT VIEW sit beside it instead of covering it (#2152).
 - Touch: sliders, dropdowns and fold-out rows (OVERALL SPEED, Spotify, EXTRA PAINT, EXTRA FUNDS, free-camera FOV) are big enough to tap (#2158).
 - Free camera with the lighting panel open: the camera bar no longer covers the panel's FREE CAMERA button on a phone (#2159).
+- Offline AI cars now play wall bump and scrape sounds when they hit barriers (#2212).
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
