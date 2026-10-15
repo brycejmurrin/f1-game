@@ -18,6 +18,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedDom } from "../helpers/seed-dom.mjs";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -320,11 +321,28 @@ test("retirements sort last and say why in the time column", async () => {
   assert.deepEqual(r[2].slice(4, 6), ["DNS", "—"]);
 });
 
-// OpenF1 answers a 200 with {detail:"No results found."} for a session that has
-// not published — api.js flattens that to []. It is the ORDINARY state for a
-// session that just finished, so it must read as "not yet", never as an error.
-test("an unpublished session shows the empty-tab copy, not an error", async () => {
-  const tree = await render({ sessionKey: 11361, name: "Race", type: "Race" }, []);
+// OpenF1 answers HTTP 404 {"detail":"No results found."} for a session that has
+// not published (measured 2026-10-15, session_result?session_key=11392, #2185).
+// The REAL transport resolves that as [] — the ORDINARY state for a session that
+// just finished, so it must read as "not yet", never as an error.
+function realApiOver404() {
+  const src = ["api-transport", "api"].map((n) => fs.readFileSync(path.join(ROOT, "js/data", n + ".js"), "utf8")).join("\n");
+  const ctx = vm.createContext({
+    fetch: async () => ({ ok: false, status: 404, headers: { get: () => null },
+      text: async () => '{"detail":"No results found."}' }),
+    AbortController, Date, setTimeout: (f) => setImmediate(f), clearTimeout() {},
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+  });
+  seedLog(ctx);
+  vm.runInContext(src + ";globalThis.__api=F1API", ctx);
+  return ctx.__api;
+}
+
+test("an unpublished session (OpenF1 404 'No results found.') shows the empty-tab copy, not an error", async () => {
+  const real = realApiOver404();
+  const meta = { sessionKey: 11392, name: "Qualifying", type: "Qualifying" };
+  const tree = await render(meta, null, DRIVERS, { sessionResult: (k) => real.sessionResult(k, 60e3) });
+  await new Promise((r) => setTimeout(r, 0));
   assert.equal(find(tree, (n) => hasCls(n, "dh-empty")).length, 1);
   assert.equal(find(tree, (n) => hasCls(n, "dh-empty"))[0].text, "NOTHING YET");
 });
