@@ -639,6 +639,44 @@ test("a PASSING commit tells the model which guard path ran: additionalContext +
   } finally { repo.rm(); }
 });
 
+test("a commit in a linked worktree borrows the main checkout's node_modules instead of blocking (2026-10-15)", () => {
+  // EnterWorktree, `isolation: worktree` workers and `git worktree add` make a tree with no
+  // node_modules; every worker commit blocked on it (census session_01CgCjzTvy729SeWsHzuv8eh).
+  const repo = scratchRepo("hook-wt-");
+  const wt = repo.dir + "-wt";
+  try {
+    fs.mkdirSync(path.join(repo.dir, "tools/check"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tests/unit"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, ".gitignore"), "node_modules\n");
+    fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), "process.exit(0);\n");
+    fs.writeFileSync(path.join(repo.dir, "package.json"), JSON.stringify({ scripts: { "test:guards": "true" } }));
+    fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "import { test } from 'node:test'; test('ok', () => {});\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
+    fs.mkdirSync(path.join(repo.dir, "node_modules/.bin"), { recursive: true });
+    repo.g("worktree", "add", "-q", wt, "-b", "wt-branch");
+    assert.equal(fs.existsSync(path.join(wt, "node_modules")), false, "a fresh worktree has no node_modules");
+    fs.writeFileSync(path.join(wt, "docs/PHYSICS.md"), "note from the worktree\n");
+    spawnSync("git", ["add", "docs/PHYSICS.md"], { cwd: wt });
+    const r = hook("bash-guard.sh", bashCall("git commit -m x", { cwd: wt }), { cwd: wt, env: { APEX_GUARD_PROBE: "" } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stderr, /node_modules is missing/);
+    assert.equal(fs.realpathSync(path.join(wt, "node_modules")), fs.realpathSync(path.join(repo.dir, "node_modules")));
+    assert.equal(spawnSync("git", ["status", "--porcelain"], { cwd: wt, encoding: "utf8" }).stdout.includes("node_modules"), false,
+      "the borrowed link is git-ignored");
+    // the main checkout itself is never linked to anything
+    fs.rmSync(path.join(repo.dir, "node_modules"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note main\n");
+    repo.g("add", "docs/PHYSICS.md");
+    const m = hook("bash-guard.sh", bashCall("git commit -m x", { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
+    assert.equal(m.status, 2, "a main checkout with no install still blocks");
+    assert.match(m.stderr, /node_modules is missing/);
+  } finally {
+    spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: repo.dir });
+    fs.rmSync(wt, { recursive: true, force: true });
+    repo.rm();
+  }
+});
+
 // ── THE CLOG OF 2026-10-15 (docs/notes/CI-CLOG-SURVEY-2026-10-15.md) ────────
 // 306 of 401 PR runs that day ended cancelled, 142 of them in 17 one-minute
 // sweeps under the owner's account, and every sweep was followed by a
