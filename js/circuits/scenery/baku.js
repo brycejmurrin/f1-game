@@ -182,7 +182,10 @@
 
         // Uplit wash at Government House base (warm stone courtyard glow)
         const aGov = anchor(k, 1, 64);
-        addBox(out, vadd(aGov.c, aGov.u, 0.1), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
+        const govWash = vadd(aGov.c, aGov.u, 0.25);
+        const govG = terrainYAt(govWash[0], govWash[2]);
+        if (govG != null) govWash[1] = govG + 0.25;
+        addBox(out, govWash, [80, 0.25, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
       }
 
       // (The five pit halls and the 1 m pit wall at .94-.02 are the engine's
@@ -564,11 +567,11 @@
           modelGroup("baku-shirvanshah-palace", {
             center: vadd(c0, a.u, 11), size: [28, 26, 70], basis: b,
           }, (stage) => {
-            addBox(stage, vadd(c0, a.u, 7), [18, 14, 40], PAL, b);
+            addBox(stage, vadd(c0, a.u, 7), [17.2, 14, 40], PAL, b);
             // Slim plinth — a fat one buried into the castle slope
             addBox(stage, vadd(c0, a.u, 0.8), [16, 0.9, 36], PD, b);
             // Portal proud of the hall face (avoids flatCoplanar with the niche)
-            addBox(stage, vadd(vadd(c0, a.r, -9.8), a.u, 5.5), [2.4, 11, 9], PL, b);
+            addBox(stage, vadd(vadd(c0, a.r, -10.6), a.u, 5.5), [2.4, 11, 9], PL, b);
             addBox(stage, vadd(vadd(c0, a.r, -11.0), a.u, 4), [0.8, 7, 4.5], PD, b);
             const mau = vadd(vadd(c0, a.t, 28), a.r, 2);
             addBox(stage, vadd(mau, a.u, 5), [11, 10, 11], PAL, b);
