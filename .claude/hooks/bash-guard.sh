@@ -192,6 +192,7 @@ fi
 #    are DENIED; any other `gh pr merge` (incl. --auto), `gh pr ready`, `gh api`
 #    …/pulls/<n>/merge or GraphQL merge/auto-merge/ready mutation ASKS, unless
 #    APEX_MERGE_DESK=1 (merge_policy.py: the same words as github-mcp-guard.sh).
+#    `gh pr update-branch` / a PUT …/pulls/<n>/update-branch ASKS everyone.
 #    No settings.json `ask` rule for these: it would also prompt Merge Desk.
 #  subagent browser ban (§Verification 10) — test-bg (but --status/--tail),
 #    test-solo, run-playwright, verify-change without --fast/--plan, `playwright

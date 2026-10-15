@@ -654,7 +654,8 @@ def gh_issues(text, cwd=None):
     (red-team round 2, 2026-10-14): `gh pr merge` (deny with --squash/-s or
     --rebase/-r, else ask), `gh pr ready` (not --undo), and `gh api` on
     …/pulls/<n>/merge, …/merges, …/git/refs (a write), a PATCH of a pull with
-    draft=false, or a GraphQL mergePullRequest / enablePullRequestAutoMerge /
+    draft=false, `gh pr update-branch` or a PUT …/pulls/<n>/update-branch
+    (decision "sync": asks even Merge Desk), or a GraphQL mergePullRequest / enablePullRequestAutoMerge /
     markPullRequestReadyForReview (deny when the method names SQUASH/REBASE).
     Raises ParseError on untokenisable text."""
     out = []
@@ -677,6 +678,8 @@ def gh_issues(text, cwd=None):
                             method = "squash" if ch == "s" else "rebase"
             out.append({"cmd": cmd, "decision": "deny" if method else "ask",
                         "why": f"gh pr merge --{method}" if method else "gh pr merge"})
+        elif words[:2] == ["pr", "update-branch"]:
+            out.append({"cmd": cmd, "decision": "sync", "why": "gh pr update-branch"})
         elif words[:2] == ["pr", "ready"]:
             if "--undo" not in argv:
                 out.append({"cmd": cmd, "decision": "ask", "why": "gh pr ready"})
@@ -716,6 +719,8 @@ def gh_issues(text, cwd=None):
                     dec = "ask"
             elif re.search(r"(^|/)pulls/[^/]+/merge$", ep) and method in ("PUT", "POST"):
                 dec = "deny" if re.search(r"merge_method=\s*\"?(squash|rebase)", blob, re.I) else "ask"
+            elif re.search(r"(^|/)pulls/[^/]+/update-branch$", ep) and method in ("PUT", "POST"):
+                dec = "sync"
             elif re.search(r"(^|/)pulls/[^/]+$", ep) and method == "PATCH" and re.search(r"\bdraft=\s*(false|0)\b", blob, re.I):
                 dec = "ask"
             elif (re.search(r"(^|/)merges$", ep) and method == "POST") or \
@@ -930,8 +935,11 @@ def guard(payload, root):
         return 2
     desk = os.environ.get("APEX_MERGE_DESK") == "1"
     deny = [x for x in gh if x["decision"] == "deny"]
+    sync = [x for x in gh if x["decision"] == "sync"]
     if deny:
         P.emit("deny", P.DENY_METHOD + " (" + deny[0]["why"] + ")")
+    elif sync:  # Merge Desk too: a branch update is never a role's routine
+        P.emit("ask", P.ASK_SYNC + " (" + sync[0]["why"] + ")")
     elif gh and not desk:
         ready = all("ready" in x["why"] or "Ready" in x["why"] for x in gh)
         ref = any(x["decision"] == "ref" for x in gh)

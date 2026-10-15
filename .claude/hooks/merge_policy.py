@@ -17,6 +17,11 @@ ASK_MERGE = ("Only Merge Desk arms auto-merge and only Merge Desk / Grok Bot mer
 ASK_READY = "Marking a draft ready starts the full CI tier. Before the flip, " + GATE + "."
 ASK_DESK_METHOD = ("Merge Desk arms auto-merge with the MERGE method named explicitly: an omitted method uses "
                    "the repository default, which may be squash. Pass mergeMethod: MERGE.")
+ASK_SYNC = ("Updating a PR branch (a merge of the base into it) starts a full CI run and cancels the one in "
+            "flight. SYNC ONLY WHEN YOU MUST (AGENTS.md §Git branch & deploy): GitHub reports CONFLICTING/DIRTY or a "
+            "required tip check is red; clean-behind is not a reason. Sync your own branch with "
+            "`node tools/ci/sync-pr.mjs <branch>`, never the update-branch button/API, and never another session's PR "
+            "(69 API branch updates in 3 h made the 2026-10-15 00Z CI spike: 379 runs in one hour).")
 ASK_REF = ("This GitHub API call merges or moves a branch outside a pull request; branch protection is the only "
            "other check. Confirm it by hand.")
 

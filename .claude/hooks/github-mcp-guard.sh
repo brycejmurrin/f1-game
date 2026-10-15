@@ -14,6 +14,8 @@
 #   update_pull_request draft falsy (false/0/"no"/"off", any case: draft->ready)
 #                                                  -> "ask" (run the gates first)
 #   any other update_pull_request (title/body/base) -> silent pass
+#   update_pull_request_branch                      -> "ask", Merge Desk too (sync
+#                                                     only when you must; sync-pr.mjs)
 #
 # APEX_MERGE_DESK=1 in the environment (the designated Merge Desk / Grok Bot
 # role) skips the "ask" prompts; the squash/rebase deny still applies, and an
@@ -48,6 +50,8 @@ elif merging:
         decision, reason = "ask", P.ASK_MERGE
     elif name.endswith("__enable_pr_auto_merge") and method != "merge":
         decision, reason = "ask", P.ASK_DESK_METHOD
+elif name.endswith("__update_pull_request_branch"):
+    decision, reason = "ask", P.ASK_SYNC
 elif name.endswith("__update_pull_request"):
     draft = ti.get("draft")
     falsy = draft is not None and draft is not True and str(draft).strip().lower() in ("false", "0", "no", "off", "")

@@ -434,9 +434,31 @@ test("github-mcp-guard: merge commits only, asks before merge/arm and the draft�
   assert.ok(!settings.permissions.deny.includes("mcp__github__merge_pull_request"), "merges are gated by the hook, not denied (Grok Bot may merge)");
   const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
   const re = new RegExp(g.matcher);
-  for (const n of ["mcp__github__enable_pr_auto_merge", "mcp__github__update_pull_request", "mcp__github__merge_pull_request"]) assert.ok(re.test(n), n);
-  for (const n of ["mcp__github__update_pull_request_branch", "mcp__github__disable_pr_auto_merge"])
+  for (const n of ["mcp__github__enable_pr_auto_merge", "mcp__github__update_pull_request", "mcp__github__merge_pull_request",
+    "mcp__github__update_pull_request_branch"]) assert.ok(re.test(n), n);
+  for (const n of ["mcp__github__disable_pr_auto_merge", "mcp__github__update_pull_request_branchx"])
     assert.ok(!re.test(n), `matcher must not catch ${n}`);
+});
+
+test("update-branch asks everyone, Merge Desk included: sync only when you must (2026-10-15 00Z spike)", () => {
+  const mcp = (env) => hook("github-mcp-guard.sh", { tool_name: "mcp__github__update_pull_request_branch", tool_input: { pullNumber: 1 } }, { env });
+  for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
+    const r = mcp(env);
+    assert.equal(r.status, 0, r.stderr);
+    const d = JSON.parse(r.stdout).hookSpecificOutput;
+    assert.equal(d.permissionDecision, "ask", JSON.stringify(env));
+    assert.match(d.permissionDecisionReason, /SYNC ONLY WHEN YOU MUST[\s\S]*sync-pr\.mjs/);
+  }
+  const sh = (command, env = { APEX_MERGE_DESK: "" }) => hook("bash-guard.sh", bashCall(command), { env });
+  for (const c of ["gh pr update-branch 12", "gh pr update-branch 12 --rebase", "gh api -X PUT repos/o/r/pulls/12/update-branch",
+    "gh api --method PUT repos/o/r/pulls/12/update-branch -f expected_head_sha=abc"]) {
+    for (const env of [{ APEX_MERGE_DESK: "" }, { APEX_MERGE_DESK: "1" }]) {
+      const r = sh(c, env);
+      assert.equal(decisionOf(r), "ask", `${c} ${JSON.stringify(env)}: ${r.stdout}`);
+      assert.match(r.stdout, /SYNC ONLY WHEN YOU MUST/);
+    }
+  }
+  for (const c of ["gh pr view 12", "gh api repos/o/r/pulls/12", "echo gh pr update-branch 12"]) assert.equal(decisionOf(sh(c)), null, c);
 });
 
 // ── RED-TEAM ROUND 2 (2026-10-14, docs/notes/AGENT-GUARDS-2026-10-14.md) ─────
