@@ -100,11 +100,18 @@ function revealYouRow(table) {
   }
 }
 
+function rankingList(container, label) {
+  const list = document.createElement("div");
+  list.setAttribute("data-results-part", "ranking");
+  list.setAttribute("role", "list"); list.setAttribute("aria-label", label);
+  container.appendChild(list); return list;
+}
 function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
   row.className = `res-row${extraClass || ""}`;
+  row.setAttribute("role", "listitem");
   const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
-  const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = color;
+  const sw = document.createElement("span"); sw.className = "res-swatch"; sw.setAttribute("aria-hidden", "true"); sw.style.background = color;
   const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = name;
   const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = ptsText;
   row.append(pos, sw, nm, pt);
@@ -168,8 +175,9 @@ function stintStrip(c) {
   // The bar is decoration for a sighted reader and the codes are the content,
   // so the accessible name carries the same thing in words.
   strip.setAttribute("role", "img");
-  strip.setAttribute("aria-label", "tyres: " + list.map((s) =>
-    `${s.code} ${s.laps} lap${s.laps === 1 ? "" : "s"}`).join(", "));
+  const names = { S: "Soft", M: "Medium", H: "Hard", I: "Intermediate", W: "Wet", SS: "Super soft", HS: "Hyper soft" };
+  const description = list.map((s) => `${names[s.code] || s.code} — completed laps ${s.lap0}-${s.lap1}`).join("; ");
+  strip.setAttribute("aria-label", "Tyre stints: " + description);
   list.forEach((s) => {
     const seg = document.createElement("div");
     seg.className = "res-stint";
@@ -180,7 +188,11 @@ function stintStrip(c) {
     seg.title = `${s.code} — laps ${s.lap0}-${s.lap1}`;
     strip.appendChild(seg);
   });
-  return strip;
+  const details = document.createElement("details"); details.setAttribute("data-stint-details", "");
+  const summary = document.createElement("summary"); summary.textContent = "TYRE STINTS";
+  const text = document.createElement("div"); text.setAttribute("data-stint-text", ""); text.textContent = description;
+  details.append(summary, text);
+  return { strip, details };
 }
 
 // `race` is endRace's own read of the session ({ sprint, duel }). The sprint
@@ -317,6 +329,7 @@ function buildResults(order, race) {
     more.onclick = () => { if (G.openCoachDetails) G.openCoachDetails(); };
     card.append(heading, detail, more); els.resultsTable.appendChild(card);
   }
+  const classification = rankingList(els.resultsTable, "Race classification");
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
     const nc = c.classified === false && !dnf && !hostRow.has(c.driverId);   // a guest reads the host verdict
@@ -324,11 +337,12 @@ function buildResults(order, race) {
     const podium = nc ? "" : PODIUM[i] || "";
     const other = c.human && !c.local ? " q-real" : "";
     row.className = `res-row${podium}${c.isPlayer ? " you" : ""}${other}`;
+    row.setAttribute("role", "listitem");
     row.style.setProperty("--i", i);   // settle stagger, css/components.css
     const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = nc ? "NC" : i + 1;
-    const sw = document.createElement("span"); sw.className = "res-swatch";
+    const sw = document.createElement("span"); sw.className = "res-swatch"; sw.setAttribute("aria-hidden", "true");
     sw.style.background = G.cssCol(c.team.color);
-    const nm = document.createElement("span"); nm.className = "res-name";
+    const nm = document.createElement("div"); nm.className = "res-name";
     // A retirement says WHY in the place a penalty would say how much: the two
     // never co-occur (a car that stopped was not given time back).
     // Set textContent FIRST — it replaces ALL children, so the PLAYER tag must
@@ -378,9 +392,9 @@ function buildResults(order, race) {
       }
     }
     const strip = stintStrip(c);
-    if (strip) row.appendChild(strip);
+    if (strip) { row.appendChild(strip.strip); nm.appendChild(strip.details); }
     row.appendChild(pt);
-    els.resultsTable.appendChild(row);
+    classification.appendChild(row);
   });
   // THE ROUND'S EARNINGS. Career only, and only for a round that just settled.
   // Every figure here comes straight off Career.settleRound()'s return, so the
@@ -419,6 +433,11 @@ function buildResults(order, race) {
       if (!st.obj.done) addRow("res-settle-row missed", Career.objectiveLabel(st.obj), "MISSED");
     }
     line("Sponsor bonus", st.sponsorPay);
+    if (st.sponsorVerdict) {
+      const v = st.sponsorVerdict;
+      addRow("res-settle-row" + (v.met ? "" : " missed"), "Sponsor target — " + v.label,
+        (v.met ? "MET" : "MISSED") + (v.reason ? " · " + v.reason : ""));
+    }
     line("Driver wages", -st.wages);
     addRow("res-settle-row total", "BALANCE", `${st.money.toLocaleString()} cr`);
     addRow("res-settle-row rep", "Reputation", `${Math.round(st.rep)} / 100`);
@@ -454,9 +473,10 @@ function buildResults(order, race) {
     // SeasonCal.rank, not a bare points sort: equal points fall to countback
     // there and the STANDINGS sheet already used it — this list put whoever
     // was earlier in the field order first and the two screens disagreed.
+    const driverRanking = rankingList(els.resultsTable, "Driver standings");
     const all = seasonTable(cars, season).slice(0, 10);
     all.forEach((c, i) => {
-      rankRow(els.resultsTable, i, seatColor(G, c), c.name ? `${c.code}  ${c.name}` : c.code,
+      rankRow(driverRanking, i, seatColor(G, c), c.name ? `${c.code}  ${c.name}` : c.code,
         ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
     });
     // Team championship (top 5)
@@ -464,10 +484,11 @@ function buildResults(order, race) {
     tmHead.className = "sel-label";
     tmHead.textContent = "CONSTRUCTORS";
     els.resultsTable.appendChild(tmHead);
+    const constructorRanking = rankingList(els.resultsTable, "Constructor standings");
     const tmList = teamOrder(season).slice(0, 5);
     tmList.forEach(([teamId, pts], i) => {
       const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
-      rankRow(els.resultsTable, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
+      rankRow(constructorRanking, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
     });
     // Never "MAIN MENU" for a sprint: the champion panel at the end of a season
     // uses that exact string as its first-click sentinel (js/game.js resNext).
@@ -562,11 +583,12 @@ function buildTTResults() {
   lbHead.textContent = `MATCHING SETUP & CONDITIONS — ${track.def.name}`;
   els.resultsTable.appendChild(lbHead);
 
+  const leaderboard = rankingList(els.resultsTable, "Time trial leaderboard");
   const board = G.records.board(track.def.id);
   board.forEach((e, i) => {
     const team = G.teamById(e.teamId);
     const name = `${e.code}  ${e.name}${team ? `  · ${team.short}` : ""}`;
-    const row = rankRow(els.resultsTable, i, G.cssCol(team ? team.color : [0.5, 0.5, 0.5]), name,
+    const row = rankRow(leaderboard, i, G.cssCol(team ? team.color : [0.5, 0.5, 0.5]), name,
       lapClock(G, e.t), e.ts >= G.ttSessionTs ? " you" : "");
     row.querySelector(".res-pts").style.width = "auto";
   });
@@ -725,12 +747,13 @@ function buildStandings() {
   drHead.textContent = "DRIVERS";
   body.appendChild(drHead);
 
+  const driverRanking = rankingList(body, "Driver standings");
   const drList = Object.entries(season.pts)
     .sort((a, b) => SeasonCal.rank(season, a[0], b[0]));   // points, then countback
   drList.forEach(([driverId, pts], i) => {
     const c = cars.find((x) => x.driverId === driverId);
     const code = c ? c.code : ((season.driverCodes && season.driverCodes[driverId]) || driverId);
-    rankRow(body, i, c ? G.cssCol(c.team.color) : "#555", `${code}${c ? `  ${c.name}` : ""}`,
+    rankRow(driverRanking, i, c ? G.cssCol(c.team.color) : "#555", `${code}${c ? `  ${c.name}` : ""}`,
       ptsLabel(season, driverId), c && c.isPlayer ? " you" : "");
   });
 
@@ -740,10 +763,11 @@ function buildStandings() {
   tmHead.textContent = "CONSTRUCTORS";
   body.appendChild(tmHead);
 
+  const constructorRanking = rankingList(body, "Constructor standings");
   const tmList = teamOrder(season);
   tmList.forEach(([teamId, pts], i) => {
     const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
-    rankRow(body, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
+    rankRow(constructorRanking, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
   });
 
   // Next round info
@@ -782,8 +806,9 @@ function buildChampion() {
   head.className = "sel-label";
   head.textContent = "FINAL STANDINGS";
   els.resultsTable.appendChild(head);
+  const driverRanking = rankingList(els.resultsTable, "Final driver standings");
   sorted.forEach((c, i) => {
-    rankRow(els.resultsTable, i, seatColor(G, c), c.code, ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
+    rankRow(driverRanking, i, seatColor(G, c), c.code, ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
   });
   els.resNext.textContent = "MAIN MENU";
   G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);
@@ -795,3 +820,4 @@ return { buildResults, buildTTResults, buildStandings, buildChampion };
 
 return { create };
 })();
+Object.freeze(GameResults);
