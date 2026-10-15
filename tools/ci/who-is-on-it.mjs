@@ -256,8 +256,14 @@ export function currentBranch() {
  *  from agent containers; best effort — no gh, no token or a refusal only
  *  means the hourly run picks the claim up. */
 export function pokeFleetBoard(run = spawnSync) {
-  const r = run("gh", ["api", "-X", "POST", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/dispatches`, "-f", `ref=${DEPLOY}`],
-    { cwd: ROOT, encoding: "utf8", timeout: 20000 });
+  const opts = { cwd: ROOT, encoding: "utf8", timeout: 20000 };
+  // Debounce: a burst of --claim/--release must not each POST workflow_dispatch;
+  // skip while fleet.yml already has a queued run (concurrency holds the rest).
+  const q = run("gh", ["api", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/runs?status=queued&per_page=1`, "--jq", ".total_count"], opts);
+  if (q.status === 0 && Number(String(q.stdout ?? "").trim()) > 0) {
+    return "already queued (that run picks this claim up)";
+  }
+  const r = run("gh", ["api", "-X", "POST", `repos/${REPO_SLUG}/actions/workflows/fleet.yml/dispatches`, "-f", `ref=${DEPLOY}`], opts);
   return r.status === 0 ? "dispatched" : "not dispatched (the hourly run will pick it up)";
 }
 
