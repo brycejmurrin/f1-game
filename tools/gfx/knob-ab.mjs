@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Visual knob A/B: same frame with a lightTune knob ON twice (noise floor) and OFF; fails unless ON vs OFF beats the noise.
+ * @doc Visual knob A/B: same frame with a lightTune knob ON twice (noise floor) and OFF; fails unless ON vs OFF beats noise.
  * @skill renderer-debug
  *
  * Why (2026-10-15, weather phase 3 #1885): standing-water puddles passed every

@@ -347,7 +347,13 @@ const RealReplay = (function () {
         const c = carOfNum(highlight.num);
         const picture = bc && bc.status();
         if (c && !c.retired && !(picture && (picture.locked || picture.manual))) setFollow(c, false);
-        else if (!run.follow) follow(+1);
+        else if (bc && bc.autoOn() && (!run.follow || run.follow.retired)) {
+          // A caution/green highlight has no driver. Keep a live subject, but
+          // never replace the viewer's manual, locked or fixed-camera choice.
+          let next = null;
+          for (const [car, f] of run.cars) if (f.tr && !car.retired && (!next || car.prog > next.prog)) next = car;
+          if (next) setFollow(next, false);
+        }
         if (bc) bc.onCut(highlight.kind);
       }
       if (G.raceRadio && G.raceRadio.resetTimeline) G.raceRadio.resetTimeline();
@@ -365,6 +371,21 @@ const RealReplay = (function () {
       }
       if (transport) transport.paint();
       return run.paused;
+    }
+    function setAuto(v) {
+      if (!bc || !run) return false;
+      if (v && bc.autoOn()) return true;
+      const enabled = bc.setAuto(v);
+      if (enabled) {
+        // Reels and paused playback do not tick the director. Take its shot
+        // now through setCamMode so the camera, HUD and audio agree on ownership.
+        bc.onCut(null);
+        bc.refresh(bcState);
+        // Playback pause still renders each frame. Only the outer pause menu
+        // needs an explicit paint; otherwise let the normal frame draw the cut.
+        if (G.snapGameCam) G.snapGameCam(!!G.paused);
+      }
+      return enabled;
     }
     function eventStep(dir) {
       if (!run) return null;
@@ -588,7 +609,7 @@ const RealReplay = (function () {
              setLocked: (v) => (bc && run ? bc.setLocked(v) : false),
              // The in-game AUTO camera (js/camera/mode-switch.js): hand the picture to the
              // TV director, ask who has it, or take it (a shot picked by the viewer).
-             setAuto: (v) => (bc && run ? bc.setAuto(v) : false), autoOn: () => !!(bc && run && bc.autoOn()),
+             setAuto, autoOn: () => !!(bc && run && bc.autoOn()),
              takePicture: () => { if (bc && run) bc.manual(); } };
     if (typeof WatchTransport !== "undefined") transport = WatchTransport.create(G, api);
     return api;
