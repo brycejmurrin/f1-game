@@ -16,7 +16,7 @@ function harness(opts = {}) {
   const bag = new Map();
   const store = {
     get(k, d) { return bag.has(k) ? bag.get(k) : d; },
-    set(k, v) { bag.set(k, v); },
+    set(k, v) { bag.set(k, v); return true; },
   };
   const writes = [];
   const location = {
@@ -297,4 +297,146 @@ test("share-code module is referenced (zeroRefModules)", () => {
   assert.equal(typeof ShareCode.encode, "function");
   assert.ok(fs.existsSync(path.join(ROOT, SRC)));
   assert.match(fs.readFileSync(path.join(ROOT, SRC), "utf8"), /const ShareCode/);
+});
+
+// Real GameStore deliberately updates its cache even when localStorage refuses.
+function quotaHarness() {
+  const disk = new Map();
+  let refuse = () => false;
+  const storage = {
+    get length() { return disk.size; },
+    key(i) { return [...disk.keys()][i] || null; },
+    getItem(k) { return disk.get(k) ?? null; },
+    setItem(k, v) { if (refuse(k, v, false)) throw Object.assign(new Error("full"), { name: "QuotaExceededError" }); disk.set(k, v); },
+    removeItem(k) { if (refuse(k, undefined, true)) throw Object.assign(new Error("blocked"), { name: "SecurityError" }); disk.delete(k); },
+  };
+  function reload() {
+    const { ShareCode, sandbox } = harness();
+    sandbox.localStorage = storage;
+    sandbox.Log = { warn() {}, info() {} };
+    sandbox.SaveMigrate = { migrateCareer() {}, CAREER_V: 1 };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/store.js"), "utf8"), ctx);
+    return { ShareCode, store: vm.runInContext("GameStore.store", ctx) };
+  }
+  return { reload, fail(fn) { refuse = fn; }, disk };
+}
+const oldTune = { arbF: 3, arbR: 4, rideF: 30, rideR: 70, brakeBias: 58 };
+const newTune = { ...oldTune, arbF: 11 };
+const setupImport = (ShareCode) => ShareCode.decode(ShareCode.encode("setup", { team: "ferrari", tune: newTune }).code);
+
+test("quota-refused backup never overwrites setup or prior recovery, even after reload/retry", () => {
+  const q = quotaHarness();
+  let { ShareCode, store } = q.reload();
+  store.set("setup.ferrari", oldTune);
+  const prior = { keys: ["setup.mercedes"], prev: { "setup.mercedes": oldTune } };
+  store.set("shareUndo", prior);
+  q.fail((k) => k === "apex26.shareUndo");
+  let opened = 0;
+  const result = ShareCode.apply(setupImport(ShareCode), { store, openGarage() { opened++; } });
+  assert.equal(result.reason, "undo-save-failed");
+  assert.equal(opened, 0);
+  assert.deepEqual(j(store.get("setup.ferrari")), oldTune);
+  assert.deepEqual(j(store.get("shareUndo")), prior);
+  q.fail(() => false);
+  store.retryFailed();
+  ({ ShareCode, store } = q.reload());
+  assert.deepEqual(j(store.get("setup.ferrari")), oldTune);
+  assert.deepEqual(j(store.get("shareUndo")), prior);
+});
+
+test("partial livery durability rolls back session values and keeps reload recovery", () => {
+  const q = quotaHarness();
+  let { ShareCode, store } = q.reload();
+  const own = [{ id: "own", c1: [1, 0, 0], c2: [0, 0, 1] }];
+  store.set("livery.custom.ferrari", own);
+  store.set("livery.ferrari", "own");
+  // Customs persist, selection fails, and rollback of the customs then fails.
+  let customsWrites = 0;
+  q.fail((k) => k === "apex26.livery.ferrari" || (k === "apex26.livery.custom.ferrari" && ++customsWrites > 1));
+  const livery = { id: "friend", c1: [0, 1, 0], c2: [1, 1, 1] };
+  const decoded = ShareCode.decode(ShareCode.encode("livery", { team: "ferrari", id: livery.id, livery }).code);
+  assert.equal(ShareCode.apply(decoded, { store }).reason, "import-save-failed");
+  assert.deepEqual(j(store.get("livery.custom.ferrari")), own);
+  assert.equal(store.get("livery.ferrari"), "own");
+  ({ ShareCode, store } = q.reload());
+  assert.equal(store.get("livery.custom.ferrari").length, 2, "partial disk write really happened");
+  const recovery = j(store.get("shareUndo"));
+  assert.equal(recovery.pending, true);
+  assert.equal(ShareCode.apply(setupImport(ShareCode), { store }).reason, "recovery-pending");
+  assert.deepEqual(j(store.get("shareUndo")), recovery);
+  q.fail(() => false);
+  assert.equal(ShareCode.undo(store).ok, true);
+  ({ store } = q.reload());
+  assert.deepEqual(j(store.get("livery.custom.ferrari")), own);
+  assert.equal(store.get("livery.ferrari"), "own");
+});
+
+test("Undo retains recovery across failed restore and failed cleanup, then retries", () => {
+  const q = quotaHarness();
+  let { ShareCode, store } = q.reload();
+  store.set("setup.ferrari", oldTune);
+  assert.equal(ShareCode.apply(setupImport(ShareCode), { store }).ok, true);
+  q.fail((k) => k === "apex26.setup.ferrari");
+  assert.equal(ShareCode.undo(store).reason, "undo-restore-failed");
+  assert.ok(store.get("shareUndo"));
+  ({ ShareCode, store } = q.reload());
+  assert.deepEqual(j(store.get("setup.ferrari")), newTune);
+  q.fail((k, _v, deleting) => k === "apex26.shareUndo" && deleting);
+  assert.equal(ShareCode.undo(store).reason, "undo-cleanup-failed");
+  assert.ok(store.get("shareUndo"), "failed deletion must not hide cached recovery");
+  ({ ShareCode, store } = q.reload());
+  assert.deepEqual(j(store.get("setup.ferrari")), oldTune);
+  assert.ok(store.get("shareUndo"));
+  q.fail(() => false);
+  assert.equal(ShareCode.undo(store).ok, true);
+  assert.equal(q.reload().store.get("shareUndo", null), null);
+});
+
+test("partial multi-key Undo blocks replacement after reload; completed imports stay one-deep", () => {
+  const q = quotaHarness();
+  let { ShareCode, store } = q.reload();
+  const own = [{ id: "own", c1: [1, 0, 0], c2: [0, 0, 1] }];
+  store.set("livery.custom.ferrari", own);
+  store.set("livery.ferrari", "own");
+  const livery = { id: "friend", c1: [0, 1, 0], c2: [1, 1, 1] };
+  const decoded = ShareCode.decode(ShareCode.encode("livery", { team: "ferrari", id: livery.id, livery }).code);
+  assert.equal(ShareCode.apply(decoded, { store }).ok, true);
+  assert.equal(store.get("shareUndo").pending, false);
+  q.fail((k) => k === "apex26.livery.ferrari");
+  assert.equal(ShareCode.undo(store).reason, "undo-restore-failed");
+  ({ ShareCode, store } = q.reload());
+  assert.deepEqual(j(store.get("livery.custom.ferrari")), own);
+  assert.equal(store.get("livery.ferrari"), "friend");
+  const recovery = j(store.get("shareUndo"));
+  assert.equal(ShareCode.apply(setupImport(ShareCode), { store }).reason, "recovery-pending");
+  assert.deepEqual(j(store.get("shareUndo")), recovery);
+  q.fail(() => false);
+  assert.equal(ShareCode.undo(store).ok, true);
+  assert.equal(ShareCode.apply(decoded, { store }).ok, true);
+  assert.equal(ShareCode.apply(setupImport(ShareCode), { store }).ok, true, "completed recovery can be replaced");
+  assert.deepEqual(j(store.get("shareUndo").keys), ["setup.ferrari"]);
+});
+
+test("failed completion marker leaves durable pending recovery; failed Undo marker changes no values", () => {
+  const q = quotaHarness();
+  let { ShareCode, store } = q.reload();
+  store.set("setup.ferrari", oldTune);
+  q.fail((k, v) => k === "apex26.shareUndo" && v && JSON.parse(v).pending === false);
+  assert.equal(ShareCode.apply(setupImport(ShareCode), { store }).reason, "import-save-failed");
+  assert.equal(store.get("shareUndo").pending, true);
+  ({ ShareCode, store } = q.reload());
+  assert.deepEqual(j(store.get("setup.ferrari")), oldTune);
+  assert.equal(ShareCode.apply(setupImport(ShareCode), { store }).reason, "recovery-pending");
+  q.fail(() => false);
+  assert.equal(ShareCode.undo(store).ok, true);
+  assert.equal(ShareCode.apply(setupImport(ShareCode), { store }).ok, true);
+  const rec = j(store.get("shareUndo"));
+  q.fail((k) => k === "apex26.shareUndo");
+  assert.equal(ShareCode.undo(store).reason, "undo-restore-failed");
+  assert.deepEqual(j(store.get("setup.ferrari")), newTune);
+  assert.deepEqual(j(store.get("shareUndo")), rec);
+  q.fail(() => false);
+  store.retryFailed();
+  assert.deepEqual(j(q.reload().store.get("shareUndo")), rec);
 });
