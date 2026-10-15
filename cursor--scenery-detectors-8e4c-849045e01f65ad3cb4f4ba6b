@@ -1,0 +1,1 @@
+1792032975	t	Scenery detector hardening: tools/track/verify-track.cjs, road coverage helper/tests, js/agent/agentview.js terrain survey, tests/specs/terrain-over-road.spec.js and focused unit tests. Parent owns integration and PR; two disjoint in-process workers.  [cursor/scenery-detectors-8e4c; session 849045e01f65ad3cb4f4ba6b]
