@@ -82,14 +82,16 @@ Weathers used: `dry`, `wet`, `rain`, `overcast`, `fog`, `storm`. TOD: `day`, `da
 
 ---
 
-## Hero — day / rain
+## Hero — night / rain
+
+Rain preset darkens sky to night levels on SwiftShader; labels match the frame (requested `day` + `rain` in `shot.mjs`).
 
 | | | |
 |---|---|---|
-| ![Pit rain](../../../artifacts/shots/tracks/korea/key-pit__day-rain.jpg) | ![Turn 3 rain](../../../artifacts/shots/tracks/korea/key-turn3__day-rain.jpg) | ![Marina rain](../../../artifacts/shots/tracks/korea/key-marina__day-rain.jpg) |
-| Key pit orbit · day · rain | Key Turn 3 orbit · day · rain | Key marina orbit · day · rain |
-| ![Footbridge rain](../../../artifacts/shots/tracks/korea/key-footbridge__day-rain.jpg) | | |
-| Key footbridge cinematic · day · rain | | |
+| ![Pit rain](../../../artifacts/shots/tracks/korea/key-pit__night-rain.jpg) | ![Turn 3 rain](../../../artifacts/shots/tracks/korea/key-turn3__night-rain.jpg) | ![Marina rain](../../../artifacts/shots/tracks/korea/key-marina__night-rain.jpg) |
+| Key pit orbit · night · rain | Key Turn 3 orbit · night · rain | Key marina orbit · night · rain |
+| ![Footbridge rain](../../../artifacts/shots/tracks/korea/key-footbridge__night-rain.jpg) | | |
+| Key footbridge cinematic · night · rain | | |
 
 ---
 
@@ -113,12 +115,12 @@ Weathers used: `dry`, `wet`, `rain`, `overcast`, `fog`, `storm`. TOD: `day`, `da
 
 ---
 
-## Hero — day / storm
+## Hero — night / storm
 
 | | | |
 |---|---|---|
-| ![Pit storm](../../../artifacts/shots/tracks/korea/key-pit__day-storm.jpg) | ![Marina storm](../../../artifacts/shots/tracks/korea/key-marina__day-storm.jpg) | |
-| Key pit orbit · day · storm | Key marina orbit · day · storm | |
+| ![Pit storm](../../../artifacts/shots/tracks/korea/key-pit__night-storm.jpg) | ![Marina storm](../../../artifacts/shots/tracks/korea/key-marina__night-storm.jpg) | |
+| Key pit orbit · night · storm | Key marina orbit · night · storm | |
 
 ---
 
