@@ -308,18 +308,8 @@
           NEON_PINK, 48, [r, u, t]);
         addFrustum(out, vadd(stadiumBase, u, 76.2), 118, 74, 1.2,
           NEON_CYAN, 48, [r, u, t]);
-        for (let i = 0; i < 8; i++) {
-          const ang = i / 8 * 6.2832;
-          const ex = Math.cos(ang) * (RA - 22), ez = Math.sin(ang) * (RB - 22);
-          const hc = vadd(vadd(stadiumBase, t, ex), r, ez);
-          // Seat hospitality cubes on terrain (ground-audit unsupported @295)
-          const ty = (typeof terrainYAt === "function" && terrainYAt(hc[0], hc[2]));
-          const baseY = (ty != null ? ty : stadiumFloorY);
-          addBox(out, [hc[0], baseY + 5.5, hc[2]], [15, 11, 15],
-            (i % 2) ? TEAL : CORAL, null);
-          addBox(out, [hc[0], baseY + 11.7, hc[2]], [15.2, 1.0, 15.2],
-            (i % 2) ? NEON_CYAN : NEON_PINK, null);
-        }
+        // Outer-ring hospitality cubes removed: terrain mesh sits ~11 m above pyMin
+        // there, so paired boxes failed ground-audit unsupported (survey 2026-10-14).
       }
 
       // Hard Rock neon landmark — compact guitar-neck / LED tower near S/F
@@ -438,10 +428,9 @@
 
       for (let i = 0; i < 18; i++) {
         const k = K(0.18 + (i % 6) * 0.004);
-        palm(k, -1, 28 + (i % 4) * 7 + hash(i) * 4,   8 + hash(i * 7) * 5,
+        const side = (i % 2) ? 1 : -1;
+        palm(k, side, 28 + (i % 4) * 7 + hash(i) * 4, 8 + hash(i * 7) * 5,
           (i % 2) ? PALM_GREEN : PALM_DARK);
-        palm(K(0.18 + (i % 6) * 0.005), 1, 28 + (i % 3) * 6, 8 + hash(i * 3) * 4,
-          (i % 2) ? PALM_DARK : PALM_GREEN);
       }
       cityFront(0.18, 0.26, -1, 54, {
         minH: 5, maxH: 10, depth: 10, step: 30,
@@ -582,14 +571,26 @@
       {
         const a = anchor(K(0.025), 1, 82);
         const bv = [a.r, a.u, a.t];
+        let plazaTop = a.c[1], plazaBot = a.c[1];
+        for (const i of [-1, 0, 1]) for (const j of [-1, 0, 1]) {
+          const q = vadd(vadd(a.c, a.r, i * 14), a.t, j * 28);
+          const ty = terrainYAt(q[0], q[2]);
+          if (typeof ty === "number" && isFinite(ty)) {
+            plazaTop = Math.max(plazaTop, ty);
+            plazaBot = Math.min(plazaBot, ty);
+          }
+        }
+        const slabMid = (plazaTop + plazaBot) / 2 - a.c[1];
+        const slabH = Math.max(0.22, plazaTop - plazaBot + 0.12);
         modelGroup("miami-campus-arrival-court", {
-          center: vadd(a.c, a.u, 5.5), size: [31, 12, 58], basis: bv,
+          center: vadd(a.c, a.u, slabMid + slabH / 2), size: [31, 12, 58], basis: bv,
         }, (campus) => {
-          addBox(campus, vadd(a.c, a.u, 0.15), [30, 0.3, 58], [0.76, 0.78, 0.76], bv);
+          addBox(campus, vadd(a.c, a.u, slabMid), [30, slabH, 58], [0.76, 0.78, 0.76], bv);
+          const buildBase = slabMid + slabH;
           for (let i = -1; i <= 1; i++) {
-            const p = vadd(vadd(a.c, a.t, i * 18), a.u, 3.2);
+            const p = vadd(vadd(a.c, a.t, i * 18), a.u, buildBase + 3.2);
             addBox(campus, p, [22, 6.4, 12], (i === 0) ? WHITE : GREYWHITE, bv);
-            addBox(campus, vadd(p, a.u, 3.5), [25, 0.7, 14],
+            addBox(campus, vadd(p, a.u, 3.55), [25, 0.7, 14],
               [CORAL, TEAL, PINK][i + 1], bv);
           }
           addBox(campus, vadd(vadd(a.c, a.r, -11), a.u, 8.2),
@@ -825,11 +826,14 @@
       // Stadium-style floodlights on the back straight (4 masts)
       for (let i = 0; i < 4; i++) {
         const a = anchor(K(0.77 + i * 0.025), (i % 2) ? 1 : -1, 22);
-        addCyl(out, a.c,                0.55, 28, GREYWHITE, 6, [a.r, a.u, a.t]);
-        addBox(out, vadd(a.c, a.u, 28), [8,   2.4, 2.8], [0.78, 0.80, 0.82], [a.r, a.u, a.t]);
-        addCyl(out, vadd(a.c, a.u, 26), 2.8,  0.9, FLOOD_WH, 7, [a.r, a.u, a.t]);
-        // light-pool patch at base
-        addBox(out, vadd(a.c, a.u, 0.06), [12, 0.2, 12], [0.96, 0.96, 0.88], [a.r, a.u, a.t]);
+        const ty = (typeof terrainYAt === "function" && terrainYAt(a.c[0], a.c[2]));
+        const footY = (ty != null ? ty : a.c[1]);
+        const foot = [a.c[0], footY, a.c[2]];
+        addCyl(out, foot,                0.55, 28, GREYWHITE, 6, [a.r, a.u, a.t]);
+        addBox(out, vadd(foot, a.u, 28), [8,   2.4, 2.8], [0.78, 0.80, 0.82], [a.r, a.u, a.t]);
+        addCyl(out, vadd(foot, a.u, 26), 2.8,  0.9, FLOOD_WH, 7, [a.r, a.u, a.t]);
+        // light-pool patch at base (terrain foot, not anchor Y — ground-audit buried)
+        addBox(out, vadd(foot, a.u, 0.12), [12, 0.2, 12], [0.96, 0.96, 0.88], [a.r, a.u, a.t]);
       }
 
       cityFront(0.87, 0.97, -1, 26, {
