@@ -1,0 +1,1 @@
+1792039263	t	PR #1976 cursor/hud-import-fixes-8ac4 publication and required merge integration only: js/ui/hud.js tests/unit/phone-touch-surface.test.mjs and regenerated derived ratchets. Separate sync worktree; preserve base intent; no unrelated source changes.  [cursor/hud-import-fixes-8ac4; session c6ba85b34012e3f9cb869c81]
