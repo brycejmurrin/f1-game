@@ -138,12 +138,12 @@ Shell one-liner (auto-starts `:3456` if needed, parks to `about:blank` after):
 
 ```sh
 python3 tools/mcp/cdmcp-cli.py apex-shot monza 0.97 --az -105 --el 26 --dist 110 \
-  --out /opt/cursor/artifacts/baked-models/cdmcp-monza-paddock.png
+  --out artifacts/baked-models/cdmcp-monza-paddock.png
 ```
 
 `snapCam()` after every `jump()`/`park()` or the frame is stale — but **never**
 after `orbit()`/`view()`/`eyeAt()` (clears dbgCam; see trap above). Screenshots
-go under `scratch/` or `/opt/cursor/artifacts/`, never the repo root (AGENTS.md).
+go under `scratch/` or `artifacts/`, never the repo root (AGENTS.md).
 
 ### Background Chromium measure (logged)
 
