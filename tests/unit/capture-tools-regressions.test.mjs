@@ -742,11 +742,8 @@ test('Chromium capture trace rejects oversized or absent streams and removes par
         return {};
       };
       const output = resolve(dir, mode + '.json');
-      // Only 'timeout' needs the short deadline (nothing ever completes); the other two finish at
-      // once, so a 10 ms budget made them race mkdir/open/read on a loaded runner and throw the
-      // time-budget error instead (#1800 tooling B, 2026-10-15, at loadavg 7.4; locally at 14.5).
-      const stopTimeoutMs = mode === 'timeout' ? 10 : 5000;
-      const trace = await startCaptureTrace({ newBrowserCDPSession: async () => session }, { path: output, maxBytes: 3, stopTimeoutMs });
+      // Only the timeout mode needs a tiny budget: the other modes run mkdir/open inside it, which a loaded runner can stretch past 10 ms.
+      const trace = await startCaptureTrace({ newBrowserCDPSession: async () => session }, { path: output, maxBytes: 3, stopTimeoutMs: mode === 'timeout' ? 10 : 5000 });
       await assert.rejects(trace.stop(), mode === 'oversized' ? /exceeded 3 bytes/ : mode === 'no-stream' ? /without an IO stream/ : /timed out/);
       assert.equal(existsSync(output), false);
       assert.equal(detached, 1);

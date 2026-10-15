@@ -22,9 +22,8 @@ APEX STEWARD CARD (do not re-read steward / check-changes / PR template unless H
   (send_later / subscribe_timer) and ci-watch --once on each wake (no
   shell-poll loops while subscribed).
 - Sync only CONFLICTING/DIRTY or required tip red. Claim via who-is-on-it --claim.
-- Re-run only via tools/ci/ci-rerun.mjs <run_id> (refuses live/green/re-run/superseded runs).
 - Branch: cursor/<topic>-<hash> → ship claude/f1-game-project-26h3ng.
-HASHES: steward=cbc6298a check-changes=42aa1fd6 pr-template=ffd0c965
+HASHES: steward=c8a72706 check-changes=42aa1fd6 pr-template=ffd0c965
 ```
 
 MCP: call `get_mcp_tools` / schema discovery once per session (or once per
