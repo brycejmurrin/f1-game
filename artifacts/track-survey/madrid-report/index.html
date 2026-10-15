@@ -108,6 +108,55 @@ figure.big{grid-column:1/-1}figure.big img{cursor:zoom-out}
 <div class="d lo"><span class="tag">Low · uncertain</span><h3>8. Grey slab at the pit straight</h3>
 <p>Frame 01 and the night/rain variants: a flat grey surface fills the lower-left of the orbit shot beside the pit lane with a visible seam. Could be the garage roof seen from the orbit camera; not confirmed with a second angle.</p></div>
 
+<h2>5b · Code &amp; scenery deep-dive</h2>
+<p class="meta">Read: <code>js/circuits/madrid.js</code> (92 lines), <code>js/circuits/scenery/madrid.js</code> (1101), <code>js/circuits/AGENTS.md</code>, <code>docs/tracks/madrid.md</code>. Counts are call sites in source; loops multiply them at build time (built props: 248,534 verts, 5,510 instanced). Not run: <code>graph-parity</code> (no emitter migration involved).</p>
+<h3>Def tables (<code>js/circuits/madrid.js</code>)</h3>
+<div class="tw"><table>
+<tr><th>Table</th><th>Value</th><th>Effect / issue</th></tr>
+<tr><td>coordinates</td><td><code>sceneryCoordinates:"racing"</code>; no <code>sceneryStartFrac</code>, so <code>_sceneryShift</code> is undefined (0) and <code>startFrac</code> 0</td><td>every <code>at(frac)</code> in the scenery file is a plain racing fraction of the 1336-node lap; no shift to compensate</td></tr>
+<tr><td><code>bankZones</code> (6)</td><td>0.75 @13.5° 180 m; 0.0524 @3°; 0.399 @3.5° 110 m; 0.5711 @3°; 0.6557 @3°; 0.9296 @3°</td><td>engine re-seats frac zones that land on a straight; all six fall on T-apexes, but the 13.5° one lands on T17 not on the sweeper (defect 1). Turn-index form <code>{turn:N}</code> is available</td></tr>
+<tr><td><code>elevations</code> (2)</td><td>s0.40 half 520 m +18 m; s0.52 half 360 m −8 m</td><td>gives the measured −8.1…+18.1 m; no <code>bridges</code> key, so overpasses are scenery decks over a flat road</td></tr>
+<tr><td>width</td><td><code>baseHW:7</code>, no zones; <code>terrainOuter:56</code></td><td>constant 14 m (defect 6)</td></tr>
+<tr><td><code>dressingExclusions</code></td><td>city s0–1 (whole lap); city+foliage s0.95–0.06; city+foliage+lighting s0.68–0.83</td><td>the lamp/tree-free zone is exactly the misplaced Monumental span; the real sweeper (0.38–0.51) gets generic foliage and lamps instead. Generic city never runs, so <code>cityStyle</code> is inert</td></tr>
+<tr><td>furniture / kit / palette</td><td>plane trees, post lamps lc [1,.9,.66]; marshal tent, jersey rail, hoarding fence, tecpro, LED boards, cantilever gantry, scaffold cams, banners; <code>standSet</code> crimson/sandstone/steel; barrier red/gold/purple</td><td>lamps are the night light source (<code>night:false</code>)</td></tr>
+<tr><td><code>turns</code> / <code>sectors</code></td><td>22 apexes; sectors [0.304, 0.66]</td><td>matches built corners (section 2)</td></tr>
+</table></div>
+<h3>Scenery emitters (<code>js/circuits/scenery/madrid.js</code>)</h3>
+<div class="tw"><table>
+<tr><th>Emitter / category</th><th>Call sites</th><th>Anchors (racing frac) and lines</th></tr>
+<tr><td><code>venueGroup</code> (halls, tower, piers, towers, plaza pieces)</td><td>16 (+7 <code>ifemaHall</code>)</td><td>halls 0.945, 0.965, 0.975, 0.008, 0.035, 0.075 (<code>:383–:388</code>); Barajas tower 0.02 with 51° bearing override (<code>:418</code>); overpass piers 0.085 (<code>:693</code>); Cuatro Torres 0.40, 6330 m out (<code>:806</code>)</td></tr>
+<tr><td><code>modelGroup</code> required</td><td>3</td><td><code>madrid-sf-tribuna</code> 0.0 (<code>:475</code>), <code>madrid-monumental-stands</code> at(0.76) (<code>:577</code>); landmarks file lists those two</td></tr>
+<tr><td>Monumental stands / arcades / masts</td><td>2 + 2 + 2 loops</td><td>stands 0.68–0.845 (inside thinned 0.725–0.80), arcades 0.705/0.755/0.805, masts 0.70/0.74/0.78/0.82 (<code>:589–:608</code>)</td></tr>
+<tr><td>Bank aprons and fins</td><td><code>runoffApron</code> ×2 loops, fins loop</td><td>aprons 0.712–0.812 step 0.0074 (10 m bays), fins 0.688–0.838 step 0.0088 (<code>:629–:646</code>)</td></tr>
+<tr><td><code>overheadSpan</code></td><td>3</td><td>overpass 0.085 (clearance 6.2, supports false + piers), start gantry 0.0, access bridge 0.885 (<code>:651–:691</code>)</td></tr>
+<tr><td>Walls / rails / fences</td><td><code>wall</code> ×3, <code>guardrail</code> ×1, <code>fence</code> ×1, <code>recordBarrier</code> ×5, <code>tyreWall</code> ×3, <code>hedge</code> ×3</td><td>walls 0.88–0.98, 0.06–0.20, 0.22–0.48; guardrail 0.54–0.86; fence 0.02–0.50; tyre walls 0.075, 0.13, 0.49 (<code>:951–:970</code>); hedges 0.12–0.24, 0.84–0.94</td></tr>
+<tr><td>Hoardings / cameras / compounds</td><td><code>sponsorHoarding</code> ×6, <code>cameraTower</code> ×2, <code>broadcastCompound</code> ×2</td><td>hoardings 0.00–0.03, 0.08–0.11, 0.26–0.30, 0.48–0.52, 0.615–0.645, 0.74–0.78; towers 0.078 and 0.75; compounds 0.965, 0.015 (<code>:975–:989</code>)</td></tr>
+<tr><td>Midfield campus</td><td><code>groundPatch</code> ×3 loops</td><td>service roads/pads/pavilions (<code>:881–:930</code>)</td></tr>
+<tr><td>Billboards / posts / trees</td><td>16 stations</td><td>listed at <code>:1060–:1078</code>; trees only for frac &lt; 0.5</td></tr>
+<tr><td><code>ridge</code> (Sierra)</td><td>1 in a 6-iteration loop</td><td><code>:1084–:1099</code>, ring radius + 1150–1330 m</td></tr>
+<tr><td>Primitive boxes</td><td><code>addBox</code> 82, <code>seat.box</code> 20, <code>addPrism</code> 8, <code>addCyl</code> 5, <code>seat.cyl</code> 8, <code>addFrustum</code> 1</td><td>all procedural; no baked glTF named in this file, PBR layers come from the shared asset pack via <code>MAT.*</code> ids</td></tr>
+</table></div>
+<h3>Night and lighting</h3>
+<p><code>night</code> only recolours glass, tower glass, the beacon and a few seat caps (<code>:21, :417, :424, :568</code>). The Monumental masts use <code>pool:false</code> (<code>:603, :607</code>), so they add no light pools; the lighting exclusion s0.68–0.83 also removes generic lamps there. Night frames 55–62 therefore light the road from the generic post lamps only (visible pools in frame 58); halls and stands read through ambient.</p>
+<h3>Rendered defect → code</h3>
+<div class="tw"><table>
+<tr><th>Defect</th><th>Cause in code</th></tr>
+<tr><td>Bowl and bank miss the sweeper (frames 07/08)</td><td><code>madrid.js:24</code> frac 0.75 (the brief's "s≈0.75" copied), <code>scenery:577</code> at(0.76), the 0.68–0.845 loops, and <code>madrid.js</code> exclusion s0.68–0.83</td></tr>
+<tr><td>Sweeper area reads as generic plain with a wall (07)</td><td>nothing bespoke at 0.38–0.51 except the El Búnker wall and brick block (<code>:699</code>); generic foliage/lamps allowed there by the exclusions</td></tr>
+<tr><td>Raking fins look like grey pyramids (08, 58)</td><td><code>addPrism(out,a.c,[4.6,5.2,1.6])</code> + capping pad (<code>:641–:643</code>) at 9.5 m from the road on a nearly straight stretch</td></tr>
+<tr><td>Sierra slabs (03, 04, 07, 08, fog)</td><td><code>ridge()</code> with fixed depth 170 and two colours <code>SIERRA/SIERRA_FAR</code> (<code>:1081–:1099</code>)</td></tr>
+<tr><td>Sky unchanged in overcast/fog</td><td>not in this file; atmosphere blend in <code>js/lighting/atmosphere.js</code> (PR #1979 touched rain/storm)</td></tr>
+<tr><td>Tunnels absent</td><td>no def key or emitter; only <code>TUNNEL_DARK</code> soffit colour (<code>:648</code>)</td></tr>
+<tr><td>Float 2 / clip 2 / coplanar 6 / buried 1</td><td>float at frac 0.781, lat 1181 m is far outside the venue ring (Barajas airliner at 0.02 w/ bearing, guess); clips at frac 0.475 and 0.550 sit in the El Búnker/bunker-slot range (<code>:699–:750</code>)</td></tr>
+</table></div>
+<h3>Real-world cross-check</h3>
+<ul>
+<li>Wikipedia (https://en.wikipedia.org/wiki/Madring, fetched 2026-10-15): 5.414 km, 22 turns, "two tunnel sections running underneath an elevated motorway", banking limited to 13.5° (24 % gradient). It states no Monumental turn number, width, or main-straight length.</li>
+<li>Source comments in the scenery file cite madring.com (Curve 12, 547.82 m, 24 %) and formula1.com; I did not re-fetch those. <b>Turn 12 of 22 sits mid-lap, which supports the sweeper (T10–T11 in the turns table) over T17</b>, but the curve numbering and the table indices are different numberings, so this stays an inference.</li>
+<li>Tunnels exist in reality (Wikipedia) and are not in the game, so the doc line at <code>docs/tracks/madrid.md:72</code> is wrong either way.</li>
+<li>Width and main-straight length remain unchecked against a source (brief claims 12 m / 523 m).</li>
+</ul>
+
 <h2>6 · Gallery — weather × time of day × lap position</h2>
 <p class="meta">62 frames, 960×540 captured on TLX/SwiftShader, shown at 800 px. Filenames <code>madrid-&lt;nn&gt;-f&lt;frac&gt;-&lt;view&gt;-&lt;tod&gt;-&lt;weather&gt;.png</code> (tod first, as GALLERY.md parses). Click an image to enlarge.</p>
 <div class="filters" id="flt"></div>
