@@ -1214,6 +1214,7 @@ void main() {
   // wet/puddle are reused below to brighten lamp reflections + sky env.
   float wet = 0.0;
   float puddle = 0.0;
+  float satin = 0.0;   // satin wet sheet between active puddles (see SATIN ROAD below); read by the env mirror + the alpha tag
   // The specular WATER FILM, as opposed to "this surface is rained on". Every
   // reflection-side use below must key off this, not plain wet — otherwise soaked
   // grass still mirrors the lamps and the sky.
@@ -1319,6 +1320,15 @@ void main() {
     float absorb = mix(absorbRoad, absorbRoad * 0.66, porous);
     albedo *= mix(1.0, absorb, wet);
     albedo *= mix(1.0, 0.40, puddle);   // standing water: darker than the wet sheet
+    // SATIN ROAD, MIRROR POOLS (2026-10-15). Once puddles are active (pg > 0)
+    // the wet sheet BETWEEN the pools turns satin — rougher (0.30 → 0.45),
+    // slightly darker (×0.88) and a weaker analytic mirror (env floor 0.55 →
+    // 0.20, below) — so the pools read as the only mirrors on the road. The
+    // SSR cover follows the same mask through the scene alpha (outColor, below;
+    // glsl-post.js decodes it). At pg = 0 satin is 0 and every term is a no-op.
+    // js/render/shared/puddles.js K.SATIN_* is the reference.
+    satin = pg * wet * (1.0 - porous) * (1.0 - puddle);   // = pg * wetSheen * (1 - puddle)
+    albedo *= mix(1.0, 0.88, satin);
     // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not
     // a perfect mirror except where water actually pools, so the general wet
     // roughness stays moderate (keeps the sun specular a streak, not a flare).
@@ -1326,6 +1336,7 @@ void main() {
     // keeps visible texture between the pools. Porous ground stays fully matte.
     wetSheen = wet * (1.0 - porous);
     rough = mix(rough, 0.30, wetSheen);
+    rough = mix(rough, 0.45, satin);    // satin sheet between the pools
     rough = mix(rough, 0.02, puddle);   // near-mirror inside the pool
     a = rough * rough;
     // Thin water film is a dielectric (~0.03 reflectance) — raise f0 toward it.
@@ -1771,7 +1782,7 @@ void main() {
   // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
-  envBlend = max(envBlend, max(wetSheen * 0.55, puddle * 0.90));   // PUDDLES: a standing pool is a strong mirror even where SSR is shed (phones) — the analytic sky/probe carries it. Smooth analytic wet mirror: this is the COHERENT reflective base the road shows wherever the screen-space SSR march misses (grazing cockpit views miss a lot). Was 0.15 (a whisper, "SSR owns it") — but SSR is patchy at grazing angles, so the analytic sky mirror carries the wet look and SSR just adds crisp on-screen detail on top.
+  envBlend = max(envBlend, max(wetSheen * mix(0.55, 0.20, satin), puddle * 0.90));   // PUDDLES: a standing pool is a strong mirror even where SSR is shed (phones) — the analytic sky/probe carries it. Smooth analytic wet mirror: this is the COHERENT reflective base the road shows wherever the screen-space SSR march misses (grazing cockpit views miss a lot). Was 0.15 (a whisper, "SSR owns it") — but SSR is patchy at grazing angles, so the analytic sky mirror carries the wet look and SSR just adds crisp on-screen detail on top.
   if (envBlend > 0.001) {
     // reflect() computed here, not at the top: envBlend is ~0 for the matte
     // majority of the scene (road/terrain/walls), where Rv was pure waste.
@@ -1959,7 +1970,11 @@ void main() {
   // Car-paint pixels are TAGGED in alpha (opaque draws never blend, so the
   // channel is free): the composite SSR pass reflects the real world on car
   // bodywork every frame — the same world-mirror the wet road gets.
-  outColor = vec4(color, carPaint > 0.001 ? 0.35 : uAlpha);
+  // Alpha is the SSR TAG (glsl-post.js): 0.35 = car paint; opaque non-car
+  // pixels write 1 - 0.4*satin (>= 0.6, above the car band) so the wet-road
+  // SSR cover follows the satin mask. satin = 0 (dry, pg = 0, translucent
+  // draws via the step) writes exactly uAlpha, as before.
+  outColor = vec4(color, carPaint > 0.001 ? 0.35 : uAlpha - 0.4 * satin * step(0.999, uAlpha));
 }`;
   window.GLXShaders = Object.assign(window.GLXShaders || {}, { LIT_VS, LIT_FS });
 })();

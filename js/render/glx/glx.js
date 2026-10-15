@@ -169,6 +169,7 @@ const GLXBackend = (function () {
   let frameViewProj = null;
   let frameSunDir = null;
   let frameEye = null;
+  let framePuddleGrow = 0;   // Puddles.growth(wetness, PUDDLES) this frame — post.js arms the satin SSR mask on > 0
   let frameCullDist = 0, frameCullFog = null;   // hard radial cap (>0) and the fog-wall pair for Frustum.radialCulled — js/render/shared/frustum.js
   let frameLights = null;
   // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
@@ -930,6 +931,7 @@ const GLXBackend = (function () {
         get sunDir() { return frameSunDir; },
         get sunColor() { return frameSunColor; },
         get eye() { return frameEye; },
+        get puddleGrow() { return framePuddleGrow; },
         get cullDist() { return frameCullDist; }, get cullFog() { return frameCullFog; },
         get invProj() { return frameInvProj; },
         get invVP() { return frameInvVP; },
@@ -2037,6 +2039,7 @@ const GLXBackend = (function () {
     uf1(litU.uAmbContactDark, _litUf, "ambContactDark", T && T.ambContactDark != null ? T.ambContactDark : 1.0);
     uf1(litU.uLampWallSpill,  _litUf, "lampWallSpill",  T && T.lampWallSpill  != null ? T.lampWallSpill  : 1.0);
     uf1(litU.uWetness, _litUf, "wetness", frame.wetness != null ? frame.wetness : 0.0);
+    framePuddleGrow = typeof Puddles !== "undefined" ? Puddles.growth(frame.wetness || 0, T && T.puddles != null ? T.puddles : 1.0) : 0;
     uf1(litU.uRain,    _litUf, "rain",    frame.rain != null ? frame.rain : 0.0);     // puddle ripples (falling rain only)
     uf1(litU.uSpecKnee, _litUf, "specKnee", T && T.specKnee != null ? T.specKnee : 4.0);   // SUN GLINT RANGE (TUNE_DEFS def 4.0)
     // Env probe: dedicated unit 6 (0 shadow / 5 decal / 7 blocker). A COMPLETE

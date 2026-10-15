@@ -750,6 +750,8 @@
       C.hazeStr.value = hz ? hz.str : 0;
       C.hazeTime.value = F.time || 0;
       C.ssrThick.value = gk("ssrThick");
+      // Satin SSR mask on while puddles are active (tlx.js latches F.wetness).
+      C.puddleSatin.value = (typeof Puddles !== "undefined" && Puddles.growth(F.wetness || 0, gk("puddles")) > 0) ? 1 : 0;
       // Camera-aware SSR extent (game.js sets these per camera; onboard cams get
       // a raised top cutoff and a pulled-in near fade).
       C.ssrTopUV.value = o.ssrTopUV != null ? o.ssrTopUV : 0.62;

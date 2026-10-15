@@ -1609,6 +1609,7 @@
         // TLX port).
         const wet = float(0.0).toVar();
         const puddle = float(0.0).toVar();
+        const satin = float(0.0).toVar();   // satin wet sheet between active puddles; env mirror + SSR tag read it
         const wetSheen = float(0.0).toVar();
         // NOT on a car: the block is world-keyed (noise puddles, ripple cells,
         // the tarmac absorb) and slid across the moving body — glsl-lit.js.
@@ -1671,8 +1672,14 @@
           const absorb = mix(absorbRoad, absorbRoad.mul(0.66), porous);
           albedo.mulAssign(mix(float(1.0), absorb, wet));
           albedo.mulAssign(mix(float(1.0), float(0.40), puddle));   // standing water: darker than the sheet
+          // SATIN ROAD, MIRROR POOLS (2026-10-15) — GLX glsl-lit.js constant for
+          // constant: with puddles active the sheet between them goes satin
+          // (rough 0.45, albedo x0.88, env floor 0.20); SSR follows via the tag.
+          satin.assign(pg.mul(wet).mul(porous.oneMinus()).mul(puddle.oneMinus()));   // = pg * wetSheen * (1 - puddle)
+          albedo.mulAssign(mix(float(1.0), float(0.88), satin));
           wetSheen.assign(wet.mul(porous.oneMinus()));
           rough.assign(mix(rough, 0.30, wetSheen));
+          rough.assign(mix(rough, 0.45, satin));   // satin sheet between the pools
           rough.assign(mix(rough, 0.02, puddle));   // near-mirror inside the pool
           a.assign(rough.mul(rough));
           f0.assign(mix(f0, vec3(0.04), wetSheen.mul(0.6)));   // thin water film dielectric
@@ -2031,7 +2038,7 @@
         const envBlend = clamp(float(0.40).sub(rough).div(0.30), 0.0, 1.0).mul(specular).toVar();
         // The probe tap below (rgb) and its weight (w > 0 once taken), reused by the metal block (same R + LOD).
         const envCubeTap = envCubeNode ? vec4(0.0).toVar() : null;
-        envBlend.assign(max(envBlend, max(wetSheen.mul(0.55), puddle.mul(0.90))));   // PUDDLES: strong mirror even with SSR shed
+        envBlend.assign(max(envBlend, max(wetSheen.mul(mix(float(0.55), float(0.20), satin)), puddle.mul(0.90))));   // PUDDLES: strong mirror even with SSR shed
         If(envBlend.greaterThan(0.001), () => {
           const R = reflect(V.negate(), N).toVar();
           const skyT = pow(max(R.y, 1e-4), 0.40);
@@ -2166,8 +2173,12 @@
         // translucent/noAlphaWrite draws preserve dst alpha through the blend
         // stage (Zero/One alpha factors in makeMaterial — GLX's colorMask).
         // Without the post chain (direct to canvas) the tag stays off.
+        // SATIN ROAD (2026-10-15): opaque non-car pixels tag 1 - 0.4*satin
+        // (>= 0.6, above the car band) so the road SSR cover follows the satin
+        // mask (tsl-post.js); satin = 0 tags exactly matU.alpha, as before.
         return vec4(color, SSR_TAG
-          ? select(carPaint.greaterThan(0.001), float(0.35), matU.alpha)
+          ? select(carPaint.greaterThan(0.001), float(0.35),
+              matU.alpha.sub(satin.mul(0.4).mul(step(0.999, matU.alpha))))
           : matU.alpha);
       })();
     }

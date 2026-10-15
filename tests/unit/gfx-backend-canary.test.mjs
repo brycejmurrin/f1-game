@@ -4624,7 +4624,9 @@ test("WGX's canvas is opaque too — it writes the same tag with NO gate", () =>
     "WGX must configure an OPAQUE canvas — it tags alpha on every frame");
 
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(chunks, /select\(alpha,\s*0\.35,\s*carPaint\s*>\s*0\.001\)/,
+  // Since 2026-10-15 the non-car branch also carries the satin SSR mask
+  // (alpha - 0.4*satin on opaque draws, >= 0.6) — the same opaque canvas covers it.
+  assert.match(chunks, /select\(alpha(?: - 0\.4 \* satin \* step\(0\.999, alpha\))?,\s*0\.35,\s*carPaint\s*>\s*0\.001\)/,
     "the ungated WGX car-paint tag moved — recheck what its canvas opacity is carrying");
 });
 

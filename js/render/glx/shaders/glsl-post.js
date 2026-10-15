@@ -582,6 +582,7 @@ uniform float uCarGloss;     // car paint gloss (CAR tuner group; default 1.0) �
 uniform vec3 uReflSkyHi;     // horizon sky-glow (dim reflection fallback on a march miss)
 uniform vec3 uReflSkyLo;     // zenith sky-glow
 uniform float uSsrThick;     // wet-road SSR depth thickness gate (def 0.20)
+uniform float uPuddleSatin;  // 1 while puddles are active (Puddles.growth > 0): decode the satin mask from scene alpha
 uniform float uSsrTopUV;     // top-of-screen SSR cutoff (def 0.62). The upper screen
                              //   is "never wet road" ONLY for a high, down-looking
                              //   chase eye; a low onboard eye (cockpit/hood) pushes the
@@ -1094,7 +1095,14 @@ void main() {
       // through the same amount of mirror. Car paint keeps its confidence-scaled
       // cover — it falls through to the lit shader's env mirror on a miss, which
       // is already continuous because the env cube covers every direction.
-      float cover  = carDom ? conf : 0.60;
+      // SATIN ROAD, MIRROR POOLS (2026-10-15): with puddles active the lit
+      // pass tags the satin sheet BETWEEN the pools in scene alpha as
+      // 1 - 0.4*satin (>= 0.6, clear of the car band); the road cover scales
+      // to a quarter there so the pools stay the mirrors. Still constant over
+      // hit vs miss (the reason above) — it varies with the SURFACE, not the
+      // march. uPuddleSatin 0 (pg = 0) leaves the cover at exactly 0.60.
+      float satinA = (uPuddleSatin > 0.5 && scn.a >= 0.58) ? clamp((1.0 - scn.a) * 2.5, 0.0, 1.0) : 0.0;
+      float cover  = carDom ? conf : 0.60 * mix(1.0, 0.25, satinA);
       // Clean DARKER MIRROR: substitute the reflected scene into a darkened base
       // (a real wet mirror shows the scene it reflects, not a wash added on top).
       // Mirror-like: a high base reflectance (so mid/near tarmac mirrors too, not

@@ -4533,7 +4533,11 @@ const WGX = (function () {
         // normal strides read depthTex (full res); feeding them the half-res
         // OUTPUT texel doubled the stride the edge/self-hit thresholds were
         // tuned at. gloss.w zeroed — postScratch is shared and uploads as-is.
-        s[49] = 1 / tw; s[50] = 1 / th; s[51] = 0;
+        s[49] = 1 / tw; s[50] = 1 / th;
+        // gloss.w = satin SSR mask on: puddles active (Puddles.growth > 0) —
+        // the shader then decodes the satin tag from scene alpha (GLX uPuddleSatin).
+        s[51] = (typeof Puddles !== "undefined" && Puddles.growth(lastFrame && lastFrame.wetness || 0,
+          (T && T.puddles != null) ? T.puddles : 1.0) > 0) ? 1 : 0;
         device.queue.writeBuffer(ssrUBO, 0, s, 0, _Post.SSR_UNIFORM_BYTES / 4);
         const p = encoder.beginRenderPass({ colorAttachments: [{ view: ssrView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 0 }, storeOp: "store" }] });

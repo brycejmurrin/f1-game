@@ -1393,7 +1393,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   }
   var reflCol = mix(skyRefl, hitCol, conf);
   // Road: constant cover; car: confidence-scaled (falls through to lit env on miss).
-  let cover = select(0.60, conf, carDom);
+  // SATIN ROAD, MIRROR POOLS (2026-10-15) — GLX glsl-post.js constant for
+  // constant: the lit pass tags the satin sheet between active puddles as
+  // alpha 1 - 0.4*satin (>= 0.6); the road cover drops to a quarter there.
+  // gloss.w = 1 while puddles are active; 0 leaves the cover at exactly 0.60.
+  let satinA = select(0.0, clamp((1.0 - scnA) * 2.5, 0.0, 1.0), U.gloss.w > 0.5 && scnA >= 0.58);
+  let cover = select(0.60 * mix(1.0, 0.25, satinA), conf, carDom);
   // Soft-clip the reflected HDR colour before it's substituted (caps the mirror
   // at a sane peak while keeping its colour).
   reflCol = reflCol / (1.0 + reflCol * 0.35);

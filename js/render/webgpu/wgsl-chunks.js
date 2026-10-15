@@ -1257,6 +1257,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   var wet = 0.0;
   var wetSheen = 0.0;
   var puddle = 0.0;   // read again by the env mirror below (Block 5b)
+  var satin = 0.0;    // satin wet sheet between active puddles; read by the env mirror + the alpha tag
   // NOT on a car: this block is world-keyed (noise puddles, ripple cells, the
   // tarmac absorb) and slid across the moving body in rain — glsl-lit.js.
   if (wetness > 0.001 && !classifiedCar) {
@@ -1319,8 +1320,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let absorb = mix(absorbRoad, absorbRoad * 0.66, porous);
     albedo = albedo * mix(1.0, absorb, wet);
     albedo = albedo * mix(1.0, 0.40, puddle);   // standing water: darker than the sheet
+    // SATIN ROAD, MIRROR POOLS (2026-10-15) — GLX glsl-lit.js constant for
+    // constant: with puddles active the sheet between them goes satin (rough
+    // 0.45, albedo x0.88, env floor 0.20); the SSR cover follows via alpha.
+    satin = pg * wet * (1.0 - porous) * (1.0 - puddle);   // = pg * wetSheen * (1 - puddle)
+    albedo = albedo * mix(1.0, 0.88, satin);
     wetSheen = wet * (1.0 - porous);
     rough = mix(rough, 0.30, wetSheen);
+    rough = mix(rough, 0.45, satin);    // satin sheet between the pools
     rough = mix(rough, 0.02, puddle);   // near-mirror inside the pool
     f0 = mix(f0, vec3<f32>(0.04), wetSheen * 0.6);    // thin water film dielectric
     a = rough * rough;
@@ -1666,7 +1673,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // gradient reflected in the view ray — the plain-gloss fallback beside the post SSR
   // pass (and the only wet mirror when SSR is shed).
   var envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
-  envBlend = max(envBlend, max(wetSheen * 0.55, puddle * 0.90));   // PUDDLES: strong mirror even with SSR shed
+  envBlend = max(envBlend, max(wetSheen * mix(0.55, 0.20, satin), puddle * 0.90));   // PUDDLES: strong mirror even with SSR shed
   if (envBlend > 0.001) {
     let Rw = reflect(-V, N);
     let skyT = pow(max(Rw.y, 1e-4), 0.40);
@@ -1818,7 +1825,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
   }
 
-  return vec4<f32>(color, select(alpha, 0.35, carPaint > 0.001));
+  // Alpha = the SSR TAG (wgsl-post.js SSR): 0.35 car paint; opaque non-car
+  // pixels 1 - 0.4*satin (>= 0.6) so the road SSR cover follows the satin
+  // mask. satin = 0 writes exactly alpha, as before (GLX glsl-lit.js).
+  return vec4<f32>(color, select(alpha - 0.4 * satin * step(0.999, alpha), 0.35, carPaint > 0.001));
 }`;
 
   //    (no fragment stage) — rasterises clip-space depth into the shadow map from

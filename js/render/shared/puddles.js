@@ -41,6 +41,17 @@ const Puddles = (function () {
     WET_ON: 0.6, WET_FULL: 1.0,          // road wetness where puddles start / are fully grown
     THR: 1.0, THR_GROW: 0.38, SOFT: 0.20,          // threshold falls 1.0 → 0.62; soft edge width
     ROUGH: 0.02, DARK: 0.40, ENV: 0.90, ENV_KEEP: 0.5,   // inside a puddle: roughness, albedo ×, env mirror floor, sky-dim relief
+    // SATIN ROAD, MIRROR POOLS (2026-10-15): between active puddles the wet
+    // sheet goes satin, so the pools are the only mirrors on the road.
+    SHEET_ROUGH: 0.30, SATIN_ROUGH: 0.45,   // sheet roughness → satin roughness
+    SATIN_DARK: 0.88,                       // satin albedo ×
+    SHEET_ENV: 0.55, SATIN_ENV: 0.20,       // analytic env-mirror floor: sheet → satin
+    // The SSR cover follows the mask through the scene alpha (the SSR tag):
+    // opaque non-car pixels write 1 - TAG_DROP*satin; the post decodes
+    // (1 - a) * TAG_SCALE above TAG_MIN (the car tag is 0.35, read through
+    // smoothstep(0.42, 0.55, a)) and scales the road cover ROAD_COVER by
+    // mix(1, SATIN_COVER, satinA).
+    TAG_DROP: 0.4, TAG_MIN: 0.58, TAG_SCALE: 2.5, ROAD_COVER: 0.60, SATIN_COVER: 0.25,
   });
 
   // f32 emulation so the reference tracks the GPU's precision on the hash.
@@ -88,6 +99,21 @@ const Puddles = (function () {
     return smoothstep(lo, lo + K.SOFT, field(x, z) * pool(o.lat == null ? null : o.lat, o.downhill)) * g;
   }
 
-  return { K, hash21, vnoise, field, pool, growth, mask };
+  /** Satin amount between the pools: pg * wetSheen * (1 - puddle). */
+  function satin(pg, wetSheen, puddle) { return pg * wetSheen * (1 - puddle); }
+  /** The lit pass's SSR-tag alpha for a non-car pixel of material alpha `a`. */
+  function tagAlpha(a, s) { return a - K.TAG_DROP * s * (a >= 0.999 ? 1 : 0); }
+  /** The post's decode: satin seen through the tag (0 when the mask is off). */
+  function decodeSatin(a, on) { return on && a >= K.TAG_MIN ? clamp((1 - a) * K.TAG_SCALE, 0, 1) : 0; }
+  /** The road SSR cover for a decoded satin amount. */
+  function roadCover(satinA) { return K.ROAD_COVER * mix(1, K.SATIN_COVER, satinA); }
+  /** The sheet's material response for a satin amount: roughness after the
+   *  sheet mix (from `rough`), albedo factor, env floor factor. */
+  function sheet(rough, wetSheen, s) {
+    const r = mix(mix(rough, K.SHEET_ROUGH, wetSheen), K.SATIN_ROUGH, s);
+    return { rough: r, albedo: mix(1, K.SATIN_DARK, s), envFloor: wetSheen * mix(K.SHEET_ENV, K.SATIN_ENV, s) };
+  }
+
+  return { K, hash21, vnoise, field, pool, growth, mask, satin, tagAlpha, decodeSatin, roadCover, sheet };
 })();
 Object.freeze(Puddles);

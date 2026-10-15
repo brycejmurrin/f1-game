@@ -4892,6 +4892,7 @@ const TLX = (function () {
           // Garage begin() sets noEnv so present() can keep proj (SSAO) without
           // routing the bay into the HDR scene target that stays black on soft GL.
           _postF.noEnv = !!(frame && frame.noEnv);
+          _postF.wetness = (frame && frame.wetness) || 0;   // tlx-post.js: the satin SSR mask (Puddles.growth)
           // GL convention on BOTH backends: tsl-post reconstructs with d*2-1, and
           // the depth texture stores 0.5*z_gl+0.5 under WebGPU's Z01 remap too.
           _postF.invProj = (frame && frame.invProj) || null;

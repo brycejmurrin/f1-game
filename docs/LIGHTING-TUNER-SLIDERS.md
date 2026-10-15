@@ -636,7 +636,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `surfDetail` | SURFACE DETAIL | 0 … 2.5 | 1 | — | ✓ | game.js×2 |
 | `matTexMix` | BAKED MATERIALS | 0 … 1 | 1 | `uMatTexMix` |   | apex.js×2, glx.js×2 |
 | `ssrThick` | SSR THICKNESS | 0.05 … 1 | 0.2 | `uSsrThick` | ✓ | — |
-| `puddles` | PUDDLES | 0 … 2 | 1 | `uPuddles` |   | glx.js×2 |
+| `puddles` | PUDDLES | 0 … 2 | 1 | `uPuddles` |   | glx.js×4 |
 | `wetDark` | WET ROAD DARKEN | 0 … 1.72 | 1 | `uWetDark` | ✓ | glx.js×2 |
 | `windowSunFlash` | WINDOW SUN FLASH | 0 … 2.5 | 1 | `uWindowSunFlash` | ✓ | glx.js×2 |
 | `skyRimGlow` | SKY RIM GLOW | 0 … 2.5 | 1 | `uSkyRimGlow` | ✓ | glx.js×2 |
@@ -684,7 +684,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` | ✓ | game.js×2, glx.js×2 |
 | `cloudDef` | CLOUD DEFINITION | 0 … 1.2 | 1 | `uCloudDef` |   | game.js×2, glx.js×2 |
 | `skyColorSat` | SKY COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
-| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×13, weather-arc.js×6, glx.js×2, puddles.js×2 |
+| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×13, weather-arc.js×6, glx.js×3, puddles.js×2 |
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js×3 |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
 | `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×4 |

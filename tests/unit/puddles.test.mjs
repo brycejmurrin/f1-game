@@ -129,9 +129,10 @@ test("parity: inside a puddle — near-zero roughness, darker albedo, a stronger
   assert.ok(glx.includes(`rough = mix(rough, ${r}, puddle);`), "GLX rough");
   assert.ok(wgx.includes(`rough = mix(rough, ${r}, puddle);`), "WGX rough");
   assert.ok(tlx.includes(`rough.assign(mix(rough, ${r}, puddle));`), "TLX rough");
-  assert.ok(glx.includes(`envBlend = max(envBlend, max(wetSheen * 0.55, puddle * ${e}));`), "GLX env floor");
-  assert.ok(wgx.includes(`envBlend = max(envBlend, max(wetSheen * 0.55, puddle * ${e}));`), "WGX env floor");
-  assert.ok(tlx.includes(`envBlend.assign(max(envBlend, max(wetSheen.mul(0.55), puddle.mul(${e}))));`), "TLX env floor");
+  // (the sheet's 0.55 floor became mix(0.55, 0.20, satin) on 2026-10-15 — the satin tests pin it)
+  assert.ok(glx.includes(`satin), puddle * ${e}));`), "GLX pool env floor");
+  assert.ok(wgx.includes(`satin), puddle * ${e}));`), "WGX pool env floor");
+  assert.ok(tlx.includes(`satin)), puddle.mul(${e}))));`), "TLX pool env floor");
   const k = K.ENV_KEEP;
   assert.ok(glx.includes(`envColor * (1.0 - wetSheen * 0.45 * (1.0 - puddle * ${k}))`), "GLX sky keep");
   assert.ok(wgx.includes(`envColor * (1.0 - wetSheen * 0.45 * (1.0 - puddle * ${k}))`), "WGX sky keep");
@@ -170,4 +171,96 @@ test("the PUDDLES knob reaches every backend", () => {
   assert.match(tlx, /puddles:\s+uniform\(1\.0\)/); assert.match(tlx, /uf1\(U\.puddles, k\("puddles", 1\.0\)\)/, "TLX updates U.puddles");
   assert.match(read("js/render/webgpu/wgx.js"), /d\[141\] = \(T && T\.puddles != null\) \? T\.puddles : 1\.0;/, "WGX packs params10.y");
   assert.match(read("js/render/webgpu/wgsl-chunks.js"), /params10\s*:\s*vec4<f32>,.*\n.*y PUDDLES knob/, "FrameU documents params10.y");
+});
+
+// ── SATIN ROAD, MIRROR POOLS (2026-10-15) ───────────────────────────────────
+// With puddles active the wet sheet between the pools goes satin (rougher,
+// a little darker, a weaker analytic mirror) and the SSR road cover follows the
+// same mask through the scene alpha. At pg = 0 every backend must render
+// exactly what shipped before: pinned on the reference AND on each shader's
+// form (every satin term is a mix(.., .., satin) or a satin-scaled offset, and
+// satin carries pg as a factor).
+test("satin reference: pg = 0 is the identity — sheet, tag, decode and cover", () => {
+  for (const ws of [0, 0.3, 0.8, 1]) for (const pud of [0, 0.4, 1]) for (const r of [0.2, 0.6, 0.9]) {
+    const s = P.satin(0, ws, pud);
+    assert.equal(s, 0);
+    const sh = P.sheet(r, ws, s);
+    assert.equal(sh.rough, r + (K.SHEET_ROUGH - r) * ws, "satin 0 keeps the sheet roughness");
+    assert.equal(sh.albedo, 1); assert.equal(sh.envFloor, ws * K.SHEET_ENV);
+  }
+  for (const a of [1, 0.999, 0.7, 0.35, 0]) assert.equal(P.tagAlpha(a, 0), a, `satin 0 tags alpha ${a} unchanged`);
+  // the mask off (pg = 0 on the CPU) never decodes, whatever alpha holds
+  for (const a of [1, 0.9, 0.6, 0.35]) assert.equal(P.decodeSatin(a, false), 0);
+  assert.equal(P.roadCover(0), K.ROAD_COVER);
+  assert.equal(K.ROAD_COVER, 0.60, "the shipped road SSR cover");
+  assert.equal(P.growth(0.6, 1), 0); assert.equal(P.growth(1, 0), 0);
+});
+
+test("satin reference: the tag round-trips, stays clear of the car band, and dims the road cover", () => {
+  for (let i = 0; i <= 20; i++) {
+    const s = i / 20, a = P.tagAlpha(1, s);
+    assert.ok(a >= 0.6 - 1e-12, `tag ${a} stays >= 0.6`);
+    // post's car read: 1 - smoothstep(0.42, 0.55, a) must stay 0 on a satin road
+    assert.ok(a > 0.55, "a satin road never reads as car paint");
+    assert.ok(Math.abs(P.decodeSatin(a, true) - s) < 1e-9, `decode(${a}) = ${s}`);
+  }
+  assert.equal(P.decodeSatin(0.35, true), 0, "the car tag is not satin");
+  assert.equal(P.tagAlpha(0.7, 1), 0.7, "translucent draws keep their alpha");
+  assert.ok(Math.abs(P.roadCover(1) - K.ROAD_COVER * K.SATIN_COVER) < 1e-12);
+  const sh = P.sheet(0.5, 1, 1);
+  assert.equal(sh.rough, K.SATIN_ROUGH); assert.equal(sh.albedo, K.SATIN_DARK); assert.equal(sh.envFloor, K.SATIN_ENV);
+  assert.equal(P.satin(1, 1, 1), 0, "inside a full pool there is no satin: the pool keeps its mirror");
+});
+
+test("satin parity: GLX, TLX and WGX carry every satin constant, gated by pg (lit)", () => {
+  const glx = read("js/render/glx/shaders/glsl-lit.js"), tlx = read("js/render/three/tsl-lit.js"), wgx = read("js/render/webgpu/wgsl-chunks.js");
+  const f2 = (x) => x.toFixed(2);
+  // satin = pg * wetSheen * (1 - puddle), spelled from the block's own terms
+  assert.ok(glx.includes("satin = pg * wet * (1.0 - porous) * (1.0 - puddle);"), "GLX satin");
+  assert.ok(wgx.includes("satin = pg * wet * (1.0 - porous) * (1.0 - puddle);"), "WGX satin");
+  assert.ok(tlx.includes("satin.assign(pg.mul(wet).mul(porous.oneMinus()).mul(puddle.oneMinus()));"), "TLX satin");
+  for (const [n, s, rough, dark] of [
+    ["GLX", glx, `rough = mix(rough, ${f2(K.SATIN_ROUGH)}, satin);`, `albedo *= mix(1.0, ${f2(K.SATIN_DARK)}, satin);`],
+    ["WGX", wgx, `rough = mix(rough, ${f2(K.SATIN_ROUGH)}, satin);`, `albedo = albedo * mix(1.0, ${f2(K.SATIN_DARK)}, satin);`],
+    ["TLX", tlx, `rough.assign(mix(rough, ${f2(K.SATIN_ROUGH)}, satin));`, `albedo.mulAssign(mix(float(1.0), float(${f2(K.SATIN_DARK)}), satin));`],
+  ]) {
+    assert.ok(s.includes(rough), `${n} satin roughness`); assert.ok(s.includes(dark), `${n} satin darken`);
+    // the satin roughness sits between the sheet mix and the pool mix
+    const iS = s.indexOf(`${f2(K.SHEET_ROUGH)}, wetSheen`), iT = s.indexOf(rough), iP = s.indexOf(`${f2(K.ROUGH)}, puddle`);
+    assert.ok(iS > 0 && iS < iT && iT < iP, `${n}: sheet -> satin -> pool roughness order`);
+  }
+  assert.ok(glx.includes(`envBlend = max(envBlend, max(wetSheen * mix(${f2(K.SHEET_ENV)}, ${f2(K.SATIN_ENV)}, satin), puddle * 0.90));`), "GLX env floor");
+  assert.ok(wgx.includes(`envBlend = max(envBlend, max(wetSheen * mix(${f2(K.SHEET_ENV)}, ${f2(K.SATIN_ENV)}, satin), puddle * 0.90));`), "WGX env floor");
+  assert.ok(tlx.includes(`envBlend.assign(max(envBlend, max(wetSheen.mul(mix(float(${f2(K.SHEET_ENV)}), float(${f2(K.SATIN_ENV)}), satin)), puddle.mul(0.90))));`), "TLX env floor");
+  // the SSR tag: satin-scaled, opaque-only (step), the car tag untouched
+  assert.ok(glx.includes(`outColor = vec4(color, carPaint > 0.001 ? 0.35 : uAlpha - ${K.TAG_DROP} * satin * step(0.999, uAlpha));`), "GLX tag");
+  assert.ok(wgx.includes(`return vec4<f32>(color, select(alpha - ${K.TAG_DROP} * satin * step(0.999, alpha), 0.35, carPaint > 0.001));`), "WGX tag");
+  assert.ok(tlx.includes(`matU.alpha.sub(satin.mul(${K.TAG_DROP}).mul(step(0.999, matU.alpha)))`), "TLX tag");
+  // satin is declared outside the wet block, zero by default (dry frames, cars)
+  assert.match(glx, /float satin = 0\.0;/); assert.match(wgx, /var satin = 0\.0;/); assert.match(tlx, /const satin = float\(0\.0\)\.toVar\(\);/);
+});
+
+test("satin parity: the post chains decode the tag and scale the ROAD cover only, behind a CPU flag", () => {
+  const gp = read("js/render/glx/shaders/glsl-post.js"), wp = read("js/render/webgpu/wgsl-post.js"), tp = read("js/render/three/tsl-post.js");
+  const t = `${K.TAG_MIN}`, sc = `${K.TAG_SCALE}`, c = `${K.ROAD_COVER.toFixed(2)}`, sv = `${K.SATIN_COVER}`;
+  assert.ok(gp.includes(`float satinA = (uPuddleSatin > 0.5 && scn.a >= ${t}) ? clamp((1.0 - scn.a) * ${sc}, 0.0, 1.0) : 0.0;`), "GLX decode");
+  assert.ok(gp.includes(`float cover  = carDom ? conf : ${c} * mix(1.0, ${sv}, satinA);`), "GLX cover");
+  assert.ok(wp.includes(`let satinA = select(0.0, clamp((1.0 - scnA) * ${sc}, 0.0, 1.0), U.gloss.w > 0.5 && scnA >= ${t});`), "WGX decode");
+  assert.ok(wp.includes(`let cover = select(${c} * mix(1.0, ${sv}, satinA), conf, carDom);`), "WGX cover");
+  assert.ok(tp.includes(`satinA.assign(select(ta.greaterThanEqual(${t}), clamp(ta.oneMinus().mul(${sc}), 0.0, 1.0), float(0.0)));`), "TLX decode");
+  assert.ok(tp.includes(`const cover = select(carDom, conf, float(${c}).mul(mix(float(1.0), float(${sv}), satinA))).toVar();`), "TLX cover");
+  assert.match(tp, /If\(C\.puddleSatin\.greaterThan\(0\.5\), \(\) => \{\s*const ta = tagT\.sample\(TL\(hazeUV\)\)\.r;/, "TLX reads the tag only with the mask on");
+  // the CPU flag: Puddles.growth > 0 on every backend, from the frame's wetness and the PUDDLES knob
+  const glxJs = read("js/render/glx/glx.js");
+  assert.match(glxJs, /framePuddleGrow = typeof Puddles !== "undefined" \? Puddles\.growth\(frame\.wetness \|\| 0, T && T\.puddles != null \? T\.puddles : 1\.0\) : 0;/);
+  assert.match(glxJs, /get puddleGrow\(\) \{ return framePuddleGrow; \}/);
+  assert.match(read("js/render/glx/post.js"), /gl\.uniform1f\(compU\.uPuddleSatin, F\.puddleGrow > 0 \? 1 : 0\);/);
+  assert.match(read("js/render/glx/post.js"), /"uSsrThick", "uPuddleSatin"/);
+  assert.match(gp, /uniform float uPuddleSatin;/);
+  assert.match(read("js/render/webgpu/wgx.js"), /s\[51\] = \(typeof Puddles !== "undefined" && Puddles\.growth\(lastFrame && lastFrame\.wetness \|\| 0,\s*\(T && T\.puddles != null\) \? T\.puddles : 1\.0\) > 0\) \? 1 : 0;/);
+  assert.match(read("js/render/three/tlx-post.js"), /C\.puddleSatin\.value = \(typeof Puddles !== "undefined" && Puddles\.growth\(F\.wetness \|\| 0, gk\("puddles"\)\) > 0\) \? 1 : 0;/);
+  assert.match(read("js/render/three/tlx.js"), /_postF\.wetness = \(frame && frame\.wetness\) \|\| 0;/);
+  assert.match(tp, /puddleSatin: uniform\(0\)/);
+  // the car path is untouched: car pixels keep the confidence cover
+  assert.match(gp, /carDom \? conf :/); assert.match(wp, /, conf, carDom\);/);
 });

@@ -208,7 +208,7 @@ const GLXPost = (function () {
         }
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }
-      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"].concat(_perspS ? _PU : []));
+      compU = locs(compProg, ["uScene", "uBloom", "uSSAO", "uAOTexel", "uGodray", "uHaveGodray", "uBloomAmt", "uBloomKnee", "uSunUV", "uFlareStr", "uExposure", "uSunShaft", "uGradeShadow", "uGradeHi", "uGradeStr", "uContrast", "uVibrance", "uSaturation", "uTint", "uVignette", "uVigSoft", "uTone0", "uTone1", "uLift", "uGamma", "uGain", "uHdrGradeOn", "uCarReflect", "uCarGloss", "uDepth", "uInvProj", "uProj", "uUpVS", "uReflTexel", "uReflect", "uSsrOk", "uReflSkyHi", "uReflSkyLo", "uSsrThick", "uPuddleSatin", "uSsrTopUV", "uSsrNear", "uChromAb", "uGrain", "uGrainTime", "uSharpen", "uBlackLift", "uWhitePoint", "uAcesA", "uAcesB", "uAcesC", "uAcesD", "uAcesE", "uSpeedBlur", "uDirt", "uLensDirt", "uHazeUV", "uHazeStr", "uHazeTime", "uShaftDecay", "uShaftSpread", "uFlareStreak", "uFlareStreak2"].concat(_perspS ? _PU : []));
       if (ssaoProg) ssaoU = locs(ssaoProg, ["uDepth", "uInvProj", "uProj", "uSunVS", "uTexel", "uStrength", "uContact", "uRadius"].concat(_perspS ? _PU : []));
       if (godrayProg) godrayU = locs(godrayProg, ["uDepth", "uShadowMap", "uInvVP", "uLightVP", "uEye", "uSunDir", "uSunColor", "uStr", "uTime", "uCloudCover", "uCloudSpeed", "uNumLights", "uLightPos[0]", "uLightCol[0]", "uLightRad[0]", "uLightDir[0]", "uLightCone[0]", "uLightVolW[0]", "uMist", "uLampStr", "uHgAniso", "uHgFloor", "uLampShadowMap", "uLampShadowVP", "uLampShadowIdx"]);
       // 1×1 white texture: the "AO off" fallback so the composite multiply is a no-op.
@@ -945,6 +945,7 @@ const GLXPost = (function () {
       gl.uniform1f(compU.uHazeStr, hz ? hz.str : 0);
       gl.uniform1f(compU.uHazeTime, F.time);
       uf1(compU.uSsrThick,   "ssrThick",   PostCommon.knob(CT, "ssrThick"));
+      gl.uniform1f(compU.uPuddleSatin, F.puddleGrow > 0 ? 1 : 0);   // satin SSR mask on (glx.js latches Puddles.growth)
       // LENS DIRT: bind the procedural smudge map (black fallback = veil term is
       // zero even if the knob is up, so a failed canvas init degrades silently).
       gl.activeTexture(gl.TEXTURE5);

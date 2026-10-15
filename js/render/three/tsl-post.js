@@ -490,7 +490,7 @@
       reflSkyHi: uniform(new THREE.Vector3(0.05, 0.06, 0.09)),
       reflSkyLo: uniform(new THREE.Vector3(0.02, 0.025, 0.05)),
       ssrTopUV: uniform(0.62), ssrNear: uniform(-2.5),
-      ssrThick: uniform(0.20), chromAb: uniform(0), grain: uniform(0),
+      ssrThick: uniform(0.20), puddleSatin: uniform(0), chromAb: uniform(0), grain: uniform(0),
       grainTime: uniform(0), sharpen: uniform(0), blackLift: uniform(0.005),
       whitePoint: uniform(1.0),
       acesA: uniform(2.51), acesB: uniform(0.03), acesC: uniform(2.43),
@@ -786,7 +786,16 @@
             // in the substitution turned reflected CONTENT into a change of
             // SURFACE (glossy vs matte patches). Car paint keeps its
             // confidence-scaled cover — its env cube covers every direction.
-            const cover = select(carDom, conf, float(0.60)).toVar();
+            // SATIN ROAD, MIRROR POOLS (2026-10-15) — GLX glsl-post.js constant
+            // for constant: the satin sheet between active puddles is tagged
+            // 1 - 0.4*satin (>= 0.6); the road cover drops to a quarter there.
+            // puddleSatin 0 (pg = 0) never reads the tag: cover stays 0.60.
+            const satinA = float(0.0).toVar();
+            If(C.puddleSatin.greaterThan(0.5), () => {
+              const ta = tagT.sample(TL(hazeUV)).r;
+              satinA.assign(select(ta.greaterThanEqual(0.58), clamp(ta.oneMinus().mul(2.5), 0.0, 1.0), float(0.0)));
+            });
+            const cover = select(carDom, conf, float(0.60).mul(mix(float(1.0), float(0.25), satinA))).toVar();
             // Fresnel off the SAME normal the ray used, not the bumpy Nv.
             const fres = pow(max(dot(Nr, V), 0.0).oneMinus(), 3.0).toVar();
             const strength = ssrGate.mul(select(carDom,
