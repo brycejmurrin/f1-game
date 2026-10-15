@@ -49,18 +49,20 @@ export const NODE_SLICES = ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"];
  * savings estimates — never for selection. Re-balanced 2026-10-15
  * (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §7): the job medians of three
  * green ship pushes BEFORE the move were vm-a1 133, vm-a2 130, vm-b1 638,
- * vm-b2 241, page 525, slow 201; the values below are the projection after
- * the riders moved and game-vm-b1/b2 were re-cut (setup ~16 s included).
- * Re-measure from the job logs, not from this table.
+ * vm-b2 241, page 525, slow 201. The values below are the FIRST ship-push
+ * run after the move (caf37bd6, run 38700490935, 2026-10-15 07:42 UTC, every
+ * row in full, setup included): the wall fell from vm-b1's 638 s to page's
+ * 422 s. One run, not a median — re-measure from the job logs after a day
+ * and replace these.
  */
 export const SLICE_COST_P50_SEC = {
   guards: 279,
-  "vm-a1": 200,
-  "vm-a2": 220,
-  "vm-b1": 320,
-  "vm-b2": 320,
-  page: 520,
-  slow: 200,
+  "vm-a1": 236,
+  "vm-a2": 278,
+  "vm-b1": 286,
+  "vm-b2": 361,
+  page: 422,
+  slow: 220,
   "driving-model": 100,
 };
 
@@ -312,12 +314,13 @@ export function costs(selected) {
 
 /** Matrix rows + flags for ci.yml GITHUB_OUTPUT.
  *
- * The matrix ALWAYS lists every NODE_SLICE. Branch protection requires the
- * fixed check names `Pure-node unit suites (<slice>)` (ci.yml comment on the
- * matrix); emitting a subset leaves those names unreported and every such PR
- * stays BLOCKED even when the aggregator `CI` is green (measured on #454
- * 35e66e231: vm-b1/b2/page/slow ran, vm-a1/a2 never appeared). Unneeded rows
- * carry `needed:"false"` so the job exits 0 without work.
+ * On a deploy push and the train the matrix lists every NODE_SLICE (needed
+ * true|false): pages-train.mjs's reuse check wants expanded node rows, and
+ * until 2026-10-15 branch protection also required the six fixed names
+ * `Pure-node unit suites (<slice>)` — a subset left them unreported and the
+ * PR BLOCKED with a green `CI` (#454 35e66e231: vm-b1/b2/page/slow ran,
+ * vm-a1/a2 never appeared). Unneeded rows carry `needed:"false"` so the job
+ * exits 0 without work.
  *
  * EXCEPT ON A PULL REQUEST (`--needed-only`, 2026-10-15): `CI` is the deploy
  * branch's one required check, so the six names owe a PR nothing, and each unneeded row was still a job start
