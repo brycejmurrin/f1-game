@@ -115,6 +115,7 @@ test("15-F5: a green draft run is reused only while the base branch has not move
     fs.writeFileSync(path.join(dir, "gh"), [
       "#!/usr/bin/env bash",
       'case "$2" in',
+      '  repos/o/r/actions/runs/*/jobs*) printf \'%s\' "$STUB_JOBS" ;;',
       '  repos/o/r/actions/runs*) printf \'{"workflow_runs":[{"id":77,"status":"completed","conclusion":"success","path":".github/workflows/ci.yml","event":"pull_request","run_started_at":"2026-10-10T10:00:00Z"}]}\' ;;',
       '  repos/o/r/commits/*) printf \'%s\\n\' "$STUB_TIP_DATE" ;;',
       '  *) exit 1 ;;',
@@ -123,7 +124,8 @@ test("15-F5: a green draft run is reused only while the base branch has not move
     const reuse = (tipDate, extra = {}) => cp.spawnSync("bash", [path.join(ROOT, "tools/ci/reuse-draft-fast.sh")], {
       encoding: "utf8",
       env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_EVENT_ACTION: "ready_for_review",
-        PR_HEAD_SHA: "a".repeat(40), PR_BASE_REF: "ship", GITHUB_RUN_ID: "1", STUB_TIP_DATE: tipDate, ...extra },
+        PR_HEAD_SHA: "a".repeat(40), PR_BASE_REF: "ship", GITHUB_RUN_ID: "1", STUB_TIP_DATE: tipDate,
+        STUB_JOBS: JSON.stringify({ jobs: [{ name: "Structural guards (tooling A)", conclusion: "success" }] }), ...extra },
     });
     const r1 = reuse("2026-10-10T09:00:00Z");
     assert.match(r1.stdout, /reuse=true/, r1.stderr);
@@ -134,6 +136,14 @@ test("15-F5: a green draft run is reused only while the base branch has not move
     // No base ref, or an unreadable tip date, is not "same": fail safe.
     assert.match(reuse("2026-10-10T09:00:00Z", { PR_BASE_REF: "" }).stdout, /reuse=false/);
     assert.match(reuse("").stdout, /reuse=false/);
+    // #2184: a run that concluded success with tooling A SKIPPED (a draft
+    // without run-ci, or a label-noise run) tested nothing and is never reused.
+    const skipOnly = reuse("2026-10-10T09:00:00Z", { STUB_JOBS: JSON.stringify({ jobs: [
+      { name: "Draft push (CI skipped — add run-ci label)", conclusion: "success" },
+      { name: "Structural guards (tooling A)", conclusion: "skipped" }] }) });
+    assert.match(skipOnly.stdout, /reuse=false/, "a skip-only green run must not stand in for the fast tier");
+    assert.match(skipOnly.stderr, /did not run and pass/);
+    assert.match(reuse("2026-10-10T09:00:00Z", { STUB_JOBS: "" }).stdout, /reuse=false/, "an unreadable jobs list fails safe");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   assert.match(ci, /PR_BASE_REF: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/, "the reuse step passes the base ref");
 });
