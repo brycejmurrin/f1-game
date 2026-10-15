@@ -242,12 +242,24 @@
         const a = anchor(k, side, gap);
         if (!a || onTrack(a.c[0], a.c[2], 10)) return false;
         const gy = terrainYAt(a.c[0], a.c[2]);
-        return !(gy != null && Math.abs(gy - a.c[1]) > 0.55);
+        if (gy == null) return true;
+        const delta = gy - a.c[1];
+        if (Math.abs(delta) > 0.55) return false;
+        // Positive delta = terrain above the road-follow foot → buried hull.
+        if (delta > 0.06) return false;
+        return true;
+      };
+      const motorhomeAt = (k, side, gaps, w, h, len, opts) => {
+        for (let g = 0; g < gaps.length; g++) {
+          const gap = gaps[g];
+          if (!seatOk(k, side, gap)) continue;
+          motorhome(k, side, gap, w, h, len, opts);
+          return;
+        }
       };
       for (let i = 0; i < 8; i++) {                         // paddock motorhomes
         const kk = K(sl(0.9730 + i * 0.0068));
-        if (!seatOk(kk, 1, 27)) continue;
-        motorhome(kk, 1, 27, 11, 4.4, 17,
+        motorhomeAt(kk, 1, [27, 29, 25], 11, 4.4, 17,
           { wall: [0.86 + hash(i * 13) * 0.08, 0.86, 0.88] });
       }
       // Second paddock row removed: gap 34–40 floated / went unsupported on
@@ -347,9 +359,8 @@
       kiosks(0.1400, -1, 54, 10, 13);
       for (let i = 0; i < 7; i++) {                         // support paddock
         const k = K(0.1480 + i * 0.0090);
-        if (!clear(k, -1, 72, 14)) continue;
-        if (!seatOk(k, -1, 72)) continue;
-        motorhome(k, -1, 72, 10, 4.2, 15,
+        if (!clear(k, -1, 76, 14)) continue;
+        motorhomeAt(k, -1, [74, 76, 70], 10, 4.2, 15,
           { wall: [0.84 + hash(i * 19) * 0.08, 0.84, 0.86] });
       }
       building(K(0.1620), -1, 84, 16, 6, 28,
