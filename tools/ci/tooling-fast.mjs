@@ -468,6 +468,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-sign-occlusion.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/generated-docs.test.mjs",
+  "tests/unit/geom-mountain-lowmat.test.mjs",
   "tests/unit/geometry-paths-baseline.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",

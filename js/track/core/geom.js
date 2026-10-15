@@ -252,6 +252,7 @@ const TrackGeom = (function () {
     const rock = opts.rock || [0.40, 0.38, 0.36];
     const snow = opts.snow || [0.93, 0.95, 0.99];
     const snowline = opts.snowline != null ? opts.snowline : 0.62;
+    const lowMat = opts.lowMat != null ? opts.lowMat : MAT.FOLIAGE;        // material of the lower 34%; pass MAT.SAND for dunes
     const rx = opts.right || [1, 0, 0], fz = opts.fwd || [0, 0, 1];
     const h2 = (a, b) => { const x = __M.sin(a * 12.9898 + b * 78.233 + seed * 0.137) * 43758.5453; return x - __M.floor(x); };
     const ridgeOff = [];
@@ -269,7 +270,7 @@ const TrackGeom = (function () {
       if (fr > snowline + 0.04) return MAT.SNOW;
       if (fr > snowline - 0.16) return MAT.ROCK;
       if (fr > 0.34) return MAT.ROCK;
-      return MAT.FOLIAGE;
+      return lowMat;
     };
     const colAt = (fy, i) => {
       const fr = fy / h + (h2(i, 99) - 0.5) * 0.07;                        // ragged zone edges
