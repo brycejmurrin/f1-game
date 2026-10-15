@@ -1355,6 +1355,7 @@ var GameAudio = (function () {
     if (harvGain) harvGain.gain.setTargetAtTime(0, t0, 0.06);
     if (ersGain) ersGain.gain.setTargetAtTime(0, t0, 0.04);
     if (typeof ErsLayer !== "undefined" && ErsLayer.silence) ErsLayer.silence(t0);
+    if (typeof RivalAudio !== "undefined" && RivalAudio.silence) RivalAudio.silence(t0);   // pass-by whoosh (#2187)
     if (windGain) windGain.gain.setTargetAtTime(0, t0, 0.06);
     if (skidGain) skidGain.gain.setTargetAtTime(0, t0, 0.04);
     if (scrubGain) scrubGain.gain.setTargetAtTime(0, t0, 0.04);
@@ -2007,7 +2008,11 @@ var GameAudio = (function () {
   function feedReplayScrub(player, scrubbing, cars, gearOf, rpmFor, rivalAudio, isWet, vTop) {
     if (!player) return;   // SOUND off or no car: leave everything as it is
     if (!scrubbing) {
-      if (_scrubWas) { stopEngine(); setRivals([]); _scrubWas = false; }
+      if (_scrubWas) {
+        stopEngine(); setRivals([]); _scrubWas = false;
+        // stopEngine skips an engine already off; the scrub's whoosh must still close (#2187).
+        if (typeof RivalAudio !== "undefined" && RivalAudio.silence) RivalAudio.silence();
+      }
       return;
     }
     _scrubWas = true;
@@ -2858,6 +2863,10 @@ var GameAudio = (function () {
     radioLeadS: radio.radioLeadS,
     radioFxMax: radio.radioFxMax,
     radioChannels: radio.radioChannels,
+    // The live context and SFX bus, for leaf modules that schedule their own
+    // nodes (radio-voice squelch, #2189). null before init / after teardown.
+    context: () => ctx,
+    sfxBus: () => sfxBus,
     setEnabled,
     enabled,
     startEngine,

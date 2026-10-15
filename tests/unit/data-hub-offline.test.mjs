@@ -24,3 +24,14 @@ test("errorBlock still keeps stale node path in loadTab", () => {
   assert.match(HUB, /hasStale/);
   assert.match(HUB, /Showing the last data/);
 });
+
+// #2190: a tab built from the API's stored copy (refetch failed) dates its
+// footnote by that copy and says so; a node that knows when it goes stale
+// (Schedule's NEXT) is rebuilt then, not after MAX_AGE.
+test("footnote dates a stale-cache serve and flags it; reuse honours node.nextFlipAt", () => {
+  assert.match(HUB, /staleApi\.staleMark\(\)/);
+  assert.match(HUB, /dataAt: staleAt,\s*offlineCopy: staleAt != null/);
+  assert.match(HUB, /footnote\(st\.dataAt \|\| st\.at, st\.offlineCopy\)/);
+  assert.match(HUB, /if \(offlineCopy \|\| navigator\.onLine === false\) txt \+= " · offline copy"/);
+  assert.match(HUB, /!\(Date\.now\(\) >= st\.node\.nextFlipAt\)/);
+});
