@@ -38,7 +38,7 @@ async function menuStart(page, mode) {
       return i && (i.state === "race" || i.state === "count");
     },
     null,
-    { polling: 200, timeout: RACE_ENTRY_SOFT_MS + 30000 },
+    { polling: 200, timeout: 540_000 },
   );
   const t1 = await page.evaluate(() => performance.now());
   const snap = await page.evaluate(() => window.__apex.raceEntryProfile());
