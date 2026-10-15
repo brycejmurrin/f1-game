@@ -68,15 +68,15 @@
             const a = anchor(kk, side, gap);
             if (onTrack(a.c[0], a.c[2], 18)) continue;
             const b = [a.r, a.u, a.t];
-            const h = 17 + hv * 6;
+            const h = 19 + hv * 6;   // Lombardy poplar: tall, slim column
             out._mat = MAT.WOOD;
             addCyl(out, a.c, 0.30, h * 0.30, POP_BK, 5, b);
             out._mat = MAT.FOLIAGE;
-            addCone(out, vadd(a.c, a.u, h * 0.16), 1.75 + hv * 0.35, h * 0.42,
+            addCone(out, vadd(a.c, a.u, h * 0.16), 1.05 + hv * 0.2, h * 0.50,
                     hv < 0.5 ? POP : POP_L, 6, b);
-            addCone(out, vadd(a.c, a.u, h * 0.50), 1.45 + hv * 0.30, h * 0.36,
+            addCone(out, vadd(a.c, a.u, h * 0.46), 0.95 + hv * 0.18, h * 0.40,
                     hv < 0.5 ? POP_L : POP, 6, b);
-            addCone(out, vadd(a.c, a.u, h * 0.78), 1.00 + hv * 0.22, h * 0.28,
+            addCone(out, vadd(a.c, a.u, h * 0.74), 0.70 + hv * 0.14, h * 0.30,
                     POP_L, 6, b);
             out._mat = 0;
           }
@@ -146,15 +146,17 @@
 
       const { cx, cz, radius: rad } = lapBounds();
 
-      // Rounded mound: a frustum shoulder under a cone cap (a dome profile at 8
+      // Rounded mound: two frustum shoulders under a cone cap (a dome profile at 8
       // segments), so a hill reads as a green mound, not peak()'s pyramid or
       // backdrop()'s flat-topped box. Same guard as peak(): clear the road's whole
       // built width. `bury` sinks the skirt below sloping ground.
       const dome = (x, z, baseY, R, H, col, bury) => {
         if (onTrack(x, z, R + 2.6)) return;
-        const y0 = baseY - bury, hh = H + bury, h1 = hh * 0.6, r1 = R * 0.62;
-        addFrustum(out, [x, y0, z], R, r1, h1, col, 8, null);
-        addCone(out, [x, y0 + h1, z], r1, hh - h1, col, 8, null);
+        const y0 = baseY - bury, hh = H + bury;
+        const hA = hh * 0.38, hB = hh * 0.80;          // sin 22 / 53 deg of the profile
+        addFrustum(out, [x, y0, z], R, R * 0.93, hA, col, 8, null);
+        addFrustum(out, [x, y0 + hA, z], R * 0.93, R * 0.6, hB - hA, col, 8, null);
+        addCone(out, [x, y0 + hB, z], R * 0.6, hh - hB, col, 8, null);
       };
 
       const ringFar = rad + 460;
