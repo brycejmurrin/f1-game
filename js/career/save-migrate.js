@@ -309,6 +309,16 @@ const SaveMigrate = (function () {
       for (const key of Object.keys(picks).slice(0, 1024))
         if (/^\d{4,8}:\d{1,3}$/.test(key) && (picks[key] === 0 || picks[key] === 1)) career.sponsorPicks[key] = picks[key];
     career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
+    if (career.myTeamIdentity && typeof CareerTeamIdentity !== "undefined") career.myTeamIdentity = CareerTeamIdentity.sanitize(career.myTeamIdentity);
+    const winter = career.winterReport;
+    if (winter && typeof winter === "object" && Number.isInteger(winter.year)) {
+      const text = (v) => typeof v === "string" ? v.replace(/[\u0000-\u001f]/g, "").slice(0, 120) : "";
+      const stat = (v) => typeof v === "number" && Number.isFinite(v) ? Math.max(-100, Math.min(100, v)) : 0;
+      career.winterReport = { year: winter.year, eraChanged: winter.eraChanged === true, explanation: typeof winter.explanation === "string" ? winter.explanation.slice(0, 500) : "", carBuildsChanged: winter.carBuildsChanged === true,
+        team: winter.team && typeof winter.team === "object" ? { id: text(winter.team.id), before: stat(winter.team.before), after: stat(winter.team.after) } : null,
+        drivers: rows(winter.drivers).slice(0, 2).map((d) => { const axes = {}; for (const key of ["pace", "craft", "awareness", "consistency", "experience"]) { const a = d.axes && d.axes[key] || {}; const before = stat(a.before), after = stat(a.after); axes[key] = { before, after, delta: after - before }; } return { code: text(d.code), name: text(d.name), player: d.player === true, axes }; }),
+        teams: rows(winter.teams).slice(0, 3).map((t) => { const before = stat(t.before), after = stat(t.after); return { id: text(t.id), name: text(t.name), before, after, delta: after - before, rankBefore: Math.max(1, Math.min(30, t.rankBefore | 0)), rankAfter: Math.max(1, Math.min(30, t.rankAfter | 0)) }; }) };
+    } else delete career.winterReport;
     return career;
   }
 

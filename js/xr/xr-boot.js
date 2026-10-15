@@ -237,7 +237,7 @@ const XrBoot = (function () {
     // the game's pause path; api.pause decides eligibility (race/count, no net).
     if (typeof XrSession.on === "function") XrSession.on((ev, d) => {
       if (!(ev === "reset" || ev === "end" || (ev === "visibility" && d && d.state !== "visible"))) return;
-      if (ev !== "end" && ev !== "reset" && typeof Input !== "undefined" && Input.remoteLost) { try { Input.remoteLost(); } catch (_) { /* */ } }
+      if (ev !== "end" && ev !== "reset" && typeof Input !== "undefined" && Input.remoteLost) { try { Input.remoteLost("xr"); } catch (_) { /* */ } }
       if (api && typeof api.pause === "function") { try { api.pause(ev === "reset" ? "xr-reset" : ev === "end" ? "xr-end" : "xr-hidden"); } catch (_) { /* */ } }
     });
     _bound = true;

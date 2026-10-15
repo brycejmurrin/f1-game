@@ -79,17 +79,16 @@ const Assets = (function () {
 
   // Break strip decode into short tasks: 17× createImageBitmap on a ~1.6 MB
   // pack strip was one contiguous main-thread hitch during the title idle
-  // Assets.load() kick. scheduler.yield when present; else a microtask / 0-ms
+  // Assets.load() kick. scheduler.yield when present; else a 0-ms
   // timer. VM unit harnesses often lack setTimeout — resolve immediately then.
+  // Microtasks drain before rendering; a timer supplies the fallback TASK.
+  // https://web.dev/articles/optimize-long-tasks
   function _yieldDecode() {
     try {
       if (typeof scheduler !== "undefined" && scheduler && typeof scheduler.yield === "function") {
         return scheduler.yield();
       }
     } catch (_) { /* fall through */ }
-    if (typeof queueMicrotask === "function") {
-      return new Promise((resolve) => { queueMicrotask(resolve); });
-    }
     if (typeof setTimeout === "function") {
       return new Promise((resolve) => { setTimeout(resolve, 0); });
     }

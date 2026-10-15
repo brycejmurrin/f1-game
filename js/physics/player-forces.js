@@ -170,6 +170,11 @@ const PlayerForces = (function () {
     // is what keeps tests/specs/physics-characterization.spec.js honest. It is
     // NOT arc-derived: wear integrates the forces this car actually made.
     const tyreMu = tyres.gripMul(c);
+    // Advisory telemetry only: predictive cues may opt into a conservative
+    // condition estimate. No curvature read or force consumer depends on it.
+    c._cueConditionGrip = clamp(weatherGrip * tyreMu, 0.25, 1);
+    c._cueCornering = clamp(modsCornering, 0.25, 1);
+    c._cueBraking = Number.isFinite(ctx.modsBraking) ? clamp(ctx.modsBraking, 0.25, 1) : 1;
     // …and the FRONT/REAR half of it. muBase already carries the shared drop,
     // so this is the ratio each axle differs by: worn fronts stop the car
     // turning in, worn rears let it step out. Exactly 1/1 with the setting off.
@@ -274,7 +279,7 @@ const PlayerForces = (function () {
       // rear actually goes light — trail braking (measured: 55 m/s, 0.75
       // lock). Slower and heavier than the front's pulse so a pad or a phone
       // can tell the two ends apart. Feedback only: reads slip, writes nothing.
-      const pastR = satR / TyreModel.CURVE_HOLD_R, pastF = sat / TyreModel.CURVE_PEAK_X;
+      const pastR = satR / TyreModel.CURVE_HOLD_R, pastF = sat / TyreModel.CURVE_PEAK_X_F;
       if (pastR > 1 && pastR > pastF && (c.oslipHapT = (c.oslipHapT || 0) - dt) <= 0) {
         const bite = clamp(pastR - 1, 0, 1);
         Input.vibrate(18 + (bite * 22) | 0);

@@ -74,7 +74,7 @@ function create(G) {
   function section(dev) {
     const { host, note, reset: resetBtn, help, section: wrap } = dev;
     if (!host) return null;
-    dev.load(store.get(dev.key, null));
+    if (dev.key !== "pad" || !Input.controllerProfile || !Input.controllerProfile()) dev.load(store.get(dev.key, null));
     let armed = null;   // { id, slot, btn } while a slot waits for input
     const setNote = (t) => { if (note) note.textContent = t; };
     const save = () => store.set(dev.key, dev.get());
@@ -641,7 +641,7 @@ function create(G) {
     };
     helpSheet.append(refresher, note);
   }
-  if (Input.setPadAxisMap) Input.setPadAxisMap(store.get("padAxes", null));
+  if (Input.setPadAxisMap && (!Input.controllerProfile || !Input.controllerProfile())) Input.setPadAxisMap(store.get("padAxes", null));
   if (Input.setPadRest) Input.setPadRest(store.get("padRest", 0));   // CALIBRATE STICK, persisted
 
   function disarmAll() {

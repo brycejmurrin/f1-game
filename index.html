@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-l621RK+i7OcyjyzPEgU8J+jhi5gY/bFyPRLNUJmCKHk=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -114,6 +114,7 @@
 <link rel="stylesheet" href="css/settings.css?v=dev" media="print">
 <link rel="stylesheet" href="css/settings-controls.css?v=dev" media="print">
 <link rel="stylesheet" href="css/dialog-platform.css?v=dev" media="print">
+<link rel="stylesheet" href="css/save-health.css?v=dev" media="print">
 <link rel="stylesheet" href="css/tuner.css?v=dev" media="print">
 <link rel="stylesheet" href="css/title.css?v=dev">
 <link rel="stylesheet" href="css/menus.css?v=dev">
@@ -137,6 +138,7 @@
 <link rel="stylesheet" href="css/experience.css?v=dev" media="print">
 <link rel="stylesheet" href="css/editor.css?v=dev" media="print">
 <link rel="stylesheet" href="css/cockpit-preview.css?v=dev" media="print">
+<link rel="stylesheet" href="css/player-tools.css?v=dev" media="print">
 <script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
@@ -339,6 +341,7 @@
   window.addEventListener("unhandledrejection", function (e) {
     var r = e && e.reason;
     recordError("rejection", (r && (r.message || r)) || "unknown", r && r.stack);
+    if (typeof GfxRecovery !== "undefined" && GfxRecovery.handle("rejection", r)) return;
     show("Promise rejection", (r && (r.message || r)) || "unknown", r && r.stack);
   });
 
@@ -3526,10 +3529,12 @@
 <script defer crossorigin="anonymous" src="js/data/teams.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/legends.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/career/team-identity.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/save-migrate.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/settings-defaults.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/garage-defaults.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/career/restore-points.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-fx.js?v=dev"></script>
@@ -3568,6 +3573,7 @@
 <script defer crossorigin="anonymous" src="js/input/pad-menu.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/haptics.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/hold-buttons.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/controller-profiles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/stub.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/circuit-lore.js?v=dev"></script>
@@ -3597,6 +3603,8 @@
 <script defer crossorigin="anonymous" src="js/garage/scene-crew.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/arrival.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/surface-inspection.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/surface-outline.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-camera.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/prebuild.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/pit-signs.js?v=dev"></script>
@@ -3623,12 +3631,14 @@
 <script defer crossorigin="anonymous" src="js/camera/trackside.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/setup-presets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-experiments.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-ui-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/save-health.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/loading-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/survey-hud.js?v=dev"></script>
@@ -3640,6 +3650,7 @@
 <script defer crossorigin="anonymous" src="js/ui/menu-nav.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/aria-state.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/setting-row.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/settings-search.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-tabs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/key-binds.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-export.js?v=dev"></script>
@@ -3672,6 +3683,7 @@
 <script defer crossorigin="anonymous" src="js/perf/race-entry-profile.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/quality-preset.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/renderer-picker.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/compatibility-recovery.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/gfx-debug-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dock-layout.js?v=dev"></script>
@@ -3736,6 +3748,10 @@
 <script defer crossorigin="anonymous" src="js/render/shared/mirror-pass.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/platform-session.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/update-check.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/race-message-history.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/controller-profile-controls.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/race-mix-controls.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/condition-cue-controls.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>
 <!-- /@gen-shell:scripts -->
 </body></html>

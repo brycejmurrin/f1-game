@@ -883,6 +883,8 @@ var RadioVoice = (function () {
 
     return {
       say, stop, halt, unlock, preview,
+      previewGeneration: () => previewGen,
+      stopPreviewIfGeneration(generation) { if (generation !== previewGen) return false; stop(); return true; },
       /** THE PRE-RACE RADIO CHECK: one engineer line over the loading flyby's
        *  grid-mine shot. The same plan() as every race line — TEAM RADIO off,
        *  master sound off, or a line that will not fit its budget all refuse it

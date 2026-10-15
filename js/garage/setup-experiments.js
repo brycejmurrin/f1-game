@@ -59,6 +59,11 @@ const SetupExperiments = (function () {
         rows[k] = { b, inp };
       }
       wrap.appendChild(rakeOut);
+      if (typeof SetupPresets !== "undefined") SetupPresets.mount(wrap, {
+        teamId: team.id, store: G.store,
+        trackId: (typeof Tracks !== "undefined" && Tracks.LIST[G.trackIdx]?.id) || G.track?.def?.id || null,
+        refresh,
+      });
       const note = document.createElement("p"); note.className = "adv-help";
       note.textContent = "Bars: stiffer overall sharpens turn-in and costs traction; a stiffer front shifts load transfer forward and reduces front grip in sustained turns; a stiffer rear helps rotation. "
         + "Rake sizes the ACTIVE AERO trade, not the car's standing downforce: more rake means more top speed to gain and more grip to lose when the flaps open, and with them shut the car drives exactly the same (measured: identical grip across the whole rake range in Corner Mode). A max-wing car is already at full load. "

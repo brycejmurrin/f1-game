@@ -890,8 +890,9 @@ test('nonidentity runtime reset waits for explicit recenter and cleans its base 
   const base = h.sessions[0].base;
   const reset = h.pose(3, 0.4, -2, 0.8, 0.2, -0.1);
   base.origin = reset;
+  const lostBeforeReset = lost.length;
   base.fireReset({ matrix: reset });
-  assert.equal(lost.length, 1);
+  assert.equal(lost.length, lostBeforeReset + 1, "reset releases XR input independently of earlier disconnect frames");
   assert.equal(xr.eyeFrames(null, h.frame()), null);
   h.fire();
   assert.equal(xr.eyeFrames(null, h.frame()), null, 'no automatic compensation or recenter guessed');
@@ -901,10 +902,12 @@ test('nonidentity runtime reset waits for explicit recenter and cleans its base 
   assert.equal(xr.eyeFrames(null, h.frame()), null);
   h.tracking(true); h.fire();
   assert.equal(xr.eyeFrames(null, h.frame()).length, 2);
+  const lostBeforeEnd = lost.length;
   await xr.end();
+  assert.equal(lost.length, lostBeforeEnd + 1, 'session end releases its XR source');
   assert.equal(base.events.has('reset'), false);
   base.fireReset();
-  assert.equal(lost.length, 2, 'stale base has no callback; only session end released input');
+  assert.equal(lost.length, lostBeforeEnd + 1, 'stale base has no callback');
 });
 
 test('immersive cockpit blocks keyboard and latched look-back while flat cockpit still turns', () => {
@@ -927,4 +930,46 @@ test('immersive cockpit blocks keyboard and latched look-back while flat cockpit
   assert.ok(direction() > 0, 'pre-existing flat latch cannot rotate immersive gaze');
   immersive = false;
   assert.ok(direction() < 0, 'flat latch is restored after XR');
+});
+
+test("XR driving source choice preserves phone ownership and absent sticks do not claim steering", () => {
+  const { XrInput } = bootXr();
+  let owner = "phone", latest = { thr: .7, steer: .2 }, samples = 0; const events = [];
+  const input = {
+    remoteSample(s) { samples++; owner = s.source || "remote"; latest = s; },
+    remoteLost(source) { if (!source || source === owner) { owner = null; latest = null; } },
+    remoteEvent(e) { events.push(e); },
+  };
+  const pad = { handedness: "right", targetRayMode: "tracked-pointer", gamepad: { axes: [0,0,.5,0], buttons: [{ value: .8 }, {}, {}, {}, {}, { value: 1 }] } };
+  XrInput.inject(input, XrInput.mapFrame([pad], {}, { driving: false }));
+  assert.equal(owner, "phone"); assert.equal(latest.thr, .7); assert.equal(samples, 0);
+  assert.deepEqual(events, ["pause"], "pause stays available with existing controls");
+  XrInput.inject(input, XrInput.mapFrame([]));
+  assert.equal(owner, "phone", "disconnect cannot clear a newer phone sample");
+  XrInput.inject(input, XrInput.mapFrame([pad]));
+  assert.equal(owner, "xr"); assert.equal(latest.thr, .8); assert.ok(latest.steer > 0);
+  XrInput.inject(input, XrInput.mapFrame([]));
+  assert.equal(owner, null, "disconnect releases our previous held pedals");
+  const noStick = { handedness: "right", gamepad: { axes: [], buttons: [{ value: .5 }] } };
+  XrInput.inject(input, XrInput.mapFrame([noStick]));
+  assert.equal(latest.thr, .5); assert.equal(Object.hasOwn(latest, "steer"), false);
+  assert.equal(Object.hasOwn(latest, "roll"), false, "pedals-only never enters tilt either");
+});
+
+test("live XR session obeys existing-controls choice and teardown preserves a newer phone sample", async () => {
+  const h = xrHarness(); let mode = "existing", owner = "phone", samples = 0;
+  h.ctx.XROpts = { xrInput: () => mode };
+  h.ctx.Input = {
+    remoteSample(s) { owner = s.source; samples++; },
+    remoteLost(source) { if (source === owner) owner = null; }, remoteEvent() {},
+  };
+  await h.ctx.XrSession.start();
+  h.sessions[0].inputSources = [{ handedness: "right", gamepad: { axes: [0,0,.5,0], buttons: [{ value: .5 }] } }];
+  h.fire();
+  assert.equal(owner, "phone"); assert.equal(samples, 0);
+  mode = "controllers"; h.fire();
+  assert.equal(owner, "xr"); assert.equal(samples, 1);
+  owner = "phone";
+  await h.ctx.XrSession.end();
+  assert.equal(owner, "phone", "session-end releases only its own source");
 });

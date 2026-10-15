@@ -115,7 +115,7 @@ not.
 | `dh-` | 264 | `data.css` | `components.css`, `dialog-platform.css`, `tokens.css` |
 | `td-` | 27 | `editor.css` | — |
 | *(unprefixed)* | 344 | `career.css` | `touch-controls.css`, `carsetup.css`, `components.css`, `menus.css`, `dialogs.css`, `hud.css`, `race-setup.css`, `dialog-platform.css`, `responsive.css`, `select.css`, `tuner.css`, `overlays.css`, `tokens.css`, `data.css`, `settings-controls.css`, `title.css`, `settings.css` |
-| `cs-` | 165 | `carsetup.css` | `components.css`, `tokens.css` |
+| `cs-` | 172 | `carsetup.css` | `components.css`, `garage-experience.css`, `player-tools.css`, `tokens.css` |
 | `cr-` | 85 | `career.css` | — |
 | `lt-` | 56 | `tuner.css` | `hud.css`, `components.css` |
 | `pc-` | 43 | `hud.css` | `tuner.css` |
@@ -142,6 +142,10 @@ not.
 | `pane-` | 9 | `components.css` | — |
 | `music-` | 9 | `tuner.css` | — |
 | `set-` | 17 | `settings-controls.css` | `race-setup.css`, `tuner.css` |
+| `player-` | 5 | `player-tools.css` | — |
+| `race-` | 2 | `player-tools.css` | — |
+| `save-` | 8 | `save-health.css` | — |
+| `settings-` | 5 | `player-tools.css` | — |
 The long tail (`fb-`, `sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
@@ -152,6 +156,17 @@ element the phone's D-pad focused, because a browser need not draw `:focus-visib
 focus (Safari after a touch) or any focus while its window is not the focused one.
 `.session-summary` lives in `select.css`: it keeps the circuit count and race setup
 summary readable in their sheet headers, truncating when the header narrows.
+
+The runtime player tools mount into existing sheets. `js/ui/settings-search.js`
+owns `.settings-find` and `.settings-find-results`; `js/garage/setup-presets.js`
+and the settings control helpers share `.player-tool-panel`, `.player-tool-row`
+and `.player-tool-note`. `js/ui/race-message-history.js` owns
+`.race-message-list` in the pause disclosure. Their layout is in
+`css/player-tools.css`, which also supplies `.cs-liv-ed-inspect` for
+`js/garage/surface-inspection.js`'s explicit camera inspection buttons.
+`js/ui/save-health.js` owns `.save-health`, `.save-health-panel` and
+`.save-health-history`, styled in `css/save-health.css`; these are status,
+cleanup and restore-point controls rather than a second settings layout system.
 
 **A family leaves this list when it leaves `css/`.** The title screen's old
 `.mb-stack` / `.mb-sub` pair was replaced by `#mb-career > span` and

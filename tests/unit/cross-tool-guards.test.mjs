@@ -61,3 +61,45 @@ test("pre-commit stands aside for Claude Code (its PreToolUse hook already ran t
     assert.equal(r.status, 0, JSON.stringify(env));
   }
 });
+
+test("a real worktree commit isolates guard fixtures while preserving its branch and staged index", () => {
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "precommit-context-"));
+  const base = path.join(dir, "base"), linked = path.join(dir, "linked"), other = path.join(dir, "other");
+  const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", CLAUDECODE: "", APEX_SKIP_GUARDS: "" };
+  // The regression itself must also be safe when a caller runs it from a hook.
+  for (const name of execFileSync("git", ["rev-parse", "--local-env-vars"], { cwd: ROOT, encoding: "utf8" }).trim().split(/\s+/)) delete env[name];
+  const git = (cwd, ...args) => execFileSync("git", args, { cwd, env, encoding: "utf8" }).trim();
+  const write = (rel, text) => { const file = path.join(base, rel); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
+  try {
+    fs.mkdirSync(base); fs.mkdirSync(other);
+    git(base, "init", "-q"); git(other, "init", "-q");
+    write(".githooks/pre-commit", fs.readFileSync(path.join(ROOT, ".githooks/pre-commit"), "utf8"));
+    fs.chmodSync(path.join(base, ".githooks/pre-commit"), 0o755);
+    write("tools/gen/targets.mjs", "// No generated targets in this fixture.\n");
+    write("tools/check/ratchets.mjs", "// Read-only fixture of the ratchet stage.\n");
+    const verify = `import assert from 'node:assert/strict';\nimport {execFileSync} from 'node:child_process';\nconst actual=execFileSync('git',['rev-parse','--show-toplevel'],{cwd:process.env.APEX_OTHER_REPO,encoding:'utf8'}).trim();\nassert.equal(actual,process.env.APEX_OTHER_REPO,'fixture Git must use its own repository');\nassert.equal(process.env.GIT_DIR,undefined);\nassert.equal(process.env.GIT_INDEX_FILE,undefined);\n`;
+    write("tests/unit/docs-integrity.test.mjs", verify);
+    write("guard-fixture.mjs", verify);
+    write("bin/npm", '#!/usr/bin/env bash\nexec "' + process.execPath + '" guard-fixture.mjs\n');
+    fs.chmodSync(path.join(base, "bin/npm"), 0o755);
+    write("code.js", "// initial\n"); write(".gitignore", "artifacts/\nnode_modules/\n");
+    git(base, "add", "."); git(base, "commit", "-q", "-m", "fixture base");
+    git(base, "worktree", "add", "-q", "-b", "guarded", linked);
+    git(base, "config", "core.hooksPath", ".githooks");
+    fs.mkdirSync(path.join(linked, "node_modules"));
+    const hookEnv = { ...env, PATH: path.join(linked, "bin") + path.delimiter + env.PATH, APEX_OTHER_REPO: other };
+    for (const file of ["code.js", "README.md"]) {
+      fs.writeFileSync(path.join(linked, file), "// changed " + file + "\n");
+      git(linked, "add", file);
+      const before = git(linked, "rev-parse", "HEAD");
+      const commit = spawnSync("git", ["commit", "-q", "-m", "guarded " + file], { cwd: linked, env: hookEnv, encoding: "utf8" });
+      assert.equal(commit.status, 0, commit.stderr + commit.stdout);
+      assert.equal(git(linked, "branch", "--show-current"), "guarded");
+      assert.notEqual(git(linked, "rev-parse", "HEAD"), before);
+      assert.equal(git(linked, "status", "--porcelain"), "");
+      assert.equal(git(base, "config", "core.bare"), "false");
+      assert.equal(git(linked, "show", "HEAD:" + file), "// changed " + file);
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

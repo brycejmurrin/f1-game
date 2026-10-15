@@ -171,6 +171,7 @@ const Input = (function () {
      held look-back bit rides the sample. */
   const REMOTE_STALE_MS = 700;   // the phone heartbeats every 100 ms; six misses = gone
   const REMOTE_HELD = Object.freeze({ lookBack: 1 });
+  let remoteOwner = null;
   let remoteMs = 0;              // nowMs() of the last sample; 0 = never
   let remThr = 0, remBrk = 0;    // 0..1 pedal travel from the phone
   let remHeld = 0;               // REMOTE_HELD bits
@@ -332,6 +333,7 @@ const Input = (function () {
   }
   function remoteSample(s) {
     if (!s) return false;
+    remoteOwner = typeof s.source === "string" ? s.source.slice(0, 32) : "remote";
     const n = nowMs();
     // A STICK (an XR thumbstick, js/xr/xr-input.js) is an analog steer
     // command, not a lean: it used to be dressed up as a roll (steerToTilt) and
@@ -402,7 +404,9 @@ const Input = (function () {
   }
   // The link dropped: pedals off at once, and a phone-fed tilt reading must not
   // keep steering a device whose own sensor is not attached.
-  function remoteLost() {
+  function remoteLost(source) {
+    if (source != null && source !== remoteOwner) return false;
+    remoteOwner = null;
     remoteMs = 0; remThr = remBrk = 0; remHeld = 0; remRoll = false; remStick = false; remSteer = 0; remSeq = null;
     if (tiltRemote || !gyroAttached) tiltSeen = false;
   }
@@ -552,9 +556,11 @@ const Input = (function () {
     return !!(window.UiLayers && window.UiLayers.anyOpen());
   }
 
+  let deviceProfiles = null;
+  function profileChanged() { if (deviceProfiles) deviceProfiles.save(); }
   const bindings = InputBindings.create({
     onKeysChanged() { heldKeys.clear(); keyLeft = keyRight = keyThrottle = keyBrake = keyLookBack = false; },
-    onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; },
+    onPadBindingChanged() { padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; profileChanged(); },
     activePad,
   });
   const {
@@ -662,9 +668,30 @@ const Input = (function () {
       // One axis cannot be both pedals: a combined axis reads brake AND throttle at rest.
       if (padAxisMap.brake != null && padAxisMap.brake === padAxisMap.throttle) padAxisMap.brake = padAxisMap.brakeRest = padAxisMap.brakeFar = null;
     }
+    profileChanged();
     return getPadAxisMap();
   }
   function getPadAxisMap() { return Object.assign({}, padAxisMap); }
+  function ensureDeviceProfiles() {
+    if (deviceProfiles || typeof ControllerProfiles === "undefined" || typeof GameStore === "undefined" || !GameStore.store) return deviceProfiles;
+    const profileMap = ControllerProfiles.clean(GameStore.store.get(ControllerProfiles.KEY, null));
+    if (!profileMap.legacyClaimed) {
+      const legacyAxes = GameStore.store.get("padAxes", null), legacyButtons = GameStore.store.get("pad", null);
+      if (legacyAxes) setPadAxisMap(legacyAxes);
+      if (legacyButtons) setPadMap(legacyButtons);
+    }
+    const legacyWheel = !padAxesAreDefault();
+    deviceProfiles = ControllerProfiles.create({
+      legacyMatches: (pad) => !legacyWheel || pad.mapping !== "standard",
+      store: GameStore.store,
+      snapshot: () => ({ axes: getPadAxisMap(), buttons: getPadMap() }),
+      apply: (row) => { setPadAxisMap(row.axes); setPadMap(row.buttons); },
+      defaults: () => ({ axes: null, buttons: null }),
+      changed: () => { if (typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("apexcontrollerprofilechange")); },
+    });
+    return deviceProfiles;
+  }
+
   function padAxesAreDefault() {
     return Object.keys(PAD_AXIS_DEF).every((k) => padAxisMap[k] === PAD_AXIS_DEF[k]);
   }
@@ -1371,6 +1398,8 @@ const Input = (function () {
       for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
     }
     padPrevKey = key;
+    const profiles = ensureDeviceProfiles();
+    if (profiles) profiles.activate(pad);
     padRestOffset = restFor(pad);
     padIsWheel = !padStd(pad) && !padAxesAreDefault();
     if (axisExt && key === axisExt.key && nowMs() <= axisExt.until) {
@@ -2206,7 +2235,7 @@ const Input = (function () {
       padAxisMap: getPadAxisMap(),
       hapticScale: haptics.scale(),
       lookingBack: lookingBack(),
-      remote: { active: remoteActive(), steers: remoteSteers(), roll: tiltRaw, stick: remStick ? remSteer : null,
+      remote: { owner: remoteOwner, active: remoteActive(), steers: remoteSteers(), roll: tiltRaw, stick: remStick ? remSteer : null,
                 thr: remThr, brk: remBrk, held: remHeld,
                 ageMs: remoteMs ? Math.round(nowMs() - remoteMs) : null },
       canvasTouches: touches.size,
@@ -2282,6 +2311,10 @@ const Input = (function () {
     throttleLatched: () => throttleLatch && throttleLatched,
     primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,
+    controllerProfile: () => deviceProfiles ? deviceProfiles.current() : null,
+    getControllerProfiles: () => ensureDeviceProfiles() ? deviceProfiles.data() : { v: 1, devices: [] },
+    setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
+    resetControllerProfile: () => deviceProfiles ? deviceProfiles.reset() : false,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, clearPadRest, padRestStore,
     touchControlsNeeded,
     pickPad,

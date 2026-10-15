@@ -76,7 +76,7 @@ const driverRec = (d) => ({ name: d.name, code: d.code, num: d.num });
 
 let career = null;        // the loaded save, or null
 let engaged = false;
-function engage(on) { engaged = !!on && !calendarProtection; applyRegs(); }
+function engage(on) { engaged = !!on && !calendarProtection; adoptTeamIdentity(); applyRegs(); identityChanged(); }
 function inCareer() { return engaged && career != null && !calendarProtection; }
 
 // Career draws never touch simRnd(): consuming that stream here would make a
@@ -121,6 +121,24 @@ const liveSlotKey = () => slotKey(slotFlavour, slotIdx);
 const currentRevision = () => store.keyRevision ? store.keyRevision(liveSlotKey()) : null;
 function armRevision() { careerRevision = currentRevision(); careerConflict = false; }
 
+const identityListeners = new Set();
+let identityRevision = 0;
+function identityChanged() { ++identityRevision; for (const fn of identityListeners) fn(); }
+function onIdentityChange(fn) { identityListeners.add(fn); return () => identityListeners.delete(fn); }
+function adoptTeamIdentity() {
+  if (career && career.flavour === "myteam" && typeof CareerTeamIdentity !== "undefined") {
+    career.myTeamIdentity = career.myTeamIdentity ? CareerTeamIdentity.sanitize(career.myTeamIdentity) : CareerTeamIdentity.capture(store);
+  }
+}
+function identityValue(key, fallback) {
+  return inCareer() && career.flavour === "myteam" && career.myTeamIdentity && Object.hasOwn(career.myTeamIdentity, key) ? career.myTeamIdentity[key] : fallback;
+}
+function setIdentityValue(key, value) {
+  if (!inCareer() || career.flavour !== "myteam" || blocked() || (careerRevision != null && currentRevision() !== careerRevision) || typeof CareerTeamIdentity === "undefined") return false;
+  const cleaned = CareerTeamIdentity.value(key, value);
+  if (cleaned === undefined) return false;
+  adoptTeamIdentity(); career.myTeamIdentity[key] = cleaned; save(); identityChanged(); return true;
+}
 function data() { return career; }
 function conflicted() { return blocked(); }
 // A career EXISTS (save on disk). For "career rules apply now", use inCareer().
@@ -195,6 +213,7 @@ function load(options) {
       }
   calendarProtection = null;
   adoptCalendar(career);
+  adoptTeamIdentity();
   armRevision();
   // migrateCareer() is pure (it must not write, or reading a slot would rewrite
   // the key it was migrated FROM), so persisting the climbed shape is this
@@ -202,6 +221,7 @@ function load(options) {
   // and never on disk, and the next build's ladder would start from v0 again.
   if (persist) save({ migration: true });
   applyRegs();
+  identityChanged();
   return career;
 }
 function setLive(options) { store.set("careerSlot", `${slotFlavour}:${slotIdx}`, options); }
@@ -243,6 +263,7 @@ function clear() {
   lastSave = writeResult(liveSlotKey(), null);
   armRevision();
   applyRegs();      // no career, no regulations
+  identityChanged();
   return lastSave;
 }
 
@@ -254,7 +275,7 @@ function slotInfo(c, f, i) {
     flavour: f, i, used: true, year: c.year,
     live: f === slotFlavour && i === slotIdx,
     round: c.season.round, rounds: calendarOf(c).length,
-    team: c.team, teamName: team ? team.name : (c.team == null ? "" : String(c.team)),
+    team: c.team, teamName: c.myTeamIdentity && c.myTeamIdentity.customTeam ? c.myTeamIdentity.customTeam.name : team ? team.name : (c.team == null ? "" : String(c.team)),
     code: c.driver ? c.driver.code : "", name: c.driver ? c.driver.name : "",
     money: c.money, rep: c.rep,
     seasons: tally.seasons + 1,
@@ -289,7 +310,10 @@ function useSlot(flavour, i) {
   setLive();
   calendarProtection = null;
   career = adoptCalendar(readSlot(f, n));
+  adoptTeamIdentity();
   armRevision();
+  if (career && career.flavour === "myteam" && !calendarProtection) save({ migration: true });
+  identityChanged();
   applyRegs();      // a different save can be a different era
   return career;
 }
@@ -308,7 +332,7 @@ function deleteSlot(flavour, i, expectedRevision) {
   }
   lastSave = writeResult(key, null);
   protectedRaw.delete(key);
-  if (f === slotFlavour && n === slotIdx) { career = null; calendarProtection = null; armRevision(); applyRegs(); }
+  if (f === slotFlavour && n === slotIdx) { career = null; calendarProtection = null; armRevision(); applyRegs(); identityChanged(); }
   return Object.assign({}, lastSave);
 }
 function slotRevision(flavour, i) { return store.keyRevision(slotKey(flavourIn(flavour), slotIn(i))); }
@@ -397,6 +421,7 @@ function start(opts) {
     roster: null,
   };
   if (flavour === "myteam") {
+    adoptTeamIdentity();
     const hired = FREE_AGENTS.find((a) => a.code === o.hire) || FREE_AGENTS[FREE_AGENTS.length - 3];
     career.roster = [rosterEntry(hired, 1)];
   }
@@ -1191,6 +1216,7 @@ function settleRound(order, player, table = Teams.POINTS) {   // table: a shorte
   const sponsorPay = settleSponsor();
   save();
   const persisted = saveStatus();
+  if (persisted.ok && persisted.durable && typeof CareerRestorePoints !== "undefined") CareerRestorePoints.capture(slotFlavour, slotIdx, career, { reason: "round" });
   Log.info("game", `Career.settleRound pos=${pos}${dnf ? ` dnf=${dnf}` : ""}`);
   return { pos, pts, prize, matePos, matePrize, salary, bonus, wages, obj, dnf, sponsorPay, craft,
            money: career.money, rep: career.rep, sponsorVerdict, stake, save: persisted,
@@ -1490,8 +1516,43 @@ function weakerSeat(team) {
   return rate(0) <= rate(1) ? 0 : 1;
 }
 
-function acceptOffer(i) {
+// Read-only offer calculation, shared by the comparison and final signature.
+function worksSnapshot(team) {
+  const raw = team.factory || (Parts.FACTORY_PRESETS && Parts.FACTORY_PRESETS[team.id]) || Parts.DEFAULTS;
+  const out = {};
+  const allowed = (o) => (!o.teams || o.teams.includes(team.id)) && (!o.team || o.team === team.id) && (!o.suppliers || o.suppliers.includes(team.engine)) && (!o.supplier || o.supplier === team.engine);
+  for (const cat of Parts.CATALOG) {
+    let opt = cat.options.find((o) => o.id === raw[cat.id]);
+    if (opt && !allowed(opt)) opt = cat.options.find((o) => o.id === opt.equivalent && allowed(o));
+    out[cat.id] = (opt || cat.options.find((o) => o.id === Parts.DEFAULTS[cat.id]) || cat.options[0]).id;
+  }
+  return out;
+}
+function offerPreview(i) {
   if (!career || blocked()) return null;
+  const o = career.offers && career.offers[i | 0], team = o && teamOf(o.teamId);
+  if (!team) return null;
+  const moving = team.id !== career.team, seat = moving ? weakerSeat(team) : career.seat;
+  const fitted = moving ? worksSnapshot(team) : Object.assign({}, career.fitted);
+  const owned = moving ? Object.values(fitted) : career.owned.slice();
+  const kind = goalTypeOk(o.goal && o.goal.type), amb = ambition();
+  const keep = kind === "beatRival" && o.goal && typeof o.goal.value === "string" && o.goal.value;
+  const goal = { type: kind, value: keep || goalKind(kind).value(team, amb) };
+  const mate = team.drivers && team.drivers[seat === 0 ? 1 : 0];
+  const teammate = mate && seatDriver(team.id, seat === 0 ? 1 : 0, mate);
+  const works = worksCost(team.id);
+  const cap = Math.min(Math.round(works * BUDGET_MULT[clamp(career.budgetLvl | 0, 0, BUDGET_MULT.length - 1)]), Math.max(budgetCap(), works));
+  return { index: i | 0, moving, teamId: team.id, teamName: team.name, seat,
+    teammate: teammate ? { name: teammate.name, code: teammate.code } : null,
+    fitted, resolvedFitted: Parts.resolveSetup ? Object.assign({}, Parts.resolveSetup(fitted, team).setup) : Object.assign({}, fitted), currentFitted: Object.assign({}, career.fitted), currentCap: budget(), owned, cap, lostResearch: moving ? career.owned.filter((id) => !owned.includes(id)) : [],
+    retained: { money: career.money, facility: career.facility, development: Object.assign({}, career.dev[seasonDriverId(career.team, career.seat)] || {}) },
+    deal: { team: team.id, seat, years: o.years, left: o.years, salary: Number.isFinite(Number(o.salary)) ? Number(o.salary) : 0, bonusPt: bonusPtFor(team), ambition: amb, goal },
+    revision: careerRevision, signature: JSON.stringify([career.year, career.team, career.seat, career.rep, career.amb, career.offers, career.fitted, career.owned, career.dev, career.seats, career.money, career.facility, career.budgetLvl, Parts.legalityKey ? Parts.legalityKey() : ""]) };
+}
+function acceptOffer(i, reviewed) {
+  if (!career || blocked() || (careerRevision != null && currentRevision() !== careerRevision)) return null;
+  const preview = offerPreview(i);
+  if (!preview || (reviewed && (reviewed.signature !== preview.signature || reviewed.revision !== preview.revision))) return null;
   const o = career.offers ? career.offers[i | 0] : null;
   const team = o && teamOf(o.teamId);
   if (!team) return null;
@@ -1500,7 +1561,7 @@ function acceptOffer(i) {
     // BEFORE career.team moves: seatDriver() answers "the player" for (career.team,
     // career.seat), so after the move the old seat INDEX at the new team read as the
     // player's placeholder rating and the wrong AI driver was displaced.
-    const seat = weakerSeat(team);
+    const seat = preview.seat;
     career.team = team.id;
     career.seat = seat;
     // DEVELOPMENT FOLLOWS THE DRIVER (docs/CAREER.md), as swapSeats() does: it is
@@ -1520,40 +1581,10 @@ function acceptOffer(i) {
     // already installed the new season's bans, so a banned works part resolved
     // to the DEFAULT and that fallback was written into owned/fitted — the team's
     // own engine or floor lost for good (3x catalog to research it back).
-    if (Parts.setLegality) Parts.setLegality(null, "");
-    const factory = Parts.getFactorySetup(team);
-    applyRegs();
-    career.owned = Object.values(factory);
-    career.fitted = Object.assign({}, factory);
+    career.owned = preview.owned.slice();
+    career.fitted = Object.assign({}, preview.fitted);
   }
-  // THE GOAL IS RECOMPUTED, not copied off the offer. setAmbition() re-stamps
-  // every offer it can reach, but a move also re-seats you (weakerSeat above),
-  // and expectedFinish() reads career.rep — so the only number that is certainly
-  // right is the one derived at the moment of signing.
-  const amb = ambition();
-  // THE KIND COMES FROM THE OFFER, exactly as setAmbition() re-stamps it, and
-  // for exactly the same reason — which I wrote there and then failed to apply
-  // here. rollover() draws the offers BEFORE `career.year++`, and the kind is
-  // seeded on the year, so re-deriving it at accept time reads a DIFFERENT year
-  // than the draw did: measured over 200 seeds x 10 seasons it changed the kind
-  // 67% of the time. The button said "Finish the season ahead of your
-  // team-mate" and the contract it signed said "Finish P18 or better".
-  //
-  // Only the TARGET is recomputed, because a move re-seats you (weakerSeat
-  // above) and expectedFinish() reads career.rep, so the offer's stored value
-  // can be stale in a way its kind cannot.
-  const kind = goalTypeOk(o.goal && o.goal.type);
-  // A RIVAL IS A NAME, not a number: it was chosen against the OFFERED team at the
-  // draw and is printed on the button, so it is kept verbatim (the pool is not
-  // re-ranked from the seat the player now holds).
-  const keepValue = kind === "beatRival" && typeof o.goal.value === "string" && o.goal.value;
-  career.deal = {
-    team: team.id, seat: career.seat,
-    years: o.years, left: o.years, salary: Number.isFinite(Number(o.salary)) ? Number(o.salary) : 0,
-    bonusPt: bonusPtFor(team),
-    ambition: amb,
-    goal: { type: kind, value: keepValue || goalKind(kind).value(team, amb) },
-  };
+  career.deal = JSON.parse(JSON.stringify(preview.deal));
   career.offers = [];
   save();
   Log.info("game", `Career.acceptOffer team=${team.id} years=${o.years}`);
@@ -1622,8 +1653,22 @@ function rollover() {
   if (career.history.length > HISTORY_MAX)
     career.history.splice(0, career.history.length - HISTORY_MAX);
 
+  const winterSeats = gridSeats().filter((seat) => seat.team.id === career.team);
+  const winterBefore = winterSeats.map((seat) => ({ seat, rating: ratingOf(seat) }));
+  const teamBefore = Object.assign({}, career.tdev);
+  const teamOrder = (dev) => Teams.LIST.filter((t) => Teams.isReal(t) || t.id === career.team).slice().sort((a, b) => ((Teams.TIER_V && Teams.TIER_V[b.tier] || 1) * (1 + (dev[b.id] || 0) * TDEV_TO_PACE)) - ((Teams.TIER_V && Teams.TIER_V[a.tier] || 1) * (1 + (dev[a.id] || 0) * TDEV_TO_PACE)) || a.id.localeCompare(b.id)).map((t) => t.id);
+  const ranksBefore = teamOrder(teamBefore);
+  const buildsBefore = JSON.stringify(career.aiParts || {});
+  const oldEra = era();
   rolloverDrivers(dStand);
   rolloverTeams(tStand);
+  career.winterReport = { year: devYear, drivers: winterBefore.map(({ seat, rating }) => {
+    const after = ratingOf(seat), axes = {};
+    for (const key of ["pace", "craft", "awareness", "consistency", "experience"]) axes[key] = { before: rating[key], after: after[key], delta: after[key] - rating[key] };
+    return { code: seat.driver.code, name: seat.driver.name, player: isPlayerSeat(seat), axes };
+  }), team: { id: career.team, before: teamBefore[career.team] || 0, after: career.tdev[career.team] || 0 },
+  teams: Teams.LIST.filter((t) => Teams.isReal(t) || t.id === career.team).map((t) => ({ id: t.id, name: t.name, before: teamBefore[t.id] || 0, after: career.tdev[t.id] || 0, rankBefore: ranksBefore.indexOf(t.id) + 1, rankAfter: teamOrder(career.tdev).indexOf(t.id) + 1, delta: (career.tdev[t.id] || 0) - (teamBefore[t.id] || 0) })).sort((a, b) => Math.abs(b.rankAfter - b.rankBefore) - Math.abs(a.rankAfter - a.rankBefore) || Math.abs(b.delta) - Math.abs(a.delta) || a.id.localeCompare(b.id)).slice(0, 3),
+  explanation: "Driver pace combines experience, season results and form; your craft also uses settled driving. Team development reflects constructors performance and previous development decay." };
   rolloverMarket();
 
   // The market value is read AFTER the goal's reputation moves below: it used to be
@@ -1686,6 +1731,8 @@ function rollover() {
     if (CareerAiDev.scrubFitted) CareerAiDev.scrubFitted(career);
     if (CareerAiDev.developWinter) CareerAiDev.developWinter(career, tStand, devExpect, rnd, devYear);
   }
+  career.winterReport.carBuildsChanged = buildsBefore !== JSON.stringify(career.aiParts || {});
+  career.winterReport.eraChanged = !!(oldEra && era() && oldEra.id !== era().id);
   // MUTATED IN PLACE, never reassigned: game.js aliases this exact object as its
   // `season` (openCareer does `season = c.season`), and a fresh object would
   // orphan that alias so the next race wrote its points into a dead one.
@@ -1877,9 +1924,10 @@ return {
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats, aiSetup,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
+  identityValue, setIdentityValue, onIdentityChange, identityRevision: () => identityRevision,
   objective, objectiveFor, objectiveLabel, objectiveMet, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
   OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked, markWeekendStarted,
-  driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
+  driverStandings, teamStandings, rollover, offers, offerPreview, acceptOffer, marketValue, offerBar,
   round, roundsTotal, seasonDone, trackIndex, calendar, tallyOf,
 };
 })();

@@ -155,6 +155,7 @@ const FULL = [
   // Legends sits with the other driver data and AHEAD of js/car/liveries.js,
   // whose forTeam() appends Legends.liveries() to the picker.
   "js/data/legends.js",
+  "js/career/team-identity.js",
   "js/career/save-migrate.js",
   // Persistence sits ahead of every js/game module: the settings panels, the
   // perf sentinel and the Spotify client go through GameStore.store's raw lane,
@@ -171,6 +172,7 @@ const FULL = [
   // from an apex26-garage-v1 export via tools/gen/garage-defaults.mjs.
   "js/data/garage-defaults.js",
   "js/core/store.js",
+  "js/career/restore-points.js",
   "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
@@ -219,6 +221,7 @@ const FULL = [
   "js/input/pad-menu.js",
   "js/input/haptics.js",
   "js/input/hold-buttons.js",
+  "js/input/controller-profiles.js",
   "js/input/input.js",
   // AUDIO STUB — the ~449 KB engine/panel/voice stack is LAZY_AUDIO (loaded on
   // first gesture or race start). The stub keeps menus from throwing and is
@@ -255,6 +258,8 @@ const FULL = [
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "js/garage/arrival.js",
+  "js/garage/surface-inspection.js",
+  "js/car/surface-outline.js",
   "js/garage/setup-camera.js",
   "js/garage/prebuild.js",              // GaragePrebuild: the garage built while the title/race settings idle
   "js/garage/pit-signs.js",
@@ -282,12 +287,14 @@ const FULL = [
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
+  "js/garage/setup-presets.js",
   "js/garage/setup-experiments.js", // reversible tune experiments and aero bench
   "js/garage/setup-sheet.js",
   "js/career/experience.js",
   "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
   "js/career/season-ui.js",
   "js/ui/flags.js",
+  "js/ui/save-health.js",
   "js/ui/select-screen.js",
   "js/ui/loading-screen.js",
   "js/ui/survey-hud.js",   // APEX_SURVEY_HUD=1: cockpit HUD fixture without race/scenery warm
@@ -299,6 +306,7 @@ const FULL = [
   "js/ui/menu-nav.js",
   "js/ui/aria-state.js",
   "js/ui/setting-row.js",
+  "js/ui/settings-search.js",
   "js/ui/settings-tabs.js",
   "js/ui/key-binds.js",
   "js/ui/settings-export.js",
@@ -333,6 +341,7 @@ const FULL = [
   "js/perf/race-entry-profile.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
+  "js/render/shared/compatibility-recovery.js",
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
   "js/ui/dock-layout.js",
@@ -405,13 +414,17 @@ const FULL = [
   "js/render/shared/mirror-pass.js",   // HUD rear-view mirror: second camera + rival poses, gfx.mirrorBegin/End (MirrorPass.create(G, deps))
   "js/ui/platform-session.js", // PlatformSession: platform, phone pairing and tab lifecycle wiring
   "js/ui/update-check.js",  // UpdateCheck: in-session version.json re-check + UPDATE READY chip (call-time; script-loader asks it)
+  "js/ui/race-message-history.js",
+  "js/ui/controller-profile-controls.js",
+  "js/ui/race-mix-controls.js",
+  "js/ui/condition-cue-controls.js",
   "js/game.js",
 ];
 
 // Stylesheet <link> order in index.html.
 const CSS = [
   "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
-  "css/settings-controls.css", "css/dialog-platform.css", "css/tuner.css",
+  "css/settings-controls.css", "css/dialog-platform.css", "css/save-health.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
   "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
   "css/loading.css", "css/responsive.css",
@@ -421,7 +434,7 @@ const CSS = [
   "css/appearance-studio.css", "css/watch-transport.css", "css/career-experience.css",
   "css/garage-experience.css", "css/photo-studio.css", "css/experience.css",
   "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
-  "css/cockpit-preview.css",
+  "css/cockpit-preview.css", "css/player-tools.css",
 ];
 // Title-critical sheets are also <link rel="preload">ed above the stylesheet
 // block. Dialogs/settings load print→all without a competing high-priority
@@ -443,9 +456,9 @@ const CSS_DEFERRED = [
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
   "css/appearance-studio.css", "css/watch-transport.css",
   "css/career-experience.css", "css/garage-experience.css",
-  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css",
+  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css", "css/player-tools.css",
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
-  "css/dialog-platform.css", "css/select.css", "css/race-setup.css",
+  "css/dialog-platform.css", "css/save-health.css", "css/select.css", "css/race-setup.css",
 ];
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.
@@ -556,6 +569,17 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  ["js/data/teams.js", "js/career/team-identity.js"],
+  ["js/career/team-identity.js", "js/career/save-migrate.js"],
+  ["js/garage/setup-tune.js", "js/garage/setup-presets.js"],
+  ["js/garage/surface-inspection.js", "js/garage/setup-camera.js"],
+  ["js/ui/settings-search.js", "js/ui/settings-tabs.js"],
+  ["js/core/store.js", "js/career/restore-points.js"],
+  ["js/career/save-migrate.js", "js/career/restore-points.js"],
+  ["js/core/store.js", "js/ui/save-health.js"],
+  ["js/career/restore-points.js", "js/ui/save-health.js"],
+  ["js/ui/save-health.js", "js/ui/select-screen.js"],
+  ["js/input/controller-profiles.js", "js/input/input.js"],
   ["js/core/script-loader.js", "js/game.js"],
   ["js/core/lazy-bundles.js", "js/game.js"],
   ["js/core/wake-lock.js", "js/game.js"],
@@ -911,6 +935,7 @@ const LAZY_RACE_SESSION_EDGES = [
 const LAZY_AUDIO = [
   "js/audio/signal.js",
   "js/audio/soundtrack.js",
+  "js/audio/race-mix-audition.js",
   "js/audio/radio-fx.js",
   "js/audio/tone-model.js",
   "js/audio/engine.js",

@@ -279,7 +279,7 @@ function create(G) {
         const summary = (c, incoming) => {
           if (!c) return "Empty";
           const team = teamById(c.team);
-          const identity = incoming && c.team === "custom" && pendingImport.envelope.myTeam;
+          const identity = c.team === "custom" && (c.myTeamIdentity || (incoming && pendingImport.envelope.myTeam));
           const teamName = identity && identity.customTeam && identity.customTeam.name;
           const round = Number.isInteger(c.season && c.season.round) ? Math.max(0, c.season.round) : 0;
           return `${c.year | 0 || 2026} · ${teamName || (team ? team.name : c.team || "Team unspecified")} · ${round} rounds completed`;
@@ -1308,6 +1308,30 @@ function create(G) {
     if (typeof CareerExperience !== "undefined") CareerExperience.mount(G, c, st, team);
   }
 
+  function showOfferPreview(index) {
+    const preview = Career.offerPreview(index); if (!preview) return;
+    const body = $("co-body"); body.textContent = "";
+    body.appendChild(head(preview.moving ? "COMPARE YOUR MOVE" : "COMPARE YOUR RENEWAL"));
+    const card = el("div", "cr-card");
+    card.append(row("Team", preview.teamName), row("Teammate", preview.teammate ? preview.teammate.name + " · " + preview.teammate.code : "No second seat"),
+      row("Term", preview.deal.years + " seasons"), row("Salary / point bonus", preview.deal.salary + " / " + preview.deal.bonusPt + " cr"),
+      row("Goal", Career.goalLabel(preview.deal.goal)), row("Fitted budget cap", preview.currentCap + " → " + preview.cap + " cr"),
+      row("Retained credits / facility", preview.retained.money + " cr / level " + preview.retained.facility));
+    card.appendChild(el("p", "cg-p", "Your personal driver development is retained. " + (preview.moving ? "The destination works build replaces your researched and fitted parts." : "Your researched and fitted parts are retained.")));
+    const label = (id) => { for (const cat of Parts.CATALOG) { const opt = cat.options.find((o) => o.id === id); if (opt) return opt.label; } return id; };
+    for (const [cat, id] of Object.entries(preview.resolvedFitted)) {
+      card.appendChild(row(cat, label(preview.currentFitted[cat]) + " → " + label(id)));
+      if (preview.fitted[cat] !== id) card.appendChild(el("p", "cg-p", "Works research retained: " + label(preview.fitted[cat]) + "; current regulations substitute " + label(id) + " on the car."));
+    }
+    if (preview.lostResearch.length) card.appendChild(el("p", "cg-p", "Research relinquished: " + preview.lostResearch.map(label).join(", ")));
+    const sign = el("button", "sel-edit", "SIGN CONTRACT"); sign.type = "button";
+    const cancel = el("button", "sel-edit", "CANCEL"); cancel.type = "button";
+    const status = el("p", "cg-p"); status.setAttribute("role", "status");
+    sign.onclick = () => { if (!Career.acceptOffer(index, preview)) { status.textContent = "The offer changed. Cancel and compare it again."; sign.disabled = true; return; } closeOffers(); G.openCareer(); };
+    cancel.onclick = () => buildOffers();
+    body.append(card, sign, cancel, status); cancel.focus();
+  }
+
   function buildOffers() {
     const c = Career.data();
     const body = $("co-body");
@@ -1372,9 +1396,7 @@ function create(G) {
         el("span", "co-offer-terms", Career.goalLabel(o.goal)));
       b.onclick = () => {
         if (G.soundOn) GameAudio.uiSelect();
-        Career.acceptOffer(i);
-        closeOffers();
-        G.openCareer();
+        showOfferPreview(i);
       };
       body.appendChild(b);
     });
@@ -1388,6 +1410,22 @@ function create(G) {
         row("You finished", "P" + past.pos + " · " + past.pts + " pts"),
         row("Constructors", "P" + past.cPos + " · " + past.cPts + " pts"),
         row("Wins / podiums", past.wins + " / " + past.podiums));
+      body.appendChild(card);
+    }
+
+    if (c.winterReport) {
+      const report = c.winterReport; body.appendChild(head("WINTER DEVELOPMENT · " + report.year));
+      const card = el("div", "cr-card");
+      const signed = (n) => (n > 0 ? "+" : "") + n;
+      for (const driver of report.drivers || []) {
+        card.appendChild(row(driver.code + (driver.player ? " · YOU" : ""), Object.entries(driver.axes || {}).map(([key, a]) => key + " " + a.before + " → " + a.after + " (" + signed(a.delta) + ")").join(" · ")));
+      }
+      if (report.team) card.appendChild(row("Your team development", report.team.before + " → " + report.team.after));
+      for (const team of report.teams || []) card.appendChild(row(team.name, "Development " + team.before + " → " + team.after + " (" + signed(team.delta) + ") · development order " + team.rankBefore + " → " + team.rankAfter));
+      card.appendChild(el("p", "cg-p", "Development order combines the base team tier and applied team development; fitted car builds and regulations are separate."));
+      if (report.carBuildsChanged) card.appendChild(el("p", "cg-p", "AI fitted car builds also changed this winter, separately from these rating deltas."));
+      card.appendChild(el("p", "cg-p", report.explanation || "Actual applied development changes from the completed winter."));
+      if (report.eraChanged) card.appendChild(el("p", "cg-p", "Regulations changed separately this winter; the development figures above exclude car legality changes."));
       body.appendChild(card);
     }
 

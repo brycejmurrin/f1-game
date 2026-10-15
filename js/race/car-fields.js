@@ -57,7 +57,8 @@ const CarFields = (function () {
       ["_lodTier", "wheelSpin", "wheelSpinF", "_whlVis"]],
     ["player force model (js/physics/player-forces.js) and its HUD/coach readouts",
       ["vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "_aeroGrip", "slipFactor", "lateralAccel", "slipFront", "slipRear",
-        "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear", "frontUtil", "rearUtil", "skidIntensity"]],
+        "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear", "frontUtil", "rearUtil", "skidIntensity",
+        "_cueConditionGrip", "_cueCornering", "_cueBraking"]],
     ["AI overtake planner (game.js ai-drive pass plan/side/best)",
       ["passPlan", "passSide", "passBest"]],
     ["player under-/over-slip dwell timer (player-forces.js)",
@@ -104,7 +105,8 @@ const CarFields = (function () {
       "_lapTimeAtLine", "fxSparkI", "kerbSndT", "kerbHapT", "pitWorked", "_otS", "_otLap", "aiBias", "holdOff",
       "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
       "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
-      "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT"]],
+      "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT",
+      "_cueConditionGrip", "_cueCornering", "_cueBraking"]],
   ];
   const WARM = [];
   for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);
@@ -204,6 +206,9 @@ const CarFields = (function () {
     if (!("frontUtil" in c)) c.frontUtil = undefined;
     if (!("rearUtil" in c)) c.rearUtil = undefined;
     if (!("skidIntensity" in c)) c.skidIntensity = undefined;
+    if (!("_cueConditionGrip" in c)) c._cueConditionGrip = undefined;
+    if (!("_cueCornering" in c)) c._cueCornering = undefined;
+    if (!("_cueBraking" in c)) c._cueBraking = undefined;
     if (!("passPlan" in c)) c.passPlan = undefined;
     if (!("passSide" in c)) c.passSide = undefined;
     if (!("passBest" in c)) c.passBest = undefined;
