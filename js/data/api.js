@@ -26,7 +26,7 @@ const F1API = (function () {
   let latestSessionKey = null;
   const sessionDates = {};              // sessionKey -> date_start ISO (seen sessions)
   const meetingDates = {};              // meetingKey -> date_start ISO (seen meetings)
-  const { request, cancelAll, cacheEntryT } = F1Transport.create(OPENF1, TTL_HISTORIC);
+  const { request, cancelAll, cacheEntryT, staleMark, staleSince } = F1Transport.create(OPENF1, TTL_HISTORIC);
 
   function num(v) {
     const n = typeof v === "number" ? v : parseFloat(v);
@@ -336,9 +336,9 @@ const F1API = (function () {
   function sessionResult(sessionKey, ttl) {
     const url = OPENF1 + "/session_result?session_key=" + encodeURIComponent(sessionKey);
     return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
-      // A session with nothing published answers {detail:"No results found."} —
-      // an OBJECT, and a 200. arr() flattens that to [], which the tab renders
-      // as "not published yet" rather than as a failed fetch.
+      // A session with nothing published answers HTTP 404 {detail:"No results
+      // found."}; the transport resolves that as [], which the tab renders as
+      // "not published yet" rather than as a failed fetch.
       return arr(list).map(function (r) {
         r = r || {};
         return {
@@ -509,6 +509,8 @@ const F1API = (function () {
     stints,
     pits,
     placeLabel,
-    cacheEntryT
+    cacheEntryT,
+    staleMark,
+    staleSince
   };
 })();

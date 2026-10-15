@@ -251,14 +251,16 @@ const SportingRegs = (function () {
 
   /** One watcher per race, for the local player. tick() returns an event or
    *  null: {type:"warn", code} once the blue has been held past BLUE_WARN_S,
-   *  {type:"penalty", sec, code} once past BLUE_HOLD_S (one per episode).
+   *  {type:"penalty", sec, code} once past BLUE_HOLD_S. Hold time is per
+   *  lapping car (a new lapper restarts the clock, #2163); the penalty latches
+   *  for the whole unbroken blue spell, so a train of lappers charges one.
    *  `ctx`: {total, vRef, caution, race}. Exemptions: caution (SC/VSC/red),
    *  pit lane / finished / retired (on either car), quali/TT (`race` false),
    *  and a player the caller's `troubled` predicate names (stuck / stricken). */
   function createBlueFlagWatch(troubled) {
     const bad = typeof troubled === "function" ? troubled : () => false;
-    let hold = 0, warned = false, pen = false, code = null;
-    function reset() { hold = 0; warned = false; pen = false; code = null; }
+    let hold = 0, warned = false, pen = false, code = null, who = null;
+    function reset() { hold = 0; warned = false; pen = false; code = null; who = null; }
     function tick(p, field, ctx, dt) {
       if (!p || !ctx || !ctx.race || p.finished || p.retired || inPit(p)
           || (ctx.caution | 0) >= CAUTION_MIN || bad(p)) {
@@ -267,6 +269,7 @@ const SportingRegs = (function () {
       }
       const lapper = blueFlagCar(p, field, ctx);
       if (!lapper) { reset(); return null; }
+      if (who !== lapper) { hold = 0; warned = false; who = lapper; }
       code = lapper.code || null;
       hold += dt > 0 ? dt : 0;
       if (!warned && hold >= BLUE_WARN_S) {

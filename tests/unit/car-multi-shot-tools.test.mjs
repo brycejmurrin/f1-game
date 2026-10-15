@@ -25,7 +25,10 @@ test("render-car has a spine preset and repeatable --shot customs", () => {
   assert.match(src, /screenshotPresentedCanvas/, "capture uses shared soft→CDP helper");
   assert.match(src, /preferView:\s*true/, "carview prefers #view soft canvas");
   assert.doesNotMatch(src, /page\.screenshot\(/, "no raw page.screenshot — fonts hang under SwiftShader");
-  assert.match(src, /chromium_headless_shell-/, "findChromium must see Cloud's headless_shell install");
+  // #2174: the private findChromium missed chrome-linux64 and system installs;
+  // tools/lib/chromium-path.mjs covers every layout incl. the headless shell.
+  assert.match(src, /chromiumPath\(\)/, "browser discovery goes through tools/lib/chromium-path.mjs");
+  assert.doesNotMatch(src, /function findChromium/, "no private copy of browser discovery");
   assert.match(src, /before:\s*frame,\s*n:\s*need/,
     "frame settle must pass `need` into waitForFunction (free `need` is PAGEERR)");
 });
