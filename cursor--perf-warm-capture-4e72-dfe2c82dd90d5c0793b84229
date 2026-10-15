@@ -1,0 +1,1 @@
+1792085078	Bryce Murrin	Fix newly measured TLX shader-warm probe retention and Photo capturePixels readback only; no material-pack/coalesced-run work (#2214), no radio ownership edits (#2215).  [cursor/perf-warm-capture-4e72; session dfe2c82dd90d5c0793b84229]
