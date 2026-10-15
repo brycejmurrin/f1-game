@@ -7,7 +7,10 @@ name: Fleet board
 #
 # Hourly at :23 (scheduled runs queue at the top of the hour,
 # https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule),
-# and at once when a claim lands on claude/claims-board. No pull_request
+# and on workflow_dispatch, which `who-is-on-it.mjs --claim/--release` sends after
+# every board write. NOT `push: [claude/claims-board]`: GitHub runs a
+# push-triggered workflow from the pushed commit's tree, and the board's tree has
+# no .github/ — that trigger never fired (live test, 2026-10-14). No pull_request
 # trigger on purpose: a check on every PR head would join ci-watch's per-sha
 # verdict for no gain; a closed PR releases its issue within the hour.
 # Edits made with GITHUB_TOKEN start no workflow runs, so the board cannot loop.
@@ -15,8 +18,6 @@ name: Fleet board
 on:
   schedule:
     - cron: "23 * * * *"
-  push:
-    branches: [claude/claims-board]
   workflow_dispatch:
 
 permissions:
