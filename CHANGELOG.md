@@ -14,12 +14,14 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- Phone-controller reconnect diagnostics no longer include the pairing code.
 - VS FRIEND: running into the back of your friend's car is one clean bump, so you no longer stay glued to their gearbox for several frames (#2164).
 - A rival's pass-by whoosh no longer keeps hissing under the pause menu, the results sheet or the title screen (#2187).
 - The team-radio key-up squelch now plays on phones, and on desktop it follows the master and SFX volume (#2189).
 - Data Hub: a session with no data yet (Results on a race weekend, WATCH & DRIVE, Telemetry, Live) now says nothing is published yet instead of showing a load failure with a RETRY that never works (#2185).
 - Data Hub: a tab served from the stored copy after a failed refresh shows that copy's age and "offline copy" instead of "updated just now"; the Schedule's NEXT marker moves on once a race ends; large telemetry downloads are no longer fetched again on every visit (#2190).
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
+- Photo captures on the THREE.JS WebGL2 path yield while waiting for GPU readback; capture resources are released on failure or timeout.
 - Blue flags: letting one lapping car through no longer counts toward a penalty for the next one in the queue (#2163).
 - Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
 - A car handed back after a heavy shunt never drives backwards at speed (#2167).
@@ -30,6 +32,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Friend invite and answer codes keep short final fragments when copied with line wrapping.
 - Data Hub cancels superseded telemetry selections, clears old session content when a Grand Prix or year has no data, and keeps keyboard navigation inside telemetry dialogs.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
+- Spotify now-playing updates recover when a response body stalls.
 - Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
 - Restoring a career backup keeps your Daily Challenge class bests, so the share line no longer reads NO LAP (#2165).
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
