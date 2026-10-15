@@ -43,8 +43,8 @@ node tools/shot/apex-eval.mjs monaco "a.camera()"
 node tools/shot/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
 # apex-eval/flicker-gate default to TLX; pin a renderer with --backend three|webgl2|webgpu
 # (apex-eval) / --backend three (flicker-gate; default webgl2 = GLX). A GLX.*() read under
-# the TLX default answers for TLX. shot.mjs has NO --backend (boots the TLX default) and the
-# apex_eval/apex_shot MCP wraps pass none.
+# the TLX default answers for TLX. shot.mjs takes --backend three|webgl2|webgpu (default three;
+# webgl2 costs ~4 min a boot on SwiftShader vs ~40 s for TLX); the apex_eval/apex_shot MCP wraps pass none.
 node tools/shot/apex-eval.mjs monaco "a.info()" --backend webgl2
 
 # Parallel screenshot validation (writes PNGs + a blank/fail manifest):
@@ -67,7 +67,9 @@ node tools/shot/backend-compare.mjs monaco 0.52 park --backends webgl2,three --o
 ```sh
 node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg] \
   [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud] \
+  [--weather dry|wet|rain|overcast|fog] [--gpu swiftshader] \
   [--team <id>] [--wait <s>] [--jpeg] [--raster]   # BROWSER (one Chromium; --help ok)
+# --gpu llvmpipe / APEX_GL=llvmpipe is CI-only (needs /dev/dri): here it fails fast, never falls back.
 # Many frames, one boot (JSON array / {jobs} / JSONL); same track reuses race():
 node tools/shot/shot.mjs --batch jobs.json [--jpeg] [--raster]
 ```

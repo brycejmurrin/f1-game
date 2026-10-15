@@ -63,15 +63,23 @@ test("explicit GPU stacks avoid fallback pins and divide Mesa threads across wor
   assert.equal(hardware.env.LIBGL_ALWAYS_SOFTWARE, undefined);
   assert.equal(hardware.env.GALLIUM_DRIVER, undefined);
   assert.equal(hardware.env.VK_DRIVER_FILES, undefined);
-  const mesa = captureGpuOptions({ gpu: 'llvmpipe', env: {}, cpus: 8, workers: 4 });
+  const mesa = captureGpuOptions({ gpu: 'llvmpipe', env: {}, cpus: 8, workers: 4, exists: () => true });
   assert.equal(mesa.env.LP_NUM_THREADS, '2');
   assert.equal(mesa.env.LIBGL_ALWAYS_SOFTWARE, '1');
   assert.equal(mesa.env.GALLIUM_DRIVER, 'llvmpipe');
   assert.ok(mesa.args.includes('--use-angle=gl'));
-  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: { LP_NUM_THREADS: '3' }, cpus: 8, workers: 4 }).env.LP_NUM_THREADS, '3');
+  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: { LP_NUM_THREADS: '3' }, cpus: 8, workers: 4, exists: () => true }).env.LP_NUM_THREADS, '3');
   assert.throws(() => captureGpuOptions({ gpu: 'llvmpipe', env: { LP_NUM_THREADS: 'bogus' } }), /LP_NUM_THREADS/);
   assert.equal(defaultCaptureWorkers({ env: { APEX_GPU: 'hardware' }, cpus: 8 }), 4);
   assert.equal(defaultCaptureWorkers({ env: { APEX_GPU: 'lavapipe' }, cpus: 4 }), 1);
+});
+
+test("llvmpipe without /dev/dri fails fast instead of falling back to SwiftShader", () => {
+  const noDri = (file) => file !== '/dev/dri';
+  assert.throws(() => captureGpuOptions({ gpu: 'llvmpipe', env: {}, exists: noDri }), /llvmpipe needs \/dev\/dri \(CI only\)/);
+  // GitHub's runners reach llvmpipe through Mesa + Xvfb (docs/notes/CI-RENDERING-PERFORMANCE.md).
+  assert.equal(captureGpuOptions({ gpu: 'llvmpipe', env: { GITHUB_ACTIONS: 'true' }, exists: noDri }).env.GALLIUM_DRIVER, 'llvmpipe');
+  assert.doesNotThrow(() => captureGpuOptions({ gpu: 'swiftshader', env: {}, exists: noDri }));
 });
 
 test("lavapipe uses the current Vulkan loader override and rejects missing ICD", () => {

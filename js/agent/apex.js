@@ -1377,6 +1377,13 @@ const api = {
   raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
   // Legs + marks + longtask ring (real-device probe; soft-blit CI is not this freeze).
   raceEntryProfile: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.snapshot()) || null,
+  // PerfGov frame history + longtask count for tests/specs/perf-frametime.spec.js.
+  frametimeBench(cmd) {
+    if (typeof GameMetrics === "undefined") return null;
+    if (cmd === "reset") { GameMetrics.frametimeBenchReset(); return true; }
+    if (cmd === "snapshot") return GameMetrics.frametimeBenchSnapshot();
+    return { cmds: ["reset", "snapshot"] };
+  },
   raceEntryStages: () => (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stageTable()) || null,
   raceEntryStageDiff: (raceSnap, practiceSnap) => (
     typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.diffStages
