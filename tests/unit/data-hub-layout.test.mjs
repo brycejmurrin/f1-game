@@ -54,8 +54,10 @@ test(".dh-content cancels sf-thumb width (no dead horizontal scroll)", () => {
   assert.equal(decl(rules, ".dh-content.sf-scroll::before", "margin-right"), "-6px");
   assert.match(
     decl(rules, ".dh-content.sf-scroll::before", "transform") || "",
-    /translateX\(calc\(var\(--gap\) \/ 6 - var\(--sf-pr/,
+    /translateX\(calc\(var\(--sf-pr,\s*0px\)\s*-\s*var\(--gap\)\s*\/\s*6\)\)/,
   );
+  assert.match(DATA_CSS,
+    /body\[data-width="wide"\]\s+\.dh-content\s*\{[^}]*padding-inline-end:\s*calc\(var\(--gap\) \* 2 \+ 6px\)/);
 });
 
 test("narrow standings names wrap with a floor (no 0px constructor collapse)", () => {
