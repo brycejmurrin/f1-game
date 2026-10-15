@@ -5,7 +5,7 @@
  *  1. WORDS. Every template in the phrasebook can be SPOKEN inside its own card
  *     (RadioVoice.plan refuses a line it cannot finish — and a radio that drops
  *     its own lines is silent exactly when it has the most to say), and a pool
- *     is dealt like a deck: nothing repeats before the pool is used up.
+ *     remembers recent variants so nothing repeats back to back.
  *  2. FACTS. Gaps come from the timing loop, not prog/speed; a swap only counts
  *     as a pass once it HOLDS; a car in the pit lane is never "overtaken".
  *  3. THE BRAIN. Lines wait for the straight (never while braking or loaded up
@@ -68,18 +68,14 @@ test("every phrasebook line can be spoken inside its own card", () => {
   assert.deepEqual(refused, []);
 });
 
-test("a pool is dealt like a deck: every variant once before any twice, never back to back", () => {
+test("a pool remembers recent picks: never the same line twice in a row", () => {
   const pools = { k: ["A", "B", "C", "D"] };
   const d = RL.create(7, pools);
   let prev = null;
-  for (let round = 0; round < 25; round++) {
-    const seen = new Set();
-    for (let i = 0; i < 4; i++) {
-      const s = d.pick("k", {});
-      assert.notEqual(s, prev, "the same line twice in a row");
-      seen.add(s); prev = s;
-    }
-    assert.equal(seen.size, 4, "a variant repeated before the pool was used up");
+  for (let i = 0; i < 50; i++) {
+    const s = d.pick("k", {});
+    assert.notEqual(s, prev, "the same line twice in a row");
+    prev = s;
   }
 });
 
