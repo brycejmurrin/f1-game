@@ -1617,7 +1617,7 @@ function fitHud() {
   // the next HUD tick only when their clamped, published zoom changed.
   const dockAfter = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
   if (Math.abs(Math.min(2, Math.max(1, zDockPub)) - Math.min(2, Math.max(1, dockAfter))) > 1e-6) {
-    _fitKey = ""; _fitWait = 0;
+    _fitKey = ""; _fitWait = 0; _fitPending = true;
   }
   // Publish --dock-r-w in the FINAL chrome zoom, after dock/top caps land.
   // CSS: right = 10px + sar/--hud-z + --dock-r-w (dock-r-w is NOT re-divided).
