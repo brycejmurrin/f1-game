@@ -116,6 +116,56 @@ test("Photo Studio buttons keep activation and arrows while WASD still flies and
   const escape = event("Escape"); key(escape); assert.equal(escape.prevented, false, "Escape reaches the canonical layer close door");
 });
 
+test("either UP key can be released while its other physical alias keeps flying upward", () => {
+  for (const first of ["KeyR", "Space"]) {
+    const { G, api, key } = boot(), second = first === "KeyR" ? "Space" : "KeyR";
+    const send = (code, type) => key({ code, type, preventDefault() {}, stopPropagation() {} });
+    api.enterPhotoMode();
+    send(first, "keydown"); send(first, "keydown"); send(second, "keydown");
+    send(first, "keyup");
+    api.updatePhotoCam(.1);
+    assert.ok(G.photoCam.pos[1] > 0, second + " still owns upward movement");
+    send(second, "keyup");
+    const height = G.photoCam.pos[1]; api.updatePhotoCam(.1);
+    assert.equal(G.photoCam.pos[1], height, "the final release stops upward movement");
+  }
+});
+
+test("either Shift can be released while the other keeps the photo camera boosted", () => {
+  for (const first of ["ShiftLeft", "ShiftRight"]) {
+    const { G, api, key } = boot(), second = first === "ShiftLeft" ? "ShiftRight" : "ShiftLeft";
+    const send = (code, type) => key({ code, type, preventDefault() {}, stopPropagation() {} });
+    api.enterPhotoMode();
+    send("KeyW", "keydown"); send(first, "keydown"); send(first, "keydown"); send(second, "keydown");
+    send(first, "keyup"); api.updatePhotoCam(.1);
+    const heldDistance = -G.photoCam.pos[2];
+    send(second, "keyup"); api.updatePhotoCam(.1);
+    const normalDistance = -G.photoCam.pos[2] - heldDistance;
+    assert.ok(heldDistance > normalDistance * 2, "the remaining Shift keeps boost; the final release restores normal speed");
+  }
+});
+
+test("ignored Studio Space and stale alias keyups do not cancel a different held key", () => {
+  const { dom, G, api, key } = boot();
+  const send = (code, type) => key({ code, type, preventDefault() {}, stopPropagation() {} });
+  api.enterPhotoMode(); send("KeyR", "keydown");
+  const panel = dom.byId("ps-panel"), button = dom.document.createElement("button"); panel.appendChild(button); button.focus();
+  send("Space", "keydown"); send("Space", "keyup"); api.updatePhotoCam(.1);
+  assert.ok(G.photoCam.pos[1] > 0, "activating a Studio button with Space leaves held R alone");
+  send("ShiftLeft", "keydown"); send("ShiftRight", "keydown");
+  key({ type: "blur" });
+  assert.equal(G.photoKeys.up, false); assert.equal(G.photoKeys.boost, false);
+  send("ShiftLeft", "keydown"); send("ShiftLeft", "keyup");
+  assert.equal(G.photoKeys.boost, false, "blur clears the other physical Shift too");
+  button.blur(); send("Space", "keydown"); send("KeyR", "keyup");
+  const before = G.photoCam.pos[1]; api.updatePhotoCam(.1);
+  assert.ok(G.photoCam.pos[1] > before, "an old keyup after blur cannot cancel newly held Space");
+  api.exitPhotoMode(); api.enterPhotoMode();
+  send("KeyR", "keydown"); send("KeyR", "keyup");
+  const resetHeight = G.photoCam.pos[1]; api.updatePhotoCam(.1);
+  assert.equal(G.photoCam.pos[1], resetHeight, "re-entry clears prior alias state");
+});
+
 test("fly-cam UP hold survives the boundary pointerleave and a capture steal; a hidden button releases", () => {
   const { dom, G } = boot();
   const el = dom.byId("pc-up");
