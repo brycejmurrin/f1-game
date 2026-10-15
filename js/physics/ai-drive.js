@@ -435,7 +435,8 @@ const AiDrive = (function () {
     // Braking authority, as a fraction of `brake`. Corner speed already scales
     // with `skill` in vC below — do not raise scrub for veterans or pace and
     // oscillation move. Only rookies (experience below the mid-grid 0.75)
-    // budget a longer stop (~down to 0.80 at exp 0).
+    // budget a longer stop (~down to 0.80 at exp 0). Tighter exp<0.4 / half
+    // pad missed 5-seed pace+oscillation targets on Monza (PR #1810).
     const exp = clamp(t.experience != null ? t.experience : 0.75, 0, 1);
     const rookPad = exp < 0.75 ? (0.75 - exp) * (0.05 / 0.75) : 0;
     const scrub = 2 * brake * clamp(0.85 - rookPad, 0.80, 0.90);
