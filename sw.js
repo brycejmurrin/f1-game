@@ -946,8 +946,9 @@ self.addEventListener("fetch", (event) => {
 
   // RECORDED RADIO VOICES ARE NETWORK-FIRST. assets/voice/*.json and *.bin are
   // fetched as unversioned pairs (js/audio/voice-pack.js); cache-first could
-  // serve a stale index with a fresh bin (or the reverse) after a deploy and
-  // corrupt clip offsets for the whole cache generation. Same strategy as pack.
+  // keep a rebaked voice stale for the whole cache generation. Same strategy
+  // as pack. Each response races independently; voice-pack.js verifies the
+  // manifest's binary digest before accepting a pair (including old bare keys).
   if (url.pathname.includes("/assets/voice/") && !DEV_HOST) {
     packNetworkFirst(event, req);
     return;

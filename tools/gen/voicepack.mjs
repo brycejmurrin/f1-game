@@ -33,6 +33,7 @@
  * Usage:
  *   node tools/gen/voicepack.mjs --list [--id george|michael|fable|bella|emma|heart]
  *   node tools/gen/voicepack.mjs --append --id <voice> --ffmpeg /usr/bin/ffmpeg
+ *   node tools/gen/voicepack.mjs --integrity-only [--out assets/voice]
  *   node tools/gen/voicepack.mjs --kokoro scratch/voicepack --id <voice> [--voice bm_george] [--dtype q4] [--speed 1.08]
  */
 import fs from "node:fs";
@@ -265,6 +266,23 @@ export function fullPhrases(id, speaker) {
   return [...out].map(([key, text]) => ({ key, text }));
 }
 
+export function binaryIntegrity(bin) {
+  return { sha256: createHash("sha256").update(bin).digest("hex"), bytes: bin.byteLength };
+}
+
+// Refresh metadata without synthesis or rewriting any recorded audio bytes.
+export function stampIntegrity(outDir) {
+  let count = 0;
+  for (const file of fs.readdirSync(outDir).filter((f) => f.endsWith(".json")).sort()) {
+    const jsonPath = path.join(outDir, file);
+    const man = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+    man.binary = binaryIntegrity(fs.readFileSync(path.join(outDir, file.replace(/\.json$/, ".bin"))));
+    fs.writeFileSync(jsonPath, JSON.stringify(man) + "\n");
+    count++;
+  }
+  return count;
+}
+
 async function build() {
   const kdir = path.resolve(ROOT, arg("kokoro", "scratch/voicepack"));
   const req = createRequire(path.join(kdir, "package.json"));
@@ -326,13 +344,15 @@ async function build() {
     off += buf.length;
     if (i % 25 === 0) console.log(`[voicepack] ${i}/${list.length}`);
   }
-  fs.writeFileSync(path.join(outDir, pack + ".bin"), Buffer.concat(chunks));
-  const man = { v: 1, id: pack, voice, speaker: spec.speaker, model: "Kokoro-82M v1.0 (ONNX " + dtype + ")", licence: "Apache-2.0", speed, clips };
+  const binary = Buffer.concat(chunks);
+  fs.writeFileSync(path.join(outDir, pack + ".bin"), binary);
+  const man = { v: 1, id: pack, voice, speaker: spec.speaker, model: "Kokoro-82M v1.0 (ONNX " + dtype + ")", licence: "Apache-2.0", speed, clips, binary: binaryIntegrity(binary) };
   fs.writeFileSync(path.join(outDir, pack + ".json"), JSON.stringify(man) + "\n");
   console.log(`[voicepack] ${pack}: ${list.length} clips, ${(off / 1024).toFixed(0)} KB`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   if (flag("list")) for (const p of phrases(arg("id", "george"), arg("speaker", null))) console.log(p.key + (p.text !== p.key ? "\t" + p.text : ""));
+  else if (flag("integrity-only")) console.log(`[voicepack] integrity metadata: ${stampIntegrity(path.resolve(ROOT, arg("out", "assets/voice")))} packs`);
   else await build();
 }

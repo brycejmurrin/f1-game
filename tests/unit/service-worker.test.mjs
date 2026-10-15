@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, webcrypto } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
@@ -1218,6 +1218,61 @@ test("offline, voice json and bin fall back to the cached pair", async () => {
   assert.equal(await (await j.responsePromise).text(), '{"oldIndex":true}');
   const b = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.bin`));
   assert.equal(await (await b.responsePromise).text(), "old-bytes");
+});
+
+test("a voice rebake during an active worker lifetime cannot play a mixed cached pair", async () => {
+  const oldBin = "OLD!!", newBin = "NEW!!";
+  const manifest = (bin) => JSON.stringify({ clips: { hello: [0, 5, 1] }, binary: {
+    bytes: Buffer.byteLength(bin), sha256: createHash("sha256").update(bin).digest("hex"),
+  } });
+  let deployed = 321, binaryFault = true, offline = false;
+  const brokenBin = deferred();
+  const ordinary = installFetch();
+  const h = createHarness({ fetchImpl: async (request) => {
+    if (offline) throw new TypeError("offline");
+    const url = new URL(typeof request === "string" ? request : request.url, ORIGIN);
+    if (url.pathname.endsWith("version.json")) return new Response(JSON.stringify({ build: deployed }));
+    if (url.pathname.endsWith("/george.json")) return new Response(manifest(deployed === 321 ? oldBin : newBin));
+    if (url.pathname.endsWith("/george.bin")) return deployed === 321 ? new Response(oldBin) : binaryFault ? brokenBin.promise : new Response(newBin);
+    return ordinary(request);
+  } });
+  await h.lifecycleEvent("install").done();
+  await h.lifecycleEvent("activate").done();
+  // Warm both files through the real fetch handler in generation 321.
+  for (const ext of ["json", "bin"]) {
+    const event = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.${ext}`));
+    await event.responsePromise;
+    await Promise.all(event.lifetimes);
+  }
+  deployed = 322;  // old worker remains active while the replacement installs
+  const ctx = vm.createContext({ crypto: webcrypto, setTimeout, clearTimeout,
+    setInterval: () => 1, clearInterval() {}, Log: { info() {} },
+    fetch: async (url) => {
+      const event = h.fetchEvent(new Request(new URL(url, ORIGIN)));
+      const response = await event.responsePromise;
+      if (url.endsWith(".json")) {
+        // JSON arrived from the new deployment; the sibling binary fails.
+        brokenBin.reject(new TypeError("connection lost"));
+      }
+      await Promise.all(event.lifetimes);
+      return response;
+    },
+  });
+  vm.runInContext(await readFile(new URL("../../js/ui/update-check.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext("globalThis.updates = UpdateCheck.create({ booted:321 }); updates.markReady(322); globalThis.blocked = UpdateCheck.blocksLazyLoad();", ctx);
+  assert.equal(ctx.blocked, true, "the script-loader guard does not own voice fetches");
+  vm.runInContext(await readFile(new URL("../../js/audio/voice-pack.js", import.meta.url), "utf8"), ctx);
+  const pack = ctx.VoicePack.create({});
+  assert.equal(await pack.load("george"), false, "fresh index + old same-sized binary is rejected by digest");
+  assert.equal(pack.ready("george"), false);
+  assert.equal(pack.plan("george", "hello"), null);
+  const cache = h.stores.get("apex26-321");
+  assert.equal(await cache.get(`${ORIGIN}/assets/voice/george.json`).clone().text(), manifest(newBin));
+  assert.equal(await cache.get(`${ORIGIN}/assets/voice/george.bin`).clone().text(), oldBin);
+  binaryFault = false;
+  assert.equal(await ctx.VoicePack.create({}).load("george"), true, "a coherent fresh pair recovers");
+  offline = true;
+  assert.equal(await ctx.VoicePack.create({}).load("george"), true, "a coherent cached pair remains playable offline");
 });
 
 test("a slow voice fetch loses the race to cache, and its late answer is still cached", async () => {
