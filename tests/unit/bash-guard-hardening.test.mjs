@@ -789,11 +789,21 @@ test("protect-files: a git conflict-side or committed-source restore of a genera
     fs.writeFileSync(path.join(repo.dir, "tests/data/ratchets.json"), "{}\n");
     fs.writeFileSync(path.join(repo.dir, "js/roster.js"), "x\n");
     fs.writeFileSync(path.join(repo.dir, "version.json"), "{}\n");
-    for (const c of ["git checkout --theirs tests/data/ratchets.json", "git checkout --ours -- js/roster.js",
-      "git checkout --theirs docs/PHYSICS.md tests/data/ratchets.json", "git checkout -m version.json",
+    // Outside a merge --ours/--theirs restore from the INDEX, which can hold a
+    // staged hand edit: the side flags are only conflict resolution mid-merge.
+    const SIDES = ["git checkout --theirs tests/data/ratchets.json", "git checkout --ours -- js/roster.js",
+      "git checkout -m version.json", "git restore --theirs tests/data/ratchets.json"];
+    for (const c of SIDES) {
+      const r = run(c);
+      assert.equal(r.status, 2, `no merge in progress, so not a resolution: ${c}`);
+      assert.match(r.stderr, /GENERATED/, c);
+    }
+    fs.writeFileSync(path.join(repo.dir, ".git/MERGE_HEAD"), repo.g("rev-parse", "HEAD").stdout);
+    for (const c of [...SIDES,
+      "git checkout --theirs docs/PHYSICS.md tests/data/ratchets.json",
       "git checkout MERGE_HEAD -- tests/data/ratchets.json",
       "git checkout origin/claude/f1-game-project-26h3ng -- js/roster.js",
-      "git restore --theirs tests/data/ratchets.json", "git restore --source=MERGE_HEAD version.json",
+      "git restore --source=MERGE_HEAD version.json",
       "git restore -s origin/claude/f1-game-project-26h3ng tests/data/ratchets.json",
       "git restore -sMERGE_HEAD js/roster.js"]) {
       const r = run(c);

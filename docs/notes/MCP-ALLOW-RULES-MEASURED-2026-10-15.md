@@ -208,7 +208,10 @@ ready and re-run through.
    branch, is kind `git-resolve`. That kind skips the generated-file and
    shared-contract rules. The live-run and scoped-agent rules still apply.
    Any other ref, HEAD included, stays blocked: R4-SUPPLY-4 pins
-   `git checkout HEAD js/roster.js`.
+   `git checkout HEAD js/roster.js`. The side flags count only while a merge,
+   cherry-pick, revert or rebase is in progress: outside one, `--ours` and
+   `--theirs` restore from the index (measured: a staged hand edit came back
+   that way), so they stay blocked there.
 2. bash-guard: a `git add` earlier in the same command counts as staged for the
    unstaged rule and the docs-only set. `git add -A`, `-u` and `.` read like
    `commit -a`.

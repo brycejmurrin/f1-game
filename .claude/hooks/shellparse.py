@@ -964,6 +964,18 @@ CURL_WRITE_ARG = {"-o", "--output", "-D", "--dump-header", "-c", "--cookie-jar",
 CURL_SHORT_ARG = set("AbcCdDeEFhHKmoPQrtTuUwxXyYz")
 
 
+def _merging(cwd):
+    """True while a merge, cherry-pick, revert or rebase has conflicts to resolve."""
+    try:
+        import subprocess
+        gd = subprocess.run(["git", "-C", cwd or ".", "rev-parse", "--absolute-git-dir"],
+                            capture_output=True, text=True, timeout=5).stdout.strip()
+    except Exception:
+        return False
+    return bool(gd) and any(os.path.exists(os.path.join(gd, f)) for f in
+                            ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"))
+
+
 def _git_writes(args, c):
     """[(path, kind)] a `git` argv (argv[1:]) writes to a NAMED worktree file:
     checkout/restore pathspecs and diff-family --output. `-C dir` moves c."""
@@ -1031,7 +1043,10 @@ def _git_writes(args, c):
         # committed content. protect-files skips the generated-file and
         # shared-contract rules for kind git-resolve; live-run and scoped-agent
         # rules still apply.
-        kind = "git-resolve" if side or source in RESOLVE_SOURCES else "git-" + sub
+        # Outside a merge, --ours/--theirs restore from the INDEX, which may hold
+        # a staged hand edit: the side flags count only mid-merge (Merge Desk
+        # review, 2026-10-15).
+        kind = "git-resolve" if (side and _merging(c)) or source in RESOLVE_SOURCES else "git-" + sub
         out += [(p, kind) for p in paths]
     return [(_abs(p, c), kind) for p, kind in out if p and p != "-"]
 
