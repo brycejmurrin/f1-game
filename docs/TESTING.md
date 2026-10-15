@@ -1270,6 +1270,7 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `garage-followups.test.mjs` | Reversible tune experiment controls, aero bench and garage followup behavior; tooling-fast and garage-unit. |
 | `player-tools-backup.test.mjs` | Real SettingsExport and ControllerProfiles/SetupPresets: authored defaults, ALL/CHANGED profile round-trips, bounded controller maps, strict named-setup imports, malformed-file preservation, and the reload-based import contract. |
 | `phone-input-improvements.test.mjs` | Age-bounded phone actions, semantic activation, pointer release, input ACK freshness and negotiated touch steering. |
 | `controller-profiles.test.mjs` | Per-device axes/buttons, bounded legacy adoption and source-owned remote input release. |
