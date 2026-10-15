@@ -533,6 +533,15 @@ jobs:
         #   vm-b2  game-vm-b2                       4.0 min
         #   page   vm-page                          9.1 min
         #   slow   node-slow                        3.3 min
+        # RE-BALANCED 2026-10-15 from per-script log timings of three green ship
+        # pushes (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §7): game-vm-b1 alone
+        # was 437 s against game-vm-b2's 220 s, and the ten "seconds each" riders
+        # had grown to 180 s (garage-unit 94, net-unit 33, audio-unit 33). The
+        # riders moved to vm-a1 / vm-a2 / slow and game-vm-b1/b2 were re-cut by
+        # per-file medians. Projected job wall (setup ~16 s included):
+        #   vm-a1 ~200 s, vm-a2 ~220 s, vm-b1 ~320 s, vm-b2 ~320 s, slow ~200 s,
+        #   page ~520 s — vm-page is the floor now (one TAP test, no per-spec
+        #   breakdown in the log); runner-minutes per push unchanged.
         # Matrix rows come from select's plan step / pick-unit-slices. Every NODE_SLICE
         # name is ALWAYS present (needed true|false): branch protection pins
         # those six check names, and a subset left vm-a1/vm-a2 unreported on
@@ -646,11 +655,49 @@ jobs:
               if planned test:game-vm-a; then
               npm run test:game-vm-a
               fi
+              unset APEX_CIRCUIT_SHARD   # the shard scopes the elevation twin only; riders see the whole roster
+              # RIDERS (2026-10-15): the ten former `fast`-slice scripts used to
+              # ride vm-b1, "the shorter half" of 2026-09-30. Measured on three
+              # green ship pushes 2026-10-15 (docs/notes/CI-CLOG-SURVEY-2026-10-15.md
+              # §7) they were 180 s on top of a game-vm-b1 that alone is 437 s, so
+              # vm-b1 set the wall at 10–12 min. They now sit on the three light
+              # rows, greedy by median: here net-unit 33 s, audio-unit 33 s,
+              # state-unit 5 s, desktop-unit 0.5 s beside a 112 s shard. Still
+              # always-on (never guarded by planned()); on a matched PR plan
+              # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;
+              # the `npm run` else-branch stays for gateNodeSuites / deploy.
+              # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).
+              # tools/ci/pick-unit-slices.mjs SLICE_SCRIPTS mirrors these arms and
+              # its test pins the two in step.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:net-unit --skip-tf; else
+              npm run test:net-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:audio-unit --skip-tf; else
+              npm run test:audio-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:state-unit --skip-tf; else
+              npm run test:state-unit
+              fi
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:desktop-unit --skip-tf; else
+              npm run test:desktop-unit
+              fi
               ;;
             vm-a2)
               export APEX_CIRCUIT_SHARD=2/2
               if planned test:game-vm-a; then
               npm run test:game-vm-a
+              fi
+              unset APEX_CIRCUIT_SHARD   # as in vm-a1
+              # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
+              # livery-contrast, body-split, cover-legibility, helmets) and three
+              # steering files (digital-steer, key-binds, settings-export) were in
+              # their groups and in NO gate — not tooling-fast, not this step, so
+              # deploy.mjs (which derives its node list from here) never ran them
+              # either. garage-unit is the heaviest rider (94 s median on a runner,
+              # 2026-10-15: the livery rasters), so it rides the 110 s shard alone;
+              # steering-unit (6 s) rides `slow`.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:garage-unit --skip-tf; else
+              npm run test:garage-unit
               fi
               ;;
             page)
@@ -664,29 +711,16 @@ jobs:
               if planned test:node-slow; then
               npm run test:node-slow
               fi
-              ;;
-            vm-b1)
-              # First of two time-balanced partitions of test:game-vm-b
-              # (tests/groups.json; test:game-vm-b is still the whole list locally).
-              # NODE_PLAN_SKIP_TF=1 drops the five VM files Structural guards
-              # already runs (tooling-fast: real-replay-vm 121 s, game-vm,
-              # physics-characterization-vm, red-flag-fuel-vm, session-entry-vm)
-              # — both jobs share one `if:`, so a matched plan ran them twice
-              # (test audit T5, 2026-10-05). --all / fail-safe keep npm run.
-              if planned test:game-vm-b1; then
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else
-              npm run test:game-vm-b1
+              # Riders (see vm-a1): steering-unit 6 s, mcp 5 s, service-worker 4 s,
+              # lifecycle-unit and agent-contract < 1 s, beside 168 s of node-slow.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:steering-unit --skip-tf; else
+              npm run test:steering-unit
               fi
-              fi
-              # The former `fast` slice: seconds each, so they ride with vm-b1, the
-              # shorter half (measured 2026-09-30 on a runner: b1 2.2 min, b2 3.9
-              # min WITH them — moved here to bring the wall to ~3 min).
-              # Always-on riders (seconds each). On a matched PR plan
-              # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;
-              # the `npm run` else-branch stays for gateNodeSuites / deploy.
-              # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:net-unit --skip-tf; else
-              npm run test:net-unit
+              # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
+              # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
+              # their fast-gate half is mcp-cli. environment-json stays gated here.
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:mcp --skip-tf; else
+              npm run test:mcp
               fi
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:service-worker --skip-tf; else
               npm run test:service-worker
@@ -694,37 +728,25 @@ jobs:
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:lifecycle-unit --skip-tf; else
               npm run test:lifecycle-unit
               fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:state-unit --skip-tf; else
-              npm run test:state-unit
-              fi
               if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:agent-contract --skip-tf; else
               npm run test:agent-contract
               fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:audio-unit --skip-tf; else
-              npm run test:audio-unit
+              ;;
+            vm-b1)
+              # First of two time-balanced partitions of test:game-vm-b
+              # (tests/groups.json; test:game-vm-b is still the whole list locally).
+              # Re-cut 2026-10-15 by per-file runner medians (LPT over 59 files,
+              # ~850 s of serial test time each; survey note §7): the 2026-09-30
+              # cut measured 437 s vs 220 s on a runner. NODE_PLAN_SKIP_TF=1 drops
+              # the VM files Structural guards already runs (tooling-fast:
+              # real-replay-vm 98 s, game-vm, red-flag-fuel-vm here;
+              # physics-characterization-vm, session-entry-vm on b2) — both jobs
+              # share one `if:`, so a matched plan ran them twice (test audit T5,
+              # 2026-10-05). --all / fail-safe keep npm run.
+              if planned test:game-vm-b1; then
+              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else
+              npm run test:game-vm-b1
               fi
-              # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
-              # livery-contrast, body-split, cover-legibility, helmets) and three
-              # steering files (digital-steer, key-binds, settings-export) were in
-              # these two groups and in NO gate — not tooling-fast, not this step,
-              # so deploy.mjs (which derives its node list from here) never ran
-              # them either. Measured 2026-09-10: garage-unit 39 s, steering-unit
-              # 0.5 s. The sub-5 s files are in tooling-fast too; the two slow
-              # livery rasters (7-10 s each) run only here.
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:garage-unit --skip-tf; else
-              npm run test:garage-unit
-              fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:steering-unit --skip-tf; else
-              npm run test:steering-unit
-              fi
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:desktop-unit --skip-tf; else
-              npm run test:desktop-unit
-              fi
-              # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
-              # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
-              # their fast-gate half is mcp-cli. environment-json stays gated below.
-              if [ -n "${NODE_PLAN_SKIP_TF:-}" ]; then node tools/ci/run-group.mjs test:mcp --skip-tf; else
-              npm run test:mcp
               fi
               ;;
             vm-b2)
