@@ -41,7 +41,8 @@
 # full selection never ran, right after dispatch 3110 (37687308660) FAILED
 # the full gate on that same tree (oversize-menu-baseline). A fast tier is
 # still remembered as fast_run (its tree-only jobs are reused) and nothing
-# more; ship_only is always false.
+# more. Its always-false ship-only output line, and the ci.yml smoke-only
+# input it fed, were removed on 2026-10-14.
 #
 # A pull_request run tests GitHub's merge ref, not the PR head. That is still
 # sound here: this only reuses such a run when merging the base into the head
@@ -67,17 +68,8 @@ say() { echo "$*" >&2; }
 # already passed give the same answer on the same bytes, so ci.yml's
 # `fast_tier_run` input skips them (2026-09-16; a deploy push paid ~12 min of
 # fast tier and then ~14 min of full tier, serially, with no job shared).
-# fast_run: the FAST-tier ci.yml run (a deploy-branch push: guards, node
-# suites, sweeps-parts, driving-model, selection) that already passed on this
-# exact tree, when there is one. Never a reason to skip the gate — the train
-# still runs the browser smoke, the geometry sweeps and the parts census (whose
-# filter diffs a base, so it is not tree-only) — but the tree-only jobs it
-# already passed give the same answer on the same bytes, so ci.yml's
-# `fast_tier_run` input skips them (2026-09-16; a deploy push paid ~12 min of
-# fast tier and then ~14 min of full tier, serially, with no job shared).
 FAST_RUN=""
-SHIP_ONLY="false"
-verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\nfast_run=%s\nship_only=%s\n' "$1" "$2" "$3" "$FAST_RUN" "${4:-$SHIP_ONLY}"; }
+verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\nfast_run=%s\n' "$1" "$2" "$3" "$FAST_RUN"; }
 tree_of() { git rev-parse --verify -q "$1^{tree}" 2>/dev/null; }
 # gate_ran <run-id>: prints `yes` only when the run's jobs show the full gate
 # ran and passed (see the header). Paginated: a full gate's selected matrix
@@ -145,13 +137,13 @@ for c in $candidates; do
       const self = process.env.GITHUB_RUN_ID || "";
       const deployBranch = process.env.DEPLOY_BRANCH || "";
       // A push run is a full gate only OFF the deploy branch (there it is the fast
-      // tier). merge_group is the merge-queue gate (full tier; Bryce enables the
-      // queue later). A deploy-branch push is remembered as FAST_RUN, and if it
-      // is THIS commit it is passed on as fast_run only, never as a gate.
+      // tier). A deploy-branch push is remembered as FAST_RUN, and if it is
+      // THIS commit it is passed on as fast_run only, never as a gate. (No
+      // merge_group: ci.yml dropped that trigger on 2026-10-14 — merge queues
+      // need an organisation-owned repo.)
       const fullPush = (r) => r.event === "push" && deployBranch !== "" && r.head_branch !== deployBranch;
-      const mergeGroup = (r) => r.event === "merge_group";
       const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
-        (r.path === ".github/workflows/ci.yml" && (fullPush(r) || mergeGroup(r) || r.event === "pull_request")) ||
+        (r.path === ".github/workflows/ci.yml" && (fullPush(r) || r.event === "pull_request")) ||
         (r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch" || r.event === "schedule")));
       for (const r of runs.filter(gate)) console.log(`${r.id} ${r.path} ${r.event} ${r.html_url || r.id}`);
     });')"
@@ -164,7 +156,7 @@ for c in $candidates; do
       continue
     fi
     say "REUSING the gate: $c already passed $path $event"
-    verdict true "$c" "$url" false
+    verdict true "$c" "$url"
     exit 0
   done <<EOF_HITS
 $hit
@@ -180,4 +172,4 @@ if [ -n "$FAST_RUN" ]; then
 else
   say "no reusable gate for $SHA; running the full gate"
 fi
-verdict false "" "" false
+verdict false "" ""
