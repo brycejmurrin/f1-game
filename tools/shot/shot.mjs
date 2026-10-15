@@ -5,6 +5,7 @@
 // Usage:
 //   node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg]
 //     [--az N] [--el N] [--dist N] [--side -1|1] [--hud] [--tod day|dusk|dawn|night]
+//     [--weather dry|wet|rain|overcast|fog]
 //     [--jpeg] [--raster] [--team <id>] [--wait <s>]
 //   node tools/shot/shot.mjs --batch jobs.json [--jpeg] [--raster]
 //
@@ -90,13 +91,15 @@ async function raceTrack(page, trackId, waitMs) {
 
 async function frameCamera(page, job) {
   return mutateCaptureScene(page,
-    ({ frac, cam, az, el, dist, side, tod, showHud }) => {
+    ({ frac, cam, az, el, dist, side, tod, weather, showHud }) => {
       const a = window.__apex;
       a.headless(false);
       a.go();
       a.park(frac);
       a.freeze(true);
       if (a.setTimeOfDay && a.setTimeOfDay() !== tod) a.setTimeOfDay(tod);
+      // After the tod reload, so the reload cannot reset it; every job pins one (default dry).
+      if (a.weather && a.weather() !== weather) a.weather(weather);
       if (a.hud) a.hud(!!showHud);
 
       if (cam === "eye") a.eyeAt(frac, 0, 2.5);
