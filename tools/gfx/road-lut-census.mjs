@@ -54,6 +54,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import vm from "node:vm";
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -225,8 +226,14 @@ const DEFAULT = ["vegas", "baku", "singapore", "monza"];
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
-  const json = args.includes("--json");
-  const all = args.includes("--all");
+  // --help and a typo'd flag answer before the bake loads (#1708).
+  exitIfHelp(args, `usage: node tools/gfx/road-lut-census.mjs [circuit ...] [--all] [--json]
+  Replays WGX's road-LUT search over the real baked table and counts ribbon points
+  handed a rotated track frame (default: ${DEFAULT.join(" ")}). NO_SWIN=1 A/Bs the
+  along-track window. Offline, no GPU, no browser.`);
+  const F = parseFlags(args, ["--json", "--all"]);
+  const json = F.has("--json");
+  const all = F.has("--all");
   const named = args.filter((a) => !a.startsWith("--"));
   const bake = loadBake();
   let ids = named.length ? named : DEFAULT;

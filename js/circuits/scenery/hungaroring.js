@@ -54,11 +54,11 @@
         const BARK   = [0.34, 0.29, 0.23];
 
         for (const [s0, s1, side, gap] of [
-          [0.075, 0.150, -1, 62],
-          [0.245, 0.320,  1, 70],
-          [0.470, 0.545, -1, 58],
-          [0.665, 0.745,  1, 66],
-          [0.840, 0.905, -1, 74],
+          [0.060, 0.165, -1, 62],
+          [0.230, 0.335,  1, 70],
+          [0.455, 0.560, -1, 58],
+          [0.650, 0.760,  1, 66],
+          [0.825, 0.920, -1, 74],
         ]) {
           const span = (s1 - s0 + 1) % 1;
           const count = Math.max(8, Math.round(span * n * ds / 11));
@@ -68,15 +68,15 @@
             const a = anchor(kk, side, gap);
             if (onTrack(a.c[0], a.c[2], 18)) continue;
             const b = [a.r, a.u, a.t];
-            const h = 17 + hv * 6;
+            const h = 19 + hv * 6;   // Lombardy poplar: tall, slim column
             out._mat = MAT.WOOD;
             addCyl(out, a.c, 0.30, h * 0.30, POP_BK, 5, b);
             out._mat = MAT.FOLIAGE;
-            addCone(out, vadd(a.c, a.u, h * 0.16), 1.75 + hv * 0.35, h * 0.42,
+            addCone(out, vadd(a.c, a.u, h * 0.16), 1.05 + hv * 0.2, h * 0.50,
                     hv < 0.5 ? POP : POP_L, 6, b);
-            addCone(out, vadd(a.c, a.u, h * 0.50), 1.45 + hv * 0.30, h * 0.36,
+            addCone(out, vadd(a.c, a.u, h * 0.46), 0.95 + hv * 0.18, h * 0.40,
                     hv < 0.5 ? POP_L : POP, 6, b);
-            addCone(out, vadd(a.c, a.u, h * 0.78), 1.00 + hv * 0.22, h * 0.28,
+            addCone(out, vadd(a.c, a.u, h * 0.74), 0.70 + hv * 0.14, h * 0.30,
                     POP_L, 6, b);
             out._mat = 0;
           }
@@ -146,11 +146,32 @@
 
       const { cx, cz, radius: rad } = lapBounds();
 
+      // Rounded mound: two frustum shoulders under a cone cap (a dome profile at 8
+      // segments), so a hill reads as a green mound, not peak()'s pyramid or
+      // backdrop()'s flat-topped box. Same guard as peak(): clear the road's whole
+      // built width. `bury` sinks the skirt below sloping ground.
+      const dome = (x, z, baseY, R, H, col, bury, maxSlope) => {
+        if (onTrack(x, z, R + 2.6)) return;
+        const gy = terrainYAt(x, z);
+        if (maxSlope != null) {
+          if (gy == null) return;           // a mound on a steep slope buries its uphill side
+          for (let q = 0; q < 4; q++) {
+            const sy = terrainYAt(x + Math.cos(q * 1.5708) * R * 0.9, z + Math.sin(q * 1.5708) * R * 0.9);
+            if (sy != null && Math.abs(sy - gy) > maxSlope) return;
+          }
+        }                   // stand on the ground there, not on pyMin
+        const y0 = (gy != null ? gy : baseY) - bury, hh = H + bury;
+        const hA = hh * 0.38, hB = hh * 0.80;          // sin 22 / 53 deg of the profile
+        addFrustum(out, [x, y0, z], R, R * 0.93, hA, col, 8, null);
+        addFrustum(out, [x, y0 + hA, z], R * 0.93, R * 0.6, hB - hA, col, 8, null);
+        addCone(out, [x, y0 + hB, z], R * 0.6, hh - hB, col, 8, null);
+      };
+
       const ringFar = rad + 460;
       for (let i = 0; i < 16; i++) {
         const a = i / 16 * 6.2832, h = hash(i * 13 + 200);
-        peak(cx + Math.cos(a) * ringFar, cz + Math.sin(a) * ringFar, pyMin,
-             280 + h * 100, 28 + h * 16, HAZE);
+        dome(cx + Math.cos(a) * ringFar, cz + Math.sin(a) * ringFar, pyMin,
+             190 + h * 60, 28 + h * 16, HAZE, 2);
       }
       // Furthest haze ridges
       const ringHorizon = rad + 640;
@@ -168,7 +189,8 @@
       ];
       for (const [s, side, dist] of amphPts) {
         const hh = hash(Math.round(s * n) * 11 + side * 3);
-        backdrop(K(s), side, dist, [120 + hh * 40, 34 + hh * 14, 110], hh < 0.5 ? AMPH : AMPH2);
+        const ab = anchor(K(s), side, dist + 65);
+        dome(ab.c[0], ab.c[2], ab.c[1], 62 + hh * 14, 30 + hh * 10, hh < 0.5 ? AMPH : AMPH2, 4, 2);
       }
 
       // Mid-ring tree-capped mounds at the amphitheatre bowl crest
@@ -178,8 +200,7 @@
         const tx = cx + Math.cos(a) * ringMid;
         const tz = cz + Math.sin(a) * ringMid;
         if (onTrack(tx, tz, 14)) continue;
-        addCone(out, [tx, pyMin, tz], 20 + h * 10, 18 + h * 10,
-                h < 0.45 ? TREE : TREE2, 7, null);
+        dome(tx, tz, pyMin, 24 + h * 12, 16 + h * 8, h < 0.45 ? TREE : TREE2, 2);
       }
 
       billboard(K(sl(0.00)), 1, 38, 22, 6, RED);
@@ -192,15 +213,15 @@
       // these T1-area stands therefore sit on the tribune/outside side (+1).
       // Pit Exit 2 omitted as a separate mass (vertex budget); T1 stand covers
       // the outside braking zone. Pit Exit 1 = uncovered bleacher below.
-      grandstandEx(0.07, 1, 11, 58, SHELL, CROWD[0],
+      grandstandEx(sl(0.07), 1, 11, 58, SHELL, CROWD[0],
                    { livery: "concrete", tiers: 2, roof: "cantilever", suites: true, pylons: true }); // T1 / Pit Exit cluster
       // Pit Exit 1 — uncovered (oversteer48: no roof), positive rake via bleacher rows.
-      bleacher(0.090, 0.098, 1, 10, { rows: 8, rise: 0.78, setback: 1.05, density: 0.5, crowd: CROWD });
+      bleacher(sl(0.090), sl(0.098), 1, 10, { rows: 8, rise: 0.78, setback: 1.05, density: 0.5, crowd: CROWD });
       // Stadium inside: Apex 1/2 banked stands inside Turn 1-2
-      grandstandEx(0.10, -1, 10,  56, SHELL, CROWD[2],
+      grandstandEx(sl(0.10), -1, 10,  56, SHELL, CROWD[2],
                    { livery: "concrete", tiers: 2, roof: "flat" });
       // Sector grandstands across the back of the circuit
-      grandstandEx(0.12, -1, 10, 44, SHELL, CROWD[2],
+      grandstandEx(sl(0.12), -1, 10, 44, SHELL, CROWD[2],
                    { livery: "alu", tiers: 1, roof: "truss" });
       // s 0.12-0.30 was the clearest hole on the lap: no stand of any kind
       // across ~800 m of a documented, heavily tree-lined grandstand location.
@@ -233,9 +254,9 @@
         addBox(out, vadd(a.c, a.u, 13.35), [0.3, 0.5, len + 2], FASCIA, b);
         addBox(out, vadd(vadd(a.c, a.r, side * 0.35), a.u, 7.7), [0.2, 0.6, len - 2], FASCIA2, b);
       };
-      standAccent(0.07, 1, 11, 58);
-      standAccent(0.10, -1, 10, 56);
-      standAccent(0.12, -1, 10, 44);
+      standAccent(sl(0.07), 1, 11, 58);
+      standAccent(sl(0.10), -1, 10, 56);
+      standAccent(sl(0.12), -1, 10, 44);
       standAccent(T5, 1, 24, 58);
       // No standAccent on 0.255 — it fought the cantilever roof (flatCoplanar).
       standAccent(0.40,  1, 13, 46);
@@ -244,8 +265,8 @@
 
       // Grandstand lit-window concourse strips
       const gsLit = [
-        { s: 0.07, side: 1, gap: 18, len: 54 },
-        { s: 0.10, side: -1, gap: 15, len: 52 },
+        { s: sl(0.07), side: 1, gap: 18, len: 54 },
+        { s: sl(0.10), side: -1, gap: 15, len: 52 },
         { s: T5, side: 1, gap: 26, len: 54 },
         { s: T67, side: -1, gap: 24, len: 50 },
         { s: 0.55, side: -1, gap: 15, len: 46 },
@@ -258,21 +279,25 @@
         addBox(out, vadd(a.c, a.u, 8.6), [0.22, 0.8, g.len - 6], WIN_COOL, [a.r, a.u, a.t]);
       }
 
+      // Mostly broadleaf (pineFrac .06): the brief's Pannonian planting is poplar rows
+      // and akác, not conifers. Inner mid-lap passes thinned to density .20 (along()
+      // halves the stride) to pay for the wider poplar rows and the dome hills
+      // inside the props-triangle ratchet.
       forestEdge(0.0,  0.18, 1, 8, { density: 0.58, hMin: 9, hMax: 15,
-                                      col: TREE, col2: TREE2, pineFrac: 0.40 });
+                                      col: TREE, col2: TREE2, pineFrac: 0.06 });
       forestEdge(0.18, 0.50, 1, 8, { density: 0.46, hMin: 7, hMax: 13,
-                                      col: TREE2, col2: TREE, pineFrac: 0.32 });
+                                      col: TREE2, col2: TREE, pineFrac: 0.06 });
       forestEdge(0.50, 1.00, 1, 8, { density: 0.50, hMin: 8, hMax: 14,
-                                      col: TREE, col2: TREE2, pineFrac: 0.40 });
+                                      col: TREE, col2: TREE2, pineFrac: 0.06 });
       // Inside: tighter valley wall
       forestEdge(0.0,  0.12, -1, 8, { density: 0.52, hMin: 7, hMax: 13,
-                                       col: TREE, col2: TREE2, pineFrac: 0.55 });
-      forestEdge(0.14, 0.35, -1, 8, { density: 0.44, hMin: 8, hMax: 13,
-                                       col: TREE2, col2: TREE, pineFrac: 0.38 });
-      forestEdge(0.35, 0.55, -1, 8, { density: 0.50, hMin: 8, hMax: 14,
-                                       col: TREE, col2: TREE2, pineFrac: 0.42 });
+                                       col: TREE, col2: TREE2, pineFrac: 0.06 });
+      forestEdge(0.14, 0.35, -1, 8, { density: 0.20, hMin: 8, hMax: 13,
+                                       col: TREE2, col2: TREE, pineFrac: 0.06 });
+      forestEdge(0.35, 0.55, -1, 8, { density: 0.20, hMin: 8, hMax: 14,
+                                       col: TREE, col2: TREE2, pineFrac: 0.06 });
       forestEdge(0.55, 1.00, -1, 8, { density: 0.46, hMin: 7, hMax: 12,
-                                       col: TREE2, col2: TREE, pineFrac: 0.38 });
+                                       col: TREE2, col2: TREE, pineFrac: 0.06 });
 
       // Dry scrub spots at the edge (gap=9, sparse)
       every(44, (kk) => {
@@ -332,7 +357,7 @@
       fence(0.30, 0.45, -1, 10, 7, STEEL);   // mid-sector inside
       fence(0.52, 0.62,  1, 10, 7, STEEL);   // twisty-sector stands
       // Tyre walls at high-risk braking points
-      tyreWall(0.045, 0.075,  1, 9, RED);
+      tyreWall(sl(0.045), sl(0.075),  1, 9, RED);   // T1 braking zone (racing .045-.075)
       tyreWall(0.14,  0.17,  -1, 9, [0.95, 0.85, 0.15]);
       tyreWall(0.54,  0.57,   1, 9, [0.20, 0.40, 0.85]);
 
@@ -529,19 +554,21 @@
 
       // T1 basin: grassy amphitheatre floor (no standing water — satellite/OSM
       // show grass banking in the Valley of the Three Springs at Mogyoród).
-      groundPatch(K(0.08), 1, 75, [40, 0.14, 32], AMPH,
+      groundPatch(K(sl(0.08)), 1, 75, [40, 0.14, 32], AMPH,
                   { id: "hungaroring-basin-grass", samples: 8 });
-      tree(K(0.074), 1, 84, 11, TREE);
-      tree(K(0.092), 1, 70, 10, TREE2);
-      hedge(0.035, 0.055, 1, 42, 3, TREE);
+      tree(K(sl(0.074)), 1, 84, 11, TREE);
+      tree(K(sl(0.092)), 1, 70, 10, TREE2);
+      hedge(sl(0.035), sl(0.055), 1, 42, 3, TREE);
 
       // Hungarian tricolour accent billboards (red/white/green)
-      billboard(K(0.04),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red accent (green twin dropped for tris)
+      billboard(K(sl(0.04)),  1, 22, 10, 4, [0.85, 0.20, 0.20]);   // red accent (green twin dropped for tris)
 
       for (const [s, side] of [[0.07, 1], [0.12, -1], [0.40, 1], [0.55, -1], [0.90, 1]]) {
-        groundPatch(K(s), side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE,
+        // 0.07 / 0.12 are T1-area racing fractions (re-keyed); ids keep the label
+        const k = K(s < 0.2 ? sl(s) : s);
+        groundPatch(k, side, 2, [0.4, 0.25, 6], side > 0 ? RED : WHITE,
                     { id: `hungaroring-kerb-${s}`, samples: 2 });
-        groundPatch(K(s), side, 7, [10, 0.08, 12], GRASS,
+        groundPatch(k, side, 7, [10, 0.08, 12], GRASS,
                     { id: `hungaroring-runoff-${s}`, samples: 4 });
       }
 
@@ -600,8 +627,8 @@
       const HG_RISER = [0.42, 0.43, 0.47];
       const hillHalf = (len) => (len / 2) / (n * ds);   // metres → lap-fraction half-span
       for (const [s, side, gap, len, rows] of [
-        [0.07,  1, 32, 52, 3],   // Turn 1 / Pit Exit hillside
-        [0.12, -1, 26, 48, 3],   // inside the slow complex
+        [sl(0.07),  1, 32, 52, 3],   // Turn 1 / Pit Exit hillside
+        [sl(0.12), -1, 26, 48, 3],   // inside the slow complex
         [T5 - 0.01, 1, 36, 40, 2],   // grass shoulder around the Turn 5 (Mogyoród) stand
         [0.19, -1, 30, 40, 2],   // inside hillside threading T5 into the chicane
         [T67 - 0.03, 1, 34, 38, 2],   // grass shoulder around the T6/7 "Driving Centre" stand
@@ -688,7 +715,7 @@
         addBox(out, vadd(vadd(c, a.r, -0.7), a.u, 12.5), [0.4, 5, 9.5], [0.05, 0.07, 0.12], b); // screen — stays FLAT (video screen)
       })();
 
-      cameraTower(K(0.065), -1, 42, { h: 16 });
+      cameraTower(K(sl(0.065)), -1, 42, { h: 16 });
       cameraTower(K(0.20),  -1, 44, { h: 14 });
       cameraTower(K(0.905),  -1, 40, { h: 14 });
 
@@ -742,7 +769,7 @@
       }
 
       for (const [s, side, dist, len] of [
-        [0.075,  1, 92, 46], [0.115, -1, 88, 40], [0.905, 1, 86, 48],
+        [sl(0.075),  1, 92, 46], [sl(0.115), -1, 88, 40], [0.905, 1, 86, 48],
       ]) {
         const k = K(s);
         const hh = hash(k * 41 + side * 17);
@@ -756,7 +783,6 @@
       ]) {
         const k = K(s), h = hash(k * 53 + side * 7);
         tree(k, side, dist, 10 + h * 5, h < 0.5 ? TREE : TREE2);
-        pine(k, side, dist + 9, 12 + h * 5, TREE);
       }
 
       if (circuitKit) {

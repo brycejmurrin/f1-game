@@ -316,6 +316,8 @@ const LoadingScreen = (function () {
     };
 
     let timer = 0, phase = "", build = null, el = null, flyT0 = 0, flyMs = FLY_MS, skipCb = null;
+    let fromGarage = false, wipeTimer = 0;   // the garage -> flyby hand-off sweep (setPhase)
+    const WIPE_MS = 900;
     let garageRadioT = 0;   // the pit-exit radio line (garage())
     // This run's flyby: `cur` is its info (shot list, field), `view` what the
     // map slot shows ("map" | "grid"), `mapBox` the map's CSS box, `markN`
@@ -590,6 +592,30 @@ const LoadingScreen = (function () {
       phase = p;
       const r = root();
       if (r) r.dataset.phase = p;
+      // THE HAND-OFF: the first phase after the garage shot (stop() set the flag)
+      // opens on a sweep in the player's team colour, so the garage and the
+      // flyby read as one sequence rather than a hard cut (css/loading.css).
+      if (fromGarage && p !== "garage" && p !== "prep") wipe(r);
+      fromGarage = false;
+    }
+    function teamWipe() {
+      try {
+        const t = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST[store && store.get ? store.get("team", 2) : 2];
+        if (!t || !Array.isArray(t.color)) return null;
+        const lum = 0.2126 * t.color[0] + 0.7152 * t.color[1] + 0.0722 * t.color[2];
+        // A near-black livery (the 2026 Mercedes) sweeps in its second colour.
+        return gridColour(lum < 0.18 && Array.isArray(t.color2) ? t.color2 : t.color);
+      } catch (_) { return null; }
+    }
+    function wipe(r) {
+      const c = r && r.style ? teamWipe() : null;
+      if (!c) return;
+      r.style.setProperty("--ld-wipe", c);
+      delete r.dataset.wipe;
+      void r.offsetWidth;   // restart the animation if one was mid-sweep
+      r.dataset.wipe = "";
+      clearTimeout(wipeTimer);
+      wipeTimer = setTimeout(() => { delete r.dataset.wipe; }, WIPE_MS);
     }
 
     function fire() {
@@ -718,6 +744,7 @@ const LoadingScreen = (function () {
       clearTimeout(timer);
       timer = 0;
       build = null; skipCb = null;
+      fromGarage = phase === "garage";
       if (garageRadioT) { clearTimeout(garageRadioT); garageRadioT = 0; }
       phase = "";
       // The voice outlives the screen unless something cancels it: the screen's
