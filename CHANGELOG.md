@@ -15,6 +15,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 ### Fixed
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
+- On street circuits a retired car parked on the track is now solid: you hit it instead of driving through it, and AI cars steer around it (#2162).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
