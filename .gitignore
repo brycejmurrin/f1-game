@@ -15,12 +15,7 @@ node_modules/
 node_modules
 # Regenerable output
 scratch/
-# artifacts/ is local except committed per-circuit survey PNGs (see docs/tracks/GALLERY.md).
-artifacts/*
-!artifacts/shots/
-artifacts/shots/*
-!artifacts/shots/tracks/
-!artifacts/shots/tracks/**
+artifacts/
 # tools/ci/queue-depth.mjs --write: a live gauge, never committed
 apex-status/
 # Run screenshots. A June 2026 lap audit committed ~1,700 versions of these in
