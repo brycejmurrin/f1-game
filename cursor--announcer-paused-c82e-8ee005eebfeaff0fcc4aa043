@@ -1,0 +1,1 @@
+1792023148	Bryce Murrin	Delegated by root codex-radio-hunt-c82e: paused explicit recorded announcer preview/sample fix ONLY js/audio/announcer.js,announcer-recorded.js and existing announcer.test.mjs. Parent integrates/tests browser. No other radio/audio/UI paths.  [cursor/announcer-paused-c82e; session 8ee005eebfeaff0fcc4aa043]
