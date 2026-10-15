@@ -39,7 +39,9 @@ const pkg = require(path.join(ROOT, "package.json"));
 const GH = parseRepoSlug(pkg.repository?.url);
 
 const CANONICAL_PREFIX = /^([a-z][a-z0-9_]*)-(\d{2,})-(.+)\.(png|jpe?g|webp)$/i;
-const WEATHER_TAIL = /^(?:(?:dawn|day|dusk|night|fog|overcast|grid|ui|unknown)-(?:dry|wet|rain|fog|overcast)|(?:dry|wet|rain|fog|overcast|grid|ui|unknown))$/i;
+const WEATHER_TAIL = /^(?:(?:dawn|day|dusk|night|fog|overcast|grid|ui|unknown)-(?:dry|wet|rain|storm|fog|overcast)|(?:dry|wet|rain|storm|fog|overcast|grid|ui|unknown))$/i;
+// Some surveyors name frames weather-then-tod (rain-night); read them as tod-weather.
+const WEATHER_THEN_TOD = /^(dry|wet|rain|storm|fog|overcast)-(dawn|day|dusk|night)$/i;
 
 function enrichTod(meta) {
   const { tod, condition } = splitTodWeather(meta.weather);
@@ -51,7 +53,12 @@ function parseCanonical(base) {
   if (!m) return null;
   const tokens = m[3].split("-");
   if (tokens.length < 2) return null;
-  const last2 = tokens.slice(-2).join("-");
+  let last2 = tokens.slice(-2).join("-");
+  const swapped = last2.match(WEATHER_THEN_TOD);
+  if (swapped && tokens.length >= 3) {
+    last2 = `${swapped[2]}-${swapped[1]}`.toLowerCase();
+    tokens.splice(-2, 2, ...last2.split("-"));
+  }
   let weather;
   let sector;
   if (tokens.length >= 3 && WEATHER_TAIL.test(last2)) {
@@ -641,8 +648,10 @@ async function main() {
     printHelp();
     return;
   }
-  const outArg = argv.find((a) => a.startsWith("--out="));
-  const outRoot = outArg ? path.resolve(outArg.slice("--out=".length)) : DEFAULT_OUT;
+  const outEq = argv.find((a) => a.startsWith("--out="));
+  const outIdx = argv.indexOf("--out");
+  const outVal = outEq ? outEq.slice("--out=".length) : outIdx >= 0 ? argv[outIdx + 1] : "";
+  const outRoot = outVal ? path.resolve(outVal) : DEFAULT_OUT;
   const skipImages = argv.includes("--skip-images");
   const noFetch = argv.includes("--no-fetch");
   await build({ outRoot, skipImages, noFetch });

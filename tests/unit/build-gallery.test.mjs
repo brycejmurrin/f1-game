@@ -28,6 +28,17 @@ test("canonical survey filenames parse circuit, sector, and weather", () => {
   assert.equal(m.weather, "night-wet");
 });
 
+test("storm and weather-then-tod survey filenames keep tod and condition", () => {
+  const a = parseShotMeta("/tmp/monza-12-orbit-f33-day-storm.jpg");
+  assert.equal(a.sector, "orbit-f33");
+  assert.equal(a.tod, "day");
+  assert.equal(a.condition, "storm");
+  const b = parseShotMeta("/tmp/monza-13-orbit-f50-rain-night.jpg");
+  assert.equal(b.sector, "orbit-f50");
+  assert.equal(b.tod, "night");
+  assert.equal(b.condition, "rain");
+});
+
 test("look-survey grid sheets parse as overview/grid", () => {
   const m = parseShotMeta(path.join(ROOT, "docs/look-survey/spa_grid.png"));
   assert.equal(m.circuit, "spa");
