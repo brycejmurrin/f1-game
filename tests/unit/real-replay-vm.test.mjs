@@ -990,6 +990,139 @@ test("WATCH OpenF1 team radio routes through GameAudioRadioFx.playWatchMedia (FX
   assert.ok(ducks.includes(false), "stop releases the duck");
 });
 
+function directRadioReplay() {
+  const clips = [], holds = new Set(), focus = [], ducks = [];
+  let generation = 1;
+  class Audio {
+    constructor() { this.paused = true; this.ended = false; this.muted = false; this.listeners = new Map(); clips.push(this); }
+    addEventListener(event, fn) { this.listeners.set(event, fn); }
+    removeEventListener(event, fn) { if (this.listeners.get(event) === fn) this.listeners.delete(event); }
+    emit(event) { this.listeners.get(event)?.(); }
+    play() { this.paused = false; return new Promise((_resolve, reject) => { this.reject = reject; }); }
+    pause() { this.paused = true; this.emit("pause"); }
+  }
+  const fixture = transportReplay({ Audio, GameAudioRadioFx: { playWatchMedia: () => null }, GameAudio: {
+    ctxGen: () => generation,
+    setVoiceFocusHold(on, owner) { focus.push({ on, owner }); if (on) holds.add(owner); else holds.delete(owner); },
+    setRadioDuck: (on) => ducks.push(on),
+  } });
+  fixture.options.script.radio = [3, 6, 9].map((t) => ({ t, num: 1, url: "https://example.test/" + t + ".mp3" }));
+  fixture.G.soundOn = true;
+  fixture.G.radio = { volume: () => 0.8 };
+  fixture.replay.start(fixture.options);
+  return { ...fixture, clips, holds, focus, ducks, rebuild() { generation++; holds.clear(); } };
+}
+
+test("WATCH direct Audio fallback focuses only audible playing and releases on interruption", () => {
+  const { replay, G, clips, holds, focus, ducks } = directRadioReplay();
+  replay.tick(3.5);
+  const a = clips[0];
+  assert.equal(holds.size, 0, "requesting playback does not claim focus");
+  assert.deepEqual(ducks, [true], "the fallback preserves legacy radio ducking");
+  a.emit("playing");
+  assert.equal(holds.size, 1);
+  const owner = focus[0].owner;
+  a.emit("playing");
+  assert.equal(focus.length, 1, "repeated playing is idempotent");
+  a.emit("stalled");
+  assert.equal(holds.size, 1, "a stalled fetch can still have buffered playback");
+  a.emit("waiting");
+  assert.equal(holds.size, 0);
+  a.emit("volumechange");
+  assert.equal(holds.size, 0, "volume changes cannot acquire while waiting");
+  a.emit("playing");
+  assert.equal(holds.size, 1, "playing after buffering recovers focus");
+  a.volume = 0; a.emit("volumechange");
+  assert.equal(holds.size, 0);
+  a.volume = 0.8; a.emit("volumechange");
+  assert.equal(holds.size, 1, "restoring volume recovers focus during confirmed playback");
+  a.muted = true; a.emit("volumechange");
+  assert.equal(holds.size, 0);
+  a.muted = false; a.emit("volumechange");
+  assert.equal(holds.size, 1, "unmuting ongoing playback recovers focus without another playing event");
+  G.soundOn = false; a.emit("playing");
+  assert.equal(holds.size, 0);
+  G.soundOn = true; G.radio.volume = () => 0; a.emit("playing");
+  assert.equal(holds.size, 0, "effective radio volume also gates the hold");
+  G.radio.volume = () => 0.8; a.emit("playing");
+  assert.equal(holds.size, 1);
+  replay.setPaused(true);
+  assert.equal(a.paused, true, "public transport pause pauses the existing element");
+  assert.equal(holds.size, 0, "transport pause releases focus without disposing the source");
+  assert.ok(a.listeners.has("playing"), "transport pause keeps resume listeners");
+  assert.equal(ducks.at(-1), false, "transport pause preserves legacy duck release");
+  a.emit("volumechange");
+  assert.equal(holds.size, 0, "volume changes cannot acquire while paused");
+  replay.setPaused(false);
+  assert.equal(clips.length, 1, "public transport resume reuses the same Audio element");
+  assert.equal(a.paused, false);
+  assert.equal(ducks.at(-1), true, "resuming restores the legacy radio duck");
+  a.emit("volumechange");
+  assert.equal(holds.size, 0, "a play request after pause still needs confirmation");
+  a.emit("playing");
+  assert.equal(holds.size, 1, "the same element reacquires focus on resumed playing");
+  a.muted = true; a.emit("volumechange");
+  assert.equal(holds.size, 0);
+  a.muted = false; a.emit("volumechange");
+  assert.equal(holds.size, 1, "resumed playback also recovers focus after unmuting");
+  replay.seek(0);
+  assert.equal(holds.size, 0, "seek stops and releases the owned fallback");
+  assert.equal(a.listeners.size, 0, "stop removes every event listener");
+  assert.equal(ducks.at(-1), false);
+  assert.ok(focus.every((entry) => entry.owner === owner), "one clip uses one stable owner object");
+  replay.stop();
+});
+
+test("WATCH fallback rejects stale events and play failures without releasing a newer owner", async () => {
+  const { replay, clips, holds, focus } = directRadioReplay();
+  replay.tick(3.5);
+  const old = clips[0], stalePlaying = old.listeners.get("playing"), staleEnded = old.listeners.get("ended");
+  old.emit("playing");
+  replay.tick(3);
+  const current = clips[1];
+  current.emit("playing");
+  const owner = focus.at(-1).owner, before = focus.length;
+  assert.equal(holds.size, 1);
+  assert.notEqual(owner, focus[0].owner, "replacement clips get distinct ownership");
+  stalePlaying(); staleEnded(); old.reject(new Error("late rejection"));
+  await Promise.resolve();
+  assert.equal(focus.length, before, "queued callbacks and an old rejection cannot touch the new hold");
+  assert.ok(holds.has(owner));
+  current.reject(new Error("autoplay refused"));
+  await Promise.resolve();
+  assert.equal(holds.size, 0, "a failed play request releases its own focus");
+  assert.equal(current.listeners.size, 0, "rejection removes listeners");
+  replay.tick(3);
+  const last = clips[2];
+  last.emit("playing"); last.emit("error");
+  assert.equal(holds.size, 0, "media errors release focus");
+  assert.equal(last.listeners.size, 0);
+  replay.stop();
+});
+
+test("WATCH fallback callbacks from a previous audio context cannot claim or release focus", () => {
+  const { replay, clips, holds, focus, ducks, rebuild } = directRadioReplay();
+  replay.tick(3.5);
+  const old = clips[0], stalePlaying = old.listeners.get("playing"), staleEnded = old.listeners.get("ended");
+  old.emit("playing");
+  rebuild();
+  const before = focus.length, duckCount = ducks.length;
+  stalePlaying(); staleEnded();
+  assert.equal(focus.length, before, "old callbacks do not call the rebuilt engine");
+  assert.equal(ducks.length, duckCount, "old callbacks cannot release the rebuilt radio duck");
+  assert.equal(old.listeners.size, 0);
+  replay.tick(3);
+  const current = clips[1];
+  current.emit("playing");
+  assert.equal(holds.size, 1, "a clip created in the rebuilt context can focus");
+  staleEnded();
+  assert.equal(holds.size, 1);
+  current.ended = true; current.emit("ended");
+  assert.equal(holds.size, 0, "natural completion releases the current clip");
+  assert.equal(current.listeners.size, 0);
+  replay.stop();
+});
+
 test("WATCH final results use published finish and DNF evidence rather than position download endings", () => {
   const { replay, G, cars, drivers, options } = transportReplay();
   drivers[0].laps = [10, 10]; drivers[0].lapsDone = 2;

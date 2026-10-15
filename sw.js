@@ -438,6 +438,7 @@ async function precacheAssetLists() {
     // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
     "js/audio/signal.js",
     "js/audio/soundtrack.js",
+    "js/audio/race-mix-audition.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
@@ -447,6 +448,7 @@ async function precacheAssetLists() {
     "js/audio/rivals.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
+    "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",

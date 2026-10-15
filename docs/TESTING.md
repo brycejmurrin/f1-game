@@ -1270,6 +1270,8 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `battle-earcon.test.mjs` | Finite battle-gap motif selection, readiness, context changes, cancellation and default-off request safety; audio-unit and tooling-fast. |
+| `audio-mix-improvements.test.mjs` | Audio half of #1776's follow-ups: race-mix audition ownership/Stop/deadline, Spotify stale searches, uploaded-track playback health and focused Retry; audio-unit and tooling-fast. |
 | `player-tools-backup.test.mjs` | Real SettingsExport and ControllerProfiles/SetupPresets: authored defaults, ALL/CHANGED profile round-trips, bounded controller maps, strict named-setup imports, malformed-file preservation, and the reload-based import contract. |
 | `phone-input-improvements.test.mjs` | Age-bounded phone actions, semantic activation, pointer release, input ACK freshness and negotiated touch steering. |
 | `controller-profiles.test.mjs` | Per-device axes/buttons, bounded legacy adoption and source-owned remote input release. |

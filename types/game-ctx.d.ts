@@ -430,7 +430,7 @@ interface GameCtx {
    * The RACE RADIO — js/race/race-radio.js: the engineer's race calls and the
    * in-race commentary. AudioPanel drives its two settings (chatter, commentary).
    */
-  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; chat(): string; comm(): string; trafficBusy(): boolean; debug(): Record<string, unknown> };
+  readonly raceRadio: { update(dt: number): void; request(): string; reset(): void; setChat(v: string): string; setComm(v: string): string; battleEarcon(): boolean; setBattleEarcon(on: boolean): boolean; stopBattleEarcon(): void; chat(): string; comm(): string; trafficBusy(): boolean; debug(): Record<string, unknown> };
   /** What the loading card describes — the flyby editor previews the same object. */
   readonly loadingInfo: () => Record<string, unknown>;
   /** The menu's race prep (world built, menuFinish done, program warm, car prep record), read-only — __apex.menuPrep. */
@@ -893,6 +893,7 @@ declare const Director: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const RaceMessageHistory: GameModuleFactory;
+declare const RaceMixControls: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;
 declare const RivalAudio: GameModuleFactory;
 declare const CarSfx: GameModuleFactory;

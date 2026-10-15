@@ -65,6 +65,7 @@
     "// table nobody read. Node-side via verify-track.cjs, so it is cheap.",
     "tests/unit/assert-audit.test.mjs",
     "tests/unit/assets-pack.test.mjs",
+    "tests/unit/audio-mix-improvements.test.mjs",
     "// Round-2: MUSIC OFF never decodes the menu track (setMusic before setSound) and rows changed before the race bundle lands reach the store, not the stub.",
     "tests/unit/audio-panel-boot.test.mjs",
     "tests/unit/audio-recovery.test.mjs",
@@ -84,6 +85,7 @@
     "tests/unit/barrier-runoff-jumps.test.mjs",
     "tests/unit/base-green.test.mjs",
     "tests/unit/bash-guard-hardening.test.mjs",
+    "tests/unit/battle-earcon.test.mjs",
     "tests/unit/behind-ship.test.mjs",
     "// BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.",
     "tests/unit/bitmap-decode-worker.test.mjs",
@@ -1097,9 +1099,12 @@
     "test:audio-unit": {
       "files": [
         "tests/unit/announcer.test.mjs",
+        "tests/unit/audio-mix-improvements.test.mjs",
+        "tests/unit/audio-panel-boot.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/battle-earcon.test.mjs",
         "tests/unit/blip-voice-pool.test.mjs",
         "tests/unit/end-race-music-vm.test.mjs",
         "tests/unit/engine-note-quality.test.mjs",
