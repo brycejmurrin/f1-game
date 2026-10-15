@@ -170,5 +170,11 @@ jobs:
           mean; the select job already reads this branch as an overlay (APEX_SPEC_TIMINGS)."
           # force-with-lease is wrong here: the branch is a rolling proposal this
           # bot owns, and a plain -f keeps it at exactly the latest merge.
-          git push -f origin "$TIMINGS_BRANCH"
+          # `-c core.hooksPath=/dev/null` (2026-10-15, #2084): setup-apex's
+          # `npm ci` runs package.json `prepare`, which activates .githooks on
+          # this runner too, and .githooks/pre-push refuses every non-fast-forward
+          # push as "a force push" — right for an agent's branch, wrong for the
+          # one branch whose rewrite is the design. The hook's other two rules
+          # (never the deploy branch, never a delete) are kept by the case above.
+          git -c core.hooksPath=/dev/null push -f origin "$TIMINGS_BRANCH"
           echo "pushed $TIMINGS_BRANCH — merge it to adopt the new samples" >> "$GITHUB_STEP_SUMMARY"
