@@ -147,9 +147,11 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.match(cd, /function cockpitBodyMesh\(team, car, visualKey = playerVisualKey\)/);
   assert.match(read("js/garage/setup-camera.js"), /function garageSeat\(\)/);
   const draw = game.match(
-    /const body = carDraw\.modelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
+    /const body = carDraw\.modelBuf \? null :[\s\S]{0,520}drawPlayerWheels\(c, _groundMat/
   );
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
+  assert.match(game, /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/,
+    "rivals past tier 2 share one distant body mesh");
   // The caster passes live in js/render/shared/shadow-pass.js (teamMesh through deps, the player through G).
   const sp = read("js/render/shared/shadow-pass.js");
   // C8 (TLX-PERF-HUNT 2026-10-11): the car pass gates the player on distance like the AI cars.
