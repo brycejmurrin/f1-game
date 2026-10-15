@@ -724,7 +724,8 @@ test("launch({intro}) goes through the pre-race screen; intro() describes the ev
   assert.ok(calls.some((c) => c[0] === "startRace"), "the fallback is a plain start");
   // The tab's two buttons opt in.
   const tab = fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8");
-  assert.equal(tab.split("\n").filter((l) => l.includes("RealRace.launch(") && l.includes("intro: true")).length, 2, "JUMP IN and WATCH both open the screen");
+  assert.equal(tab.split("\n").filter((l) => l.includes("launchRace(") && l.includes("intro: true")).length, 2, "JUMP IN and WATCH both request the screen through launch recovery");
+  assert.match(tab, /RealRace\.launch\(script, options\)/, "launch recovery forwards the intro option to RealRace");
 });
 
 // ── THE RACE SO FAR (RealRace.situation) — the pre-race screen's read of a JUMP IN ──
