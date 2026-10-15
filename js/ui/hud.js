@@ -978,7 +978,9 @@ function phoneFitStampSync(scale, force) {
     void secEl.offsetHeight;
     return true;
   };
-  if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
+  // REL's own tick already re-fit it if its key moved; fitRows writes then reads,
+  // so an unconditional call here forced a layout every phone tick (#2151).
+  if (typeof HudRelative !== "undefined") { if (HudRelative.refit) HudRelative.refit(force); else if (HudRelative.fitRows) HudRelative.fitRows(); }
   // One probe per pass: the verdict after the last pass feeds the stamp below.
   let clash = phonePaintedClash();
   for (let pass = 0; pass < 8 && clash; pass++, clash = phonePaintedClash()) {
@@ -2723,6 +2725,7 @@ return {
   create,
   invalidateFit: () => { if (_invalidateFit) _invalidateFit(); },
   syncPhoneFit: () => (_syncPhoneFit ? _syncPhoneFit() : false),
+  vpKey: () => vpW() + "x" + vpH(),   // the cached viewport, for 10 Hz keys that must not force a layout (#2151)
 };
 })();
 Object.freeze(GameHud);
