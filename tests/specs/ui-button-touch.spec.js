@@ -796,6 +796,11 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     // Keyboard access starts with the first visible piece selected.
     await expect(page.locator("#hud-arrange-name")).toContainText("TIMING TOWER");
     await expect(vis).toBeEnabled();
+    await vis.click();
+    expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].filter(id => HudElements.isOn(id)))).toEqual([]);
+    await expect(vis).toHaveText("SHOW");
+    await vis.click();
+    expect(await page.evaluate(() => ["pos", "lap", "time", "best", "delta"].every(id => HudElements.isOn(id)))).toBe(true);
     // Touch the sector plate (a press with no movement selects it).
     const sec = await page.locator("#hud-sectors").boundingBox();
     expect(sec).not.toBeNull();
@@ -869,6 +874,51 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await page.locator("#hud-arrange-done").click();
     expect(await page.evaluate(() => Object.fromEntries(["rel", "strat", "inputs"].map(id =>
       [id, { hidden: document.getElementById("hud-" + id).hidden, on: HudElements.isOn(id) }])))).toEqual(original);
+  });
+
+  test("crowded optional previews remain editable after fitting at maximum sizes", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem("apex26.hudLayout");
+      for (const [key, value] of Object.entries({ hudScale: 200, hudBtnScale: 300, hudProfile: "standard", textSize: "large" })) {
+        localStorage.setItem("apex26." + key, JSON.stringify(value));
+      }
+    });
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.evaluate(() => window.__apex.camera("chase"));
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
+    await page.locator("#pm-hud-arrange").click();
+    await page.evaluate(() => {
+      for (const id of ["rel", "strat", "inputs"]) HudLayout.set(id, { s: 200 });
+      GameHud.invalidateFit();
+      HudLayout.clearReadouts();
+    });
+    // The fit still detects a lack of room, but cannot remove editor handles.
+    expect(await page.locator("[data-hl-arr][data-col-drop]").count()).toBeGreaterThan(0);
+    const picker = page.locator("#hud-arrange-element");
+    for (const id of ["rel", "strat", "inputs"]) {
+      await picker.selectOption(id);
+      await expect(page.locator("#hud-" + id)).toBeVisible();
+    }
+    await page.locator("#hud-arrange-smaller").click();
+    await expect(page.locator("#hud-inputs")).toBeVisible();
+    await page.locator("#hud-arrange-done").click();
+    await expect(page.locator("#hud-arrange-bar")).toBeHidden();
+    // The normal race drop rule is active again even for a visible producer.
+    expect(await page.evaluate(() => {
+      const el = document.getElementById("hud-inputs");
+      const hidden = el.hidden, drop = el.getAttribute("data-col-drop");
+      try {
+        el.hidden = false; el.setAttribute("data-col-drop", "");
+        return getComputedStyle(el).display;
+      } finally {
+        el.hidden = hidden;
+        if (drop === null) el.removeAttribute("data-col-drop"); else el.setAttribute("data-col-drop", drop);
+      }
+    })).toBe("none");
   });
 
   test("a dragged radio card leaves auto-placement and stays where it was dropped; RESET hands it back", async ({ page }) => {

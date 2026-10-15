@@ -80,12 +80,12 @@ test("clashes: only pairs overlapping by more than the margin on BOTH axes; touc
 
 test("visIds / visShown: which HUD ELEMENTS toggles a piece maps to, and when it reads as shown", () => {
   const A = load();
-  assert.deepEqual(plain(A.visIds("tower")), ["pos", "lap", "time", "best"], "the tower is its four boxes together");
+  assert.deepEqual(plain(A.visIds("tower")), ["pos", "lap", "time", "best", "delta"], "the tower includes its delta box");
   assert.deepEqual(plain(A.visIds("gearbox")), ["gear"]);
   for (const id of ["map", "gaps", "mirror", "flag", "announce", "nope"]) assert.deepEqual(plain(A.visIds(id)), [], id + " has no toggle here");
-  const off = new Set(["pos", "lap", "time", "best", "speed"]);
+  const off = new Set(["pos", "lap", "time", "best", "delta", "speed"]);
   const isOn = (v) => !off.has(v);
-  assert.equal(A.visShown("tower", isOn), false, "all four tower boxes off: hidden");
+  assert.equal(A.visShown("tower", isOn), false, "all five tower boxes off: hidden");
   assert.equal(A.visShown("speed", isOn), false);
   assert.equal(A.visShown("sectors", isOn), true);
   assert.equal(A.visShown("map", isOn), true, "a piece with no toggle always reads as shown");
@@ -131,7 +131,7 @@ function editor(pieceId = "piece", options = {}) {
   const get = (id, sn, pn) => ({ x: 0, y: 0, s: 100, ...values.get(key(sn, pn)) });
   const layout = { ELEMENTS: [[pieceId, 'Piece', '#' + pieceId]], shown: () => set, profile: () => profile, get,
     set(id, v, sn, pn) { writes.push({ id, v: { ...v }, sn, pn }); values.set(key(sn, pn), { ...get(id, sn, pn), ...v }); }, resetEl() {} };
-  const on = new Set(options.on ? [pieceId] : []), visibilityWrites = [];
+  const on = new Set(Array.isArray(options.on) ? options.on : options.on ? [pieceId] : []), visibilityWrites = [];
   if (options.hidden) ids.get(pieceId).hidden = true;
   if (options.rect) ids.get(pieceId).getBoundingClientRect = () => options.rect;
   const ctx = { document: doc, window: { innerWidth: options.width || 1000, innerHeight: options.height || 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } },
@@ -265,4 +265,25 @@ test('editor: visible optional readouts lift and restore producer drop state wit
   e.api.setEditing(false);
   assert.equal(root.hidden, false); assert.equal(root.getAttribute('data-col-drop'), '');
   assert.equal(row.textContent, 'live row'); assert.deepEqual(e.visibilityWrites, []);
+});
+
+
+test('editor: tower hide/show includes DELTA and leaves SPEED independent', () => {
+  const tower = ['pos', 'lap', 'time', 'best', 'delta'];
+  const e = editor('tower', { on: [...tower, 'speed'] });
+  e.api.setEditing(true);
+  const vis = e.ids.get('hud-arrange-vis');
+  assert.equal(vis.textContent, 'HIDE');
+  vis.onclick();
+  assert.deepEqual([...e.on], ['speed'], 'no timing-tower child remains on');
+  assert.equal(vis.textContent, 'SHOW');
+  vis.onclick();
+  for (const id of tower) assert.equal(e.on.has(id), true, id + ' returns with the tower');
+  assert.equal(e.on.has('speed'), true);
+  // DELTA can be the only enabled child after individual settings changes.
+  for (const id of tower) if (id !== 'delta') e.on.delete(id);
+  e.api.setEditing(false); e.api.setEditing(true);
+  assert.equal(vis.textContent, 'HIDE', 'a delta-only tower is visible');
+  vis.onclick();
+  assert.deepEqual([...e.on], ['speed']);
 });

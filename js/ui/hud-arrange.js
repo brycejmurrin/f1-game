@@ -45,11 +45,11 @@ const HudArrange = (() => {
     return clamp(Math.round((s0 * d1 / d0) / 5) * 5, LIM.s[0], LIM.s[1]);
   }
   /* SHOW / HIDE: which per-element visibility toggles (js/ui/hud-elements.js)
-     a MOVE & SIZE piece maps to. The tower is four toggles shown or hidden
+     a MOVE & SIZE piece maps to. The tower is five toggles shown or hidden
      together; MAP, GAPS and MIRROR keep their own AUTO / ON / OFF rows and the
      flag / radio card are race messages, so those carry no toggle here. */
   const VIS = Object.freeze({
-    tower: ["pos", "lap", "time", "best"], sectors: ["sectors"], limits: ["limits"], gearbox: ["gear"],
+    tower: ["pos", "lap", "time", "best", "delta"], sectors: ["sectors"], limits: ["limits"], gearbox: ["gear"],
     speed: ["speed"], energy: ["energy"], tyre: ["tyre"], ot: ["ot"], aero: ["aero"], bb: ["bb"],
     damage: ["damage"], rel: ["rel"], strat: ["strat"], inputs: ["inputs"],
   });
