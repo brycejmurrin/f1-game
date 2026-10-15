@@ -682,6 +682,13 @@
         }
       }
 
+      // Inland mid-rise row — the 0.78–0.86 chicane had canyon/k kerbs only.
+      cityFront(0.78, 0.86, -1, 64, {
+        minH: 8, maxH: 15, depth: 12,
+        palette: WALL_INL, lit: true, windowCol: WINTEAL,
+        step: 46, floor: 3,
+      });
+
       // ── TIGHT TECHNICAL SECTOR — s 0.78–0.84 ─────────────────────────────
       for (const side of [-1, 1]) {
         for (let i = 0; i < 5; i++) {
@@ -740,7 +747,8 @@
           // Plinth reaches 0.6 m under the sea plane: its underside stood
           // 0.38 m over the water, so the whole mosque hung (ground-audit).
           addBox(stage, vadd(base, a.u, 1.7), [26, 4.6, 26], [0.90, 0.90, 0.86], b);
-          addBox(stage, vadd(base, a.u, 4.3), [26.6, 0.6, 26.6], WINCOOL, b);
+          // Deck band 0.05 m above the plinth top (was coplanar at 4.3 m, 256 m²).
+          addBox(stage, vadd(base, a.u, 4.35), [26.4, 0.5, 26.4], WINCOOL, b);
           addBox(stage, vadd(base, a.u, 7.5), [16, 7, 16], [0.93, 0.93, 0.90], b);
           addBox(stage, vadd(base, a.u, 8.0), [16.3, 3, 16.3], WINWARM, b);
           addFrustum(stage, vadd(base, a.u, 11), 7.2, 4.6, 5, [0.95, 0.95, 0.92], 12, b);
@@ -758,7 +766,9 @@
           addBox(stage, vadd(mc, a.u, 41), [0.5, 2.2, 0.5], SPANGLE, b);
         }, { required: true });
       };
-      floatingMosque(K(0.165), 230);
+      // North-loop / marina sightline (~s 0.50): was s≈0.165 (early Red Sea leg),
+      // which read as the wrong sector in orbit captures vs the real Corniche mosque.
+      floatingMosque(K(0.498), 215);
 
       // ── Jeddah Flagpole — the record 171 m mast + giant green flag ───────
       {
