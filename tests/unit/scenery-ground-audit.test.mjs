@@ -223,6 +223,41 @@ test("partial footprint: the ground audit includes actual road and water surface
   }
 });
 
+test("partial footprint: an overhead road or water surface cannot ground a floating mass", () => {
+  const mass = [[0, 12, 0], [4, 4, 4]]; // base 10 m, wholly below the upper deck
+  const surface = (heights) => ({ __cap: {
+    pos: heights.flatMap((y) => [-20, y, -20, 20, y, -20, 20, y, 20, -20, y, 20]),
+    idx: heights.flatMap((_y, i) => [0, 1, 2, 0, 2, 3].map((v) => v + i * 4)),
+  } });
+  const audit = (boxes, terrain, mesh = "road", heights = [30]) => {
+    const { prims, buf } = fixture(boxes, () => terrain);
+    const track = { meshes: { props: { __cap: buf }, [mesh]: surface(heights) } };
+    return GA.analyse({ Tracks: { terrainY: () => terrain } }, track, prims, { coplanar: false });
+  };
+  for (const mesh of ["road", "water"]) {
+    const floating = audit([mass], 0, mesh);
+    assert.equal(floating.counts.unsupported, 1, `${mesh} above the entire box is not a support`);
+    assert.equal(floating.partial.findings.length, 1);
+    assert.equal(floating.partial.unknownSamples, 0);
+    assert.ok(floating.partial.findings[0].samples.every((s) => s.gap === 10 && s.support === "none"));
+    assert.equal(audit([mass], 0, mesh, [10]).partial.findings.length, 0, `${mesh} at the base supplies support`);
+    assert.equal(audit([mass], 0, mesh, [10, 30]).counts.unsupported, 0, "find the eligible lower deck beneath an upper deck");
+    assert.equal(audit([mass], 0, mesh, [10, 30]).partial.findings.length, 0);
+    assert.equal(audit([mass], 0, mesh, [10 + FP.CONTACT / 2]).partial.findings.length, 0, "contact slack remains accepted");
+    assert.equal(audit([mass], 0, mesh, [10 + FP.CONTACT + .001]).partial.findings.length, 1, "surface beyond contact slack cannot certify support");
+  }
+  const buried = audit([mass], 20);
+  assert.equal(buried.partial.findings.length, 0, "solid terrain still supports a buried base");
+  assert.equal(buried.counts.unsupported, 0);
+  const plinth = [[0, 5, 0], [6, 10, 6]];
+  assert.equal(audit([mass, plinth], 0).partial.findings.length, 0, "real grounded plinth supports the mass below an upper deck");
+  const detachedPlinth = [[0, 8, 0], [6, 4, 6]];
+  const detached = audit([mass, detachedPlinth], 0);
+  assert.ok(detached.partial.findings.some((f) => f.p.maxY === 14), "recursive foundation checks must also exclude overhead decks");
+  const unknown = audit([mass], null);
+  assert.equal(unknown.partial.unknownSamples, 9, "upper decks do not convert missing terrain into known support");
+});
+
 test("partial footprint: captured Monaco city slab reports the missed nine-metre corner", () => {
   const env = buildContext(), track = env.Tracks.build(env.Tracks.LIST.find((d) => d.id === "monaco"), {});
   const anchor = [-276.47003, 20.53050, 488.56760];

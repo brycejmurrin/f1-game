@@ -94,7 +94,7 @@ function supportProbe(props, groundY) {
     return top === -Infinity ? null : { bottom, top };
   };
   const rests = (p, x, y, z, path) => {
-    const ground = groundY(x, z);
+    const ground = groundY(x, z, y);
     if (ground !== null && y <= ground + CONTACT) return "ground";
     if (path.size >= 32) return "unknown";
     path.add(p);
@@ -140,7 +140,7 @@ function analyseFootprints(props, groundY) {
     if (Math.min(width, depth, height) < 3) continue;
     candidates++;
     const samples = footprintSamples(face).map((v) => {
-      const ground = groundY(v[0], v[2]);
+      const ground = groundY(v[0], v[2], v[1]);
       const support = probe(p, v);
       return { at: v, ground, gap: ground === null ? null : v[1] - ground, support };
     });

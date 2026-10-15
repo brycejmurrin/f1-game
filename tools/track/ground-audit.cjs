@@ -58,7 +58,8 @@ const PROP_MESHES = ["props", "glass", "gate", "startline"];
 const ck = (ix, iz) => ix * 4000003 + iz;
 
 // Ground triangles of the named meshes on an XZ grid: the highest surface at a
-// point, the way Tracks.terrainY reads the terrain, extended to road and water.
+// point at/below the queried support level. A road deck is a surface, not solid
+// terrain extending downward: an unrelated upper deck cannot support a prop below.
 function surfaceOf(meshes, names) {
   const C = 8, grid = new Map(), T = [];
   for (const nm of names) {
@@ -80,7 +81,7 @@ function surfaceOf(meshes, names) {
         }
     }
   }
-  return (x, z) => {
+  return (x, z, maxY = Infinity) => {
     const arr = grid.get(ck(Math.floor(x / C), Math.floor(z / C)));
     if (!arr) return null;
     let best = null;
@@ -93,6 +94,7 @@ function surfaceOf(meshes, names) {
       const u = (d11 * d20 - d01 * d21) / den, v = (d00 * d21 - d01 * d20) / den;
       if (u < -0.01 || v < -0.01 || u + v > 1.01) continue;
       const y = T[b + 1] + u * (T[b + 7] - T[b + 1]) + v * (T[b + 4] - T[b + 1]);
+      if (y > maxY) continue;
       if (best === null || y > best) best = y;
     }
     return best;
@@ -121,8 +123,10 @@ function analyse(env, track, prims, opt) {
   const props = prims.filter((p) => propBuf.has(p.buf.pos));
   const terrainY = (x, z) => env.Tracks.terrainY(track, x, z);
   const other = surfaceOf(M, ["road", "water"]);
-  const groundY = (x, z) => {
-    const a = terrainY(x, z), b = other(x, z);
+  const groundY = (x, z, baseY = Infinity) => {
+    // Terrain is a solid height field (a buried base can be supported). Road
+    // and water are discrete surfaces and must be eligible at this base height.
+    const a = terrainY(x, z), b = other(x, z, baseY + footprint.CONTACT);
     return a === null ? b : b === null ? a : Math.max(a, b);
   };
 
@@ -159,7 +163,7 @@ function analyse(env, track, prims, opt) {
     const s = faceSamples(p, false);
     let gap = Infinity;
     for (let k = 0; k < s.length; k += 3) {
-      const g = groundY(s[k], s[k + 2]);
+      const g = groundY(s[k], s[k + 2], s[k + 1]);
       if (g !== null && s[k + 1] - g < gap) gap = s[k + 1] - g;
     }
     gapOf[i] = gap;
