@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import {
   imageFormatFor,
   normalizeJob,
@@ -13,6 +14,9 @@ import {
   shotSessionKey,
   loadBatchFile,
   SHOT_USAGE,
+  WEATHERS,
+  TODS,
+  isRetryableCaptureError,
 } from "../../tools/shot/shot-jobs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -131,4 +135,44 @@ test("per-job isolation is retained even when the batch otherwise reuses warm sc
   const job = normalizeJob({ track: "monza", isolated: true }, { ROOT });
   assert.equal(job.capture.isolated, true);
   assert.equal(groupJobsByTrack([job, job]).length, 2);
+});
+
+test("batch jobs accept per-job weather and time of day", () => {
+  const j = normalizeJob({ track: "spa", frac: 0.2, tod: "dusk", weather: "wet", wx: undefined }, { ROOT });
+  assert.equal(j.tod, "dusk");
+  assert.equal(j.weather, "wet");
+  assert.throws(() => normalizeJob({ weather: "snow" }, { ROOT }), /weather/);
+  assert.throws(() => normalizeJob({ tod: "noon" }, { ROOT }), /time of day/);
+  assert.deepEqual(WEATHERS.includes("storm"), true);
+  assert.deepEqual(TODS.includes("night"), true);
+
+  const jobs = [
+    normalizeJob({ track: "monza", tod: "day", weather: "dry" }, { ROOT }),
+    normalizeJob({ track: "monza", tod: "day", weather: "rain" }, { ROOT }),
+  ];
+  assert.equal(groupJobsByTrack(jobs).length, 2);
+
+  const plan = parseShotArgv(["monaco", "0.1", "--weather", "fog", "--tod", "night"], ROOT);
+  assert.equal(plan.jobs[0].weather, "fog");
+  assert.equal(plan.jobs[0].tod, "night");
+  assert.equal(plan.presentMs, plan.waitMs);
+  const longPresent = parseShotArgv(["monza", "0.1", "--present-timeout", "90"], ROOT);
+  assert.equal(longPresent.presentMs, 90000);
+  assert.equal(longPresent.captureRetries, 2);
+  assert.match(SHOT_USAGE, /llvmpipe/);
+});
+
+test("isRetryableCaptureError classifies blank and present timeouts", () => {
+  assert.equal(isRetryableCaptureError(new Error("wrote x.png but it is blank (pixel spread 0.00)")), true);
+  assert.equal(isRetryableCaptureError(new Error("probe: capture readiness timed out after 8000ms")), true);
+  assert.equal(isRetryableCaptureError(new Error("unknown team")), false);
+});
+
+test("apex-eval joins multi-token expressions on the --vm route", () => {
+  const r = spawnSync(process.execPath, [
+    "tools/shot/apex-eval.mjs", "monza", "(a.go(),", "a.info().track)", "--vm",
+  ], { cwd: ROOT, encoding: "utf8", timeout: 120000 });
+  assert.equal(r.status, 0, r.stderr || r.stdout);
+  const val = JSON.parse(r.stdout);
+  assert.equal(val, "monza");
 });
