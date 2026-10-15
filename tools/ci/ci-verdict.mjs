@@ -77,8 +77,9 @@ export function verdict(needs, opts = {}) {
   }
   // Skipped-only is not green either: when every needed job was skipped (a
   // workflow whose gates all hung off one input) nothing was actually checked.
-  // (A named core set is deliberately NOT required: a smoke_only dispatch runs
-  // only `smoke`, a fast-tier run skips `guards`/`unit-plan` by design.)
+  // (A named core set is deliberately NOT required: a train that reuses a
+  // fast tier (`fast_tier_run`) skips `guards`/`unit-plan` by design, and
+  // `poke-train` is not a row at all — ci.yml leaves it out of CI's needs.)
   if (bad.length === 0 && passed.length === 0) {
     bad.push("no needed job succeeded — every result was skipped or advisory, so nothing was verified");
   }
