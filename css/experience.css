@@ -91,7 +91,7 @@
   body.photo-studio-open #overlay > :not(#title-car) { visibility: hidden; }
   /* #title-car is the fallback until the live subject paints. Once it has,
      the line art laid a white haze over the garage the studio frames (#1895). */
-  body.photo-studio-open #overlay[data-home-ready="1"] #title-car { visibility: hidden; }
+  body.photo-studio-open #overlay[data-home-ready="1"] #title-car { display: none; }
   body.photo-studio-open #overlay[data-home-scene] { background: transparent; pointer-events: none; }
   body.photo-studio-open #overlay[data-home-scene]::before { content: none; }
   /* A wide scene owns the left half; menu surfaces retain their own solid ink.
