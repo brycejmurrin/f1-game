@@ -68,4 +68,6 @@ test(".github/labels.json carries the backlog labels AGENTS.md §Backlog names, 
   const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/fleet.yml"), "utf8");
   assert.match(wf, /node tools\/ci\/fleet-board\.mjs --apply/);
   assert.doesNotMatch(wf, /^\s+pull_request:/m, "no pull_request trigger: it would join every PR's ci-watch verdict");
+  assert.doesNotMatch(wf, /^\s+push:/m, "no push trigger: a claims-board push runs the board's own tree, which has no workflow — who-is-on-it dispatches instead");
+  assert.match(wf, /^\s+workflow_dispatch:/m);
 });
