@@ -1,146 +1,117 @@
 # Nürburgring GP-Strecke — circuit survey (2026-10-14)
 
 **Scope:** Modern **Grand-Prix-Strecke** (`id: nurburgring`) only — not the Nordschleife.  
-**Evidence:** Headless TLX captures (`node tools/shot/shot.mjs --batch scratch/nurburgring-survey-day.json`), node VM audits (`audit-circuit.cjs`, `float-audit`, `clip-audit`, `ground-audit`).  
-**Shot storage:** `artifacts/shots/tracks/nurburgring/` (33 JPEGs force-added on branch (`git add -f`)).
+**Evidence:** Headless TLX captures (`node tools/shot/shot.mjs --batch scratch/nurburgring-survey-final.json --jpeg --present-timeout 90 --capture-retries 4 --wait 120`), node VM audits (`audit-circuit.cjs`).  
+**Shot storage:** `artifacts/shots/tracks/nurburgring/` — **35 JPEGs** (`git add -f`, ≤1280px, q≈80, &lt;300 KB each).
 
 ## Code map
 
 | Layer | Path | Role |
 |--------|------|------|
-| Circuit def | `js/circuits/nurburgring.js` | OSM centreline (`path.len` 5141 m), `startFrac` 0.02, `theme: green`, SRTM elevation, `hwZones` / `bankZones`, `dressingExclusions`, `furniture` (`lamp: "none"`), palette |
-| Scenery | `js/circuits/scenery/nurburgring.js` | `TrackScenery.nurburgring` — `forestEdge` belts, landmarks, Dunlop `overheadSpan`, Burg Nürburg, pit/Arena/Dunlop/Schumacher/Veedol/Coca-Cola kits |
+| Circuit def | `js/circuits/nurburgring.js` | OSM centreline, SRTM elevation, `furniture` (`lamp: "none"`), palette |
+| Scenery | `js/circuits/scenery/nurburgring.js` | `forestEdge`, landmarks, Dunlop bridge, Burg, pit/Arena kits |
 | Brief | `docs/tracks/nurburgring.md` | Visual design reference |
-| Landmarks | `tests/data/landmarks/nurburgring.json` | `nurburgring-burg-nurburg`, `nurburgring-coca-cola-kurve`, `nurburgring-race-control` |
+| Landmarks | `tests/data/landmarks/nurburgring.json` | Burg, Coca-Cola Kurve, race-control |
 
-Sectors (racing lap, curated splits `sectors: [0.346, 0.667]`): **S1** start → ~0.35, **S2** ~0.35 → ~0.67, **S3** ~0.67 → finish.
+## Capture plan (35 frames)
 
-## Theme and models
+| Bucket | Count |
+|--------|------:|
+| Sector anchors (day · dry) | 5 |
+| Hero weather + TOD (5 landmarks) | 30 |
 
-Muted Eifel green palette, heavy fog density, dark spruce (`fir`). Hero pieces: Mercedes-Arena bowl, Dunlop bridge + yellow fascia, Dunlop-Kehre open scaffold tribune, race-control drum (pit-offset `required`), ring°boulevard halls, Burg Nürburg on NW cone. Schumacher-S has gravel + `indexSolid` only (scaffold feet hit fold on SRTM mesh).
-
-## Capture plan (33 frames)
-
-| Bucket | Count | Notes |
-|--------|------:|-------|
-| Sector coverage, day dry | 22 | Every sector + landmarks |
-| Time-of-day variants (dry) | 11 | 5 key views × dusk/night/dawn subsets |
-| Weather variants | 0 | **Deferred** — needs shared `shot.mjs` batch `weather` + `artifacts/shots/tracks/**` gitignore exception |
-
-**Planned weather follow-up (4–6 views):** Mercedes-Arena, Dunlop bridge, Dunlop-Kehre, pit complex, Burg — `dry`, `overcast`, `wet`, `fog`, `rain` at `day` (and `night` for pits if lamps added later).
-
+Weather on heroes: `wet`, `rain`, `overcast`, `fog`, `storm` (subset per view). TOD: `dawn`, `day`, `dusk`, `night` on dry.
 
 ## Screenshot panels
 
-Committed JPEGs (1280px, q≈80) under `artifacts/shots/tracks/nurburgring/` — paths relative to this file.
+Paths relative to this file (`../../../artifacts/shots/tracks/nurburgring/`).
 
-### Sector 1 — day dry
-
-| | | |
-|:---:|:---:|:---:|
-| ![s1 start finish · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-start-finish-day-dry.jpg) | ![s1 pit straight · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-pit-straight-day-dry.jpg) | ![s1 haug haken · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-haug-haken-day-dry.jpg) |
-| s1 start finish; dry; day | s1 pit straight; dry; day | s1 haug haken; dry; day |
-| ![s1 mercedes arena · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-mercedes-arena-day-dry.jpg) | ![s1 arena bowl · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-arena-bowl-day-dry.jpg) | ![s1 dunlop bridge · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-dunlop-bridge-day-dry.jpg) |
-| s1 mercedes arena; dry; day | s1 arena bowl; dry; day | s1 dunlop bridge; dry; day |
-| ![s1 arena exit · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-arena-exit-day-dry.jpg) | | |
-| s1 arena exit; dry; day | | |
-
-### Sector 2 — day dry
+### Sector anchors (day · dry)
 
 | | | |
 |:---:|:---:|:---:|
-| ![s2 infield hairpin · dry · day](../../../artifacts/shots/tracks/nurburgring/s2-infield-hairpin-day-dry.jpg) | ![s2 forest loop · dry · day](../../../artifacts/shots/tracks/nurburgring/s2-forest-loop-day-dry.jpg) | ![s2 ga banks · dry · day](../../../artifacts/shots/tracks/nurburgring/s2-ga-banks-day-dry.jpg) |
-| s2 infield hairpin; dry; day | s2 forest loop; dry; day | s2 ga banks; dry; day |
-| ![s2 forest camp · dry · day](../../../artifacts/shots/tracks/nurburgring/s2-forest-camp-day-dry.jpg) | ![s2 bit kurve · dry · day](../../../artifacts/shots/tracks/nurburgring/s2-bit-kurve-day-dry.jpg) | ![s2 mid forest · dry · day](../../../artifacts/shots/tracks/nurburgring/s2-mid-forest-day-dry.jpg) |
-| s2 forest camp; dry; day | s2 bit kurve; dry; day | s2 mid forest; dry; day |
-| ![s2 dunlop kehre · dry · day](../../../artifacts/shots/tracks/nurburgring/s2-dunlop-kehre-day-dry.jpg) | | |
-| s2 dunlop kehre; dry; day | | |
+| ![s1 haug haken · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-haug-haken-day-dry.jpg) | ![s2 forest loop · dry · day](../../../artifacts/shots/tracks/nurburgring/s2-forest-loop-day-dry.jpg) | ![s3 schumacher s · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-schumacher-s-day-dry.jpg) |
+| s1 haug haken; dry; day | s2 forest loop; dry; day | s3 schumacher s; dry; day |
+| ![s3 veedol · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-veedol-day-dry.jpg) | ![s3 coca cola · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-coca-cola-day-dry.jpg) | |
+| s3 veedol; dry; day | s3 coca cola; dry; day | |
 
-### Sector 3 + landmark — day dry
+### Mercedes-Arena hero
 
 | | | |
 |:---:|:---:|:---:|
-| ![s3 approach schumacher · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-approach-schumacher-day-dry.jpg) | ![s3 schumacher s · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-schumacher-s-day-dry.jpg) | ![s3 back straight · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-back-straight-day-dry.jpg) |
-| s3 approach schumacher; dry; day | s3 schumacher s; dry; day | s3 back straight; dry; day |
-| ![s3 veedol · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-veedol-day-dry.jpg) | ![s3 coca cola · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-coca-cola-day-dry.jpg) | ![s3 boulevard · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-boulevard-day-dry.jpg) |
-| s3 veedol; dry; day | s3 coca cola; dry; day | s3 boulevard; dry; day |
-| ![s3 pit complex · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-pit-complex-day-dry.jpg) | ![landmark burg nurburg · dry · day](../../../artifacts/shots/tracks/nurburgring/landmark-burg-nurburg-day-dry.jpg) | |
-| s3 pit complex; dry; day | landmark burg nurburg; dry; day | |
+| ![mercedes arena · dry · day](../../../artifacts/shots/tracks/nurburgring/hero-mercedes-arena-day-dry.jpg) | ![mercedes arena · dry · dusk](../../../artifacts/shots/tracks/nurburgring/hero-mercedes-arena-dusk-dry.jpg) | ![mercedes arena · dry · night](../../../artifacts/shots/tracks/nurburgring/hero-mercedes-arena-night-dry.jpg) |
+| mercedes arena; dry; day | mercedes arena; dry; dusk | mercedes arena; dry; night |
+| ![mercedes arena · dry · dawn](../../../artifacts/shots/tracks/nurburgring/hero-mercedes-arena-dawn-dry.jpg) | ![mercedes arena · wet · day](../../../artifacts/shots/tracks/nurburgring/hero-mercedes-arena-day-wet.jpg) | ![mercedes arena · overcast · day](../../../artifacts/shots/tracks/nurburgring/hero-mercedes-arena-day-overcast.jpg) |
+| mercedes arena; dry; dawn | mercedes arena; wet; day | mercedes arena; overcast; day |
+| ![mercedes arena · fog · day](../../../artifacts/shots/tracks/nurburgring/hero-mercedes-arena-day-fog.jpg) | | |
+| mercedes arena; fog; day | | |
 
-### Mercedes-Arena — time of day (dry)
-
-| | | |
-|:---:|:---:|:---:|
-| ![s1 mercedes arena · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-mercedes-arena-day-dry.jpg) | ![s1 mercedes arena · dry · dusk](../../../artifacts/shots/tracks/nurburgring/s1-mercedes-arena-dusk-dry.jpg) | ![s1 mercedes arena · dry · night](../../../artifacts/shots/tracks/nurburgring/s1-mercedes-arena-night-dry.jpg) |
-| s1 mercedes arena; dry; day | s1 mercedes arena; dry; dusk | s1 mercedes arena; dry; night |
-| ![s1 mercedes arena · dry · dawn](../../../artifacts/shots/tracks/nurburgring/s1-mercedes-arena-dawn-dry.jpg) | | |
-| s1 mercedes arena; dry; dawn | | |
-
-### Dunlop bridge — time of day (dry)
+### Dunlop bridge hero
 
 | | | |
 |:---:|:---:|:---:|
-| ![s1 dunlop bridge · dry · day](../../../artifacts/shots/tracks/nurburgring/s1-dunlop-bridge-day-dry.jpg) | ![s1 dunlop bridge · dry · dusk](../../../artifacts/shots/tracks/nurburgring/s1-dunlop-bridge-dusk-dry.jpg) | ![s1 dunlop bridge · dry · night](../../../artifacts/shots/tracks/nurburgring/s1-dunlop-bridge-night-dry.jpg) |
-| s1 dunlop bridge; dry; day | s1 dunlop bridge; dry; dusk | s1 dunlop bridge; dry; night |
+| ![dunlop bridge · dry · day](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-day-dry.jpg) | ![dunlop bridge · dry · dusk](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-dusk-dry.jpg) | ![dunlop bridge · dry · night](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-night-dry.jpg) |
+| dunlop bridge; dry; day | dunlop bridge; dry; dusk | dunlop bridge; dry; night |
+| ![dunlop bridge · wet · day](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-day-wet.jpg) | ![dunlop bridge · rain · day](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-day-rain.jpg) | ![dunlop bridge · fog · day](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-day-fog.jpg) |
+| dunlop bridge; wet; day | dunlop bridge; rain; day | dunlop bridge; fog; day |
 
-### Dunlop-Kehre — time of day (dry)
-
-| | | |
-|:---:|:---:|:---:|
-| ![s2 dunlop kehre · dry · day](../../../artifacts/shots/tracks/nurburgring/s2-dunlop-kehre-day-dry.jpg) | ![s2 dunlop kehre · dry · dusk](../../../artifacts/shots/tracks/nurburgring/s2-dunlop-kehre-dusk-dry.jpg) | ![s2 dunlop kehre · dry · night](../../../artifacts/shots/tracks/nurburgring/s2-dunlop-kehre-night-dry.jpg) |
-| s2 dunlop kehre; dry; day | s2 dunlop kehre; dry; dusk | s2 dunlop kehre; dry; night |
-
-### Pit complex — time of day (dry)
+### Dunlop-Kehre hero
 
 | | | |
 |:---:|:---:|:---:|
-| ![s3 pit complex · dry · day](../../../artifacts/shots/tracks/nurburgring/s3-pit-complex-day-dry.jpg) | ![s3 pit complex · dry · dusk](../../../artifacts/shots/tracks/nurburgring/s3-pit-complex-dusk-dry.jpg) | ![s3 pit complex · dry · night](../../../artifacts/shots/tracks/nurburgring/s3-pit-complex-night-dry.jpg) |
-| s3 pit complex; dry; day | s3 pit complex; dry; dusk | s3 pit complex; dry; night |
+| ![dunlop kehre · dry · day](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-day-dry.jpg) | ![dunlop kehre · dry · dusk](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-dusk-dry.jpg) | ![dunlop kehre · dry · night](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-night-dry.jpg) |
+| dunlop kehre; dry; day | dunlop kehre; dry; dusk | dunlop kehre; dry; night |
+| ![dunlop kehre · wet · day](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-day-wet.jpg) | ![dunlop kehre · storm · day](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-day-storm.jpg) | ![dunlop kehre · overcast · day](../../../artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-day-overcast.jpg) |
+| dunlop kehre; wet; day | dunlop kehre; storm; day | dunlop kehre; overcast; day |
 
-### Burg Nürburg — time of day (dry)
+### Pit complex hero
 
 | | | |
 |:---:|:---:|:---:|
-| ![landmark burg nurburg · dry · day](../../../artifacts/shots/tracks/nurburgring/landmark-burg-nurburg-day-dry.jpg) | ![landmark burg nurburg · dry · dusk](../../../artifacts/shots/tracks/nurburgring/landmark-burg-nurburg-dusk-dry.jpg) | ![landmark burg nurburg · dry · dawn](../../../artifacts/shots/tracks/nurburgring/landmark-burg-nurburg-dawn-dry.jpg) |
-| landmark burg nurburg; dry; day | landmark burg nurburg; dry; dusk | landmark burg nurburg; dry; dawn |
+| ![pit complex · dry · day](../../../artifacts/shots/tracks/nurburgring/hero-pit-complex-day-dry.jpg) | ![pit complex · dry · dusk](../../../artifacts/shots/tracks/nurburgring/hero-pit-complex-dusk-dry.jpg) | ![pit complex · dry · night](../../../artifacts/shots/tracks/nurburgring/hero-pit-complex-night-dry.jpg) |
+| pit complex; dry; day | pit complex; dry; dusk | pit complex; dry; night |
+| ![pit complex · wet · day](../../../artifacts/shots/tracks/nurburgring/hero-pit-complex-day-wet.jpg) | ![pit complex · overcast · day](../../../artifacts/shots/tracks/nurburgring/hero-pit-complex-day-overcast.jpg) | ![pit complex · fog · day](../../../artifacts/shots/tracks/nurburgring/hero-pit-complex-day-fog.jpg) |
+| pit complex; wet; day | pit complex; overcast; day | pit complex; fog; day |
 
+### Burg Nürburg hero
 
-## Weather / lighting backlog (not captured yet)
+| | | |
+|:---:|:---:|:---:|
+| ![burg nurburg · dry · day](../../../artifacts/shots/tracks/nurburgring/hero-burg-nurburg-day-dry.jpg) | ![burg nurburg · dry · dusk](../../../artifacts/shots/tracks/nurburgring/hero-burg-nurburg-dusk-dry.jpg) | ![burg nurburg · dry · dawn](../../../artifacts/shots/tracks/nurburgring/hero-burg-nurburg-dawn-dry.jpg) |
+| burg nurburg; dry; day | burg nurburg; dry; dusk | burg nurburg; dry; dawn |
+| ![burg nurburg · fog · day](../../../artifacts/shots/tracks/nurburgring/hero-burg-nurburg-day-fog.jpg) | ![burg nurburg · overcast · day](../../../artifacts/shots/tracks/nurburgring/hero-burg-nurburg-day-overcast.jpg) | |
+| burg nurburg; fog; day | burg nurburg; overcast; day | |
 
-| Priority | View | Conditions to shoot | Issue to watch |
-|----------|------|---------------------|----------------|
-| P1 | Pit complex | day `overcast`, `wet`, `fog` | `furniture.lamp: "none"` — night/wet already dark; no flood masts |
-| P1 | Mercedes-Arena | day `overcast`, `rain` | Fog preset vs `pal.fogDensity` — ensure Eifel haze, not generic grey |
-| P2 | Dunlop bridge | day `fog`, `wet` | Under-bridge soffit (fleet QA); yellow fascia legibility in rain |
-| P2 | Dunlop-Kehre | day `wet`, `rain` | Wet road + scaffold readability |
-| P3 | Burg wide | day `fog`, `overcast` | Distant terrain slab / horizon at extreme orbit |
-| P3 | Forest loop | day `fog` | Trench readability when fog multiplies `fogDensity` |
+## Weather / lighting notes (from frames)
 
----
+| Topic | Evidence |
+|-------|----------|
+| Night forest very dark | `hero-*-night-dry` — `furniture.lamp: none` |
+| Fog reads Eifel-hazy | `hero-*-day-fog` — matches `pal.fogDensity` |
+| Storm heavy rain at Kehre | `hero-dunlop-kehre-day-storm` — particles + wet road |
+| Pit night lacks flood masts | `hero-pit-complex-night-dry` — only building glow |
 
-## Node VM audit (this branch)
+## Node VM audit
 
 ```text
 verify-track: OK — surface folds 0
-float-audit: 0 floating
-clip-audit: 2 severe (baseline cap 2), 4 spots ≥0.5 m after scenery tweak
-ground-audit: buried 3 (baseline 3) @ motorhome paddock row
+clip-audit: 2 severe (baseline cap 2)
+ground-audit: buried 3 (baseline 3)
 ```
 
 ## Findings (ranked)
 
 | Rank | Topic | Evidence | Action |
 |------|--------|----------|--------|
-| 1 | Schumacher-S no open tribune | `s3-schumacher-s-day-dry` | Intentional (`indexSolid`); restore with per-foot `groundUnder` |
-| 2 | Night lighting sparse | `*-night-dry` panels | `lamp: "none"` in def — expect dark forest; race-control windows only |
-| 3 | Paddock motorhomes buried ≤0.45 m | ground-audit `:286` | Within baseline; gap increase worsened burial (measured) |
-| 4 | Clip replay vs scatter | clip-audit @0.383, 0.235 | Baseline cap; skipped `every(32)` on `s∈[0.23,0.26]` (−1 minor pair) |
-| 5 | Weather panels missing | — | Follow-up after shared shot tooling PR |
+| 1 | Schumacher-S no open tribune | `s3-schumacher-s-day-dry` | Intentional; SRTM fold skirt |
+| 2 | Night lighting sparse | `hero-*-night-dry` | `lamp: "none"` — no trackside floods |
+| 3 | Motorhomes buried ≤0.45 m | ground-audit | Within baseline |
+| 4 | Clip replay vs scatter | clip-audit | Scatter skip `s∈[0.23,0.26]` |
 
 ## Changes on this branch
 
-- `js/circuits/scenery/nurburgring.js`: skip broadleaf scatter `s ∈ [0.23, 0.26]` where `forestEdge` owns the treeline (clip-audit minor pair removed).
-- `docs/tracks/surveys/nurburgring.md`: this survey.
+- `js/circuits/scenery/nurburgring.js`: broadleaf scatter skip on guardrail corridor.
+- `docs/tracks/surveys/nurburgring.md` + `artifacts/shots/tracks/nurburgring/*.jpg` (35).
 
 ## Verification
 
