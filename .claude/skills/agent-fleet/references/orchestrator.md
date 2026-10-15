@@ -66,7 +66,10 @@ and `docs/notes/AGENT-CONFIG-RESEARCH-2026-10-15.md`.
   and `source_revision: claude/f1-game-project-26h3ng` (or the worker's branch)
   the child gets an empty directory tagged `config:no-git-repo`: relaunch it.
   An `add_repo` recovery is a read-only clone with no GitHub MCP access to the
-  repo, so it cannot open a PR.
+  repo, so it cannot open a PR. One repository per session: an Anthropic-hosted
+  session with several repositories loads no repository's `.claude/settings.json`
+  hooks, so every guard is off there
+  ([docs](https://code.claude.com/docs/en/claude-code-on-the-web)).
 - **Authority: one rule.** A worker acts on the user's words: quoted with a UTC
   time in its launch prompt (`USER GRANTS:`), or typed by the user into its own
   session. Both are the user's; only the second arrives as a human turn, and on

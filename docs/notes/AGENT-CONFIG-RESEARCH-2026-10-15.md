@@ -84,6 +84,48 @@ prompt that a rule can reach.
 | `subscribe_pr_activity` fails for sibling sessions | `orchestrator.md` fallback to `ci-watch.mjs --once` on timer wakes |
 | docs-integrity unit-suite floor red on the tip | fixed in #2146 |
 
+## Deep-research list (session_012QWw3Y9hxBBzFWkx2gr8JS, PR #2228): triage
+
+| # | item | outcome |
+|---|---|---|
+| 1–3, 10, 12 | hook output as JSON `additionalContext` / `systemMessage`, SubagentHandback check, SessionStart matcher, hook timeouts, one-process bash-guard | hooks session's files (PR #2227): forwarded |
+| 4–5 | narrow `Bash(git *)`, drop `Bash(awk *)`, exact `npm install`; `:*` mid-token never matches (`npm run test:*`, `gen:*`, `curl …:*`) | diff below. The auto classifier REJECTED the edit as `[Self-Modification]`, so it waits for Bryce (default-mode session, or his approval) |
+| 6 | ~45 inert allow lines; add `Workflow` | not done: removing `Read` etc. changes reads outside the working directory, and `Workflow` is gated by design (explicit opt-in) |
+| 7 | `omitClaudeMd: true` on self-contained reporters | done for ci-watcher, deploy-research, finding-verifier, prior-art-scout, bloat-auditor (docs: v2.1.271+, container 2.1.300); not ci-red-triage, whose return line and re-run rule come from AGENTS.md |
+| 8 | AGENTS.md ≤ 12 KB; move procedures into skills | follow-up issue: too large for this PR, and the 75-rule-line test already holds the size steady |
+| 9 | skill-listing budget; `disable-model-invocation` on ci-watch, phone-browser | open (above). Not done: merge-desk loads ci-watch through the Skill tool, and phone-browser is triggered by the user's prose |
+| 11 | `worker` inherits tools; `memory: project` grants Write | open: needs a live A/B of the worker agent |
+| 13 | multi-repo cloud sessions load no repo hooks | `orchestrator.md` "Pass the repo" |
+| 14 | ci.yml `labeled` trigger | CI-waste lane (#2179/#2184) |
+
+Measured against item 4's premise in this auto session: `sed -n 561,590p
+<file>` (a single command that `Bash(sed -n *)` names) went `classifier`, so in
+these cloud sessions narrow Bash rules do not skip review. The narrowing still
+matters for local auto sessions without server-side review.
+
+Proposed `permissions.allow` diff (not applied):
+
+```diff
+-      "Bash(git *)",
+-      "Bash(npm run test:*)",
++      "Bash(npm run test*)",
+-      "Bash(npm run gen:*)",
++      "Bash(npm run gen*)",
+-      "Bash(npm install *)",
++      "Bash(npm install)",
+-      "Bash(git stash *)",
++      "Bash(git stash list*)", "Bash(git stash show *)", "Bash(git stash push *)", "Bash(git stash pop*)",
++      "Bash(git ls-remote *)", "Bash(git rev-list *)", "Bash(git merge-tree *)", "Bash(git cat-file *)",
+-      "Bash(awk *)",
+-      "Bash(curl http://127.0.0.1:*)",
+-      "Bash(curl http://localhost:*)",
++      "Bash(curl http://127.0.0.1:3*)",
++      "Bash(curl http://localhost:3*)",
+```
+
+The `:3*` form keeps the host fixed. A bare `127.0.0.1*` would also match
+`127.0.0.1.attacker.example`.
+
 ## Open, not changed here
 
 - Skill-listing overflow on 200 k-context models: measure with `/doctor` in
