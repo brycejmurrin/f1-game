@@ -1,14 +1,12 @@
 # Okayama — circuit survey (2026-10-14)
 
-Pacific GP / TI Circuit Aida. **3.70 km**, 11 turns, **green** day theme, `baseHW` 7
-(narrowest lap in roster). Clockwise; **+1 = infield** (pits, paddock, club).
+Pacific GP / TI Circuit Aida. **3.70 km**, 11 turns, **green** theme, `baseHW` 7.
+Clockwise; **+1 = infield**.
 
-**Evidence:** `node tools/track/verify-track.cjs okayama`, `audit-circuit.cjs okayama`,
-`node tools/shot/agent.mjs okayama survey`. GLX captures: `shot.mjs --backend webgl2`
-(`APEX_GL=llvmpipe`).
-
-**Shots:** committed after rebase onto shared survey tooling PR (`artifacts/shots/tracks/okayama/`).
-This pass has **14 day/dry sector frames**; **weather/lighting matrix deferred** (see below).
+**Evidence:** `verify-track`, `audit-circuit`, agent `survey`. Captures: GLX
+`shot.mjs --backend webgl2` (`APEX_GL=llvmpipe`). **33** committed JPEGs in
+`artifacts/shots/tracks/okayama/` (q≈80, ≤1280 px wide). Weather variants on
+anchors still **dry** only until shared `weather()` batch lands.
 
 ## Code map
 
@@ -19,97 +17,63 @@ This pass has **14 day/dry sector frames**; **weather/lighting matrix deferred**
 | Brief | `docs/tracks/okayama.md` |
 | Landmarks | `tests/data/landmarks/okayama.json` |
 
-## Theme and models
-
-Humid green enclosure, pale clay banks, low club buildings. Required: control tower,
-Dunlop `overheadSpan`, Williams `okayama-paddock-block`. Pit garage `modelGroup` is
-**superseded** by engine pit complex (expected `modelsSuppressed`).
-
 ## Sector 1 — start/finish (s &lt; 0.371)
-
-Panel filenames (under `artifacts/shots/tracks/okayama/` after shared tooling PR commits them):
 
 | | | |
 |:---:|:---:|:---:|
-| `00-track-picker-still.webp` | `s1-pit-chase-day-dry.png` | `s1-pit-orbit-day-dry.png` |
-| Track select still | Main straight chase | Pit complex orbit (post stand fix) |
-| `s1-dunlop-eye-day-dry.png` | — | — |
-| Under Dunlop bridge | | |
+| ![Track select](../../../artifacts/shots/tracks/okayama/00-track-picker-still.jpg) | ![Pit chase day](../../../artifacts/shots/tracks/okayama/s1-pit-chase__day-dry.jpg) | ![Pit orbit day](../../../artifacts/shots/tracks/okayama/s1-pit-orbit__day-dry.jpg) |
+| Track select · day · dry | Pit chase · day · dry | Pit orbit · day · dry |
+| ![Pit orbit dusk](../../../artifacts/shots/tracks/okayama/s1-pit-orbit__dusk-dry.jpg) | ![Pit orbit dawn](../../../artifacts/shots/tracks/okayama/s1-pit-orbit__dawn-dry.jpg) | ![Pit orbit night](../../../artifacts/shots/tracks/okayama/s1-pit-orbit__night-dry.jpg) |
+| Pit orbit · dusk · dry | Pit orbit · dawn · dry | Pit orbit · night · dry |
+| ![Pit chase dusk](../../../artifacts/shots/tracks/okayama/s1-pit-chase__dusk-dry.jpg) | ![Paddock orbit](../../../artifacts/shots/tracks/okayama/s1-paddock-orbit__day-dry.jpg) | ![Main stand](../../../artifacts/shots/tracks/okayama/s1-stand-ts__day-dry.jpg) |
+| Pit chase · dusk · dry | Paddock orbit · day · dry | Main stand trackside · day · dry |
+| ![Dunlop day](../../../artifacts/shots/tracks/okayama/s1-dunlop-eye__day-dry.jpg) | ![Dunlop dusk](../../../artifacts/shots/tracks/okayama/s1-dunlop-eye__dusk-dry.jpg) | |
+| Dunlop bridge eye · day · dry | Dunlop bridge eye · dusk · dry | |
 
-**Notes:** Main `grandstandEx` was **7.6 m over the racing line** at 10 m offset — fixed to **18 m**
-(`propsOverRoadCandidates` 2 → 0). Pit garages model suppressed; live pit mesh reads fine.
+**Notes:** Main grandstand pushed **10→18 m** (was 7.6 m props-over-road). Pit garage model suppressed by engine pit complex.
 
 ## Sector 2 — Attwood → hairpin (0.371 – 0.599)
 
 | | | |
 |:---:|:---:|:---:|
-| `s2-turn1-ts-day-dry.png` | `s2-williams-orbit-day-dry.png` | `s2-moss-ts-day-dry.png` |
-| Turn 1 trackside | Williams paddock orbit | Moss S spectator bank |
-| `s2-hairpin-ts-day-dry.png` | — | — |
-| Mid-lap hairpin | | |
+| ![Turn 1 day](../../../artifacts/shots/tracks/okayama/s2-turn1-ts__day-dry.jpg) | ![Turn 1 dusk](../../../artifacts/shots/tracks/okayama/s2-turn1-ts__dusk-dry.jpg) | ![Attwood](../../../artifacts/shots/tracks/okayama/s2-attwood-park__day-dry.jpg) |
+| Turn 1 trackside · day · dry | Turn 1 trackside · dusk · dry | Attwood park · day · dry |
+| ![Williams day](../../../artifacts/shots/tracks/okayama/s2-williams-orbit__day-dry.jpg) | ![Williams dawn](../../../artifacts/shots/tracks/okayama/s2-williams-orbit__dawn-dry.jpg) | ![Williams dusk](../../../artifacts/shots/tracks/okayama/s2-williams-orbit__dusk-dry.jpg) |
+| Williams paddock orbit · day · dry | Williams paddock orbit · dawn · dry | Williams paddock orbit · dusk · dry |
+| ![Moss day](../../../artifacts/shots/tracks/okayama/s2-moss-ts__day-dry.jpg) | ![Moss dusk](../../../artifacts/shots/tracks/okayama/s2-moss-ts__dusk-dry.jpg) | ![Hairpin day](../../../artifacts/shots/tracks/okayama/s2-hairpin-ts__day-dry.jpg) |
+| Moss S trackside · day · dry | Moss S trackside · dusk · dry | Hairpin trackside · day · dry |
+| ![Hairpin dusk](../../../artifacts/shots/tracks/okayama/s2-hairpin-ts__dusk-dry.jpg) | ![Hairpin night](../../../artifacts/shots/tracks/okayama/s2-hairpin-ts__night-dry.jpg) | |
+| Hairpin trackside · dusk · dry | Hairpin trackside · night · dry | |
 
-**Notes:** Trackside frames often include lattice `cameraTower` in foreground (by design).
-`ridge()` silent drops on tight fold — terraces use `spectatorHill` / `clayCut` instead.
+**Notes:** Trackside `cameraTower` often fills foreground. `lamp: "none"` — night panels show unlit foliage (no flood masts).
 
 ## Sector 3 — Revolver → last corner (s &gt; 0.599)
 
 | | | |
 |:---:|:---:|:---:|
-| `s3-revolver-park-day-dry.png` | `s3-climb-park-day-dry.png` | `s3-hobbs-ts-day-dry.png` |
-| Revolver | Back-section climb | Hobbs hairpin |
-| `s3-mike-park-day-dry.png` | `s3-last-ts-day-dry.png` | — |
-| Mike Knight descent | Last corner / pit entry | |
+| ![Revolver day](../../../artifacts/shots/tracks/okayama/s3-revolver-park__day-dry.jpg) | ![Revolver dusk](../../../artifacts/shots/tracks/okayama/s3-revolver-park__dusk-dry.jpg) | ![Climb day](../../../artifacts/shots/tracks/okayama/s3-climb-park__day-dry.jpg) |
+| Revolver chase · day · dry | Revolver chase · dusk · dry | Back climb chase · day · dry |
+| ![Climb dusk](../../../artifacts/shots/tracks/okayama/s3-climb-park__dusk-dry.jpg) | ![Hobbs day](../../../artifacts/shots/tracks/okayama/s3-hobbs-ts__day-dry.jpg) | ![Hobbs dusk](../../../artifacts/shots/tracks/okayama/s3-hobbs-ts__dusk-dry.jpg) |
+| Back climb chase · dusk · dry | Hobbs trackside · day · dry | Hobbs trackside · dusk · dry |
+| ![Hobbs night](../../../artifacts/shots/tracks/okayama/s3-hobbs-ts__night-dry.jpg) | ![Mike day](../../../artifacts/shots/tracks/okayama/s3-mike-park__day-dry.jpg) | ![Mike night](../../../artifacts/shots/tracks/okayama/s3-mike-park__night-dry.jpg) |
+| Hobbs trackside · night · dry | Mike Knight chase · day · dry | Mike Knight chase · night · dry |
+| ![Last day](../../../artifacts/shots/tracks/okayama/s3-last-ts__day-dry.jpg) | ![Last dusk](../../../artifacts/shots/tracks/okayama/s3-last-ts__dusk-dry.jpg) | |
+| Last corner trackside · day · dry | Last corner trackside · dusk · dry | |
 
-**Notes:** Hobbs stand overlap **0.83 m** — fixed (dist 20 → **22 m**). Agent survey: ground
-cliff @ frac **0.75** (terrain step on descent; no terrain-over-road).
+**Notes:** Hobbs stand **20→22 m** (0.83 m overlap fixed). Ground cliff @ frac 0.75 on descent (terrain step).
 
-## Weather and lighting (planned — blocked on shared tooling)
+## Weather backlog (not yet captured)
 
-Target **30–36** total frames: **14 day/dry** (above) + **4–6 anchor views** × **6** conditions.
+Rain, wet, overcast, fog need shared `__apex.weather()` batch. Watch: wet clay z-fight, fog vs green `fogDensity`, rain particles in tree walls.
 
-Anchors: pit orbit, hairpin, Williams paddock, Hobbs, Dunlop eye, main-stand trackside.
-
-| Condition | `tod` | `weather()` |
-|-----------|-------|-------------|
-| Midday dry | `day` | `dry` |
-| Golden hour | `dusk` | `dry` |
-| Dawn | `dawn` | `dry` |
-| Night | `night` | `dry` |
-| Overcast | `day` | `overcast` |
-| Rain | `day` | `rain` |
-| Wet track | `day` | `wet` |
-| Fog | `day` | `fog` |
-| Night wet | `night` | `wet` |
-
-Okayama has full `okayama|tod|wx` presets in `js/lighting/presets.js` (incl. night despite
-`night: false` on def). **`lamp: "none"`** on def — expect **no floodlight masts** at night;
-watch for flat/unlit foliage and rain particle density on enclosed tree walls.
-
-**Watch list when weather batch lands:** z-fight on wet clay banks; fog vs `fogDensity` on
-green theme; night lamp cap on a circuit with no authored lamps; Dunlop bridge soffit flicker
-(fleet overhead QA — okayama span is single-deck).
-
-## Audits (2026-10-14)
+## Audits
 
 | Check | Result |
 |--------|--------|
-| verify-track | OK — min radius 11.99 m, 0 surface folds |
-| float / clip | 0 / 0 severe |
-| coplanar | 3 spots (baseline) — distant crowdBank × grandstand |
-| ground | 1 buried @ shared `city.js` detail (0.15 m, within baseline) |
-| props tris | ~332k |
-
-## Ranked backlog
-
-| Pri | Item | Status |
-|-----|------|--------|
-| P0 | Grandstand road overlap S/F + Hobbs | **Fixed** |
-| P1 | Weather/lighting panel grid (30–36 frames) | **Blocked** — rebase shared shot tooling PR |
-| P2 | `startFrac` vs real S/F | Open |
-| P3 | Night lighting without `lamp` furniture | Open (needs lighting pass or accept dark) |
-| P4 | ENKEI bridge when frac confirmed | Open |
+| verify-track | OK — min radius 11.99 m, 0 folds |
+| audit-circuit | OK — float 0, clip 0 |
 
 ## Fixes in branch
 
-- `grandstandEx(0.015, -1, 18, …)` — main stand off racing line.
+- `grandstandEx(0.015, -1, 18, …)` — main stand clearance.
 - `grandstandEx(0.6322, -1, 22, …)` — Hobbs stand clearance.
