@@ -257,12 +257,23 @@ const TrackGeom = (function () {
     const h2 = (a, b) => { const x = __M.sin(a * 12.9898 + b * 78.233 + seed * 0.137) * 43758.5453; return x - __M.floor(x); };
     const ridgeOff = [];
     for (let i = 0; i < seg; i++) ridgeOff.push(h2(i, 7) - 0.5);            // shared down each ridge
-    const rings = [[0, 1], [0.38, 0.64], [0.70, 0.34]];                    // [heightFrac, radiusFrac]
+    // opts.profile (default "cone" = the original 3 rings, byte-identical): "massif" is a 5-ring
+    // convex-then-concave shoulder (broad base, steep flanks, blunt crest) that reads as a hill, not
+    // a cone. opts.stretch (default 1) elongates along `fwd` (ridge lines); opts.crest (0..1, default 0)
+    // blunts the summit by lifting the last ring's radius.
+    const PROFILES = {
+      cone: [[0, 1], [0.38, 0.64], [0.70, 0.34]],
+      massif: [[0, 1], [0.16, 0.86], [0.38, 0.68], [0.62, 0.46], [0.82, 0.27]]
+    };
+    const rings = PROFILES[opts.profile] || PROFILES.cone;                 // [heightFrac, radiusFrac]
+    const stretch = opts.stretch != null && opts.stretch > 0 ? opts.stretch : 1;
+    const crest = opts.crest != null ? Math.max(0, Math.min(1, opts.crest)) : 0;
     const pt = (hf, rf, i) => {
       const a = i / seg * 6.2832;
       const rad = baseR * rf * (1 + ridgeOff[i] * rough * 1.4) * (1 + (h2(i, hf * 97 + 3) - 0.5) * rough * 0.7);
       const y = h * (hf + (h2(i, hf * 97 + 9) - 0.5) * rough * 0.12);
-      return [c[0] + rx[0] * __M.cos(a) * rad + fz[0] * __M.sin(a) * rad, c[1] + y, c[2] + rx[2] * __M.cos(a) * rad + fz[2] * __M.sin(a) * rad];
+      const rr = hf === rings[rings.length - 1][0] ? rad * (1 + crest * 0.8) : rad, co = __M.cos(a), si = __M.sin(a);   // float order kept: default output is byte-identical
+      return [c[0] + rx[0] * co * rr + fz[0] * si * rr * stretch, c[1] + y, c[2] + rx[2] * co * rr + fz[2] * si * rr * stretch];
     };
     const ref = [c[0], c[1] + h * 0.4, c[2]];
     const zoneAt = (fy, i) => {
