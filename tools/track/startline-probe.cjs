@@ -33,6 +33,7 @@
  *
  * Usage:
  *   node tools/track/startline-probe.cjs                 # every circuit, as authored
+ *   node tools/track/startline-probe.cjs monza spa       # just these
  *   node tools/track/startline-probe.cjs --calibrate     # score the hand measure first
  *   node tools/track/startline-probe.cjs --snap          # as authored vs. snapped
  *   node tools/track/startline-probe.cjs --frac monza=0  # probe explicit candidates
@@ -206,10 +207,17 @@ function firstApex(Tracks, track) {
 
 /* ---------- driver ---------- */
 
-function probe(candidates) {
+// `only` (optional array of circuit ids) narrows the sweep; an id that is not
+// in Tracks.LIST throws rather than probing nothing and printing 0/0.
+function probe(candidates, only) {
   const Tracks = buildContext();
+  if (only && only.length) {
+    const unknown = only.filter((id) => !Tracks.LIST.some((d) => d.id === id));
+    if (unknown.length) throw new Error(`unknown circuit ${unknown.join(" ")}`);
+  }
   const rows = [];
   for (const def of Tracks.LIST) {
+    if (only && only.length && !only.includes(def.id)) continue;
     const source = sourcePoints(def);
     const N = source.length;
     const authored = def.startFrac || 0;
@@ -259,27 +267,47 @@ function fmt(id, frac, m, spacing) {
 
 if (require.main === module) {
   const argv = process.argv.slice(2);
-  const asJson = argv.includes("--json");
-  const wantSnap = argv.includes("--snap");
-  const calibrate = argv.includes("--calibrate");
+  // --help and a typo'd flag answer before the 40-circuit build (#1708).
+  // Node >= 22.12 loads the shared ESM parser through require().
+  const { exitIfHelp, parseFlags } = require("../lib/cli-args.mjs");
+  exitIfHelp(argv, `usage: node tools/track/startline-probe.cjs [id ...] [--calibrate] [--snap] [--json]
+                                       [--frac <id>=<frac> ...]
+  Is each start/finish line on a straight (mean |k| over 120 m, max |k| within +-40 m),
+  does the 24-slot grid reach a corner, and which hand is the first apex?
+  Default: every circuit; positional ids narrow it. Exit 1 on an unexcused failure.`);
+  const F = parseFlags(argv, ["--json", "--snap", "--calibrate", "--frac"]);
+  const asJson = F.has("--json");
+  const wantSnap = F.has("--snap");
+  const calibrate = F.has("--calibrate");
 
+  // --frac takes every following `id=frac` token up to the next flag; the
+  // `--frac=id=frac` form carries one. Bare tokens anywhere else are circuit ids.
   let candidates = null;
-  const fracIdx = argv.indexOf("--frac");
-  if (fracIdx >= 0) {
-    candidates = {};
-    for (const a of argv.slice(fracIdx + 1)) {
-      if (a.startsWith("--")) break;
-      const [id, v] = a.split("=");
-      candidates[id] = Number(v);
-    }
+  const fracTok = new Set();
+  argv.forEach((a, i) => {
+    if (a.startsWith("--frac=")) fracTok.add(i);
+    if (a !== "--frac") return;
+    for (let j = i + 1; j < argv.length && !argv[j].startsWith("--"); j++) fracTok.add(j);
+  });
+  for (const i of fracTok) {
+    candidates = candidates || {};
+    const [id, v] = argv[i].replace(/^--frac=/, "").split("=");
+    candidates[id] = Number(v);
   }
+  const only = argv.filter((a, i) => !a.startsWith("-") && !fracTok.has(i));
   if (wantSnap) {
     const { snap, START } = require("./startline-snap.cjs");
     candidates = candidates || {};
     for (const r of snap(Object.keys(START))) if (!r.error) candidates[r.id] = r.startFrac;
   }
 
-  const rows = probe(candidates);
+  let rows;
+  try { rows = probe(candidates, only); }
+  catch (e) {
+    if (!/^unknown circuit/.test(e.message)) throw e;
+    console.error(`startline-probe: ${e.message}`);
+    process.exit(1);
+  }
   if (asJson) { console.log(JSON.stringify(rows, null, 2)); process.exit(0); }
 
   if (calibrate) {

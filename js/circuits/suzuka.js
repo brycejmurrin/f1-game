@@ -50,7 +50,7 @@
     // Elevation from SRTM bake in js/track/circuit-elevations.js
     // (`node tools/gen/bake-elevation.mjs suzuka`); authored cosine bumps leave
     // ~71% of the lap under 0.5% grade (stair-step undulation).
-    bridges: [{ s: 0.845, halfM: 160, rise: 10 }],
+    bridges: [{ s: 0.845, halfM: 230, rise: 9.3 }],   // was halfM 160 rise 10: ramp grade ~10.9 % -> ~6.9 % (survey 2026-10-15). Not 280: at ~5.2 % the ramp stops being the lap's steepest climb and player-dynamics-vm's gravity check (needs >~6 %) loses its margin. Gap to the lower road kept ~12.4 m
     hwZones: [   // s0/s1 are CONTROL-INDEX fractions (def.js applyHwZones); "racing arc" = where the narrowed nodes really sit
       { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // racing arc 0.919-0.965 Casio chicane
     ],
