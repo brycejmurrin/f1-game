@@ -21,6 +21,7 @@ const NetLobby = (function () {
     let pendingId = null;
     const MAX_GUESTS = 3;
     let role = null;
+    const hostEvictingIds = new Set();   // guest ids the host is removing (stay in room, fresh code)
     let pollTimer = null;
     // Pending-attempt fail tag: waitForOpen prefers this over failureMsg TURN copy.
     // 'expired' | 'no_relay' | 'ice' | null
@@ -46,7 +47,7 @@ const NetLobby = (function () {
       codeInputWrap: $("vs-code-input"), codeIn: $("vs-code-in"),
       raceSummary: $("vs-race-summary"), raceNote: $("vs-race-note"),
       editRace: $("vs-edit-race"), editCar: $("vs-edit-car"),
-      me: $("vs-me"), them: $("vs-them"),
+      roster: $("vs-roster"), playerCount: $("vs-player-count"),
       ready: $("vs-ready"), start: $("vs-start"), inviteMore: $("vs-invite-more"),
       invite: $("vs-invite"), inviteIn: $("vs-invite-in"),
       answer: $("vs-answer"), answerIn: $("vs-answer-in"),
@@ -213,6 +214,7 @@ const NetLobby = (function () {
         // teardown()'s sweep.
         const wasIn = transports.has(id) || sessions.has(id);
         const tGone = transports.get(id);
+        const wasHostEvict = !!(tGone && tGone._hostEvict) || hostEvictingIds.has(id);
         if (tGone) { try { tGone.close(); } catch (e) { /* already gone */ } }
         transports.delete(id);
         const s = sessions.get(id);
@@ -223,6 +225,7 @@ const NetLobby = (function () {
         // Never connected: waitForOpen() just said which failure it was; this ran inside its dropPending() and overwrote it.
         if (!wasIn) { Log.info("net", "pending transport closed " + id); return; }
         Log.info("net", "peer leave " + id);
+        if (hostEvictingIds.has(id)) hostEvictingIds.delete(id);
         session = [...sessions.values()][0] || null;
         // OCCUPANCY IS TRANSPORTS, NOT LOBBY SESSIONS. finishStart() hands the
         // sessions map to NetPlay and clears it, but leaves transports up for
@@ -243,6 +246,24 @@ const NetLobby = (function () {
           _peers.clear(); _ready.clear(); clashClear();
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
+          } else if (wasHostEvict && role === "host") {
+            // The host removed the last guest — not a natural leave. Stay in the
+            // waiting room, free the seat, and rotate the room code so the
+            // evicted player cannot walk back in on the old one.
+            selfReady = false;
+            _verify.delete(id);
+            if (G.setNetRoom) G.setNetRoom(true);
+            stopCodeWait();
+            dropPending();
+            codeReopen = null;
+            clearTimeout(codeReopenTimer); codeReopenTimer = null;
+            _answersSeen = null;
+            say("Player removed — invite someone new when you are ready.");
+            show("room");
+            rotateRoomAfterEvict();
+            renderRoom();
+            if (G.refreshQualiGate) G.refreshQualiGate();
+            return;
           } else {
             myRank = Infinity; restoreOwnRules();
             if (G.setNetRoom) G.setNetRoom(false);
@@ -256,7 +277,9 @@ const NetLobby = (function () {
             say(role === "guest" ? "The host left the room." : "Your friend left the room.", true);
           }
         } else {
-          say("A player left. The rest of you are still in.");
+          say(wasHostEvict && role === "host"
+            ? "Player removed. The rest of you are still in."
+            : "A player left. The rest of you are still in.");
           // Guests learned of each other only through this host's relay, so
           // only the host can tell them one is gone: their roster kept the
           // leaver forever — the quali gate waited on a lap that never came,
@@ -465,6 +488,28 @@ const NetLobby = (function () {
         if (!operationCurrent(gen)) return;
         codeHost({ code: again, quiet: true }).catch((e) => { Log.warn("net", "room reopen for the next guest failed:", e && e.message); });
       }, 250);
+    }
+
+    // After the host removes a guest, mint a NEW room code (never reuse the
+    // one the evicted player still has). Guests already seated stay connected.
+    function rotateRoomAfterEvict() {
+      if (role !== "host" || typeof NetRendezvous === "undefined") return;
+      if (NetRendezvous.usingPrivateRelay && NetRendezvous.usingPrivateRelay()) return;
+      stopCodeWait();
+      dropPending();
+      codeReopen = null;
+      clearTimeout(codeReopenTimer); codeReopenTimer = null;
+      _answersSeen = null;
+      const fresh = NetRendezvous.makeCode && NetRendezvous.makeCode();
+      if (!fresh) return;
+      const quiet = !!(els().roomStep && !els().roomStep.hidden);
+      codeHost({ code: fresh, quiet }).then((res) => {
+        if (!res || !res.ok) return;
+        if (quiet) {
+          paintHostCode(res.code);
+          say("New room code — removed players need this one to join.");
+        }
+      }).catch((e) => { Log.warn("net", "room rotate after remove failed:", e && e.message); });
     }
 
     function onConnected(id, t) {
@@ -1083,24 +1128,49 @@ const NetLobby = (function () {
       return el;
     }
 
-    function driverLine(profile, label, ready) {
+    const ROOM_SEATS = MAX_GUESTS + 1;
+
+    function rosterDriverName(profile) {
       const team = TEAM_OF(profile);
+      if (!team) return "Choosing…";
       const seat = profile ? (profile.driver || 0) : 0;
-      const d = team && team.drivers ? team.drivers[seat] : null;
-      const who = team ? `${team.short} · ${d ? (d.code || d.name) : "—"}` : "choosing a car…";
-      const full = team ? `${team.name}${d ? " · " + d.name : ""}` : "still choosing";
+      const d = team.drivers ? team.drivers[seat] : null;
+      return d ? (d.name || d.code || "—") : "—";
+    }
+
+    function rosterTeamShort(profile) {
+      const team = TEAM_OF(profile);
+      return team ? team.short : "—";
+    }
+
+    function rosterSeatRow(profile, ready, peerId) {
+      const team = TEAM_OF(profile);
+      const full = team
+        ? `${team.name}${profile && team.drivers
+          ? " · " + ((team.drivers[profile.driver || 0] && team.drivers[profile.driver || 0].name) || "")
+          : ""}`
+        : "Still choosing a car";
+      const li = document.createElement("li");
+      li.className = "vs-driver vs-roster-seat";
+      const dot = document.createElement("span");
+      dot.className = "vs-roster-dot" + (ready ? " on" : "");
+      dot.setAttribute("aria-label", ready ? "Ready" : "Not ready");
+      const who = span("vs-who", peerId == null ? "You" : rosterTeamShort(profile));
       const frag = document.createDocumentFragment();
-      frag.appendChild(span("vs-who", label));
+      frag.appendChild(dot);
+      frag.appendChild(who);
       if (team) {
         const swatch = span("vs-swatch", "");
         swatch.style.background = css(team.color);
         frag.appendChild(swatch);
       }
-      const car = span("vs-car", who);
+      const car = span("vs-car", rosterDriverName(profile));
       car.title = full;
       frag.appendChild(car);
-      frag.appendChild(span("vs-ready" + (ready ? " on" : ""), ready ? "READY" : "choosing"));
-      return frag;
+      li.appendChild(frag);
+      let row = peerId != null ? verifyRow(li, peerId) : li;
+      if (peerId != null) row = hostRemoveRow(row, peerId);
+      return row;
     }
 
     function replace(el, node) {
@@ -1144,30 +1214,22 @@ const NetLobby = (function () {
           : "The host chooses the circuit and conditions. If they leave, their rivals continue as AI.";
         e.raceNote.hidden = host;
       }
-      if (e.me) replace(e.me, driverLine(localProfile(), "You", selfReady));
-      // A row per other player. #vs-them is a LIST now, so this builds one
-      // .vs-driver per peer rather than overwriting a single fixed row — with
-      // one peer it renders exactly what it always did.
-      //
-      // Iterated over peerIds(), not _peers: somebody who has said READY but
-      // whose profile has not arrived is still in the room, and showing nothing
-      // for them is how you get a START that will not enable with no visible
-      // reason why. That ordering is not hypothetical — it is the bug the
-      // READY specs caught.
-      if (e.them) {
-        const ids = [...peerIds()];
-        const row = (inner) => {
-          const el = document.createElement("div");
-          el.className = "vs-driver";
-          el.appendChild(inner);
-          return el;
-        };
+      const ids = [...peerIds()];
+      const seated = 1 + ids.length;
+      if (e.playerCount) e.playerCount.textContent = seated + "/" + ROOM_SEATS;
+      if (e.roster) {
         const rows = document.createDocumentFragment();
-        if (ids.length) ids.forEach((k, i) => rows.appendChild(verifyRow(row(driverLine(
-              willYield(k) ? null : (_peers.get(k) || null),
-              ids.length > 1 ? "P" + (i + 2) : "Them", !!_ready.get(k))), k)));
-        else rows.appendChild(row(driverLine(null, "Them", false)));
-        replace(e.them, rows);
+        rows.appendChild(rosterSeatRow(localProfile(), selfReady, null));
+        // Iterated over peerIds(), not _peers: somebody who has said READY but
+        // whose profile has not arrived is still in the room, and showing nothing
+        // for them is how you get a START that will not enable with no visible
+        // reason why. That ordering is not hypothetical — it is the bug the
+        // READY specs caught.
+        ids.forEach((k) => rows.appendChild(rosterSeatRow(
+          willYield(k) ? null : (_peers.get(k) || null),
+          !!_ready.get(k),
+          k)));
+        replace(e.roster, rows);
       }
       if (e.inviteMore) {
         e.inviteMore.hidden = !host;
@@ -1184,6 +1246,19 @@ const NetLobby = (function () {
         e.start.disabled = !(selfReady && peersReady()) || customPicked();
         e.start.title = customPicked() ? CUSTOM_MSG : "";
       }
+    }
+
+    function hostRemoveRow(el, id) {
+      if (role !== "host") return el;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "vs-roster-remove";
+      b.dataset.rosterRemove = id;
+      b.textContent = "Remove";
+      b.setAttribute("aria-label", "Remove this player from the room");
+      b.addEventListener("click", () => removeGuest(id));
+      el.appendChild(b);
+      return el;
     }
 
     // The verification code on a DIRECT connection's row; the host also gets
@@ -1207,6 +1282,8 @@ const NetLobby = (function () {
     function removeGuest(id) {
       const t = role === "host" ? transports.get(id) : null;
       if (!t) return false;
+      hostEvictingIds.add(id);
+      t._hostEvict = true;
       Log.info("net", "host removed " + id);
       try { t.close(); } catch (e) { /* its close handler is the cleanup */ }
       return true;
