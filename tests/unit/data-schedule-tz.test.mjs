@@ -86,3 +86,14 @@ test("schedule venue lines do not stamp a native title (scroll leaves it hung)",
   sub.listeners.mouseleave[0]();
   assert.equal(sub.attrs.title, undefined, "leave clears the tip so scroll cannot hang it");
 });
+
+// #2190 (3): the Schedule node is reused for hours, so NEXT must say when it
+// moves on; hub.js drops a reused node whose `nextFlipAt` has passed.
+test("nextFlipAt: NEXT moves on at race start + 2 h (or the next UTC day for a date-only entry)", () => {
+  const at = Date.parse("2026-11-22T04:00:00Z");
+  const items = [{ date: "2026-11-08", time: "18:00:00Z" }, VEGAS, { date: "2026-12-06", time: "13:00:00Z" }];
+  assert.equal(S.nextFlipAt(items, at - 3600e3), at + 2 * 3600e3);
+  assert.equal(S.nextFlipAt(items, at + 2 * 3600e3), Date.parse("2026-12-06T15:00:00Z"));
+  assert.equal(S.nextFlipAt([{ date: "2026-11-22" }], Date.parse("2026-11-22T10:00:00Z")), Date.parse("2026-11-23T00:00:00Z"));
+  assert.equal(S.nextFlipAt(items, Date.parse("2027-01-01T00:00:00Z")), Infinity);
+});

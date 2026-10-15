@@ -974,7 +974,8 @@ test("launch unification: every session the player starts reaches raceIntro; the
   assert.doesNotMatch(read("js/ui/title-flow.js").match(/function openTimeTrial[\s\S]*?\n\}/)[0], /startRace|raceIntro/, "the title's TT / DAILY open the picker, they never start");
   // The Data Hub's JUMP IN opts in to the pre-race screen, and RealRace.launch runs the raw raceIntro (not the sheet variant: no sheet to hold).
   const tab = read("js/data/real-race-tab.js");
-  assert.match(tab.match(/function jumpIn[\s\S]*?\n    \}/)[0], /RealRace\.launch\(script, \{[^}]*intro: true \}\)/, "JUMP IN passes intro");
+  assert.match(tab.match(/function jumpIn[\s\S]*?\n    \}/)[0], /launchRace\(script, \{[^}]*intro: true \}\)/, "JUMP IN passes intro through launch recovery");
+  assert.match(tab, /RealRace\.launch\(script, options\)/, "launch recovery forwards the options");
   assert.match(real, /if \(opts && opts\.intro && G\.raceIntro\) \{\s*try \{ G\.raceIntro\(G\.startRace\); \}/, "launch runs the pre-race screen when asked");
   assert.match(game, /\n  raceIntro,   \/\/ the pre-race screen, for a launch that is not RACE!/, "the façade hands launch the raw raceIntro");
   // The drive-out is dropped only where the player's car is not leaving the garage, or nothing could show it.
@@ -991,8 +992,8 @@ test("the card over the scene: black bars and a light hint in every theme, an un
   const css = readCssSource("css/overlays.css");
   const bars = css.match(/#loading::before,\s*#loading::after\s*\{([^}]*)\}/)[1];
   assert.match(bars, /background:\s*#000/, "cinema bars — the LIGHT theme's --bg made them white");
-  const hint = css.match(/#loading\[data-phase="run"\] #ld-card::after\s*\{([^}]*)\}/)[1];
-  assert.match(hint, /color:\s*#fff/, "the hint sits on the 3D scene, not a themed plate");
+  assert.match(css, /#loading\[data-phase="run"\] #ld-card::after[\s\S]*?color:\s*#fff/, "the hint sits on the 3D scene, not a themed plate");
+  assert.match(read("css/a11y-loading.css"), /background:\s*rgba\(0,\s*0,\s*0/, "a dark plate holds contrast over bright flyby sky");
   assert.match(css.match(/\n#ld-map\s*\{([^}]*)\}/)[1], /object-fit:\s*contain/, "fitCanvas pins px width AND height; the 45% cap squashed the outline");
   assert.match(css, /@starting-style\s*\{\s*#loading\[data-phase\] #ld-card\s*\{[^}]*opacity:\s*0/, "a transition cannot start from display: none");
   assert.match(css, /:root\[data-motion="reduce"\] #loading::before,\s*:root\[data-motion="reduce"\] #loading::after\s*\{\s*content:\s*none;/);

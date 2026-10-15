@@ -21,10 +21,9 @@
 // still exists EXACTLY ONCE in its file, so retuning a constant without
 // updating this catalog fails fast.
 
-import { createServer } from "node:http";
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
-import { extname } from "node:path";
-import { launchChromium, sleep } from "../lib/harness.mjs";
+import { join } from "node:path";
+import { launchChromium, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
@@ -226,31 +225,28 @@ const FREEZE_FLICKER_FILE = "js/lighting/frame-lights.js";
 const FREEZE_FLICKER = ["const amp = hsh > 0.90 ? flick : flick * 0.2;", "const amp = 0.0;"];
 
 // ── Static server: serves ROOT, applying {file → [find,replace]} overrides ──
-function startServer(overrides) {
-  const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
-    ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml" };
-  const srv = createServer((req, res) => {
+// harness.startStaticServer owns the MIME table, path containment and no-store;
+// the route only claims the exact repo paths it rewrites.
+async function startServer(overrides) {
+  const route = (req, res, url) => {
+    const file = decodeURIComponent(url.pathname).slice(1);
+    const ov = overrides && overrides[file];
+    if (!ov && file !== FREEZE_FLICKER_FILE) return false;
     try {
-      let p = decodeURIComponent(req.url.split("?")[0]);
-      if (p === "/") p = "/index.html";
-      let body = readFileSync(ROOT + p);
-      const file = p.slice(1);
-      const ov = overrides && overrides[file];
-      if (ov || file === FREEZE_FLICKER_FILE) {
-        let text = body.toString();
-        if (ov) {
-          if (!text.includes(ov[0])) throw new Error(`knob find-string missing in ${p}`);
-          text = text.replace(ov[0], ov[1]);
-        }
-        if (file === FREEZE_FLICKER_FILE && text.includes(FREEZE_FLICKER[0]))
-          text = text.replace(FREEZE_FLICKER[0], FREEZE_FLICKER[1]);
-        body = Buffer.from(text);
+      let text = readFileSync(join(ROOT, file), "utf8");
+      if (ov) {
+        if (!text.includes(ov[0])) throw new Error(`knob find-string missing in /${file}`);
+        text = text.replace(ov[0], ov[1]);
       }
-      res.writeHead(200, { "content-type": MIME[extname(p)] || "application/octet-stream" });
-      res.end(body);
+      if (file === FREEZE_FLICKER_FILE && text.includes(FREEZE_FLICKER[0]))
+        text = text.replace(FREEZE_FLICKER[0], FREEZE_FLICKER[1]);
+      res.writeHead(200, { "content-type": "text/javascript" });
+      res.end(text);
     } catch (e) { res.writeHead(404); res.end(String(e.message || e)); }
-  });
-  return new Promise((resolve) => srv.listen(0, "127.0.0.1", () => resolve({ srv, port: srv.address().port })));
+    return true;
+  };
+  const srv = await startStaticServer(ROOT, { route });
+  return { srv, port: srv.port };
 }
 
 async function renderScene(browser, port, scene, outPath) {
