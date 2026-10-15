@@ -479,6 +479,7 @@ globalThis.document = { getElementById: () => null, addEventListener: () => {} }
 // Three teams so the guest's seat, the host's seat and a bystander's are all
 // distinct. driverId is seasonDriverId's format (js/core/store.js): "team:seat".
 globalThis.Teams = {
+  isReal: (team) => !!team && !team.custom && !team.legends,
   LIST: [
     { id: "alpha", name: "Alpha", drivers: [{ code: "AL1", name: "A One", num: 1 }, { code: "AL2", name: "A Two", num: 2 }] },
     { id: "bravo", name: "Bravo", drivers: [{ code: "BR1", name: "B One", num: 3 }, { code: "BR2", name: "B Two", num: 4 }] },
@@ -499,7 +500,7 @@ function lobbyG() {
   const G = {
     teamIdx: 0, driverIdx: 0,             // the local player holds alpha:0
     trackIdx: 0, raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "day",
-    raceQuali: true, raceGrid: "quali", difficulty: 1, raceChangeable: false, wxArcPlan: null,
+    raceQuali: true, raceGrid: "quali", difficulty: "normal", raceChangeable: false, wxArcPlan: null,
     caughtQuali: [], caughtQLive: [],
     onPeerQuali: (d) => { G.caughtQuali.push(d); },
     onPeerQualiLive: (d) => { G.caughtQLive.push(d); },
@@ -540,6 +541,10 @@ async function lobbyUp(role) {
   // delivers it — so every send is followed by a settle().
   const peerSays = (t, d) => { far.send("event", JSON.stringify({ t, d })); far.pump(performance.now()); };
   const settle = () => sleep(80);
+  if (role === "guest") {
+    peerSays("settings", { track: G.trackIdx, laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay, quali: G.raceQuali, difficulty: G.difficulty });
+    await settle();
+  }
   return { G, lobby, peerSays, settle };
 }
 
@@ -598,7 +603,7 @@ test("LOBBY phase: more than five HELLOs (or READYs) in a second are dropped, pe
   // host; every READY re-renders. Nothing legitimate needs more than a
   // handful a second, so past the fifth in a rolling second the rest are
   // ignored — and a second later the window is open again.
-  const { lobby, peerSays, settle } = await lobbyUp("guest");
+  const { lobby, peerSays, settle } = await lobbyUp("host");
   try {
     for (let i = 0; i < 9; i++) peerSays("hello", { team: "bravo", driver: i % 2, tag: i });
     await settle();
@@ -1484,4 +1489,16 @@ test("a hidden tab keeps pumping the session but publishes no pose; it resumes o
   } finally {
     if (had) Object.defineProperty(globalThis, "document", had); else delete globalThis.document;
   }
+});
+
+
+test("QUALI and QLIVE reject a rival driverId even with the sender's code", () => {
+  const { G, s } = started("host");
+  const code = G.cars[1].code;
+  s.deliver("quali", { driverId: "drv0", code, t: 61 });
+  s.deliver("qlive", { driverId: "drv0", code, t: 62 });
+  assert.deepEqual(G.caughtQuali, []);
+  assert.deepEqual(G.caughtQLive, []);
+  s.deliver("quali", { driverId: "drv1", code, t: 63 });
+  assert.equal(G.caughtQuali.length, 1);
 });

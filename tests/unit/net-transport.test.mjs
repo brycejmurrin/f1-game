@@ -324,7 +324,8 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
     const quali = JSON.stringify({ t: "quali", d: { driverId: "a", t: 71.2 } });
     const finLap = JSON.stringify({ t: "lap", d: { lap: 3, fin: 49.9 } });
     const settings = JSON.stringify({ t: "settings", d: { laps: 3 } });
-    for (const m of [quali, finLap, settings]) assert.equal(ep.send(fresh.EVENT, m), true, "critical " + JSON.parse(m).t + " queues");
+    const qgo = JSON.stringify({ t: "qgo", d: null }), qabort = JSON.stringify({ t: "qabort", d: null });
+    for (const m of [quali, finLap, settings, qgo, qabort]) assert.equal(ep.send(fresh.EVENT, m), true, "critical " + JSON.parse(m).t + " queues");
     assert.equal(event.sent.length, 0, "criticals wait for the buffer to drain");
 
     // Still backed up: another LAP must keep dropping (not jump the critical queue).
@@ -332,7 +333,7 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
 
     event.bufferedAmount = 0;
     event.onbufferedamountlow();
-    assert.deepEqual(event.sent, [go, start, result, bye, quali, finLap, settings],
+    assert.deepEqual(event.sent, [go, start, result, bye, quali, finLap, settings, qgo, qabort],
       "critical EVENTs must flush in send order once bufferedAmount drains");
   } finally {
     delete global.RTCPeerConnection;

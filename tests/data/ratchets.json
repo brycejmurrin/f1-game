@@ -25,7 +25,7 @@
       "lines": 7336
     },
     "js/net/lobby.js": {
-      "lines": 2194
+      "lines": 2260
     },
     "js/render/glx/glx.js": {
       "lines": 2980
@@ -84,7 +84,7 @@
     },
     "waitForTimeout": 85,
     "waitNoPolling": {
-      "ceiling": 54,
+      "ceiling": 44,
       "slack": 39
     },
     "zeroRefModules": {
