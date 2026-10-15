@@ -713,8 +713,9 @@ test("TLX zeros sunShaft when bloom is shed, matching GLX doBloom gate", () => {
 test("TLX wet analytic mirror and chrome MIRROR id 27 match GLX", () => {
   const lit = fs.readFileSync(path.join(ROOT, "js/render/glx/shaders/glsl-lit.js"), "utf8");
   const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
-  assert.match(lit, /wetSheen \* 0\.55/);
-  assert.match(tsl, /wetSheen\.mul\(0\.55\)/);
+  // The sheet floor is 0.55 at satin 0 (2026-10-15: mix(0.55, 0.20, satin) between active puddles — puddles.test.mjs).
+  assert.match(lit, /wetSheen \* mix\(0\.55, 0\.20, satin\)/);
+  assert.match(tsl, /wetSheen\.mul\(mix\(float\(0\.55\), float\(0\.20\), satin\)\)/);
   // The classification RANGE and every finish id in it must agree across the
   // backends, or a finish silently does nothing on two of the three renderers
   // and no other test would notice. Range grew to 31 with matte/brushed/pearl
