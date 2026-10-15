@@ -1,0 +1,8 @@
+[
+  {"track":"madrid","frac":0.78,"cam":"eye","tod":"night","weather":"dry","out":"artifacts/shots/tracks/madrid/wx-monumental-night-dry-eye.jpg"},
+  {"track":"madrid","frac":0.78,"cam":"eye","tod":"day","weather":"rain","out":"artifacts/shots/tracks/madrid/wx-monumental-day-rain-eye.jpg"},
+  {"track":"madrid","frac":0.00,"cam":"park","tod":"dusk","weather":"dry","out":"artifacts/shots/tracks/madrid/wx-sf-dusk-dry-park.jpg"},
+  {"track":"madrid","frac":0.00,"cam":"park","tod":"night","weather":"dry","out":"artifacts/shots/tracks/madrid/wx-sf-night-dry-park.jpg"},
+  {"track":"madrid","frac":0.085,"cam":"eye","tod":"day","weather":"fog","out":"artifacts/shots/tracks/madrid/wx-overpass-day-fog-eye.jpg"},
+  {"track":"madrid","frac":0.48,"cam":"park","tod":"day","weather":"wet","out":"artifacts/shots/tracks/madrid/wx-bunker-day-wet-park.jpg"}
+]

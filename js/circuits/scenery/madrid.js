@@ -908,7 +908,7 @@
         [0.26,  1, 95, STRAW_DARK],
         [0.34, -1, 105, [0.42, 0.50, 0.32]],
         [0.42,  1, 88, STRAW],
-        [0.55, -1, 95, STRAW_DARK],
+        [0.53, -1, 108, STRAW_DARK], // was s=0.55 — plaza cleared urban mansard (clip @0.55)
         [0.90,  1, 72, STONE],
       ]) {
         groundPatch(at(sf), side, gap, [28, 0.18, 42], col, {

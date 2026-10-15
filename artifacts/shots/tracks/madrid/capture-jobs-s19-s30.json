@@ -1,0 +1,14 @@
+[
+  {"track":"madrid","frac":0.04,"cam":"park","tod":"day","out":"artifacts/shots/tracks/madrid/s19-pit-lane-day-dry-park.png"},
+  {"track":"madrid","frac":0.07,"cam":"eye","tod":"day","out":"artifacts/shots/tracks/madrid/s20-t1-chicane-day-dry-eye.png"},
+  {"track":"madrid","frac":0.18,"cam":"orbit","tod":"day","out":"artifacts/shots/tracks/madrid/s21-avenue-day-dry-orbit.png"},
+  {"track":"madrid","frac":0.38,"cam":"orbit","tod":"day","out":"artifacts/shots/tracks/madrid/s22-urban-crest-day-dry-orbit.png"},
+  {"track":"madrid","frac":0.45,"cam":"park","tod":"day","out":"artifacts/shots/tracks/madrid/s23-bunker-crest-day-dry-park.png"},
+  {"track":"madrid","frac":0.52,"cam":"trackside","tod":"day","out":"artifacts/shots/tracks/madrid/s24-bunker-drop-day-dry-trackside.png"},
+  {"track":"madrid","frac":0.66,"cam":"orbit","tod":"day","out":"artifacts/shots/tracks/madrid/s25-s3-entry-day-dry-orbit.png"},
+  {"track":"madrid","frac":0.74,"cam":"orbit","el":16,"dist":42,"tod":"day","out":"artifacts/shots/tracks/madrid/s26-monumental-outside-day-dry-orbit.png"},
+  {"track":"madrid","frac":0.81,"cam":"park","tod":"day","out":"artifacts/shots/tracks/madrid/s27-monumental-mid-day-dry-park.png"},
+  {"track":"madrid","frac":0.88,"cam":"trackside","tod":"day","out":"artifacts/shots/tracks/madrid/s28-pelouse-bridge-day-dry-trackside.png"},
+  {"track":"madrid","frac":0.93,"cam":"orbit","tod":"day","out":"artifacts/shots/tracks/madrid/s29-valdebebas-day-dry-orbit.png"},
+  {"track":"madrid","frac":0.025,"cam":"orbit","az":40,"el":8,"dist":65,"tod":"day","out":"artifacts/shots/tracks/madrid/s30-barajas-horizon-day-dry-orbit.png"}
+]
