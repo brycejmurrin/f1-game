@@ -812,9 +812,12 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   assert.equal(decl(td, "#track-detail-legend", "font-size"), "var(--fs-2)");
   assert.equal(decl(td, /#track-detail-legend \[data-leg="sector"\]/, "color"), "var(--silver)");
   const menus = code("js/ui/select-screen.js");
-  assert.match(menus, /past S\/F/, "a DRS zone that wraps the line says so");
+  assert.match(menus, /function drsZoneRangeHtml/, "DRS wrap labels are one helper for detail + tests");
+  assert.match(menus, /crossing start\/finish/, "a zone past the line names S/F on the wrap");
   assert.match(menus, /z\.wrap \|\| z\.b > 1 \|\| z\.b < z\.a/,
     "wrap is the AeroZones flag, end past 1 lap, or a folded b < a");
+  assert.match(menus, /snapTrackToFilter\(\);\s*\n\s*updateTrackPreview\(\)/,
+    "filter snap refreshes the hero before the deferred chip rebuild");
   assert.ok(!/className = "track-group-head"/.test(menus),
     "filter chips name the view; no vertical CLASSICS/SEASON divider");
   assert.match(menus, /setAttribute\("data-leg", "sector"\)/, "grey S2 sector is named");
