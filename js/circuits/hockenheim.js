@@ -43,7 +43,7 @@
     ],
     bankZones: [
       { frac: 0.055, angleDeg: 3.0, widthM: 110 },   // Nordkurve
-      { turn: 4, angleDeg: 2.5, widthM: 90 },    // Ostkurve entry; re-seated frac 0.335 (was 533 m off any apex)
+      { turn: 4, angleDeg: 2.5, widthM: 90 },    // Ostkurve entry (T4); scenery furniture re-seated there too
       { frac: 0.880, angleDeg: 4.0, widthM: 120 },   // Sachskurve
     ],
 
@@ -56,7 +56,7 @@
     sectors: [0.318, 0.69],  // ~1/3 and ~2/3, each snapped to the nearest straight (2026-10-04) — not FIA-published splits
     turns: [0.0610, 0.1875, 0.1985, 0.2175, 0.4635, 0.5625, 0.6220, 0.6570, 0.7535, 0.7655, 0.8265, 0.8335, 0.8415, 0.8675, 0.8830, 0.9075, 0.9360],
     furniture: { tree: "fir",   fol: [0.11, 0.30, 0.15], lamp: "none" },  // Hardtwald pine corridor
-    kit: { marshal: "bunker",    rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
+    kit: { marshal: "bunker",    rail: "doubleArmco", fence: "panelled",  tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["concrete", "darkSteel", "crimson"],  // Motodrom concrete bowl, German-GP red accents
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
     // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.

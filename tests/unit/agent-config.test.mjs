@@ -661,12 +661,14 @@ test("skill descriptions: a char budget, every arrow resolves, every skill has r
   }
 });
 
-test("settings.json denies GitHub-MCP merge and repo surgery, asks before MCP pushes", () => {
+test("settings.json denies GitHub-MCP repo surgery; nothing asks (the owner, 2026-10-15)", () => {
   const perms = JSON.parse(read(".claude/settings.json")).permissions;
   for (const t of ["mcp__github__delete_file", "mcp__github__create_repository", "mcp__github__fork_repository"])
     assert.ok(perms.deny.includes(t), `permissions.deny must hold ${t} (AGENTS.md: agents never merge)`);
-  for (const t of ["mcp__github__push_files", "mcp__github__create_or_update_file"])
-    assert.ok((perms.ask || []).includes(t), `permissions.ask must hold ${t} (a commit that skips the commit hook)`);
+  // push_files / create_or_update_file sat in permissions.ask until 2026-10-15 (a commit
+  // that skips the commit hook). Bryce: "I want all tools and mcps enabled", "Fix for me".
+  assert.deepEqual(perms.ask || [], [], "no permissions.ask rule");
+  assert.ok(perms.allow.includes("mcp__github"), "the whole GitHub MCP server is pre-approved");
   for (const t of [...perms.deny, ...(perms.ask || [])])
     assert.ok(!perms.allow.includes(t), `${t} is both allowed and gated`);
   const pre = JSON.parse(read(".claude/settings.json")).hooks.PreToolUse;

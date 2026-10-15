@@ -48,8 +48,11 @@
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
         modelGroup(id, {
-          center: vadd(a.c, a.u, tiers * 1.4),
-          size: [tiers * 3.4 + 4, tiers * 3.2, len + 4],
+          // Tiers span lateral [-1.55, tiers*3.2+0.3] from the anchor: centre the
+          // footprint on that span (it was centred on the anchor, so the mass
+          // escaped the declared box by 4-6 m).
+          center: vadd(vadd(a.c, a.r, side * (tiers * 1.6 - 0.6)), a.u, tiers * 1.4),
+          size: [tiers * 3.2 + 2.4, tiers * 3.2, len + 4],
           basis: b,
         }, (stage) => {
           // STEP AWAY FROM THE TRACK, WHICHEVER SIDE THIS IS. The tiers rise
@@ -59,7 +62,7 @@
           // the road and were culled, so the main grandstand of this circuit
           // has never been on screen.
           for (let t = 0; t < tiers; t++) {
-            const hgt = 1.6 + t * 2.2;
+            const hgt = 1.2 + t * 1.9;
             addBox(stage, vadd(vadd(a.c, a.r, side * t * 3.2), a.u, hgt * 0.5),
               [3.1, hgt, len], t % 2 ? CONC : CONC_D, b);
             stage._mat = MAT.FABRIC;
@@ -81,12 +84,15 @@
         const a = anchor(K(s), side, gap);
         const b = [a.r, a.u, a.t];
         modelGroup("baires-terrace-curvon", {
-          center: vadd(a.c, a.u, tiers * 1.4),
-          size: [tiers * 3.4 + 4, tiers * 3.2, len + 4],
+          // Tiers span lateral [-1.55, tiers*3.2+0.3] from the anchor: centre the
+          // footprint on that span (it was centred on the anchor, so the mass
+          // escaped the declared box by 4-6 m).
+          center: vadd(vadd(a.c, a.r, side * (tiers * 1.6 - 0.6)), a.u, tiers * 1.4),
+          size: [tiers * 3.2 + 2.4, tiers * 3.2, len + 4],
           basis: b,
         }, (stage) => {
           for (let t = 0; t < tiers; t++) {
-            const hgt = 1.6 + t * 2.2;
+            const hgt = 1.2 + t * 1.9;
             addBox(stage, vadd(vadd(a.c, a.r, side * t * 3.2), a.u, hgt * 0.5),
               [3.1, hgt, len], t % 2 ? CONC : CONC_D, b);
             stage._mat = MAT.FABRIC;
@@ -101,7 +107,7 @@
       }
 
       {
-        const a = anchor(K(0.975), 1, 15);
+        const a = anchor(K(0.975), 1, 52);
         const b = [a.r, a.u, a.t];
         modelGroup("baires-pit-block", {
           center: vadd(a.c, a.u, 4), size: [16, 12, 116], basis: b,
@@ -121,7 +127,7 @@
       // news says a new race-control building is under construction); we keep
       // the classic look because the game uses classic: true (not the 2027 layout).
       {
-        const a = anchor(K(0.995), 1, 30);
+        const a = anchor(K(0.995), 1, 66);
         const b = [a.r, a.u, a.t];
         modelGroup("baires-control-tower", {
           center: vadd(a.c, a.u, 10), size: [12, 24, 12], basis: b,
