@@ -492,6 +492,26 @@ test("BLOCKED storage: a read that throws is remembered, not retried (and re-log
   assert.equal(logs, 1, "one log line, not one per frame");
 });
 
+test("BLOCKED storage: a throwing global getter does not abort boot when IndexedDB exists", async () => {
+  const idb = fakeIndexedDb([["apex26.career.driver.0", JSON.stringify({ money: 7 })]]);
+  const ctx = {
+    Log: { info() {}, warn() {} }, indexedDB: idb, setTimeout, clearTimeout,
+  };
+  vm.createContext(ctx);
+  vm.runInContext('Object.defineProperty(globalThis, "localStorage", { get() { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); } });', ctx);
+  assert.throws(() => vm.runInContext("typeof localStorage", ctx), { name: "SecurityError" },
+    "the VM global must invoke the denied storage getter");
+  seedSaveMigrate(ctx);
+  assert.doesNotThrow(() => vm.runInContext(SRC + ";this.GS=GameStore;", ctx),
+    "store.js must finish boot even when the global storage getter throws");
+  assert.equal(await ctx.GS.store.mirror.ready, 0);
+  assert.equal(ctx.GS.store.mirror.settled, true,
+    "denied storage must settle recovery before career boot checks the mirror");
+  assert.equal(idb.opens, 0, "restore cannot write into blocked localStorage");
+  assert.equal(ctx.GS.store.get("career.driver.0", null), null,
+    "the live store still answers defaults while storage is blocked");
+});
+
 test("a restored newer row that LANDED makes this session its owner: its later saves replace the row, no rollback next boot", async () => {
   // Bug hunt 2026-09-29: the restore wrote the quota-refused row back to disk
   // but did not mark this session as its owner, so the flush guard refused
