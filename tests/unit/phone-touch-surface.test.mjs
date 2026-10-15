@@ -109,9 +109,9 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   const ov = css("css/touch-controls.css");
   assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "width"), "var(--tap)");
   assert.equal(decl(ov, /body:not\(\.desktop\) \.dock \.pedal,/, "width"), "var(--hold)");
-  // The CAM and PAUSE buttons follow HUD SIZE (css/hud.css --tap-hud), but
-  // only UP: --hud-btn-z is the top band's zoom floored at 1, so --tap-hud
-  // never drops under the --tap rung. The restore eye stays on --tap itself.
+  // CAM and PAUSE share effective BUTTON SIZE independently of HUD bands;
+  // the minimum zoom of 1 protects the top controls' --tap rung. The restore
+  // eye stays on --tap itself.
   // Past 150 % BUTTON SIZE PAUSE PAINTS bigger (--tap-btn, up to 200 %) while every layout reader keeps the
   // --tap-hud band; CAM keeps the band height (its span crosses the sector plate) and moves left by PAUSE.
   assert.equal(decl(ov, "#pausebtn", "height"), "var(--tap-btn, var(--tap-hud))", "#pausebtn grows DOWN past 150 %, floored at the band");
@@ -127,10 +127,21 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   const tb = decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--tap-btn");
   assert.match(tb, /^max\(var\(--tap-hud\),/, "--tap-btn never paints under the band");
   assert.match(tb, /var\(--dock-r-w, 0px\)/, "--tap-btn stops at the sector plate (it stands off --dock-r-w)");
+  assert.equal(decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--hud-btn-zt"),
+    "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2)", "larger PAUSE/CAM typography shares the fitted dock scale up to 200%");
   assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
   const hudCss = css("css/hud.css");
   assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
-  assert.equal(decl(hudCss, ":root", "--hud-btn-z"), "clamp(1, var(--hud-btn-scale, 1), 1.5)", "camera and pause use button size independently of HUD size");
+  const topZoom = decl(hudCss, ":root", "--hud-btn-z");
+  assert.equal(topZoom, "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5)",
+    "camera and pause share the effective dock cap, falling back to independent BUTTON SIZE");
+  assert.doesNotMatch(topZoom, /--hud-(?:scale|z-top|z-bot)\b/,
+    "top controls must not depend on a HUD readout scale or fitted band");
+  // --tap-hud is defined on :root, so test its actual base rung rather than
+  // assuming it inherits the larger touch-body --tap. The outer clamp's
+  // minimum of 1 above protects this rung even when dock fitting goes below 1.
+  const chromeTap = rung(decl(css("css/tokens.css"), ":root", "--tap"), "root chrome --tap");
+  assert.ok(chromeTap >= 44, `CAM/PAUSE retain a ${chromeTap}px base target, never under 44px`);
 });
 
 test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {

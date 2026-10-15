@@ -51,7 +51,7 @@ const GLOBALS = [
   "Reliability", "Damage", "Duel", "RadioLines", "RaceFacts", "Spotter", "PitLane", "RaceEngineer",
   "RaceRadio", "SessionRecords", "StartLights", "MarshalPanels", "FlyingStart",
   "GameAudio", "GameAudioSignal", "GameAudioSoundtrack", "GameAudioRadioFx", "GameAudioToneModel",
-  "CarSfx", "RivalAudio", "VoicePack", "RecordedAnnouncer", "DrivingCues", "RadioVoice", "Announcer", "AudioPanel",
+  "CarSfx", "ErsLayer", "RivalAudio", "VoicePack", "RecordedAnnouncer", "DrivingCues", "RadioVoice", "Announcer", "AudioPanel",
 ];
 
 // Each stub instance game.js holds until the bundle lands: its G getter, its

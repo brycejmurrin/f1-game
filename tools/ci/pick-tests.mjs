@@ -199,6 +199,7 @@ export const RULES = [
   [/^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
   [/^js\/audio\/rivals\.js/, ["audio-unit"], "rival-audio.test.mjs and the pass-by voice pool"],
   [/^js\/audio\/engine\.js/, ["audio-unit"], "GameAudio init attach of the rival pass-by pool"],
+  [/^js\/audio\/ers-layer\.js/, ["audio-unit"], "MGU-K electric deploy/harvest + overtake/boost cue"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
   [/^js\/perf\/(metrics-overlay|race-entry-profile)\.js/, ["perf-frametime", "ui"], "frametime bench seam + metrics overlay"],
   [/^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],

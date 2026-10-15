@@ -1038,7 +1038,7 @@ test("measured clearance protects instruments and controls without changing save
 
 
 test("all temporarily corrected readouts restrict transitions to paint properties", () => {
-  const block = CSS.match(/:is\(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs\)\s*\{([^}]+)\}/);
+  const block = CSS.match(/:is\(#minimap, #hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs\)\s*\{([^}]+)\}/);
   assert.ok(block, "an unconditional rule covers every measured clearance target");
   assert.match(block[1], /transition-property:\s*opacity, color, background-color, border-color, box-shadow, filter, text-shadow;/);
 });
@@ -1150,4 +1150,41 @@ test("optional input trace yields to occupied space and restores without saving"
   assert.ok(!inputs.hasAttribute("data-col-drop"));
   assert.equal(inputs.getBoundingClientRect().height,40);
   assert.ok(inputs.getBoundingClientRect().top >= 154);
+});
+
+
+test("only the unplaced touch broadcast map clears pedals without resizing or saving", () => {
+  const elements = {}, state = { broadcast: true, desktop: false, brakeTop: 121 };
+  const make = (selector, x, y, w, h) => {
+    const attrs = {}, props = {};
+    return elements[selector] = {
+      hidden: false, hasAttribute: k => k in attrs, setAttribute: (k,v) => attrs[k]=v, removeAttribute: k => delete attrs[k],
+      style: { setProperty: (k,v) => props[k]=v, removeProperty: k => delete props[k], getPropertyValue: k => props[k] || "" },
+      getBoundingClientRect() {
+        const left = x + parseFloat(props["--hud-clear-x"] || 0);
+        const top = (selector === "#btn-brake" ? state.brakeTop : y) + parseFloat(props["--hud-clear-y"] || 0);
+        return { left, top, right: left+w, bottom: top+h, width:w, height:h };
+      },
+    };
+  };
+  const map = make("#minimap",54,51,77,77), brake = make("#btn-brake",59,121,108,108);
+  const tower = make(".hud-top",54,6,186,39), tyre = make("#hud-tyre",59,80,91,35);
+  const viewport = { innerWidth:844, innerHeight:390 };
+  const doc = {readyState:"loading",addEventListener(){},getElementById:()=>null,
+    body:{classList:{contains:k=>k==="desktop"?state.desktop:k==="hud-prof-broadcast"&&state.broadcast},setAttribute(){}},
+    querySelector:sel=>elements[sel]||null,querySelectorAll:sel=>sel.includes("#pausebtn")?[map,brake,tower,tyre]:sel===".touchbtn, .steerbtn, .shiftbtn"?[brake]:[]};
+  const ctx = {window:viewport,document:doc,GameStore:{store:{get:(k,d)=>d,set(){throw Error("placement must not save");}}}};
+  vm.createContext(ctx);vm.runInContext(SRC+";this.HudLayout=HudLayout;",ctx);
+  const fit = () => {ctx.HudLayout.clearReadouts();return map.getBoundingClientRect();};
+  const hit = (a,b) => a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top;
+  const placed = fit();
+  for (const obstacle of [brake,tower,tyre]) assert.ok(!hit(placed,obstacle.getBoundingClientRect()));
+  assert.equal(placed.width,77);assert.equal(placed.height,77);
+  assert.deepEqual(fit(),placed,"repeated clearance remains stable");
+  state.brakeTop=160;tyre.hidden=true;assert.equal(fit().left,54,"available room restores the shipped map anchor");
+  state.brakeTop=121;tyre.hidden=false;map.setAttribute("data-hl-user","");
+  assert.equal(fit().left,54,"custom map placement wins even when overlapping a control");
+  map.removeAttribute("data-hl-user");state.broadcast=false;assert.equal(fit().left,54,"standard profile remains unchanged");
+  state.broadcast=true;state.desktop=true;assert.equal(fit().left,54,"desktop remains unchanged");
+  state.desktop=false;viewport.innerWidth=390;viewport.innerHeight=844;assert.equal(fit().left,54,"portrait remains unchanged");
 });

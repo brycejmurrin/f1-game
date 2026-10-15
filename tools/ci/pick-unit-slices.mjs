@@ -17,7 +17,7 @@
  *   node tools/ci/pick-unit-slices.mjs js/circuits/scenery/monaco.js
  *   node tools/ci/pick-unit-slices.mjs --json
  *   node tools/ci/pick-unit-slices.mjs --all --github-output
- *   node tools/ci/pick-unit-slices.mjs --since <base> --needed-only --github-output   # draft PR: needed rows only
+ *   node tools/ci/pick-unit-slices.mjs --since <base> --needed-only --github-output   # a pull request: needed rows only
  *   node tools/ci/pick-unit-slices.mjs --costs
  */
 import { execFileSync } from "node:child_process";
@@ -46,45 +46,56 @@ export const NODE_SLICES = ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"];
 
 /**
  * Measured / expected p50 job durations (seconds). Used only for --costs /
- * savings estimates — never for selection. Six-slice split from #508
- * (2026-09-30); times are half of the prior packed three-slice p50s where
- * a shard replaced a packed row.
+ * savings estimates — never for selection. Re-balanced 2026-10-15
+ * (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §7): the job medians of three
+ * green ship pushes BEFORE the move were vm-a1 133, vm-a2 130, vm-b1 638,
+ * vm-b2 241, page 525, slow 201. The values below are the FIRST ship-push
+ * run after the move (caf37bd6, run 38700490935, 2026-10-15 07:42 UTC, every
+ * row in full, setup included): the wall fell from vm-b1's 638 s to page's
+ * 422 s. One run, not a median — re-measure from the job logs after a day
+ * and replace these.
  */
 export const SLICE_COST_P50_SEC = {
   guards: 279,
-  "vm-a1": 168,
-  "vm-a2": 168,
-  "vm-b1": 185,
-  "vm-b2": 185,
-  page: 168,
-  slow: 146,
+  "vm-a1": 236,
+  "vm-a2": 278,
+  "vm-b1": 286,
+  "vm-b2": 361,
+  page: 422,
+  slow: 220,
   "driving-model": 100,
 };
 
-/** Which npm scripts / groups.json keys feed each slice. */
+/** Which npm scripts / groups.json keys feed each slice. MIRRORS the case
+ *  arms of ci.yml's "Pure-node unit suites" step; pick-unit-slices.test.mjs
+ *  pins the two together (the ten riders sat under vm-b2 here while ci.yml
+ *  ran them on vm-b1 until 2026-10-15 — a js/audio diff selected the wrong
+ *  runner and nothing said so). */
 export const SLICE_SCRIPTS = {
   guards: ["test:guards"],
-  // Both shards run the same script with APEX_CIRCUIT_SHARD=i/2.
-  "vm-a1": ["test:game-vm-a"],
-  "vm-a2": ["test:game-vm-a"],
+  // Both shards run the same script with APEX_CIRCUIT_SHARD=i/2. The ten
+  // former `fast`-slice riders are spread over the three light rows by their
+  // measured medians (2026-10-15): the two heaviest beside the two shards,
+  // the seconds-long five beside node-slow.
+  "vm-a1": ["test:game-vm-a", "test:net-unit", "test:audio-unit", "test:state-unit", "test:desktop-unit"],
+  "vm-a2": ["test:game-vm-a", "test:garage-unit"],
   "vm-b1": ["test:game-vm-b1"],
-  "vm-b2": [
-    "test:game-vm-b2",
-    "test:net-unit", "test:service-worker", "test:lifecycle-unit",
-    "test:state-unit", "test:agent-contract", "test:audio-unit",
-    "test:garage-unit", "test:steering-unit", "test:desktop-unit", "test:mcp",
-  ],
+  "vm-b2": ["test:game-vm-b2"],
   page: ["test:vm-page"],
-  slow: ["test:node-slow"],
+  slow: ["test:node-slow", "test:steering-unit", "test:mcp", "test:service-worker", "test:lifecycle-unit", "test:agent-contract"],
   "driving-model": [], // browser job: tests/specs/physics-characterization.spec.js
 };
 
 /** Elevation twin → both circuit shards. */
 const VM_A = ["vm-a1", "vm-a2"];
-/** game-vm-b partitions + fast riders. */
+/** game-vm-b partitions (the VM twins of the browser specs). */
 const VM_B = ["vm-b1", "vm-b2"];
 /** Former page-slow packed pair. */
 const PAGE_SLOW = ["page", "slow"];
+/** Where each rider lives now (2026-10-15); RULES name a rider by its row. */
+const NET_AUDIO_STATE = "vm-a1";   // net-unit, audio-unit, state-unit, desktop-unit
+const GARAGE = "vm-a2";            // garage-unit
+const STEERING_MCP_SW = "slow";    // steering-unit, mcp, service-worker, lifecycle-unit, agent-contract
 
 /** Build test-file → slice ownership from groups.json (source of truth). */
 export function testFileOwners(groupsJson = null) {
@@ -119,29 +130,29 @@ export const RULES = [
   [/^tools\/lib\//, ["guards", ...VM_A, ...VM_B], "build/harness: both VM slices"],
   [/^tools\/manifest\.cjs$/, ["guards", ...VM_A, ...VM_B], "TRACK_VM load list"],
 
-  [/^js\/game\.js$/, ["guards", ...VM_B, ...PAGE_SLOW, "driving-model"], "the loop"],
+  [/^js\/game\.js$/, ["guards", ...VM_A, ...VM_B, ...PAGE_SLOW, "driving-model"], "the loop: every VM twin and rider boots it"],
   [/^js\/physics\//, ["guards", ...VM_B, "driving-model"], "driving model numbers"],
   [/^js\/race\//, ["guards", ...VM_B], "session / pit / race-control"],
 
-  [/^js\/car\//, ["guards", ...PAGE_SLOW, ...VM_B], "car mesh + garage-unit rasters"],
-  [/^js\/garage\//, ["guards", ...VM_B, ...VM_A], "garage unit + pit complex in fleet"],
-  [/^js\/audio\//, ["guards", ...VM_B], "audio-unit"],
-  [/^js\/input\//, ["guards", ...VM_B], "steering-unit + phone-pad twin"],
-  [/^js\/net\//, ["guards", ...VM_B], "net-unit + netplay twin"],
-  [/^sw\.js$|^manifest\.json$/, ["guards", ...VM_B], "service-worker"],
-  [/^worker\//, ["guards", ...VM_B], "rendezvous Durable Object"],
+  [/^js\/car\//, ["guards", ...PAGE_SLOW, ...VM_B, GARAGE], "car mesh (car-fields twin) + garage-unit rasters (vm-a2)"],
+  [/^js\/garage\//, ["guards", ...VM_B, ...VM_A], "garage-unit (vm-a2) + pit complex in fleet + session twins"],
+  [/^js\/audio\//, ["guards", NET_AUDIO_STATE], "audio-unit (vm-a1)"],
+  [/^js\/input\//, ["guards", ...VM_B, STEERING_MCP_SW], "steering-unit (slow) + phone-pad / input-ghost twins"],
+  [/^js\/net\//, ["guards", ...VM_B, NET_AUDIO_STATE], "net-unit (vm-a1) + netplay / seed-sync twins"],
+  [/^sw\.js$|^manifest\.json$/, ["guards", STEERING_MCP_SW], "service-worker (slow)"],
+  [/^worker\//, ["guards", NET_AUDIO_STATE], "rendezvous Durable Object: net-unit's rendezvous-worker (vm-a1)"],
 
   [/^js\/render\//, ["guards"], "renderer: node gate is structural; gfx is macos"],
   [/^js\/lighting\//, ["guards"], "lighting: structural + targeted sweeps (elsewhere)"],
-  [/^js\/ui\//, ["guards", ...VM_B], "state-unit / steering opts live in vm-b"],
-  [/^js\/camera\//, ["guards", ...PAGE_SLOW, ...VM_B], "flyby fleet in node-slow"],
-  [/^js\/agent\//, ["guards", ...VM_B], "agent-contract + agent-view-vm"],
-  [/^js\/core\//, ["guards", ...VM_A, ...VM_B], "shared floor every VM boots"],
-  [/^js\/data\//, ["guards", ...VM_B], "hub / legends / settings-defaults"],
-  [/^js\/perf\//, ["guards", ...VM_B], "quality / overlays"],
+  [/^js\/ui\//, ["guards", ...VM_B, NET_AUDIO_STATE, STEERING_MCP_SW], "state-unit (vm-a1), steering opts (slow), agent-view / hud twins (vm-b)"],
+  [/^js\/camera\//, ["guards", ...PAGE_SLOW, ...VM_B], "flyby fleet in node-slow + cam-avoid twin"],
+  [/^js\/agent\//, ["guards", ...VM_B, STEERING_MCP_SW], "agent-contract (slow) + agent-view-vm"],
+  [/^js\/core\//, ["guards", ...VM_A, ...VM_B, ...PAGE_SLOW], "shared floor every VM and rider boots"],
+  [/^js\/data\//, ["guards", ...VM_B, NET_AUDIO_STATE, STEERING_MCP_SW], "hub / legends (state-unit) / settings-defaults (steering-unit)"],
+  [/^js\/perf\//, ["guards", ...VM_B, NET_AUDIO_STATE], "quality / overlays (state-unit)"],
   [/^js\/fx\//, ["guards"], "visual-only"],
-  [/^js\/career\//, ["guards", ...VM_B], "career state + session twins"],
-  [/^js\/xr\//, ["guards", ...VM_B], "xr-phase0 in steering-unit"],
+  [/^js\/career\//, ["guards", ...VM_B, NET_AUDIO_STATE], "career state (state-unit, vm-a1) + session twins"],
+  [/^js\/xr\//, ["guards", STEERING_MCP_SW], "xr-phase0 / xr-opts in steering-unit (slow)"],
 
   [/^css\//, ["guards"], "layout lint lives in guards/tooling-fast"],
   [/^index\.html$/, ["guards"], "shell ids / load order"],
@@ -303,17 +314,18 @@ export function costs(selected) {
 
 /** Matrix rows + flags for ci.yml GITHUB_OUTPUT.
  *
- * The matrix ALWAYS lists every NODE_SLICE. Branch protection requires the
- * fixed check names `Pure-node unit suites (<slice>)` (ci.yml comment on the
- * matrix); emitting a subset leaves those names unreported and every such PR
- * stays BLOCKED even when the aggregator `CI` is green (measured on #454
- * 35e66e231: vm-b1/b2/page/slow ran, vm-a1/a2 never appeared). Unneeded rows
- * carry `needed:"false"` so the job exits 0 without work.
+ * On a deploy push and the train the matrix lists every NODE_SLICE (needed
+ * true|false): pages-train.mjs's reuse check wants expanded node rows, and
+ * until 2026-10-15 branch protection also required the six fixed names
+ * `Pure-node unit suites (<slice>)` — a subset left them unreported and the
+ * PR BLOCKED with a green `CI` (#454 35e66e231: vm-b1/b2/page/slow ran,
+ * vm-a1/a2 never appeared). Unneeded rows carry `needed:"false"` so the job
+ * exits 0 without work.
  *
- * EXCEPT ON A DRAFT (`--needed-only`, 2026-10-15): a draft cannot merge, so the
- * required names owe it nothing, and each unneeded row was still a job start
+ * EXCEPT ON A PULL REQUEST (`--needed-only`, 2026-10-15): `CI` is the deploy
+ * branch's one required check, so the six names owe a PR nothing, and each unneeded row was still a job start
  * waiting ~11 min for a runner on a jammed day (docs/notes/CI-CLOG-SURVEY-
- * 2026-10-15.md). The draft plan lists only the needed rows; when there are
+ * 2026-10-15.md). The PR plan lists only the needed rows; when there are
  * none, `slices` is `[]` and ci.yml's node-suites job skips on any_node=false.
  */
 export function ciOutputs(result, { neededOnly = false } = {}) {
