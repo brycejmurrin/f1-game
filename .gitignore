@@ -15,7 +15,8 @@ node_modules/
 node_modules
 # Regenerable output
 scratch/
-artifacts/
+# artifacts/ is local except committed per-circuit survey PNGs (see docs/tracks/GALLERY.md).
+artifacts/*
 !artifacts/shots/
 artifacts/shots/*
 !artifacts/shots/tracks/
