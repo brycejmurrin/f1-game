@@ -1,0 +1,1 @@
+1792106874	Bryce Murrin	#2233 flake-tally only: verify existing proxy transport and fix jobs fallback pagination at 30/page; tools/ci/flake-tally.mjs tests/unit/flake-tally.test.mjs only. No shared proxy module or changelog edits.  [cursor/flake-transport-7c31; session f23db661ca97633ea79f0a74]
