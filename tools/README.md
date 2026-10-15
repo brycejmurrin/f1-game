@@ -221,6 +221,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | renderer-debug |
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
+| **gfx/knob-ab.mjs** | Visual knob A/B: same frame with a lightTune knob ON twice (noise floor) and OFF; fails unless ON vs OFF beats the… | renderer-debug |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
@@ -396,6 +397,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/behind-ship.mjs** | Print how many commits a PR head is behind the ship branch; warn over 10, never fail. |
 | **ci/ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |
 | **ci/ci-pr-base.sh** | The base a pull_request checkout diffs against: the test commit's FIRST PARENT, else the fallback given. |
+| **ci/ci-rerun.mjs** | Guarded CI re-run: refuses a superseded run (head_sha ≠ PR head), a live run, or a second re-run. |
 | **ci/ci-resolve-before.sh** | Resolves the selected-specs CI base (`EVENT`/`PUSH_BEFORE`/`PR_BASE`); a Pages call with no base selects all. |
 | **ci/ci-select-specs-step.sh** | The CI "select specs for this change" step body: base via `ci-resolve-before.sh`, then `select-specs.mjs --since`. |
 | **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |

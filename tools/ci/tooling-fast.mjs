@@ -200,6 +200,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/chromium-shell.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
+  // Guards born on the 2026-10-15 weather PRs: ci-rerun.mjs refuses a superseded/live/green/re-run run; knob-ab.mjs fails a visual knob below the noise floor. Pure, no network or browser.
+  "tests/unit/ci-guard-tools.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
   "tests/unit/ci-verdict.test.mjs",
   "tests/unit/ci-watch.test.mjs",

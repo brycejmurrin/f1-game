@@ -51,6 +51,11 @@ A PR that ends `cancelled` twice, zero failures — the recipe:
    `ci.yml` once (`group: <name>`), do NOT sync the branch to "refresh" it
    (section 2: a sync is a new full PR run and can cancel again).
 
+Every re-run goes through `node tools/ci/ci-rerun.mjs <run_id> [--dry-run]`, never a bare
+MCP/`gh` re-run. It refuses a run that is still live, green, already re-run, or SUPERSEDED.
+Superseded means a PR run whose head_sha is no longer its PR head. Re-running one joins
+`ci-<head.ref>` and cancels the live run on the new head (#1800, 2026-10-15).
+
 ## 2. A base merge is `sync-pr.mjs`, never a hand merge — and only when you must
 
     node tools/ci/sync-pr.mjs <branch> --plan   # cached refs only; no conflict proof
