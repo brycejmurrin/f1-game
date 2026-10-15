@@ -875,7 +875,7 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   const game = gameSource();
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /const flyMs = loadingScreen\.nextFlyMs\(info\.readMs, info\.warmReady = !\(gfx && gfx\.warming && gfx\.warming\(\)\)\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
-  assert.match(intro, /loadingScreen\.run\(info, go\);/);
+  assert.match(intro, /loadingScreen\.run\(info,[\s\S]{0,120}go\(\)/, "flyby run still hands off to the same go() after profiling wrap");
   const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
   assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");
   assert.match(read("js/ui/loading-screen.js"), /flyMsFor\(readSkips\(\), info\.readMs, info\.warmReady\)/);
@@ -943,7 +943,7 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
   assert.match(intro, /await introPrepare\(live, key, info, n, true\)/, "a built but unwarmed world joins planning and warm under the card before motion");
-  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await studioDone\(live, n\);/, "warm world: garage-out is not blocked behind prepare (its rejection handled meanwhile)");
+  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await RaceEntryProfile\.spanAsync\("studioDone", \(\) => studioDone\(live, n\)\);/, "warm world: garage-out is not blocked behind prepare (its rejection handled meanwhile)");
   const prepare = game.slice(game.indexOf("async function introPrepare("), game.indexOf("// A ready, warm world"));
   assert.match(prepare, /await awaitIntroWarm\(current\)/, "shared compile bound — never fly over pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
