@@ -275,7 +275,7 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
   assert.match(src, /let _softBlitSeq = 0/);
   assert.match(src, /let _softDisplayPending = false, _softDisplayEpoch = 0/);
   assert.match(src, /if \(_softHold \|\| _softDisplayPending\) return null/);
-  assert.match(src, /_softDisplayPending = true;\s*return \{ buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen \}/);
+  assert.match(src, /_softDisplayPending = true;\s*_softDisplaySince = _softNow\(\);\s*return \{ buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen \}/);
   assert.match(src, /epoch === _softDisplayEpoch && seq === _softBlitSeq &&[^]*?_displayCanvas\.width === w[^]*?_displayCanvas\.height === h/);
   assert.match(src, /const release = function \(\) \{ _softDisplayPending = false; \}/);
   const resize = src.slice(src.indexOf("function resize()"), src.indexOf("function setRenderScale"));
@@ -285,6 +285,42 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
     "WGX suppresses its own backing-store resize signal through the shared cache");
   // Size split: present jitter uses pw/ph vs presentW/H; render jitter uses rw/rh vs width/height.
   assert.match(resize, /Math\.abs\(r?w - width\) <= 1 && Math\.abs\(r?h - height\) <= 1/);
+});
+
+test("WGX soft present back-pressures frames and the car pass while a read waits (#2226)", () => {
+  // Measured 2026-10-15 on SwiftShader (montreal): ~500 frames queued ahead of
+  // the first map, so the next blit never landed inside gfx-probe's 60 s.
+  const src = read("js/render/webgpu/wgx.js");
+  const grab = (re, what) => { const m = src.match(re); assert.ok(m, what); return m[0]; };
+  const held = grab(/function _softFrameHeld\(\) \{[^]*?\n    \}/, "_softFrameHeld");
+  const gate = grab(/if \(_softGpu && _softDisplayPending\) \{\s*if \(_softFrameHeld\(\)\) return false;[^}]*\}/, "begin() hold");
+  const car = grab(/const carShadowBegin = \(\.\.\.a\) => \{[^]*?\n    \};/, "carShadowBegin gate");
+  assert.ok(src.indexOf(gate) < src.indexOf("encoder = device.createCommandEncoder();\n        _passSamples"),
+    "begin() refuses before it records any frame work");
+  const make = new Function("SHD", `
+    let _softGpu = true, _softDisplayPending = false, _softDisplaySince = 0, now = 0;
+    const SOFT_HOLD_MAX_MS = ${grab(/const SOFT_HOLD_MAX_MS = \d+/, "bound").split("= ")[1]};
+    const _softNow = () => now;
+    ${held}
+    ${car}
+    function begin() { ${gate} return true; }
+    return { begin, carShadowBegin,
+      set: (o) => { if ("pending" in o) { _softDisplayPending = o.pending; _softDisplaySince = now; } if ("gpu" in o) _softGpu = o.gpu; },
+      at: (t) => { now = t; } };`);
+  const calls = { begin: 0, keep: 0 };
+  const W = make({ carShadowBegin() { calls.begin++; }, carShadowKeep() { calls.keep++; return true; } });
+  assert.equal(W.begin(), true, "no read in flight: frames render");
+  W.set({ pending: true });
+  let drawn = 0;
+  for (let t = 0; t <= 60000; t += 16) { W.at(t); if (W.begin()) drawn++; W.carShadowBegin([], 1); }
+  assert.ok(drawn >= 2 && drawn <= 4, "a stuck read lets one frame through per bound, never a flood (" + drawn + ")");
+  assert.equal(calls.begin, 0, "no car-shadow submission while a read waits");
+  assert.ok(calls.keep > 3000, "the held car map stays armed (KEEP)");
+  W.set({ pending: false }); W.carShadowBegin([], 1);
+  assert.equal(W.begin(), true); assert.equal(calls.begin, 1, "both resume once the read lands");
+  W.set({ gpu: false, pending: true }); W.carShadowBegin([], 1);
+  assert.equal(W.begin(), true, "hardware presentation is never held");
+  assert.equal(calls.begin, 2);
 });
 
 test("all renderers share zero/reveal, orientation, and UI-scale CSS-size semantics", () => {

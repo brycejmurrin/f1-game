@@ -6186,6 +6186,23 @@ test("TLX mirror honours software readback backpressure and resumes when the rea
   assert.equal(opened, 2);
 });
 
+test("TLX car shadow pass honours software readback backpressure (#2226)", () => {
+  // Measured 2026-10-15 (SwiftShader, monaco orbit): the car map was the only
+  // submitter while a soft read waited, ~30 queue.submit/s, so the read missed
+  // the stale guard and every replacement queued behind that backlog —
+  // awaitSoftPresent timed out at 90 s. A held frame KEEPs the map instead.
+  let _softBlit = true, _softReadPending = true, began = 0, kept = 0;
+  const shadowSys = { carShadowBegin() { began++; }, carShadowKeep() { kept++; return true; } };
+  const begin = eval("(function(vp,boxScale){" + fnBody(code("js/render/three/tlx.js"), "carShadowBegin") + "})");
+  for (let i = 0; i < 60; i++) begin([], 1);
+  assert.equal(began, 0, "a pending read cannot accumulate car-shadow submissions");
+  assert.equal(kept, 60, "a held frame keeps the car map armed (no shadow strobe)");
+  _softReadPending = false; begin([], 1);
+  assert.equal(began, 1, "the pass resumes when the read drains");
+  _softBlit = false; _softReadPending = true; begin([], 1);
+  assert.equal(began, 2, "hardware presentation keeps the per-frame car pass");
+});
+
 test("TLX scene MSAA: preset-driven on the desktop WebGL2 backend only, depth resolved", () => {
   // 2026-10-01: the shipped renderer had NO geometric AA — the scene target was
   // single-sample and the canvas MSAA only ever smoothed the FXAA quad. The
