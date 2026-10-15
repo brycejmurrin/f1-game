@@ -208,7 +208,7 @@
         // flank dark scoria/forest and a ragged snow edge across the mid band:
         // contrast, not brightness, is what makes a cap read.
         addMountain(stage, [fx, FUJI_BASE, fz], FUJI_W * 0.5, FUJI_H, {
-          seg: 24, seed: 11, rough: 0.05, snowline: 0.50,
+          seg: 16, seed: 11, rough: 0.05, snowline: 0.50,
           snow: [0.90, 0.95, 1.00], rock: [0.30, 0.27, 0.32], forest: [0.12, 0.20, 0.19],
         });
       };
@@ -232,7 +232,7 @@
       ]) {
         mountain(fA.c[0] + ux * dOut + tx * along, fA.c[2] + uz * dOut + tz * along,
           pyMin - 28, w, h,
-          { seg: 12, seed: sd, rough: 0.28, snowline: 1.4,
+          { seg: 8, seed: sd, rough: 0.28, snowline: 1.4,
             forest: [0.14, 0.24, 0.24], rock: [0.24, 0.26, 0.28] });
       }
       // Low hazed ring of forested foothills — 12 (was 24), flattened to 30-60 m
@@ -244,7 +244,7 @@
           const rr = radius + 700 + h * 400;
           mountain(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin - 14,
             520 + h * 300, 30 + h * 30,
-            { seg: 10, seed: i * 5 + 3, rough: 0.34, snowline: 1.6,
+            { seg: 6, seed: i * 5 + 3, rough: 0.34, snowline: 1.6,
               forest: [0.13 + h * 0.02, 0.23 + h * 0.03, 0.22], rock: [0.24, 0.26, 0.27] });
         }
       }
@@ -528,7 +528,7 @@
           const near = 30 + h * 20 + (side < 0 ? 5 : 0);
           const mid = 78 + hash(k * 5.1 + side) * 54;
           const far = 158 + hash(k * 2.7 + side) * 96;
-          const ranks = yard ? [mid, far] : (h > 0.55 ? [near, mid, far] : [near, mid]);
+          const ranks = yard ? [mid, far] : (h > 0.55 ? [near, mid] : [near]);
           let j = 0;
           for (const dist of ranks) {
             const a = anchor(k, side, dist);
@@ -541,10 +541,11 @@
           if (!yard && h > 0.88) bush(k, side, near - 10, SCRUB);
         }
       });
-      // Infill: the 2026-10-15 survey read lone pines on a lawn. A second pass on
-      // the nodes the first skips (every(32) offset by 4 = every 16 m in all)
-      // adds hazed mid/far/deep ranks ONLY, never a near rank, and keeps off the
-      // lap's building stretches so it adds no clip spots (audit-circuit).
+      // Infill: the 2026-10-15 survey read lone pines on a lawn. The first pass's
+      // far rank (45% of nodes) is replaced by ONE hazed rank on every node of an
+      // every-16 m grid (the second half offset by 4 nodes), keeping off the
+      // lap's building stretches (audit-circuit clip) and inside props-tri-ratchet
+      // (a rank is ~5.4 k tris).
       every(32, (k0) => {
         const k = (k0 + 4) % n, f = W((k - K(0)) / n);   // racing frac: every() hands out raw nodes
         if (f < 0.32 || f > 0.84) return;
@@ -552,8 +553,8 @@
         if (h < 0.06) return;
         for (const side of [-1, 1]) {
           if (f > 0.465 && f < 0.495 && side < 0) continue;   // Advan bleacher + tyre wall
-          const ranks = [74 + hash(k * 4.1 + side) * 40, 150 + hash(k * 6.3 + side) * 80,
-            250 + hash(k * 3.9 + side) * 80];
+          const ranks = h > 0.65 ? [74 + hash(k * 4.1 + side) * 40, 120 + hash(k * 6.3 + side) * 100]
+            : [120 + hash(k * 6.3 + side) * 100];
           let j = 0;
           for (const dist of ranks) {
             j++;
