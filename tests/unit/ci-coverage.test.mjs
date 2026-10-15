@@ -278,7 +278,7 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
 /* THE PROSE-ONLY PR HOLE (2026-09-25). ci.yml's paths-ignore means a PR that
  * touches only docs/**, **\/*.md, .claude/**, .cursor/** or .codex/** starts no
  * ci.yml run, while tooling-fast holds guards over exactly those trees.
- * docs-guards.yml closes it by triggering on the SAME list as `paths:` — so the
+ * docs-guards.yml closed it (2026-09-25..2026-10-15) by triggering on the SAME list as `paths:` — so the
  * two lists must stay one list, and the job must run the group that holds them. */
 /* EVERY REQUIRED CHECK REPORTS ON EVERY PR (2026-09-30). Branch protection on
  * the deploy branch requires the fast-tier jobs and docs-guards; a required
@@ -287,8 +287,14 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
  * PR too (the node plan keeps it to guards plus seconds), and docs-guards runs
  * on every PR and exits before `npm ci` unless the diff is prose-only — a
  * list it READS from ci.yml's push paths-ignore, the one filter that stays. */
-test("docs-guards.yml and ci.yml both run on every pull request; the prose list is read from ci.yml's push filter", () => {
-  const docsWorkflow = fs.readFileSync(new URL("../../.github/workflows/docs-guards.yml", import.meta.url), "utf8");
+test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and test:docs-guards is a local alias inside tooling-fast", () => {
+  // RETIRED 2026-10-15 (Actions audit finding 5; docs/notes/CI-CLOG-SURVEY-2026-10-15.md):
+  // tooling-fast held every file of the group, so the workflow ran 615 times
+  // on 2026-10-14 to test nothing new, one job start per PR event. Its required
+  // status context was removed from the deploy branch's protection first (a
+  // required check that never reports blocks every merge), then the file.
+  assert.ok(!fs.existsSync(new URL("../../.github/workflows/docs-guards.yml", import.meta.url)),
+    "docs-guards.yml is back — tooling-fast already runs every file it ran, and a second workflow is a job start per PR event");
   const listAfter = (text, key, from = 0) => {
     const at = text.indexOf(`\n    ${key}:\n`, from);
     assert.ok(at >= 0, `no \`${key}:\` list found`);
@@ -304,20 +310,11 @@ test("docs-guards.yml and ci.yml both run on every pull request; the prose list 
   const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
   assert.ok(prBlock.includes("types: [opened, synchronize, reopened, ready_for_review]"), "the pull_request block was sliced whole");
   assert.doesNotMatch(prBlock, /paths(-ignore)?:/,
-    "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required checks");
-  const docsOn = docsWorkflow.slice(docsWorkflow.indexOf("\non:"), docsWorkflow.indexOf("\npermissions:"));
-  assert.match(docsWorkflow, /^on:\n  pull_request:\n/m, "docs-guards runs on pull requests");
-  assert.match(docsWorkflow, /types: \[opened, synchronize, reopened, ready_for_review\]/,
-    "marking a draft ready must re-run docs-guards on the same head");
-  assert.doesNotMatch(docsOn, /\n    paths(-ignore)?:/, "docs-guards must report on every PR too (it is a required check)");
-  assert.match(docsWorkflow, /- name: Is every changed path prose\?/);
-  assert.match(docsWorkflow, /readFileSync\("\.github\/workflows\/ci\.yml", "utf8"\)/, "the prose list is READ from ci.yml, never retyped");
-  assert.match(docsWorkflow, /push\.indexOf\("paths-ignore:"\)/, "…from the push block's paths-ignore, the one filter that stays");
-  assert.match(docsWorkflow, /uses: \.\/\.github\/actions\/setup-apex[^\n]*\n\s+if: steps\.prose\.outputs\.prose != 'false'/,
-    "a mixed PR must exit before npm ci");
-  assert.match(docsWorkflow, /run: npm run test:docs-guards\s*$/m);
-  assert.match(docsWorkflow, /run: npm run test:docs-guards\n\s+if: steps\.prose\.outputs\.prose != 'false'/);
+    "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required check");
 
+  // The group stays as the local alias the docs-only fast path and the
+  // agent-config skill call; every file in it is in tooling-fast, so ci.yml's
+  // guards job covers a prose PR with no second workflow.
   const groups = JSON.parse(fs.readFileSync(new URL("../groups.json", import.meta.url), "utf8"));
   const files = groups.groups["test:docs-guards"]?.files || [];
   for (const must of ["docs-integrity", "generated-docs", "agent-config", "skill-progressive", "hooks-documented"]) {
@@ -325,7 +322,12 @@ test("docs-guards.yml and ci.yml both run on every pull request; the prose list 
   }
   const fast = new Set(groups.toolingFast.filter((f) => !f.startsWith("//")));
   const notFast = files.filter((f) => !fast.has(f) && f !== "tests/unit/environment-json.test.mjs");
-  assert.deepEqual(notFast, [], "docs-guards is a CI entry point for tooling-fast's prose guards, not a new home for files");
+  assert.deepEqual(notFast, [], "test:docs-guards is an alias over tooling-fast's prose guards, not a new home for files");
+  // No other workflow may quietly take its place.
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  const others = fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n) && n !== "ci.yml")
+    .filter((n) => /npm run test:docs-guards/.test(fs.readFileSync(new URL(n, dir), "utf8")));
+  assert.deepEqual(others, [], "no workflow but ci.yml's guards runs the prose group on PRs");
 });
 
 test("ci-verdict is the always-run aggregator every other job feeds", () => {
