@@ -477,7 +477,10 @@ const GameStore = (function () {
   // disk holds the older value, and the boot's own re-save of it (Career.load)
   // must neither win here nor overwrite the row when the queue flushes.
   function mirrorRestore() {
-    if (typeof indexedDB === "undefined" || !indexedDB || typeof localStorage === "undefined") { _restoreDone = mirror.settled = true; return Promise.resolve(0); }
+    let canRestore = false;
+    try { canRestore = typeof indexedDB !== "undefined" && !!indexedDB && typeof localStorage !== "undefined"; }
+    catch (_) { /* storage global denied: boot without mirror restore */ }
+    if (!canRestore) { _restoreDone = mirror.settled = true; return Promise.resolve(0); }
     return mirrorOpen().then((db) => new Promise((res) => {
       if (!db) { res([]); return; }
       let r;

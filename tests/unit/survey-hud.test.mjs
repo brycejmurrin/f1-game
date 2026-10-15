@@ -226,6 +226,20 @@ test("boot: off when flag unset", () => {
   assert.equal(fx.els.hud.hidden, true);
 });
 
+test("armed and boot tolerate a denied global storage getter, including query activation", () => {
+  const ctx = vm.createContext({ URLSearchParams, location: { search: "", hash: "" } });
+  vm.runInContext('Object.defineProperty(globalThis, "localStorage", { get() { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); } });', ctx);
+  assert.throws(() => vm.runInContext("typeof localStorage", ctx), { name: "SecurityError" });
+  vm.runInContext(read("js/ui/survey-hud.js") + ";this.SH=SurveyHud;", ctx);
+  const fx = fakeDom();
+  assert.equal(ctx.SH.armed(), false);
+  assert.equal(ctx.SH.boot(fx), false);
+  ctx.location.search = "?APEX_SURVEY_HUD=1";
+  assert.equal(ctx.SH.armed(), true, "query flag works without storage");
+  assert.equal(ctx.SH.boot(fx), true, "query flag still applies the survey fixture");
+  assert.equal(fx.els.hud.hidden, false);
+});
+
 test("manifest + game.js boot hook + css-play screen are wired", () => {
   const man = require("../../tools/manifest.cjs");
   const iSurvey = man.FULL.indexOf("js/ui/survey-hud.js");

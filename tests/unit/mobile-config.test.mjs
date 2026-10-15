@@ -27,6 +27,11 @@ test("frozen identity is the single appId / scheme source", () => {
   assert.equal(cap.appId, identity.appId);
   assert.equal(cap.appName, identity.appName);
   assert.equal(cap.server.androidScheme, identity.androidScheme);
+  const instrumented = readFileSync(join(ROOT,
+    "mobile/android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java"), "utf8");
+  const expectedPackage = instrumented.match(/assertEquals\("([^"]+)", appContext\.getPackageName\(\)\)/);
+  assert.equal(expectedPackage && expectedPackage[1], identity.appId,
+    "the device test must expect the installed application's frozen ID");
 });
 
 test("capacitor.config.json is a sideload-safe Capacitor 8 shape", () => {

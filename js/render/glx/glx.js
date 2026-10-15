@@ -1134,6 +1134,7 @@ const GLXBackend = (function () {
     // a ~6" screen, and it multiplies with every other saving.
     const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
     const css = cssSize();
+    const lastPW = presentW, lastPH = presentH;
     presentW = Math.max(1, Math.round(css.width * dpr));
     presentH = Math.max(1, Math.round(css.height * dpr));
     // CLAMP UNIFORMLY to the driver's ceiling (maxDim, queried in init): one
@@ -1147,8 +1148,16 @@ const GLXBackend = (function () {
       presentW = Math.max(1, Math.floor(presentW * k));
       presentH = Math.max(1, Math.floor(presentH * k));
     }
-    const rw = Math.max(1, Math.round(presentW * renderScale));
-    const rh = Math.max(1, Math.round(presentH * renderScale));
+    // 1px CSS/DPR jitter (mobile URL bar, fractional zoom) must not rebuild
+    // every post target — snap a ±1 px change back to the applied size, as WGX does.
+    if (lastPW > 1 && lastPH > 1 && Math.abs(presentW - lastPW) <= 1 && Math.abs(presentH - lastPH) <= 1) {
+      presentW = lastPW; presentH = lastPH;
+    }
+    let rw = Math.max(1, Math.round(presentW * renderScale));
+    let rh = Math.max(1, Math.round(presentH * renderScale));
+    if (width > 1 && height > 1 && Math.abs(rw - width) <= 1 && Math.abs(rh - height) <= 1) {
+      rw = width; rh = height;
+    }
     // Upscale path: canvas = present (full), scene FBOs = render (scaled).
     // Off or scale≈1: canvas = render (legacy browser bilinear stretch).
     const up = wantSpatialUpscale();
