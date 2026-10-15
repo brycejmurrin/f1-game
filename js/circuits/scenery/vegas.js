@@ -802,9 +802,11 @@
         }
         for (let j = 0; j < 22; j++) {
           const s = 0.485 + (j + 0.2) / 22 * 0.33, side = (j % 2) ? 1 : -1;
-          palm(K(sl(s)), side, 22, 11 + hash(j * 23) * 4, LIME);
+          // gap 25+ (was 22): six Strip palms were guard-dropped against the
+          // neon hoarding band (verify-track palm=6); survey 2026-10-14.
+          palm(K(sl(s)), side, 25, 11 + hash(j * 23) * 4, LIME);
           if (j % 3 === 0)
-            palm(K(sl(s + 0.004)), -side, 24, 10 + hash(j * 29) * 3, LIME);
+            palm(K(sl(s + 0.004)), -side, 27, 10 + hash(j * 29) * 3, LIME);
         }
         for (let j = 0; j < 40; j++) {
           const s = 0.485 + (j + 0.6) / 40 * 0.33, side = (j % 2) ? -1 : 1;
