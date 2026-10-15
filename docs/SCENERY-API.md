@@ -979,6 +979,10 @@ node tools/track/clip-audit.cjs --all --gate        # node tools/ci/test-bg.mjs 
 Gated by `tests/unit/prop-clipping.test.mjs` against `tools/track/clip-baseline.json`, on
 the same ratchet semantics as `props-over-road.spec.js`: a circuit not in the
 map must read 0, a capped circuit fails when it grows, no `ALLOW` hatch.
+A cap above its measurement is stale: `clip-audit.cjs --all --lower` rewrites
+those rows down (never up). On a pull request a stale row fails only for a
+circuit the diff touches, or when the diff edits the baseline; other rows print
+an advisory, so a fix merged elsewhere does not redden unrelated PRs (#2183).
 
 #### 6.2 Blocking, not separating
 
