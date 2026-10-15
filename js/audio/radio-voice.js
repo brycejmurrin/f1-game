@@ -358,7 +358,7 @@ var RadioVoice = (function () {
      * outside. The audio panel prints the verdict; see js/audio/panel.js. */
     let asked = 0, started = 0;
     let lastSquelch = null, squelchOpenT = null, squelchCloseT = null;
-    let ownCtx = null, noiseBuf = null, poolCtx = null;
+    let noiseBuf = null, poolCtx = null, poolDest = null;
     const squelchPool = [];   // reused bandpass+gain; BufferSource is one-shot
     function stopSquelch(cut) {
       if (squelchOpenT != null) { clearTimeout(squelchOpenT); squelchOpenT = null; }
@@ -372,28 +372,32 @@ var RadioVoice = (function () {
         v.busyUntil = t;
       }
     }
+    // GameAudio's own context and SFX bus (#2189): master, limiter, SFX volume
+    // and hide-time suspend all apply, on every device. No second AudioContext —
+    // with GameAudio still the title stub (null) the card sting stands alone.
     function audioCtx() {
       const w = typeof window !== "undefined" ? window : null;
-      if (w && w.RadioSquelchCtx) return w.RadioSquelchCtx;
-      if (typeof GameAudio !== "undefined" && GameAudio && typeof GameAudio.context === "function") {
-        try { const c = GameAudio.context(); if (c) return c; } catch (e) { /* stub or mid-teardown */ }
-      }
-      if (isMobile()) return null;   // no second graph on a phone; the card sting stays
-      if (ownCtx) return ownCtx;
-      const AC = (typeof window !== "undefined" && (window.AudioContext || window.webkitAudioContext))
-        || (typeof AudioContext !== "undefined" ? AudioContext : null);
-      if (!AC) return null;
-      try { ownCtx = new AC(); } catch (e) { return null; }
-      return ownCtx;
+      if (w && w.RadioSquelchCtx) return w.RadioSquelchCtx;   // unit-test hook
+      if (typeof GameAudio === "undefined" || !GameAudio || typeof GameAudio.context !== "function") return null;
+      try { return GameAudio.context() || null; } catch (e) { return null; }   // mid-teardown
+    }
+    function squelchDest(ctx) {
+      let bus = null;
+      try {
+        if (GameAudio.context() === ctx && typeof GameAudio.sfxBus === "function") bus = GameAudio.sfxBus();
+      } catch (e) { /* stub or hook context */ }
+      return bus || ctx.destination || null;
     }
     function ensureSquelchPool(ctx) {
-      if (poolCtx === ctx && squelchPool.length) return;
+      const dest = squelchDest(ctx);
+      if (poolCtx === ctx && poolDest === dest && squelchPool.length) return;
       for (const v of squelchPool) {
         try { v.g.disconnect(); } catch (e) { /* gone */ }
         try { v.filt.disconnect(); } catch (e) { /* gone */ }
       }
       squelchPool.length = 0;
       poolCtx = ctx;
+      poolDest = dest;
       noiseBuf = null;
       const n = isMobile() ? 1 : SQUELCH_POOL;
       for (let i = 0; i < n; i++) {
@@ -402,7 +406,7 @@ var RadioVoice = (function () {
         const g = ctx.createGain();
         g.gain.value = 0.0001;
         filt.connect(g);
-        if (ctx.destination) g.connect(ctx.destination);
+        if (dest) g.connect(dest);
         squelchPool.push({ filt, g, src: null, busyUntil: 0 });
       }
     }

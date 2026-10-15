@@ -844,6 +844,15 @@ test('atomic WGX mutations invalidate exactly once and a renderer reset rebases 
   assert.equal((await awaitCaptureReady(page)).required, 2); assert.equal(invalidated, 3); assert.equal(waits, 1);
 });
 
+test('an env-chosen GPU stack is explicit, so a SwiftShader fallback fails fast', () => {
+  assert.equal(parseCaptureOptions([], {}).gpuExplicit, false);
+  assert.equal(parseCaptureOptions([], { APEX_GL: 'llvmpipe' }).gpuExplicit, true);
+  assert.equal(parseCaptureOptions([], { APEX_GPU: 'hardware' }).gpuExplicit, true);
+  assert.equal(parseCaptureOptions(['--gpu', 'swiftshader'], {}).gpuExplicit, true);
+  const opts = parseCaptureOptions([], { APEX_GL: 'llvmpipe' });
+  assert.throws(() => assertCaptureGpuCapability({ actual: { renderer: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))' } }, opts), /requested GPU profile llvmpipe, actual renderer is .*SwiftShader/);
+});
+
 test('WebGPU capture launch uses the verified software adapter pins and refuses WebGL-only llvmpipe', () => {
   const swift = parseCaptureOptions(['--gpu', 'swiftshader']);
   const launch = captureLaunchOptions(swift, { backend: 'webgpu' });
