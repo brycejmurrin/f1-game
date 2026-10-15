@@ -26,6 +26,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Byte-identical to liverytex's css(), so a palette colour can be matched
@@ -378,7 +379,11 @@ export function replay(LT, teamId, R, palette, bare) {
 // ── CLI ────────────────────────────────────────────────────────────────────
 function main() {
   const args = process.argv.slice(2);
-  const asJson = args.includes("--json");
+  // --help and a typo'd flag (`--jsno`) answer before the sweep runs (#1708).
+  exitIfHelp(args, `usage: node tools/car/crest-sweep.mjs [teamId ...] [--json]
+  Measures every team crest (cover + fin badge) offline: span, min stroke,
+  coverage at 430 px and 40 px; flags SMALL THIN BLEED MIP BLOB FAINT. No browser.`);
+  const asJson = parseFlags(args, ["--json"]).has("--json");
   const want = args.filter((a) => !a.startsWith("--"));
   const { LiveryTex: LT, Teams, Liveries } = loadCrests();
   const ids = (want.length ? want : Teams.LIST.map((t) => t.id));

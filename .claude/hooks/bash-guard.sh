@@ -145,9 +145,17 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 # node` (a digit before the f), `pkill -u root -f chrome` (a flag with an
 # argument) and `pkill --signal 9 -f chrome` (a long flag) walked past. Now ANY
 # non-separator words may precede the -f cluster: PKILL_F.
+#
+# 2026-10-15 (#2125): `pkill -f` was blocked only when the text also named
+# chrom/playwright/node/test-bg/npm, so `pkill -f "serve -l 3456"` passed and
+# killed its own shell (exit 144) twice in census siblings. Every `pkill -f X`
+# matches the hook-wrapped shell, whose argv contains X, whatever X is, so it
+# now blocks unconditionally. `killall` matches process NAMES, not command
+# lines, so it keeps the browser/test-tree scope.
 PKILL_F='pkill([[:space:]]+[^[:space:];&|()]+)*[[:space:]]+(-[A-Za-z0-9]*f[A-Za-z0-9]*|--full)'
-if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}(${PKILL_F}([[:space:]]|\$)|killall[[:space:]])" \
-   && printf '%s' "$SCAN" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
+if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}${PKILL_F}([[:space:]]|\$)" \
+   || { printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}killall[[:space:]]" \
+        && printf '%s' "$SCAN" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; }; then
   echo "BLOCKED: pkill -f / killall matches your own shell (its command line contains the pattern) and orphans Playwright's browsers. Stop a run with 'node tools/ci/test-bg.mjs --stop'; kill orphan Chrome by PID from a listed set: ps -eo pid,comm | awk '\$2==\"chrome\"{print \$1}'" >&2
   exit 2
 fi
