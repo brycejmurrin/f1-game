@@ -61,10 +61,46 @@ test("paint with extra writes the aria-label, plan appended", () => {
   assert.equal(attrs["aria-label"], "Medium tyres, cold, about 5 laps left, BOX L12");
 });
 
+test("compoundChip and paint: COLOURBLIND CUES stamps data-compound on the code chip", () => {
+  const H = load();
+  const chip = { dataset: {}, textContent: "SOFT" };
+  const attrsOff = {};
+  const el = {
+    dataset: {}, querySelector: (sel) => (sel === "#hud-tyre-code" ? chip : null),
+    setAttribute: (k, v) => { attrsOff[k] = v; },
+    getAttribute: (k) => attrsOff[k] ?? null,
+  };
+  assert.equal(H.compoundChip("SOFT"), "SOFT");
+  H.paint(el, { tempS: 90, tempOpt: 90, tempWindow: 15 }, { code: "SOFT", lapsLeft: 3, spent: 0.1 });
+  assert.equal(chip.dataset.compound, undefined);
+
+  const ctx = { console, A11yOpts: { cuesOn: () => true, compoundLetter: (n) => (n.indexOf("SOFT") === 0 ? "S" : "M") } };
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.HudTyres = HudTyres;", ctx);
+  const Hon = ctx.HudTyres;
+  assert.equal(Hon.compoundChip("SOFT"), "S");
+  const chip2 = { dataset: {}, textContent: "SOFT" };
+  const attrs2 = {};
+  const el2 = {
+    dataset: {}, querySelector: () => chip2,
+    setAttribute: (k, v) => { attrs2[k] = v; },
+    getAttribute: (k) => attrs2[k] ?? null,
+  };
+  Hon.paint(el2, { tempS: 90, tempOpt: 90, tempWindow: 15 }, { code: "SOFT", spent: 0 });
+  assert.equal(chip2.dataset.compound, "S");
+  assert.equal(chip2.textContent, "S");
+  ctx.A11yOpts.cuesOn = () => false;
+  Hon.paint(el2, { tempS: 90, tempOpt: 90, tempWindow: 15 }, { code: "SOFT", spent: 0 });
+  assert.equal(chip2.dataset.compound, undefined);
+});
+
 test("CSS: cold/hot carry a glyph after the letter, not colour alone", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
   assert.match(css, /#hud-tyre\[data-temp="cold"\] #hud-tyre-code::after \{ content: "\\2744"/);
   assert.match(css, /#hud-tyre\[data-temp="hot"\] #hud-tyre-code::after \{ content: "\\25B2"/);
+  assert.match(css, /:root\[data-cb-cues="on"\] #hud-tyre-code\[data-compound\]/);
+  assert.match(css, /:root\[data-cb-cues="on"\] #hud-flag\[data-flag-cue\]/);
+  assert.match(css, /:root\[data-cb-cues="on"\] \.sec-row\[data-sec-timing="session"\]/);
   const shell = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   assert.match(shell, /<div id="hud-tyre" role="img" aria-label="Tyres" hidden>/);
 });

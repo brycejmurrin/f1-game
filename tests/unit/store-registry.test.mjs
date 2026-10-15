@@ -83,7 +83,7 @@ function inventory(files = jsFiles("js")) {
 
 // Measured at 78cb4831b. Remove a name when its key gains a writer or goes away.
 const WRITERLESS = new Set(`analogSpeedSteer backgroundMotion breakBarriers c1Pileup career debris debrisCap devApi
-  digitalRate dragSmooth fieldLod forceMobileTier gfxDebug glErrDrain glxInstPerPass glxPerspScalar grLite haptics homeCamera homeScene iceRelayOnly
+  digitalRate dragSmooth fieldLod forceMobileTier gfxBootStepMs gfxDebug glErrDrain glxInstPerPass glxPerspScalar grLite haptics homeCamera homeScene iceRelayOnly
   inputDebug instCellCache marbleGrip mirrorInstEvery modelInst moonShadowCadence motion multiDraw musicStream nostrRelays padCurve
   padDeadzone padSaturation propsUnchunked r2Airborne r3Contact spatialUpscaleGather tiltCurve tlxArrayNearest
   tlxChunkMerge tlxChunkRelease tlxForceBatches tlxForceHw tlxInstPad tlxLampStatic tlxMirLampCap tlxMirrorSweep tlxMobile tlxPack
@@ -93,6 +93,7 @@ const WRITERLESS = new Set(`analogSpeedSteer backgroundMotion breakBarriers c1Pi
 // tlxMaterialDetail is a manual reload-only material-array anisotropy setting (4 default, 8 opt-in).
 // carWarmSlice is the manual race-car warm slicing kill switch (PERF-HUNT-4 F3.3).
 // tlxWarmBeforePack is hunt 5 A kill switch: "0" restores the pack gate on the TLX race-entry warm.
+// gfxBootStepMs is a localStorage-only renderer boot step timeout cap (see docs/DEBUG-HOOKS.md).
 // Read with two defaults at 78cb4831b — mostly deliberate "is it set at all?"
 // probes (null) beside the real default, but the scan cannot tell a probe from
 // drift. Remove a name when its call sites agree.
@@ -104,7 +105,7 @@ const listDefaults = (keys) => keys.map((k) => `  apex26.${k}:\n    ` + inv.defa
 
 test("the scanner still sees the store (health floor, not a ceiling)", (t) => {
   t.diagnostic(`${inv.keys} keys / ${inv.sites} sites; ${inv.writerless.length} writer-less; ${inv.defaults.size} with mixed defaults`);
-  assert.equal(WRITERLESS.size, 90);   // +tlxWarmBeforePack (hunt 5 A kill switch: "0" restores the pack gate on the TLX race-entry warm); +carWarmSlice (PERF-HUNT-4 F3.3 manual warm-slicing kill switch); +tlxMaterialDetail (manual 4/8 material-array setting), +tlxSharpenLimit (manual post limiter); +tlxMirWarmLazy (PERF-HUNT-4 B-F3.1 A/B knob, lane TLX-H4); +tlxCasterAttr (PERF-HUNT-4 A-H4 A/B knob, lane TLX-H4); +glxChunkAlign (PERF-HUNT-4 C-P7, lane GLX-C); +wgxInsetInPass, wgxPackAsync, wgxTransient (PERF-HUNT-4 C-P2 / C-P4 / C-P6 A/B knobs, lane WGX); +liveryAsync (PERF-HUNT-4 C-P3 kill switch, lane CAR: set by hand to restore the synchronous canvas upload); +tlxPad4, tlxMirMips, tlxDepthDiscard, tlxDrawWarm (PERF-HUNT-4 A-W2 / A-H5 / A-P1 / A-W1 A/B knobs, lane TLX-W); +tlxDynUsage (PERF-HUNT-4 A-H1 kill switch, lane RENDER-S); +tlxCoalesce, tlxSharedTex, tlxAttrInst (PERF-HUNT-3 R1 / R2-B14 / R8-A2, lane TLX-2); +tlxTagLess, ssrDayGate, tlxPartWrap, tlxPoolRoot, tlxSkyCache512 (PERF-HUNT-3 R3 / R7 / R9 / R6 / R5 A/B levers); +tlxRoadNormalV2, tlxAoFold, tlxBloom11, tlxMirFold, moonShadowCadence (TLX-PERF-HUNT tier 2 A/B knobs); +glxPerspScalar, glxInstPerPass (PERF-HUNT-2 G11, G8)
+  assert.equal(WRITERLESS.size, 91);   // +gfxBootStepMs (renderer boot step cap override; docs/DEBUG-HOOKS.md); +tlxWarmBeforePack (hunt 5 A kill switch: "0" restores the pack gate on the TLX race-entry warm); +carWarmSlice (PERF-HUNT-4 F3.3 manual warm-slicing kill switch); +tlxMaterialDetail (manual 4/8 material-array setting), +tlxSharpenLimit (manual post limiter); +tlxMirWarmLazy (PERF-HUNT-4 B-F3.1 A/B knob, lane TLX-H4); +tlxCasterAttr (PERF-HUNT-4 A-H4 A/B knob, lane TLX-H4); +glxChunkAlign (PERF-HUNT-4 C-P7, lane GLX-C); +wgxInsetInPass, wgxPackAsync, wgxTransient (PERF-HUNT-4 C-P2 / C-P4 / C-P6 A/B knobs, lane WGX); +liveryAsync (PERF-HUNT-4 C-P3 kill switch, lane CAR: set by hand to restore the synchronous canvas upload); +tlxPad4, tlxMirMips, tlxDepthDiscard, tlxDrawWarm (PERF-HUNT-4 A-W2 / A-H5 / A-P1 / A-W1 A/B knobs, lane TLX-W); +tlxDynUsage (PERF-HUNT-4 A-H1 kill switch, lane RENDER-S); +tlxCoalesce, tlxSharedTex, tlxAttrInst (PERF-HUNT-3 R1 / R2-B14 / R8-A2, lane TLX-2); +tlxTagLess, ssrDayGate, tlxPartWrap, tlxPoolRoot, tlxSkyCache512 (PERF-HUNT-3 R3 / R7 / R9 / R6 / R5 A/B levers); +tlxRoadNormalV2, tlxAoFold, tlxBloom11, tlxMirFold, moonShadowCadence (TLX-PERF-HUNT tier 2 A/B knobs); +glxPerspScalar, glxInstPerPass (PERF-HUNT-2 G11, G8)
   assert.equal(MIXED_DEFAULTS.size, 10);
   assert.ok(inv.keys >= 200, `only ${inv.keys} apex26.* keys found (217 measured) — the scan has stopped seeing them`);
   assert.ok(inv.sites >= 480, `only ${inv.sites} call sites found (515 measured) — the scan has stopped seeing them`);
