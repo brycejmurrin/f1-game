@@ -588,9 +588,9 @@
       // = seamed, low-poly dome) instead of straight-edged ridge() slabs. Width
       // varies per hill so neighbours overlap into a soft, uneven skyline.
       for (const [extra, count, wMin, wVar, hMin, hVar, col, rock] of [
-        [125, 24, 170, 110, 16, 14, [0.30, 0.36, 0.21], [0.46, 0.38, 0.28]],
-        [225, 18, 260, 150, 30, 22, [0.31, 0.34, 0.25], [0.46, 0.40, 0.32]],
-        [370, 11, 450, 200, 52, 34, [0.40, 0.38, 0.32], [0.48, 0.44, 0.38]],
+        [125, 24, 170, 110, 16, 14, [0.30, 0.36, 0.21], [0.36, 0.38, 0.24]],
+        [225, 18, 260, 150, 30, 22, [0.31, 0.34, 0.25], [0.36, 0.37, 0.28]],
+        [370, 11, 450, 200, 52, 34, [0.38, 0.38, 0.32], [0.42, 0.41, 0.35]],
       ]) {
         for (let i = 0; i < count; i++) {
           const a = (i + hash(i * 3 + extra) * 0.6) / count * 6.2832, h = hash(i * 7 + extra);
