@@ -51,11 +51,11 @@ test("raw GitHub URLs use the committed branch path", () => {
   assert.ok(!url.includes("/workspace"));
 });
 
-test("collectSurveyBranchShots includes committed silverstone survey JPEGs", () => {
+test("collectSurveyBranchShots includes committed okayama survey frames on this branch", () => {
   const shots = collectSurveyBranchShots();
   assert.ok(
-    shots.some((s) => s.circuit === "silverstone" && s.sector === "hero-abbey" && s.tod === "dusk"),
-    `expected silverstone branch shots, got ${shots.length} total`,
+    shots.some((s) => s.circuit === "okayama" && s.sector === "f00-orbit" && s.tod === "day"),
+    `expected okayama branch shots, got ${shots.length} total`,
   );
 });
 

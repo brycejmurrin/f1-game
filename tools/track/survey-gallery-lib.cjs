@@ -93,11 +93,16 @@ function branchHasTrackShots(root, ref) {
 
 function listBranchTrackImages(root, branch) {
   const ref = branch.startsWith("origin/") ? branch : `origin/${branch}`;
-  const list = execFileSync(
-    "git",
-    ["ls-tree", "-r", "--name-only", ref, "--", "artifacts/shots/tracks/"],
-    { cwd: root, encoding: "utf8", maxBuffer: 32 << 20 },
-  );
+  let list;
+  try {
+    list = execFileSync(
+      "git",
+      ["ls-tree", "-r", "--name-only", ref, "--", "artifacts/shots/tracks/"],
+      { cwd: root, encoding: "utf8", maxBuffer: 32 << 20 },
+    );
+  } catch (_) {
+    return [];
+  }
   return list
     .split("\n")
     .map((l) => l.trim())
