@@ -419,23 +419,6 @@ test("unit-plan feeds the node-suites matrix and can skip unused slices", () => 
   assert.match(driving, /needs\.unit-plan\.outputs\.driving == 'true'/);
 });
 
-test("gallery:tracks is path-gated (gallery-filter → gallery-build) and feeds ci-verdict", () => {
-  const filter = (ciWorkflow.split("\n  gallery-filter:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.ok(filter, "gallery-filter job missing");
-  assert.match(filter, /artifacts\/shots\/tracks\//);
-  assert.match(filter, /docs\/tracks\//);
-  assert.match(filter, /outputs:\s*\n\s*gallery:/);
-  const build = (ciWorkflow.split("\n  gallery-build:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.ok(build, "gallery-build job missing");
-  assert.match(build, /needs: gallery-filter/);
-  assert.match(build, /needs\.gallery-filter\.outputs\.gallery == 'true'/);
-  assert.match(build, /npm run gallery:tracks/);
-  assert.match(build, /circuit-survey-gallery/);
-  const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.match(body, /- gallery-filter\b/);
-  assert.match(body, /- gallery-build\b/);
-});
-
 test("test:xr is path-gated (xr-filter → xr) and feeds ci-verdict", () => {
   const filter = (ciWorkflow.split("\n  xr-filter:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(filter, "xr-filter job missing");
@@ -1229,8 +1212,8 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   assert.equal(report.rendererGate.deployGate, false,
     "renderer-macos joined the deploy gate — pages.yml aggregates every job in ci.yml, so this must be deliberate");
   assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(),
-    ["gallery-build", "gallery-filter", "renderer-filter", "renderer-macos", "xr", "xr-filter"],
-    "jobs outside the deploy gate: renderer-*, path-gated xr, and track-survey gallery");
+    ["renderer-filter", "renderer-macos", "xr", "xr-filter"],
+    "jobs outside the deploy gate: renderer-* and the path-gated xr suite");
   // The path filter: every renderer backend plus the lighting modules the
   // gfx specs pin, the spec list DERIVED from package.json, fail-safe to run.
   // js/lighting/ as a DIRECTORY, not the six filenames this listed until
