@@ -228,11 +228,15 @@
   padding: calc(var(--pad) * 0.35); gap: 2px;
   min-height: max(36px, var(--tap-min));
 }
-#cr-inner[data-density="compact"] .cr-note,
-#cr-inner[data-shape="tall"] .cr-note {
+#cr-inner:is([data-density="compact"], [data-shape="tall"]) :is(#cr-left, #cr-right) > .sel-label:first-child + .cr-note {
   margin-bottom: 4px; font-size: var(--fs-2); line-height: 1.35;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   overflow: hidden;
+}
+#cr-inner:is([data-density="compact"], [data-shape="tall"]) .cr-slot > .cr-note,
+#cr-inner:is([data-density="compact"], [data-shape="tall"]) :is(#cr-left, #cr-right) > .sel-label:not(:first-child) + .cr-note {
+  display: block; overflow: visible;
+  -webkit-line-clamp: unset; -webkit-box-orient: unset;
 }
 #cr-inner[data-density="compact"] .cr-record {
   padding: calc(var(--pad) * 0.45); gap: 2px;
