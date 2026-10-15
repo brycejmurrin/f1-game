@@ -6,6 +6,13 @@ import path from "node:path";
 
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 const TODS = new Set(["day", "dusk", "dawn", "night"]);
+const WEATHERS = new Set(["dry", "wet", "rain", "overcast", "fog"]);
+/** null = leave the session's weather as it is (track-session's contract). */
+const normWeather = (w, where) => {
+  if (w == null || w === "") return null;
+  if (!WEATHERS.has(String(w))) throw new Error(`${where} invalid (${[...WEATHERS].join("|")})`);
+  return String(w);
+};
 const NAME_RE = /^[A-Za-z0-9._-]{1,80}$/;
 export const MAX_SURVEY_SHOTS = 32;
 export const MAX_SURVEY_TRACKS = 12;
@@ -116,6 +123,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
         frac,
         cam,
         tod,
+        weather: normWeather(s.weather ?? args.weather, `shots[${i}].weather`),
         az: s.az == null ? 45 : Number(s.az),
         el: s.el == null ? 22 : Number(s.el),
         dist: s.dist == null ? 45 : Number(s.dist),
@@ -145,6 +153,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
   const cams = normCam(args.cam ?? args.cams ?? presetDef?.cam);
   const tod = String(args.tod ?? presetDef?.tod ?? "day");
   if (!TODS.has(tod)) throw new Error("tod invalid");
+  const weather = normWeather(args.weather, "weather");
 
   const shots = [];
   for (const frac of fracs) {
@@ -155,6 +164,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
         frac,
         cam,
         tod,
+        weather,
         az: args.az == null ? (presetDef?.az ?? 45) : Number(args.az),
         el: args.el == null ? (presetDef?.el ?? 22) : Number(args.el),
         dist: args.dist == null ? (presetDef?.dist ?? 45) : Number(args.dist),
@@ -258,7 +268,7 @@ export function writeSurveyIndex(outDir, meta) {
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
   const rows = (meta.shots || []).map((s) => {
     const file = `${esc(s.name)}.png`;
-    const cap = `${s.name} · ${s.track || meta.track} · frac ${s.frac} · ${s.cam} · ${s.tod}`;
+    const cap = `${s.name} · ${s.track || meta.track} · frac ${s.frac} · ${s.cam} · ${s.tod}${s.weather ? ` · ${s.weather}` : ""}`;
     return `<figure><a href="${file}"><img src="${file}" loading="lazy" alt="${esc(cap)}"></a><figcaption>${esc(cap)}</figcaption></figure>`;
   }).join("\n");
   const panel = meta.panelPng ? `<p>Panel: <a href="${esc(path.basename(meta.panelPng))}">${esc(path.basename(meta.panelPng))}</a></p>` : "";

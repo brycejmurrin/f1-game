@@ -41,6 +41,30 @@ test("images under tests/ live only in Playwright *-snapshots/ baselines", () =>
     "tests/ui-screenshots/*.png in two days; deleted since, they are still ~750 MB of every clone.");
 });
 
+// docs/ and artifacts/ take no new images on the deploy branch: survey sheets,
+// contact sheets and screenshot runs go on `track-survey-assets` (AGENTS.md
+// §Git branch & deploy) and docs link them by a pinned sha. 2026-10-15: 146
+// such images (123 MB, ~37% of the checkout) moved there; these 15 small ones
+// (6.5 MB) predate the rule and stay until someone moves them too. Shrink
+// this list, never grow it.
+const DOCS_IMAGE_ALLOW = new Set([
+  ...["albert_park", "dijon", "kyalami", "mexico"].flatMap((t) =>
+    ["after", "before"].map((w) => `artifacts/night-lamps-${w}/${t}-night.jpg`)),
+  ...["bahrain", "monaco-eye", "montreal-eye", "montreal", "singapore", "spa", "vegas"]
+    .map((n) => `docs/research/wgx-gallery/${n}.png`),
+]);
+
+test("no new images under docs/ or artifacts/ (they belong on track-survey-assets)", () => {
+  const stray = tracked.filter((f) => /^(docs|artifacts)\//.test(f) && !DOCS_IMAGE_ALLOW.has(f));
+  assert.deepEqual(stray, [],
+    `images under docs/ or artifacts/ on the deploy branch:\n  ${stray.join("\n  ")}\n\n` +
+    "Commit them on the track-survey-assets branch and link them from the doc by a pinned sha\n" +
+    "(https://github.com/brycejmurrin/f1-game/blob/<sha>/<path>?raw=1). Every committed version\n" +
+    "stays in every clone of the deploy branch forever.");
+  const gone = [...DOCS_IMAGE_ALLOW].filter((f) => !tracked.includes(f));
+  assert.deepEqual(gone, [], "allow-listed images no longer tracked: drop them from DOCS_IMAGE_ALLOW");
+});
+
 test(`no image outside assets/ is over ${MAX_MB} MB`, () => {
   const big = tracked.filter((f) => !f.startsWith("assets/"))
     .map((f) => { let s = 0; try { s = fs.statSync(path.join(ROOT, f)).size; } catch (_) { /* deleted in the worktree */ } return [f, s]; })

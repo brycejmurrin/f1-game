@@ -177,6 +177,9 @@ const ShadowPass = (function () {
       // _shadowMats stays pooled — pushCaster overwrites it slot by slot.
       _shadowCount = 0;
       _shadowCars.length = 0; _shadowTeams.length = 0; _shadowCast.length = 0;
+      // The car map holds the PREVIOUS session's cars: the cadence keep must not
+      // re-arm it until a pass of this session draws it (#2180).
+      _carMapEmpty = true;
     }
     // The render loop: count reset before the car loop, one push per drawn car
     // (blob shadow this frame; sun / lamp caster next frame), flush after.

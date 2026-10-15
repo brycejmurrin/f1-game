@@ -83,6 +83,28 @@
         motorhome(k, side, gap, w, h, d, opts);
       };
 
+      // Flat-roof club building seated on terrain (building() uses ribbon Y only;
+      // pit offices were buried ~0.5 m on the paddock grade).
+      const clubBuilding = (kk, side, gap, w, h, d, wall) => {
+        const dist = gap + w / 2;
+        const p = anchor(kk, side, dist);
+        if (!p || onTrack(p.c[0], p.c[2], 6)) return;
+        const gy = terrainYAt(p.c[0], p.c[2]);
+        const lift = gy != null ? Math.max(0.04, gy - p.c[1] + 0.06) : 0.06;
+        const b = [p.r, p.u, p.t];
+        modelGroup(`zolder-pit-office-${kk}-${gap}`, {
+          center: vadd(p.c, p.u, lift + h / 2),
+          size: [w + 1, h + 1.2, d + 1],
+          basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, vadd(p.c, p.u, lift + h / 2), [w, h, d], wall, b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(p.c, p.u, lift + h + 0.22), [w + 0.4, 0.35, d + 0.4], GREY, b);
+          stage._mat = 0;
+        });
+      };
+
       // Open-rake stand (brands/sepang pattern): rows rise AWAY from the
       // track. Used for the S/F permanent tribune — grandstandEx at
       // sl(0.012) gap 12 len 150 ships SUPPRESSED (0 prims) on this fold.
@@ -95,7 +117,7 @@
         const b = [a.r, a.u, a.t];
         // Seat plinth a touch above terrain so risers do not bury 0.2 m.
         const gy = terrainYAt(a.c[0], a.c[2]);
-        const dy = gy != null ? (gy - a.c[1] + 0.18) : 0.18;
+        const dy = gy != null ? (gy - a.c[1] + 0.21) : 0.21;
         stage._mat = MAT.CONCRETE;
         addBox(stage, vadd(vadd(a.c, a.r, side * (depth * 0.48)), a.u, dy + h * 0.40),
           [depth * 0.28, h * 0.80, len], shell, b);
@@ -429,9 +451,9 @@
         building(kk, 1, 14, 8, 4.4 + (h > 0.7 ? 1.2 : 0), 8.5,
           { wall: h < 0.55 ? WHITE : GREY });
       }
-      // Team offices over the middle of the pit block — set further back.
-      building(K(sl(0.008)), 1, 32, 12, 7.5, 10, { wall: WHITE });
-      building(K(sl(0.038)), 1, 34, 11, 6.0, 10, { wall: GREY });
+      // Team offices over the middle of the pit block — terrain-seated.
+      clubBuilding(K(sl(0.008)), 1, 32, 12, 7.5, 10, WHITE);
+      clubBuilding(K(sl(0.038)), 1, 34, 11, 6.0, 10, GREY);
       if (typeof indexSolid === "function") {
         indexSolid(sl(0.995), sl(0.020), 1, 24, 16);
         indexSolid(sl(0.028), sl(0.050), 1, 26, 16);
@@ -543,7 +565,7 @@
         if (a && !onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
           const gy = terrainYAt(a.c[0], a.c[2]);
-          const dy = gy != null ? (gy - a.c[1] + 0.25) : 0.25;
+          const dy = gy != null ? Math.max(0, gy - a.c[1]) + 0.10 : 0.10;
           const POLE = [0.92, 0.92, 0.90];
           const CAPS = [
             [0.78, 0.12, 0.14],   // helmet red
@@ -557,10 +579,10 @@
             size: [10, 11, 16], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
-            // Plinth seated above terrain — was buried 0.37 m on the paddock grade.
-            addBox(stage, vadd(a.c, a.u, dy + 0.35), [8.5, 0.3, 14], CONCRETE, b);
+            // Plinth bottom on terrain (survey: was floating ~0.2 m above grade).
+            addBox(stage, vadd(a.c, a.u, dy + 0.15), [8.5, 0.3, 14], CONCRETE, b);
             for (let i = 0; i < 5; i++) {
-              const p = vadd(vadd(a.c, a.t, (i - 2) * 2.6), a.u, dy + 0.2);
+              const p = vadd(vadd(a.c, a.t, (i - 2) * 2.6), a.u, dy + 0.15);
               stage._mat = MAT.CONCRETE;
               addCyl(stage, p, 0.22, 7.2, POLE, 6, b);
               stage._mat = MAT.METAL;

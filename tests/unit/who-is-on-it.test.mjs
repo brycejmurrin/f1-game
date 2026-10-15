@@ -5,6 +5,7 @@
 // the text), and those are what a unit test can pin without touching the
 // remote. Importing the module must run nothing: the CLI entry is guarded on
 // argv[1]. Under a second.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";

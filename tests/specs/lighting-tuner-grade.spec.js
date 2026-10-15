@@ -121,6 +121,13 @@ async function openImageTuner(page) {
   await page.goto("/");
   await bootHeadless(page, "bahrain");
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
+  // The shipped presets are the LAZY_RACE payload, not awaited by boot or by
+  // race(). Until they land every track resolves to TUNE_DEFS defaults, so a
+  // lightCopy("look") made then skips each knob that equals a default and the
+  // target later resolves its own preset instead. Pages 38570932657 (#1956):
+  // monza read roadRough 1 / shadowStr 1.15 / starBright 0.55 (defaults + its
+  // own night|wet preset) against bahrain's 0.85 / 0.88 / 1.
+  await page.waitForFunction(() => window.LightPresets != null, null, { polling: 100, timeout: TRACK_MS });
   await walkToImageTuner(page);
 }
 
