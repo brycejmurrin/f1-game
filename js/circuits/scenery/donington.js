@@ -31,8 +31,9 @@
    a back treeline, a car park, a service compound or a field boundary — so no
    feature reads as a single cardboard rank. Deep ranks go through rank() /
    safeBox() / carPark(), which pre-test onTrack() and simply skip: that is how
-   this file keeps guard drops at ZERO. forestEdge()/hedge()/spectatorHill()
-   have no such guard, so they stay at the shallow gaps that are known clean.
+   this file keeps the guarded rows clean. forestEdge()/hedge()/spectatorHill()
+   and the engine's own plantTree pass have no such guard: verify-track still
+   reports ~139 engine tree drops (MEASURED 2026-10-15), so drops are NOT zero.
 
    Deviation from the brief's distance column: the Collection sits at gap 58,
    not 34 — the infield is narrow at s 0.048 and anything closer overlapped the
@@ -167,7 +168,7 @@
       // moves the props).
       const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
-      building(K(sl(0.968)), 1, 15, 14, 6.5, 108, { col: WALL, roof: ROOF });
+      building(K(sl(0.968)), 1, 26, 14, 4.8, 108, { col: WALL, roof: ROOF });
       building(K(sl(0.032)), 1, 19, 12, 5.5, 34, { col: WALL_2, roof: ROOF });
       // Race control / timing over the end of the garage run — still club scale.
       building(K(sl(0.004)), 1, 25, 10, 7.0, 16, { col: CREAM, roof: ROOF_D });
@@ -231,7 +232,7 @@
       }
       building(K(0.072), 1, 28, 12, 4.8, 18, { col: WALL_2, roof: ROOF, flat: true });
       groundPatch(K(0.046), 1, 24, [26, 0.18, 54], TARMACISH);
-      hedge(0.034, 0.078, 1, 17, 2.2, HEDGE_C);
+      hedge(0.034, 0.060, 1, 17, 2.2, HEDGE_C);   // ends before the Redgate apex (0.0663)
       for (let i = 0; i < 4; i++) specimen(K(0.040 + i * 0.011), 1, 60, i * 7);
       // --- the closed museum still reads as a SITE: second wing, entrance
       //     block, coach apron and visitor parking (empty hardstanding).
@@ -371,7 +372,7 @@
       for (let i = 0; i < 6; i++) bush(K(0.258 + i * 0.017), -1, 26 + (i % 2) * 7, LEAF_D);
       hut(K(0.300), -1, 24, WALL_2);
 
-      // 9. s 0.3342 +1 15 — OLD HAIRPIN, the lowest point of the lap
+      // 9. s 0.3342 +1 15 — OLD HAIRPIN (not the lap's low point: that is ~-26 m at 0.6175, Schwantz)
       // Leave a planting strip behind the full hedge, while preserving the
       // marshal post and guardrail in the narrower foreground corridor.
       spectatorHill(0.318, 0.372, 1, 18, { h: 8.0, col: GRASS });
@@ -387,7 +388,7 @@
       hedge(0.306, 0.386, 1, 54, 2.1, HEDGE_L);
       rank(0.302, 0.392, 1, 64, 16, 1270, 9.5, 16.0);
 
-      // 10. s 0.4552 +1 10 — STARKEY'S BRIDGE, on the climb back out
+      // 10. s 0.4552 +1 10 — STARKEY'S BRIDGE (the deck sits mid-descent, y ~ -18.7 m, per survey)
       guardrail(0.415, 0.495, 1, 11, ARMCO);
       guardrail(0.415, 0.495, -1, 11, ARMCO);
       sponsorHoarding(0.440, 0.472, 1, 12);
