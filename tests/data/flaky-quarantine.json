@@ -23,12 +23,6 @@
       "since": "2026-10-02",
       "owner": "ui-menu-a11y / TLX mirror prepare (js/render/shared/mirror-pass.js prepareRace, hud-mirror.spec.js)",
       "why": "Re-scoped 2026-10-05 to the test that actually flakes: TLX 'prepares an enabled mirror before the countdown advances and reuses its target in the race' failed on PR run 37238728678 (2026-10-04 22:09) with state:count, preparing:false, prepared:false, renders 0. The probable cause is prepareRace's 30 s wall-clock give-up on a cold TLX boot (test audit T7, open). The row was first written 2026-10-02 for TLX 'renders the mirror pass...' on macOS Metal (PR #709 run 36943992701), which has not recurred. The quarantine keys on the spec, so the GLX tests ride along; delete the row with the T7 fix."
-    },
-    {
-      "spec": "tests/specs/logging.spec.js",
-      "since": "2026-10-14",
-      "owner": "fixtures / sharedTest loadTrack (pinFactorySeat / race-start grid)",
-      "why": "hooks browser-group shard 4/4 on cursor/agent-view-flakes-7837 (run 38510191253, llvmpipe): Log › a track build reports through it failed first try with 'Race start did not reach the grid' then passed on retry. Same Mercedes-kit race-start class as debris/time-trial. A global installMocks factory pin fixed hooks but broke menu-baseline garage goldens + parts-persistence on full-tier (run 38527815604) — do not re-pin globally. Spec is VM-twinned so Selected specs never runs it; quarantine only silences APEX_FAIL_ON_FLAKY on browser-group. Delete when sharedTest loadTrack pins a factory seat without changing GarageDefaults for menu/parts specs."
     }
   ]
 }
