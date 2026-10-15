@@ -12,7 +12,7 @@
     // plunge (v0 convention; T1 measured LEFT, matches the real T1).
     // A start line is always on a straight: docs/tracks/START-LINES.md.
     // No sceneryStartFrac: the scenery is authored against this line (pit bays
-    // 0.948-0.990, T1 gravel 0.055, T8 amphitheatre 0.34-0.46, T13 gravel
+    // 0.948-0.990, T1 gravel 0.055, T8 amphitheatre 0.395-0.515, T13 gravel
     // 0.905); a 0.98 sceneryStartFrac shifts all of it 0.925, paddock onto T12.
     startFrac: 0.0000,
     // The main grandstand (scenery grandstandEx 0.005, -1) is this circuit's own
@@ -29,7 +29,7 @@
     terrainOuter: 120,
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.93, s1: 0.08 },  // pits
-      { kind: "foliage", s0: 0.34, s1: 0.46 },              // the Turn 8 amphitheatre
+      { kind: "foliage", s0: 0.383, s1: 0.519 },            // the Turn 8 amphitheatre
     ],
     // Dry Thracian hillside: hazy warm sun, parched grass, pale limestone dust.
     pal: {
@@ -58,8 +58,10 @@
     // Turn 8 is the famous one: a long, banked, quadruple-apex left taken flat.
     bankZones: [
       { frac: 0.050, angleDeg: 4.0, widthM: 130 },   // Turn 1
-      { turn: 6, angleDeg: 7.0, widthM: 300 },   // Turn 8 — the big one; re-seated frac 0.4 (was 179 m off any apex)
-      { turn: 11, angleDeg: 3.5, widthM: 130 },   // Turn 12; re-seated frac 0.76 (was 641 m off any apex)
+      // Turn 8: the long left sweeper, curvature peaks 0.438-0.476 (turns[6..7], both LEFT).
+      // `turn: 6` resolved to turns[5] = 0.3659, a RIGHT-hander (survey 2026-10-15).
+      { frac: 0.457, angleDeg: 7.0, widthM: 300 },
+      { turn: 11, angleDeg: 3.5, widthM: 130 },   // Turn 12 (turns[10] = 0.8819, left)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

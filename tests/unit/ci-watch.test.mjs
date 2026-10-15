@@ -368,3 +368,83 @@ test("resolveSha: an unresolvable or ambiguous short sha is a clear error, not a
   assert.match(r.error, /cannot expand --sha 87575fbde/);
   assert.match(resolveSha("--evil", { revParse: () => "", request: () => ({}) }).error ?? "", /invalid --sha/);
 });
+
+test("#2184: a label-noise run (all jobs skipped, success) never hides the real verdict on the head", async () => {
+  const { labelNoiseRun } = await import("../../tools/ci/ci-watch.mjs");
+  const noise = { ...run(2, "CI", "completed", "success", "2026-10-01T00:05:00Z"), display_title: "CI ignored: label bug" };
+  const real = { ...run(1, "CI", "completed", "failure", "2026-10-01T00:00:00Z"), display_title: "Fix the thing" };
+  assert.ok(labelNoiseRun(noise) && !labelNoiseRun(real) && !labelNoiseRun({}));
+  const result = await afterThreeMinutes((endpoint) => {
+    if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [noise, real] } };
+    if (endpoint === "actions/runs/1/jobs?per_page=100") return { json: { jobs: [{ id: 9, name: "CI", status: "completed", conclusion: "failure", steps: [] }] } };
+    if (endpoint.startsWith("check-runs/")) return { json: [] };
+    throw new Error(endpoint);
+  }, { once: true });
+  assert.equal(result.code, 1, result.lines.join("\n"));
+  assert.ok(result.lines.some((line) => line.startsWith("= ci failed")));
+  assert.ok(!result.lines.some((line) => line.includes("#2 ")), "the noise run is not even announced");
+});
+
+test("#2184: `= ci none-yet` names the PR's mergeable_state", async () => {
+  const lines = []; let calls = 0;
+  const code = await watchSha(SHA, { interval: 1, deadline: Infinity, once: true,
+    now: () => calls++ === 0 ? 0 : 700000, wait: async () => {}, report: (l) => lines.push(l),
+    request: (endpoint) => {
+      if (endpoint.startsWith("actions/runs?")) return { json: { workflow_runs: [] } };
+      if (endpoint === associated) return { json: [pr()] };
+      if (endpoint === "pulls/738") return { json: { ...pr(), mergeable_state: "unknown" } };
+      if (endpoint.endsWith("/check-runs?per_page=1")) return { json: { total_count: 0 } };
+      throw new Error(endpoint);
+    } });
+  assert.equal(code, 124);
+  assert.ok(lines.some((l) => /= ci none-yet — PR #738 .*mergeable_state unknown/.test(l)), lines.join("\n"));
+});
+
+// #2259: started right after a run-ci label, ci-watch printed `= ci passed`
+// from the PREVIOUS (skipped draft) run on the same head, before the run the
+// label started was listed (PR #2224, 2026-10-15). A floor time (the trigger
+// event) makes older runs not count; no newer run within the grace is `none`.
+test("#2259: an older completed run plus a label at T and no run after T is never `= ci passed`", async () => {
+  const { triggerFloor } = await import("../../tools/ci/ci-watch.mjs");
+  const T = Date.parse("2026-10-15T17:08:05Z");
+  const old = { ...run(1, "CI", "completed", "success", "2026-10-15T15:38:36Z"), display_title: "x" };
+  const fresh = { ...run(2, "CI", "queued", null, "2026-10-15T17:08:09Z"), display_title: "x" };
+  const watch = (runs, opts = {}) => {
+    const lines = []; let t = 0, waits = 0;
+    return watchSha(SHA, { interval: 1, deadline: Infinity, once: false, since: T, grace: 300000,
+      now: () => t, wait: async () => { waits++; t += 60000; }, report: (l) => lines.push(l),
+      request: (e) => {
+        if (e.startsWith("actions/runs?")) return { json: { workflow_runs: typeof runs === "function" ? runs(waits) : runs } };
+        if (/^actions\/runs\/\d+\/jobs/.test(e)) return { json: { jobs: [job(9, "guards", "completed", "success")] } };
+        throw new Error(e);
+      }, ...opts }).then((code) => ({ code, lines, waits }));
+  };
+  const stale = await watch([old]);
+  assert.ok(!stale.lines.some((l) => /= ci passed/.test(l)), stale.lines.join("\n"));
+  assert.equal(stale.code, 124);
+  assert.ok(stale.lines.some((l) => /^= ci none — no run for .* created after 2026-10-15T17:08:05/.test(l)), stale.lines.join("\n"));
+  assert.ok(stale.waits >= 5, "kept polling through the grace");
+  // The new run appears on the second poll: its verdict, never the old one's.
+  const late = await watch((w) => w < 1 ? [old] : [old, { ...fresh, status: "completed", conclusion: "success" }]);
+  assert.equal(late.code, 0);
+  assert.ok(late.lines.some((l) => /CI #2 /.test(l)) && !late.lines.some((l) => /CI #1 /.test(l)), late.lines.join("\n"));
+  // --once with only stale runs: not green.
+  const once = await watch([old], { once: true });
+  assert.equal(once.code, 124);
+  assert.ok(!once.lines.some((l) => /= ci passed/.test(l)));
+  // No floor: today's behaviour (the old run's verdict) is unchanged.
+  assert.equal((await watch([old], { since: null })).code, 0);
+
+  // The floor: the newest run-ci label while DRAFT, ready_for_review or reopened.
+  const ev = (event, at, extra = {}) => ({ event, created_at: at, ...extra });
+  const pages = (list) => (e) => { assert.match(e, /^issues\/738\/events\?per_page=100&page=\d$/); return { json: e.endsWith("page=1") ? list : [] }; };
+  const draft = { number: 738, draft: true };
+  assert.equal(triggerFloor(draft, pages([ev("labeled", "2026-10-15T17:00:00Z", { label: { name: "area:tooling" } }),
+    ev("labeled", "2026-10-15T17:08:05Z", { label: { name: "run-ci" } }), ev("labeled", "2026-10-15T17:09:00Z", { label: { name: "claimed" } })])).floor, T,
+    "another label is noise (its run is titled `CI ignored`)");
+  assert.equal(triggerFloor({ number: 738, draft: false }, pages([ev("labeled", "2026-10-15T17:00:00Z", { label: { name: "run-ci" } }),
+    ev("ready_for_review", "2026-10-15T17:08:05Z"), ev("labeled", "2026-10-15T17:20:00Z", { label: { name: "run-ci" } })])).floor, T,
+    "run-ci on a READY PR starts no real run");
+  assert.equal(triggerFloor(draft, pages([])).floor, null);
+  assert.match(triggerFloor(draft, () => ({ error: "HTTP 502" })).error, /HTTP 502/);
+});

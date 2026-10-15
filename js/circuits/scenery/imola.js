@@ -15,11 +15,16 @@
               grandstandEx, spectatorHill, building, motorhome, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall, lampPost,
               forestEdge } = api;
+      // K(s) lands at racing frac s + _sceneryShift (0.509); sl(f) is the inverse, so K(sl(f)) = f.
+      // R(f) is that: a RACING-lap fraction. Every landmark below is placed with R / sl, never a raw K.
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
+      const sl = (f) => (f + SL) % 1;
+      const R = (f) => K(sl(f));
       const terrainPatch = (id, s, side, gap, size, col, opts) =>
-        groundPatch(K(s), side, gap, [size[0], 0.18, size[1]], col,
+        groundPatch(K(sl(s)), side, gap, [size[0], 0.18, size[1]], col,
           Object.assign({ id, samples: Math.max(3, Math.ceil(size[0] / 10)) }, opts));
       const riverSurface = (id, s, side, gap, size, col, opts) =>
-        waterSurface(K(s), side, gap, [size[0], 0.16, size[1]], col,
+        waterSurface(K(sl(s)), side, gap, [size[0], 0.16, size[1]], col,
           Object.assign({ id }, opts));
 
       const CANOPY2 = [0.17, 0.44, 0.19];
@@ -77,13 +82,21 @@
           [0.600, -1, 112, 8, 70, 0.09],
           [0.665, -1, 148, 6, 56, -0.07],
         ]) {
-          const kk = K(sf);
+          const kk = R(sf);
           const a0 = anchor(kk, side, gap);
           if (onTrack(a0.c[0], a0.c[2], 30)) continue;
           const b = [a0.r, a0.u, a0.t];
           for (let r = 0; r < rows; r++) {
             const a = anchor(kk + Math.round(r * ang * 10), side, gap + r * 6.5);
             if (onTrack(a.c[0], a.c[2], 24)) continue;
+            const rowLen0 = len * 1.08;
+            // Rows on a hillside sink their soil strip and posts into the slope: skip them.
+            const rowYs = [];
+            for (const [ex, ez] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+              rowYs.push(terrainYAt(a.c[0] + a.t[0] * ex * rowLen0 / 2 + a.r[0] * ez * 2.3,
+                                    a.c[2] + a.t[2] * ex * rowLen0 / 2 + a.r[2] * ez * 2.3));
+            }
+            if (rowYs.some((y) => !Number.isFinite(y)) || Math.max(...rowYs) - Math.min(...rowYs) > 0.5) continue;
             const hv = hash(kk * 17 + r * 29);
             const rowLen = len * (0.86 + hv * 0.22);
             addBox(out, vadd(a.c, a.u, 0.06), [4.6, 0.12, rowLen], SOIL, b);
@@ -150,50 +163,40 @@
 
       // Overlapping water + bank strips so the river reads as one ribbon at race speed.
       const SANTERNO = [
-        [0.94, 20, [52, 130]], [0.97, 20, [55, 140]], [0.00, 20, [58, 160]],
-        [0.03, 20, [56, 150]], [0.06, 20, [54, 145]], [0.09, 20, [52, 140]],
+        [0.94, 20, [52, 130]], [0.97, 20, [55, 142]], [0.00, 20, [58, 142]],
+        [0.03, 20, [56, 142]], [0.06, 20, [20, 100]], [0.09, 20, [52, 140]],
         [0.12, 19, [50, 130]], [0.15, 18, [48, 120]], [0.18, 18, [46, 100]],
       ];
       SANTERNO.forEach(([s, gap, sz], i) =>
         riverSurface(`santerno-water-${i}`, s, 1, gap, sz, RIVER, { required: true }));
-      const SANTERNO_BANK = [
-        // Split the mid-river bank into two short patches: a single 40 m slab
-        // at s≈0.08 underlaps the Acque Minerali return leg and the footprint
-        // guard suppresses the whole group. Two ~22 m patches leave a gap at
-        // the crossing and still read as one bank at race speed.
-        [0.95, 9,  [12, 120]], [0.00, 9,  [12, 140]], [0.04, 9,  [12, 130]],
-        [0.065, 10, [12, 22]], [0.095, 10, [12, 22]],
-        [0.12, 10, [11, 110]], [0.16, 10, [11, 90]],
-      ];
-      SANTERNO_BANK.forEach(([s, gap, sz], i) =>
-        terrainPatch(`santerno-bank-${i}`, s, 1, gap, sz, BANK));
+      // The santerno-bank-* BANK-coloured ground quads (12 m x 90-140 m) were removed: flat,
+      // untextured, brighter than the terrain and edged by a dark side face, they read as an
+      // olive slab beside the straight (survey 2026-10-15 defect 2). The terrain is the bank.
 
-      backdrop(K(0.34), -1, 72, [40, 28, 58], [0.12, 0.28, 0.14]);
-      backdrop(K(0.36), -1, 90, [36, 34, 54], [0.10, 0.24, 0.12]);
-      backdrop(K(0.35),  1, 68, [38, 26, 56], [0.13, 0.30, 0.15]);
-      backdrop(K(0.38), -1, 58, [32, 22, 48], [0.11, 0.26, 0.13]);
 
-      terrainPatch("acque-mist-0", 0.45,  1, 14, [48, 80], [0.72, 0.78, 0.74]);
-      terrainPatch("acque-mist-1", 0.48,  1, 16, [46, 78], [0.74, 0.80, 0.76]);
-      terrainPatch("acque-mist-2", 0.51,  1, 15, [44, 72], [0.70, 0.76, 0.72]);
-      terrainPatch("acque-mist-3", 0.54,  1, 14, [42, 65], [0.73, 0.79, 0.75]);
-      terrainPatch("acque-mist-4", 0.48, -1, 12, [36, 55], [0.71, 0.77, 0.73]);
+      backdrop(R(0.34), -1, 72, [40, 28, 58], [0.12, 0.28, 0.14]);
+      backdrop(R(0.36), -1, 90, [36, 34, 54], [0.10, 0.24, 0.12]);
+      backdrop(R(0.35),  1, 68, [38, 26, 56], [0.13, 0.30, 0.15]);
+      backdrop(R(0.38), -1, 58, [32, 22, 48], [0.11, 0.26, 0.13]);
+
+      // Acque Minerali "mist" was five flat pale ground quads (44x72 m); they read as an
+      // unlit slab with a hard edge (survey 2026-10-15 defect 2), so the hollow's mist is dropped.
       // Extra dark canopy walls for the enclosed park-in-the-loop read
-      backdrop(K(0.46),  1, 42, [34, 20, 50], [0.08, 0.20, 0.10]);
+      backdrop(R(0.46),  1, 42, [34, 20, 50], [0.08, 0.20, 0.10]);
       // dist 60 (was 48): at 48 the engine's per-primitive road cull ate this
       // canopy's frustum base near the start/finish leg, leaving its dome cap
       // hanging 10.7 m up (float-audit frac 0.009, lat 55).
-      backdrop(K(0.50),  1, 60, [36, 24, 52], [0.07, 0.18, 0.09]);
-      backdrop(K(0.54), -1, 40, [32, 18, 48], [0.09, 0.22, 0.11]);
+      backdrop(R(0.50),  1, 60, [36, 24, 52], [0.07, 0.18, 0.09]);
+      backdrop(R(0.54), -1, 40, [32, 18, 48], [0.09, 0.22, 0.11]);
 
-      backdrop(K(0.60), -1,  70, [44, 26, 58], [0.12, 0.28, 0.14]);
-      backdrop(K(0.63), -1,  88, [48, 32, 62], [0.10, 0.24, 0.12]);
-      backdrop(K(0.66), -1, 100, [46, 34, 60], [0.11, 0.26, 0.13]);
-      backdrop(K(0.69), -1, 118, [42, 30, 56], [0.09, 0.22, 0.11]);
-      backdrop(K(0.64),  1,  78, [38, 24, 52], [0.12, 0.28, 0.14]);
+      backdrop(R(0.60), -1,  70, [44, 26, 58], [0.12, 0.28, 0.14]);
+      backdrop(R(0.63), -1,  88, [48, 32, 62], [0.10, 0.24, 0.12]);
+      backdrop(R(0.66), -1, 100, [46, 34, 60], [0.11, 0.26, 0.13]);
+      backdrop(R(0.69), -1, 118, [42, 30, 56], [0.09, 0.22, 0.11]);
+      backdrop(R(0.64),  1,  78, [38, 24, 52], [0.12, 0.28, 0.14]);
       // Classic Imola campanile (bell tower) visible above treeline
       {
-        const ac = anchor(K(0.64), -1, 120);
+        const ac = anchor(R(0.64), -1, 120);
         const tH = 30;
         addCyl(out, ac.c, 2.0, tH, STONE2, 8, [ac.r, ac.u, ac.t]);
         addBox(out, vadd(ac.c, ac.u, tH), [5.0, 2.4, 5.0], STONE, [ac.r, ac.u, ac.t]);
@@ -214,8 +217,6 @@
       // sl(f) lands at engine frac f. The engine pit complex is on the LEFT
       // (imola.js `pit.side: -1`, docs/tracks/imola.md), so pit-side stands
       // and the tower stand behind its ~30 m keep-out (gap 34 / 36).
-      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
-      const sl = (f) => (f + SL) % 1;
       // The pit complex, as SIX blocks behind the pit wall rather than one
       // 130 m slab at gap 1. The single call emitted NOTHING — verified by
       // vertex count, which is identical with the line deleted — because it
@@ -280,16 +281,16 @@
       }
 
       terrainPatch("tamburello-lawn", 0.05, -1, 12, [18, 20], BANK);
-      place(K(0.05), -1, 2, [0.4, 0.3, 7], RED);
-      place(K(0.06), -1, 2, [0.4, 0.3, 7], WHITE);
+      place(R(0.05), -1, 2, [0.4, 0.3, 7], RED);
+      place(R(0.06), -1, 2, [0.4, 0.3, 7], WHITE);
       {
-        const am = anchor(K(0.07), -1, 8);
+        const am = anchor(R(0.07), -1, 8);
         addBox(out, vadd(am.c, am.u, 1.25), [3, 2.5, 0.4], [0.90, 0.90, 0.88], [am.r, am.u, am.t]);
       }
 
       terrainPatch("villeneuve-gravel", 0.12, -1, 5, [24, 30], GRAVEL);
-      place(K(0.12), -1, 2, [0.4, 0.3, 7], RED);
-      place(K(0.13), -1, 2, [0.4, 0.3, 7], WHITE);
+      place(R(0.12), -1, 2, [0.4, 0.3, 7], RED);
+      place(R(0.13), -1, 2, [0.4, 0.3, 7], WHITE);
       spectatorHill(0.113, 0.138, -1, 20, { rows: 3, rise: 1.1, depth: 2.0,
         density: 0.5, grass: BANK, crowd: [CROWD_A, CROWD_B, CROWD_C, WHITE] });
 
@@ -305,31 +306,37 @@
       // Rivazza spectatorHills. A second spectatorHill here blew the tris ratchet.
 
       for (const side of [-1, 1]) {
-        place(K(0.645), side, 2.2, [1.0, 1.35, 9], RED);
-        place(K(0.655), side, 2.2, [1.0, 1.35, 9], WHITE);
-        place(K(0.665), side, 2.2, [1.0, 1.40, 10], RED);
-        place(K(0.675), side, 2.2, [1.0, 1.40, 10], WHITE);
-        place(K(0.685), side, 2.2, [0.95, 1.25, 8], RED);
+        place(R(0.645), side, 2.2, [1.0, 1.35, 9], RED);
+        place(R(0.655), side, 2.2, [1.0, 1.35, 9], WHITE);
+        place(R(0.665), side, 2.2, [1.0, 1.40, 10], RED);
+        place(R(0.675), side, 2.2, [1.0, 1.40, 10], WHITE);
+        place(R(0.685), side, 2.2, [0.95, 1.25, 8], RED);
       }
-      bush(K(0.66), -1, 10, BANK);
-      bush(K(0.66),  1, 12, [0.16, 0.36, 0.18]);
-      bush(K(0.64), -1, 8, [0.14, 0.32, 0.15]);
-      bush(K(0.68),  1, 9, [0.15, 0.34, 0.16]);
+      bush(R(0.66), -1, 10, BANK);
+      bush(R(0.66),  1, 12, [0.16, 0.36, 0.18]);
+      bush(R(0.64), -1, 8, [0.14, 0.32, 0.15]);
+      bush(R(0.68),  1, 9, [0.15, 0.34, 0.16]);
 
       grandstandEx(0.80, -1, 16, 52, null, null,
         { livery: "crimson", roof: "cantilever" });
       terrainPatch("rivazza-gravel-0", 0.79, -1, 6, [32, 55], GRAVEL);
       terrainPatch("rivazza-gravel-1", 0.81, -1, 7, [34, 58], GRAVEL);
-      terrainPatch("rivazza-bank-0", 0.80, -1, 18, [40, 62], BANK);
-      terrainPatch("rivazza-bank-1", 0.83, -1, 22, [38, 58], BANK);
-      terrainPatch("rivazza-bank-2", 0.82,  1, 16, [28, 40], BANK);
+      // rivazza-bank-0/1/2 (flat BANK ground quads) dropped: same untextured slab as the santerno banks.
       // Prato Rivazza already has spectatorHill(0.788…) / (0.830…) below —
       // do not stack another bank on the same verge (clip + coplanar).
 
       const emiliaCasale = (s, side, gap, w, h, d, wall) => {
-        const a = anchor(K(s), side, gap);
+        const a = anchor(R(s), side, gap);
         if (onTrack(a.c[0], a.c[2], 18)) return false;
         const b = [a.r, a.u, a.t];
+        // A casale on a steep slope sinks its downhill corner (2.7 m measured): keep it off hillsides.
+        {
+          const ys = [];
+          for (const [ox, oz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+            ys.push(terrainYAt(a.c[0] + (a.r[0] * ox * w + a.t[0] * oz * d) / 2, a.c[2] + (a.r[2] * ox * w + a.t[2] * oz * d) / 2));
+          }
+          if (ys.every(Number.isFinite) && Math.max(...ys) - Math.min(...ys) > 1.2) return false;
+        }
         const gy = terrainYAt(a.c[0], a.c[2]);
         const gu = groundUnder(a.c[0], a.c[2]);
         const y = Math.max(
@@ -358,8 +365,8 @@
         emiliaCasale(s, side, dist, bw, bh, bd, wall);
       }
 
-      place(K(0.92), 1, 2, [0.4, 0.3, 7], RED);
-      place(K(0.93), 1, 2, [0.4, 0.3, 7], WHITE);
+      place(R(0.92), 1, 2, [0.4, 0.3, 7], RED);
+      place(R(0.93), 1, 2, [0.4, 0.3, 7], WHITE);
 
       every(110, (k) => {
         marshalPost(k, hash(k * 37) < 0.5 ? -1 : 1, 5);
@@ -489,7 +496,7 @@
       wall(sl(0.95), sl(0.06), -1, 2, 1.0, PITWALL, 0.5);
 
       {
-        const at = anchor(K(0.02), -1, 110);
+        const at = anchor(R(0.02), -1, 110);
         const r = at.r, u = at.u, t = at.t;
         // at.k, not K(0.02): anchor() is origin-shifted by the api wrapper and
         // groundYAt() is not, so the raw index read the hillside half a lap away.
@@ -576,16 +583,16 @@
       tyreWall(0.79,  0.815, -1, 4, RED);
       tyreWall(0.915, 0.93,   1, 4, RED);
 
-      billboard(K(0.05),  1, 18, 14, 5, [0.86, 0.16, 0.14]);
-      billboard(K(0.12), -1, 16, 12, 5, [0.20, 0.40, 0.70]);
-      billboard(K(0.27),  1, 18, 12, 5, [0.90, 0.80, 0.20]);
-      billboard(K(0.51),  1, 20, 14, 5, [0.86, 0.30, 0.20]);
-      billboard(K(0.66), -1, 16, 12, 5, [0.20, 0.44, 0.70]);
-      billboard(K(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);
-      billboard(K(0.95),  1, 16, 12, 5, [0.90, 0.80, 0.20]);
+      billboard(R(0.05),  1, 18, 14, 5, [0.86, 0.16, 0.14]);
+      billboard(R(0.12), -1, 16, 12, 5, [0.20, 0.40, 0.70]);
+      billboard(R(0.27),  1, 18, 12, 5, [0.90, 0.80, 0.20]);
+      billboard(R(0.51),  1, 20, 14, 5, [0.86, 0.30, 0.20]);
+      billboard(R(0.66), -1, 16, 12, 5, [0.20, 0.44, 0.70]);
+      billboard(R(0.82), -1, 18, 12, 5, [0.86, 0.16, 0.14]);
+      billboard(R(0.95),  1, 16, 12, 5, [0.90, 0.80, 0.20]);
       // Canopy that used to brace a board face after the S/F forestEdge keep-out.
-      tree(K(0.05), 1, 22, 11, WOODS);
-      tree(K(0.95), 1, 20, 11, WOODS2);
+      tree(R(0.05), 1, 22, 11, WOODS);
+      tree(R(0.95), 1, 20, 11, WOODS2);
 
       // Keep original hospitality gaps — pushing them out buried city detail
       // worse than the motorhomes themselves. Mild bury (~0.7 m) stays ≤ baseline.
@@ -595,10 +602,10 @@
         [0.958, 40, [0.90, 0.80, 0.20]],
       ];
       for (const [s, gap, accent] of HOSPITALITY_POS) {
-        motorhome(K(s), -1, gap, 18, 6, 14, { wall: PITWALL, window: WIN_LIT, accent });
+        motorhome(R(s), -1, gap, 18, 6, 14, { wall: PITWALL, window: WIN_LIT, accent });
       }
       {
-        const a = anchor(K(0.92), -1, 30);
+        const a = anchor(R(0.92), -1, 30);
         addBox(out, vadd(a.c, a.u, 2.2), [16, 4.4, 12], [0.90, 0.90, 0.88], [a.r, a.u, a.t]);
         // Marquee body is CENTRED at 2.2 with height 4.4 → ridge starts at 4.4.
         seat.prism(out, vadd(a.c, a.u, 4.4), [16, 2.8, 12], [0.94, 0.94, 0.92], [a.r, a.u, a.t]);
@@ -612,6 +619,18 @@
         addBox(out, head, [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
         if (typeof lampPost === "function") lampPost({ pos: head, k, side: -1, kind: "halogen" });
       });
+      // Pit-straight lamps continue before the 0.95–1.05 run (night frames: pit straight nearly
+      // dark, survey defect 5); the engine masts take over from 0.05 (def dressingExclusions).
+      for (const [s0, span] of [[0.92, 0.03]]) {
+        along(s0, span, 24, (k) => {
+          const p = anchor(k, -1, 8);
+          if (onTrack(p.c[0], p.c[2], 0.5)) return;
+          addCyl(out, p.c, 0.12, 8.5, [0.58, 0.60, 0.62], 5, [p.r, p.u, p.t]);
+          const head = vadd(p.c, p.u, 8.5);
+          addBox(out, head, [0.5, 0.45, 0.5], LAMP_COL, [p.r, p.u, p.t]);
+          if (typeof lampPost === "function") lampPost({ pos: head, k, side: -1, kind: "halogen" });
+        });
+      }
       along(0.30, 0.38, 20, (k) => {
         const p = anchor(k, -1, 7);
         if (onTrack(p.c[0], p.c[2], 0.5)) return;
@@ -633,18 +652,18 @@
       const CYP = [0.11, 0.28, 0.15], CYP_D = [0.08, 0.22, 0.12];
       const cyp = (k, side, dist, h, slim) =>
         cypress(k, side, dist, h, hash(k * 7 + side) < 0.5 ? CYP : CYP_D,
-                { slim: slim || 0.93 });
+                { slim: slim || 0.94 });
       // Sparse cypress punctuation on the wooded slopes (deciduous hollow owns mid-lap).
-      for (const [s0, side, gap, cnt] of [[0.32, -1, 24, 3], [0.52, 1, 26, 2], [0.64, -1, 32, 3], [0.82, -1, 20, 3]]) {
-        for (let i = 0; i < cnt; i++) cyp(K(s0 + i * 0.010), side, gap + (i % 2) * 3, 13 + hash(i * 5 + s0 * 40) * 6);
+      for (const [s0, side, gap, cnt] of [[0.325, -1, 24, 2], [0.52, 1, 26, 2], [0.64, -1, 32, 3], [0.82, -1, 20, 3]]) {
+        for (let i = 0; i < cnt; i++) cyp(R(s0 + i * 0.010), side, gap + (i % 2) * 3, 13 + hash(i * 5 + s0 * 40) * 6);
       }
 
-      for (let i = 0; i < 14; i++) {
-        cyp(K(0.300 + i * 0.0072), -1, 17, 14.5 + hash(i * 3.1) * 3.5, 0.86);
+      for (let i = 0; i < 12; i++) {
+        cyp(R(0.322 + i * 0.0072), -1, 17, 14.5 + hash(i * 3.1) * 3.5, 0.9);
       }
       // Matching short rank flanking the Rivazza exit toward the paddock gate.
       for (let i = 0; i < 8; i++) {
-        cyp(K(0.862 + i * 0.0068), -1, 15, 13.5 + hash(i * 5.7 + 2) * 3, 0.86);
+        cyp(R(0.862 + i * 0.0068), -1, 15, 13.5 + hash(i * 5.7 + 2) * 3, 0.9);
       }
 
       const PINO = [0.16, 0.34, 0.17], PINO_D = [0.12, 0.28, 0.14];
@@ -652,7 +671,7 @@
         [0.452, -1, 20, 17], [0.470,  1, 22, 19], [0.488, -1, 25, 16],
         [0.506,  1, 24, 18], [0.524, -1, 21, 20], [0.542,  1, 27, 17],
         [0.372, -1, 26, 18], [0.398,  1, 24, 16],
-      ]) stonePine(K(s), side, gap, h, hash(s * 71) < 0.5 ? PINO : PINO_D,
+      ]) stonePine(R(s), side, gap, h, hash(s * 71) < 0.5 ? PINO : PINO_D,
                    { lean: 0.35, spread: 1.15 });
 
       // ── Pollarded plane avenue (platani) along the old-town approach. An
@@ -661,12 +680,12 @@
       //    why the tree()/pine() pair could never make this street.
       const PLAT = [0.20, 0.38, 0.19];
       for (let i = 0; i < 9; i++) {
-        plane(K(0.596 + i * 0.0125), -1, 44, 13 + (i % 3) * 1.5, PLAT,
+        plane(R(0.596 + i * 0.0125), -1, 44, 13 + (i % 3) * 1.5, PLAT,
               { stages: 2, spread: 0.85 });
       }
 
       (function sennaMemorial() {
-        const a = anchor(K(0.075), -1, 20);
+        const a = anchor(R(0.075), -1, 20);
         const b = [a.r, a.u, a.t], base = a.c;
         const bronze = [0.34, 0.30, 0.22], stone = [0.80, 0.78, 0.72];
         modelGroup("senna-memorial", {
@@ -705,7 +724,7 @@
       })();
 
       (function santernoBridge() {
-        const a = anchor(K(0.10), 1, 26);
+        const a = anchor(R(0.10), 1, 26);
         const b = [a.r, a.u, a.t], base = a.c;
         const stone = [0.72, 0.68, 0.60];
         modelGroup("santerno-footbridge", {
@@ -755,15 +774,15 @@
         [0.505, -1, 26, 16], [0.538,  1, 30, 17],
       ];
       PARK_GROVES.forEach(([s, side, dist, h], i) => {
-        tree(K(s), side, dist, h + hash(i * 19 + 71) * 3,
+        tree(R(s), side, dist, h + hash(i * 19 + 71) * 3,
              i % 2 ? [0.12, 0.32, 0.15] : [0.09, 0.27, 0.12]);
-        bush(K(s + 0.004), side, dist - 5,
+        bush(R(s + 0.004), side, dist - 5,
              i % 2 ? [0.18, 0.40, 0.18] : [0.14, 0.35, 0.16]);
-        bush(K(s - 0.004), side, dist + 4, [0.11, 0.30, 0.13]);
+        bush(R(s - 0.004), side, dist + 4, [0.11, 0.30, 0.13]);
       });
 
       (function historicRaceOffice() {
-        const a = anchor(K(0.905), -1, 40);
+        const a = anchor(R(0.905), -1, 40);
         const b = [a.r, a.u, a.t], base = a.c;
         modelGroup("imola-historic-race-office", {
           center: vadd(base, a.u, 8), size: [34, 18, 38], basis: b,
@@ -803,11 +822,11 @@
       ];
       PIRATELLA_VILLAS.forEach(([s, side, gap, w, h, d], i) => {
         emiliaCasale(s, side, gap, w, h, d, i % 3 === 0 ? STONE3 : (i % 3 === 1 ? TERRA2 : STONE2));
-        cyp(K(s + 0.006), side, gap + 22, 12 + (i % 3) * 2);
+        cyp(R(s + 0.006), side, gap + 22, 12 + (i % 3) * 2);
       });
       (function hillsideVillas() {
         const s = 0.355, side = -1, gap = 84, w = 12, h = 7.5, d = 14;
-        const a = anchor(K(s), side, gap);
+        const a = anchor(R(s), side, gap);
         if (onTrack(a.c[0], a.c[2], 20)) return;
         const b = [a.r, a.u, a.t];
         const gy = terrainYAt(a.c[0], a.c[2]);
@@ -833,7 +852,7 @@
       })();
 
       (function tamburelloTributeWall() {
-        const a = anchor(K(0.082), -1, 32);
+        const a = anchor(R(0.082), -1, 32);
         const b = [a.r, a.u, a.t], base = a.c;
         modelGroup("imola-tamburello-tribute-wall", {
           center: vadd(base, a.u, 4.5), size: [10, 10, 24], basis: b,

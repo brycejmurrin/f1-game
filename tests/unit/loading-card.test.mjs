@@ -875,7 +875,7 @@ test("flyMsFor(skips, wantMs): a real race's read stretches the flyby up to FLY_
   const game = gameSource();
   const intro = game.slice(game.indexOf("function raceIntro(go)"), game.indexOf("function loadingInfo()"));
   assert.match(intro, /const flyMs = loadingScreen\.nextFlyMs\(info\.readMs, info\.warmReady = !\(gfx && gfx\.warming && gfx\.warming\(\)\)\);[\s\S]{0,300}FlybySeq\.setDuration\(flyMs\);/);
-  assert.match(intro, /loadingScreen\.run\(info, go\);/);
+  assert.match(intro, /loadingScreen\.run\(info,[\s\S]{0,120}go\(\)/, "flyby run still hands off to the same go() after profiling wrap");
   const li = game.slice(game.indexOf("function loadingInfo()"), game.indexOf("function loadingInfo()") + 2000);
   assert.match(li, /if \(real && announcer\.readMs\) out\.readMs = announcer\.readMs\(out\);/, "only a real race stretches it");
   assert.match(read("js/ui/loading-screen.js"), /flyMsFor\(readSkips\(\), info\.readMs, info\.warmReady\)/);
@@ -943,7 +943,7 @@ test("RACE! over a pending warm holds the card until it ends; the sheets that sk
   assert.match(intro, /if \(!gfx\.warm \|\| \(_warmKey === key && !\(gfx\.warming && gfx\.warming\(\)\)\)\) return false;/, "warmed and no warm pending: fly at once");
   assert.match(intro, /loadingScreen\.building\(loadingInfo\(\)\);/, "the card holds over the warm");
   assert.match(intro, /await introPrepare\(live, key, info, n, true\)/, "a built but unwarmed world joins planning and warm under the card before motion");
-  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await studioDone\(live, n\);/, "warm world: garage-out is not blocked behind prepare (its rejection handled meanwhile)");
+  assert.match(intro, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await RaceEntryProfile\.spanAsync\("studioDone", \(\) => studioDone\(live, n\)\);/, "warm world: garage-out is not blocked behind prepare (its rejection handled meanwhile)");
   const prepare = game.slice(game.indexOf("async function introPrepare("), game.indexOf("// A ready, warm world"));
   assert.match(prepare, /await awaitIntroWarm\(current\)/, "shared compile bound — never fly over pending warm");
   assert.match(intro, /announce\("PREPARATION FAILED/, "a warm timeout recovers to the menu with a visible message");
@@ -974,7 +974,8 @@ test("launch unification: every session the player starts reaches raceIntro; the
   assert.doesNotMatch(read("js/ui/title-flow.js").match(/function openTimeTrial[\s\S]*?\n\}/)[0], /startRace|raceIntro/, "the title's TT / DAILY open the picker, they never start");
   // The Data Hub's JUMP IN opts in to the pre-race screen, and RealRace.launch runs the raw raceIntro (not the sheet variant: no sheet to hold).
   const tab = read("js/data/real-race-tab.js");
-  assert.match(tab.match(/function jumpIn[\s\S]*?\n    \}/)[0], /RealRace\.launch\(script, \{[^}]*intro: true \}\)/, "JUMP IN passes intro");
+  assert.match(tab.match(/function jumpIn[\s\S]*?\n    \}/)[0], /launchRace\(script, \{[^}]*intro: true \}\)/, "JUMP IN passes intro through launch recovery");
+  assert.match(tab, /RealRace\.launch\(script, options\)/, "launch recovery forwards the options");
   assert.match(real, /if \(opts && opts\.intro && G\.raceIntro\) \{\s*try \{ G\.raceIntro\(G\.startRace\); \}/, "launch runs the pre-race screen when asked");
   assert.match(game, /\n  raceIntro,   \/\/ the pre-race screen, for a launch that is not RACE!/, "the façade hands launch the raw raceIntro");
   // The drive-out is dropped only where the player's car is not leaving the garage, or nothing could show it.
@@ -991,8 +992,8 @@ test("the card over the scene: black bars and a light hint in every theme, an un
   const css = readCssSource("css/overlays.css");
   const bars = css.match(/#loading::before,\s*#loading::after\s*\{([^}]*)\}/)[1];
   assert.match(bars, /background:\s*#000/, "cinema bars — the LIGHT theme's --bg made them white");
-  const hint = css.match(/#loading\[data-phase="run"\] #ld-card::after\s*\{([^}]*)\}/)[1];
-  assert.match(hint, /color:\s*#fff/, "the hint sits on the 3D scene, not a themed plate");
+  assert.match(css, /#loading\[data-phase="run"\] #ld-card::after[\s\S]*?color:\s*#fff/, "the hint sits on the 3D scene, not a themed plate");
+  assert.match(read("css/a11y-loading.css"), /background:\s*rgba\(0,\s*0,\s*0/, "a dark plate holds contrast over bright flyby sky");
   assert.match(css.match(/\n#ld-map\s*\{([^}]*)\}/)[1], /object-fit:\s*contain/, "fitCanvas pins px width AND height; the 45% cap squashed the outline");
   assert.match(css, /@starting-style\s*\{\s*#loading\[data-phase\] #ld-card\s*\{[^}]*opacity:\s*0/, "a transition cannot start from display: none");
   assert.match(css, /:root\[data-motion="reduce"\] #loading::before,\s*:root\[data-motion="reduce"\] #loading::after\s*\{\s*content:\s*none;/);

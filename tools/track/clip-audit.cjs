@@ -28,9 +28,10 @@
 //
 // Usage:
 //   node tools/track/clip-audit.cjs <trackId> [--why] [--dump] [--depth M] [--adj N]
-//   node tools/track/clip-audit.cjs --all [--json] [--gate]
+//   node tools/track/clip-audit.cjs --all [--json] [--gate] [--lower] [--baseline FILE]
 //
 // --gate exits 1 if any circuit exceeds its BASELINE severe-spot count.
+// --lower rewrites the baseline rows whose measurement fell below the cap (never raises one).
 
 "use strict";
 
@@ -248,11 +249,18 @@ const asJson = args.includes("--json");
 const gate = args.includes("--gate");
 const why = args.includes("--why");
 const dump = args.includes("--dump");
+// `--lower` (#2183): the ratchet-down writer. Rows whose measured count is
+// BELOW the cap drop to the measurement; a row at or above its cap is left
+// alone (growth is --gate's business, never a raise), so it is idempotent.
+const lower = args.includes("--lower");
+const baselineArg = args.indexOf("--baseline");
+const BASELINE_FILE = baselineArg >= 0 && args[baselineArg + 1]
+  ? require("node:path").resolve(args[baselineArg + 1]) : require("node:path").join(__dirname, "clip-baseline.json");
 
 // Per-circuit SEVERE spot caps. Same semantics as tests/specs/props-over-road.spec.js:
 // a circuit NOT in this map must read 0, and a capped circuit fails when its
 // number GROWS. Lower each cap as circuits are cleaned — that is the ratchet.
-const BASELINE = require("./clip-baseline.json");
+const BASELINE = JSON.parse(require("node:fs").readFileSync(BASELINE_FILE, "utf8"));
 
 function report(r) {
   console.log(`\n${r.id.padEnd(13)} ${String(r.severeSpots.length).padStart(4)} severe spot(s) ` +
@@ -295,10 +303,10 @@ function attribute(id, r) {
 
 const ids = args.includes("--all")
   ? require("../lib/circuit-scope.cjs").scope(buildContext().Tracks.LIST.map((d) => d.id))   // APEX_CIRCUITS narrows --all
-  : [args.find((a) => !a.startsWith("-") && isNaN(+a))];
+  : [args.find((a, i) => !a.startsWith("-") && isNaN(+a) && args[i - 1] !== "--baseline")];
 
 if (!ids[0]) {
-  console.error("usage: clip-audit.cjs <trackId> [--why] | --all [--json] [--gate]");
+  console.error("usage: clip-audit.cjs <trackId> [--why] | --all [--json] [--gate] [--lower] [--baseline FILE]");
   process.exit(2);
 }
 
@@ -320,6 +328,17 @@ for (const id of ids) {
       console.error(`FAIL ${id}: ${r.severeSpots.length} severe spots > baseline ${cap}`);
     }
   }
+}
+if (lower) {
+  const lowered = [];
+  for (const o of out) {
+    if (BASELINE[o.id] != null && o.severe < BASELINE[o.id]) {
+      lowered.push(`${o.id} ${BASELINE[o.id]} -> ${o.severe}`);
+      BASELINE[o.id] = o.severe;
+    }
+  }
+  if (lowered.length) require("node:fs").writeFileSync(BASELINE_FILE, JSON.stringify(BASELINE, null, 2) + "\n");
+  console.error(lowered.length ? `lowered ${lowered.length} cap(s): ${lowered.join(", ")}` : "clip baseline: no cap above its measurement");
 }
 if (asJson) console.log(JSON.stringify(out, null, 1));
 else if (ids.length > 1) {
