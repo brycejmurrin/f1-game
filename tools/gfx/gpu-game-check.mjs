@@ -35,7 +35,8 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate } from "../lib/census-entry.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -69,7 +70,13 @@ if (argv.includes("--help") || argv.includes("-h")) {
   --cam ID                        player camera (a CamModes id: helmet, chase, ...) set at boot,
                                   before race(); omitted = the game's default (helmet). chase
                                   is how TLX's mirror mip cap (A-H5) shows: helmet/cockpit
-                                  glass latches the full mirror chain for the session
+                                  glass latches the full mirror chain for the session.
+                                  A>B (e.g. chase>cockpit) switches to B halfway through the
+                                  driven window — where the lazy mirror warm is paid
+  --entry api|menu|menu-full      how the race starts: api = __apex.race() (default); menu =
+                                  title > RACE > RACE SETUP, wait for __apex.menuPrep(), START
+                                  RACE (harness intro); menu-full = the same at player pace
+  --menu-timeout MS               menu entry: longest wait for the menu prep (default 150000)
   --ls apex26.k=v                 extra localStorage (repeatable; after the defaults)
   --gl-err-drain                  GLX: drain getError() on EVERY present (apex26.glErrDrain=1);
                                   default drains once per beat via GLX.drainGpuErrors()
@@ -81,14 +88,23 @@ if (argv.includes("--help") || argv.includes("-h")) {
 const flag = (n, d = null) => { const i = argv.indexOf(n); return i > -1 ? argv[i + 1] : d; };
 // The track is the first bare word that is not some flag's value.
 const VALUE_FLAGS = new Set(["--json", "--shot", "--backend", "--path", "--cam", "--tod", "--clock", "--beats", "--ls",
-  "--boot-timeout", "--race-timeout"]);
+  "--boot-timeout", "--race-timeout", "--entry", "--menu-timeout"]);
 const track = argv.find((a, i) => !a.startsWith("--") && !VALUE_FLAGS.has(argv[i - 1])) || "montreal";
 // --cam ID (hunt 4 H5): the player camera, set right after boot so no frame of
 // race entry draws through another one. The default camera is helmet
 // (apex26.camMode 19), whose cockpit glass latches TLX's FULL mirror mip chain
 // for the session (A-H5), so the mirror-mip cap is invisible unless a leg
 // drives chase. Omitted = the game's own default, exactly as before.
-const cam = flag("--cam", null);
+// `A>B` (hunt 5 E): start on A, switch to B at the window's middle beat
+// (tools/lib/census-entry.mjs) — chase>cockpit pays the opt-in lazy mirror warm.
+const camSpec = parseCam(flag("--cam", null));
+if (!camSpec) { console.error(`gpu-game-check: --cam ${flag("--cam")} is not ID or ID>ID`); process.exit(2); }
+const cam = camSpec.start;
+// --entry (hunt 5 E): how the race starts — api (race(), as every census before)
+// or the player's menu path, which runs the menu's car prep and program warm.
+const entry = parseEntry(flag("--entry", "api"));
+if (!entry) { console.error(`gpu-game-check: --entry ${flag("--entry")} is not one of ${ENTRIES.join("|")}`); process.exit(2); }
+const menuTimeout = Math.max(1000, Number(flag("--menu-timeout", 150000)) || 150000);
 const backend = flag("--backend", "three");
 // --ls key=value (repeatable), same contract as gfx-probe: drive a knob the
 // pins do not know about — apex26.tlxForceHw above all, which is how the
@@ -151,7 +167,7 @@ function checkpoint(phase, extra) {
 }
 const log = (m) => console.log(`[game-check] ${m}`);
 const out = { platform: process.platform, arch: process.arch, track, backend, path: path3,
-  glErrDrain: glErrDrainEveryPresent ? "present" : "beat" };
+  glErrDrain: glErrDrainEveryPresent ? "present" : "beat", entry };
 const { server, port } = await serve();
 const browser = await chromium.launch({
   ...(PINNED ? { executablePath: PINNED } : { channel: "chromium" }),
@@ -180,7 +196,7 @@ try {
   page.on("crash", () => { out.crashed = true; checkpoint("renderer-crashed"); });
   page.on("close", () => { out.pageClosed = true; });
   browser.on("disconnected", () => { out.browserGone = true; });
-  await page.addInitScript(([be, p, ls, drainEvery]) => {
+  await page.addInitScript(([be, p, ls, drainEvery, pick]) => {
     // THE SPIKE TRAIN, recorded on the machine that has a real GPU.
     //
     // Everything else this file measures is a SETTLED number: fps is an EMA,
@@ -248,7 +264,9 @@ try {
     // steps is kept apart, and a step that starts >= 500 ms after the previous
     // one records both, so the stall names the frame before it.
     const GAP_MS = 500;
-    let _gFrameTs = null, _gFrameStart = -1, _gFrameDur = 0, _gFrameWork = null, _gBetween = null, _gInCb = false;
+    // _gFrameCb: callbacks in the step (hunt 5 E) — one long callback and many
+    // short ones summing to the same prevFrameMs are different stalls.
+    let _gFrameTs = null, _gFrameStart = -1, _gFrameDur = 0, _gFrameCb = 0, _gFrameWork = null, _gBetween = null, _gInCb = false;
     const _gGaps = [];
     const _gapAdd = (k, n) => {
       const o = _gInCb ? (_gFrameWork || (_gFrameWork = {})) : (_gBetween || (_gBetween = {}));
@@ -529,11 +547,12 @@ try {
           if (ts !== _gFrameTs) {
             // A new rendering step: was the one before it followed by a gap?
             if (_gFrameStart >= 0 && a - _gFrameStart >= GAP_MS && _gGaps.length < 64) {
-              _gGaps.push({ at: _gFrameStart, gapMs: a - _gFrameStart, prevFrameMs: _gFrameDur,
+              _gGaps.push({ at: _gFrameStart, gapMs: a - _gFrameStart, prevFrameMs: _gFrameDur, prevCallbacks: _gFrameCb,
                 prevWork: _gFrameWork, between: _gBetween, armed: _hArmed });
             }
-            _gFrameTs = ts; _gFrameStart = a; _gFrameDur = 0; _gFrameWork = null; _gBetween = null;
+            _gFrameTs = ts; _gFrameStart = a; _gFrameDur = 0; _gFrameCb = 0; _gFrameWork = null; _gBetween = null;
           }
+          _gFrameCb++;
           _gInCb = true;
           try { return cb(ts); } finally {
             _gInCb = false; _gFrameDur += performance.now() - a;
@@ -558,6 +577,7 @@ try {
         disarm() { if (!_hArmed) return; _hArmed = false; _win.t1 = performance.now(); _win.f1 = _lhFrames(); },
         dump: () => ({ win: Object.assign({}, _win), gameFrameT: Array.from(_gfT.subarray(0, _gfN)),
                        gaps: _gGaps, marks: window.__apexMarks || {}, longTasks: window.__apexLongTasks || [],
+                       loaf: window.__apexLoaf || [], loafObserver: window.__apexLoafObserver,
                        t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
                        passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
                        work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
@@ -575,6 +595,9 @@ try {
       // drains once per beat instead (GLX.drainGpuErrors(), below); flags are
       // sticky until read, so the gpuErrors > 0 gate keeps full coverage.
       if (drainEvery) localStorage.setItem("apex26.glErrDrain", "1");
+      // MENU ENTRY: the picker opens on the circuit asked for, as for a player
+      // who raced it last (select-screen.js stores the pick as JSON "trackId").
+      if (pick) localStorage.setItem("apex26.trackId", JSON.stringify(pick));
     } catch (_) { /* blocked storage: the defaults still boot */ }
     for (const kv of ls || []) {
       const i = kv.indexOf("=");
@@ -609,7 +632,29 @@ try {
       // item is dead when nothing had looked.
       window.__apexLongTaskObserver = false;
     }
-  }, [backend, path3, extraLs, glErrDrainEveryPresent]);
+    // LONG ANIMATION FRAMES (hunt 5 E): the same window, with SCRIPT
+    // ATTRIBUTION — each script's invokerType (user-callback = a rAF callback,
+    // resolve-promise = an await continuation, ...), invoker, function and URL.
+    // A long task cannot say whether a ~1 s block was one rAF step or yield
+    // continuations landing inside it; this can. Compact, capped, from page load;
+    // analyseRaceEntryLoaf keeps the longest frames in race entry.
+    // https://developer.chrome.com/docs/web-platform/long-animation-frames
+    window.__apexLoaf = [];
+    try {
+      const cut = (v, n) => (v == null ? "" : String(v).slice(0, n));
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          if (window.__apexLoaf.length >= 1500) break;
+          const s = Array.from(e.scripts || []).sort((a, b) => b.duration - a.duration).slice(0, 8)
+            .map((x) => ({ it: x.invokerType, inv: cut(x.invoker, 120), fn: cut(x.sourceFunctionName, 80), url: cut(x.sourceURL, 120),
+              t: +x.startTime.toFixed(1), d: +x.duration.toFixed(1) }));
+          window.__apexLoaf.push({ t: +e.startTime.toFixed(1), d: +e.duration.toFixed(1), rs: +(e.renderStart || 0).toFixed(1),
+            bd: e.blockingDuration != null ? +e.blockingDuration.toFixed(1) : null, s });
+        }
+      }).observe({ type: "long-animation-frame", buffered: true });
+      window.__apexLoafObserver = true;
+    } catch (_) { window.__apexLoafObserver = false; }
+  }, [backend, path3, extraLs, glErrDrainEveryPresent, entry === "api" ? null : track]);
 
   // Bounded: a wedged renderer must not turn the diagnosis into another blank.
   const bounded = (fn, ms, label) => Promise.race([
@@ -646,7 +691,66 @@ try {
     }
   }), 15000, "fresh-" + label);
 
-  await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1`,
+  // THE PLAYER'S ENTRY (hunt 5 E; --entry menu|menu-full). title > RACE > RACE
+  // SETUP, then WAIT for the menu's own prep — menuFinish's car assets and TLX
+  // program warm (__apex.menuPrep(), tools/lib/census-entry.mjs menuPrepReady)
+  // and race settings' garage prewarm — and press START RACE, so startRaceBody
+  // meets the warm caches and the `_warmKey` a player's RACE! does. A prep that
+  // never settles is RECORDED (prepReady false) and the race is started anyway:
+  // the leg then measures what a player who taps early gets, and says so.
+  async function enterViaMenu(tod) {
+    const t0m = Date.now(), m = { entry, steps: [] };
+    const step = (name) => { m.steps.push([name, Date.now() - t0m]); checkpoint("menu-" + name, { menu: m }); };
+    const shown = (id) => page.waitForFunction((i) => { const e = document.getElementById(i); return !!(e && !e.hidden); },
+      id, { polling: 100, timeout: 60000 });
+    const prep = () => page.evaluate(() => { try { return window.__apex.menuPrep(); } catch (e) { return { error: String((e && e.message) || e).slice(0, 100) }; } });
+    try {
+      await page.waitForFunction(() => { const A = window.__apex; return !!(A && A.info().state === "menu" && A.menuPrep); },
+        null, { polling: 100, timeout: 60000 });
+      await page.locator("#mb-race").click({ timeout: 60000 });
+      await shown("select"); step("select");
+      // The init script preset apex26.trackId; a picker that opened elsewhere gets the tile tapped.
+      const p0 = await prep();
+      if (!p0 || p0.trackId !== track) {
+        m.tileTapped = await page.evaluate((id) => {
+          const i = Tracks.LIST.findIndex((t) => t.id === id);
+          const row = document.querySelector(`.track-row[data-track-idx="${i}"]`);
+          if (row) row.click(); return !!row;
+        }, track);
+      }
+      await page.locator("#sel-go").click({ timeout: 60000 });
+      await shown("race-settings"); step("race-settings");
+      if (tod) {
+        try { await page.selectOption("#rs-time-sel", tod, { timeout: 10000 }); m.tod = await page.$eval("#rs-time-sel", (s) => s.value); }
+        catch (e) { m.todError = String((e && e.message) || e).slice(0, 100); }
+      }
+      const tw = Date.now();
+      try { await page.waitForFunction(menuPrepReady, null, { polling: 100, timeout: menuTimeout }); m.prepReady = true; }
+      catch (_) { m.prepReady = false; m.prepNote = `menu prep not ready after ${menuTimeout} ms — START RACE pressed anyway`; }
+      // Race settings' garage prewarm runs after menuFinish: a player reading the sheet gets it; bounded.
+      try {
+        await page.waitForFunction(() => { const g = window.__apex.garagePrebuild && window.__apex.garagePrebuild();
+          return !g || g.garageReady || !!(g.last && g.last.want === "settings"); }, null, { polling: 100, timeout: 30000 });
+      } catch (_) { m.garageNote = "garage prewarm still running after 30 s"; }
+      m.prepWaitMs = Date.now() - tw;
+      step("prepared");
+      m.atGo = await prep();
+      m.garage = await page.evaluate(() => { const g = window.__apex.garagePrebuild && window.__apex.garagePrebuild();
+        return g ? { ready: g.ready, garageReady: g.garageReady, last: g.last } : null; }).catch(() => null);
+      await page.evaluate(() => window.__apexMark("raceCall"));
+      await page.locator("#rs-go").click({ timeout: 60000 });
+      step("start-race");
+      m.ok = true;
+    } catch (e) {
+      m.ok = false; m.error = String((e && e.message) || e).slice(0, 160);
+    }
+    m.ms = Date.now() - t0m;
+    return m;
+  }
+
+  // menu-full: PLAYER PACE (LoadingScreen.isAutomation honours ?fullIntro=1) —
+  // the garage drive-out and the flyby a harness otherwise skips.
+  await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1${entry === "menu-full" ? "&fullIntro=1" : ""}`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
   checkpoint("navigated");
   // 120 s. This was once raised to 300 s on the theory that windows-latest was
@@ -693,10 +797,15 @@ try {
   // built without lamps is a dark scene with nothing to light it — which is why
   // the night leg looked exactly like noon.
   const tod = flag("--tod", "");
-  out.raceCall = await bounded(() => page.evaluate(([t, d]) => {
-    window.__apexMark("raceCall");
-    return d ? window.__apex.race(t, d) : window.__apex.race(t);
-  }, [track, tod]), 60000, "race");
+  if (entry === "api") {
+    out.raceCall = await bounded(() => page.evaluate(([t, d]) => {
+      window.__apexMark("raceCall");
+      return d ? window.__apex.race(t, d) : window.__apex.race(t);
+    }, [track, tod]), 60000, "race");
+  } else {
+    out.menu = await enterViaMenu(tod);
+    checkpoint("menu-entry", { menu: out.menu });
+  }
   out.timeOfDay = tod || "(default)";
   checkpoint("race-called");
   // 300 s was a guess made against a software rasteriser; on a real GPU the
@@ -782,34 +891,25 @@ try {
   const _gateT0 = Date.now();
   out.race = { beats, drive, reached: false };
   try {
-    await page.waitForFunction(() => {
-      const A = window.__apex; const i = A && A.info ? A.info() : null;
-      const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
-      // TLX requests its warm at race start and STARTS it on the next present,
-      // so "not warming" alone is true in the gap before it begins (the local
-      // dry run passed the gate at +0.1 s and then timed the warm anyway). A
-      // leg that has a warm must have FINISHED one; GLX/WGX report no warm.
-      const m = t && t.memState ? t.memState() : null;
-      const w = m && m.warm ? m.warm : null;
-      const warming = !!(t && t.warming && t.warming());
-      // A tree whose memState() has no warm timeline (the pre-#228 TLX) still
-      // warms: warming() goes true a present after race start. With no
-      // timeline, require the warm SEEN and ended, or 5 s of race with none —
-      // census 224 passed this gate at +46 ms and timed the warm's twelve
-      // compiles as race hitches.
-      const g = window.__raceGate || (window.__raceGate = { t0: 0, saw: false });
-      if (i && i.state === "race" && !g.t0) g.t0 = performance.now();
-      if (warming) g.saw = true;
-      const tlxNoTimeline = !!(t && t.warming) && !w;
-      const warmDone = w ? w.done === true
-        : (!tlxNoTimeline || g.saw || (g.t0 && performance.now() - g.t0 > 5000));
-      return !!(i && i.state === "race" && !warming && warmDone);
-    }, null, { polling: 100, timeout: Number(flag("--race-timeout", 90000)) });
+    // tools/lib/census-entry.mjs raceGate: race state, nothing compiling, and
+    // the entry's TLX warm finished — only when race entry ASKED for one
+    // (warm:request). No warm requested (pack gate, skipped-menu, noop) passes
+    // on !warming instead of waiting for a warm.done that never comes (hunt 5 E).
+    await page.waitForFunction(raceGate, null, { polling: 100, timeout: Number(flag("--race-timeout", 90000)) });
     out.race.reached = true;
   } catch (e) {
     out.race.note = "RACE NOT REACHED: " + String((e && e.message) || e).slice(0, 100);
   }
   out.race.gateMs = Date.now() - _gateT0;
+  // WHICH WARM THIS ENTRY ASKED FOR (hunt 5 E): RaceEntryProfile's warm mark
+  // (warm:request | warm:skipped-menu | warm:noop | null = requestWarm never
+  // ran, e.g. the pack gate) — copied to raceEntry below.
+  const _gate = await bounded(() => page.evaluate(() => {
+    const g = window.__raceGate || {};
+    return { warmMark: g.warmMark != null ? g.warmMark : null, warmRequested: g.warmRequested === true, profiled: !!g.profiled };
+  }), 10000, "gate-read");
+  out.race.warmMark = _gate && !_gate.error ? _gate.warmMark : null;
+  out.race.warmRequested = _gate && !_gate.error ? _gate.warmRequested : null;
   // The warm's own timeline (tlx.js memState().warm): how long the lights held
   // for a player on this GPU, by stage. Absent on GLX/WGX, which have no warm.
   out.race.warm = await bounded(() => page.evaluate(() => {
@@ -897,6 +997,19 @@ try {
   let missed = 0;
   for (let i = 0; i < beats; i++) {
     if (out.crashed || out.browserGone) break;
+    // --cam A>B (hunt 5 E): the mid-window switch, e.g. chase>cockpit — the first
+    // mirrorBegin then pays an owed lazy mirror warm (memState().warm.mirrorLazy,
+    // read as out.warmEnd below); `at` is the page clock, to join with the gaps.
+    if (camSpec.switchTo && i === switchBeat(beats)) {
+      out.camSwitch = await bounded(() => page.evaluate((c) => {
+        const A = window.__apex, at = +performance.now().toFixed(1);
+        let r = false;
+        try { r = A.camera(c); } catch (e) { return { to: c, at, error: String((e && e.message) || e).slice(0, 100) }; }
+        return r ? { to: c, at, set: r.mode } : { to: c, at, error: "not a CamModes id: " + c };
+      }, camSpec.switchTo), 10000, "camera-switch");
+      out.camSwitch.beat = i;
+      if (out.cam && out.camSwitch.set) out.cam.switchedTo = out.camSwitch.set;
+    }
     try {
       const beat = await Promise.race([
         // `f` READ info().fps, WHICH DOES NOT EXIST — so every beat of every leg
@@ -977,6 +1090,15 @@ try {
   }), 10000, "camera-end");
   if (out.cam) out.cam.atWindowEnd = _camEnd && !_camEnd.error ? _camEnd.mode : null;
   out.mirror = _camEnd && !_camEnd.error ? _camEnd.mirror : { note: "mirror read failed: " + ((_camEnd && _camEnd.error) || "?") };
+  // THE WARM TIMELINE AFTER THE WINDOW (hunt 5 E). out.race.warm is read at the
+  // race gate, before any camera switch; a lazy mirror warm (mirrorDeferred at
+  // entry, mirrorLazy {ms, drawn, ok} once a mirror view asked for it) lands
+  // later, so read tlx.js memState().warm again here. null on GLX/WGX.
+  out.warmEnd = await bounded(() => page.evaluate(() => {
+    const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+    const m = t && t.memState ? t.memState() : null;
+    return m && m.warm ? m.warm : null;
+  }), 10000, "warm-end-read");
   if (_cpu) {
     try { const { profile } = await _cpu.send("Profiler.stop"); _cpuProfile = profile; out.cpu = analyseCpu(profile, 24); }
     catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
@@ -994,6 +1116,7 @@ try {
   // THE PERIOD OF THE TAIL, from the raw per-callback series rather than from
   // aggregated per-beat percentiles. bounded() because a leg whose renderer
   // crashed leaves every later evaluate hanging for ever.
+  let _loaf = { note: "hitch read failed before the LoAF series" };
   out.hitch = await bounded(async () => {
     const d = await page.evaluate(() => (window.__gcHitch ? window.__gcHitch.dump() : null));
     // READ THE WINDOW, NOT THE GOVERNOR'S END STATE (hunt 4 I4): frames, fps
@@ -1005,6 +1128,10 @@ try {
     // THE SAME GAPS AND LONG TASKS, NAMED BY RACE-ENTRY SPAN (hunt 4 B-F3.3).
     out.raceEntrySpans = d ? analyseRaceEntrySpans({ rep: out.raceEntryProfile, warm: out.race && out.race.warm,
       censusMarks: d.marks, gaps: d.gaps || [], longTasks: d.longTasks || [], win: d.win }) : { note: "no recorder on this leg" };
+    // ...AND THE LONG ANIMATION FRAMES, with script attribution (hunt 5 E);
+    // written as raceEntry.loaf below, beside the longtask window it explains.
+    _loaf = d ? analyseRaceEntryLoaf({ loaf: d.loaf, supported: d.loafObserver, rep: out.raceEntryProfile,
+      warm: out.race && out.race.warm, censusMarks: d.marks, win: d.win }) : { note: "no recorder on this leg" };
     if (!d || !d.dur || d.dur.length < 30) return { note: "no rAF series — the recorder never armed, or the leg drew too few frames" };
     const a = analyse(d.t0, d.dur);
     // The pass census rides the same series: same frames, same window, so
@@ -1055,6 +1182,11 @@ try {
     r.longest5 = win.slice().sort((x, y) => y[1] - x[1]).slice(0, 5).map((t) => ({ at: t[0], ms: t[1] }));
     return r;
   }), 20000, "race-entry");
+  if (out.raceEntry && typeof out.raceEntry === "object") {
+    out.raceEntry.loaf = _loaf;
+    out.raceEntry.warmRequested = out.race ? out.race.warmRequested : null;
+    out.raceEntry.warmMark = out.race ? out.race.warmMark : null;
+  }
   // WHICH JavaScript. The window above says the block is main-thread JS; this
   // says which phase of the build it is, which is the half of condition 2 the
   // hardware-vs-software comparison cannot reach.
