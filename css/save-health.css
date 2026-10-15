@@ -1,0 +1,10 @@
+@layer components {
+.save-health { flex-basis: 100%; min-width: 0; margin-block: var(--gap); }
+.save-health > button { max-width: 100%; white-space: normal; }
+.save-health-panel { display: grid; gap: var(--gap); padding-block: var(--pad); }
+.save-health-panel[hidden] { display: none; }
+.save-health-panel p { margin: 0; overflow-wrap: anywhere; font-size: var(--fs-2); line-height: 1.5; }
+.save-health-panel button, .save-health-panel select { max-width: 100%; white-space: normal; min-height: var(--tap); }
+.save-health-history, .save-health-history > div { display: grid; gap: var(--gap); min-width: 0; }
+.save-health-history select { color: inherit; background: var(--surf-1); padding: var(--gap); border: 1px solid currentColor; }
+}

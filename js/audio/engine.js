@@ -209,6 +209,7 @@ var GameAudio = (function () {
     p._apexAimTgt = target;
   }
   let engineOn = false;
+  let engineActionGeneration = 0;   // every explicit start/stop transfers engine ownership
   // Node batches from stopEngine() that still sit on sfxBus until their
   // 0.35 s fade ends — ONE ENTRY PER STOP. A resume that starts a new graph
   // BEFORE that timeout would leave both graphs rendering (~450 ms of doubled
@@ -1388,6 +1389,7 @@ var GameAudio = (function () {
   // per menu-race cycle. Arming first and tearing down on the way out makes a
   // partial build cost silence instead of a permanent one.
   function startEngine() {
+    ++engineActionGeneration;
     if (!ctx || engineOn) return;
     engineOn = true;
     try { startEngineBody(); }
@@ -1400,6 +1402,7 @@ var GameAudio = (function () {
   }
 
   function stopEngine() {
+    ++engineActionGeneration;
     if (!engineOn) return;
     const t0 = now();
     soundtrack.releaseEngineDuck(t0, true);   // a line still on air keeps its own duck
@@ -2887,6 +2890,8 @@ var GameAudio = (function () {
     enabled,
     startEngine,
     stopEngine,
+    enginePlaybackGeneration: () => engineActionGeneration,
+    stopEngineIfGeneration(generation) { if (generation !== engineActionGeneration) return false; setSkid(0); stopEngine(); return true; },
     setEngine,
     setGridIdle,
     feedReplayScrub,
@@ -2969,6 +2974,8 @@ var GameAudio = (function () {
     stopRain,
     startMusic,
     stopMusic,
+    musicPlaybackGeneration: soundtrack.musicPlaybackGeneration,
+    stopMusicIfGeneration: soundtrack.stopMusicIfGeneration,
     setMusicEnabled,
     skipTrack,
     prevTrack,

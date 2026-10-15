@@ -1232,3 +1232,24 @@ test("selective focus follows actual audible synth start and rejects stale mute/
   utterances.at(-1).onstart(); assert.equal(held.size, 0, "zero-volume synth never focuses");
   v.setVolume(0.8); G.soundOn = false; utterances.at(-1).onstart(); assert.equal(held.size, 0);
 });
+
+test("race mix audition stops only the preview generation it started", () => {
+  const { RV, G, synth, ctx } = load({ voices: [{ name: "Local", lang: "en-US", localService: true }] });
+  const timers = new Map(); let next = 0;
+  ctx.setTimeout = (fn, ms) => { timers.set(++next, { fn, ms }); return next; }; ctx.clearTimeout = (id) => timers.delete(id);
+  vm.runInContext(read("js/audio/race-mix-audition.js"), ctx);
+  const audition = vm.runInContext("RaceMixAudition", ctx), voice = RV.create(G);
+  const audio = { enabled: () => true, init() {}, debug: () => ({ engineOn: false }), currentTrackId: () => "existing", musicBackend: () => null };
+  const store = { get: (key, d) => key === "sfx" ? false : key === "radioVoice" ? true : d };
+  assert.equal(audition.start({ audio, radio: voice, store }), true);
+  [...timers.values()].find((t) => t.ms === 2400).fn();
+  const auditionGeneration = voice.previewGeneration();
+  assert.equal(voice.preview("control", "Independent later test"), true);
+  assert.notEqual(voice.previewGeneration(), auditionGeneration);
+  const cancels = synth.calls.filter((c) => c.m === "cancel").length;
+  audition.stop();
+  assert.equal(synth.calls.filter((c) => c.m === "cancel").length, cancels, "Stop leaves a later independent preview alone");
+  assert.equal(timers.size, 0);
+  const current = voice.previewGeneration(); assert.equal(voice.stopPreviewIfGeneration(current), true, "owner can cancel its own pending/current voice");
+  assert.equal(voice.stopPreviewIfGeneration(current), false, "spent ownership cannot cancel a newer voice generation");
+});

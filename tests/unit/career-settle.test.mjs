@@ -327,8 +327,9 @@ function loadDriver(ratings, opts = {}) {
     // RUNGS, not the cap, are what this test measures.
     Parts: {
       getFactorySetup: () => ({}), getCost: () => opts.worksCost || 600,
+      DEFAULTS: Object.fromEntries(Array.from({ length: 6 }, (_, i) => ["c" + i, "base" + i])),
       CATALOG: Array.from({ length: 6 }, (_, i) => ({
-        id: "c" + i, options: [{ cost: 0 }, { cost: 500 }],
+        id: "c" + i, options: [{ id: "base" + i, cost: 0 }, { id: "top" + i, cost: 500 }],
       })),
     },
     // An EMPTY calendar by default, which makes seasonDone() true at round 0 —
@@ -1308,11 +1309,13 @@ test("a move takes the player's DEVELOPMENT along (it is keyed by seat); the old
   assert.fail("no seed drew an offer from another team");
 });
 
-test("a move resolves the new team's WORKS build outside the current era's bans (like start())", () => {
+test("a move consumes the pure reviewed works snapshot without temporarily changing the installed era", () => {
   const src = readFileSync(join(ROOT, "js/career/career.js"), "utf8");
-  const fn = src.slice(src.indexOf("function acceptOffer("), src.indexOf("\n}\n", src.indexOf("function acceptOffer(")));
-  const clear = fn.indexOf('Parts.setLegality(null, "")'), fac = fn.indexOf("Parts.getFactorySetup(team)"), re = fn.indexOf("applyRegs()");
-  assert.ok(clear > 0 && fac > clear && re > fac, "clear the ruleset, read the factory, re-install the era");
+  const factory = src.slice(src.indexOf("function worksSnapshot("), src.indexOf("function offerPreview("));
+  assert.ok(factory.includes("Parts.FACTORY_PRESETS"), "snapshot reads the unrestricted authored works build");
+  assert.ok(!factory.includes("setLegality"), "preview never changes the live era while browsing");
+  const accept = src.slice(src.indexOf("function acceptOffer("), src.indexOf("\n}\n", src.indexOf("function acceptOffer(")));
+  assert.ok(accept.includes("career.fitted = Object.assign({}, preview.fitted)"), "signing consumes the same reviewed works snapshot");
 });
 
 // ── a hostile offer / tdev that slipped past the importer ───────────────────

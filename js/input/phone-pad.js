@@ -64,16 +64,19 @@ const PhonePad = (function () {
 
   // ── wire ──────────────────────────────────────────────────────────────────
   // STATE channel, phone → desktop: one JSON array per sample,
-  // [proto, seq, roll|null, thr, brk, held].
+  // [1, seq, roll|null, thr, brk, held]. After an explicit steer capability
+  // handshake, touch steering uses [2, seq, null, thr, brk, held, steer].
   function encodeSample(s) {
     const roll = (typeof s.roll === "number" && isFinite(s.roll)) ? round2(s.roll) : null;
-    return JSON.stringify([PROTO, s.seq | 0, roll, round2(s.thr), round2(s.brk), s.held | 0]);
+    const touch = typeof s.steer === "number" && isFinite(s.steer);
+    return JSON.stringify(touch ? [2, s.seq | 0, null, round2(s.thr), round2(s.brk), s.held | 0, num(s.steer, -1, 1)] : [PROTO, s.seq | 0, roll, round2(s.thr), round2(s.brk), s.held | 0]);
   }
   function decodeSample(text) {
     let a;
     try { a = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
-    if (!Array.isArray(a) || a.length !== 6 || a[0] !== PROTO) return null;
+    if (!Array.isArray(a) || !((a.length === 6 && a[0] === PROTO) || (a.length === 7 && a[0] === 2 && typeof a[6] === "number" && isFinite(a[6])))) return null;
     return {
+      ...(a[0] === 2 ? { steer: num(a[6], -1, 1) } : {}),
       seq: a[1] | 0,
       roll: (typeof a[2] === "number" && isFinite(a[2])) ? num(a[2], -180, 180) : null,
       thr: num(a[3], 0, 1), brk: num(a[4], 0, 1), held: a[5] | 0,
@@ -101,17 +104,18 @@ const PhonePad = (function () {
     };
   }
   // EVENT channel: {t:"ev", k} phone→desktop; {t:"hap", ms} desktop→phone;
-  // {t:"hi", side, haptics} once on open; only a capable phone enables rumble.
+  // {t:"hi", side, haptics, steer?, ack?} advertises additive capabilities.
+  // Accepted sample acknowledgements use STATE ["A", seq]; older peers ignore them.
   function encodeEvent(k) { return JSON.stringify({ t: "ev", k }); }
   function encodeHaptic(ms) { return JSON.stringify({ t: "hap", ms: Math.max(0, Math.min(1000, ms | 0)) }); }
-  function encodeHello(side, haptics) { return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true }); }
+  function encodeHello(side, haptics, extended) { return JSON.stringify({ t: "hi", side, p: PROTO, haptics: haptics === true, ...(extended ? { steer: true, ack: true } : {}) }); }
   function decodeEvent(text) {
     let o;
     try { o = JSON.parse(typeof text === "string" ? text : ""); } catch (e) { return null; }
     if (!o || typeof o !== "object") return null;
     if (o.t === "ev") return EVENTS.includes(o.k) ? { t: "ev", k: o.k } : null;
     if (o.t === "hap") return { t: "hap", ms: Math.max(0, Math.min(1000, o.ms | 0)) };
-    if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true };
+    if (o.t === "hi") return { t: "hi", side: String(o.side || ""), p: o.p | 0, haptics: o.haptics === true, ...(o.steer === true ? { steer: true } : {}), ...(o.ack === true ? { ack: true } : {}) };
     return null;
   }
   // A TeamDef colour (three 0..1 floats) as the CSS hex the phone's LCD tints with.
@@ -218,7 +222,7 @@ const PhonePad = (function () {
     // A clock on every pump: the rtc transport ignores it, loopback (the test
     // wire) schedules by it, and an undefined `now` there delivers nothing.
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
-    let lastSeq = -1;
+    let lastSeq = -1, ackAt = -1e9, peerAck = false, helloPending = false;
     let samples = 0, events = 0, stale = 0, junk = 0, huds = 0;
     let closed = false;
     let raf = 0;
@@ -236,12 +240,15 @@ const PhonePad = (function () {
         if (s.seq <= lastSeq && lastSeq - s.seq < 30000) { stale++; return; }
         lastSeq = s.seq;
         samples++;
-        input.remoteSample(s);
+        const accepted = input.remoteSample(Object.assign({ source: "phone" }, s));
+        if (accepted !== false && peerAck && now() - ackAt >= HEARTBEAT_MS) { ackAt = now(); transport.send(T.STATE, JSON.stringify(["A", s.seq])); }
         return;
       }
       const ev = decodeEvent(data);
       if (!ev) { junk++; return; }
       if (ev.t === "hi" && ev.side === "pad" && ev.p === PROTO) {
+        peerAck = !!ev.ack;
+        helloPending = !transport.send(T.EVENT, encodeHello("host", false, true));
         input.setRemoteHaptics(ev.haptics ? (ms) => transport.send(T.EVENT, encodeHaptic(ms)) : null);
       }
       if (ev.t === "ev") {
@@ -257,7 +264,7 @@ const PhonePad = (function () {
       closed = true;
       if (ring) ring.stop();
       if (raf) { try { cancelAnimationFrame(raf); } catch (e) { /* no rAF here */ } raf = 0; }
-      input.remoteLost();
+      input.remoteLost("phone");
       input.setRemoteHaptics(null);
       if (opts.onClose) { try { opts.onClose(why); } catch (e) { /* caller's problem */ } }
     };
@@ -265,7 +272,7 @@ const PhonePad = (function () {
 
     const armed = () => {
       if (closed) return;
-      transport.send(T.EVENT, encodeHello("host"));
+      helloPending = !transport.send(T.EVENT, encodeHello("host", false, true));
       if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* caller's problem */ } }
     };
     if (transport.status === "open") armed(); else transport.onOpen(armed);
@@ -284,7 +291,7 @@ const PhonePad = (function () {
     // a frame, ahead of the game loop's own Input.poll(). The frame loop is not
     // this module's to edit (js/game.js is ratcheted), so an rAF of its own
     // does the pumping; a test pumps by hand with pump: false.
-    const pump = () => { const t = now(); const n = transport.pump(t); sendHud(t); return n; };
+    const pump = () => { const t = now(); const n = transport.pump(t); if (helloPending) helloPending = !transport.send(T.EVENT, encodeHello("host", false, true)); sendHud(t); return n; };
     if (opts.pump !== false && typeof requestAnimationFrame === "function") {
       const tick = () => { if (closed) return; pump(); raf = requestAnimationFrame(tick); };
       raf = requestAnimationFrame(tick);
@@ -460,7 +467,28 @@ const PhonePad = (function () {
     const T = NetTransport;
     const now = opts.now || (() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
     let seq = 0, lastSent = -1e9, sent = 0, haptics = 0, huds = 0, closed = false;
-    let beat = 0;
+    let beat = 0, helloPending = false, peerSteer = false, peerAck = false, ackAt = -1, openedAt = now();
+    const pending = [], sentTimes = new Map();
+    const EDGE_MAX_AGE_MS = 1200, NAV_MAX_AGE_MS = 250, EDGE_CAP = 24;
+    let expired = 0, rejected = 0, healthState = "unavailable";
+    const canVibrate = () => typeof opts.vibrate === "function" || (typeof navigator !== "undefined" && typeof navigator.vibrate === "function" && navigator.maxTouchPoints > 0);
+    function flush() {
+      if (closed || transport.status !== "open") return;
+      if (helloPending) helloPending = !transport.send(T.EVENT, encodeHello("pad", canVibrate(), true));
+      while (pending.length) {
+        const edge = pending[0];
+        if (now() - edge.at > (NAV_REPEAT[edge.k] ? NAV_MAX_AGE_MS : EDGE_MAX_AGE_MS)) { pending.shift(); expired++; continue; }
+        if (!transport.send(T.EVENT, encodeEvent(edge.k))) break;
+        pending.shift();
+      }
+    }
+    // Sender-clock age of a sample the desktop acknowledged accepting. HUD
+    // receipt alone says nothing about whether the upstream input arrived.
+    function health() {
+      const age = ackAt < 0 ? now() - openedAt : now() - ackAt;
+      healthState = !peerAck ? "unavailable" : age > 1500 ? "reconnecting" : ackAt < 0 ? "waiting" : age > 400 ? "degraded" : age < 250 ? "good" : healthState === "good" ? "good" : "degraded";
+      return { state: healthState, ageMs: ackAt < 0 ? null : Math.max(0, age), touchSupported: peerSteer };
+    }
     const vibrate = opts.vibrate || ((ms) => {
       try { if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* advisory */ }
     });
@@ -472,37 +500,45 @@ const PhonePad = (function () {
       lastSent = t;
       const ok = transport.send(T.STATE, encodeSample({
         seq: seq++, roll: src.roll(), thr: src.thr(), brk: src.brk(), held: src.held(),
+        ...(peerSteer && src.steer && src.steer() != null ? { steer: src.steer() } : {}),
       }));
-      if (ok) sent++;
+      if (ok) { sent++; sentTimes.set(seq - 1, t); while (sentTimes.size > 128) sentTimes.delete(sentTimes.keys().next().value); }
       return ok;
     }
     function event(k) {
       if (closed || !EVENTS.includes(k) || transport.status !== "open") return false;
-      return transport.send(T.EVENT, encodeEvent(k));
+      flush();
+      if (NAV_REPEAT[k] && pending.some((e) => e.k === k)) return true;
+      if (pending.length >= EDGE_CAP) { rejected++; return false; }
+      pending.push({ k, at: now() }); flush();
+      return true;
     }
     transport.onMessage((channel, data) => {
       if (closed) return;
       if (channel === T.STATE) {
+        let ack; try { ack = JSON.parse(data); } catch (_) { ack = null; }
+        if (peerAck && Array.isArray(ack) && ack[0] === "A" && Number.isInteger(ack[1]) && sentTimes.has(ack[1])) { ackAt = sentTimes.get(ack[1]); for (const key of sentTimes.keys()) if (key <= ack[1]) sentTimes.delete(key); }
         const h = decodeHud(data);
         if (h && opts.onHud) { huds++; try { opts.onHud(h); } catch (e) { /* page's problem */ } }
         return;
       }
       const ev = decodeEvent(data);
+      if (ev && ev.t === "hi" && ev.side === "host" && ev.p === PROTO) { peerSteer = !!ev.steer; peerAck = !!ev.ack; if (opts.onCapabilities) opts.onCapabilities({ touchSupported: peerSteer }); }
       if (ev && ev.t === "hap" && ev.ms > 0) { haptics++; vibrate(ev.ms); }
     });
     const close = (why) => {
       if (closed) return;
-      closed = true;
+      closed = true; pending.length = 0; sentTimes.clear();
       if (beat) { clearInterval(beat); beat = 0; }
       if (opts.onClose) { try { opts.onClose(why); } catch (e) { /* page's problem */ } }
     };
     transport.onClose(close);
     const armed = () => {
       if (closed) return;
-      const canVibrate = typeof opts.vibrate === "function" || (typeof navigator !== "undefined" && typeof navigator.vibrate === "function" && navigator.maxTouchPoints > 0);
-      transport.send(T.EVENT, encodeHello("pad", canVibrate));
+      openedAt = now();
+      helloPending = true; flush();
       if (opts.heartbeat !== false) {
-        beat = setInterval(() => send(true), HEARTBEAT_MS);
+        beat = setInterval(() => { flush(); send(true); if (opts.onHealth) opts.onHealth(health()); }, HEARTBEAT_MS);
         if (beat && typeof beat.unref === "function") beat.unref();   // node harness: never the thing keeping the process alive
       }
       if (opts.onOpen) { try { opts.onOpen(); } catch (e) { /* page's problem */ } }
@@ -513,9 +549,10 @@ const PhonePad = (function () {
       // keeps the 15 ms gap, since the next reading is a frame away anyway.
       sample: (force) => send(!!force),
       event,
-      pump: () => transport.pump(now()),
+      pump: () => { const n = transport.pump(now()); flush(); if (opts.onHealth) opts.onHealth(health()); return n; },
+      health,
       close() { try { transport.close(); } catch (e) { /* already closed */ } close("local"); },
-      stats: () => ({ sent, haptics, huds, seq, open: !closed && transport.status === "open" }),
+      stats: () => ({ sent, haptics, huds, seq, queued: pending.length, expired, rejected, health: health(), open: !closed && transport.status === "open" }),
     };
   }
 
@@ -600,11 +637,11 @@ const PhonePad = (function () {
       dom.status.classList.toggle("bad", !!bad);
     };
     // Sensor state — what padSession reads on every send.
-    let roll = null, thr = 0, brk = 0, held = 0;
+    let roll = null, thr = 0, brk = 0, held = 0, steer = 0, steeringMode = "tilt";
     let session = null;
     let sensorOn = false;
     let lastHud = null;
-    const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held };
+    const src = { roll: () => roll, thr: () => thr, brk: () => brk, held: () => held, steer: () => steeringMode === "touch" ? steer : null };
 
     // The rim turns with the phone: the wheel the player sees is the wheel
     // they are holding. Geared down and clamped — the controls on top stay
@@ -616,6 +653,7 @@ const PhonePad = (function () {
       dom.rim.style.transform = "rotate(" + r.toFixed(1) + "deg)";
     }
     function onOrient(e) {
+      if (steeringMode !== "tilt") return;
       const r = TiltRoll.rollDeg(e.beta, e.gamma, TiltRoll.screenAngle());
       if (r === null) return;
       roll = r;
@@ -642,7 +680,7 @@ const PhonePad = (function () {
     // anywhere on the pedal is full travel, and sliding the thumb UP from where
     // it landed eases it off. An absolute "height on the pedal" mapping gave a
     // thumb aimed at the label of a ~150 px pedal half a brake (R3-PHONE-2).
-    const releases = [];
+    const releases = [], pointerReleases = [];
     const releaseAll = () => { for (const r of releases) r(); };
     function hold(el, on, off, travel) {
       if (!el) return;
@@ -665,6 +703,7 @@ const PhonePad = (function () {
       };
       el.addEventListener("pointerdown", down);
       el.addEventListener("pointermove", move);
+      pointerReleases.push(up);
       el.addEventListener("pointerup", up);
       el.addEventListener("pointercancel", up);
       // WebKit keeps ONE capture slot: pressing LOOK while GAS is held steals
@@ -678,6 +717,10 @@ const PhonePad = (function () {
       // Every finger up (a pointerup that landed elsewhere), or the page hidden
       // by a call / app switch: nothing is held, so nothing stays pinned.
       const allUp = (e) => { if (!e.touches || !e.touches.length) releaseAll(); };
+      const releasePointer = (e) => { for (const up of pointerReleases) up(e); };
+      document.addEventListener("pointerup", releasePointer, true);
+      document.addEventListener("pointercancel", releasePointer, true);
+      if (typeof window !== "undefined" && window.addEventListener) { window.addEventListener("pointerup", releasePointer, true); window.addEventListener("pointercancel", releasePointer, true); }
       document.addEventListener("touchend", allUp, true);
       document.addEventListener("touchcancel", allUp, true);
       document.addEventListener("visibilitychange", () => { if (document.hidden) releaseAll(); });
@@ -689,7 +732,27 @@ const PhonePad = (function () {
       const up = Math.max(0, anchorY - y - PEDAL_DEAD_PX);
       return Math.max(PEDAL_MIN, Math.min(1, 1 - up / PEDAL_TRAVEL_PX));
     }
-    const push = () => { if (session) session.sample(true); };
+    const push = () => { if (dom.steer && dom.steer.setAttribute) dom.steer.setAttribute("aria-valuenow", String(steer)); if (session) session.sample(true); };
+    function setSteeringMode(mode) {
+      if (mode !== "tilt" && mode !== "touch") return false;
+      if (mode === "touch" && (!session || !session.health().touchSupported)) { say("Touch steering needs an updated game. Reload the game and reconnect.", true); return false; }
+      steeringMode = mode; steer = 0; push();
+      if (dom.steeringMode) dom.steeringMode.value = mode;
+      if (dom.steer) dom.steer.hidden = mode !== "touch";
+      return true;
+    }
+    if (dom.steeringMode) dom.steeringMode.addEventListener("change", () => { if (!setSteeringMode(dom.steeringMode.value)) dom.steeringMode.value = steeringMode; });
+    if (dom.steer) {
+      let steeringPointer = null, anchorX = 0;
+      const release = (e) => { if (e && e.pointerId !== steeringPointer) return; steeringPointer = null; steer = 0; push(); };
+      releases.push(() => release()); pointerReleases.push(release);
+      dom.steer.addEventListener("pointerdown", (e) => { if (steeringMode !== "touch" || steeringPointer !== null) return; steeringPointer = e.pointerId; anchorX = e.clientX; steer = 0; try { dom.steer.setPointerCapture(e.pointerId); } catch (_) { /* document release fanout still centers steering when capture is refused */ } e.preventDefault(); push(); });
+      dom.steer.addEventListener("pointermove", (e) => { if (steeringPointer !== e.pointerId) return; steer = num((e.clientX - anchorX) / Math.max(40, dom.steer.getBoundingClientRect().width * 0.4), -1, 1); push(); });
+      dom.steer.addEventListener("pointerup", release); dom.steer.addEventListener("pointercancel", release);
+      dom.steer.addEventListener("keydown", (e) => { if (steeringMode !== "touch" || !["ArrowLeft", "ArrowRight"].includes(e.key)) return; e.preventDefault(); steer = e.key === "ArrowLeft" ? -1 : 1; push(); });
+      dom.steer.addEventListener("keyup", (e) => { if (["ArrowLeft", "ArrowRight"].includes(e.key)) release(); });
+      dom.steer.addEventListener("blur", () => release());
+    }
     hold(dom.gas, (v) => { thr = v; push(); }, () => { thr = 0; push(); }, true);
     hold(dom.brake, (v) => { brk = v; push(); }, () => { brk = 0; push(); }, true);
     hold(dom.lookBack, () => { held |= HELD.lookBack; push(); }, () => { held &= ~HELD.lookBack; push(); });
@@ -726,11 +789,12 @@ const PhonePad = (function () {
     function edge(el, k, repeat) {
       if (!el) return;
       const r = repeater(k), stop = r.stop;
+      const fire = () => { buzz(); if (session) session.event(k); };
+      el.addEventListener("click", (e) => { if (!e.detail) { e.preventDefault(); fire(); } });
       el.addEventListener("pointerdown", (e) => {
         e.preventDefault();
         el.classList.add("on");
-        buzz();
-        if (session) session.event(k);
+        fire();
         if (repeat) r.start();
       });
       const up = () => { el.classList.remove("on"); stop(); };
@@ -852,7 +916,10 @@ const PhonePad = (function () {
       const old = attempt; attempt = null;
       if (old) old.cancelled = true;
       connecting = false;
-      const active = session; session = null;
+      const active = session;
+      steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.steer) dom.steer.hidden = true;
+      if (active) { steer = 0; thr = brk = held = 0; active.sample(true); }
+      session = null;
       if (active) active.close();
       else if (old && old.transport) { try { old.transport.close(); } catch (_) { /* already closed */ } }
       dropWake(); releaseAll();
@@ -877,7 +944,7 @@ const PhonePad = (function () {
       // (a re-dial is outside one, and its listener is still on from the first link).
       const sensor = sensorOn || await requestSensor();
       if (attempt !== owner) return { ok: false, error: "cancelled" };
-      if (!sensor) say("No motion sensor here — the pedals and buttons still work.", true);
+      if (!sensor) say("No motion sensor — choose TOUCH STRIP under STEERING after connecting to an updated game.", true);
       else say("Looking for the game…");
       keepAwake();
       try {
@@ -918,8 +985,14 @@ const PhonePad = (function () {
             if (dom.body) dom.body.classList.add("linked");
             if (opts.onOpen) opts.onOpen();
           },
+          onHealth: (h) => {
+            const text = h.state === "unavailable" ? "INPUT AGE UNAVAILABLE · UPDATE GAME" : h.state === "waiting" ? "WAITING FOR INPUT ACK" : h.state === "reconnecting" ? "INPUT NOT ACKNOWLEDGED" : "INPUT " + h.state.toUpperCase();
+            if (dom.health && dom.health.textContent !== text) dom.health.textContent = text;
+            if (dom.healthAge) { const age = h.ageMs == null ? "" : Math.round(h.ageMs / 100) * 100 + " ms since acknowledged sample"; if (dom.healthAge.textContent !== age) dom.healthAge.textContent = age; }
+          },
           onClose: (why) => {
             if (attempt !== owner) return;
+            steer = 0; steeringMode = "tilt"; if (dom.steeringMode) dom.steeringMode.value = "tilt"; if (dom.health) dom.health.textContent = "INPUT DISCONNECTED"; if (dom.steer) dom.steer.hidden = true;
             attempt = null; owner.cancelled = true; connecting = false;
             session = null;
             dropWake(); releaseAll();
@@ -999,13 +1072,14 @@ const PhonePad = (function () {
       connect,
       cancel,
       scan,
+      setSteeringMode,
       // The test/console handle: what the page holds, and a way to paint a
       // dash without a link (controller.html?demo drives the LCD from it).
       paintHud: (h) => { lastHud = h; paintHud(dom.hud, h); },
       armSensor: requestSensor,   // the demo turns the rim with a real phone's tilt, unlinked
       setRoll: (r) => { roll = r; paintRoll(); if (session) session.sample(); },   // stands in for the sensor
       pump: () => (session ? session.pump() : 0),   // the frame tick, for a harness with no rAF
-      state: () => ({ linked: !!session, roll, thr, brk, held, sensorOn, hud: lastHud, stats: session ? session.stats() : null }),
+      state: () => ({ linked: !!session, roll, thr, brk, held, steer, steeringMode, sensorOn, hud: lastHud, stats: session ? session.stats() : null }),
     };
   }
 

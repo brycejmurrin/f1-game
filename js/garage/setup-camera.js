@@ -976,6 +976,13 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
   }
 }
 
+// Preset jumps are immediate even with reduced motion; the full camera snapshot
+// is restored on DONE, tab change or garage exit. No draft/material mutation.
+if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.bind({
+  capture: captureCamera, restore: restoreCamera, show: setSetupView,
+  eligible: () => !!$("carsetup") && !$("carsetup").hidden,
+});
+
 // The camera's own state, published for the G façade (js/game.js keeps the
 // spellings __apex.garageCam() and types/game-ctx.d.ts already name).
 return {

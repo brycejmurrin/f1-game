@@ -2267,6 +2267,8 @@ test("MY CIRCUITS collection controls import atomically and leave the working dr
   assert.deepEqual(walk(b.root).find((e) => e.dataset.role === "library-files").children.map((e) => e.textContent), ["EXPORT ALL", "IMPORT LIBRARY"]);
   const draft = plain(b.D.state().design), envelope = { format: b.C.COLLECTION_FORMAT, v: 1, items: [draft] };
   assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify(envelope) }), true);
+  assert.match(msgText(b), /Nothing imported yet/); assert.equal(b.C.list().length, 0);
+  assert.equal(b.D.commitLibraryImport(), true);
   assert.match(msgText(b), /Imported 1 circuits/); assert.equal(b.C.list().length, 1);
   assert.deepEqual(plain(b.D.state().design), draft);
   b.ctx.Blob = Blob;
@@ -2276,13 +2278,15 @@ test("MY CIRCUITS collection controls import atomically and leave the working dr
   assert.equal(exported.name, "apex26-circuits.apextracks.json");
   assert.equal(exported.data.format, b.C.COLLECTION_FORMAT); assert.equal(exported.data.items.length, 1);
   assert.equal(await b.D.loadFrom(JSON.stringify(envelope)), true);
+  assert.equal(b.D.commitLibraryImport(), true);
   assert.match(msgText(b), /Imported 0 circuits.*1 duplicates/);
   assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify({ ...envelope, items: [draft, { pts: [] }] }) }), false);
   assert.match(msgText(b), /Circuit 2 failed validation.*Nothing imported/); assert.equal(b.C.list().length, 1);
   assert.equal(await b.D.importLibraryFile({ size: 2000000, text: async () => { throw new Error("must not read"); } }), false);
   assert.match(msgText(b), /too large/);
   b.ctx.GameStore.store.write = () => ({ ok: false, durable: false });
-  assert.equal(b.D.loadCollection({ ...envelope, items: [{ ...draft, seed: 17 }] }), false);
+  assert.equal(await b.D.loadCollection({ ...envelope, items: [{ ...draft, seed: 17 }] }), true);
+  assert.equal(b.D.commitLibraryImport(), false);
   assert.match(msgText(b), /Library storage write failed.*Nothing imported/);
   assert.equal(b.C.list().length, 1); assert.deepEqual(plain(b.D.state().design), draft);
   b.D.close();
@@ -2510,4 +2514,56 @@ test("Spa corner memory cards highlight three apexes and reveal labels without a
   assert.match(followupText(panel),/T1/); chipsIn(panel,"HIDE LABEL")[0].click();
   assert.match(followupText(panel),/Recall this turn/); chipsIn(panel,"REVEAL LABEL")[0].click(); assert.match(followupText(panel),/T1/);
   assert.deepEqual(plain(b.D.state().design),d); assert.equal(b.D.state().undo,u); assert.equal(b.D.state().sel,sel); b.D.close();
+});
+
+
+test("CARD keeps its outline facts name link and native title on one pre-compression snapshot", async () => {
+  const b = bootScreen(); openGreen(b, 11);
+  const texts = [], canvases = []; recordingCanvas(b, texts, canvases);
+  const original = plain(b.D.state().design), encoded = b.ctx.TrackCodec.encode;
+  let release, started;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: (d) => { started = plain(d); return new Promise((resolve) => { release = async () => resolve(await encoded(d)); }); } };
+  const pending = b.D.cardCanvas();
+  b.D.setName("Changed after click"); b.D.setTheme("oasis"); b.D.preview();
+  assert.ok(release); await release(); const card = await pending;
+  assert.equal(card.title, original.name); assert.ok(texts.includes(original.name)); assert.ok(!texts.includes("CHANGED AFTER CLICK"));
+  assert.match(card.name, new RegExp(original.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")));
+  const decoded = await b.ctx.TrackCodec.decode(b.ctx.TrackCodec.fromHash(card.url.slice(card.url.indexOf("#"))));
+  assert.equal(decoded.design.name, original.name); assert.equal(decoded.design.theme, original.theme);
+  assert.deepEqual(started, original);
+  b.D.close();
+});
+
+test("library review is cancellable mid-preflight and on close, and stale approval never writes", async () => {
+  const b = bootScreen(); openGreen(b); const draft = plain(b.D.state().design);
+  const env = { format: b.C.COLLECTION_FORMAT, v: 1, items: [draft, { ...draft, seed: 19 }] };
+  const pending = b.D.loadCollection(env); b.D.cancelLibraryImport(true);
+  assert.equal(await pending, false); assert.equal(b.C.list().length, 0);
+  assert.equal(await b.D.loadCollection(env), true);
+  assert.equal(b.C.list().length, 0, "review makes no write");
+  b.C.upsert({ ...draft, seed: 21 });
+  assert.equal(b.D.commitLibraryImport(), false); assert.match(msgText(b), /changed.*Nothing imported/);
+  assert.equal(b.C.list().length, 1);
+  const closing = b.D.loadCollection(env); b.D.close();
+  assert.equal(await closing, false); assert.equal(b.C.list().length, 1);
+});
+
+
+test("native CARD share title remains captured when the design changes during PNG encoding", async () => {
+  const b = bootScreen(); openGreen(b); const name = b.D.state().design.name;
+  const create = b.dom.document.createElement; let finishPng;
+  b.dom.document.createElement = (tag) => {
+    const e = create(tag);
+    if (tag === "canvas") e.toBlob = (done) => { finishPng = () => done(new Blob(["PNG"], { type: "image/png" })); };
+    return e;
+  };
+  b.ctx.File = File; let shared;
+  b.ctx.navigator = { canShare: () => true, share: async (d) => { shared = d; } };
+  const pending = b.D.shareCard();
+  for (let i = 0; i < 40 && !finishPng; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(typeof finishPng, "function");
+  b.D.setName("Different after PNG"); finishPng();
+  assert.equal(await pending, true); assert.equal(shared.title, name);
+  assert.equal((await b.CD.decode(b.CD.fromHash(shared.text.slice(shared.text.indexOf("#"))))).design.name, name);
+  b.D.close();
 });

@@ -645,3 +645,33 @@ test("pending contact sheet respects same-open Studio session generation replace
   assert.equal(cancelled(), true); resolve(true); assert.equal(await pending, false);
   assert.equal(api.status().scrubT, 1, "new Studio session cannot be overwritten by old capture restore");
 });
+
+test("frame controls use adjacent recorded samples across gaps, discontinuities and a wrapped ring", () => {
+  let cuts = 0;
+  const R = boot(undefined, { GameCams: { resetSmoothing() { cuts++; } }, CamFeel: { resetFollow() {} } });
+  const field = cars(1), G = { cars: field, raceT: 30, paused: true, netPlay: { active: () => false } };
+  const api = R.create(G);
+  for (let i = 0; i < R.MAX_FRAMES + 10; i++) {
+    field[0].px = i;
+    if (i === R.MAX_FRAMES + 7) { api.breakTimeline(); field[0].px = 2000; }
+    api.sample(i * .05, field);
+  }
+  G.raceT = (R.MAX_FRAMES + 9) * .05;
+  const before = { ...field[0] };
+  assert.equal(api.beginScrub(false), true);
+  const w = api.window();
+  api.apply(w.t1);
+  assert.equal(api.stepFrame(1), false, "end is clamped; no fabricated future frame");
+  assert.equal(api.status().scrubPlaying, false);
+  assert.equal(api.stepFrame(-1), true);
+  assert.ok(Math.abs(api.status().scrubT - (w.t1 - .05)) < 1e-9);
+  api.apply((R.MAX_FRAMES + 6) * .05);
+  assert.equal(api.stepFrame(1), true);
+  assert.equal(field[0].px, 2000, "timeline break picks the exact recorded new pose");
+  api.apply(w.t0);
+  assert.equal(api.stepFrame(-1), false, "wrapped head is the beginning, not a modulo seek");
+  assert.equal(api.stepFrame(1), true);
+  assert.ok(cuts >= 3);
+  api.endScrub();
+  assert.deepEqual(field[0], before, "live pose and absent interpolation fields are restored exactly");
+});

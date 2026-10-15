@@ -27,6 +27,8 @@ var GameAudio = (function () {
     setRadioFocusDb: (v) => [0, 4, 8, 12].indexOf(v) >= 0 ? v : 0, getRadioFocusDb: noop0, setVoiceFocusHold: noop,
     setRadioDuck: noop, radioLeadS: noop0, radioSting: noop, radioStingStop: noop,
     startMusic: noop, stopMusic: noop, startEngine: noop, stopEngine: noop,
+    musicPlaybackGeneration: noop0, stopMusicIfGeneration: () => false,
+    enginePlaybackGeneration: noop0, stopEngineIfGeneration: () => false,
     startRain: noop, stopRain: noop, setEngine: noop, setSkid: noop,
     setRivals: noop, setGridIdle: noop, feedReplayScrub: noop, syncReplayRpms: noop, resetReplayScrub: noop, setVoice: noop, setVenue: noop,
     setCameraMix: noop, setCarSfx: noop, brakeCue: noop, shift: noop,
@@ -60,13 +62,14 @@ var RivalAudio = {
 var VoicePack = { create: () => null };
 var RecordedAnnouncer = { create: () => ({ play: () => false, stop: function () {} }) };
 var DrivingCues = {
-  create: function () {}, tick: function () {}, setLevel: function () {},
+  create: function () {}, tick: function () {}, setLevel: function () {}, setConditionAware: function () {},
   labelOf: (v) => (v <= 1 ? "OFF" : "CUES " + v),
 };
 var RadioVoice = (function () {
   function inert() {
     return {
       stop: function () {}, speak: () => false, say: function () {}, sayPreRace: () => false, halt: function () {},
+      previewGeneration: () => 0, stopPreviewIfGeneration: () => false,
       prepare: function () {}, unlock: function () {}, enabled: () => false, setEnabled: function () {},
       setVolume: function () {}, volume: () => 0, pack: null, packOn: () => false,
       announcerPackOn: () => false, current: function () {}, tick: function () {},

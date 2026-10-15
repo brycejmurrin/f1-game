@@ -101,3 +101,31 @@ test("distinct music loads serialize decoding and skip superseded queued tracks"
   assert.equal(maxActive, 1);
   assert.equal(started.filter((n) => n.buffer && n.buffer.duration === 4).length, 1, "superseded decode never plays");
 });
+
+test("GameAudio exposes soundtrack playback ownership and preserves a replacement upload", async () => {
+  const { A } = boot(); A.init(); await flush(); A.stopMusic();
+  A.addTracks([{ id: "user:lease-one", name: "one", url: "blob:lease-one" }, { id: "user:lease-two", name: "two", url: "blob:lease-two" }]);
+  A.setMusicSource("user"); A.startMusic(-1); const first = A.musicPlaybackGeneration();
+  A.playTrackId("user:lease-two");
+  assert.equal(A.stopMusicIfGeneration(first), false);
+  assert.equal(A.currentTrackId(), "user:lease-two");
+  assert.equal(A.stopMusicIfGeneration(A.musicPlaybackGeneration()), true);
+  assert.equal(A.currentTrackId(), null); await flush();
+});
+
+test("audition samples and cleanup cannot alter a later race engine claim, including an already-running graph", async () => {
+  const { A, sandbox } = boot(); A.init(); await flush(); A.stopMusic();
+  let timerId = 0; const timers = new Map();
+  const ctx = vm.createContext({ setTimeout: (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; }, clearTimeout: (id) => timers.delete(id) });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/race-mix-audition.js"), "utf8"), ctx);
+  const audition = vm.runInContext("RaceMixAudition", ctx);
+  const store = { get: (key, d) => key === "music" || key === "radioVoice" ? false : d };
+  assert.equal(audition.start({ audio: A, store }), true); const before = A.enginePlaybackGeneration();
+  assert.equal(A.debug().engineOn, true);
+  A.startEngine(); // race starts synchronously before the settings-hidden observer runs
+  assert.notEqual(A.enginePlaybackGeneration(), before, "even a start on the same running graph transfers ownership");
+  A.setEngine(0.7, 0, false, 0.6, 5); A.setSkid(0.75); const skid = A.skidLevel();
+  [...timers.values()].find((t) => t.ms === 1200).fn(); assert.equal(A.skidLevel(), skid, "later audition samples do not overwrite race skid");
+  audition.stop(); assert.equal(A.debug().engineOn, true); assert.equal(A.skidLevel(), skid, "cleanup cannot zero the race skid");
+  assert.equal(timers.size, 0); A.stopEngine();
+});

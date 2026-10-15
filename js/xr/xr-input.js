@@ -50,7 +50,7 @@ const XrInput = (function () {
     let primaryDown = false, secondaryDown = false;
     const list = sources || [];
     // XRInputSourceArray is indexed/iterable, but has no Array.prototype.some.
-    let hasLeft = false;
+    let hasLeft = false, hasStick = false, hasGamepad = false;
     for (let i = 0; i < list.length; i++)
       if (usableStick(list[i]) && list[i].handedness === "left") hasLeft = true;
     for (let i = 0; i < list.length; i++) {
@@ -58,6 +58,7 @@ const XrInput = (function () {
       if (!src || src.targetRayMode === "gaze") continue;
       const gp = src.gamepad;
       if (!gp) continue;
+      hasGamepad = true;
       const hand = src.handedness;   // "left" | "right" | "none"
       const t = btn(gp, BTN_TRIGGER);
       if (hand === "right") thr = Math.max(thr, t);
@@ -69,6 +70,7 @@ const XrInput = (function () {
       const sx = axis(gp, AXIS_STICK_X);
       // Prefer left stick for steer when both present; else any.
       if (usableStick(src)) {
+        hasStick = true;
         if (hand === "left" || (!hasLeft && hand !== "right" && !stickX) || (hand === "right" && !hasLeft)) {
           stickX = sx; stickY = axis(gp, AXIS_STICK_Y);
         }
@@ -96,7 +98,8 @@ const XrInput = (function () {
 
     const steer = XrRig.stickToSteer(stickX);
     return {
-      sample: { roll: steer, thr: thr, brk: brk, held: held },
+      sample: { roll: hasStick ? steer : null, thr: thr, brk: brk, held: held },
+      driving: hasGamepad && !(options && options.driving === false),
       events,
       recenter,
       latch,
@@ -109,7 +112,15 @@ const XrInput = (function () {
   function inject(input, mapped) {
     if (!input || !mapped) return false;
     const s = mapped.sample;
-    input.remoteSample({ steer: typeof s.roll === "number" ? s.roll : 0, thr: s.thr, brk: s.brk, held: s.held | 0 });
+    if (mapped.driving === false) {
+      // A disconnect or EXISTING CONTROLS releases only our lane. A phone may
+      // have supplied a newer sample since our last frame; never clear it.
+      if (input.remoteLost) input.remoteLost("xr");
+    } else {
+      const sample = { source: "xr", thr: s.thr, brk: s.brk, held: s.held | 0 };
+      if (typeof s.roll === "number") sample.steer = s.roll;
+      input.remoteSample(sample);
+    }
     const ev = mapped.events || [];
     for (let i = 0; i < ev.length; i++) input.remoteEvent(ev[i]);
     return true;

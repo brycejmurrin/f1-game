@@ -214,16 +214,29 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   }
 });
 
+function assertFastVerification(argv) {
+  assert.ok(Array.isArray(argv), "structured argv is required");
+  const script = argv[1];
+  assert.equal(path.basename(script || ""), "verify-change.mjs", argv);
+  assert.equal(path.basename(path.dirname(script)), "ci", argv);
+  assert.equal(path.basename(path.dirname(path.dirname(script))), "tools", argv);
+  assert.ok(argv.includes("--fast"), argv);
+  assert.ok(argv.includes("--json"), argv);
+  assert.ok(!argv.includes("--wait"), argv);
+}
+
+test("fast verification contract accepts test-bg in checkout paths but rejects the actual wrapper", () => {
+  assertFastVerification([process.execPath, "/tmp/test-bg-checkout/tools/ci/verify-change.mjs", "--fast", "--json"]);
+  assert.throws(() => assertFastVerification([process.execPath, "/tmp/checkout/tools/ci/test-bg.mjs", "--fast", "--json"]));
+  assert.throws(() => assertFastVerification([process.execPath, "/tmp/checkout/tools/ci/verify-change.mjs", "--fast", "--json", "--wait"]));
+});
+
 test("dryRun / mock apex_verify_change_fast pins --fast --json, never --wait or test-bg", () => {
   const r = callCli("apex_verify_change_fast", { dryRun: true });
   assert.equal(r.status, 0, r.stderr);
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, true);
-  assert.ok(body.argv.includes("--fast"), body.argv);
-  assert.ok(body.argv.includes("--json"), body.argv);
-  assert.ok(!body.argv.includes("--wait"), body.argv);
-  const blob = JSON.stringify(body);
-  assert.doesNotMatch(blob, /test-bg/);
+  assertFastVerification(body.argv);
 });
 
 test("apex_bump_cache_check argv never contains --apply", () => {

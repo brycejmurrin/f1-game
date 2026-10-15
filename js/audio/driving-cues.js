@@ -110,6 +110,9 @@ var DrivingCues = (function () {
     let lastCallS = null, lastCallSide = 0, callArmed = true, callExitM = 0;
     let lastCallMs = -Infinity;
     let brakeFired = 0, callFired = 0;
+    let conditionAware = !!(G && G.store && G.store.get("conditionCues", false) === true);
+    const capacity = {};
+    function setConditionAware(on) { conditionAware = on === true; delete capacity.lat; delete capacity.brake; }
 
     function setLevel(v) {
       if (typeof v === "number" && isFinite(v)) {
@@ -166,7 +169,9 @@ var DrivingCues = (function () {
       lastMs = now;
 
       const PC = (typeof PhysicsConsts !== "undefined") ? PhysicsConsts : {};
-      const lat = PC.LAT_MAX || 22, brake = PC.BRAKE || 22;
+      const estimate = conditionAware && typeof BrakeCue !== "undefined" && BrakeCue.conditionCapacity
+        ? BrakeCue.conditionCapacity(p, PC, capacity, dt) : null;
+      const lat = estimate ? estimate.lat : PC.LAT_MAX || 22, brake = estimate ? estimate.brake : PC.BRAKE || 22;
       const vt = (G.vTop ? G.vTop() : 0) || (PC.VMAX || 72);
       const lookLo = 28 * Math.max(vt / (PC.VMAX || 72), 0.05);
       const lookHi = Math.max(lookLo, vt * vt / (2 * Math.max(brake, 1)));
@@ -234,11 +239,11 @@ var DrivingCues = (function () {
     function debug() {
       return {
         level, on: cfg.on, lookSec: +cfg.lookSec.toFixed(2),
-        urgency: +lastU.toFixed(3), brakeFired, callFired, lastCallSide,
+        urgency: +lastU.toFixed(3), conditionAware, capacity: Object.assign({}, capacity), brakeFired, callFired, lastCallSide,
       };
     }
 
-    inst = { tick, setLevel, debug, fromSlider, urgencyOf, cornerSide, on: () => cfg.on };
+    inst = { tick, setLevel, setConditionAware, debug, fromSlider, urgencyOf, cornerSide, on: () => cfg.on };
     return inst;
   }
 
@@ -248,5 +253,6 @@ var DrivingCues = (function () {
     on() { return !!inst && inst.on(); },
     debug() { return inst ? inst.debug() : null; },
     setLevel(v) { if (inst) inst.setLevel(v); },
+    setConditionAware(on) { if (inst) inst.setConditionAware(on); },
   });
 })();

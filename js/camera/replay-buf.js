@@ -261,6 +261,32 @@ const ReplayBuf = (function () {
       applyPose(G.cars, snap.cars);
       return true;
     }
+    // Pick recorded timestamps, not +/-1/HZ: a slow frame may skip samples.
+    function adjacentFrame(t, direction) {
+      if (!count || (direction !== -1 && direction !== 1)) return null;
+      let found = null;
+      for (let k = 0; k < count; k++) {
+        const time = times[(head + k) % cap];
+        if (direction < 0 ? time < t - 1e-9 : time > t + 1e-9) {
+          if (found === null || (direction < 0 ? time > found : time < found)) found = time;
+        }
+      }
+      return found;
+    }
+    function stepFrame(direction) {
+      if (!scrubbing || sheetBusy || !allowed() || (direction !== -1 && direction !== 1)) return false;
+      scrubPlaying = false;
+      const t = adjacentFrame(scrubT, direction);
+      if (t === null) { paintDock(); return false; }
+      const ok = apply(t);
+      if (ok) {
+        // A seek is a cut; never ease from the unrelated pre-step framing.
+        if (typeof CamFeel !== "undefined") CamFeel.resetFollow();
+        if (typeof GameCams !== "undefined") GameCams.resetSmoothing();
+      }
+      paintDock();
+      return ok;
+    }
     function endScrub() {
       sheetGeneration++; sheetBusy = false;
       if (!scrubbing) return false;
@@ -376,6 +402,8 @@ const ReplayBuf = (function () {
         '<button type="button" id="pm-replay-exit">EXIT</button>' +
         '<button type="button" id="pm-replay-play">PAUSE</button>' +
         '<button type="button" id="pm-replay-last">LAST</button>' +
+        '<button type="button" id="pm-replay-prev" aria-label="Previous recorded frame">← FRAME</button>' +
+        '<button type="button" id="pm-replay-next" aria-label="Next recorded frame">FRAME →</button>' +
         '<button type="button" id="pm-replay-rate">1×</button>' +
         '<input id="pm-replay-scrub" type="range" min="0" max="1000" value="1000" aria-label="Replay position">' +
         '<span id="pm-replay-label">0.0</span>' +
@@ -396,6 +424,8 @@ const ReplayBuf = (function () {
         scrubPlaying = !scrubPlaying;
         paintDock();
       };
+      dock.querySelector("#pm-replay-prev").onclick = () => stepFrame(-1);
+      dock.querySelector("#pm-replay-next").onclick = () => stepFrame(1);
       dock.querySelector("#pm-replay-last").onclick = () => { if (!sheetBusy) { jumpLastTag(); paintDock(); } };
       dock.querySelector("#pm-replay-rate").onclick = () => {
         if (sheetBusy) return;
@@ -435,7 +465,10 @@ const ReplayBuf = (function () {
         const u = (scrubT - w.t0) / (w.t1 - w.t0);
         scrub.value = String(Math.round(Math.max(0, Math.min(1, u)) * 1000));
       }
-      if (label) label.textContent = scrubT.toFixed(1) + "s";
+      if (label) label.textContent = scrubT.toFixed(3) + "s";
+      const prevFrame = document.getElementById("pm-replay-prev"), nextFrame = document.getElementById("pm-replay-next");
+      if (prevFrame) prevFrame.disabled = sheetBusy || adjacentFrame(scrubT, -1) === null;
+      if (nextFrame) nextFrame.disabled = sheetBusy || adjacentFrame(scrubT, 1) === null;
       const picker = document.getElementById("pm-replay-tag"), sheet = document.getElementById("pm-replay-sheet");
       if (picker && !sheetBusy) {
         const selected = picker.value; picker.replaceChildren();
@@ -470,7 +503,7 @@ const ReplayBuf = (function () {
     return {
       sample, clear, breakTimeline, reset, pushTag, window: windowInfo, at,
       beginScrub, apply, endScrub, contactSheet, cancelContactSheet, isScrubbing, lastTag, jumpLastTag, tags: tagsOf,
-      tickScrub, status: statusOf,
+      tickScrub, stepFrame, adjacentFrame, status: statusOf,
       refreshButton, ensureButton,
       onRaceStart, onTick, onPause,
     };

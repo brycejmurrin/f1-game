@@ -1,5 +1,19 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+
+## 2026-10-15 — new player tools and shared wiring
+
+`js/game.js` codeLines 5158 → **5172** and lines 9440 → **9454** add
+bounded delivery-history lifecycle hooks, deferred settings-panel mounting,
+carbon flap surface threading and condition-cue telemetry. Persistent feature
+state lives in the extracted modules; existing top-level state declarations
+were reused. Tree `cssClasses` 644 → **654** admits ten scoped component classes
+for settings search, setup/audio controls, delivered messages and storage health.
+These classes share existing spacing, colour, type and target-size tokens.
+No shell-node, raw-colour/spacing, font-floor, coverage, performance or test
+assertion ceiling is raised. Re-measured using
+`node tools/check/ratchets.mjs --update` after integrating the source modules.
+
 ## 2026-10-14 — followup feature integration
 
 `js/agent/agentview.js` lines 2584 → **2588** (+4) records episode metadata;

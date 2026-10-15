@@ -47,3 +47,28 @@ test("urgency is never a brake command — output is 0..1 only", () => {
   const u = BrakeCue.urgencyOf(70, 0.04, 40, 0, LAT, BRAKE);
   assert.ok(u >= 0 && u <= 1);
 });
+
+
+test("condition estimate is conservative, smoothly monotone, and sensory-only", () => {
+  const pc = { LAT_MAX: 22, BRAKE: 22 }, state = {}, player = { _cueConditionGrip: .5, _cueCornering: .9, _cueBraking: .8 };
+  const before = JSON.stringify(player); let previous = { lat: 22, brake: 22 }, urgency = 0;
+  for (let i = 0; i < 60; i++) {
+    const c = BrakeCue.conditionCapacity(player, pc, state, 1 / 60);
+    assert.ok(c.lat <= previous.lat && c.brake <= previous.brake);
+    assert.ok(previous.lat - c.lat < .6 && previous.brake - c.brake < .6, "bounded smoothing per fixed tick");
+    const u = BrakeCue.urgencyOf(40, .02, 75, 0, c.lat, c.brake);
+    assert.ok(u >= urgency); urgency = u; previous = c;
+  }
+  assert.equal(JSON.stringify(player), before, "estimate never writes player state");
+  const dry = BrakeCue.conditionCapacity({ _cueConditionGrip: 2, _cueCornering: 2, _cueBraking: 2 }, pc, {}, 1);
+  assert.equal(dry.lat, 22); assert.equal(dry.brake, 22, "never promise extra grip");
+});
+
+test("condition cues default off and OFF performs no curvature reads or haptics", () => {
+  const ctx = { window: {}, M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) }, performance: { now: () => 100 }, Tracks: { curvature() { throw new Error("OFF sampled track"); } }, Input: { rumble() { throw new Error("OFF rumbled"); }, vibrate() { throw new Error("OFF vibrated"); } } };
+  vm.runInNewContext(src, ctx);
+  const cue = ctx.BrakeCue.create({ paused: false, state: "race", player: { speed: 40 }, track: { total: 1000 } });
+  assert.equal(cue.debug().conditionAware, false);
+  cue.setConditionAware(true); cue.setLevel(1); cue.tick();
+  assert.equal(cue.debug().urgency, 0);
+});

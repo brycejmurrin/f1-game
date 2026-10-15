@@ -37,6 +37,21 @@ const BrakeCue = (function () {
     return clamp(remain / Math.max(brake, 1), 0, 1);
   }
 
+  // Shared sensory-only estimate for the two predictive cue producers. The
+  // live force model publishes condition scalars; no track sampling occurs
+  // here. Never predict extra grip from aero/banking or an upgraded setup.
+  // Opt-in until human timing calibration; the default path is unchanged.
+  function conditionCapacity(player, pc, state, dt) {
+    const bounded = (v) => Number.isFinite(v) ? clamp(v, 0.25, 1) : 1;
+    const grip = bounded(player && player._cueConditionGrip);
+    const latTarget = grip * bounded(player && player._cueCornering);
+    const brakeTarget = grip * bounded(player && player._cueBraking);
+    const alpha = 1 - Math.exp(-clamp(dt || 0, 0, 0.1) / 0.6);
+    state.lat = (state.lat == null ? 1 : state.lat) + (latTarget - (state.lat == null ? 1 : state.lat)) * alpha;
+    state.brake = (state.brake == null ? 1 : state.brake) + (brakeTarget - (state.brake == null ? 1 : state.brake)) * alpha;
+    return { lat: (pc.LAT_MAX || 22) * state.lat, brake: (pc.BRAKE || 22) * state.brake };
+  }
+
   let inst = null;
 
   function create(G) {
@@ -45,6 +60,9 @@ const BrakeCue = (function () {
     let nextT = 0;
     let lastMs = 0;
     let lastU = 0;
+    let conditionAware = !!(G && G.store && G.store.get("conditionCues", false) === true);
+    const capacity = {};
+    function setConditionAware(on) { conditionAware = on === true; delete capacity.lat; delete capacity.brake; }
 
     function setLevel(v) {
       if (typeof v === "number" && isFinite(v)) { level = clamp(v, 1, 10); cfg = fromSlider(level); }
@@ -60,7 +78,8 @@ const BrakeCue = (function () {
         lastU = 0; return;
       }
       const PC = window.PhysicsConsts || {};
-      const lat = PC.LAT_MAX || 22, brake = PC.BRAKE || 22;
+      const estimate = conditionAware ? conditionCapacity(p, PC, capacity, dt) : null;
+      const lat = estimate ? estimate.lat : PC.LAT_MAX || 22, brake = estimate ? estimate.brake : PC.BRAKE || 22;
       // The bounds are METRES, so they ride the OVERALL SPEED scale: ground
       // speed carries PACE while `brake` is absolute, which puts braking
       // distance on PACE². A bare 120 m ceiling stops the sample loop short of
@@ -100,10 +119,10 @@ const BrakeCue = (function () {
     }
 
     function debug() {
-      return { level, on: fromSlider(level).on, lookSec: +fromSlider(level).lookSec.toFixed(2), urgency: +lastU.toFixed(3) };
+      return { level, on: fromSlider(level).on, lookSec: +fromSlider(level).lookSec.toFixed(2), urgency: +lastU.toFixed(3), conditionAware, capacity: Object.assign({}, capacity) };
     }
 
-    inst = { tick, setLevel, debug, fromSlider, urgencyOf, on: () => cfg.on };
+    inst = { tick, setLevel, setConditionAware, debug, fromSlider, urgencyOf, on: () => cfg.on };
     return inst;
   }
 
@@ -111,6 +130,7 @@ const BrakeCue = (function () {
     create,
     fromSlider,
     urgencyOf,
+    conditionCapacity,
     labelOf,
     tick() { if (inst) inst.tick(); },
     // The slider cue owns GameAudio.brakeCue while it is on; the driving line's
@@ -118,6 +138,7 @@ const BrakeCue = (function () {
     on() { return !!inst && inst.on(); },
     debug() { return inst ? inst.debug() : null; },
     setLevel(v) { if (inst) inst.setLevel(v); },
+    setConditionAware(on) { if (inst) inst.setConditionAware(on); },
   };
 })();
 Object.freeze(BrakeCue);

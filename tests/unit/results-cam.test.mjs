@@ -84,8 +84,9 @@ test("highlight windows fit end tags, short recordings and the actual budget", (
   assert.equal(finish[0].t0, 16);
   assert.equal(finish[0].t1, 20);
   const short = R.highlightsReel([{ t: 10 }, { t: 10.5 }, { t: 11 }], 10, 11, 2.5);
-  assert.equal(short.length, 3, "charge each one-second clip, leaving half a second for the last");
-  assert.equal(short.reduce((sum, clip) => sum + clip.t1 - clip.t0, 0), 2.5);
+  assert.equal(short.length, 1, "same-subject overlapping tags share one clip");
+  assert.equal(short.reduce((sum, clip) => sum + clip.t1 - clip.t0, 0), 1);
+  assert.equal(short[0].events.length, 3, "every tag remains identified in the merged moment");
   for (const clip of short) assert.ok(clip.t0 >= 10 && clip.t1 <= 11 && clip.t1 > clip.t0);
   assert.equal(R.highlightsReel([{ t: 10 }], 10, 10, 4).length, 0);
   assert.equal(R.highlightsReel([{ t: 10 }], 11, 10, 4).length, 0);
@@ -511,4 +512,17 @@ test("results highlights expose the scene and restore the sheet on every exit", 
     assert.equal(ends, 1, "replay released exactly once");
     assert.equal(camera.status().phase, exit === "reset" || exit === "eligibility" ? "idle" : "orbit");
   }
+});
+
+test("dense same-subject highlights coalesce without losing event metadata or another subject", () => {
+  const R = boot();
+  const reel = R.highlightsReel([{ kind: "incident", t: 15, car: 0 }, { kind: "other", t: 15.1, car: 1 }, { kind: "retirement", t: 15.2, car: 0 }, { kind: "flag", t: 15.4, car: 0 }], 0, 20, 45);
+  assert.equal(reel.length, 2);
+  const same = reel.find((c) => c.car === 0);
+  assert.ok(Math.abs((same.t1 - same.t0) - 4.4) < 1e-9);
+  assert.deepEqual(Array.from(same.events, (e) => e.kind), ["incident", "retirement", "flag"]);
+  assert.ok(reel.some((c) => c.car === 1), "overlapping different-subject shot survives");
+  const capped = R.highlightsReel([{ t: 2, car: 0 }, { t: 12, car: 0 }, { t: 12.2, car: 0 }], 0, 20, 5);
+  assert.ok(capped.reduce((sum, c) => sum + c.t1 - c.t0, 0) <= 5 + 1e-9);
+  assert.ok(capped.every((c) => c.t0 >= 0 && c.t1 <= 20 && c.t1 > c.t0));
 });

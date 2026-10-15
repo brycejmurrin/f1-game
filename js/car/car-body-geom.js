@@ -492,7 +492,8 @@ const CarBodyGeom = (function () {
     }
     return out;
   }
-  function buildFlapGeom(el, col, finish) {
+  function buildFlapGeom(el, col, finish, surface) {
+    if (surface === "carbon") col = CARBON;
     const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
     // The element exactly as the wing build emits it...
     addWingFoil(out, {
@@ -500,7 +501,7 @@ const CarBodyGeom = (function () {
       half: el.half, thick: el.thick, taper: el.taper,
       sweep: el.sweep, rise: el.rise, attachHalf: el.attachHalf,
       twist: el.twist, teCurve: el.teCurve, chordTaper: el.chordTaper,
-    }, col, SURFACES.paint);
+    }, col, surface === "carbon" ? SURFACES.carbon : SURFACES.paint);
     if (el.upsweep) {
       const { fwHalf, e } = el.upsweep;
       for (const sgn of [-1, 1]) {
@@ -515,7 +516,10 @@ const CarBodyGeom = (function () {
     // Livery FINISH remap, exactly as build() does for the baked mesh: the flaps
     // are the wing's own paint, so a satin/chrome car must carry the finish here
     // too. A gloss / absent finish leaves the array byte-identical (no remap).
-    CarMaterials.applyFinish(out, finish);
+    if (surface === "carbon") {
+      // Upsweep spans also belong to the flap; keep every vertex bare weave.
+      for (let i = 0; i < out.mat.length; i++) out.mat[i] = SURFACES.carbon;
+    } else CarMaterials.applyFinish(out, finish);
     return out;
   }
   function aeroFlapAim(aLvl, wing, style) {

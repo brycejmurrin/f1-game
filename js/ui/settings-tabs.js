@@ -19,7 +19,12 @@ const SettingsNav = (function () {
   let live = null;
   // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
   // wizard disarms itself here). Module-level so a subscriber needs no instance.
-  const leaveFns = [];
+  const leaveFns = [], enterFns = [];
+  function fireEnter(id) {
+    for (const fn of enterFns) {
+      try { fn(id); } catch (e) { Log.warn("game", "SettingsNav.onEnter handler failed: " + (e && e.message)); }
+    }
+  }
   function fireLeave(id) {
     for (const fn of leaveFns) {
       try { fn(id); } catch (e) { Log.warn("game", "SettingsNav.onLeave handler failed: " + (e && e.message)); }
@@ -43,7 +48,7 @@ const SettingsNav = (function () {
 
   function create(_store, onSelect) {
     Log.info("game", "SettingsNav.create");
-    let current = "home", generation = 0;
+    let current = "home", generation = 0, search = null;
     // The index door that opened a page. A dialog does not know about focus
     // changes inside its own sheet, so keep this explicitly and restore it on
     // the same page-stack BACK path that Escape presses.
@@ -151,12 +156,15 @@ const SettingsNav = (function () {
       }
       Log.info("game", `SettingsNav.show ${id}`);
       if (id === "audio") audioNote(pages.audio, audioTried === "failed");
-      // A callback may disable/reflow controls (KeyBinds and audio do this),
-      // so run it before resolving the page's focus target.
-      if (typeof after === "function") after();
-      if (focus) focusPage(id);
+      // Lifecycle hooks also cover programmatic/search navigation, after lazy
+      // loading, and before focus resolves newly mounted page controls.
+      fireEnter(id);
       const body = document.getElementById("pm-settings-body");
       if (body) body.scrollTop = 0;
+      // A callback may disable/reflow controls (KeyBinds and audio do this),
+      // so run it before resolving the page's focus target.
+      const placed = typeof after === "function" && after() === true;
+      if (focus && !placed) focusPage(id);
       if (window.ScrollFade) ScrollFade.refresh();
     }
 
@@ -180,7 +188,7 @@ const SettingsNav = (function () {
       show("home", false);
       const door = originDoor;
       originDoor = null;
-      quietFocus(door) || focusPage("home");
+      if (!(search && search.restore())) quietFocus(door) || focusPage("home");
       return false;
     }
 
@@ -205,6 +213,10 @@ const SettingsNav = (function () {
     // seam owns focus when it opens, and its opener should remain authoritative.
     originDoor = null;
     show("home", false);
+    if (typeof SettingsSearch !== "undefined") search = SettingsSearch.create({
+      host: document.getElementById("pm-settings-index"), show, onSelect,
+      onLeave: (fn) => leaveFns.push(fn),
+    });
     live = {
       // The caller uses this on every open, including after an interrupted
       // page transition. Clear the previous door so a later BACK cannot return
@@ -220,6 +232,7 @@ const SettingsNav = (function () {
     show: (id, focus) => { if (live) live.show(id, focus); },
     invalidate: () => { if (live) live.invalidate(); },
     onLeave: (fn) => { if (typeof fn === "function") leaveFns.push(fn); },
+    onEnter: (fn) => { if (typeof fn === "function") enterFns.push(fn); },
   };
 })();
 Object.freeze(SettingsNav);

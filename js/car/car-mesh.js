@@ -611,8 +611,8 @@ const _flapKeyMemo = new WeakMap(), FLAP_DEF_COL = Object.freeze([0.9, 0.9, 0.1]
 // One element's key: its solve (cacheKey carries level + recipe), colour, finish.
 // Finish is part of the key: the same element/level/colour renders a different
 // MATERIAL under a satin/chrome livery, so two finishes must not share a mesh.
-function _flapKey(g, aLvl, style, c, finish) {
-  const ck = colKey3(c), fin = finish || "";
+function _flapKey(g, aLvl, style, c, finish, surface) {
+  const ck = colKey3(c), fin = (finish || "") + "|" + (surface === "carbon" ? "carbon" : "paint");
   if (!g.cacheKey) {
     return g.id + aLvl + "|" + (style ? [
       style.frontSweep, style.frontTaper, style.frontRise,
@@ -641,15 +641,15 @@ function _flapPut(cache, order, max, key, data) {
   }
   return mesh;
 }
-function getAeroFlap(aLvl, col, idx, style, el, finish) {
+function getAeroFlap(aLvl, col, idx, style, el, finish, surface) {
   const c = col || FLAP_DEF_COL;
   // aLvl is passed through RAW — catalog options use fractional levels and the
   // wing geometry depends on the exact value, so it must not be truncated here
   // either (it is part of the cache key for the same reason).
   const g = el || Car3D.aeroFlaps(aLvl, style)[idx | 0];
   if (!g) return null;
-  const key = _flapKey(g, aLvl, style, c, finish);
-  return _flapMeshes[key] || _flapPut(_flapMeshes, _flapOrder, FLAP_CACHE_MAX, key, Car3D.buildFlapGeom(g, c, finish));
+  const key = _flapKey(g, aLvl, style, c, finish, surface);
+  return _flapMeshes[key] || _flapPut(_flapMeshes, _flapOrder, FLAP_CACHE_MAX, key, Car3D.buildFlapGeom(g, c, finish, surface));
 }
 // THE WHOLE FLAP SET AS ONE STATIC MESH at a REST pose — closed (zAngle, Z-mode)
 // or `open` (xAngle, X-mode); `only` "front"/"rear" as drawAeroFlaps. Each element
@@ -660,12 +660,12 @@ function getAeroFlap(aLvl, col, idx, style, el, finish) {
 // a rear wing stripped to its main plane) and any car whose wings are at rest.
 const _flapSets = {}, _flapSetOrder = [], _flapSetMemo = new Map();   // base key -> [mesh per (open, only) slot]
 const FLAP_SET_MAX = 64;   // ~11 teams x 2 poses a race (+ the cockpit's front-only)
-function getAeroFlapSet(aLvl, col, style, finish, open, only) {
+function getAeroFlapSet(aLvl, col, style, finish, open, only, surface) {
   const c = col || FLAP_DEF_COL, flaps = Car3D.aeroFlaps(aLvl, style);
   if (!flaps.length) return null;
   // The full key is a string concat per call (per drawn car per frame): a (record, pose) memo keyed on the
   // already-memoised base key turns a hit into two Map/array reads. Cleared whole on an eviction.
-  const bk = _flapKey(flaps[0], aLvl, style, c, finish), slot = !only ? (open ? 1 : 0) : only === "front" ? (open ? 3 : 2) : only === "rear" ? (open ? 5 : 4) : -1;
+  const bk = _flapKey(flaps[0], aLvl, style, c, finish, surface), slot = !only ? (open ? 1 : 0) : only === "front" ? (open ? 3 : 2) : only === "rear" ? (open ? 5 : 4) : -1;
   let memo = slot >= 0 ? _flapSetMemo.get(bk) : undefined;
   if (memo && memo[slot]) return memo[slot];
   const key = bk + (open ? "|X|" : "|Z|") + (only || "");
@@ -675,7 +675,7 @@ function getAeroFlapSet(aLvl, col, style, finish, open, only) {
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   for (const fg of flaps) {
     if (only && fg.wing !== only) continue;
-    const g = Car3D.buildFlapGeom(fg, c, finish), ang = open ? fg.xAngle : fg.zAngle;
+    const g = Car3D.buildFlapGeom(fg, c, finish, surface), ang = open ? fg.xAngle : fg.zAngle;
     const ca = Math.cos(ang), sa = Math.sin(ang), base = out.pos.length / 3;
     for (let i = 0; i < g.pos.length; i += 3) {
       const y = g.pos[i + 1], z = g.pos[i + 2], ny = g.nrm[i + 1], nz = g.nrm[i + 2];

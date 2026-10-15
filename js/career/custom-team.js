@@ -41,8 +41,13 @@ const CustomTeam = (function () {
     // Teams.sanitizeCustom rebuilds every field to the save dialog's limits
     // (length caps, control characters, num 0-99, a bounded roster): the
     // dialog's clean() only ever guarded what was TYPED, never what was loaded.
+    function identityGet(key, fallback) { return typeof Career !== "undefined" && Career.identityValue ? Career.identityValue(key, fallback) : fallback; }
+    function identitySet(key, value) {
+      if (typeof Career !== "undefined" && Career.inCareer() && Career.data().flavour === "myteam" && Career.setIdentityValue) return Career.setIdentityValue(key, value);
+      return store.set(key, value);
+    }
     function loadCustomTeam() {
-      return Teams.sanitizeCustom(store.get("customTeam", DEFAULT_CUSTOM));
+      return Teams.sanitizeCustom(identityGet("customTeam", store.get("customTeam", DEFAULT_CUSTOM)));
     }
     function customTeamIndex() { return Teams.LIST.findIndex((t) => t.id === "custom"); }
 
@@ -139,7 +144,7 @@ const CustomTeam = (function () {
       return was >= 0 ? was : 0;
     }
 
-    function loadCustomLogo() { try { return store.get(CUSTOM_LOGO_KEY, null); } catch (_) { return null; } }
+    function loadCustomLogo() { try { return identityGet(CUSTOM_LOGO_KEY, store.get(CUSTOM_LOGO_KEY, null)); } catch (_) { return null; } }
 
     function applyCustomLogo(dataUrl) {
       if (typeof LiveryTex === "undefined" || !LiveryTex.setTeamLogo) return;
@@ -309,7 +314,7 @@ const CustomTeam = (function () {
           }],
         };
         ct.livery = czLivFromDialog();
-        store.set("customTeam", ct);
+        identitySet("customTeam", ct);
         syncCustomTeam();
         // Inside a career the CONTRACT picks the car: saving the design must
         // not swap a driver career's seat for MY TEAM (the contracted car
@@ -337,7 +342,7 @@ const CustomTeam = (function () {
         const current = () => generation === logoGeneration;
         readLogoFile(f, (dataUrl) => {
           if (!current() || !dataUrl) return;
-          try { store.set(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
+          try { identitySet(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
           applyCustomLogo(dataUrl);
           refreshCustomLogoUi(dataUrl);
           invalidateDecalTextures("custom");
@@ -348,7 +353,7 @@ const CustomTeam = (function () {
       });
       $("cz-logo-clear").onclick = () => {
         ++logoGeneration;
-        try { store.set(CUSTOM_LOGO_KEY, null); } catch (_) {}
+        try { identitySet(CUSTOM_LOGO_KEY, null); } catch (_) {}
         applyCustomLogo(null);
         refreshCustomLogoUi(null);
         invalidateDecalTextures("custom");
@@ -387,6 +392,9 @@ const CustomTeam = (function () {
     }
 
     function init() {
+      if (typeof Career !== "undefined" && Career.onIdentityChange) Career.onIdentityChange(() => {
+        ++logoGeneration; syncCustomTeam(); applyCustomLogo(loadCustomLogo()); refreshCustomLogoUi(loadCustomLogo()); spMeshBust();
+      });
       wireDialog();
       wireStoreSubscribe();
       wireLiveryTexMarkChange();

@@ -283,7 +283,7 @@ const XrSession = (function () {
         // A controller/injected-input failure must not strand the XR clock or
         // leave its last throttle sample latched while the headset keeps moving.
         if (typeof Input !== "undefined" && Input.remoteLost) {
-          try { Input.remoteLost(); } catch (_) { /* input teardown is best-effort */ }
+          try { Input.remoteLost("xr"); } catch (_) { /* input teardown is best-effort */ }
         }
         try { Log.warn("xr", "pollInput", e && e.message); } catch (_) { /* */ }
       }
@@ -316,12 +316,13 @@ const XrSession = (function () {
     const sources = _session.inputSources;
     const menuOpen = typeof UiLayers !== "undefined" && UiLayers.navOpen && UiLayers.navOpen();
     const mapped = XrInput.mapFrame(sources, _inputLatch, {
+      driving: typeof XROpts === "undefined" || !XROpts.xrInput || XROpts.xrInput() !== "existing",
       menuOpen: !!menuOpen, overlay: !!_session.domOverlayState && !_resetPending,
     });
     _inputLatch = mapped.latch;
     if (mapped.recenter) recenter();
     const input = (typeof Input !== "undefined") ? Input : null;
-    if (_resetPending || _session.visibilityState !== "visible") mapped.sample = { roll: 0, thr: 0, brk: 0, held: 0 };
+    if (_resetPending || _session.visibilityState !== "visible") mapped.driving = false;
     if (input) XrInput.inject(input, mapped);
   }
 
@@ -435,7 +436,7 @@ const XrSession = (function () {
     _enabledFeatures = [];
     _running = false;
     if (typeof Input !== "undefined" && Input.remoteLost) {
-      try { Input.remoteLost(); } catch (_) { /* */ }
+      try { Input.remoteLost("xr"); } catch (_) { /* */ }
     }
     const b = _bindings;
     if (b && typeof b.detachSession === "function") {
@@ -454,7 +455,7 @@ const XrSession = (function () {
     // recenter rather than guessing a transform and rotating the seated driver.
     _resetPending = true;
     _recenterPending = false;
-    if (typeof Input !== "undefined" && Input.remoteLost) { try { Input.remoteLost(); } catch (_) { /* best effort */ } }
+    if (typeof Input !== "undefined" && Input.remoteLost) { try { Input.remoteLost("xr"); } catch (_) { /* best effort */ } }
     emit("reset", { recenterRequired: true });
   }
 

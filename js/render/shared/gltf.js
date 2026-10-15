@@ -95,11 +95,12 @@ const GLTF = (function () {
     const c20 = (b * f - c * e) * id;
     const c21 = (c * d - a * f) * id;
     const c22 = (a * e - b * d) * id;
-    // normal' = inverse-transpose * n. inverse-transpose rows are the cofactor rows.
+    // The coefficients above are cofactor COLUMNS for our column-major input.
+    // Apply their rows: normals need inverse-transpose, not inverse rotation.
     return [
-      c00 * n[0] + c01 * n[1] + c02 * n[2],
-      c10 * n[0] + c11 * n[1] + c12 * n[2],
-      c20 * n[0] + c21 * n[1] + c22 * n[2],
+      c00 * n[0] + c10 * n[1] + c20 * n[2],
+      c01 * n[0] + c11 * n[1] + c21 * n[2],
+      c02 * n[0] + c12 * n[1] + c22 * n[2],
     ];
   }
 

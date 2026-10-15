@@ -1516,7 +1516,7 @@ const Car3D = (function () {
     const aLvl = aeroStyle && aeroStyle.lvl != null
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
     const ws = wingOf(teamStyle);
-    out.flapInfo = { aLvl, style: Object.assign({}, aeroStyle, { wingStyle: ws }), col: wingCol, finish: liv.finish };
+    out.flapInfo = { aLvl, style: Object.assign({}, aeroStyle, { wingStyle: ws }), col: wingCol, finish: liv.finish, surface: wingCarbon ? "carbon" : "paint" };
 
     const nb = numberBoard(aLvl, aeroStyle);
     for (const s of [-1, 1]) {
@@ -2178,7 +2178,7 @@ const Car3D = (function () {
       // The livery finish rides flapInfo: build()'s own paint->finish remap
       // runs before these flaps are appended, so without it a satin/chrome
       // car got gloss top flaps from this path.
-      const g = buildFlapGeom(el, info.col, info.finish);
+      const g = buildFlapGeom(el, info.col, info.finish, info.surface);
       const base = out.pos.length / 3;
       for (let i = 0; i < g.pos.length; i += 3) {
         // delta 0: undo only the hinge translation buildFlapGeom applied.
