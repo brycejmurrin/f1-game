@@ -1,0 +1,1 @@
+1792029524	t	Publish footprint audit PR from local 62005ca73 on cursor/footprint-audit-7c2d. Existing implementation frozen; full pre-push gate then draft PR, explicitly requested by user after queue hold. No runtime/scenery edits.  [cursor/footprint-audit-7c2d; session 065cf5e7e29f073639ec310a]
