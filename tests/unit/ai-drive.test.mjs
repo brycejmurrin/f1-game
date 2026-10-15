@@ -365,7 +365,9 @@ test("brake budget scales with experience: a veteran stops shorter, a mid driver
   };
   const dRaw = stopDistance({ ...mid, experience: 0.12 });
   const dVet = stopDistance({ ...mid, experience: 1 });
+  const dMid = stopDistance({ ...mid });
   assert.ok(dVet < dRaw, `experienced ${dVet.toFixed(2)} m should stop shorter than raw ${dRaw.toFixed(2)} m`);
+  assert.ok(Math.abs(dVet - dMid) < 0.5, `veterans keep the mid 0.85 stop (${dVet.toFixed(2)} vs ${dMid.toFixed(2)} m)`);
   // Scrub fraction does not track skill — corner speed already does.
   const fracAt = (traits) => {
     const d = 60;
