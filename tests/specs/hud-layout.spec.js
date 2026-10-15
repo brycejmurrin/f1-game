@@ -15,6 +15,7 @@
 // the notch is exactly where a 59px inset eats the width these rules assume.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+import { awaitApexBoot } from "../helpers/await-track-build.js";
 import { analyzeOverlap, probeHudElements } from "../../tools/lib/hud-geometry.mjs";
 
 const VIEWS = [
@@ -1181,16 +1182,21 @@ test.describe("speed readouts", () => {
   test.setTimeout(300_000);
   test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
 
+  // ONE boot, waited on progress (#1956). Pages 38660546141 timed out the
+  // FIRST of two boots (goto, then reload to apply the keys) at 45 s while the
+  // page was still logging its build at 53 s. Seeding the boot keys from an
+  // init script drops the second boot; awaitApexBoot fails a boot that goes
+  // quiet for BOOT_MS, as before, but lets a busy one finish.
   async function bootCockpitMonza(page) {
     await page.addInitScript(PIN_PREVIOUS_LOOK);
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => {
-      localStorage.setItem("apex26.steerMode", JSON.stringify("tilt"));
-      localStorage.setItem("apex26.manual", JSON.stringify(false));
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem("apex26.steerMode", JSON.stringify("tilt"));
+        localStorage.setItem("apex26.manual", JSON.stringify(false));
+      } catch (_) {}
     });
-    await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.goto("/");
+    await awaitApexBoot(page);
     await page.evaluate(() => {
       window.__spdRace = "pending";
       Promise.resolve(window.__apex.race("monza")).then(
