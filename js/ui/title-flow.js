@@ -6,6 +6,14 @@ function create(G, deps) {
 const { $, els } = G;
 const { restoreFreePlaySelection, careerUi, refreshTitle, ensureNet } = deps;
 let titleTransition = 0, titleTransitionSerial = 0;
+let lobbyRequest = 0;
+// Settings/Help and other title doors live outside this module and may leave
+// the title visible. Capture their activation before their handlers run: BACK
+// must not revive a pending lobby request. The downloaded bundle stays cached.
+els.overlay.addEventListener?.("click", (event) => {
+  const door = event.target.closest?.("button, a");
+  if (door && (door.id.startsWith("mb-") || door.tagName === "A")) lobbyRequest++;
+}, true);
 function vt(fn) {
   // Normal-motion snapshots defer the DOM swap. Claim the title now, before
   // an older async link/lobby load can mistake the still-visible title for idle.
@@ -42,8 +50,9 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   // selection are written only once it has: a refused/offline load must leave
   // the title untouched and say so.
   const navigation = titleTransitionSerial;
+  const request = ++lobbyRequest;
   Promise.resolve(ensureNet()).then((ok) => ok, () => false).then((ok) => {
-    if (navigation !== titleTransitionSerial || !titleIsLive()) return;   // a newer sheet/race owns navigation now
+    if (request !== lobbyRequest || navigation !== titleTransitionSerial || !titleIsLive()) return;
     if (!ok) { G.announce("COULD NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", 4, "warning"); return; }
     G.flow = "gp"; G.session = "race";
     restoreFreePlaySelection();
