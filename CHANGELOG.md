@@ -13,6 +13,12 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 ## 1695
 
+### New
+- Track Designer: add, edit and remove road bridges; place ponds, lakes and straight river sections from a water palette.
+
+### Improved
+- Track Designer workspaces separate drawing, road editing, elevation, scenery and testing controls, reducing repeated menus.
+
 ### Fixed
 - VS FRIEND: running into the back of your friend's car is one clean bump, so you no longer stay glued to their gearbox for several frames (#2164).
 - A rival's pass-by whoosh no longer keeps hissing under the pause menu, the results sheet or the title screen (#2187).
