@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
-  SLICES, NODE_SLICES, SLICE_COST_P50_SEC, pick, costs, testFileOwners, ciOutputs,
+  SLICES, NODE_SLICES, SLICE_COST_P50_SEC, SLICE_SCRIPTS, pick, costs, testFileOwners, ciOutputs,
 } from "../../tools/ci/pick-unit-slices.mjs";
 
 function runJson(...args) {
@@ -211,4 +211,48 @@ test("--needed-only (a pull request) lists only the needed rows; a deploy push k
     "ci.yml asks for needed rows only on every pull request (CI is the one required check since 2026-10-15)");
   assert.match(ci, /needs\.select\.outputs\.any_node == 'true' \|\| github\.event_name != 'pull_request'/,
     "node-suites skips at the job level only on a pull request with nothing needed");
+});
+
+test("SLICE_SCRIPTS mirrors ci.yml's case arms script for script (2026-10-15)", () => {
+  // Until 2026-10-15 this table listed the ten riders under vm-b2 while ci.yml
+  // ran them on vm-b1: a js/audio diff selected a runner that never ran
+  // audio-unit, and nothing said so. Parse the step's `<slice>)` … `;;` arms
+  // and compare the `npm run test:*` lines with the table, both ways.
+  const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
+  const at = ci.indexOf("- name: Pure-node unit suites");
+  assert.ok(at > 0, "the step exists");
+  const step = ci.slice(at).split(/\n      - name: /)[0];
+  const arms = {};
+  const re = /^\s+(vm-a1|vm-a2|vm-b1|vm-b2|page|slow)\)\n([\s\S]*?)\n\s+;;/gm;
+  for (const m of step.matchAll(re)) {
+    arms[m[1]] = [...m[2].matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((x) => x[1]).sort();
+  }
+  assert.deepEqual(Object.keys(arms).sort(), [...NODE_SLICES].sort(), "one case arm per node slice");
+  for (const s of NODE_SLICES) assert.deepEqual(arms[s], [...SLICE_SCRIPTS[s]].sort(), `${s}: ci.yml arm vs SLICE_SCRIPTS`);
+  // The ten former `fast`-slice riders ride the three LIGHT rows, never a game-vm-b half.
+  for (const script of ["test:net-unit", "test:audio-unit", "test:state-unit", "test:desktop-unit",
+    "test:garage-unit", "test:steering-unit", "test:mcp", "test:service-worker", "test:lifecycle-unit", "test:agent-contract"]) {
+    const rows = NODE_SLICES.filter((s) => SLICE_SCRIPTS[s].includes(script));
+    assert.equal(rows.length, 1, `${script} has one row: ${rows}`);
+    assert.ok(["vm-a1", "vm-a2", "slow"].includes(rows[0]), `${script} rides a light row, not ${rows[0]}`);
+  }
+});
+
+test("a rider's source path selects the row that runs the rider (2026-10-15)", () => {
+  const slices = (f) => new Set(pick([f]).slices.keys());
+  const owners = testFileOwners();
+  // audio-unit rides vm-a1: a js/audio edit must spin vm-a1 and needs no game-vm-b half.
+  assert.ok(slices("js/audio/announcer.js").has("vm-a1"));
+  assert.ok(!slices("js/audio/announcer.js").has("vm-b1") && !slices("js/audio/announcer.js").has("vm-b2"));
+  assert.ok(owners.get("tests/unit/net-roster.test.mjs")?.has("vm-a1"), "net-unit → vm-a1");
+  assert.ok(owners.get("tests/unit/helmets.test.mjs")?.has("vm-a2"), "garage-unit → vm-a2");
+  assert.ok(owners.get("tests/unit/key-binds.test.mjs")?.has("slow"), "steering-unit → slow");
+  assert.ok(owners.get("tests/unit/service-worker.test.mjs")?.has("slow"), "service-worker → slow");
+  // Rider rows with VM twins beside them keep both.
+  const net = slices("js/net/handshake.js");
+  assert.ok(net.has("vm-a1") && net.has("vm-b1") && net.has("vm-b2"), [...net].join(","));
+  const input = slices("js/input/bindings.js");
+  assert.ok(input.has("slow") && input.has("vm-b1"), [...input].join(","));
+  const xr = slices("js/xr/xr-boot.js");
+  assert.ok(xr.has("slow") && !xr.has("vm-b1"), [...xr].join(","));
 });

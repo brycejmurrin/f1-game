@@ -46,45 +46,54 @@ export const NODE_SLICES = ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"];
 
 /**
  * Measured / expected p50 job durations (seconds). Used only for --costs /
- * savings estimates — never for selection. Six-slice split from #508
- * (2026-09-30); times are half of the prior packed three-slice p50s where
- * a shard replaced a packed row.
+ * savings estimates — never for selection. Re-balanced 2026-10-15
+ * (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §7): the job medians of three
+ * green ship pushes BEFORE the move were vm-a1 133, vm-a2 130, vm-b1 638,
+ * vm-b2 241, page 525, slow 201; the values below are the projection after
+ * the riders moved and game-vm-b1/b2 were re-cut (setup ~16 s included).
+ * Re-measure from the job logs, not from this table.
  */
 export const SLICE_COST_P50_SEC = {
   guards: 279,
-  "vm-a1": 168,
-  "vm-a2": 168,
-  "vm-b1": 185,
-  "vm-b2": 185,
-  page: 168,
-  slow: 146,
+  "vm-a1": 200,
+  "vm-a2": 220,
+  "vm-b1": 320,
+  "vm-b2": 320,
+  page: 520,
+  slow: 200,
   "driving-model": 100,
 };
 
-/** Which npm scripts / groups.json keys feed each slice. */
+/** Which npm scripts / groups.json keys feed each slice. MIRRORS the case
+ *  arms of ci.yml's "Pure-node unit suites" step; pick-unit-slices.test.mjs
+ *  pins the two together (the ten riders sat under vm-b2 here while ci.yml
+ *  ran them on vm-b1 until 2026-10-15 — a js/audio diff selected the wrong
+ *  runner and nothing said so). */
 export const SLICE_SCRIPTS = {
   guards: ["test:guards"],
-  // Both shards run the same script with APEX_CIRCUIT_SHARD=i/2.
-  "vm-a1": ["test:game-vm-a"],
-  "vm-a2": ["test:game-vm-a"],
+  // Both shards run the same script with APEX_CIRCUIT_SHARD=i/2. The ten
+  // former `fast`-slice riders are spread over the three light rows by their
+  // measured medians (2026-10-15): the two heaviest beside the two shards,
+  // the seconds-long five beside node-slow.
+  "vm-a1": ["test:game-vm-a", "test:net-unit", "test:audio-unit", "test:state-unit", "test:desktop-unit"],
+  "vm-a2": ["test:game-vm-a", "test:garage-unit"],
   "vm-b1": ["test:game-vm-b1"],
-  "vm-b2": [
-    "test:game-vm-b2",
-    "test:net-unit", "test:service-worker", "test:lifecycle-unit",
-    "test:state-unit", "test:agent-contract", "test:audio-unit",
-    "test:garage-unit", "test:steering-unit", "test:desktop-unit", "test:mcp",
-  ],
+  "vm-b2": ["test:game-vm-b2"],
   page: ["test:vm-page"],
-  slow: ["test:node-slow"],
+  slow: ["test:node-slow", "test:steering-unit", "test:mcp", "test:service-worker", "test:lifecycle-unit", "test:agent-contract"],
   "driving-model": [], // browser job: tests/specs/physics-characterization.spec.js
 };
 
 /** Elevation twin → both circuit shards. */
 const VM_A = ["vm-a1", "vm-a2"];
-/** game-vm-b partitions + fast riders. */
+/** game-vm-b partitions (the VM twins of the browser specs). */
 const VM_B = ["vm-b1", "vm-b2"];
 /** Former page-slow packed pair. */
 const PAGE_SLOW = ["page", "slow"];
+/** Where each rider lives now (2026-10-15); RULES name a rider by its row. */
+const NET_AUDIO_STATE = "vm-a1";   // net-unit, audio-unit, state-unit, desktop-unit
+const GARAGE = "vm-a2";            // garage-unit
+const STEERING_MCP_SW = "slow";    // steering-unit, mcp, service-worker, lifecycle-unit, agent-contract
 
 /** Build test-file → slice ownership from groups.json (source of truth). */
 export function testFileOwners(groupsJson = null) {
@@ -119,29 +128,29 @@ export const RULES = [
   [/^tools\/lib\//, ["guards", ...VM_A, ...VM_B], "build/harness: both VM slices"],
   [/^tools\/manifest\.cjs$/, ["guards", ...VM_A, ...VM_B], "TRACK_VM load list"],
 
-  [/^js\/game\.js$/, ["guards", ...VM_B, ...PAGE_SLOW, "driving-model"], "the loop"],
+  [/^js\/game\.js$/, ["guards", ...VM_A, ...VM_B, ...PAGE_SLOW, "driving-model"], "the loop: every VM twin and rider boots it"],
   [/^js\/physics\//, ["guards", ...VM_B, "driving-model"], "driving model numbers"],
   [/^js\/race\//, ["guards", ...VM_B], "session / pit / race-control"],
 
-  [/^js\/car\//, ["guards", ...PAGE_SLOW, ...VM_B], "car mesh + garage-unit rasters"],
-  [/^js\/garage\//, ["guards", ...VM_B, ...VM_A], "garage unit + pit complex in fleet"],
-  [/^js\/audio\//, ["guards", ...VM_B], "audio-unit"],
-  [/^js\/input\//, ["guards", ...VM_B], "steering-unit + phone-pad twin"],
-  [/^js\/net\//, ["guards", ...VM_B], "net-unit + netplay twin"],
-  [/^sw\.js$|^manifest\.json$/, ["guards", ...VM_B], "service-worker"],
-  [/^worker\//, ["guards", ...VM_B], "rendezvous Durable Object"],
+  [/^js\/car\//, ["guards", ...PAGE_SLOW, ...VM_B, GARAGE], "car mesh (car-fields twin) + garage-unit rasters (vm-a2)"],
+  [/^js\/garage\//, ["guards", ...VM_B, ...VM_A], "garage-unit (vm-a2) + pit complex in fleet + session twins"],
+  [/^js\/audio\//, ["guards", NET_AUDIO_STATE], "audio-unit (vm-a1)"],
+  [/^js\/input\//, ["guards", ...VM_B, STEERING_MCP_SW], "steering-unit (slow) + phone-pad / input-ghost twins"],
+  [/^js\/net\//, ["guards", ...VM_B, NET_AUDIO_STATE], "net-unit (vm-a1) + netplay / seed-sync twins"],
+  [/^sw\.js$|^manifest\.json$/, ["guards", STEERING_MCP_SW], "service-worker (slow)"],
+  [/^worker\//, ["guards", NET_AUDIO_STATE], "rendezvous Durable Object: net-unit's rendezvous-worker (vm-a1)"],
 
   [/^js\/render\//, ["guards"], "renderer: node gate is structural; gfx is macos"],
   [/^js\/lighting\//, ["guards"], "lighting: structural + targeted sweeps (elsewhere)"],
-  [/^js\/ui\//, ["guards", ...VM_B], "state-unit / steering opts live in vm-b"],
-  [/^js\/camera\//, ["guards", ...PAGE_SLOW, ...VM_B], "flyby fleet in node-slow"],
-  [/^js\/agent\//, ["guards", ...VM_B], "agent-contract + agent-view-vm"],
-  [/^js\/core\//, ["guards", ...VM_A, ...VM_B], "shared floor every VM boots"],
-  [/^js\/data\//, ["guards", ...VM_B], "hub / legends / settings-defaults"],
-  [/^js\/perf\//, ["guards", ...VM_B], "quality / overlays"],
+  [/^js\/ui\//, ["guards", ...VM_B, NET_AUDIO_STATE, STEERING_MCP_SW], "state-unit (vm-a1), steering opts (slow), agent-view / hud twins (vm-b)"],
+  [/^js\/camera\//, ["guards", ...PAGE_SLOW, ...VM_B], "flyby fleet in node-slow + cam-avoid twin"],
+  [/^js\/agent\//, ["guards", ...VM_B, STEERING_MCP_SW], "agent-contract (slow) + agent-view-vm"],
+  [/^js\/core\//, ["guards", ...VM_A, ...VM_B, ...PAGE_SLOW], "shared floor every VM and rider boots"],
+  [/^js\/data\//, ["guards", ...VM_B, NET_AUDIO_STATE, STEERING_MCP_SW], "hub / legends (state-unit) / settings-defaults (steering-unit)"],
+  [/^js\/perf\//, ["guards", ...VM_B, NET_AUDIO_STATE], "quality / overlays (state-unit)"],
   [/^js\/fx\//, ["guards"], "visual-only"],
-  [/^js\/career\//, ["guards", ...VM_B], "career state + session twins"],
-  [/^js\/xr\//, ["guards", ...VM_B], "xr-phase0 in steering-unit"],
+  [/^js\/career\//, ["guards", ...VM_B, NET_AUDIO_STATE], "career state (state-unit, vm-a1) + session twins"],
+  [/^js\/xr\//, ["guards", STEERING_MCP_SW], "xr-phase0 / xr-opts in steering-unit (slow)"],
 
   [/^css\//, ["guards"], "layout lint lives in guards/tooling-fast"],
   [/^index\.html$/, ["guards"], "shell ids / load order"],
