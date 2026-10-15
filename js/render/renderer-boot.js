@@ -88,12 +88,15 @@ async function gpuAdapterAvailable() {
 // GLX. A step that outlives BOOT_STEP_MS resolves to TIMED_OUT and the caller
 // treats the backend as unavailable and falls through to GLX. Logged once, where
 // it fires; a step that settles in time costs one cleared timer.
-// 8 s was fine on an idle box; Pages 38660546141 (oversize-hud-layout shard +
-// track-switch-memory on the same gate, loadavg hot) saw TLX import/init finish
-// just after the cap — track-switch-memory got GLX.backend undefined and a
-// false GLX fallback. 15 s is still below the spec backstops and only bounds
-// hung steps, not slow-but-real inits.
-const BOOT_STEP_MS = 15000;
+// Software-GL CI runners (SwiftShader/llvmpipe on a starved host) can take
+// longer than 8 s to init TLX; Pages 38660546141 saw init finish just after
+// the old 8 s cap on a hot gate. Default 15 s; a spec that MEASURES TLX may
+// RAISE the cap (never lower it) with apex26.gfxBootStepMs, clamped to 60 s.
+const BOOT_STEP_MS = (() => {
+  let ms = 15000;
+  try { const v = Number(localStorage.getItem("apex26.gfxBootStepMs")); if (v > ms) ms = Math.min(v, 60000); } catch (_) { /* blocked storage: default cap */ }
+  return ms;
+})();
 const TIMED_OUT = { timedOut: true };
 function withTimeout(promise, ms, label) {
   if (typeof setTimeout !== "function") return Promise.resolve(promise);   // some VM harnesses: await it alone

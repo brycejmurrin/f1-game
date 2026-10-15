@@ -13,7 +13,7 @@ import vm from "node:vm";
 import { readFileSync } from "node:fs";
 
 const src = readFileSync(new URL("../../js/render/renderer-boot.js", import.meta.url), "utf8");
-const BOOT_STEP_MS = Number(src.match(/const BOOT_STEP_MS = (\d+);/)?.[1] || 15000);
+const BOOT_STEP_MS = Number(src.match(/let ms = (\d+);/)?.[1] || 15000);
 const settle = () => new Promise((r) => setImmediate(r));
 
 function boot({ stored = "three", gfxCreate, loadBackend, xrDetect, noGLX = false } = {}) {
