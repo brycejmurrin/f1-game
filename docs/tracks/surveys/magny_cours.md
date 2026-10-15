@@ -8,13 +8,13 @@
 
 | Batch | Frames | Path | Status |
 |--------|--------|------|--------|
-| Sector + landmarks (day dry) | 16 | `scratch/captures/magny-cours-survey/s1-*-day-dry.jpg` … `s3-*` | In flight (stock `shot.mjs`, `--tod day` only) |
-| Time-of-day on 6 hero views | 18 | `scratch/captures/magny-cours-survey/tod-*-{dusk,dawn,night}-dry.jpg` | Same batch (34 total) |
-| Weather matrix (dry / wet / rain / overcast / fog) | 24–30 planned | `artifacts/shots/tracks/magny_cours/` (committed) | **Blocked** — rebase on shared PR `tools: shared shot tooling for circuit surveys` (`--weather` batch + `artifacts/shots/tracks/**` gitignore exception) |
+| Sector + landmarks (day · dry) | 16 | `artifacts/shots/tracks/magny_cours/s1-*` … `s3-*` | **Committed** (`git add -f`) |
+| Time-of-day heroes (dawn / dusk / night · dry) | 18 | `artifacts/shots/tracks/magny_cours/tod-*` | **Committed** |
+| Weather matrix (wet / rain / overcast / fog) | ~20 planned | same tree | **Deferred** — needs shared `shot.mjs --weather` batch after tooling PR |
 
-Session walkthrough PNGs (pre-expansion): `/opt/cursor/artifacts/magny_cours/01-*.png` … `13-*.png` (agent VM, not in git).
+**34** JPEGs total (q≈80, max width 1280px, each &lt;300 KB). Labels: `view · time-of-day · weather`.
 
-Engine weather enum (`js/game.js`): `dry` | `wet` | `rain` | `overcast` | `fog`. Time of day: `dawn` | `day` | `dusk` | `night`. Circuit `furniture.lamp: "none"` and `night: false` — expect **no floodlight pass** at night until a dressing change.
+Engine weather enum (`js/game.js`): `dry` | `wet` | `rain` | `overcast` | `fog`. Time of day: `dawn` | `day` | `dusk` | `night`. Circuit `furniture.lamp: "none"` and `night: false` — night frames are intentionally dark (backlog W1).
 
 ---
 
@@ -51,45 +51,41 @@ Sectors (racing lap `s`, curated splits `sectors: [0.335, 0.693]`):
 
 ---
 
-## Panel grid — Sector S1 (day dry)
+## Panel grids (committed shots, 34 frames)
 
-Filenames: `scratch/captures/magny-cours-survey/` (local) → `artifacts/shots/tracks/magny_cours/` after tooling PR. Embedded images are in the PR description.
+Path: `artifacts/shots/tracks/magny_cours/` (JPEG q80, max width 1280px).
 
-| Frame A | Frame B | Frame C |
-|---------|---------|---------|
-| `s1-pit-complex-day-dry.jpg` — `s≈0.99` orbit | `s1-main-tribuna-day-dry.jpg` — `s≈0.005` trackside | `s1-control-block-day-dry.jpg` — `s≈0.998` orbit |
-| `s1-conservatoire-day-dry.jpg` — `s≈0.055` | `s1-estoril-day-dry.jpg` — `s≈0.172` | `s1-esses-day-dry.jpg` — `s≈0.12` park |
+### Sector S1 (day · dry)
 
-## Panel grid — Sector S2 (day dry)
+| | | |
+|:---:|:---:|:---:|
+| ![conservatoire · day · dry](../../../artifacts/shots/tracks/magny_cours/s1-conservatoire-day-dry.jpg)<br/>conservatoire · day · dry | ![control block · day · dry](../../../artifacts/shots/tracks/magny_cours/s1-control-block-day-dry.jpg)<br/>control block · day · dry | ![esses · day · dry](../../../artifacts/shots/tracks/magny_cours/s1-esses-day-dry.jpg)<br/>esses · day · dry |
+| ![estoril · day · dry](../../../artifacts/shots/tracks/magny_cours/s1-estoril-day-dry.jpg)<br/>estoril · day · dry | ![main tribuna · day · dry](../../../artifacts/shots/tracks/magny_cours/s1-main-tribuna-day-dry.jpg)<br/>main tribuna · day · dry | ![pit complex · day · dry](../../../artifacts/shots/tracks/magny_cours/s1-pit-complex-day-dry.jpg)<br/>pit complex · day · dry |
 
-| Frame A | Frame B | Frame C |
-|---------|---------|---------|
-| `s2-spectator-hill-day-dry.jpg` — `s≈0.25` | `s2-ferme-day-dry.jpg` — `s≈0.34` | `s2-grande-courbe-day-dry.jpg` — `s≈0.41` |
-| `s2-midfield-day-dry.jpg` — `s≈0.52` | `s2-adelaide-day-dry.jpg` — `s≈0.58` | `s2-bourg-day-dry.jpg` — `s≈0.62` |
+### Sector S2 (day · dry)
 
-## Panel grid — Sector S3 (day dry)
+| | | |
+|:---:|:---:|:---:|
+| ![adelaide · day · dry](../../../artifacts/shots/tracks/magny_cours/s2-adelaide-day-dry.jpg)<br/>adelaide · day · dry | ![bourg · day · dry](../../../artifacts/shots/tracks/magny_cours/s2-bourg-day-dry.jpg)<br/>bourg · day · dry | ![ferme · day · dry](../../../artifacts/shots/tracks/magny_cours/s2-ferme-day-dry.jpg)<br/>ferme · day · dry |
+| ![grande courbe · day · dry](../../../artifacts/shots/tracks/magny_cours/s2-grande-courbe-day-dry.jpg)<br/>grande courbe · day · dry | ![midfield · day · dry](../../../artifacts/shots/tracks/magny_cours/s2-midfield-day-dry.jpg)<br/>midfield · day · dry | ![spectator hill · day · dry](../../../artifacts/shots/tracks/magny_cours/s2-spectator-hill-day-dry.jpg)<br/>spectator hill · day · dry |
 
-| Frame A | Frame B | Frame C |
-|---------|---------|---------|
-| `s3-imola-seq-day-dry.jpg` — `s≈0.76` | `s3-chateau-deau-day-dry.jpg` — `s≈0.82` | `s3-lycee-day-dry.jpg` — `s≈0.92` |
-| `s3-main-straight-day-dry.jpg` — `s≈0.97` | — | — |
+### Sector S3 (day · dry)
 
-## Panel grid — Time of day (dry; 6 hero views)
+| | | |
+|:---:|:---:|:---:|
+| ![chateau deau · day · dry](../../../artifacts/shots/tracks/magny_cours/s3-chateau-deau-day-dry.jpg)<br/>chateau deau · day · dry | ![imola seq · day · dry](../../../artifacts/shots/tracks/magny_cours/s3-imola-seq-day-dry.jpg)<br/>imola seq · day · dry | ![lycee · day · dry](../../../artifacts/shots/tracks/magny_cours/s3-lycee-day-dry.jpg)<br/>lycee · day · dry |
+| ![main straight · day · dry](../../../artifacts/shots/tracks/magny_cours/s3-main-straight-day-dry.jpg)<br/>main straight · day · dry | — | — |
 
-| View | day | dusk | dawn |
-|------|-----|------|------|
-| Pit `s≈0.99` | `s1-pit-complex-day-dry.jpg` | `tod-pit-dusk-dry.jpg` | `tod-pit-dawn-dry.jpg` |
-| | night: `tod-pit-night-dry.jpg` | | |
-| Ferme `s≈0.34` | `s2-ferme-day-dry.jpg` | `tod-ferme-dusk-dry.jpg` | `tod-ferme-dawn-dry.jpg` |
-| | night: `tod-ferme-night-dry.jpg` | | |
-| Adelaide `s≈0.58` | `s2-adelaide-day-dry.jpg` | `tod-adelaide-dusk-dry.jpg` | `tod-adelaide-dawn-dry.jpg` |
-| | night: `tod-adelaide-night-dry.jpg` | | |
-| Château `s≈0.82` | `s3-chateau-deau-day-dry.jpg` | `tod-chateau-dusk-dry.jpg` | `tod-chateau-dawn-dry.jpg` |
-| | night: `tod-chateau-night-dry.jpg` | | |
-| Lycée `s≈0.92` | `s3-lycee-day-dry.jpg` | `tod-lycee-dusk-dry.jpg` | `tod-lycee-dawn-dry.jpg` |
-| | night: `tod-lycee-night-dry.jpg` | | |
-| Main straight `s≈0.97` | `s3-main-straight-day-dry.jpg` | `tod-pit-straight-dusk-dry.jpg` | `tod-pit-straight-dawn-dry.jpg` |
-| | night: `tod-pit-straight-night-dry.jpg` | | |
+### Time of day (dry weather)
+
+| | | |
+|:---:|:---:|:---:|
+| ![adelaide · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-adelaide-dawn-dry.jpg)<br/>adelaide · dawn · dry | ![adelaide · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-adelaide-dusk-dry.jpg)<br/>adelaide · dusk · dry | ![adelaide · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-adelaide-night-dry.jpg)<br/>adelaide · night · dry |
+| ![chateau · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-chateau-dawn-dry.jpg)<br/>chateau · dawn · dry | ![chateau · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-chateau-dusk-dry.jpg)<br/>chateau · dusk · dry | ![chateau · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-chateau-night-dry.jpg)<br/>chateau · night · dry |
+| ![ferme · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-ferme-dawn-dry.jpg)<br/>ferme · dawn · dry | ![ferme · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-ferme-dusk-dry.jpg)<br/>ferme · dusk · dry | ![ferme · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-ferme-night-dry.jpg)<br/>ferme · night · dry |
+| ![lycee · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-lycee-dawn-dry.jpg)<br/>lycee · dawn · dry | ![lycee · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-lycee-dusk-dry.jpg)<br/>lycee · dusk · dry | ![lycee · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-lycee-night-dry.jpg)<br/>lycee · night · dry |
+| ![pit · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-dawn-dry.jpg)<br/>pit · dawn · dry | ![pit · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-dusk-dry.jpg)<br/>pit · dusk · dry | ![pit · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-night-dry.jpg)<br/>pit · night · dry |
+| ![pit straight · dawn · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-straight-dawn-dry.jpg)<br/>pit straight · dawn · dry | ![pit straight · dusk · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-straight-dusk-dry.jpg)<br/>pit straight · dusk · dry | ![pit straight · night · dry](../../../artifacts/shots/tracks/magny_cours/tod-pit-straight-night-dry.jpg)<br/>pit straight · night · dry |
 
 ## Weather / lighting backlog (post–tooling PR)
 
