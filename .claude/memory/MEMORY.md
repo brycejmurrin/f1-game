@@ -21,4 +21,5 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Foreground wait loop killed (137)](foreground-wait-loop-killed.md) — never block a foreground Bash on a multi-minute background run; end the turn and take the notification
 - [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch queues, a third replaces it; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps
 - [Orchestrator may spawn sessions](orchestrator-may-spawn-sessions.md) — fleet work: launch sibling sessions without asking, tell Bryce each time; respect a single denied launch
+- [MCP allow rules, measured](mcp-allow-rules-measured.md) — read `permission_decision` in list_events; bare `mcp__<server>` misses the .mcp.json servers (use `mcp__<server>__*`); MDN/BrowserStack prompt regardless (claude.ai connector setting)
 - [Merge method: verify parents](merge-method-verify-parents.md) — a "merge" merge_pull_request landed as a squash (#1743); check two parents after every merge
