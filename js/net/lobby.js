@@ -252,7 +252,7 @@ const NetLobby = (function () {
             if (G.setNetRoom) G.setNetRoom(false);
             // …and stop ADVERTISING it: the code onConnected reopened (and its
             // pending transport) would answer the old code and pull us back in.
-            sealRoom();
+            sealRoom(); stopScan();   // a camera INVITE ANOTHER opened must not outlive the room (#2200)
             show("pick");
             // inviteAnother() hid these; the pick is a fresh start, as open().
             if ($("vs-join")) $("vs-join").hidden = false;
@@ -446,7 +446,7 @@ const NetLobby = (function () {
           reopenRoom(sessions.size > 0 && sessions.size < MAX_GUESTS);
           dropPending();
           if (sessions.size) { show("room"); renderRoom(); }
-          else { teardown(); show("pick"); }   // leave the lobby usable, not dead
+          else { teardown(); stopScan(); show("pick"); }   // leave the lobby usable, not dead
         }
       }, 250);
     }
@@ -1660,6 +1660,13 @@ const NetLobby = (function () {
               say(msg);
               return;
             }
+            // Nobody in, nothing watching: take the dead code down, in host copy
+            // (nostr's is the GUEST's "Check the six characters…") (#2200).
+            if (r.error === "expired" && !opts.quiet) {
+              const msg = "The room code expired — tap NEW CODE for another.";
+              paintHostCode(""); tagFailReason("expired", msg); say(msg, true);
+              return;
+            }
             if (r.error === "expired" || r.error === "no_relay") {
               tagFailReason(r.error, r.message);
               say(r.message || "The room service went away. Use the invite link or QR instead.", true);
@@ -1847,6 +1854,7 @@ const NetLobby = (function () {
         const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
         if (why.error === "expired" || why.error === "no_relay") tagFailReason(why.error, why.message);
         if (why.error !== "cancelled") say(why.message || "Could not join that room.", true);
+        if (transport === pending) dropPending();   // its RTCPeerConnection, not left open until GO/CLOSE (#2200)
         return why;
       }
       watch();
