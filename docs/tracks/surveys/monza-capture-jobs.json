@@ -1,0 +1,44 @@
+{
+  "jobs": [
+    { "trackId": "monza", "frac": 0.005, "cam": "orbit", "az": 48, "el": 22, "dist": 58, "tod": "day", "weather": "dry", "out": "artifacts/shots/tracks/monza/s1-start_day-dry.jpg" },
+    { "trackId": "monza", "frac": 0.09, "cam": "park", "tod": "day", "weather": "dry", "out": "artifacts/shots/tracks/monza/s1-rettifilo_day-dry.jpg" },
+    { "trackId": "monza", "frac": 0.14, "cam": "park", "tod": "day", "weather": "dry", "out": "artifacts/shots/tracks/monza/s1-grande_day-dry.jpg" },
+    { "trackId": "monza", "frac": 0.31, "cam": "park", "tod": "day", "weather": "dry", "out": "artifacts/shots/tracks/monza/s2-roggia_day-dry.jpg" },
+    { "trackId": "monza", "frac": 0.40, "cam": "orbit", "az": 40, "el": 20, "dist": 78, "tod": "day", "weather": "dry", "out": "artifacts/shots/tracks/monza/s2-villa-lake_day-dry.jpg" },
+    { "trackId": "monza", "frac": 0.55, "cam": "orbit", "az": 50, "el": 17, "dist": 68, "tod": "day", "weather": "dry", "out": "artifacts/shots/tracks/monza/s3-banking_day-dry.jpg" },
+    { "trackId": "monza", "frac": 0.72, "cam": "park", "tod": "day", "weather": "dry", "out": "artifacts/shots/tracks/monza/s3-flyover_day-dry.jpg" },
+    { "trackId": "monza", "frac": 0.85, "cam": "park", "tod": "day", "weather": "dry", "out": "artifacts/shots/tracks/monza/s4-parabolica_day-dry.jpg" },
+
+    { "trackId": "monza", "frac": 0.005, "cam": "orbit", "az": 48, "el": 22, "dist": 58, "tod": "day", "weather": "wet", "out": "artifacts/shots/tracks/monza/s1-start_day-wet.jpg" },
+    { "trackId": "monza", "frac": 0.005, "cam": "orbit", "az": 48, "el": 22, "dist": 58, "tod": "day", "weather": "rain", "out": "artifacts/shots/tracks/monza/s1-start_day-rain.jpg" },
+    { "trackId": "monza", "frac": 0.005, "cam": "orbit", "az": 48, "el": 22, "dist": 58, "tod": "day", "weather": "overcast", "out": "artifacts/shots/tracks/monza/s1-start_day-overcast.jpg" },
+    { "trackId": "monza", "frac": 0.005, "cam": "orbit", "az": 48, "el": 22, "dist": 58, "tod": "day", "weather": "fog", "out": "artifacts/shots/tracks/monza/s1-start_day-fog.jpg" },
+    { "trackId": "monza", "frac": 0.005, "cam": "orbit", "az": 48, "el": 22, "dist": 58, "tod": "day", "weather": "storm", "out": "artifacts/shots/tracks/monza/s1-start_day-storm.jpg" },
+    { "trackId": "monza", "frac": 0.005, "cam": "orbit", "az": 48, "el": 22, "dist": 58, "tod": "dusk", "weather": "dry", "out": "artifacts/shots/tracks/monza/s1-start_dusk-dry.jpg" },
+    { "trackId": "monza", "frac": 0.005, "cam": "orbit", "az": 48, "el": 22, "dist": 58, "tod": "night", "weather": "dry", "out": "artifacts/shots/tracks/monza/s1-start_night-dry.jpg" },
+
+    { "trackId": "monza", "frac": 0.31, "cam": "park", "tod": "day", "weather": "wet", "out": "artifacts/shots/tracks/monza/s2-roggia_day-wet.jpg" },
+    { "trackId": "monza", "frac": 0.31, "cam": "park", "tod": "day", "weather": "rain", "out": "artifacts/shots/tracks/monza/s2-roggia_day-rain.jpg" },
+    { "trackId": "monza", "frac": 0.31, "cam": "park", "tod": "day", "weather": "overcast", "out": "artifacts/shots/tracks/monza/s2-roggia_day-overcast.jpg" },
+    { "trackId": "monza", "frac": 0.31, "cam": "park", "tod": "day", "weather": "fog", "out": "artifacts/shots/tracks/monza/s2-roggia_day-fog.jpg" },
+    { "trackId": "monza", "frac": 0.31, "cam": "park", "tod": "day", "weather": "storm", "out": "artifacts/shots/tracks/monza/s2-roggia_day-storm.jpg" },
+    { "trackId": "monza", "frac": 0.31, "cam": "park", "tod": "dusk", "weather": "dry", "out": "artifacts/shots/tracks/monza/s2-roggia_dusk-dry.jpg" },
+    { "trackId": "monza", "frac": 0.31, "cam": "park", "tod": "night", "weather": "dry", "out": "artifacts/shots/tracks/monza/s2-roggia_night-dry.jpg" },
+
+    { "trackId": "monza", "frac": 0.72, "cam": "park", "tod": "day", "weather": "wet", "out": "artifacts/shots/tracks/monza/s3-flyover_day-wet.jpg" },
+    { "trackId": "monza", "frac": 0.72, "cam": "park", "tod": "day", "weather": "rain", "out": "artifacts/shots/tracks/monza/s3-flyover_day-rain.jpg" },
+    { "trackId": "monza", "frac": 0.72, "cam": "park", "tod": "day", "weather": "overcast", "out": "artifacts/shots/tracks/monza/s3-flyover_day-overcast.jpg" },
+    { "trackId": "monza", "frac": 0.72, "cam": "park", "tod": "day", "weather": "fog", "out": "artifacts/shots/tracks/monza/s3-flyover_day-fog.jpg" },
+    { "trackId": "monza", "frac": 0.72, "cam": "park", "tod": "day", "weather": "storm", "out": "artifacts/shots/tracks/monza/s3-flyover_day-storm.jpg" },
+    { "trackId": "monza", "frac": 0.72, "cam": "park", "tod": "dusk", "weather": "dry", "out": "artifacts/shots/tracks/monza/s3-flyover_dusk-dry.jpg" },
+    { "trackId": "monza", "frac": 0.72, "cam": "park", "tod": "night", "weather": "dry", "out": "artifacts/shots/tracks/monza/s3-flyover_night-dry.jpg" },
+
+    { "trackId": "monza", "frac": 0.85, "cam": "park", "tod": "day", "weather": "wet", "out": "artifacts/shots/tracks/monza/s4-parabolica_day-wet.jpg" },
+    { "trackId": "monza", "frac": 0.85, "cam": "park", "tod": "day", "weather": "rain", "out": "artifacts/shots/tracks/monza/s4-parabolica_day-rain.jpg" },
+    { "trackId": "monza", "frac": 0.85, "cam": "park", "tod": "day", "weather": "overcast", "out": "artifacts/shots/tracks/monza/s4-parabolica_day-overcast.jpg" },
+    { "trackId": "monza", "frac": 0.85, "cam": "park", "tod": "day", "weather": "fog", "out": "artifacts/shots/tracks/monza/s4-parabolica_day-fog.jpg" },
+    { "trackId": "monza", "frac": 0.85, "cam": "park", "tod": "day", "weather": "storm", "out": "artifacts/shots/tracks/monza/s4-parabolica_day-storm.jpg" },
+    { "trackId": "monza", "frac": 0.85, "cam": "park", "tod": "dusk", "weather": "dry", "out": "artifacts/shots/tracks/monza/s4-parabolica_dusk-dry.jpg" },
+    { "trackId": "monza", "frac": 0.85, "cam": "park", "tod": "night", "weather": "dry", "out": "artifacts/shots/tracks/monza/s4-parabolica_night-dry.jpg" }
+  ]
+}
