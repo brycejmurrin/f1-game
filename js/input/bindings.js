@@ -2,6 +2,21 @@
 "use strict";
 
 const InputBindings = (function () {
+  // Per-action HOLD vs TOGGLE for driving controls that are normally held (GAS,
+  // LOOK BACK). Persisted as apex26.holdMode; validated here so Input and SETTINGS
+  // share one parser. Touch GAS latch is still the separate throttleLatch assist.
+  const HOLD_MODE_ACTIONS = Object.freeze(["throttle", "lookBack"]);
+  function holdModeDefaults() { return { throttle: "hold", lookBack: "hold" }; }
+  function parseHoldMode(saved) {
+    const out = holdModeDefaults();
+    if (!saved || typeof saved !== "object") return out;
+    for (const id of HOLD_MODE_ACTIONS) {
+      const v = saved[id];
+      if (v === "hold" || v === "toggle") out[id] = v;
+    }
+    return out;
+  }
+
   function snapshot(actions, map) {
     const result = {};
     for (const a of actions) result[a.id] = map[a.id].slice();
@@ -294,6 +309,6 @@ const InputBindings = (function () {
     };
   }
 
-  return { create };
+  return { create, HOLD_MODE_ACTIONS, holdModeDefaults, parseHoldMode };
 })();
 Object.freeze(InputBindings);
