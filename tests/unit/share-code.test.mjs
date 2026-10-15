@@ -51,6 +51,7 @@ function harness(opts = {}) {
     Career: {
       data: () => opts.career || null,
       load: () => opts.career || null,
+      ...(opts.calendar ? { calendar: () => opts.calendar.map((id) => ({ id, name: id.toUpperCase() })) } : {}),
     },
     DailyChallenge: {
       prevDay: (day) => {
@@ -207,6 +208,49 @@ test("lastSession round-trips and continueHint prefers career then daily then se
     },
   });
   assert.equal(hintS.kind, "session");
+});
+
+// #2160: the career CONTINUE subtitle named Tracks.SEASON (the build's calendar), so a
+// save stamped with another calendar showed a different circuit and round count from
+// the career hub, which reads Career.calendar().
+test("career continueHint names the save's own calendar, not the build's Tracks.SEASON", () => {
+  const { ShareCode, store } = harness({
+    tracks: ["monza", "spa", "suzuka", "imola"],
+    calendar: ["imola", "suzuka", "baku"],
+    career: { year: 2026, season: { round: 1 }, team: "mercedes", flavour: "driver" },
+  });
+  const hint = ShareCode.continueHint({ store, daily: null });
+  assert.equal(hint.kind, "career");
+  assert.equal(hint.sub, "2026 · ROUND 2 · SUZUKA", "calendar()[round] and its own round count");
+  const last = harness({
+    tracks: ["monza", "spa", "suzuka", "imola"],
+    calendar: ["imola", "suzuka"],
+    career: { year: 2026, season: { round: 2 }, team: "mercedes", flavour: "driver" },
+  });
+  assert.equal(last.ShareCode.continueHint({ store: last.store, daily: null }).sub, "2026 · ROUND 2 · SUZUKA",
+    "a finished season clamps to calendar().length, not Tracks.SEASON.length");
+});
+
+// #2155: an unfinished YESTERDAY daily card staged TODAY's daily (title-menu dropped hint.day,
+// and every other path — share codes, the picker chip — deliberately replays only today).
+// The card is retired: CONTINUE never offers a past day it cannot open.
+test("continueHint never offers yesterday's daily", () => {
+  const day = new Date().toISOString().slice(0, 10);
+  const d = new Date(day + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - 1);
+  const y = d.toISOString().slice(0, 10);
+  const h = harness({ career: null });
+  const daily = (streak) => ({
+    dayKey: () => day,
+    data: () => ({ days: { [y]: { best: null, laps: 3 } }, streak: { count: streak, last: y } }),
+    liveStreak: () => streak,
+    today: () => null,
+  });
+  const none = h.ShareCode.continueHint({ store: h.store, daily: daily(0) });
+  assert.equal(none, null, "no streak and no last session: no CONTINUE card");
+  const live = h.ShareCode.continueHint({ store: h.store, daily: daily(2) });
+  assert.equal(live.kind, "daily");
+  assert.equal(live.day, day, "the daily CONTINUE card is today's, which is what openDailyPicker() opens");
+  assert.doesNotMatch(live.sub, /YESTERDAY/);
 });
 
 // Round-3 hunt 6-F1: the livery branch did next.slice(0, 32) — a player with 40 custom

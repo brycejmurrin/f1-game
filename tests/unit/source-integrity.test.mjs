@@ -306,6 +306,36 @@ test("portrait race blocker is an actionable accessible dialog", () => {
     "the blocker must still appear by default — opt-in, not opt-out");
 });
 
+// #2157: RACE IN PORTRAIT was a one-way door — nothing cleared apex26.portraitOk.
+// SETTINGS › DISPLAY › RACE IN PORTRAIT is its undo; turned OFF, the blocker returns.
+test("RACE IN PORTRAIT has a settings undo: on → off brings the blocker back", async () => {
+  const { symbolSource } = await import("../helpers/game-source.mjs");
+  const vm = await import("node:vm");
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /SettingRow\.build\("pm-portrait", "RACE IN PORTRAIT"\)[\s\S]{0,400}SettingRow\.wire\(r\.row/,
+    "the settings row is built and wired");
+  const spec = fs.readFileSync(path.join(ROOT, "js/ui/settings-export.js"), "utf8");
+  assert.match(spec, /\{ k: "portraitOk", lane: "raw", group: "display"[^}]*oneOf: \["0", "1"\]/,
+    "settings backup carries the choice");
+  const cls = new Set(["in-race"]), bag = new Map(), painted = [];
+  const blockerShown = () => cls.has("in-race") && !cls.has("rotate-ok");   // css/overlays.css
+  let synced = null;
+  const ctx = vm.createContext({
+    document: { body: { classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), contains: (c) => cls.has(c) } } },
+    localStorage: { setItem: (k, v) => bag.set(k, v), getItem: (k) => bag.get(k) ?? null },
+    SettingRow: { paint: (el, v) => painted.push(v) }, portraitUi: { row: { id: "pm-portrait" } },
+    syncRotateBlocker: () => { synced = blockerShown(); },
+  });
+  vm.runInContext(symbolSource("function setPortraitOk(") + "; this.setPortraitOk = setPortraitOk;", ctx);
+  ctx.setPortraitOk(true);
+  assert.equal(bag.get("apex26.portraitOk"), "1");
+  assert.equal(synced, false, "ON: the blocker steps aside");
+  ctx.setPortraitOk(false);
+  assert.equal(bag.get("apex26.portraitOk"), "0", "OFF is written, so the next boot asks again");
+  assert.equal(synced, true, "OFF: the blocker is back, re-synced at once");
+  assert.deepEqual(painted, ["on", "off"], "the settings row follows the blocker's own button");
+});
+
 test("no screen fakes modality with a div claiming dialog semantics", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
   const FAKE_MODAL_OK = new Set([

@@ -8766,16 +8766,31 @@ $("rotate-controls").onclick = () => {
   const close = $("htp-close"); if (close) close.focus();
 };
 $("rotate-exit").onclick = () => quitToMenu();
-// RACE IN PORTRAIT — opt in, once. The blocker stays the default: it is the
-// rotation-locked recovery path. docs/PERF-FINDINGS.md 5a.
-$("rotate-race").onclick = () => {
-  document.body.classList.add("rotate-ok");
-  try { localStorage.setItem("apex26.portraitOk", "1"); } catch (_) { /* private: this session only */ }
+// RACE IN PORTRAIT — opt in from the blocker. The blocker stays the default: it is
+// the rotation-locked recovery path (docs/PERF-FINDINGS.md 5a). SETTINGS › DISPLAY ›
+// RACE IN PORTRAIT is the undo (#2157); the body class is the truth in private mode.
+const portraitUi = { row: null };   // the SETTINGS row, built below
+function setPortraitOk(on) {
+  document.body.classList.toggle("rotate-ok", on);
+  try { localStorage.setItem("apex26.portraitOk", on ? "1" : "0"); } catch (_) { /* private: this session only */ }
+  if (portraitUi.row) SettingRow.paint(portraitUi.row, on ? "on" : "off");
   syncRotateBlocker(true);
-};
+}
+$("rotate-race").onclick = () => { document.body.classList.add("rotate-ok"); setPortraitOk(true); };
 try {
   if (localStorage.getItem("apex26.portraitOk") === "1") document.body.classList.add("rotate-ok");
 } catch (_) { /* no storage: it asks again */ }
+{ // Built here, under FULLSCREEN (the other orientation lever), so the shell's node count stays put.
+  const note = $("pm-fullscreen-note"), r = note && SettingRow.build("pm-portrait", "RACE IN PORTRAIT");
+  if (r) {
+    const help = document.createElement("p");
+    help.className = "adv-help";
+    help.textContent = "ON races with the phone upright. OFF asks you to rotate to landscape when a race starts.";
+    note.after(r.row, help); portraitUi.row = r.row;
+    SettingRow.wire(r.row, { values: SettingRow.labels(["off", "on"]),
+      read: () => (document.body.classList.contains("rotate-ok") ? "on" : "off"), write: (v) => setPortraitOk(v === "on") });
+  }
+}
 // Team picker: opened by the garage's TEAM & DRIVER tab (js/garage/setup-sheet.js).
 // Closing without choosing leaves the current team as-is. Nothing to rebuild —
 // the garage is still underneath, unchanged.
