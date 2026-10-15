@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 const context = vm.createContext({});
 vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context);
 const Arrival = vm.runInContext('GarageArrival', context);
+vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context);
+const TrackPit = vm.runInContext('TrackPit', context);
 function harness(reduced = false) {
   const elements = new Map();
   const $ = id => {
@@ -14,18 +16,30 @@ function harness(reduced = false) {
   };
   return { $, arrival: Arrival.create($, () => reduced) };
 }
-test('car waits outside until shutter is clear, backs monotonically into bay and parks', () => {
-  let prior = Infinity;
-  for (let t = 0; t <= 7; t += 0.02) {
-    const p = Arrival.pose(t);
-    assert.ok(p.z <= prior && p.z >= 0);
-    if (t < 1.8) assert.equal(p.z, 11.4);
-    if (p.z < 11.4) assert.equal(p.door, 1);
-    assert.ok(p.eye[0] > -5.4 && p.eye[0] < 5.4 && p.eye[2] > -6.4 && p.eye[2] < 6.4);
-    prior = p.z;
+test('car waits out of sight until the shutter is clear, comes up the lane past the box, backs into the bay and parks', () => {
+  for (const angle of ['cut', 'left', 'right']) {
+    const cfg = Arrival.settings({ angle });
+    let prior = Infinity, stopped = null;
+    for (let t = 0; t <= Arrival.DURATION + 0.5; t += 0.02) {
+      const p = Arrival.pose(t, cfg, true);
+      assert.ok(p.z <= prior + 1e-9 && p.z >= 0, 'never drives back out: z only falls');
+      if (t < 1.8) { assert.equal(p.z, 13); assert.ok(!seenThroughDoor(p), angle + ': out of sight while the shutter opens'); }
+      if (p.z < 13) { assert.equal(p.door, 1); if (!stopped) stopped = Arrival.pose(t - 0.02, cfg, true); }
+      assert.ok(p.eye[0] > -5.4 && p.eye[0] < 5.4 && p.eye[2] > -6.4 && p.eye[2] < 6.4);
+      prior = p.z;
+    }
+    assert.ok(seenThroughDoor(stopped), angle + ': it stops past the box where the camera sees it, then backs in');
+    const end = Arrival.pose(Arrival.DURATION + 0.5, cfg, true);
+    assert.deepEqual([end.x + 0, end.z + 0, end.yaw + 0, end.active], [0, 0, 0, false], 'parked straight, nose to the lane');
+    // The way in is the drive-out's own arc: the same points, run backwards.
+    const side = angle === 'left' ? 1 : -1;
+    for (let k = 0.05; k < 1; k += 0.05) {
+      const p = Arrival.pose(1.8 + 2.6 + 0.4 + 3.6 * k, cfg, true);
+      const onStraight = Math.abs(p.x) < 1e-9 && Math.abs(p.yaw) < 1e-9 && p.z <= 8 + 1e-9;
+      const onArc = Math.abs(Math.hypot(p.x - side * 5, p.z - 8) - 5) < 1e-6 && Math.abs(p.yaw - side * Math.atan2(p.z - 8, side * (side * 5 - p.x))) < 1e-6;
+      assert.ok(onStraight || onArc, `${angle} k ${k.toFixed(2)}: backing in on the drive-out's straight or arc (${p.x.toFixed(3)}, ${p.z.toFixed(3)})`);
+    }
   }
-  assert.equal(Arrival.pose(7).z, 0);
-  assert.equal(Arrival.pose(7).active, false);
 });
 test('skip and natural completion unlock controls and preserve open shutter until exit', () => {
   for (const skip of [true, false]) {
@@ -33,12 +47,12 @@ test('skip and natural completion unlock controls and preserve open shutter unti
     assert.equal($('cs-inner').inert, true);
     assert.equal($('carsetup')['data-esc-close'], 'cs-arrival-skip');
     if (skip) $('cs-arrival-skip').onclick();
-    else for (let i = 0; i < 70; i++) arrival.step(0.1);
+    else for (let i = 0; i < Math.ceil(Arrival.DURATION / 0.1) + 2; i++) arrival.step(0.1);
     assert.equal(arrival.state.z, 0); assert.equal(arrival.state.door, 1);
     assert.equal($('cs-inner').inert, false); assert.equal($('cs-arrival').hidden, true);
     assert.equal($('carsetup')['data-esc-close'], 'cs-back');
     arrival.cancel(); assert.equal(arrival.state, null);
-    arrival.start(); assert.equal(arrival.state.z, 11.4);
+    arrival.start(); assert.equal(arrival.state.z, 13);
   }
 });
 test('reduced motion bypasses camera movement; tab gaps and invalid dt cannot skip sequence', () => {
@@ -48,7 +62,7 @@ test('reduced motion bypasses camera movement; tab gaps and invalid dt cannot sk
   const { arrival } = harness(); arrival.start();
   for (const dt of [NaN, -3, Infinity]) arrival.step(dt);
   assert.equal(arrival.state.door, 0);
-  arrival.step(60); assert.equal(arrival.state.active, true); assert.equal(arrival.state.z, 11.4);
+  arrival.step(60); assert.equal(arrival.state.active, true); assert.equal(arrival.state.z, 13);
 });
 test('saved tuner settings control arrival speed, angle, lens and disabled playback', () => {
   const { $ } = harness();
@@ -59,7 +73,7 @@ test('saved tuner settings control arrival speed, angle, lens and disabled playb
   $('ga-fov').value = '70'; $('ga-fov').onchange();
   const arrival = Arrival.create($, () => false, read);
   arrival.start(); assert.ok(arrival.state.eye[0] > 0); assert.equal(arrival.state.fov, 70);
-  for (let i = 0; i < 33; i++) arrival.step(0.1);
+  for (let i = 0; i < Math.ceil(Arrival.DURATION / 0.2) + 1; i++) arrival.step(0.1);
   assert.equal(arrival.state.active, false);
   $('ga-enabled').checked = false; $('ga-enabled').onchange();
   arrival.start(); assert.equal(arrival.state.active, false);
@@ -79,8 +93,8 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
   assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*return Math\.round\(GarageArrival\.OUT_DURATION \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
   assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
-  // Player pace: speed 1 (the default) → OUT_DURATION, ~7.6 s, never trimmed.
-  assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 7600) <= 400, 'the default drive-out is the tuned ~7.6 s');
+  // Player pace: speed 1 (the default) → OUT_DURATION, ~10.6 s, never trimmed.
+  assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 10600) <= 400, 'the default drive-out is the tuned ~10.6 s');
   // Automation (the harness) skips it through the ONE shared gate, nothing else.
   assert.match(out, /if \(typeof LoadingScreen !== "undefined" && LoadingScreen\.isAutomation && LoadingScreen\.isAutomation\(\)\) return 0;/, 'harness launches skip the drive-out via LoadingScreen.isAutomation');
   assert.ok(!/webdriver/.test(out), 'no scattered navigator.webdriver check: the shared gate decides');
@@ -123,7 +137,7 @@ test('once out of the door the car turns into the pit lane, away from the camera
       px = p.x; pyaw = p.yaw;
     }
     const end = Arrival.poseOut(Arrival.OUT_DURATION, cfg);
-    assert.ok(side * end.yaw > 1.0 && side * end.yaw < Math.PI / 2, 'turned roughly 60-90 degrees, never back on itself');
+    assert.ok(side * end.yaw > 1.0 && side * end.yaw <= Math.PI / 2 + 1e-9, 'squared into the lane, never back on itself');
     assert.ok(side * end.x > 2, 'and off to the side, away from the camera (the eye stands at x ' + Math.sign(cfg.angle === 'right' ? 1 : -1) + ')');
     assert.ok(Math.sign(end.aim[0]) === side, 'the camera follows it round');
   }
@@ -270,7 +284,7 @@ function previewHarness({ saved = null, carsetupOpen = false, was = false } = {}
   $('carsetup').hidden = !carsetupOpen; $('garrival-inner').hidden = false;
   const frames = [], keys = [];
   const G = { setupPreviewOn: was, store: { get: (k, d) => (k === 'garageArrival' ? saved : d) } };
-  const c = vm.createContext({ $, G, GarageArrival: Arrival, driveOut: null, endHome() {}, Log: { info() {} },
+  const c = vm.createContext({ $, G, GarageArrival: Arrival, driveOut: null, endHome() {}, reducedMotion: () => false, Log: { info() {} },
     requestAnimationFrame: (fn) => frames.push(fn), render: (dt) => frames.push('render:' + dt),
     window: { addEventListener: (t, fn) => { if (t === 'keydown') keys.push(fn); } } });
   vm.runInContext(src, c);
@@ -296,7 +310,10 @@ test('PREVIEW IN / OUT: plays the saved settings to the end, then hands the canv
     assert.ok(Math.abs(n - dur / 0.2) <= 2, `${dir}: SPEED 2 plays it in half the time (${n} steps)`);
     assert.equal(last.active, true, 'the last frame holds the final pose');
     if (dir === 'in') assert.equal(last.z, 0, 'parked');
-    else assert.ok(last.z >= Arrival.poseOut(dur).z && last.z <= Arrival.poseOut(Arrival.OUT_SETTLE).z, 'out of the door, still coasting');
+    else {
+      const end = Arrival.poseOut(Arrival.OUT_SETTLE, Arrival.settings({ angle: 'right' }));
+      assert.deepEqual([last.x, last.z], [end.x, end.z], 'gone down the lane, held out of frame');
+    }
     assert.equal(h.G.setupPreviewOn, false, 'setupPreviewOn restored');
     assert.equal(h.$('garrival-inner').hidden, false, 'the panel is back');
     assert.equal(btn.focused, true, 'focus returns to the PREVIEW button');
@@ -383,14 +400,60 @@ test('the car out, the garage HOLDS until the flyby where the backend warms (TLX
   assert.match(game, /FlybySeq\.reset\(\); warmPrograms\(\); _menuGate\.warm = 2;/, 'cold world frames run under the preparation card before motion');
   assert.match(game, /prepared = true;   \/\/ afterGarageOut closes the held garage, then the race\/session card/, 'introWarm hands off through afterGarageOut');
 });
-test('the drive-out coasts on past OUT_DURATION (the held garage), and settles without a jump', () => {
-  const cfg = Arrival.DEFAULT, at = (t) => Arrival.poseOut(t, cfg);
-  assert.ok(Arrival.OUT_SETTLE > Arrival.OUT_DURATION);
-  assert.ok(at(Arrival.OUT_DURATION + 0.5).z > at(Arrival.OUT_DURATION).z, 'still rolling while RACE! loads');
-  const end = at(Arrival.OUT_SETTLE);
-  assert.deepEqual([at(Arrival.OUT_SETTLE + 30).x, at(Arrival.OUT_SETTLE + 30).z], [end.x, end.z], 'then it holds');
-  const step = Math.hypot(end.x - at(Arrival.OUT_SETTLE - 0.02).x, end.z - at(Arrival.OUT_SETTLE - 0.02).z);
-  assert.ok(step < 0.02, `the last 20 ms moves ${step.toFixed(4)} m: no stop jerk`);
+// Where a car corner's sight line from the eye crosses the door plane: inside the
+// aperture (|x| < doorW / 2) it is seen through the door, outside it the front wall hides it.
+function seenThroughDoor(p) {
+  const [ex, , ez] = p.eye, DOOR_Z = TrackPit.BAY.depth / 2, HW = TrackPit.BAY.doorW / 2;
+  const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
+  return [[2.8, 1], [2.8, -1], [-2.8, 1], [-2.8, -1]].some(([along, across]) => {
+    const cx = p.x + along * s + across * c, cz = p.z + along * c - across * s;
+    return Math.abs(ex + (cx - ex) * (DOOR_Z - ez) / (cz - ez)) < HW;
+  });
+}
+test('the drive-out does not stop in view: it squares into the lane, leaves at the limiter, goes behind the front wall', () => {
+  for (const angle of ['cut', 'left', 'right']) {
+    const cfg = Arrival.settings({ angle }), at = (t) => Arrival.poseOut(t, cfg, true);
+    assert.ok(Arrival.OUT_SETTLE < Arrival.OUT_DURATION, 'gone before the shot ends: a beat on the empty lane');
+    let turned = 0;
+    while (Math.abs(at(turned).yaw) < Math.PI / 2 - 1e-9) turned += 0.01;
+    assert.ok(seenThroughDoor(at(turned)), angle + ': in the doorway as it squares into the lane');
+    assert.ok(!seenThroughDoor(at(Arrival.OUT_SETTLE)), angle + ': behind the front wall when it settles, out of frame');
+    let gone = turned;
+    while (seenThroughDoor(at(gone))) gone += 0.01;
+    assert.ok(gone - turned >= 1.2, `${angle}: seen leaving down the lane for ${(gone - turned).toFixed(2)} s, not a flash`);
+    const v = (t) => Math.hypot(at(t + 0.05).x - at(t).x, at(t + 0.05).z - at(t).z) / 0.05;
+    for (let t = turned; t + 0.05 <= Arrival.OUT_SETTLE + 1e-9; t += 0.05)
+      assert.ok(Math.abs(v(t) - v(turned)) < 1e-6, 'one steady pit-limiter speed down the lane: no launch, no braking in view');
+    const end = at(Arrival.OUT_SETTLE);
+    assert.deepEqual([at(Arrival.OUT_SETTLE + 30).x, at(Arrival.OUT_SETTLE + 30).z], [end.x, end.z], 'then it holds, out of sight');
+    assert.ok(Math.abs(end.aim[0]) <= 3.5 + 1e-9, 'the camera holds on the doorway, not on the wall it went behind');
+  }
+});
+test('the empty-lane hold is a slow push toward the door, not a frozen frame; calm (reduce motion) holds still', () => {
+  for (const angle of ['cut', 'right']) {
+    const cfg = Arrival.settings({ angle }), S = Arrival.OUT_SETTLE;
+    const a = Arrival.poseOut(S, cfg, true), b = Arrival.poseOut(S + 6, cfg, false), c = Arrival.poseOut(S + 60, cfg, false);
+    assert.ok(b.eye[2] > a.eye[2] + 1 && c.eye[2] > b.eye[2], angle + ': the eye moves in toward the door while RACE! loads');
+    assert.ok(c.eye[2] < 6.4 - 3 && Math.abs(c.eye[0]) < 5.4, 'and stops well inside the bay');
+    const step = Math.hypot(...[0, 1, 2].map((i) => Arrival.poseOut(S + 0.02, cfg, true).eye[i] - a.eye[i]));
+    assert.ok(step < 1e-9, 'calm: no push');
+    assert.deepEqual(Arrival.poseOut(S + 60, cfg, true).eye, a.eye, 'calm: the hold is still');
+  }
+});
+test('handheld sway: centimetres, both shots, and off when calm', () => {
+  const cfg = Arrival.DEFAULT;
+  for (const fn of [Arrival.pose, Arrival.poseOut]) {
+    let max = 0;
+    for (let t = 0; t < 8; t += 0.05) {
+      const live = fn(t, cfg, false), calm = fn(t, cfg, true);
+      max = Math.max(max, Math.hypot(live.eye[0] - calm.eye[0], live.eye[1] - calm.eye[1]));
+      assert.equal(live.eye[2], calm.eye[2], 'never toward or away from the car');
+      assert.ok(Math.abs(live.aim[0] - calm.aim[0]) < 0.05 && Math.abs(live.aim[1] - calm.aim[1]) < 0.05);
+    }
+    assert.ok(max > 0.01 && max < 0.05, `sway ${max.toFixed(3)} m: there, but small`);
+  }
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  assert.match(cam, /GarageArrival\.poseOut\(driveOut\.t, driveOut\.cfg, reducedMotion\(\)\)/, 'the RACE! drive-out is calm under reduce motion');
 });
 test('START from race settings: the sheet covers preparation (PREPARING…), never the card over black, and gives way to the garage', async () => {
   const game = readFileSync(new URL('../../js/game.js', import.meta.url), 'utf8');
@@ -492,7 +555,7 @@ function garageEntryRegressionHarness() {
     endHome() {}, uiExperience: { renderHome: () => false, trackActive: () => false },
     headlessMode: false, settings: 'same-entry', flybyShots: null,
     _menuFly: null, _menuGate: { warm: 0, garageWarm: 0, garageReady: false, generation: 0 },
-    _warmKey: 'world', flybyBuildTimer: 0,
+    _warmKey: 'world', flybyBuildTimer: 0, _carWarm: { busy: false },
     canvas: { style: {} }, _softEl: { style: {} },
     document: { hidden: false, getElementById: () => null },
     performance: { now: () => now },

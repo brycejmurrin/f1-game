@@ -128,7 +128,7 @@ function startDriveOut() {
   driveOut = null;
   if (!cfg.enabled) return 0;
   // AUTOMATION skips it (LoadingScreen.isAutomation, the one gate #1294's 700 ms
-  // card uses): a harness launch on software GL spent the 7.6 s drive-out (up to 3x
+  // card uses): a harness launch on software GL spent the ~10.6 s drive-out (up to 3x
   // on a stalled clock) plus awaitSoftPresent on top of a 30-90 s build and blew
   // the specs' 45 s grid wait (steering, quali). No drive-out means no studio and no
   // soft-present wait: game.js introGarage flies straight on, as with the tuner off.
@@ -152,7 +152,7 @@ function stepDriveOut(held = false) {
   const now = performance.now(), gap = driveOut.last ? (now - driveOut.last) / 1000 : 0;
   driveOut.last = now;
   if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
-  return Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg), { active: true });
+  return Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg, reducedMotion()), { active: true });
 }
 // THE ARRIVAL PREVIEW (#garrival's PREVIEW IN / OUT): the tuner's saved settings
 // played once in this room, from the settings page — the title screen or a paused
@@ -177,7 +177,7 @@ function startArrivalPreview(dir, btn) {
 }
 function stepPreview(dt) {
   preview.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * preview.cfg.speed;
-  const pose = (preview.dir === "out" ? GarageArrival.poseOut : GarageArrival.pose)(preview.t, preview.cfg);
+  const pose = (preview.dir === "out" ? GarageArrival.poseOut : GarageArrival.pose)(preview.t, preview.cfg, reducedMotion());
   if (pose.active) return pose;
   stopPreview();
   return Object.assign(pose, { active: true });   // this frame still holds the last pose, not the turntable's
