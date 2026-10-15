@@ -86,7 +86,7 @@ var RaceRadio = (function () {
     // facts only colour it (battles, the lead gap). Hooks: nameOf(car) — the
     // REAL driver's name (a seat car can wear another roster name) — and
     // radioBusy() — a team radio clip is playing.
-    let watch = null, timeline = 0;
+    let watch = null, timeline = 0, commentaryGeneration = 0;
     let m = null;
     const queue = { eng: new Map(), tv: new Map() };
     const log = [];
@@ -169,9 +169,10 @@ var RaceRadio = (function () {
     function speak(c, kind) {
       const text = lines.pick(c.key, c.vars);
       if (!text) { queue[c.ch].delete(c.id); return false; }
-      // announce() may accept a card that will not play until after a seek.
-      const gen = timeline, still = c.still;
-      const valid = watch ? () => !!watch && gen === timeline && (!still || still()) : still;
+      // Accepted cards may wait across a seek or the start of another race.
+      const gen = timeline, field = G.cars, watching = watch, cg = commentaryGeneration, still = c.still;
+      const valid = () => gen === timeline && field === G.cars && watch === watching
+        && (c.ch !== "tv" || (cg === commentaryGeneration && comm !== "off")) && (!still || still());
       // Refused (a full card queue): an URGENT line stays queued and is offered
       // again until its ttl — "LAST LAP" is a once line, and dropping it here
       // lost it for the race. Anything else is dropped, as before.
@@ -664,6 +665,7 @@ var RaceRadio = (function () {
     }
     function setComm(v) {
       if (COMM.indexOf(v) < 0) return comm;
+      if (v === "off" && comm !== "off") { commentaryGeneration++; queue.tv.clear(); }
       comm = v; if (store && store.set) store.set("commentary", v);
       return comm;
     }
