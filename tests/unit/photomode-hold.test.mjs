@@ -20,6 +20,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
@@ -37,8 +38,7 @@ test("rotation never resurfaces the pause card over an active photo camera", () 
 });
 
 test("rotation keeps foreground Settings above Pause until Settings closes", () => {
-  const source = src("js/game.js");
-  const fn = source.slice(source.indexOf("function syncRotateBlocker("), source.indexOf("if (rotateBlockMql.addEventListener)"));
+  const fn = symbolSource("function syncRotateBlocker(");
   let portrait = true;
   const box = { setAttribute() {} }, pausemenu = { hidden: true }, pmsettings = { hidden: false };
   const garage = { hidden: true };
