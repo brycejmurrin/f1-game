@@ -217,78 +217,67 @@
       const EUC  = [0.30, 0.42, 0.28];   // grey-green eucalyptus
       const EUC2 = [0.34, 0.46, 0.30];   // slightly lighter canopy twin
 
-      // forestEdge's lobed (broadleaf) crowns are capped at 30 accepted trees PER
-      // CALL, counted from s0; the default crown is a 4-cone stack that reads as
-      // a conifer. Feed it ~100 m chunks so every tree of the treeline is lobed
-      // (the along() ends are inclusive: stop one node short of the next chunk).
-      const edge = (s0, s1, side, gap, o) => {
-        const CH = 0.02;
-        for (let a = s0; a < s1 - 1e-9; a += CH)
-          forestEdge(a, Math.min(s1, a + CH) - (a + CH < s1 ? 1 / n : 0), side, gap,
-            { ...o, treeOptions: { crown: "lobed", maxDetailed: 30 } });
-      };
-
-      edge(0.00, 0.10, -1, 11, {
+      forestEdge(0.00, 0.10, -1, 11, {
         density: 0.45, hMin: 9, hMax: 16,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      edge(0.00, 0.10, 1, 13, {
+      forestEdge(0.00, 0.10, 1, 13, {
         density: 0.40, hMin: 8, hMax: 14,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      edge(0.10, 0.27, -1, 9, {
+      forestEdge(0.10, 0.27, -1, 9, {
         density: 0.60, hMin: 10, hMax: 17,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
-      edge(0.10, 0.27, 1, 10, {
+      forestEdge(0.10, 0.27, 1, 10, {
         density: 0.55, hMin: 9, hMax: 16,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      edge(0.27, 0.65, 1, 14, {
+      forestEdge(0.27, 0.65, 1, 13, {
         density: 0.45, hMin: 10, hMax: 17,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      edge(0.27, 0.65, -1, 19, {
+      forestEdge(0.27, 0.65, -1, 19, {
         density: 0.40, hMin: 11, hMax: 18,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      edge(0.65, 0.85, -1, 9, {
+      forestEdge(0.65, 0.85, -1, 9, {
         density: 0.70, hMin: 11, hMax: 19,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
-      edge(0.65, 0.85, 1, 10, {
+      forestEdge(0.65, 0.85, 1, 10, {
         density: 0.65, hMin: 10, hMax: 18,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      edge(0.85, 1.00, -1, 9, {
+      forestEdge(0.85, 1.00, -1, 9, {
         density: 0.45, hMin: 9, hMax: 15,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
-      edge(0.85, 1.00, 1, 12, {
+      forestEdge(0.85, 1.00, 1, 12, {
         density: 0.40, hMin: 8, hMax: 14,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
 
-      edge(0.75, 0.82, -1, 11, {
+      forestEdge(0.75, 0.82, -1, 11, {
         density: 0.70, hMin: 13, hMax: 20,
         col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
       });
-      edge(0.75, 0.82, 1, 12, {
+      forestEdge(0.75, 0.82, 1, 12, {
         density: 0.65, hMin: 12, hMax: 19,
         col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
       });
 
-      edge(0.12, 0.25, 1, 27, {
+      forestEdge(0.12, 0.25, 1, 27, {
         density: 0.30, hMin: 13, hMax: 20,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
-      edge(0.68, 0.84, -1, 26, {
+      forestEdge(0.68, 0.84, -1, 26, {
         density: 0.34, hMin: 14, hMax: 21,
         col: EUC, col2: EUC2, pineFrac: 0,
       });
