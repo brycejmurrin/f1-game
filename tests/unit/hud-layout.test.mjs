@@ -203,7 +203,8 @@ test("phone portrait parks the minimap under the timing tower; other shapes keep
   assert.ok(baseMap, "shipped #minimap rule");
   assert.match(baseMap[1], /top:\s*calc\(8px \+ var\(--sat\) \/ var\(--hud-z\)\);/);
   assert.doesNotMatch(baseMap[1], /--hud-top-h/, "landscape/desktop map stays in the top-left corner");
-  assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 1);
+  assert.equal((src.match(/@media \(orientation: portrait\) and \(max-width: 500px\)/g) || []).length, 2,
+    "tower/map stack plus the unpublished-lane radio fallback, both after the rules they beat");
 });
 
 // Empty .hud-gaps collapses (css/hud.css). The COMPACT metrics test must seed
@@ -784,6 +785,8 @@ test("hiddenReason: classes name the reason; the live element has the last word"
     "phone sectors (tilt/touch/buttons) take the same --dock-r-w clearance as limits/damage");
   assert.match(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 50% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
     "touch #announce sits in the published dock lane (centred when none is published), not at 10px+sal over TILT's left dock");
+  assert.match(css, /@media \(orientation: portrait\) and \(max-width: 500px\) \{[\s\S]*?body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\[data-radio-corner\]\):not\(\.hud-mirror-side\) #announce \{[\s\S]*?left: calc\(var\(--announce-lane-x, 34% \* var\(--hud-z\)\) \/ var\(--hud-z\)\)/,
+    "portrait unpublished-lane fallback pins left past the map column so HUD 150% on 390 clears #minimap");
   assert.doesNotMatch(css, /body:not\(\.desktop\):not\(\.hud-radio-top\):not\(\.hud-prof-broadcast\)[^{]*#announce \{[\s\S]*?left: calc\(10px \+ var\(--sal\)/,
     "the under-map announce park is gone — it sat on BRAKE / BOOST / SHIFT");
   assert.doesNotMatch(css,
