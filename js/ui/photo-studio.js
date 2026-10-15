@@ -81,7 +81,7 @@ function create(G, deps) {
   if (!root) return null;
   const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
-  let last = null, focus = null, libraryPaint = 0;
+  let last = null, focus = null, libraryPaint = 0, releaseCar = null;
   const mk = (tag, props, kids) => {
     const el = document.createElement(tag);
     if (props) for (const k in props) {
@@ -116,12 +116,25 @@ function create(G, deps) {
   const subjectRow = select("Subject", [["garage", "Garage"], ["circuit", "Circuit"]], subjectValue,
     (v) => { if (st.subject && !st.busy && v !== subjectValue()) st.subject(v); }, "ps-subject");
   const subjectGroup = group("SUBJECT", [subjectRow,
-    mk("p", { className: "adv-help", textContent: "Your car in the garage, or the free camera on the circuit. Your Home scene stays as it is." })]);
+    mk("p", { className: "adv-help", textContent: "Your car in the garage or on the circuit. Your Home scene stays as it is." })]);
+  const placement = (label, id, min, max, step, unit) => {
+    const out = mk("output", { id: id + "-value", textContent: "0" + unit });
+    const input = mk("input", { id, type: "range", min: String(min), max: String(max), step: String(step), value: "0" });
+    input.addEventListener("input", () => { out.textContent = input.value + unit; placeCar(); });
+    return mk("label", { className: "tune-row" }, [mk("span", { className: "tune-label", textContent: label }), input, out]);
+  };
+  const carGroup = group("PLACE YOUR CAR", [
+    placement("Circuit position", "ps-car-position", 0, 100, .1, "%"),
+    placement("Sideways", "ps-car-offset", -20, 20, .1, " m"),
+    placement("Rotation", "ps-car-rotation", -180, 180, 1, "°"),
+    button("FRAME CAR", () => setShot("car"), "ps-car-frame"),
+  ]);
   const panel = mk("section", { id: "ps-panel", className: "sheet", attrs: { "aria-label": "Photo Studio" } }, [
     mk("header", { className: "sheet-head" }, [mk("h2", { textContent: "PHOTO STUDIO" })]),
     mk("div", { id: "ps-body", className: "sheet-body pane" }, [
       mk("p", { id: "ps-context", className: "adv-help" }),
       subjectGroup,
+      carGroup,
       group("COMPOSITION", [
         select("Frame", [["scene", "Full scene"], ["wide", "16:9"], ["square", "1:1"], ["portrait", "4:5"]], () => st.aspect, (v) => { st.aspect = v; guides(); }, "ps-aspect"),
         select("Guide", [["off", "Off"], ["thirds", "Thirds"], ["centre", "Centre"]], () => st.grid, (v) => { st.grid = v; guides(); }, "ps-grid-select"),
@@ -162,11 +175,36 @@ function create(G, deps) {
   function guides() { root.dataset.aspect = st.aspect; root.dataset.grid = st.grid; }
   function camera() { return deps.freeCam || (typeof FreeCam !== "undefined" ? FreeCam : null); }
   function isGarage() { return st.source === "home" || st.source === "garage"; }
+  function hasCar() { return st.open && !!releaseCar; }
+  function placeCar() {
+    if (!hasCar() || !G.player || !G.track) return;
+    const c = G.player, sample = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+    c.s = (+E["ps-car-position"].value % 100) * G.track.total / 100;
+    c.x = c.xVis = +E["ps-car-offset"].value;
+    Tracks.sample(G.track, c.s, sample);
+    const len = Math.hypot(...sample.r) || 1;
+    c.px = sample.p[0] + sample.r[0] / len * c.x;
+    c.pz = sample.p[2] + sample.r[2] / len * c.x;
+    c.yawVis = +E["ps-car-rotation"].value * Math.PI / 180;
+    c.head = Math.atan2(sample.t[0], sample.t[2]) + c.yawVis;
+    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
+    c.rPrevHead = c.head; c.rPrevYawVis = c.yawVis; c.speed = 0;
+    setShot("car");
+  }
   function setShot(id) {
     if (isGarage()) { if (deps.garage && deps.garage.shot) deps.garage.shot(id); }
     else {
       const fc = camera(); if (!fc || !fc.cmd) return;
-      fc.cmd(id === "corner" ? { snap: "corner" } : { snap: "car", fov: id === "detail" ? 35 : id === "wide" ? 80 : 60 });
+      const fov = id === "detail" ? 35 : id === "wide" ? 80 : 60;
+      if (hasCar() && G.player && id !== "corner") {
+        // Keep the subject above the phone sticks and left of the studio sheet.
+        const c = G.player, sample = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
+        Tracks.sample(G.track, c.s, sample);
+        const bank = Tracks.banking ? Tracks.banking(G.track, c.s, c.x) : null;
+        const y = sample.p[1] + (bank ? bank.dy : 0), fx = Math.sin(c.head), fz = Math.cos(c.head);
+        fc.cmd({ eye: [c.px - fx * 9, y + 3.2, c.pz - fz * 9],
+          target: [c.px + fz * 3, y + 1, c.pz - fx * 3], fov });
+      } else fc.cmd(id === "corner" ? { snap: "corner" } : { snap: "car", fov });
     }
   }
   function open(opts) {
@@ -189,7 +227,13 @@ function create(G, deps) {
       const p = fc.panel ? fc.panel() : G.$("freecam-inner"); if (p) p.hidden = true;
       if (fc.setOverlaysVisible) fc.setOverlaysVisible(false);
     }
+    if (st.source === "home-track" && deps.borrowCar) releaseCar = deps.borrowCar();
     st.open = true; st.generation++; root.hidden = false;
+    carGroup.hidden = !hasCar();
+    for (const [id, unit] of [["ps-car-position", "%"], ["ps-car-offset", " m"], ["ps-car-rotation", "°"]]) {
+      E[id].value = "0"; E[id + "-value"].textContent = "0" + unit;
+    }
+    placeCar();
     subjectGroup.hidden = !st.subject;
     if (st.subject) SettingRow.paint(subjectRow, subjectValue());
     document.body.classList.add("photo-studio-open");
@@ -221,6 +265,7 @@ function create(G, deps) {
   function finishClose(back) {
     if (!st.open && !st.closing) return;
     const returnTo = st.back; st.generation++; st.open = false; st.back = null; st.closing = false;
+    if (releaseCar) { releaseCar(); releaseCar = null; }
     if (isGarage()) { if (deps.garage && deps.garage.restore && st.snapshot) deps.garage.restore(st.snapshot); st.snapshot = null; }
     else {
       const fc = camera(), prior = st.borrowed;
@@ -381,7 +426,7 @@ function create(G, deps) {
     finally { if (gen === st.generation) { busy(false); importFile.value = ""; } }
   }
   function state() { return { open: st.open, source: st.source, subject: !!st.subject, aspect: st.aspect, grid: st.grid, postcard: st.postcard, busy: st.busy, captured: !!last, background: !!background() }; }
-  const api = { open, close, capture, state, background, setBackground, exportPhoto, savePhoto };
+  const api = { open, close, capture, state, background, setBackground, exportPhoto, savePhoto, hasCar };
   live = api; busy(false); return api;
 }
 return Object.freeze({ create, background, setBackground, crop, filename, ASPECTS, LIMIT, state: () => live ? live.state() : { open: false } });

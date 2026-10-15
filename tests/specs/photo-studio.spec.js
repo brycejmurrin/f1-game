@@ -45,6 +45,48 @@ async function evidence(page, info, name) {
   } finally { await cdp.detach(); }
 }
 
+test("Title circuit photo provides a car to place without starting a race", async ({ page, pageErrors }, info) => {
+  await boot(page);
+  await page.evaluate(() => __apex.agentHelp());
+  await clickLive(page, "mb-photo");
+  await page.locator("#ps-subject").selectOption("circuit");
+  await page.waitForFunction(() => PhotoStudio.state().open && PhotoStudio.state().source === "home-track",
+    null, { polling: 100, timeout: BOOT_MS });
+  await present(page);
+  await evidence(page, info, "title-circuit-car");
+  expect(await page.evaluate(() => __apex.cars().length)).toBe(1);
+  const start = await page.evaluate(() => __apex.physState());
+  await page.locator("#ps-car-position").fill("25");
+  await page.locator("#ps-car-offset").fill("3");
+  await page.locator("#ps-car-rotation").fill("90");
+  const placed = await page.evaluate(() => __apex.physState());
+  expect(placed.s).toBeGreaterThan(start.s + 100);
+  expect(placed.x).toBeCloseTo(3);
+  expect(Math.hypot(placed.px - start.px, placed.pz - start.pz)).toBeGreaterThan(100);
+  expect(placed.head).not.toBe(start.head);
+  await present(page);
+  await evidence(page, info, "title-circuit-placed");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await present(page);
+  await evidence(page, info, "title-circuit-desktop");
+  expect((await page.evaluate(() => __apex.physState())).s).toBeCloseTo(placed.s);
+  await clickLive(page, "ps-capture");
+  await page.waitForFunction(() => PhotoStudio.state().captured && !PhotoStudio.state().busy,
+    null, { polling: 100, timeout: BOOT_MS });
+  await page.locator("#ps-subject").selectOption("garage");
+  await page.waitForFunction(() => PhotoStudio.state().open && PhotoStudio.state().source === "home",
+    null, { polling: 100, timeout: BOOT_MS });
+  expect(await page.evaluate(() => __apex.cars().length)).toBe(0);
+  await page.locator("#ps-subject").selectOption("circuit");
+  await page.waitForFunction(() => PhotoStudio.state().open && PhotoStudio.state().source === "home-track",
+    null, { polling: 100, timeout: BOOT_MS });
+  expect(await page.evaluate(() => __apex.cars().length)).toBe(1);
+  await clickLive(page, "ps-close");
+  await expect(page.locator("#photo-studio")).toBeHidden();
+  expect(await page.evaluate(() => __apex.cars().length)).toBe(0);
+  expect(pageErrors).toEqual([]);
+});
+
 test("Home photo retains its shot across rotation at 200%, captures, and returns its camera", async ({ page, pageErrors }, info) => {
   await boot(page);
   await page.evaluate(() => {
@@ -91,6 +133,7 @@ test("Paused race photo keeps controls reachable at 200% and isolates panel scro
   });
   await clickLive(page, "pausebtn");
   await clickLive(page, "pm-photo");
+  await expect(page.getByRole("region", { name: "PLACE YOUR CAR" })).toBeHidden();
   await page.evaluate(() => { __apex.uiScale(200); __apex.headless(false); });
   for (const [name, viewport] of [["race-landscape-200", LANDSCAPE], ["race-portrait-200", PORTRAIT]]) {
     await page.setViewportSize(viewport);

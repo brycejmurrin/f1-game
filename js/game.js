@@ -7858,7 +7858,7 @@ function render(dt) {
     // field is the SUBJECT rather than the leftovers the guard above describes.
     // Still nothing after quitToMenu: that leaves the loading screen inactive,
     // which is the same break as before.
-    if (state === "menu" && !loadingScreen.active()) break;
+    if (state === "menu" && !loadingScreen.active() && !(photoStudio && photoStudio.hasCar())) break;
     if (!c.isPlayer && player && !dbgCam) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
@@ -8802,7 +8802,15 @@ $("track-detail-close").onclick = closeTrackDetail;
 // the same rule the mode-dependent driving controls follow, so the grid never
 // reflows under a thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
-photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0), garage: {
+photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0),
+  borrowCar: () => {
+    // A fresh photo subject, never the last race's live car or seeded stream.
+    const before = { cars, player }, rng = _simRngState;
+    try { makeCars(); cars = player ? [player] : []; }
+    catch (e) { cars = before.cars; player = before.player; throw e; }
+    finally { _simRngState = rng; }
+    return () => { cars = before.cars; player = before.player; };
+  }, garage: {
   snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id), } });
 function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),

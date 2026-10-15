@@ -25,7 +25,8 @@ function boot(options = {}) {
     return el;
   };
   let closed = 0, restored = null, overlays = true, current = options.priorCamera || { open: false };
-  const G = { $: dom.byId, canvas: dom.byId("game"), track: { name: "Monza" }, photoMode: !!options.priorPhoto,
+  const G = { $: dom.byId, canvas: dom.byId("game"), track: { name: "Monza", total: 1000 }, photoMode: !!options.priorPhoto,
+    player: options.player || null,
     photoCam: { pos: [1, 2, 3], yaw: 1, pitch: 0.3, fov: 60 },
     gfx: { capturePixels: () => { order.push("read"); return options.readback || Promise.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4).fill(123) }); } } };
   const freeCam = {
@@ -40,14 +41,44 @@ function boot(options = {}) {
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
-    Log: { warn: () => {} }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
+    Log: { warn: () => {} }, Tracks: { sample: (_t, s, out) => {
+      out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, 0, -1];
+    } }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
   vm.runInContext(source, ctx);
-  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw") });
+  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw"),
+    borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
   return { api, PS, dom, order, downloads, canvasOps, G, storage, closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
+
+test("Home circuit photo borrows a subject, places its complete pose, and returns ownership", () => {
+  const prior = { px: 88 }, subject = {};
+  let released = 0;
+  const { api, G, dom } = boot({ player: prior, borrowCar: (G) => {
+    G.player = subject;
+    return () => { G.player = prior; released++; };
+  } });
+  api.open({ source: "home-track" });
+  assert.equal(api.hasCar(), true);
+  const values = [["ps-car-position", "25"], ["ps-car-offset", "3"], ["ps-car-rotation", "90"]];
+  for (const [id, value] of values) {
+    dom.byId(id).value = value;
+    dom.byId(id).dispatchEvent({ type: "input" });
+  }
+  assert.equal(subject.s, 250); assert.equal(subject.x, 3);
+  assert.equal(subject.px, 250); assert.equal(subject.pz, -3);
+  assert.equal(subject.head, Math.PI); assert.equal(subject.yawVis, Math.PI / 2);
+  for (const [a, b] of [["rPrevS", "s"], ["rPrevX", "x"], ["rPrevPx", "px"], ["rPrevPz", "pz"], ["rPrevYawVis", "yawVis"], ["rPrevHead", "head"]]) {
+    assert.equal(subject[a], subject[b], "no interpolation from a stale " + b);
+  }
+  api.close(false); api.close(false);
+  assert.equal(released, 1); assert.equal(G.player, prior); assert.equal(api.hasCar(), false);
+  assert.deepEqual(prior, { px: 88 });
+  api.open({ source: "race" });
+  assert.equal(api.hasCar(), false); assert.equal(G.player, prior);
+});
 // One shared object store, with serialized transactions and staged writes. A
 // request's success is distinct from commit, and abort discards every staged
 // mutation, so these tests exercise isolation and rollback rather than callbacks
