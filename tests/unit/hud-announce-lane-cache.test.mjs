@@ -196,3 +196,18 @@ test("PERF: steady ticks + gap digit rolloff → 0 announceLane getBoundingClien
   h.force();
   assert.ok(h.misses() >= 1, "forced refresh always re-measures");
 });
+
+
+test("delayed primary packing invalidates the cached tyre lane rectangle", () => {
+  const h = boot();
+  const tyre = h.sb.document.createElement("div");
+  h.sb.document.body.appendChild(tyre); h.els.tyre = tyre;
+  tyre._rect = {left: 20, top: 100, right: 140, bottom: 140, width: 120, height: 40};
+  for (let i = 0; i < 4; i++) h.force();
+  h.nat(); h.resetMisses();
+  tyre.style.setProperty("margin-top", "12px");
+  h.nat();
+  assert.ok(h.misses() > 0, "a packed tyre changes the lane's clipper geometry without a settings edit");
+  h.resetMisses(); h.nat();
+  assert.equal(h.misses(), 0, "the unchanged packed layout reuses the cache again");
+});

@@ -53,6 +53,20 @@ var GameAudio = (function () {
   let pitGunFired = 0, surfSched = 0;
   let pitLimLvl = 0;                                          // 0..1 from setCarSfx; applied in setEngine
 
+  // FIELD CONTACT (Radio r9): positional bump / scrape / squeal for AI & rivals.
+  // Cap CONTACT_VOICES; per-car cooldown ≥250 ms; pooled looping noise — no
+  // per-fire BufferSource alloc. Player GameAudio.collision() stays untouched.
+  const CONTACT_VOICES_DESKTOP = 3, CONTACT_VOICES_MOBILE = 2;
+  const CONTACT_COOLDOWN = 0.25;
+  const CONTACT_RANGE = 120;
+  const CONTACT_REF = 8;
+  let contactVoices = [];   // { src, filt, gain, pan, freeAt }
+  const _contactCdKeys = new Int32Array(24);
+  const _contactCdUntil = new Float64Array(24);
+  let _contactCdN = 0;
+  let fieldArmed = false;   // true only while setRivals runs (race); false on grid/pause/stop
+  let contactFired = 0, contactDeniedCd = 0, contactDeniedCap = 0, contactDeniedGate = 0;
+
   // RIVAL ENGINES. The game had no opponent audio at all and no panner anywhere
   // in the graph, so a car alongside was silent and the only cue you had for it
   // was the mirror. This is the one audio layer that changes how the game PLAYS
@@ -1275,6 +1289,27 @@ var GameAudio = (function () {
     spraySrc.start();
     windSrc.start();
     brakeSrc.start();
+    // FIELD CONTACT pool (Radio r9): osc + filter + gain + panner.
+    // Oscillators (not looping BufferSources) so the six harvest/skid/scrub/
+    // surface/wind/brake loop contract stays intact. Built once at startEngine;
+    // fieldContact only schedules envelopes. Mobile 2 / desktop 3.
+    contactVoices = [];
+    _contactCdN = 0;
+    contactFired = contactDeniedCd = contactDeniedCap = contactDeniedGate = 0;
+    if (ctx.createStereoPanner && sfxOk()) {
+      const nContact = lowPower() ? CONTACT_VOICES_MOBILE : CONTACT_VOICES_DESKTOP;
+      for (let ci = 0; ci < nContact; ci++) {
+        const cOsc = ctx.createOscillator();
+        cOsc.type = "sawtooth"; cOsc.frequency.value = 120;
+        const cFilt = ctx.createBiquadFilter();
+        cFilt.type = "bandpass"; cFilt.frequency.value = 900; cFilt.Q.value = 1.2;
+        const cGain = ctx.createGain(); cGain.gain.value = 0;
+        const cPan = ctx.createStereoPanner(); cPan.pan.value = 0;
+        cOsc.connect(cFilt).connect(cGain).connect(cPan).connect(sfxBus);
+        contactVoices.push({ osc: cOsc, filt: cFilt, gain: cGain, pan: cPan, freeAt: 0 });
+        cOsc.start(0);
+      }
+    }
 
     lastSpeed = 0;
     lastEngT = 0;
@@ -1365,6 +1400,9 @@ var GameAudio = (function () {
     stopAt(whineOsc, t0 + 0.35);
     stopAt(subOctOsc, t0 + 0.35);
     for (const v of rivalVoices) { try { v.gain.gain.setTargetAtTime(0, t0, 0.06); v.stop(t0 + 0.35); } catch (e) { /* already stopped */ } }
+    for (const v of contactVoices) {
+      try { v.gain.gain.setTargetAtTime(0, t0, 0.04); stopAt(v.osc, t0 + 0.35); } catch (e) { /* already stopped */ }
+    }
     stopAt(harvSrc, t0 + 0.35);
     stopAt(ersOsc, t0 + 0.35);
     stopAt(windSrc, t0 + 0.35);
@@ -1403,6 +1441,7 @@ var GameAudio = (function () {
                   revSend, convolver, revReturn, deadPitLim, deadCylCut, scrubFilter, scrubGain, lockFilter, lockGain,
                   surfFilter, surfGain, kerbFilter, kerbGain, sprayFilter, sprayGain];
     for (const v of rivalVoices) { dead.push(v.filt, v.gain, v.pan); }
+    for (const v of contactVoices) { dead.push(v.filt, v.gain, v.pan); }
     queueDying(dead);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = skidLfo = skidLfoGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
@@ -1413,6 +1452,9 @@ var GameAudio = (function () {
     subOctOsc = subOctGain = null;
     convolver = revSend = revReturn = null;
     rivalVoices = [];
+    contactVoices = [];
+    fieldArmed = false;
+    _contactCdN = 0;
     idleGainRamped = false;
     rateFresh = false;
     lastGearSeen = NaN;
@@ -1929,6 +1971,7 @@ var GameAudio = (function () {
   // at LIGHTS OUT. Stationary (speed 0) keeps wind and whine gated. game.js
   // calls this on the countdown return; `_audioParamStep` still gates it.
   function setGridIdle(player, opts) {
+    fieldArmed = false;   // countdown: field contact SFX stay silent (intentional)
     const o = opts || {};
     if (!player || o.soundOn === false || o.step === false) return;
     const idle = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.IDLE_RPM) || 5000;
@@ -2376,11 +2419,15 @@ var GameAudio = (function () {
     return s.b;
   }
   function setRivals(list) {
+    // Race (and instant-replay scrub) call this; countdown uses setGridIdle instead.
+    // Arm field contact only while the engine graph is live — stopEngine already
+    // clears fieldArmed; a post-stop setRivals([]) (scrub exit) must not re-arm.
     // Spray wake: nearest rival ahead within 40 m → 0..1 (RivalAudio owns the
     // geometry; engine only stores the scalar for setEngine's wet spray bed).
     sprayAhead = (typeof RivalAudio !== "undefined" && RivalAudio.sprayAhead)
       ? RivalAudio.sprayAhead(list) : 0;
     if (!engineOn || !rivalVoices.length) return;
+    fieldArmed = true;
     const t = now();
     const dt = _rivalRevSmT > 0 ? Math.min(0.05, t - _rivalRevSmT) : 1 / 60;
     _rivalRevSmT = t;
@@ -2518,6 +2565,99 @@ var GameAudio = (function () {
     blip(150, "sine", 0.34 * (0.4 + 0.6 * k), 0.005, 0.25, 45);
     noise(0.26 * (0.4 + 0.6 * k), 0.18, 900);
     if (k > 0.6) blip(70, "sine", 0.3 * (k - 0.6) / 0.4, 0.004, 0.3, 40);   // the bang under a real hit
+  }
+
+  // ── FIELD CONTACT (Radio r9) ───────────────────────────────────────────
+  // Positional one-shots for rival–rival / wall / slide. Player collision()
+  // above is byte-identical. Voices are pooled at startEngine; this only
+  // schedules pan + filter + gain envelopes (no per-fire node alloc).
+  function contactCdHit(key, t) {
+    if (key == null || key < 0) return false;
+    for (let i = 0; i < _contactCdN; i++) {
+      if (_contactCdKeys[i] === key) return _contactCdUntil[i] > t;
+    }
+    return false;
+  }
+  function contactCdMark(key, t) {
+    if (key == null || key < 0) return;
+    const until = t + CONTACT_COOLDOWN;
+    for (let i = 0; i < _contactCdN; i++) {
+      if (_contactCdKeys[i] === key) { _contactCdUntil[i] = until; return; }
+    }
+    if (_contactCdN < _contactCdKeys.length) {
+      _contactCdKeys[_contactCdN] = key; _contactCdUntil[_contactCdN] = until; _contactCdN++;
+      return;
+    }
+    let oldest = 0;
+    for (let i = 1; i < _contactCdN; i++) if (_contactCdUntil[i] < _contactCdUntil[oldest]) oldest = i;
+    _contactCdKeys[oldest] = key; _contactCdUntil[oldest] = until;
+  }
+  /** kind: "bump" | "scrape" | "squeal". impact 0..1. wx/wz world metres. carKey for cooldown. */
+  function fieldContact(kind, impact, wx, wz, carKey) {
+    if (!sfxOk() || !engineOn || !fieldArmed || !contactVoices.length) {
+      contactDeniedGate++; return false;
+    }
+    const t = now();
+    const key = carKey | 0;
+    if (contactCdHit(key, t)) { contactDeniedCd++; return false; }
+    let pan = 0, dist = CONTACT_REF;
+    const basis = typeof GameCams !== "undefined" && GameCams.getListenerBasis
+      ? GameCams.getListenerBasis() : null;
+    if (basis && wx != null && wz != null && isFinite(+wx) && isFinite(+wz)) {
+      const dx = +wx - basis.x, dz = +wz - basis.z;
+      dist = Math.hypot(dx, dz);
+      const lat = dx * basis.rightX + dz * basis.rightZ;
+      const arc = dx * basis.fwdX + dz * basis.fwdZ;
+      pan = rivalPanPlayerFrame(lat, arc);
+    }
+    if (!(dist < CONTACT_RANGE)) { contactDeniedGate++; return false; }
+    let v = null;
+    for (let i = 0; i < contactVoices.length; i++) {
+      if (contactVoices[i].freeAt <= t) { v = contactVoices[i]; break; }
+    }
+    if (!v) { contactDeniedCap++; return false; }
+    const k = clamp01(impact != null ? impact : 0.5);
+    const near = CONTACT_REF / (CONTACT_REF + 1.15 * Math.max(0, dist - CONTACT_REF));
+    const kd = kind || "bump";
+    let peak, attack, decay, freq, q, fType;
+    if (kd === "scrape") {
+      peak = 0.10 + 0.16 * k; attack = 0.02; decay = 0.18 + 0.12 * k;
+      freq = 2400; q = 1.2; fType = "bandpass";
+    } else if (kd === "squeal") {
+      peak = 0.08 + 0.14 * k; attack = 0.01; decay = 0.12 + 0.10 * k;
+      freq = 1800 + 600 * k; q = 6; fType = "bandpass";
+    } else {
+      peak = 0.16 + 0.22 * k; attack = 0.005; decay = 0.14 + 0.12 * k;
+      freq = 420 + 180 * k; q = 0.9; fType = "lowpass";
+    }
+    peak *= near * 0.9;
+    if (!(peak > 0.001)) return false;
+    v.filt.type = fType;
+    v.filt.Q.value = q;
+    v.filt.frequency.cancelScheduledValues(t);
+    v.filt.frequency.setValueAtTime(freq, t);
+    v.osc.type = kd === "squeal" ? "triangle" : kd === "scrape" ? "sawtooth" : "sine";
+    v.osc.frequency.cancelScheduledValues(t);
+    v.osc.frequency.setValueAtTime(kd === "bump" ? Math.max(55, freq * 0.35) : freq * 0.55, t);
+    v.pan.pan.cancelScheduledValues(t);
+    v.pan.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), t);
+    env(v.gain, t, peak, attack, decay);
+    v.freeAt = t + attack + decay + 0.05;
+    contactCdMark(key, t);
+    contactFired++;
+    return true;
+  }
+  function fieldContactState() {
+    return {
+      armed: fieldArmed,
+      voices: contactVoices.length,
+      live: contactVoices.filter((v) => v.freeAt > now()).length,
+      fired: contactFired,
+      deniedCd: contactDeniedCd,
+      deniedCap: contactDeniedCap,
+      deniedGate: contactDeniedGate,
+      cooldown: CONTACT_COOLDOWN,
+    };
   }
   function offtrack() {
     noise(0.14, 0.14, 480);
@@ -2740,6 +2880,8 @@ var GameAudio = (function () {
     setProfile,
     setLayer,
     setRivals,
+    fieldContact,
+    fieldContactState,
     setVenue,
     venue() { return { name: venueName, level: revReturn ? +revReturn.gain.value.toFixed(4) : 0, decay: venue.decay }; },
     // Test hooks: each rival voice's live pan/level/pitch. They sit behind their

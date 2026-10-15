@@ -1,7 +1,7 @@
 /* Pit-work arrival: a render-clock sequence, independent of race simulation. */
 const GarageArrival = (function () {
   "use strict";
-  const DURATION = 6.4, DOOR_S = 1.8;
+  const DOOR_S = 1.8;
   const ease = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
   const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54 });
   function settings(value) {
@@ -59,60 +59,90 @@ const GarageArrival = (function () {
     refresh();
     return read;
   }
-  function pose(seconds, config = DEFAULT) {
+  /* ONE PATH, BOTH WAYS. The drive-out leaves the box along it (straight out of
+   * the door to OUT_STRAIGHT, a quarter arc of OUT_R metres into the lane, then
+   * down the lane); the arrival runs the lane the other way, stops just past the
+   * box, and backs in along the same arc, the way a crew pushes a car back into
+   * its garage. side +1 / -1 is the lane direction away from the camera's eye
+   * (x and yaw ride the pose; setup-camera.js builds the car matrix from them). */
+  const OUT_STRAIGHT = 8, OUT_R = 5, OUT_TURN = Math.PI / 2, OUT_PATH = OUT_STRAIGHT + OUT_R * OUT_TURN;
+  function pathAt(s, side) {
+    const th = Math.min(OUT_TURN, Math.max(0, s - OUT_STRAIGHT) / OUT_R), past = Math.max(0, s - OUT_PATH);
+    const z = (s < OUT_STRAIGHT ? Math.max(0, s) : OUT_STRAIGHT + OUT_R * Math.sin(th)) + past * Math.cos(th);
+    return { x: side * (OUT_R * (1 - Math.cos(th)) + past * Math.sin(th)), z, yaw: side * th };
+  }
+  const EYE_L = [-3.8, 2.1, -4.8], EYE_R = [4.1, 2.25, -4.9];
+  // HANDHELD: a slow, small sway on both shots, as if someone were filming from
+  // the back of the bay. Off when `calm` (reduce motion); timing never changes.
+  function shot(out, eye, aim, t, calm) {
+    out.eye = eye.slice(); out.aim = aim;
+    if (calm) return out;
+    out.eye[0] += 0.022 * Math.sin(1.3 * t) + 0.010 * Math.sin(3.1 * t + 1);
+    out.eye[1] += 0.014 * Math.sin(1.7 * t + 2);
+    aim[0] += 0.028 * Math.sin(0.9 * t + 0.5); aim[1] += 0.018 * Math.sin(1.2 * t + 1.3);
+    return out;
+  }
+  // THE ARRIVAL (WORK ON CAR): the shutter opens (DOOR_S) on an empty lane, the
+  // car comes up the lane past the box (IN_LANE s, braking to a stop IN_LANE_M
+  // metres along, just past the door and in view), sits a beat, then backs in
+  // along the drive-out's own arc (IN_BACK s) and parks, nose to the pit lane.
+  const IN_LANE = 2.6, IN_LANE_M = 22, IN_PAUSE = 0.4, IN_BACK = 3.6;
+  const DURATION = DOOR_S + IN_LANE + IN_PAUSE + IN_BACK + 0.3;
+  function pose(seconds, config = DEFAULT, calm = false) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
-    const travel = ease((t - DOOR_S) / 4.2);
     const left = config.angle === "left" || (config.angle !== "right" && t < DOOR_S);
-    // Reverse into the bay, nose facing the pit lane, as the parked preview is.
-    const z = 11.4 * (1 - travel);
-    return { active: t < DURATION, fov: config.fov, door: ease(t / DOOR_S), z,
-      label: t < DOOR_S ? "OPENING GARAGE" : t < 6 ? "BRINGING CAR IN" : "READY FOR WORK",
+    const side = config.angle === "left" ? 1 : -1;   // away from the eye that watches it in (after the door)
+    const u = Math.max(0, Math.min(1, (t - DOOR_S) / IN_LANE)), lane = IN_LANE_M * (1 - (1 - u) * (1 - u));
+    const back = ease((t - DOOR_S - IN_LANE - IN_PAUSE) / IN_BACK);
+    const p = back > 0 ? pathAt(OUT_PATH * (1 - back), side)
+      : { x: side * (OUT_R + lane - IN_LANE_M), z: OUT_STRAIGHT + OUT_R, yaw: side * OUT_TURN };
+    return shot({ active: t < DURATION, fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+      label: t < DOOR_S ? "OPENING GARAGE" : t < DURATION - 0.3 ? "BRINGING CAR IN" : "READY FOR WORK" },
       // Interior versions of garage-angles' bay/rear three-quarter framings.
       // A cut after the shutter opens keeps both eyes behind the threshold.
-      eye: left ? [-3.8, 2.1, -4.8] : [4.1, 2.25, -4.9],
-      aim: [0, 0.8, t < DOOR_S ? 6.2 : z * 0.48 + 0.8] };
+      left ? EYE_L : EYE_R,
+      [Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < DOOR_S ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)], t, calm);
   }
   /* THE DRIVE-OUT: the arrival in reverse, opening every RACE! while the circuit
-   * builds (js/game.js studioOpen). Mirror the pit-work IN beat: the shutter
-   * opens first (DOOR_S), the car sits a beat, then rolls out nose first and
-   * on out of the door while the camera, at the arrival's interior three-quarter,
-   * follows it. No circuit is needed — this is the setup screen's own room —
-   * so it plays the moment START is pressed, while the circuit builds behind it.
-   * ONCE OUT IT TURNS INTO THE PIT LANE: straight to OUT_STRAIGHT (clear of the
-   * door at z 6.4), then an arc of OUT_R metres through OUT_TURN radians, away
-   * from the camera so the car sweeps across the doorway rather than out of it.
-   * x and yaw ride the pose (setup-camera.js builds the car matrix from them). */
-  const OUT_HOLD = 1.1, OUT_RUN = 4.4, OUT_DURATION = DOOR_S + OUT_HOLD + OUT_RUN + 0.3;
-  // Reduce-motion Start Race plays it too, AT THE TUNER'S PACE: the 4x short cut
-  // (~1.9 s) read as a glitch, not a leave (2026-10-09), and the card, the flyby
-  // and the announcer always follow it (js/ui/loading-screen.js run).
-  const OUT_STRAIGHT = 8, OUT_R = 5, OUT_TURN = 1.3;   // ~75 degrees
-  // PACE: it pulls away (OUT_ACCEL s), holds its speed through the turn, and leaves
-  // it still rolling, then coasts OUT_COAST m on down the pit lane and eases to a
-  // stop, so the shot is still moving while RACE!'s load finishes behind it
-  // (studioDone holds the garage past OUT_DURATION).
-  const OUT_PATH = OUT_STRAIGHT + OUT_R * OUT_TURN, OUT_ACCEL = 1.2, OUT_COAST = 2.5;
-  const OUT_V = OUT_PATH / (OUT_RUN - OUT_ACCEL / 2), OUT_TAU = OUT_COAST / OUT_V;
-  const OUT_SETTLE = DOOR_S + OUT_HOLD + OUT_RUN + 4 * OUT_TAU;   // the coast's end (98 %): the pose holds from here
+   * builds (js/game.js studioOpen). The shutter opens first (DOOR_S), the car sits
+   * a beat, then rolls out nose first, sweeps across the doorway into the lane
+   * and goes on down it at the PIT LIMITER — the speed it turned in at, no
+   * launch — so it is seen leaving (~1.4 s in the doorway's view, 2026-10-14)
+   * before the garage's front wall hides it. No circuit is needed — this is the
+   * setup screen's own room — so it plays the moment START is pressed.
+   * Reduce-motion Start Race plays it too, AT THE TUNER'S PACE: the 4x short cut
+   * (~1.9 s) read as a glitch, not a leave (2026-10-09), and the card, the flyby
+   * and the announcer always follow it (js/ui/loading-screen.js run). */
+  const OUT_HOLD = 1.1, OUT_RUN = 5.0, OUT_ACCEL = 1.2, OUT_EXIT_M = 8.5;
+  const OUT_V = OUT_PATH / (OUT_RUN - OUT_ACCEL / 2), OUT_EXIT = OUT_EXIT_M / OUT_V;
+  const OUT_SETTLE = DOOR_S + OUT_HOLD + OUT_RUN + OUT_EXIT;   // gone behind the wall: the car holds from here
+  const OUT_DURATION = OUT_SETTLE + 0.3;                         // a beat on the empty lane
+  // THE EMPTY-LANE HOLD: studioDone keeps this shot up past OUT_DURATION until
+  // RACE!'s load is done (seconds on a slow phone). A slow push toward the
+  // doorway (HOLD_PUSH m, easing out over ~HOLD_TAU s) keeps it a shot, not a
+  // stalled frame; the aim drifts from the jamb back to the lane. Not when calm.
+  const HOLD_PUSH = 2.2, HOLD_TAU = 4;
   function outDistance(tm) {
     if (tm <= 0) return 0;
     if (tm < OUT_ACCEL) return OUT_V * tm * tm / (2 * OUT_ACCEL);
-    if (tm < OUT_RUN) return OUT_V * (tm - OUT_ACCEL / 2);
-    return OUT_PATH + OUT_COAST * (1 - Math.exp(-(tm - OUT_RUN) / OUT_TAU));
+    return OUT_V * (Math.min(tm, OUT_RUN + OUT_EXIT) - OUT_ACCEL / 2);
   }
-  function poseOut(seconds, config = DEFAULT) {
+  function poseOut(seconds, config = DEFAULT, calm = false) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
     const right = config.angle === "right", side = right ? -1 : 1;   // turn away from the eye
     const opening = t < DOOR_S;
-    const door = ease(t / DOOR_S);
-    const s = outDistance(Math.min(t, OUT_SETTLE) - DOOR_S - OUT_HOLD);   // path after the door + hold
-    const th = Math.min(OUT_TURN, Math.max(0, s - OUT_STRAIGHT) / OUT_R), past = Math.max(0, s - OUT_PATH);
-    const z = (s < OUT_STRAIGHT ? s : OUT_STRAIGHT + OUT_R * Math.sin(th)) + past * Math.cos(th);
-    const x = side * (OUT_R * (1 - Math.cos(th)) + past * Math.sin(th)), yaw = side * th;
-    return { active: t < OUT_DURATION, fov: config.fov, door, x, z, yaw,
-      label: opening ? "OPENING GARAGE" : "LEAVING THE GARAGE",
-      eye: right ? [4.1, 2.25, -4.9] : [-3.8, 2.1, -4.8],
-      aim: [x * 0.7, 0.8, opening ? 6.2 : Math.min(9, 1.2 + z * 0.62)] };
+    const p = pathAt(outDistance(Math.min(t, OUT_SETTLE) - DOOR_S - OUT_HOLD), side);
+    const eye = right ? EYE_R : EYE_L;
+    // The aim follows it round to the jamb and holds on the doorway as it goes.
+    const aim = [side * Math.min(side * p.x * 0.7, 3.5), 0.8, opening ? 6.2 : Math.min(9, 1.2 + p.z * 0.62)];
+    let e = eye;
+    if (!calm && t > OUT_SETTLE) {
+      const k = 1 - Math.exp(-(t - OUT_SETTLE) / HOLD_TAU);
+      e = [eye[0] * (1 - 0.25 * k), eye[1] - 0.25 * k, eye[2] + HOLD_PUSH * k];
+      aim[0] -= side * 2.2 * k;
+    }
+    return shot({ active: t < OUT_DURATION, fov: config.fov, door: ease(t / DOOR_S), x: p.x, z: p.z, yaw: p.yaw,
+      label: opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm);
   }
   function create($, reducedMotion, readSettings = () => DEFAULT) {
     let state = null, time = 0, config = DEFAULT;
