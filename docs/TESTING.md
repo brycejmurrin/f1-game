@@ -1663,6 +1663,7 @@ what it covers.
 | `meeting-picker-labels.test.mjs` | OpenF1 meeting picker labels stay unique when `meeting_name` collides — circuit suffix, then YYYY-MM-DD |
 | `data-lazy-loader.test.mjs` | Failed predecessor scripts stop before DataHub initialization and successful siblings are retained across retry |
 | `data-api-status.test.mjs` | a `"null"` error body still throws with `.status` attached, so a 401/403 lockout can never serve stale cache |
+| `data-export.test.mjs` | Data Hub EXPORT (`js/data/export.js`) against the OpenF1 fixture in `tests/helpers/f1-api-mock.js`: Gather then Download on the real `F1API`, the ZIP unzipped in Node — file list (`startlines-<year>.json` plus one `img/<circuit>.png` per captured circuit), stored sizes and CRC-32 in the local and central headers, every JSON file parsing to `{year, generatedAt, circuits}` with each circuit's trace/sf/driver/lap shape, an empty meetings body still producing a valid archive with `circuits: {}`, a location body that never yields a lap logging `no lap/loc` and still zipping, and a failed fetch leaving Download disabled with an ERROR status |
 | `audio-smoke.spec.js` | the WebAudio engine/sfx initialise and respond, objectively |
 | `music-library.spec.js` | the bring-your-own-music library and the Spotify backend |
 | `spotify-refresh.test.mjs` | Spotify refresh single-flight, retry preservation, rotated-token ownership, and terminal revocation |
