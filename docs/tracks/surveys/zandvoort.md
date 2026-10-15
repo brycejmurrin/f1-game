@@ -5,7 +5,7 @@
 **Design brief:** `docs/tracks/zandvoort.md`  
 **Shots (36 JPEGs, q≈80, ≤1280px wide):** `artifacts/shots/tracks/zandvoort/` (`git add -f`; fleet gitignore exception pending)
 
-> **Tooling note:** Weather/time-of-day batch capture used a **local WIP** `shot.mjs` patch during one background run; shared edits were **reverted** per fleet policy (`tools: shared shot tooling for circuit surveys`). After rebasing that PR, re-run **4–6 hero weather frames** with the supported harness (dawn + full matrix on ferris / Hugenholtz / Scheivlak / Luyendyk).
+> **Capture:** `node tools/shot/shot.mjs --batch scratch/zandvoort-survey-final.json --jpeg --present-timeout 90 --capture-retries 4 --wait 120` on merged `cursor/shared-shot-tooling-5b45` (SwiftShader default).
 
 ## Code map
 
@@ -60,38 +60,38 @@ Caption row: **view** · time of day · weather. Paths relative to this file.
 
 | | | |
 |:---:|:---:|:---:|
-| ![ferris](../../../artifacts/shots/tracks/zandvoort/dusk__dry/wx-dusk-01-ferris.jpg) | ![tarzan](../../../artifacts/shots/tracks/zandvoort/dusk__dry/wx-dusk-02-tarzan.jpg) | ![hugenholtz](../../../artifacts/shots/tracks/zandvoort/dusk__dry/wx-dusk-03-hugenholtz.jpg) |
-| **ferris** · dusk · dry | **tarzan** · dusk · dry | **hugenholtz** · dusk · dry |
+| ![ferris orbit](../../../artifacts/shots/tracks/zandvoort/dawn__dry/wx-dawn-01-ferris-orbit.jpg) | ![tarzan park](../../../artifacts/shots/tracks/zandvoort/dawn__dry/wx-dawn-02-tarzan-park.jpg) | ![hugenholtz bank](../../../artifacts/shots/tracks/zandvoort/dawn__dry/wx-dawn-03-hugenholtz-bank.jpg) |
+| **ferris orbit** · dawn · dry | **tarzan park** · dawn · dry | **hugenholtz bank** · dawn · dry |
 
 | | | |
 |:---:|:---:|:---:|
-| ![scheivlak sea](../../../artifacts/shots/tracks/zandvoort/dusk__dry/wx-dusk-04-scheivlak-sea.jpg) | ![luyendyk](../../../artifacts/shots/tracks/zandvoort/dusk__dry/wx-dusk-05-luyendyk.jpg) | ![pit ferris](../../../artifacts/shots/tracks/zandvoort/night__dry/wx-night-01-pit-ferris.jpg) |
-| **scheivlak sea** · dusk · dry | **luyendyk** · dusk · dry | **pit ferris** · night · dry |
+| ![scheivlak sea](../../../artifacts/shots/tracks/zandvoort/dawn__dry/wx-dawn-04-scheivlak-sea.jpg) | ![luyendyk bank](../../../artifacts/shots/tracks/zandvoort/dawn__dry/wx-dawn-05-luyendyk-bank.jpg) | ![ferris orbit](../../../artifacts/shots/tracks/zandvoort/dusk__dry/wx-dusk-ferris-orbit.jpg) |
+| **scheivlak sea** · dawn · dry | **luyendyk bank** · dawn · dry | **ferris orbit** · dusk · dry |
 
 | | | |
 |:---:|:---:|:---:|
-| ![fanzone](../../../artifacts/shots/tracks/zandvoort/night__dry/wx-night-02-fanzone.jpg) | ![hugenholtz](../../../artifacts/shots/tracks/zandvoort/night__dry/wx-night-03-hugenholtz.jpg) | ![scheivlak stand](../../../artifacts/shots/tracks/zandvoort/night__dry/wx-night-04-scheivlak-stand.jpg) |
-| **fanzone** · night · dry | **hugenholtz** · night · dry | **scheivlak stand** · night · dry |
+| ![ferris orbit](../../../artifacts/shots/tracks/zandvoort/night__dry/wx-night-ferris-orbit.jpg) | ![hugenholtz bank](../../../artifacts/shots/tracks/zandvoort/dusk__dry/wx-dusk-hugenholtz-bank.jpg) | ![hugenholtz bank](../../../artifacts/shots/tracks/zandvoort/night__dry/wx-night-hugenholtz-bank.jpg) |
+| **ferris orbit** · night · dry | **hugenholtz bank** · dusk · dry | **hugenholtz bank** · night · dry |
 
 | | | |
 |:---:|:---:|:---:|
-| ![luyendyk](../../../artifacts/shots/tracks/zandvoort/night__dry/wx-night-05-luyendyk.jpg) | ![tarzan](../../../artifacts/shots/tracks/zandvoort/day__overcast/wx-overcast-01-tarzan.jpg) | ![midlap](../../../artifacts/shots/tracks/zandvoort/day__overcast/wx-overcast-02-midlap.jpg) |
-| **luyendyk** · night · dry | **tarzan** · day · overcast | **midlap** · day · overcast |
+| ![scheivlak sea](../../../artifacts/shots/tracks/zandvoort/dusk__dry/wx-dusk-scheivlak-sea.jpg) | ![scheivlak sea](../../../artifacts/shots/tracks/zandvoort/night__dry/wx-night-scheivlak-sea.jpg) | ![luyendyk bank](../../../artifacts/shots/tracks/zandvoort/dusk__dry/wx-dusk-luyendyk-bank.jpg) |
+| **scheivlak sea** · dusk · dry | **scheivlak sea** · night · dry | **luyendyk bank** · dusk · dry |
 
 | | | |
 |:---:|:---:|:---:|
-| ![lighthouse](../../../artifacts/shots/tracks/zandvoort/day__overcast/wx-overcast-03-lighthouse.jpg) | ![tarzan](../../../artifacts/shots/tracks/zandvoort/day__wet/wx-wet-01-tarzan.jpg) | ![scheivlak](../../../artifacts/shots/tracks/zandvoort/day__wet/wx-wet-03-scheivlak.jpg) |
-| **lighthouse** · day · overcast | **tarzan** · day · wet | **scheivlak** · day · wet |
+| ![luyendyk bank](../../../artifacts/shots/tracks/zandvoort/night__dry/wx-night-luyendyk-bank.jpg) | ![hugenholtz bank](../../../artifacts/shots/tracks/zandvoort/day__overcast/wx-overcast-hugenholtz-bank.jpg) | ![luyendyk bank](../../../artifacts/shots/tracks/zandvoort/day__wet/wx-wet-luyendyk-bank.jpg) |
+| **luyendyk bank** · night · dry | **hugenholtz bank** · day · overcast | **luyendyk bank** · day · wet |
 
 | | | |
 |:---:|:---:|:---:|
-| ![luyendyk](../../../artifacts/shots/tracks/zandvoort/day__wet/wx-wet-04-luyendyk.jpg) | ![scheivlak](../../../artifacts/shots/tracks/zandvoort/day__rain/wx-rain-01-scheivlak.jpg) | ![pitstraight](../../../artifacts/shots/tracks/zandvoort/day__rain/wx-rain-02-pitstraight.jpg) |
-| **luyendyk** · day · wet | **scheivlak** · day · rain | **pitstraight** · day · rain |
+| ![scheivlak sea](../../../artifacts/shots/tracks/zandvoort/day__rain/wx-rain-scheivlak-sea.jpg) | ![ferris orbit](../../../artifacts/shots/tracks/zandvoort/day__fog/wx-fog-ferris-orbit.jpg) | ![scheivlak sea](../../../artifacts/shots/tracks/zandvoort/day__fog/wx-fog-scheivlak-sea.jpg) |
+| **scheivlak sea** · day · rain | **ferris orbit** · day · fog | **scheivlak sea** · day · fog |
 
 | | | |
 |:---:|:---:|:---:|
-| ![sea peek](../../../artifacts/shots/tracks/zandvoort/day__fog/wx-fog-01-sea-peek.jpg) | ![ferris](../../../artifacts/shots/tracks/zandvoort/day__fog/wx-fog-02-ferris.jpg) | ![watertoren](../../../artifacts/shots/tracks/zandvoort/day__fog/wx-fog-03-watertoren.jpg) |
-| **sea peek** · day · fog | **ferris** · day · fog | **watertoren** · day · fog |
+| ![ferris orbit](../../../artifacts/shots/tracks/zandvoort/day__storm/wx-storm-ferris-orbit.jpg) | ![luyendyk bank](../../../artifacts/shots/tracks/zandvoort/day__storm/wx-storm-luyendyk-bank.jpg) | ![scheivlak sea](../../../artifacts/shots/tracks/zandvoort/day__storm/wx-storm-scheivlak-sea.jpg) |
+| **ferris orbit** · day · storm | **luyendyk bank** · day · storm | **scheivlak sea** · day · storm |
 
 ## Findings & backlog
 
@@ -111,11 +111,11 @@ Caption row: **view** · time of day · weather. Paths relative to this file.
 | ID | Issue | Seen in | Risk to fix |
 |----|--------|---------|-------------|
 | W1 | **Night:** hand `every(35)` lamp posts emit geometry but **no lamp gate** — masts are dark; grandstand emissive strips help only near stands | `wx-night-*` | Medium — needs `lampPost` / lighting-tuner pass, not a one-line scenery tweak |
-| W2 | **Fog:** `def.pal.fogDensity` coastal haze vs `wx=fog` sky — sea band can look **same tone** as sky (low separation) | `wx-fog-01` | Low — palette tune in def `pal` only |
+| W2 | **Fog:** `def.pal.fogDensity` coastal haze vs `wx=fog` sky — sea band can look **same tone** as sky (low separation) | `wx-fog-scheivlak-sea` | Low — palette tune in def `pal` only |
 | W3 | **Wet/rain:** tarmac darkening OK; **dune sand does not read wet** (expected — no wet shader on props) | `wx-wet-*`, `wx-rain-*` | Low / optional wet tint on sand boxes |
 | W4 | **Dusk:** strong; no issue filed | `wx-dusk-*` | — |
 | W5 | **Trackside camera** can clip inside grandstand shell (Hugenholtz) — shot recipe, not mesh | `s1-05` | Info |
-| W6 | **Dawn** frames deferred until shared shot batch (not in 36-frame cap) | — | Re-capture after tooling PR |
+| W7 | **Storm:** heavy sky read; track wetness visible on tarmac | `wx-storm-*` | Info |
 
 ### Ranked future work (circuit-scoped)
 
