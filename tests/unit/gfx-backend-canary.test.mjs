@@ -2476,13 +2476,9 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   const post = code("js/render/three/tlx-post.js");
   assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
   assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
-  // ForceGL / WebGL2 path: readPixels must not run in the Promise executor —
-  // Appearance's MutationObserver → previewScene used to freeze 10–15 s on that
-  // turn under llvmpipe (2026-10-05). setTimeout(run, 0) yields one macrotask.
-  const capBody = fnBody(tlx, "capturePixels");
-  assert.match(capBody, /setTimeout\s*\(\s*run\s*,\s*0\s*\)/,
-    "WebGL capturePixels defers sync readPixels off the caller's turn");
-  assert.match(capBody, /gl\.readPixels/, "the deferred run still readPixels");
+  // WebGL2 readback timing/state/cleanup are exercised against the production
+  // capture method in renderer-soft-lifecycle. The old timer + client-memory
+  // readPixels pin only deferred a synchronous GPU stall to another turn.
   assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
   assert.match(fnBody(tlx, "softPresentState"), /\bon:\s*!!\s*_softBlit\b/,
     "softPresentState must be OWN so descriptor-copy does not keep GLX's");
