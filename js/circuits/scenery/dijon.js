@@ -488,7 +488,7 @@
       fenceRun(0.390, 0.478, -1, 26, 1.6, WOOD);
       marshalPost(K(0.466), -1, 16);
       treeAt(0.410, 1, 48, 9.4, FOL);
-      treeAt(0.462, 1, 52, 8.0, FOL_Y);
+      treeAt(0.462, 1, 60, 8.0, FOL_Y);  // was 52: clip vs Villeroy timing box (frac ~0.466)
       bushAt(0.440, 1, 40, FOL_D);
       field(0.424, 1, 72, 34, 46, STUB);
       field(0.458, -1, 62, 36, 50, WHEAT);
@@ -635,7 +635,7 @@
 
       every(30, (k) => {
         const h = hash(k * 37);
-        if (h < 0.50) return;                       // half the slots, no more
+        if (h < 0.54) return;                       // thinned: was 0.50; esses clip @~0.609
         const side = hash(k * 71) < 0.5 ? -1 : 1;
         const dist = 34 + hash(k * 13) * 54;        // well back off the road
         const a = anchor(k, side, dist);
@@ -657,9 +657,8 @@
         [0.228, 0.274,  1, 66], [0.448, 0.498, -1, 54],
         [0.558, 0.612, -1, 68], [0.666, 0.710,  1, 58],
         [0.794, 0.844, -1, 64], [0.298, 0.348, -1, 80],
-        [0.140, 0.190,  1, 96], [0.520, 0.568, -1, 58],
         [0.736, 0.782,  1, 64], [0.036, 0.082, -1, 90],
-        [0.196, 0.246, -1, 100], [0.560, 0.606,  1,  78],
+        [0.196, 0.246, -1, 100],
         [0.372, 0.420,  1,  66], [0.652, 0.698,  1,  48],
         [0.934, 0.980,  1,  62],
       ]) hedgeRun(s0, s1, side, gap, 1.7 + hash(Math.round(s0 * 1000)) * 0.6,
@@ -728,10 +727,9 @@
 
       // Rapeseed parcels: the one strong colour accent on the slope, used
       // sparingly so the patchwork still reads as dry summer Burgundy.
-      // 0.144 sits at gap 78: from 104 it lay over the 0.150 wheat field in the
-      // same drape residue, two tops in one plane (0.0 mm, coplanar-audit).
+      // 0.144 rapeseed gap 92: 78–104 shared a drape plane with 0.150 wheat.
       for (const [s, side, gap, w, d] of [
-        [0.144, -1,  78, 42, 56], [0.330,  1,  86, 38, 50],
+        [0.144, -1,  92, 42, 56], [0.330,  1,  86, 38, 50],
         [0.520, -1, 118, 44, 58], [0.658,  1,  92, 40, 54],
         [0.882, -1, 112, 42, 56],
       ]) field(s, side, gap, w, d, RAPE);
