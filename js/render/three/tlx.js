@@ -2695,10 +2695,40 @@ const TLX = (function () {
       // compile left on the WebGPU lap (PERF-FINDINGS §2ah).
       // Compile each FX material once on its
       // stream's real vertex layout, under the scene target and MRT the warm has
-      // already set; the throwaway Mesh is dropped, the stream geometry kept.
+      // already set; warm probes are reused until their stream geometry/material is released.
       // apex26.tlxWarmFx=0 is the A/B handle.
       let _warmFx = true;
       try { _warmFx = localStorage.getItem("apex26.tlxWarmFx") !== "0"; } catch (_) { /* no storage: warm them */ }
+      // Reuse warm-only render objects so their pipelines stay cached, without minting another listener per race.
+      // Their geometry/material owns the probes. A release during compile waits until that compiler is done.
+      const _warmProbes = new WeakMap();
+      async function compileWarmProbe(geo, mat, sx = 1) {
+        let mats = _warmProbes.get(geo);
+        if (!mats) _warmProbes.set(geo, mats = new Map());
+        let p = mats.get(mat);
+        if (!p) {
+          p = { meshes: new Map(), pending: 0, dead: false };
+          p.release = () => {
+            if (!p.dead) {
+              p.dead = true; mats.delete(mat);
+              geo.removeEventListener("dispose", p.release); mat.removeEventListener("dispose", p.release);
+            }
+            if (p.pending) return;
+            for (const m of p.meshes.values()) { m.dispose(); m.geometry = null; m.material = null; }
+            p.meshes.clear();
+          };
+          mats.set(mat, p);
+          geo.addEventListener("dispose", p.release); mat.addEventListener("dispose", p.release);
+        }
+        let m = p.meshes.get(sx);
+        if (!m) {
+          m = new THREE.Mesh(geo, mat); m.frustumCulled = false;
+          m.scale.x = sx; m.updateMatrixWorld(true); p.meshes.set(sx, m);
+        }
+        p.pending++;
+        try { await renderer.compileAsync(m, camera, scene); }
+        finally { if (!--p.pending && p.dead) p.release(); }
+      }
       async function warmFxPrograms() {
         if (!_warmFx || !fx) return;
         const jobs = [[skidStream, fx.skidMat], [partStreams[0], fx.particleMats && fx.particleMats[0]],
@@ -2706,9 +2736,7 @@ const TLX = (function () {
         for (const [stream, mat] of jobs) {
           if (!mat) continue;
           ensureStream(stream, 1);
-          const m = new THREE.Mesh(stream.geo, mat);
-          m.frustumCulled = false;
-          await renderer.compileAsync(m, camera, scene);
+          await compileWarmProbe(stream.geo, mat);
         }
         // The instanced blob program (A6) and decal runs (F3), if none was on screen for the scene warm.
         for (const run of [_blob, ..._decalRuns.values()]) {
@@ -2740,6 +2768,7 @@ const TLX = (function () {
       // layout in the pool like the ring above. apex26.fieldLod=0 skips them.
       const _LATE_FX = [{ roughness: 1, specular: 0, noAlphaWrite: true, alpha: 0.5 },
         { roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 }];
+      let _lateFxGeo = null;   // one tiny HDR quad for every entry warm, like the mirror-glass probe
       const _lateFxOn = () => typeof FieldLod === "undefined" || FieldLod.on;
       function _layoutKey(g) {
         let k = g.index ? g.index.array.constructor.name : "-";
@@ -2782,22 +2811,16 @@ const TLX = (function () {
           // parts (the brake ring among them) through a mirrored matrix — the
           // one field the lap's pipeline key differed in (probe, field 27).
           for (const g of geos.values()) for (const sx of [1, -1]) {
-            const m = new THREE.Mesh(g, mat);
-            m.frustumCulled = false;
-            m.scale.x = sx; m.updateMatrixWorld(true);
-            await renderer.compileAsync(m, camera, scene);
+            await compileWarmProbe(g, mat, sx);
           }
         }
         if (!_lateFxOn()) return;
-        const quad = buildGeometry({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
-          col: [2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25], idx: [0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3] });   // HDR colour: packAttr keeps it float, as on the real flame
+        const quad = _lateFxGeo || (_lateFxGeo = buildGeometry({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
+          col: [2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25], idx: [0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3] }));   // HDR colour: packAttr keeps it float, as on the real flame
         for (const o of _LATE_FX) {
           const mat = materialFor(o, false, false);
           for (const sx of [1, -1]) {
-            const m = new THREE.Mesh(quad, mat);
-            m.frustumCulled = false;
-            m.scale.x = sx; m.updateMatrixWorld(true);
-            await renderer.compileAsync(m, camera, scene);
+            await compileWarmProbe(quad, mat, sx);
           }
         }
         _warmStages.lateFx = _LATE_FX.length;
@@ -2940,10 +2963,7 @@ const TLX = (function () {
           }
           const gm = fx.mirrorGlassMaterial(mirRT.texture);
           for (const sx of [1, -1]) {
-            const m = new THREE.Mesh(_glassProbeGeo, gm);
-            m.frustumCulled = false;
-            m.scale.x = sx; m.updateMatrixWorld(true);
-            await renderer.compileAsync(m, camera, scene);
+            await compileWarmProbe(_glassProbeGeo, gm, sx);
           }
         }
         if (post.warmMirror) await post.warmMirror(mirRT.texture);
