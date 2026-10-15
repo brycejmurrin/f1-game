@@ -209,4 +209,12 @@ Later the same day Bryce moved the deploy branch's protection to the single `CI`
 
 Then (same day, once `CI` was the one required check): every pull request's node plan lists only the needed slices (`--needed-only` on ready PRs too; a deploy push and the train keep all six rows for the train's reuse check), and the ready tier's browser legs queue per lane in GitHub — `selected` legs on 12 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a field of every matrix row, `select-specs.mjs` LANES) and smoke on one lane per shard index — so at most 12 selected legs and 1 smoke run fleet-wide at once and the rest wait FIFO without a runner; the train, the nightly and a dispatch get a group of their own per leg. `ready-full-cap.mjs` still bounds ready RUNS at the desk; the lanes bound LEGS in GitHub.
 
+The first train on the folded workflow (773bb047) went red on one `selected` leg, `oversize-career`: a 45 s boot timeout
+with the Bahrain menu backdrop not even started until 44.6 s, while the leg's second Playwright worker ran three track builds
+on the same 2-vCPU llvmpipe runner; 36 of 37 tests and both sibling career legs passed, and a per-change cost audit of the
+diff since the last green (the save-schema registry: 0.11 µs per store write, no validator or new gate before `__apex`)
+found no boot regression. The fat-UI specs (career, career-season, career-hub, hud-layout) now plan as at least two native
+`--shard` pieces of ONE worker each (`select-specs.mjs` FAT_UI_MIN_PIECES) instead of one two-worker leg: same wall time,
+every test owns its runner, one more job start per fat spec, bounded by the lanes.
+
 Re-measure with the same three numbers as §5 after a day of agent traffic.
