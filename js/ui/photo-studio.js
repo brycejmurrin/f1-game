@@ -203,7 +203,7 @@ function create(G, deps) {
         const bank = Tracks.banking ? Tracks.banking(G.track, c.s, c.x) : null;
         const y = sample.p[1] + (bank ? bank.dy : 0), fx = Math.sin(c.head), fz = Math.cos(c.head);
         fc.cmd({ eye: [c.px - fx * 9, y + 3.2, c.pz - fz * 9],
-          target: [c.px + fz * 3, y + 1, c.pz - fx * 3], fov });
+          target: [c.px - fz * 3, y + .5, c.pz + fx * 3], fov });
       } else fc.cmd(id === "corner" ? { snap: "corner" } : { snap: "car", fov });
     }
   }
