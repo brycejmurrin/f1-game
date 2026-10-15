@@ -150,9 +150,17 @@
       // segments), so a hill reads as a green mound, not peak()'s pyramid or
       // backdrop()'s flat-topped box. Same guard as peak(): clear the road's whole
       // built width. `bury` sinks the skirt below sloping ground.
-      const dome = (x, z, baseY, R, H, col, bury) => {
+      const dome = (x, z, baseY, R, H, col, bury, maxSlope) => {
         if (onTrack(x, z, R + 2.6)) return;
-        const y0 = baseY - bury, hh = H + bury;
+        const gy = terrainYAt(x, z);
+        if (maxSlope != null) {
+          if (gy == null) return;           // a mound on a steep slope buries its uphill side
+          for (let q = 0; q < 4; q++) {
+            const sy = terrainYAt(x + Math.cos(q * 1.5708) * R * 0.9, z + Math.sin(q * 1.5708) * R * 0.9);
+            if (sy != null && Math.abs(sy - gy) > maxSlope) return;
+          }
+        }                   // stand on the ground there, not on pyMin
+        const y0 = (gy != null ? gy : baseY) - bury, hh = H + bury;
         const hA = hh * 0.38, hB = hh * 0.80;          // sin 22 / 53 deg of the profile
         addFrustum(out, [x, y0, z], R, R * 0.93, hA, col, 8, null);
         addFrustum(out, [x, y0 + hA, z], R * 0.93, R * 0.6, hB - hA, col, 8, null);
@@ -182,7 +190,7 @@
       for (const [s, side, dist] of amphPts) {
         const hh = hash(Math.round(s * n) * 11 + side * 3);
         const ab = anchor(K(s), side, dist + 65);
-        dome(ab.c[0], ab.c[2], ab.c[1], 62 + hh * 14, 30 + hh * 10, hh < 0.5 ? AMPH : AMPH2, 6);
+        dome(ab.c[0], ab.c[2], ab.c[1], 62 + hh * 14, 30 + hh * 10, hh < 0.5 ? AMPH : AMPH2, 4, 2);
       }
 
       // Mid-ring tree-capped mounds at the amphitheatre bowl crest
