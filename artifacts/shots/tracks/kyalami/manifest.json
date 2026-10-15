@@ -1,0 +1,221 @@
+{
+  "count": 36,
+  "shots": [
+    {
+      "file": "HERO-crowthorne__day__fog.jpg",
+      "view": "Crowthorne T1",
+      "tod": "day",
+      "weather": "fog"
+    },
+    {
+      "file": "HERO-crowthorne__day__overcast.jpg",
+      "view": "Crowthorne T1",
+      "tod": "day",
+      "weather": "overcast"
+    },
+    {
+      "file": "HERO-crowthorne__day__rain.jpg",
+      "view": "Crowthorne T1",
+      "tod": "day",
+      "weather": "rain"
+    },
+    {
+      "file": "HERO-crowthorne__day__wet.jpg",
+      "view": "Crowthorne T1",
+      "tod": "day",
+      "weather": "wet"
+    },
+    {
+      "file": "HERO-crowthorne__dusk__dry.jpg",
+      "view": "Crowthorne T1",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "HERO-crowthorne__night__dry.jpg",
+      "view": "Crowthorne T1",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "HERO-headgear__day__fog.jpg",
+      "view": "Mine headgear",
+      "tod": "day",
+      "weather": "fog"
+    },
+    {
+      "file": "HERO-headgear__day__overcast.jpg",
+      "view": "Mine headgear",
+      "tod": "day",
+      "weather": "overcast"
+    },
+    {
+      "file": "HERO-headgear__day__rain.jpg",
+      "view": "Mine headgear",
+      "tod": "day",
+      "weather": "rain"
+    },
+    {
+      "file": "HERO-headgear__day__wet.jpg",
+      "view": "Mine headgear",
+      "tod": "day",
+      "weather": "wet"
+    },
+    {
+      "file": "HERO-headgear__dusk__dry.jpg",
+      "view": "Mine headgear",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "HERO-headgear__night__dry.jpg",
+      "view": "Mine headgear",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "HERO-pit__day__fog.jpg",
+      "view": "Pit complex",
+      "tod": "day",
+      "weather": "fog"
+    },
+    {
+      "file": "HERO-pit__day__overcast.jpg",
+      "view": "Pit complex",
+      "tod": "day",
+      "weather": "overcast"
+    },
+    {
+      "file": "HERO-pit__day__rain.jpg",
+      "view": "Pit complex",
+      "tod": "day",
+      "weather": "rain"
+    },
+    {
+      "file": "HERO-pit__day__wet.jpg",
+      "view": "Pit complex",
+      "tod": "day",
+      "weather": "wet"
+    },
+    {
+      "file": "HERO-pit__dusk__dry.jpg",
+      "view": "Pit complex",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "HERO-pit__night__dry.jpg",
+      "view": "Pit complex",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "HERO-start__day__fog.jpg",
+      "view": "Start straight",
+      "tod": "day",
+      "weather": "fog"
+    },
+    {
+      "file": "HERO-start__day__overcast.jpg",
+      "view": "Start straight",
+      "tod": "day",
+      "weather": "overcast"
+    },
+    {
+      "file": "HERO-start__day__rain.jpg",
+      "view": "Start straight",
+      "tod": "day",
+      "weather": "rain"
+    },
+    {
+      "file": "HERO-start__day__wet.jpg",
+      "view": "Start straight",
+      "tod": "day",
+      "weather": "wet"
+    },
+    {
+      "file": "HERO-start__dusk__dry.jpg",
+      "view": "Start straight",
+      "tod": "dusk",
+      "weather": "dry"
+    },
+    {
+      "file": "HERO-start__night__dry.jpg",
+      "view": "Start straight",
+      "tod": "night",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-01-start__day__dry.jpg",
+      "view": "Start / main straight (orbit)",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-02-main-gs__day__dry.jpg",
+      "view": "Main grandstand (trackside)",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-03-pit__day__dry.jpg",
+      "view": "Pit paddock (orbit)",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-04-crowthorne__day__dry.jpg",
+      "view": "T1 Crowthorne (chase)",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-05-jukskei__day__dry.jpg",
+      "view": "Jukskei Sweep",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-06-barbecue__day__dry.jpg",
+      "view": "Barbecue corner",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-07-headgear__day__dry.jpg",
+      "view": "Mine headgear (orbit)",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-08-climb__day__dry.jpg",
+      "view": "Climb iron terrace",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-09-leeukop__day__dry.jpg",
+      "view": "Leeukop high point",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-10-windpump__day__dry.jpg",
+      "view": "Windpump + dam",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-11-plunge__day__dry.jpg",
+      "view": "Plunge descent",
+      "tod": "day",
+      "weather": "dry"
+    },
+    {
+      "file": "SEC-12-horizon__day__dry.jpg",
+      "view": "Horizon / mine dumps (eye)",
+      "tod": "day",
+      "weather": "dry"
+    }
+  ]
+}
