@@ -72,6 +72,7 @@ Branch <code>cursor/mosport-survey-a1</code> &middot; base sha <code>432d348</co
 <li>Every frame is TLX on SwiftShader (no GPU). WGX and GLX were not compared, so backend-specific defects are unknown.</li>
 <li>Nothing here is evidence about a player's GPU. Frame reads are visual impressions from downscaled stills, not pixel assertions; I did not drive a lap, so motion artefacts (z-fighting, shimmer) are unassessed. coplanar-audit reports 0 spots.</li>
 <li>Defects 2, 3, 5, 6, 7 and 8 name a likely mechanism that I did not confirm by editing; the &ldquo;uncertain&rdquo; labels stand.</li>
+<li><b>Gallery build</b> (<code>node tools/track/build-gallery.cjs --out=scratch/gallery-out --no-fetch</code>, run after pushing): all 72 Mosport frames appear (144 manifest entries, i.e. each frame is listed twice, cause not traced). Two tooling issues: <code>--help</code> documents <code>--out DIR</code> but only <code>--out=DIR</code> works (the spaced form silently overwrote tracked <code>gallery/tracks/</code>, which I restored); and <code>storm</code> is missing from <code>WEATHER_TAIL</code>/<code>TOD_PREFIX</code> (<code>tools/track/build-gallery.cjs:41</code>, <code>survey-gallery-lib.cjs:9</code>), so storm frames parse as tod &ldquo;unknown&rdquo; with the tod left in the sector name.</li>
 <li>Real-world dimensions are source claims from the brief; no external web verification was done in this pass.</li>
 </ul>
 </main></body></html>
