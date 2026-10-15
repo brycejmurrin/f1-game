@@ -14,7 +14,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
-- Importing a setup, livery or Daily share code from Settings now opens its destination without leaving Settings over it.
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - Blue flags: letting one lapping car through no longer counts toward a penalty for the next one in the queue (#2163).
 - Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
@@ -28,6 +27,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
 - Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
 - A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
+- Importing a setup, livery or Daily share code from Settings now opens its destination without leaving Settings over it.
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
