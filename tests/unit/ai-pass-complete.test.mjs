@@ -31,6 +31,10 @@ const vTop = 72;
 // ~1.2 % pace edge (matches LEC<BOT baseline stuck pair)
 const us = 72 * 1.0;
 const them = 72 * (1 - 0.012);
+// Scripted pace on game.js's real scale: scriptPace() = tierV × skill, a
+// unitless multiplier near 1 (NOT m/s) — the same ~1.2 % edge.
+const usP = 1.0 * 0.97;
+const themP = usP * (1 - 0.012);
 
 test("passHunger: streets always 1; equal pace always 1", () => {
   assert.equal(A.passHunger({ street: true, traits: mid, vTop, ourVmax: us, blockerVmax: them, queueT: 30 }), 1);
@@ -40,8 +44,12 @@ test("passHunger: streets always 1; equal pace always 1", () => {
   // Scripted pace (tierV×skill) alone is enough when vmax is equalised.
   assert.ok(A.passHunger({
     street: false, traits: mid, vTop, ourVmax: us, blockerVmax: us,
-    ourPace: us, blockerPace: them, queueT: 12,
-  }) > 1, "scripted pace edge still hungers");
+    ourPace: usP, blockerPace: themP, queueT: 12,
+  }) > 1, "scripted pace edge (tierV×skill scale) still hungers");
+  assert.equal(A.passHunger({
+    street: false, traits: mid, vTop, ourVmax: us, blockerVmax: us,
+    ourPace: usP, blockerPace: usP * 0.999, queueT: 12,
+  }), 1, "sub-0.7 % scripted edge is noise");
 });
 
 test("passHunger: ≥0.7 % edge + queue time raises fire hunger (bounded)", () => {
@@ -149,7 +157,7 @@ test("towGain: hunger lifts permanent tow; street and no-arg stay base", () => {
 test("sbsCommitT / sbsEase: conceding defender tucks sooner; streets and no-arg stay", () => {
   assert.equal(A.sbsCommitT(), 2);
   assert.equal(A.sbsEase(), 0.97);
-  const beaten = { street: false, traits: mid, vTop, ourVmax: them, ourPace: them, otherVmax: us, otherPace: us };
+  const beaten = { street: false, traits: mid, vTop, ourVmax: them, ourPace: themP, otherVmax: us, otherPace: usP };
   assert.ok(A.sbsCommitT(beaten) < 2, "0.8 %+ concede shortens the alongside");
   assert.ok(A.sbsEase(beaten) < 0.97, "conceding yielder eases more");
   assert.equal(A.sbsCommitT({ ...beaten, street: true }), 2);

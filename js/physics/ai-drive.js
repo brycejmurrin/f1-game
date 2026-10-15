@@ -145,7 +145,7 @@ const AiDrive = (function () {
     if (street) return base;
     const h = clamp((hunger || 1) - 1, 0, 1);
     // Slipstream pull (permanent): a hungrier car closes in the tow without
-    // raising fire rate. +55 % at full hunger — not the reverted latch/fire bump.
+    // raising fire rate. +65 % at full hunger — not the reverted latch/fire bump.
     return base * (1 + h * 0.65);
   }
 
@@ -164,12 +164,13 @@ const AiDrive = (function () {
     const span = (full > PASS_EDGE ? full : PASS_EDGE_FULL) - PASS_EDGE;
     return clamp((edge - PASS_EDGE) / span, 0, 1);
   }
-  // Pace edge from vmax and/or scripted pace (tierV×skill — same ratio
-  // ai-tactics uses for stuck-longest). Take the larger so a compressed
-  // vmax still sees a real field-pace gap.
+  // Pace edge from vmax (m/s, over vTop) and/or scripted pace (tierV×skill, a
+  // unitless multiplier near 1 — its edge is the ratio, the same one ai-tactics
+  // uses for stuck-longest). Take the larger so a compressed vmax still sees a
+  // real field-pace gap.
   function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop, full) {
     const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop, full) : 0;
-    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP, slowerP, vTop, full) : 0;
+    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP / slowerP, 1, 1, full) : 0;
     return Math.max(a, b);
   }
   // 1..~2.2: stuck time behind a slower car → fire / latch / run / tow boost.
