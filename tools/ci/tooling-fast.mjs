@@ -727,6 +727,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/race-step-snap.test.mjs",
   // Race-radio card life vs RadioVoice speech budget (phrasebook, longest slots).
   "tests/unit/radio-duration.test.mjs",
+  // radio-lines phrasebook: slot fill, recent-history pick, variant counts.
+  "tests/unit/radio-lines.test.mjs",
   "tests/unit/radio-voice.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.

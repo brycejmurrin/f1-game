@@ -281,13 +281,12 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
  * ci.yml run, while tooling-fast holds guards over exactly those trees.
  * docs-guards.yml closed it (2026-09-25..2026-10-15) by triggering on the SAME list as `paths:` — so the
  * two lists must stay one list, and the job must run the group that holds them. */
-/* EVERY REQUIRED CHECK REPORTS ON EVERY PR (2026-09-30). Branch protection on
- * the deploy branch requires the fast-tier jobs and docs-guards; a required
- * check that never reports blocks the merge for good. So neither workflow may
- * path-filter its pull_request trigger: ci.yml runs the fast tier on a prose
- * PR too (the node plan keeps it to guards plus seconds), and docs-guards runs
- * on every PR and exits before `npm ci` unless the diff is prose-only — a
- * list it READS from ci.yml's push paths-ignore, the one filter that stays. */
+/* THE REQUIRED CHECK REPORTS ON EVERY PR (2026-09-30; one check, `CI`, since
+ * 2026-10-15 — before that the fast-tier jobs and docs-guards by name). A
+ * required check that never reports blocks the merge for good, so ci.yml may
+ * not path-filter its pull_request trigger: it runs the fast tier on a prose
+ * PR too (the node plan keeps it to guards plus seconds). docs-guards.yml,
+ * which read ci.yml's push paths-ignore to exit early on code PRs, is gone. */
 test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and test:docs-guards is a local alias inside tooling-fast", () => {
   // RETIRED 2026-10-15 (Actions audit finding 5; docs/notes/CI-CLOG-SURVEY-2026-10-15.md):
   // tooling-fast held every file of the group, so the workflow ran 615 times

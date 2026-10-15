@@ -1241,7 +1241,16 @@ function announce(msg, dur, kind, still, quiet) {   // still(): false once a que
     // newcomer that outranks nothing waiting; one that does (a warning behind
     // two reports) queues deeper instead of pushing an accepted line out.
     const low = _annQueue.length ? _annQueue[_annQueue.length - 1].pri : 0;
-    if (_annQueue.length >= (pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX)) return false;
+    const cap = pri > low ? ANN_QUEUE_MAX + 3 : ANN_QUEUE_MAX;
+    // A full queue used to refuse the newcomer outright (race-radio counted
+    // those as announce-refused and dropped the line). Shed the lowest-priority
+    // waiting cards — comm and coach first — so engineer, box and warnings still
+    // land. Only refuse when nothing waiting is weaker than the newcomer.
+    while (_annQueue.length >= cap) {
+      const tail = _annQueue[_annQueue.length - 1];
+      if (!tail || tail.pri >= pri) return false;
+      _annQueue.pop();
+    }
     let at = _annQueue.length;
     while (at > 0 && _annQueue[at - 1].pri < pri) at--;
     _annQueue.splice(at, 0, { msg, dur, kind, pri, still, t: performance.now() });
