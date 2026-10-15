@@ -1,0 +1,1 @@
+1792049076	Bryce Murrin	Fix CI evidence false-green paths only: tools/ci/selected-gate-verdict.mjs, tools/ci/ready-gate.mjs and their existing unit tests. No workflow YAML, shared tooling-fast, PR1977 source/body, or other owners paths. Local verification then full deploy gate; queue HOLD honored.  [cursor/ci-readiness-evidence-4a7c; session 16ab7dfe48813c19f13cebf2]
