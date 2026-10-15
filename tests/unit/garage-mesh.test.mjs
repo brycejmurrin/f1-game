@@ -415,25 +415,24 @@ test("garage glare and fixture energy stay under the bloom knee at default knobs
     "floor uplights keep a small glareW, not the old 0.5");
   assert.match(scene, /const LED_OPTS = \{ emissive: 0\.[4567]/,
     "LED faces stay lit without an HDR 1.0 push over the bloom threshold");
-  assert.match(scene, /const MIRROR_OPTS = \{ alpha: 0\.26/,
-    "floor reflection is the accepted planar ghost (alpha 0.26)");
-  assert.match(scene, /noDepthTest:\s*true/,
-    "ghost draws after the floor with no depth test so the slab cannot hide it");
-  assert.doesNotMatch(scene, /MIRROR_RESOLVE|mirrorSheen|ensureMirrorFade/,
-    "#1025 opaque+fade path hid the contact reflection on the live bay");
+  assert.match(scene, /const MIRROR_RESOLVE = \{ alpha: 1/,
+    "floor reflection depth-resolves (opaque + depth bias)");
+  assert.match(scene, /mirrorSheen\(/, "contact sheen scales with camera distance");
+  assert.match(scene, /ensureMirrorFade/, "bay fade quad restores floor sheen");
+  assert.doesNotMatch(scene, /MIRROR_OPTS.*noDepthTest/,
+    "noDepthTest ghost smeared a duplicate car under the floor slab");
 });
 
-test("floor reflection draws after the floor and before the room", () => {
+test("floor reflection draws after the room so depth clips the mirror", () => {
   const { GarageScene, draws } = harness();
   const car = { car: true };
   GarageScene.draw(TEAM, LIV, [0, 1.4, 3.2], null, 0, null, car);
   const carAt = draws.findIndex((d) => d.mesh === car);
   assert.ok(carAt >= 0, "mirrored car is drawn");
-  // Floor is draw 0; the ghost must precede shell/props so they paint over it.
-  assert.equal(carAt, 1, `reflection at draw ${carAt} should be immediately after the floor`);
+  assert.ok(carAt > 1, `reflection at ${carAt} must follow the room (floor is draw 0)`);
   const scene = read("js/garage/scene.js");
-  assert.match(scene, /_gfx\.draw\(carMesh, arrivalMirror, MIRROR_OPTS\)/,
-    "ghost uses MIRROR_OPTS (noDepthTest + alpha)");
+  assert.match(scene, /_gfx\.draw\(carMesh, arrivalMirror, MIRROR_RESOLVE\)/,
+    "mirror uses MIRROR_RESOLVE (depth bias, no noDepthTest)");
 });
 
 test("TOP hides the roof truss and ceiling LED housings; other presets restore them", () => {
