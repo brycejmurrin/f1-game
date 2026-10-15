@@ -174,7 +174,7 @@ var Announcer = (function () {
    *  circuit whose row says nothing about either. */
   function conditionsLine(weather, night, lore) {
     const wx = String(weather || "dry");
-    if (wx === "rain") return lore.wet || "Heavy rain, and it is going to decide this one.";
+    if (wx === "rain" || wx === "storm") return lore.wet || "Heavy rain, and it is going to decide this one.";
     if (wx === "wet") return lore.wet || "A wet track, and the racing line is the only dry part of it.";
     if (wx === "fog") return "Fog across the circuit — you will not see the corner until you are in it.";
     if (wx === "overcast") return "Grey overhead, cool track, and the tyres will take their time.";

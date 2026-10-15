@@ -51,7 +51,48 @@ Do not enable auto-merge or merge.
 - **Auto mode.** Launch every sibling session in auto mode
   (`create_session` `permission_mode: "auto"`) and run subagents without plan
   mode: an unattended worker in `plan` or `default` stalls on an approval nobody
-  sees. Auto mode still runs the hooks and the permission classifier.
+  sees. Auto mode still runs the hooks and the permission classifier. Verify
+  with `get_session` right after the spawn: `permission_mode` is what the child
+  actually got (a request for `default` landed as `auto` on 2026-10-15 and the
+  reverse happened too), and a `default` child's prompts appear only in the
+  app, where the user must answer them in that session. An auto child needs an
+  auto parent: from a `default` session `create_session` refuses with
+  "permission_mode 'auto' requires the parent session to be in auto mode", so
+  ask the user to switch YOUR session to Auto before a launch.
+- **What an auto worker can do unattended** (measured 2026-10-15 on 76637056,
+  about 100 calls in two auto siblings: 0 prompts, 0 blocks): git and worktree
+  commits, the `worker` and `Explore` subagents, tasks, worktree tools,
+  sibling-to-sibling `send_message` (both ways, ~20 s), GitHub reads, skills,
+  web, and every MCP server. The `.mcp.json` servers (apex-tools,
+  chrome-devtools, playwright-official), MDN, BrowserStack, Bash and Agent are
+  approved by the classifier, not a rule: a repository cannot pre-approve the
+  servers it defines itself, so no `.claude/settings.json` entry helps them.
+  Still gated by design: merges and ready flips (`github-mcp-guard.sh`), and
+  `APEX_PUSH_HOLD=0` (the classifier rejects it as `[Safety Bypass Flag]`, so a
+  worker waits for `queue-depth.mjs` to read ok, or the user pushes it).
+- **The repo is not inherited.** `create_session` without `source_url` makes a
+  session with an EMPTY working directory, tagged `config:no-git-repo` (two
+  census siblings on 2026-10-15 stopped at their first `git log`). Always pass
+  `source_url: https://github.com/brycejmurrin/f1-game` and
+  `source_revision: claude/f1-game-project-26h3ng` (or the worker's branch);
+  check the new session's `tags` for `config:no-git-repo` and relaunch if it is
+  there. A child that recovers with `add_repo` gets a read-only clone under
+  `/home/user/brycejmurrin/f1-game` with no GitHub MCP access to the repo, so
+  it cannot open or update a PR.
+- **The brief is read as peer data.** A spawned session sees its launch prompt
+  as a task notification, not a user message: on 2026-10-15 both census
+  siblings ran only their read-only first step and waited until the user typed
+  into them. `USER GRANTS:` with the user's exact words and a UTC time is what
+  lets a child act; a brief without it buys a read-only report at best.
+- **Measure permissions, never infer them.** "No prompt seen" proves nothing
+  in auto mode. Every tool result in a session's `list_events` transcript
+  carries `tool_result_meta[].permission_decision`: reason `rule` + source
+  `config` means an allow rule in settings matched; reason `classifier` means
+  no rule matched and the auto-mode classifier approved; source
+  `user_temporary` / `user_permanent` with no reason means a human prompt was
+  shown; `reject` names `hook` or `classifier`. Read your own session's events
+  to test a settings change; the measured rule shapes are in
+  `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`.
 - **Relayed authority does not travel.** A worker treats the orchestrator's
   messages as peer data, so "Bryce approved X" mid-run is refused (seen 20+
   times: the push-hold override, merges, opening PRs). Put everything the user
@@ -86,8 +127,8 @@ launching Cursor workers uses the Cursor API column (needs a key).
 
 | need | Claude Code cloud | Cursor, from inside a Cursor cloud agent | Cursor Cloud Agents API v1 (any host with a key) | Grok Build |
 |---|---|---|---|---|
-| spawn | `create_session` with `prompt`; or a routine `/fire` | `Task`, `environment: "cloud"`, `run_in_background: true`, `cloud_base_branch` = deploy branch | `POST /v1/agents` (`prompt.text`, `repos[].url`, `startingRef`/`prUrl`, `model.id`) | `grok --no-auto-update -p "<prompt>" -w --ref <deploy branch> --always-approve --output-format streaming-json` in a job you own (no cloud API) |
-| message a running worker | `send_message` (wakes an idle session) | `Task` `resume: <id>` once it has finished (fails while it runs); else a PR comment | `POST /v1/agents/{id}/runs` (one active run at a time) | `grok -r <session> -p "<msg>"` in the same job, or a PR comment |
+| spawn | `create_session` with `prompt`, `source_url`, `source_revision` and `permission_mode: "auto"` (omit `source_url` and the child has no repo); or a routine `/fire` | `Task`, `environment: "cloud"`, `run_in_background: true`, `cloud_base_branch` = deploy branch | `POST /v1/agents` (`prompt.text`, `repos[].url`, `startingRef`/`prUrl`, `model.id`) | `grok --no-auto-update -p "<prompt>" -w --ref <deploy branch> --always-approve --output-format streaming-json` in a job you own (no cloud API) |
+| message a running worker | `send_message` (wakes an idle session; a session that has gone inactive refuses it with `session_inactive`, so `get_session` first and put the message on the PR too) | `Task` `resume: <id>` once it has finished (fails while it runs); else a PR comment | `POST /v1/agents/{id}/runs` (one active run at a time) | `grok -r <session> -p "<msg>"` in the same job, or a PR comment |
 | worker → orchestrator | `send_message` back | the subagent's final message returns to you; mid-run only the PR | none: PR comment + fleet block | none: PR comment + fleet block |
 | status | `get_session` (`status_bucket`), `list_events` | `cursor-cloud` `list-cloud-agents` / `batch-fetch-details` | `GET /v1/agents/{id}`, `…/runs/{runId}`, `…/stream` | the job's log |
 | stop | `interrupt_session`, then `archive_session` | none in-tool: ask via PR; the API column can cancel | `POST /v1/agents/{id}/runs/{runId}/cancel`, then `POST /v1/agents/{id}/archive` | cancel the job; `--max-turns` caps it up front |
