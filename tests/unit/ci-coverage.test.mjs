@@ -1003,7 +1003,12 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
   // Same refusal import-models.yml carries: the deploy branch by name.
   assert.match(timings, /claude\/f1-game-project-26h3ng\|""\|\*\[!a-z0-9\._\/-\]\*\)/,
     "the push must refuse the deploy branch by name, as import-models.yml does");
-  assert.match(timings, /git push -f origin "\$TIMINGS_BRANCH"/);
+  // The bot's own hooks must not refuse the bot (2026-10-15, #2084): package.json
+  // `prepare` activates .githooks on the runner, and pre-push calls every
+  // non-fast-forward push "a force push". The rolling record IS a force push.
+  assert.match(timings, /git -c core\.hooksPath=\/dev\/null push -f origin "\$TIMINGS_BRANCH"/,
+    "the record push bypasses the prepare-installed pre-push hook (it blocked the bot on 18cb8f37 and c23ad312)");
+  assert.doesNotMatch(timings, /^\s+git push -f origin/m, "no bare force push left that the hook can refuse");
   // FORCE-PUSHED, so the namespace matters as much as the name: `claude/*` is
   // where sessions branch, and a bot that force-pushes there lands on an open
   // PR's head sooner or later. `bot/` is import-models.yml's convention.
