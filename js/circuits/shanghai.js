@@ -29,7 +29,7 @@
       { kind: "foliage", s0: 0.425, s1: 0.445 },
       { kind: "foliage", s0: 0.720, s1: 0.765 },
     ],
-    pal: { zenith: [0.28, 0.4, 0.58], horizon: [0.64, 0.66, 0.66], grass: [0.26, 0.42, 0.22], runoff: [0.4, 0.4, 0.4], fog: [0.64, 0.66, 0.66], fogDensity: 0.002, sunDir: [0.597109775827013, 0.7349043394794006, 0.3215206485222378], sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.9, 0.82] },
+    pal: { zenith: [0.5, 0.62, 0.76], horizon: [0.64, 0.66, 0.66], grass: [0.26, 0.42, 0.22], runoff: [0.4, 0.4, 0.4], fog: [0.64, 0.66, 0.66], fogDensity: 0.0032, sunDir: [0.597109775827013, 0.7349043394794006, 0.3215206485222378], sun: [0.96, 0.92, 0.84], sunColor: [0.94, 0.9, 0.82] },
     bankZones: [
       { frac: 0.0133, angleDeg: 5.0, widthM: 200 },   // T1-2-3 spiral
       { frac: 0.1433, angleDeg: 3.0, widthM: 110 },
@@ -41,7 +41,7 @@
     ],
     // Elevations use source-trace fractions. The Jiading site is reclaimed marsh
     // — flat by F1 standards but engineered with ~6 m of long-wavelength relief
-    // (the spiral climbs, the back straight crests). Grades stay under ~1.7 %.
+    // (the spiral climbs, the back straight crests). Built max grade is 2.76 % (measured at the s=0.4525 crest).
     // The crest keeps the original s=0.4525 anchor and stays at 6.5 m: raising
     // the s=0.2125 bump instead trips the prop-interpenetration ratchet, and a
     // taller crest lifts the ground out from under the far skyline towers.

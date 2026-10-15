@@ -53,9 +53,9 @@ var GameAudio = (function () {
   let pitGunFired = 0, surfSched = 0;
   let pitLimLvl = 0;                                          // 0..1 from setCarSfx; applied in setEngine
 
-  // FIELD CONTACT (Radio r9): positional bump / scrape / squeal for AI & rivals.
-  // Cap CONTACT_VOICES; per-car cooldown ≥250 ms; pooled looping noise — no
-  // per-fire BufferSource alloc. Player GameAudio.collision() stays untouched.
+  // FIELD CONTACT (Radio r9): positional bump / scrape / squeal for AI & rivals,
+  // and optional player collision pan (collision() side ≠ 0). Cap CONTACT_VOICES;
+  // per-car cooldown ≥250 ms; pooled oscillators — no per-fire BufferSource alloc.
   const CONTACT_VOICES_DESKTOP = 3, CONTACT_VOICES_MOBILE = 2;
   const CONTACT_COOLDOWN = 0.25;
   const CONTACT_RANGE = 120;
@@ -66,6 +66,7 @@ var GameAudio = (function () {
   let _contactCdN = 0;
   let fieldArmed = false;   // true only while setRivals runs (race); false on grid/pause/stop
   let contactFired = 0, contactDeniedCd = 0, contactDeniedCap = 0, contactDeniedGate = 0;
+  let _lastPlayerContactPan = 0;
 
   // RIVAL ENGINES. The game had no opponent audio at all and no panner anywhere
   // in the graph, so a car alongside was silent and the only cue you had for it
@@ -2559,8 +2560,15 @@ var GameAudio = (function () {
   // Contact. `impact` 0..1 is what collideFx already computes (and used to
   // throw away): a graze and a T1 shunt were byte-identical. `scrape` is the
   // wall-follow case — a sustained band-passed grind instead of a thump.
-  function collision(impact, scrape) {
+  // Optional `side` (−1 left … +1 right): 0 (default) keeps the centred blip
+  // path byte-identical; non-zero routes through the contact voice pool + panner.
+  function collision(impact, scrape, side) {
     const k = clamp01(impact != null ? impact : 0.6);
+    const panSide = side == null || side === 0 ? 0 : Math.max(-1, Math.min(1, +side));
+    if (panSide !== 0 && scheduleContactVoice(scrape ? "scrape" : "bump", k, panSide, 1, true)) {
+      _lastPlayerContactPan = panSide;
+      return;
+    }
     if (scrape) { scrapeNoise(0.12 + 0.22 * k, 0.22 + 0.18 * k); return; }
     blip(150, "sine", 0.34 * (0.4 + 0.6 * k), 0.005, 0.25, 45);
     noise(0.26 * (0.4 + 0.6 * k), 0.18, 900);
@@ -2568,9 +2576,8 @@ var GameAudio = (function () {
   }
 
   // ── FIELD CONTACT (Radio r9) ───────────────────────────────────────────
-  // Positional one-shots for rival–rival / wall / slide. Player collision()
-  // above is byte-identical. Voices are pooled at startEngine; this only
-  // schedules pan + filter + gain envelopes (no per-fire node alloc).
+  // Positional one-shots for rival–rival / wall / slide; pooled at startEngine.
+  // scheduleContactVoice() only schedules pan + filter + gain (no per-fire alloc).
   function contactCdHit(key, t) {
     if (key == null || key < 0) return false;
     for (let i = 0; i < _contactCdN; i++) {
@@ -2592,6 +2599,49 @@ var GameAudio = (function () {
     for (let i = 1; i < _contactCdN; i++) if (_contactCdUntil[i] < _contactCdUntil[oldest]) oldest = i;
     _contactCdKeys[oldest] = key; _contactCdUntil[oldest] = until;
   }
+  /** Shared pool schedule. `near` is 0..1 distance gain; `player` skips fieldArmed/range. */
+  function scheduleContactVoice(kind, impact, pan, near, player) {
+    if (!sfxOk() || !engineOn || !contactVoices.length) {
+      if (!player) contactDeniedGate++;
+      return false;
+    }
+    if (!player && !fieldArmed) { contactDeniedGate++; return false; }
+    const t = now();
+    let v = null;
+    for (let i = 0; i < contactVoices.length; i++) {
+      if (contactVoices[i].freeAt <= t) { v = contactVoices[i]; break; }
+    }
+    if (!v) { contactDeniedCap++; return false; }
+    const k = clamp01(impact != null ? impact : 0.5);
+    const kd = kind || "bump";
+    let peak, attack, decay, freq, q, fType;
+    if (kd === "scrape") {
+      peak = 0.10 + 0.16 * k; attack = 0.02; decay = 0.18 + 0.12 * k;
+      freq = 2400; q = 1.2; fType = "bandpass";
+    } else if (kd === "squeal") {
+      peak = 0.08 + 0.14 * k; attack = 0.01; decay = 0.12 + 0.10 * k;
+      freq = 1800 + 600 * k; q = 6; fType = "bandpass";
+    } else {
+      peak = 0.16 + 0.22 * k; attack = 0.005; decay = 0.14 + 0.12 * k;
+      freq = 420 + 180 * k; q = 0.9; fType = "lowpass";
+    }
+    peak *= clamp01(near != null ? near : 1) * 0.9;
+    if (!(peak > 0.001)) return false;
+    v.filt.type = fType;
+    v.filt.Q.value = q;
+    v.filt.frequency.cancelScheduledValues(t);
+    v.filt.frequency.setValueAtTime(freq, t);
+    v.osc.type = kd === "squeal" ? "triangle" : kd === "scrape" ? "sawtooth" : "sine";
+    v.osc.frequency.cancelScheduledValues(t);
+    v.osc.frequency.setValueAtTime(kd === "bump" ? Math.max(55, freq * 0.35) : freq * 0.55, t);
+    const panClamped = Math.max(-1, Math.min(1, pan));
+    v.pan.pan.cancelScheduledValues(t);
+    v.pan.pan.setValueAtTime(panClamped, t);
+    env(v.gain, t, peak, attack, decay);
+    v.freeAt = t + attack + decay + 0.05;
+    contactFired++;
+    return true;
+  }
   /** kind: "bump" | "scrape" | "squeal". impact 0..1. wx/wz world metres. carKey for cooldown. */
   function fieldContact(kind, impact, wx, wz, carKey) {
     if (!sfxOk() || !engineOn || !fieldArmed || !contactVoices.length) {
@@ -2611,40 +2661,9 @@ var GameAudio = (function () {
       pan = rivalPanPlayerFrame(lat, arc);
     }
     if (!(dist < CONTACT_RANGE)) { contactDeniedGate++; return false; }
-    let v = null;
-    for (let i = 0; i < contactVoices.length; i++) {
-      if (contactVoices[i].freeAt <= t) { v = contactVoices[i]; break; }
-    }
-    if (!v) { contactDeniedCap++; return false; }
-    const k = clamp01(impact != null ? impact : 0.5);
     const near = CONTACT_REF / (CONTACT_REF + 1.15 * Math.max(0, dist - CONTACT_REF));
-    const kd = kind || "bump";
-    let peak, attack, decay, freq, q, fType;
-    if (kd === "scrape") {
-      peak = 0.10 + 0.16 * k; attack = 0.02; decay = 0.18 + 0.12 * k;
-      freq = 2400; q = 1.2; fType = "bandpass";
-    } else if (kd === "squeal") {
-      peak = 0.08 + 0.14 * k; attack = 0.01; decay = 0.12 + 0.10 * k;
-      freq = 1800 + 600 * k; q = 6; fType = "bandpass";
-    } else {
-      peak = 0.16 + 0.22 * k; attack = 0.005; decay = 0.14 + 0.12 * k;
-      freq = 420 + 180 * k; q = 0.9; fType = "lowpass";
-    }
-    peak *= near * 0.9;
-    if (!(peak > 0.001)) return false;
-    v.filt.type = fType;
-    v.filt.Q.value = q;
-    v.filt.frequency.cancelScheduledValues(t);
-    v.filt.frequency.setValueAtTime(freq, t);
-    v.osc.type = kd === "squeal" ? "triangle" : kd === "scrape" ? "sawtooth" : "sine";
-    v.osc.frequency.cancelScheduledValues(t);
-    v.osc.frequency.setValueAtTime(kd === "bump" ? Math.max(55, freq * 0.35) : freq * 0.55, t);
-    v.pan.pan.cancelScheduledValues(t);
-    v.pan.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), t);
-    env(v.gain, t, peak, attack, decay);
-    v.freeAt = t + attack + decay + 0.05;
+    if (!scheduleContactVoice(kind, impact, pan, near, false)) return false;
     contactCdMark(key, t);
-    contactFired++;
     return true;
   }
   function fieldContactState() {
@@ -2882,6 +2901,11 @@ var GameAudio = (function () {
     setRivals,
     fieldContact,
     fieldContactState,
+    lastPlayerContactPan() { return +_lastPlayerContactPan.toFixed(4); },
+    contactPoolPans() {
+      const t = now();
+      return contactVoices.filter((v) => v.freeAt > t).map((v) => +v.pan.pan.value.toFixed(4));
+    },
     setVenue,
     venue() { return { name: venueName, level: revReturn ? +revReturn.gain.value.toFixed(4) : 0, decay: venue.decay }; },
     // Test hooks: each rival voice's live pan/level/pitch. They sit behind their

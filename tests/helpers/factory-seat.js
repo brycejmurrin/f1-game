@@ -21,3 +21,22 @@ export async function pinFactorySeat(page) {
     } catch (_) { /* private mode */ }
   });
 }
+
+/**
+ * Pin the factory McLaren seat on a page that has ALREADY booted — without
+ * touching localStorage (menu-baseline garage goldens read the shipped
+ * GarageDefaults on a fresh goto). Writes GameStore and re-reads teamIdx via
+ * #mb-race / #sel-back, same as pinFreePlay. Call at the title screen.
+ *
+ * @param {import("@playwright/test").Page} page
+ */
+export async function syncFactoryMcLarenSeat(page) {
+  await page.evaluate(() => {
+    const S = GameStore.store;
+    S.set("team", 2);
+    S.set("driver", 0);
+    S.set("parts.mclaren", {});
+    document.getElementById("mb-race").click();
+    document.getElementById("sel-back").click();
+  });
+}
