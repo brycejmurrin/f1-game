@@ -112,6 +112,8 @@ export function toMarkdown(s) {
 export function ciSummary(runs) {
   const by = new Map();
   for (const r of runs || []) {
+    // A label-noise run (#2184: ci-watch.mjs labelNoiseRun) tested nothing.
+    if (/^CI ignored: label /.test(String(r.display_title || ""))) continue;
     const c = by.get(r.name), t = Date.parse(r.created_at), ct = c ? Date.parse(c.created_at) : -Infinity;
     if (!c || t > ct || (t === ct && r.id > c.id)) by.set(r.name, r);
   }
