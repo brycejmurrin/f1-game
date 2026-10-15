@@ -680,17 +680,17 @@
           size: [37, 12.1, 75], basis: [a.r, a.u, a.t],
         });
         {
-          const a = anchor(k(0.185), -1, 98);
+          const a = anchor(k(0.185), -1, 88);
           modelGroup("silverstone-t2-hangar-west", hangarBounds(a),
             (stage) => emitHangar(stage, a, T2_OLIVE), { required: true });
         }
         {
-          const a = anchor(k(0.228), -1, 104);
+          const a = anchor(k(0.228), -1, 92);
           modelGroup("silverstone-t2-hangar-centre", hangarBounds(a),
             (stage) => emitHangar(stage, a, T2_OLIVE_D), { required: true });
         }
         {
-          const a = anchor(k(0.272), -1, 96);
+          const a = anchor(k(0.272), -1, 86);
           modelGroup("silverstone-t2-hangar-east", hangarBounds(a),
             (stage) => emitHangar(stage, a, T2_OLIVE), { required: true });
         }
@@ -841,7 +841,8 @@
         addCyl(out, vadd(vadd(a.c, a.u, bodyH), a.t, -ln / 2 - 0.2), w / 2, ln,
                [0.58, 0.60, 0.65], 8, [a.r, a.t, a.u]);                                   // original barrel roof, repainted
         out._mat = MAT.METAL;
-        addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.94), a.t, 0), [w + 0.4, 1.1, ln + 0.8], [0.10, 0.20, 0.44], b);
+        // Slight lift so the fascia band does not share the hall's top plane (flatCoplanar).
+        addBox(out, vadd(vadd(a.c, a.u, bodyH * 0.97), a.t, 0), [w + 0.4, 0.95, ln + 0.8], [0.10, 0.20, 0.44], b);
         // Glazed entrance gable + canopy at the trackside end.
         const gable = vadd(vadd(a.c, a.u, bodyH * 0.42), a.t, -(ln / 2 + 0.05));
         out._mat = MAT.GLASS;
@@ -1003,7 +1004,7 @@
           stage._mat = MAT.CONCRETE;
           TrackGeom.addBox(stage, vadd(a.c, a.u, 1.3), [5.0, 2.6, 8], [0.80, 0.81, 0.83], b);
           stage._mat = MAT.METAL;
-          TrackGeom.addBox(stage, vadd(a.c, a.u, 2.75), [5.6, 0.3, 8.6], [0.95, 0.55, 0.08], b);
+          TrackGeom.addBox(stage, vadd(a.c, a.u, 2.92), [5.6, 0.28, 8.6], [0.95, 0.55, 0.08], b);
           // recovery tractor parked alongside
           const v = vadd(vadd(a.c, a.t, 8), a.r, side * 0.5);
           TrackGeom.addBox(stage, vadd(v, a.u, 1.0), [2.4, 2.0, 5.2], [0.90, 0.62, 0.10], b);
@@ -1145,7 +1146,7 @@
         if (!onTrack(a.c[0], a.c[2], 16)) {
           for (const [dr, dt, sz] of [[0, -2.6, [7, 0.06, 1.2]], [0, 2.6, [7, 0.06, 1.2]],
                                       [0, 0, [1.2, 0.06, 6]]])
-            addBox(out, vadd(vadd(a.c, a.u, 0.22), a.t, dt), sz, [0.92, 0.92, 0.90], b), void dr;
+            addBox(out, vadd(vadd(a.c, a.u, 0.30), a.t, dt), sz, [0.92, 0.92, 0.90], b), void dr;
           out._mat = MAT.METAL;
           seat.cyl(out, a.c, 0.14, 1.1, [0.30, 0.31, 0.34], 5, b);                       // skid strut
           addBox(out, vadd(a.c, a.u, 1.6), [1.8, 1.5, 6.4], [0.18, 0.30, 0.52], b);      // cabin
