@@ -1186,6 +1186,38 @@ test("a connection shows its verification code, and only the HOST can remove tha
   } finally { h.lobby.cancel(); }
 });
 
+test("a guest the host evicts sees a dedicated message, not 'host left'", async () => {
+  let guestTransport = null;
+  const made = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  });
+  h.lobby.setTransportFactory(() => {
+    const closers = [];
+    const t = {
+      status: "open",
+      onClose(fn) { closers.push(fn); },
+      close() { for (const fn of closers) fn(); },
+    };
+    guestTransport = t;
+    return t;
+  });
+  await h.lobby.join();
+  h.lobby.watchForOpen();
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  await new Promise((r) => setTimeout(r, 300));
+  try {
+    assert.equal(made.length, 1);
+    const EV = h.context.NetPlay.EV;
+    made[0].deliver(EV.LEFT, { evicted: true });
+    assert.equal(guestTransport._hostRemovedMe, true, "LEFT { evicted } tags the transport before it closes");
+    guestTransport.close();
+    assert.match(h.status.textContent, /removed you from the room/i);
+    assert.doesNotMatch(h.status.textContent, /host left the room/i);
+  } finally { h.lobby.cancel(); }
+});
+
 test("host remove: evicting the last guest keeps the host in the waiting room", async () => {
   const { h } = await connectedHost();
   try {

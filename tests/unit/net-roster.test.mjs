@@ -613,6 +613,9 @@ test("host remove: evict stays in the room, broadcasts lobby LEFT, and rotates t
   assert.match(LOBBY_SRC, /t\._hostEvict = true/);
   assert.match(LOBBY_SRC, /function rotateRoomAfterEvict/);
   assert.match(LOBBY_SRC, /wasHostEvict && role === "host"/);
+  assert.match(LOBBY_SRC, /sess\.sendEvent\(NetPlay\.EV\.LEFT, \{ evicted: true \}\)/);
   assert.match(LOBBY_SRC, /sess\.sendEvent\(NetPlay\.EV\.LEFT, \{ from: id \}\)/);
   assert.match(LOBBY_SRC, /NetRendezvous\.makeCode/);
+  assert.match(LOBBY_SRC, /wasHostEvictGuest \? "The host removed you from the room\." : "The host left the room\."/);
+  assert.match(LOBBY_SRC, /t\._hostRemovedMe = true/);
 });

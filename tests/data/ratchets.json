@@ -25,7 +25,7 @@
       "lines": 7316
     },
     "js/net/lobby.js": {
-      "lines": 2267
+      "lines": 2284
     },
     "js/render/glx/glx.js": {
       "lines": 2971
@@ -47,7 +47,7 @@
       "slack": 15
     },
     "cssClasses": {
-      "ceiling": 650,
+      "ceiling": 651,
       "slack": 5
     },
     "dynamicIdReads": {

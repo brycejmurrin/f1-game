@@ -22,6 +22,7 @@ const NetLobby = (function () {
     const MAX_GUESTS = 3;
     let role = null;
     const hostEvictingIds = new Set();   // guest ids the host is removing (stay in room, fresh code)
+    let hostRemovedMe = false;           // guest: host sent LEFT { evicted } before the transport died
     let pollTimer = null;
     // Pending-attempt fail tag: waitForOpen prefers this over failureMsg TURN copy.
     // 'expired' | 'no_relay' | 'ice' | null
@@ -215,6 +216,7 @@ const NetLobby = (function () {
         const wasIn = transports.has(id) || sessions.has(id);
         const tGone = transports.get(id);
         const wasHostEvict = !!(tGone && tGone._hostEvict) || hostEvictingIds.has(id);
+        const wasHostEvictGuest = hostRemovedMe || !!(tGone && tGone._hostRemovedMe);
         if (tGone) { try { tGone.close(); } catch (e) { /* already gone */ } }
         transports.delete(id);
         const s = sessions.get(id);
@@ -274,7 +276,11 @@ const NetLobby = (function () {
             // inviteAnother() hid these; the pick is a fresh start, as open().
             if ($("vs-join")) $("vs-join").hidden = false;
             if ($("vs-code-join")) $("vs-code-join").hidden = false;
-            say(role === "guest" ? "The host left the room." : "Your friend left the room.", true);
+            say(role === "guest"
+              ? (wasHostEvictGuest ? "The host removed you from the room." : "The host left the room.")
+              : "Your friend left the room.", true);
+            hostRemovedMe = false;
+            if (tGone) tGone._hostRemovedMe = false;
           }
         } else {
           say(wasHostEvict && role === "host"
@@ -347,6 +353,7 @@ const NetLobby = (function () {
       transport = null;
       pendingId = null;
       nextGuestId = 0;
+      hostRemovedMe = false;
     }
 
     // "It didn't work" is not an answer a player can act on, and the two ways
@@ -622,7 +629,13 @@ const NetLobby = (function () {
       // the host saying another guest's connection closed. Only the host may
       // say it, and only about a relayed profile — never this connection's own.
       made.onEvent(NetPlay.EV.LEFT, (d) => {
-        if (role !== "guest" || !d || d.from == null || d.from === id) return;
+        if (role !== "guest" || !d) return;
+        if (d.evicted) {
+          hostRemovedMe = true;
+          if (t) t._hostRemovedMe = true;
+          return;
+        }
+        if (d.from == null || d.from === id) return;
         _peers.delete(d.from); _ready.delete(d.from);
         clashDrop(d.from);
         renderRoom(); if (G.refreshQualiGate) G.refreshQualiGate();
@@ -1284,6 +1297,10 @@ const NetLobby = (function () {
       if (!t) return false;
       hostEvictingIds.add(id);
       t._hostEvict = true;
+      const sess = sessions.get(id);
+      if (sess) {
+        try { sess.sendEvent(NetPlay.EV.LEFT, { evicted: true }); } catch (e) { /* leaving */ }
+      }
       Log.info("net", "host removed " + id);
       try { t.close(); } catch (e) { /* its close handler is the cleanup */ }
       return true;
