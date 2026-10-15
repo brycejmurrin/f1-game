@@ -17,7 +17,7 @@
  *   node tools/ci/queue-depth.mjs --write /workspace/apex-status/queue-depth.json
  *
  * HOLD (commit locally, do not push or launch) when ANY of:
- *   Linux jobs in flight (queued + running) ≥ LINUX_SLOTS (40)
+ *   Linux jobs in flight (queued + running) ≥ LINUX_HOLD (60; the account has 40 slots)
  *   queued jobs, any OS                     ≥ QUEUED_HOLD (10)
  *   macOS jobs in flight                    ≥ MACOS_SLOTS (5)
  * Only the first MAX_RUNS (30) live runs are examined (≤ 32 API calls); a
@@ -41,6 +41,8 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** Concurrent standard (Linux) job slots on the account. */
 export const LINUX_SLOTS = 40;
+/** Linux jobs in flight at which a push only adds wait: full slots with an empty queue is normal use; median queue wait is 86 s up to here, 264 s above (ACTIONS-AUDIT-2026-10-14 finding 6). */
+export const LINUX_HOLD = 60;
 /** Concurrent macOS job slots on the account. */
 export const MACOS_SLOTS = 5;
 /** Queued jobs (any OS) at which a push only adds wait: the 35–60 band's median is 86 s. */
@@ -80,7 +82,7 @@ export function evaluate(c, meta = {}) {
   const macInFlight = c.macos.running + c.macos.queued;
   const queued = c.linux.queued + c.macos.queued;
   const reasons = [];
-  if (linuxInFlight >= LINUX_SLOTS) reasons.push(`Linux jobs in flight ${linuxInFlight} ≥ ${LINUX_SLOTS}`);
+  if (linuxInFlight >= LINUX_HOLD) reasons.push(`Linux jobs in flight ${linuxInFlight} ≥ ${LINUX_HOLD}`);
   if (queued >= QUEUED_HOLD) reasons.push(`queued jobs ${queued} ≥ ${QUEUED_HOLD}`);
   if (macInFlight >= MACOS_SLOTS) reasons.push(`macOS jobs in flight ${macInFlight} ≥ ${MACOS_SLOTS}`);
   const runsExamined = meta.runsExamined ?? 0, runsLive = meta.runsLive ?? runsExamined;
@@ -151,7 +153,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   exitIfHelp(argv, `usage: node tools/ci/queue-depth.mjs [--json] [--write [path]]
 
 Counts queued + running Actions JOBS by OS against ${LINUX_SLOTS} Linux / ${MACOS_SLOTS} macOS slots.
-Hold at ≥${LINUX_SLOTS} Linux in flight, ≥${QUEUED_HOLD} queued, or ≥${MACOS_SLOTS} macOS. --write defaults to ${DEFAULT_OUT}.
+Hold at ≥${LINUX_HOLD} Linux in flight, ≥${QUEUED_HOLD} queued, or ≥${MACOS_SLOTS} macOS. --write defaults to ${DEFAULT_OUT}.
 Exit 0 = ok, 1 = hold (commit locally, do not push), 2 = bad args, 3 = API/token.`);
   const args = parseArgs(argv);
   if (args.error) { console.error(`queue-depth: ${args.error}`); process.exit(2); }
