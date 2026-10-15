@@ -719,7 +719,7 @@
         }
         // Village church: white nave + a tall spire, one atomic group so the spire
         // never stands without its nave.
-        const cf = vadd(vadd(base, a.t, 20), a.r, 60 * SD);
+        const cf = vadd(vadd(base.slice(), a.t, 20), a.r, 60 * SD);
         modelGroup("hungaroring-village-church", {
           center: vadd(vadd(cf, a.t, 2.25), a.u, 19), size: [14, 38, 27], basis: b,
         }, (stage) => {
@@ -728,11 +728,13 @@
           stage._mat = MAT.ROOF;
           addPrism(stage, vadd(cf, a.u, 17.05), [14, 3.6, 22], roofC, b);
           const tf = vadd(cf, a.t, 13);
+          const towerMidU = 13.35, towerH = 26;
           stage._mat = MAT.STONE;
           // Lift the tower off the nave roof plane (ground-audit flatCoplanar at 723×728).
-          addBox(stage, vadd(tf, a.u, 13.35), [5, 26, 5], [0.92, 0.90, 0.84], b);
+          addBox(stage, vadd(tf, a.u, towerMidU), [5, towerH, 5], [0.92, 0.90, 0.84], b);
           stage._mat = MAT.METAL;
-          addCone(stage, vadd(tf, a.u, 27.2), 3.2, 11.5, roofC, 7, b);
+          // Cone base must meet the tower top within float-audit's 0.6 m EPS stack.
+          addCone(stage, vadd(tf, a.u, towerMidU + towerH / 2), 3.2, 11.5, roofC, 7, b);
           stage._mat = 0;
         });
       })();
