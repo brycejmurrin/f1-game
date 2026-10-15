@@ -2317,7 +2317,7 @@ function reloadFlybyShots() {
 // prevents late scenery downloads (including A -> B -> A) from committing.
 // garageWarm/garageReady/garageKey: the setup garage pre-built on race settings
 // and the idle title (garagePrewarm, js/garage/prebuild.js), keyed per team/livery.
-const _menuGate = { warm: 0, generation: 0, ready: "", track: null, garageWarm: 0, garageReady: false, garageKey: "" };
+const _menuGate = { warm: 0, generation: 0, ready: "", track: null, garageWarm: 0, garageReady: false, garageKey: "", done: "" };   // done: the menuKey menuFinish ran to its end for
 // The menu finished building THIS selection (circuit, time, weather): only then is
 // `track` the world the loading screen may fly, light and grid. A fast tap to RACE!
 // before the idle build ran left the OLD circuit in `track`.
@@ -2398,6 +2398,16 @@ async function menuFinish(current, key) {
   if (!yielded && current() && _menuGate.warm > 0) await menuSlice();
   if (current()) _menuFly = fly;
   if (lit && await menuIdle(current)) { warmPrograms("|lit"); FlybySeq.reset(); _menuGate.warm = 2; }   // only a baked (dark) world changed the shaders
+  if (current()) _menuGate.done = key;
+}
+// THE MENU'S RACE PREP, read-only (__apex.menuPrep; the GPU census's menu entry waits on it before RACE!):
+// the selection's world built, menuFinish run to its end (car assets, program warm, lamp bake), the
+// warm's hidden frames drawn and no compile in flight, and the car prep's own record (null until one ends).
+function menuPrep() {
+  const key = trackIdx >= 0 ? menuKey(trackIdx) : "", p = _menuGate.prep, def = Tracks.LIST[trackIdx];
+  return { state, trackId: def ? def.id : null, key, world: menuWorld(), building: !!(p && p.building), done: !!key && _menuGate.done === key,
+    warmable: !!gfx.warm, warmKey: _warmKey, warmed: !!key && _warmKey === key, warmFrames: _menuGate.warm, warming: !!(gfx.warming && gfx.warming()),
+    garageReady: !!_menuGate.garageReady, cars: carDraw.menuCarAssets || null };
 }
 // THE GARAGE, PRE-BUILT ON RACE SETTINGS AND THE IDLE TITLE. RACE! opens on the
 // garage drive-out and GARAGE on the garage, and an undrawn garage's first frame
@@ -3521,6 +3531,7 @@ const G = {
   setTimeOfDay: (tod) => wxArc.setTimeOfDay(tod),
   weather: (w) => wxArc.weather(w),
   loadingInfo,                          // what the loading card describes — the flyby editor previews it
+  menuPrep,                             // the menu's race prep, read-only (__apex.menuPrep)
   get loadingScreen() { return loadingScreen; },   // js/ui/loading-screen.js — the editor drives the card's geometry
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   followCar: (c) => { cars.forEach((o) => setCarRole(o, false, o === c)); player = c; },   // a replay: the camera, HUD and audio move to this car; nobody drives (js/race/real-replay.js)
