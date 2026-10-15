@@ -520,3 +520,28 @@ test('the tyre watch names the corner eating a fast-wearing set, and which end o
   f2.c.lap = 3; f2.tick(1.2);
   assert.ok(!f2.announcements.some((a) => /EATING/.test(a[0])), 'no tyre line at the planned rate');
 });
+
+
+test('WATCH pause hides pit strategy and cannot choose tyres; driving restores it', () => {
+  const { coach, G, ctx, nodes } = fixture();
+  let watching = true, picked = 0, selections = 0;
+  ctx.RealRace = { status: () => ({ watch: watching }) };
+  ctx.SettingRow.disable = (row, disabled) => { if (row) row.disabled = disabled; };
+  ctx.SettingRow.wire = (row, options) => { if (row) row.write = options.write; };
+  for (const id of ['pm-pit-panel', 'pm-pit-choice', 'pm-pit-help', 'pm-pit-estimate']) nodes.set(id, { textContent: '' });
+  G.tyres.on = () => true;
+  G.pits.pickFor = () => { picked++; return { id: 'soft', code: 'C4' }; };
+  G.pits.selectNext = () => selections++;
+  const panelCoach = vm.runInContext('DrivingCoach', ctx).create(G);
+  panelCoach.paint();
+  nodes.get('pm-pit-choice').write('soft');
+  assert.equal(selections, 0, 'even a retained strategy handler cannot edit replay tyres');
+  assert.equal(nodes.get('pm-pit-panel').hidden, true);
+  assert.equal(nodes.get('pm-pit-choice').disabled, true);
+  assert.equal(picked, 0, 'WATCH does not calculate a simulated pit recommendation');
+  assert.doesNotMatch(nodes.get('pm-pit-help').textContent, /AUTO will fit/);
+  watching = false; panelCoach.paint();
+  assert.equal(nodes.get('pm-pit-panel').hidden, false);
+  assert.equal(nodes.get('pm-pit-choice').disabled, false);
+  assert.equal(picked, 1);
+});

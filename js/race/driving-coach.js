@@ -688,6 +688,14 @@ const DrivingCoach = (function () {
         }
         if (!planned) emptyRow(decisions, "No rival is lining up a pass right now.");
       }
+      const watching = typeof RealRace !== "undefined" && !!RealRace.status().watch;
+      const panel = $("pm-pit-panel");
+      if (panel) panel.hidden = watching;
+      if (watching) {
+        SettingRow.disable($("pm-pit-choice"), true);
+        for (const id of ["pm-pit-help", "pm-pit-estimate"]) { const el = $(id); if (el) el.textContent = "Pit strategy is unavailable while watching a replay."; }
+        return;
+      }
       const note = $("pm-pit-estimate");
       const names = new Map(G.pits.ownedTyres().map(o => [o.id, o.label]));
       const compoundName = id => names.get(id) || id.replace(/_/g, " ");
@@ -722,7 +730,7 @@ const DrivingCoach = (function () {
     SettingRow.wire($("pm-drill"), { values: GOALS.map(g => g.slice()),
       read: () => drillMode, write: setPracticeGoal });
     SettingRow.wire($("pm-pit-choice"), { read: () => G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
-      write: v => { G.pits.selectNext(G.player, v); paint(); } });
+      write: v => { if (typeof RealRace !== "undefined" && RealRace.status().watch) return; G.pits.selectNext(G.player, v); paint(); } });
     const menu = $("pmsettings"), panel = $("pm-panel-driving");
     if (menu && panel && typeof MutationObserver === "function") {
       const observer = new MutationObserver(() => { if (!menu.hidden && !panel.hidden) paint(); });

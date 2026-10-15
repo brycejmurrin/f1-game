@@ -461,3 +461,52 @@ test('track Home measures the menu pane once per scene/viewport key, not every t
   assert.ok(begun > 0, 'the track Home path ran');
   assert.ok(rects <= 1 && panes <= 1, `30 title frames measured the pane ${rects}x, allocated ${panes}x`);
 });
+
+
+test('paused WATCH and HIGHLIGHTS describe the replay and followed driver without a driving objective', () => {
+  let watched = { watch: true, name: '2025 Italian Grand Prix', replay: { follow: 'LEC', reel: 0 } };
+  const local = vm.createContext({ RealRace: { status: () => watched }, CareerExperience: { objectiveStatus: () => 'Finish P1' } });
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const player = { lap: 3 }, G = { player, track: { def: { name: 'Monza' } }, ranked: [player], lapsTarget: 53 };
+  let brief = local.api.raceBrief(G);
+  assert.match(brief.detail, /WATCH/);
+  assert.match(brief.detail, /FOLLOWING LEC/);
+  assert.doesNotMatch(brief.detail, /RACE|P1/);
+  assert.equal(brief.objective || '', '');
+  watched.replay.reel = 5;
+  brief = local.api.raceBrief(G);
+  assert.match(brief.detail, /HIGHLIGHTS/);
+  watched = { watch: false };
+  assert.match(local.api.raceBrief(G).detail, /RACE · P1/);
+});
+
+
+test('WATCH pause omits driving strategy copy and restores the strategy door for a live race', () => {
+  const dom = makeDom(), observers = [];
+  let watching = true;
+  const sandbox = { document: dom.document,
+    MutationObserver: class { constructor(fn) { this.fn = fn; } observe(node) { observers.push([node, this.fn]); } },
+    RealRace: { status: () => ({ watch: watching, replay: { follow: 'LEC' } }) },
+    HomeWorld: { create: () => ({ end() {}, active: () => false, state: () => ({}) }) },
+    GameStore: { store: { get: (_key, value) => value, set() {} } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'auto', onSceneChange() {} },
+    addEventListener() {} };
+  sandbox.window = sandbox;
+  const local = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const player = { lap: 2 }, G = { $: dom.byId, state: 'race', player, ranked: [player], track: { def: { name: 'Monza' } }, lapsTarget: 53, tyres: { on: () => true } };
+  local.api.create(G, { coach: { paint() {}, practiceGoal: () => 'free' }, trackReady: () => true });
+  dom.byId('pm-pit-help').textContent = 'AUTO will fit Compound C4 at your next stop.';
+  dom.byId('pm-pit-estimate').textContent = 'Estimated pit loss: 22s';
+  dom.byId('pausemenu').hidden = false;
+  const refresh = observers.find(([node]) => node === dom.byId('pausemenu'))[1];
+  refresh();
+  assert.equal(dom.byId('pm-strategy').hidden, true);
+  assert.equal(dom.byId('pm-strategy').disabled, true);
+  assert.doesNotMatch(Array.from(dom.byId('pm-race-context').children, el => el.textContent).join(' '), /AUTO|pit loss|RACE · P1/);
+  watching = false; refresh();
+  assert.equal(dom.byId('pm-strategy').hidden, false);
+  assert.equal(dom.byId('pm-strategy').disabled, false);
+  assert.match(Array.from(dom.byId('pm-race-context').children, el => el.textContent).join(' '), /AUTO will fit/);
+});
