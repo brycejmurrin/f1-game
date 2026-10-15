@@ -366,6 +366,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ers-audio-layer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
+  "tests/unit/f1-dev-tools.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
   // Rival-car distance LOD (js/car/field-lod.js): the table, the shadow-caster
   // gate, the mirror cap and the launch warm. Real shadow/mirror passes in VMs, ~0.1 s.
