@@ -59,6 +59,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // source, no browser, ~0.2 s.
   // Round-2 (2026-10-10): visible text is contained in every control's accessible name (WCAG 2.5.3); static shell scan.
   "tests/unit/a11y-label-in-name.test.mjs",
+  // Flyby skip hint (#ld-card::after): dark plate holds WCAG over bright sky (#1896).
+  "tests/unit/a11y-loading-hint.test.mjs",
   // SETTINGS › ACCESSIBILITY: reduce motion Auto/On/Off, high focus ring,
   // colourblind S/M/H/I/W cues. VM + shell pins, < 0.2 s.
   "tests/unit/a11y-opts.test.mjs",

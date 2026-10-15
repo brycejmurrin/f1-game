@@ -1,0 +1,17 @@
+@layer overlays {
+/* Loading-screen contrast — flyby skip hint over the live 3D scene (#1896).
+   The hint is #ld-card::after (css/loading.css); it sits above the card on the
+   sky, not on the opaque plate. A semi-opaque backing keeps #fff at ≥4.5:1 even
+   over a bright flyby frame; text-shadow is backup for sub-pixel edges. */
+#loading[data-phase="run"] #ld-card::after {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 0.35em 0.65em;
+  border-radius: var(--r-xs, 2px);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  text-shadow:
+    0 0 1px rgba(0, 0, 0, 0.95),
+    0 1px 3px rgba(0, 0, 0, 0.85);
+}
+} /* @layer overlays */

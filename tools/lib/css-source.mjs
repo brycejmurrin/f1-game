@@ -12,7 +12,7 @@ export const CSS_SOURCES = {
   ],
   "css/menus.css": ["css/title.css", "css/menus.css"],
   "css/select.css": ["css/select.css", "css/race-setup.css"],
-  "css/overlays.css": ["css/touch-controls.css", "css/overlays.css", "css/loading.css"],
+  "css/overlays.css": ["css/touch-controls.css", "css/overlays.css", "css/loading.css", "css/a11y-loading.css"],
 };
 
 // Pre-split logical names → concat for source audits (ui-improve-pass etc.).
