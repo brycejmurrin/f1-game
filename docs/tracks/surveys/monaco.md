@@ -23,37 +23,37 @@ Mediterranean pastels, tight Armco, three `waterField` harbour stations (racing 
 
 ---
 
-## Panels — Sector 1 (dry midday, `tod=day`)
+## Panels — Sector 1 (dry · day)
 
-| Pit / start `s1-01-pit-start-day` | Sainte Dévote `s1-02-sainte-devote-day` | Beau Rivage `s1-03-beau-rivage-day` |
+| **Pit / start** · orbit · dry · day | **Sainte Dévote** · orbit · dry · day | **Beau Rivage** · orbit · dry · day |
 |:---:|:---:|:---:|
 | ![S1 pit](../../../artifacts/shots/tracks/monaco/s1-01-pit-start-day.jpg) | ![S1 T1](../../../artifacts/shots/tracks/monaco/s1-02-sainte-devote-day.jpg) | ![S1 climb](../../../artifacts/shots/tracks/monaco/s1-03-beau-rivage-day.jpg) |
 
-| Casino Square `s1-04-casino-square-day` | Massenet eye `s1-05-massenet-statue-day` | Sector 1 crest `s1-06-sector1-crest-day` |
+| **Casino Square** · orbit · dry · day | **Massenet statue** · eye · dry · day | **Sector 1 crest** · cinematic · dry · day |
 |:---:|:---:|:---:|
 | ![Casino](../../../artifacts/shots/tracks/monaco/s1-04-casino-square-day.jpg) | ![Massenet](../../../artifacts/shots/tracks/monaco/s1-05-massenet-statue-day.jpg) | ![Crest](../../../artifacts/shots/tracks/monaco/s1-06-sector1-crest-day.jpg) |
 
 ---
 
-## Panels — Sector 2 (dry midday)
+## Panels — Sector 2 (dry · day)
 
-| Mirabeau `s2-01-mirabeau-day` | Fairmont hairpin `s2-02-fairmont-hairpin-day` | Portier `s2-03-portier-day` |
+| **Mirabeau** · orbit · dry · day | **Fairmont hairpin** · orbit · dry · day | **Portier** · trackside · dry · day |
 |:---:|:---:|:---:|
 | ![Mirabeau](../../../artifacts/shots/tracks/monaco/s2-01-mirabeau-day.jpg) | ![Hairpin](../../../artifacts/shots/tracks/monaco/s2-02-fairmont-hairpin-day.jpg) | ![Portier](../../../artifacts/shots/tracks/monaco/s2-03-portier-day.jpg) |
 
-| Tunnel interior `s2-04-tunnel-interior-day` | Tunnel exit `s2-05-tunnel-exit-day` | Nouvelle chicane `s2-06-nouvelle-chicane-day` |
+| **Tunnel interior** · chase · dry · day | **Tunnel exit** · orbit · dry · day | **Nouvelle chicane** · orbit · dry · day |
 |:---:|:---:|:---:|
 | ![Tunnel](../../../artifacts/shots/tracks/monaco/s2-04-tunnel-interior-day.jpg) | ![Tunnel exit](../../../artifacts/shots/tracks/monaco/s2-05-tunnel-exit-day.jpg) | ![Chicane](../../../artifacts/shots/tracks/monaco/s2-06-nouvelle-chicane-day.jpg) |
 
 ---
 
-## Panels — Sector 3 (dry midday)
+## Panels — Sector 3 (dry · day)
 
-| Harbour wide `s3-01-harbour-wide-day` | Tabac `s3-02-tabac-day` | Swimming pool `s3-03-swimming-pool-day` |
+| **Port Hercule** · orbit wide · dry · day | **Tabac** · orbit · dry · day | **Swimming pool** · orbit · dry · day |
 |:---:|:---:|:---:|
 | ![Harbour](../../../artifacts/shots/tracks/monaco/s3-01-harbour-wide-day.jpg) | ![Tabac](../../../artifacts/shots/tracks/monaco/s3-02-tabac-day.jpg) | ![Pool](../../../artifacts/shots/tracks/monaco/s3-03-swimming-pool-day.jpg) |
 
-| Rascasse `s3-04-rascasse-day` | La Rascasse bar `s3-05-rascasse-bar-day` | Antony Noghès `s3-06-antony-noghes-day` |
+| **Rascasse** · orbit · dry · day | **La Rascasse bar** · eye · dry · day | **Antony Noghès** · orbit · dry · day |
 |:---:|:---:|:---:|
 | ![Rascasse](../../../artifacts/shots/tracks/monaco/s3-04-rascasse-day.jpg) | ![Bar](../../../artifacts/shots/tracks/monaco/s3-05-rascasse-bar-day.jpg) | ![Noghes](../../../artifacts/shots/tracks/monaco/s3-06-antony-noghes-day.jpg) |
 
