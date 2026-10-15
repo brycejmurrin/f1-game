@@ -79,6 +79,21 @@ test("pose aims at the subject car when carPos is supplied", () => {
   assert.equal(p.count, 3);
 });
 
+test("trackside snap selects the seek destination without inheriting hysteresis", () => {
+  const TS = load(), track = { total: 1000 };
+  for (const previous of [0, 2]) {
+    track._tsIdx = previous;
+    assert.equal(TS.pose(track, 405, 0, { carPos: [0, 405] }).index, previous,
+      "continuous playback retains its hysteresis");
+    const shot = TS.pose(track, 405, 0, { carPos: [0, 405], snap: true });
+    assert.equal(shot.index, 1, "forward and backward seeks use the destination camera");
+    assert.equal(shot.eye[2], 400);
+    assert.equal(shot.cut, true);
+    assert.equal(TS.pose(track, 405, 0, { snap: true }).cut, false, "repeated paused snaps stay put");
+  }
+  assert.equal(TS.pose(track, 1105, 0, { snap: true }).index, 0, "seek also wraps the lap");
+});
+
 test("CAM_MODES appends trackside after visor (save-index contract)", () => {
   const ms = fs.readFileSync(path.join(ROOT, "js/camera/mode-switch.js"), "utf8");
   const ids = [...ms.matchAll(/\{ id: "([^"]+)"/g)].map((m) => m[1]);

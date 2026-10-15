@@ -74,7 +74,7 @@ const TracksideCams = (function () {
   }
 
   /** Index of the camera the car has most recently passed (with hysteresis). */
-  function pick(cams, s, total, prev) {
+  function pick(cams, s, total, prev, snap) {
     if (!cams || !cams.length) return 0;
     const L = total || 1;
     const ss = wrapS({ total: L }, s);
@@ -84,7 +84,7 @@ const TracksideCams = (function () {
       if (behind < bestBehind) { bestBehind = behind; best = i; }
     }
     const prevIdx = ((prev | 0) % cams.length + cams.length) % cams.length;
-    if (prevIdx !== best) {
+    if (!snap && prevIdx !== best) {
       // Stick with the previous cam until the car is HYST_M past the new one's s,
       // so a weave near a corner does not flicker.
       const pastNew = ahead(cams[best].s, ss, L);
@@ -101,7 +101,7 @@ const TracksideCams = (function () {
     const cams = build(track);
     if (!cams.length) return null;
     const prev = track._tsIdx | 0;
-    const idx = pick(cams, s, track.total, prev);
+    const idx = pick(cams, s, track.total, prev, extra && extra.snap);
     track._tsIdx = idx;
     const c = cams[idx];
     const cut = idx !== prev;
