@@ -1427,7 +1427,7 @@ function fitHud() {
     try { const cs = getComputedStyle(root); sat = parseFloat(cs.getPropertyValue("--sat")) || 0; sab = parseFloat(cs.getPropertyValue("--sab")) || 0; } catch (_) { /* mini-dom */ }
     const topButtons = 44 * Math.min(1.5, Math.max(1, btnScale));
     const roomL = window.innerHeight - sat - sab - topButtons - 4 * FIT_AIR;
-    const roomR = roomL;
+    const roomR = roomL - 44 * Math.max(0, Math.min(2, btnScale) - 1.5);   // PAUSE paints on past 150 % (touch-controls.css --tap-btn)
     // PLAN vs THE CLUSTER at HUD 200%. #hud-tyre is anchored on the left dock,
     // outside the centred cluster, so the viewport budget above never sees them
     // meet (852×393 @200%: the gearbox plate sat on PLAN). The tyre's left edge
