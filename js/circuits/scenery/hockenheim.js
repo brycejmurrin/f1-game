@@ -94,6 +94,8 @@
       every(26, (k) => {
         const s = k / n;
         if (inStadium(s)) return;
+        // Spitzkehre runoff: gravel + temp stands — verge scrub clips risers (clip-audit @0.45).
+        if (s > 0.40 && s < 0.50) return;
         const h = hash(k * 97 + 23);
         if (h < 0.55) return;
         bush(k, h < 0.78 ? -1 : 1, 6.5 + h * 4, [0.16, 0.34, 0.16]);
@@ -126,7 +128,8 @@
       }
       // Outer Motodrom ring (Ost / Sachs side) — continuous rake, not discrete
       // stand boxes. South Grandstand is a separate required modelGroup below.
-      motodromTerrace(0.790, 0.870, 1, 13, 5, 12);
+      // End ~0.858: outer rake rows clip kit neonTowerBody @ ~0.864 (clip-audit).
+      motodromTerrace(0.790, 0.858, 1, 14, 5, 12);
       // Inner Grandstand opposite South (Innentribüne) — shallower 3-row rake.
       // Source: thef1spectator.com where-to-watch (Inner faces South).
       motodromTerrace(0.840, 0.880, -1, 12, 3, 13);
@@ -386,7 +389,7 @@
         const sMid = 0.457;
         const side = 1;
         for (let t = 0; t < 3; t++) {
-          const a = anchor(K(sMid), side, 24 + t * 4.5);
+          const a = anchor(K(sMid), side, 28 + t * 4.5);
           if (onTrack(a.c[0], a.c[2], 4)) continue;
           const b = [a.r, a.u, a.t];
           const h = 2.0 + t * 2.2;
