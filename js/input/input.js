@@ -1054,23 +1054,57 @@ const Input = (function () {
       if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); touchActive = true; }
     }
     if (!touchActive) touchSteer = 0;
+    updateDragAnchor();
   }
 
   function canvasTouchIsDriving() { return !menuOverlayOpen(); }
 
-  /* Show where the anchor is, briefly. Looked up lazily and cached: the element
-     is optional (a test harness page may not have it) and this runs on the
-     touch path, so it must never throw and never query per event. */
+  /* Drag-anchor ring + offset dot: optional DOM (#drag-anchor), cached lookups
+     only, transform/left/top updates on the touch path — must never throw. */
   let dragMark = undefined;
-  function showDragAnchor(x) {
-    if (steerMode !== "touch") return;
+  let dragDotEl = null;
+  const DRAG_DOT_CSS = "position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;pointer-events:none;background:rgba(255,255,255,0.65);box-shadow:0 0 0 2px rgba(0,0,0,0.5)";
+  function dragMarkEl() {
     if (dragMark === undefined) dragMark = document.getElementById("drag-anchor") || null;
-    if (!dragMark) return;
-    dragMark.style.left = x + "px";
-    dragMark.classList.add("on");
+    return dragMark;
+  }
+  function dragDot(mark) {
+    if (dragDotEl && dragDotEl.parentNode === mark) return dragDotEl;
+    dragDotEl = null;
+    if (typeof mark.appendChild === "function" && typeof document.createElement === "function") {
+      dragDotEl = document.createElement("span");
+      dragDotEl.setAttribute("aria-hidden", "true");
+      if (dragDotEl.style) dragDotEl.style.cssText = DRAG_DOT_CSS;
+      mark.appendChild(dragDotEl);
+    }
+    return dragDotEl;
+  }
+  function steeringTouchRec() {
+    let best = -1, pick = null;
+    for (const rec of touches.values()) {
+      if (rec.seq > best) { best = rec.seq; pick = rec; }
+    }
+    return pick;
   }
   function hideDragAnchor() {
-    if (dragMark) dragMark.classList.remove("on");
+    const mark = dragMarkEl();
+    if (mark) mark.classList.remove("on");
+  }
+  function updateDragAnchor() {
+    if (steerMode !== "touch" || !canvasTouchIsDriving()) { hideDragAnchor(); return; }
+    const rec = steeringTouchRec();
+    if (!rec) { hideDragAnchor(); return; }
+    const mark = dragMarkEl();
+    if (!mark) return;
+    mark.style.left = rec.anchorX + "px";
+    mark.style.top = rec.anchorY + "px";
+    const dx = rec.x - rec.anchorX;
+    const adx = Math.abs(dx);
+    const range = touchRangePx();
+    const offPx = adx <= TOUCH_DEAD_PX ? 0 : Math.sign(dx) * Math.min(adx - TOUCH_DEAD_PX, range);
+    const dot = dragDot(mark);
+    if (dot && dot.style) dot.style.transform = "translateX(" + offPx + "px)";
+    mark.classList.add("on");
   }
 
   function onTouchStart(e) {
@@ -1078,8 +1112,9 @@ const Input = (function () {
     noteInputSource("touch");
     e.preventDefault();
     for (const t of e.changedTouches) {
-      touches.set(t.identifier, { anchorX: t.clientX, x: t.clientX, seq: ++touchSeq });
-      showDragAnchor(t.clientX);
+      touches.set(t.identifier, {
+        anchorX: t.clientX, anchorY: t.clientY, x: t.clientX, seq: ++touchSeq,
+      });
     }
     recomputeTouchSteer();
   }
@@ -1099,7 +1134,6 @@ const Input = (function () {
     for (const t of e.changedTouches) {
       touches.delete(t.identifier);
     }
-    if (!touches.size) hideDragAnchor();
     recomputeTouchSteer();
   }
 

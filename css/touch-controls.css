@@ -216,14 +216,14 @@
    the anchor — Mario Kart Tour ships exactly this, as its "Steer/Drift Button
    Display" option. Fades on its own; never takes a pointer event. */
 #drag-anchor {
-  position: fixed; z-index: 6; top: 50%; left: 0;
+  position: fixed; z-index: 6; top: 0; left: 0;
   width: 44px; height: 44px; margin: -22px 0 0 -22px;
   border-radius: 50%; pointer-events: none;
   border: 2px solid rgba(255, 255, 255, 0.65);
   box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
   opacity: 0; transition: opacity 0.45s ease-out;
 }
-#drag-anchor.on { opacity: 0.55; transition: opacity 0.08s ease-out; }
+#drag-anchor.on { opacity: 0.9; transition: opacity 0.08s ease-out; }
 @media (prefers-reduced-motion: reduce) { #drag-anchor { transition: none; } }
 
 /* The iOS install nudge. A banner, not a modal: it must never stand between a
