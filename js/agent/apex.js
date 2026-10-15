@@ -541,6 +541,8 @@ const api = {
   }),
   // GARAGE PREBUILD (js/garage/prebuild.js): ready/blockers/last run ms/tap-to-first-frame ms.
   garagePrebuild: () => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().state() : null),
+  // THE MENU'S RACE PREP (read-only): world/done/warmed/warmFrames/warming/cars — what RACE! will find ready.
+  menuPrep: () => (G.menuPrep ? G.menuPrep() : null),
   garagePrewarm: (on) => (typeof GaragePrebuild !== "undefined" && GaragePrebuild.instance() ? GaragePrebuild.instance().setEnabled(on) : null),   // the title prebuild's A/B switch (session; apex26.garagePrewarm="off" at boot)
   // GARAGE ACTIVE AERO, drivable without a frame loop. The preview eases inside
   // the rAF render, and a headless page composites no frames at all, so the
