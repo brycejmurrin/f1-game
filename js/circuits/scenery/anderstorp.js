@@ -9,7 +9,7 @@
      2  start/finish complex                                   (§4 0.005 +1)
      3  pit-straight outside: colonnade pine + hoarding        (§4 0.020 -1)
      4  Turn 1: grey sand, tyres, camera tower                 (§4 0.045 -1)
-     5  infield paddock: corrugated rank + motorhomes          (§4 0.095 +1)
+     5  infield paddock: corrugated rank + sheds (motorhomes removed) (§4 0.095 +1)
      6  pine right up to the armco                             (§4 0.150 -1)
      7  Turns 2-3 Sodra Kurvan: mown infield, low hill         (§4 0.185 +1)
      8  back into the trees: flag/timing hut                   (§4 0.245 -1)
@@ -21,7 +21,7 @@
     14  runway far side: mown grass to a distant treeline      (§4 0.740 -1)
     15  end of the apron: sheds, concrete gives way            (§4 0.820 +1)
     16  Turn 7 — off the runway, the corridor narrows          (§4 0.860 -1)
-    17  Turn 8: long banked final corner onto the pit straight (§4 0.920 -1)
+    17  Turn 8: long slow final corner onto the pit straight   (§4 0.920 -1; flat — the def builds no banking)
     18  Anderstorpsån bog strip + reeds (-1, s≈0.11–0.28)
     19  Flight Straight offset runway pavement (+1 apron clearance band)
     20  paddock helipad (16×16 m, ESMP medevac pad)
@@ -39,7 +39,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall,
         marshalPost, cameraTower, billboard, sponsorHoarding, gantry,
-        motorhome, groundPatch, runoffApron, waterBand,
+        groundPatch, runoffApron, waterBand,
         place, addBox, addCyl, addFrustum, vadd,
         modelGroup, seat, MAT } = api;
 
@@ -438,7 +438,7 @@
 
       // ---------------------------------------------------------------- 5.
       // 0.095 +1 — INFIELD PADDOCK. A low corrugated rank in faded blue and
-      // cream, single storey, with motorhomes nose-in on grey hardstanding.
+      // cream, single storey, on grey hardstanding.
       // This is the working part of the site and it looks it: a second and a
       // third rank of sheds behind the first, transporters, drums, a silo.
       groundPatch(K(0.100), 1, 24, [46, 0.18, 60], HARDSTAND);
@@ -670,7 +670,8 @@
         // Inner slab only — outer reach capped so hangar pads at gap 72+ stay clear.
         // No weathering overlays: they co-planed with the parent on shared
         // patchSeq lift slots (flatCoplanar 570×573/574).
-        groundPatch(k, 1, 6, [Math.min(22, 20 * f), 0.18, ln], CONCRETE);
+        groundPatch(k, 1, 6, [Math.min(22, 20 * f), 0.18, ln],
+          pick(hash(i * 31 + 7), [CONCRETE, CONC_W, CONC_D, CONCRETE]));
       }
       // ESMP: 30 m pavement, 20 m runway — ~10 m clearance offset on the apron
       // side; seated slabs avoid a second groundPatch row (flatCoplanar on fold).
@@ -810,7 +811,7 @@
       // a lift slot on the same footprint (was flatCoplanar self-pair at :613).
       for (let i = 0; i < 8; i++) {
         groundPatch(K(RW0 + 0.02 + (i / 7) * (RW1 - RW0 - 0.04)), -1, 14 + (i % 2) * 8,
-          [56, 0.18, 90], i & 1 ? GRASS_M : GRASS);
+          [56, 0.18, 90], pick(hash(i * 17 + 3), [GRASS, GRASS_M, GRASS_S, GRASS]));
       }
       for (let i = 0; i < 6; i++) {   // mown bands, lighter, further out
         groundPatch(K(RW0 + 0.04 + (i / 5) * (RW1 - RW0 - 0.08)), -1, 100 + (i % 2) * 10,
@@ -903,7 +904,8 @@
       }
 
       // --------------------------------------------------------------- 17.
-      // 0.920 -1 — TURN 8, the long slow banked sweep onto the pit straight.
+      // 0.920 -1 — TURN 8, the long slow sweep onto the pit straight (flat: the def
+      // has no bankZones, so nothing here leans).
       // Low timber terracing on the outside with a bank extending it,
       // billboards along the barrier, tyres and grey sand, forest behind.
       // The corner takes forever, so the outside gets a second stand, a
