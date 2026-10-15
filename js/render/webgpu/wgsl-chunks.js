@@ -1773,10 +1773,12 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       }
       let fd = vDist * fogDensity * heightAtten;
       let fAmt = 1.0 - exp(-fd * fd);
-      var fogCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 4.0));
+      // In-scatter sun colour capped to max component 1.0 (GLX parity: a dusk HDR sun must not wash the fog).
+      let fogSun = F.sunColor.xyz / max(1.0, max(F.sunColor.x, max(F.sunColor.y, F.sunColor.z)));
+      var fogCol = mix(F.fogColor.xyz, fogSun, pow(sunAmt, 4.0));
       // FOG SUN CORE knob (F.params6.w; GLX parity, def 0.6). Read directly — 0 is a
       // valid "no hot core", so the uploader always packs the resolved value.
-      fogCol = fogCol + F.sunColor.xyz * pow(sunAmt, 16.0) * F.params6.w;
+      fogCol = fogCol + fogSun * pow(sunAmt, 16.0) * F.params6.w;
       // FOG WARM / COOL white-balance (params3.y; GLX uFogTint asymmetric mix).
       let fTint = F.params3.y;
       fogCol = fogCol * vec3<f32>(
