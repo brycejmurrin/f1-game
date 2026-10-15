@@ -132,3 +132,20 @@ test("per-job isolation is retained even when the batch otherwise reuses warm sc
   assert.equal(job.capture.isolated, true);
   assert.equal(groupJobsByTrack([job, job]).length, 2);
 });
+
+test("--weather parses, validates, and splits batch groups", () => {
+  const plan = parseShotArgv(["monaco", "0.47", "orbit", "--tod", "dusk", "--weather", "rain"], ROOT);
+  assert.equal(plan.jobs[0].weather, "rain");
+  assert.equal(plan.jobs[0].tod, "dusk");
+  assert.equal(plan.jobs[0].cam, "orbit");
+  assert.equal(parseShotArgv(["monza"], ROOT).jobs[0].weather, "dry");
+  assert.throws(() => parseShotArgv(["monza", "--weather", "snow"], ROOT), /unknown weather/);
+  assert.throws(() => normalizeJob({ weather: "hail" }, { ROOT }), /unknown weather/);
+  const jobs = [{ weather: "fog" }, { weather: "dry" }, { frac: 0.3, weather: "fog" }, { frac: 0.4 }]
+    .map((raw) => normalizeJob({ track: "monza", ...raw }, { ROOT }));
+  const groups = groupJobsByTrack(jobs);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map((g) => g.jobs.map((j) => j.weather)), [["fog", "fog"], ["dry", "dry"]]);
+  assert.equal(shotSessionKey(jobs[0]), shotSessionKey(jobs[1])); // weather changes in place, like tod
+  assert.match(SHOT_USAGE, /--weather dry\|wet\|rain\|overcast\|fog/);
+});

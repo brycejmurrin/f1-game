@@ -1179,3 +1179,36 @@ test("SEC2-2: a career file with more than 16 bag keys is refused", () => {
   for (let i = 0; i < 16; i++) ok["junk" + i] = i;
   assert.equal(b.loadCareer({ format: "apex26-career-v1", careers: ok }).ok, true, "16 keys is within the cap (all skipped as non-career)");
 });
+
+// #2191: the legacy motion branch did `(groups.a11y ||= {}).motion = …`, which
+// throws in strict mode on a truthy primitive a11y; through pick() → done() →
+// apply() that became an unhandled rejection and the red error overlay.
+test("a malformed settings / a11y group never throws — it is refused or skipped (#2191)", () => {
+  const b = boot();
+  const F = b.SettingsExport.FORMAT;
+  for (const a11y of [1, "x", true, [1]]) {
+    const r = b.loadSettings({ format: F, settings: { appearance: { motion: true }, a11y } });
+    assert.equal(typeof r.ok, "boolean", "a11y " + JSON.stringify(a11y));
+  }
+  for (const settings of ["x", 5, [1, 2], null]) {
+    const r = b.loadSettings({ format: F, settings });
+    assert.equal(typeof r.ok, "boolean", "settings " + JSON.stringify(settings));
+    assert.equal(r.applied, 0);
+  }
+});
+
+test("LOAD SETTINGS FILE shows a result, not an unhandled rejection, for a malformed a11y group (#2191)", async () => {
+  const b = bootImportUI();
+  const rejections = [];
+  const onRej = (e) => rejections.push(e);
+  process.on("unhandledRejection", onRej);
+  try {
+    const text = JSON.stringify({ format: b.SettingsExport.FORMAT, settings: { appearance: { motion: true }, a11y: "x" } });
+    assert.notEqual(b.choose(Promise.resolve(text)), false);
+    for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+    assert.deepEqual(rejections.map(String), []);
+    assert.match(b.button.textContent, /LOAD SETTINGS FILE — /);
+  } finally {
+    process.off("unhandledRejection", onRej);
+  }
+});
