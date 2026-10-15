@@ -8,7 +8,7 @@ metadata:
   modified: 2026-10-15T07:37:48.069Z
 ---
 
-On 2026-10-15 Bryce asked for a Claude Merge Desk ("I want agents to work together"). It is a persistent session, session_01R3whHoRN3TucnYrBdK5kAb (title "Merge Desk (f1-game)", tag merge-desk), woken hourly by trigger trig_01WCgB7LuMe9ySHLsPRRMbDp plus its own send_later. Protocol: workers send `SWEEP <PR#>` when the draft tip is green and ready-gate passes; Merge Desk answers SYNC/FIX/DONE to owners and BLOCKED to the orchestrator.
+On 2026-10-15 Bryce asked for a Claude Merge Desk ("I want agents to work together"). It is a persistent session, session_01WQY3pk88sN7o9MCxyAYoWr (title "[Merge Desk] desk (sonnet)", tag merge-desk), woken by its own send_later. Protocol: workers send `SWEEP <PR#>` when the draft tip is green and ready-gate passes; Merge Desk answers SYNC/FIX/DONE to owners and BLOCKED to the orchestrator.
 
 **Why:** a fresh-session Routine had no GitHub connector and no way to talk to the fleet.
 
