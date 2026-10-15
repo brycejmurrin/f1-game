@@ -109,7 +109,8 @@ const GaragePrebuild = (function () {
   // so one tree measures both. Race settings' prewarm (older, RACE!'s) stays on.
   function readSwitch(storage) {
     try {
-      const v = storage && storage.getItem("apex26.garagePrewarm");
+      const disk = storage === undefined ? (typeof localStorage !== "undefined" ? localStorage : null) : storage;
+      const v = disk && disk.getItem("apex26.garagePrewarm");
       return !(v === "off" || v === '"off"' || v === "0" || v === "false");
     } catch (_) { return true; }
   }
@@ -117,7 +118,7 @@ const GaragePrebuild = (function () {
   function create(G, d) {
     const gate = d.gate, cam = d.setupCam, $ = G.$;
     const now = () => performance.now(), ms = (t) => Math.round(t);
-    let enabled = readSwitch(typeof localStorage !== "undefined" ? localStorage : null);
+    let enabled = readSwitch();
     let running = false, warmed = false, last = null, open = null, firstFrame = null, timer = 0, visits = 0;
     let prepped = null;   // { key, room }: built on the CPU by a frameless plan, frames NOT drawn
     const ui = () => { const u = d.ui(); return u && u.state ? u.state() : null; };
