@@ -16,7 +16,6 @@ const DataTelemetry = (function () {
     function loadTelemetry() {
       return ensureSession().then(function () {
         const wrap = el("div", "dh-tabbody dh-split");
-        if (sel.sessionKey === null) { wrap.appendChild(emptyMsg(NO_TELEM_MSG)); return wrap; }
         const leftPane = el("div", "dh-split-L");
         const rightPane = el("div", "dh-split-R");
         leftPane.appendChild(buildPicker(function (meta) {
@@ -63,6 +62,7 @@ const DataTelemetry = (function () {
       // Keep the picker (first child of leftPane); remove everything appended after it
       while (leftPane.children.length > 1) leftPane.removeChild(leftPane.lastChild);
       clear(rightPane);
+      if (!meta || meta.sessionKey == null) { tray = []; rightPane.appendChild(emptyMsg(NO_TELEM_MSG)); return; }
       rightPane.appendChild(spinner());
 
       F1API.sessionDrivers(meta.sessionKey).then(function (drivers) {
@@ -97,13 +97,11 @@ const DataTelemetry = (function () {
         drivers.forEach(function (d) { driverByNum[d.num] = d; });
 
         function selectionChanged() {
-          // A tray edit supersedes its loading snapshot. Keep this separate
-          // from syncChips: a successful load rebuilds the same summary too.
+          // A changed tray supersedes both outcomes of the pending lap load.
           ++telGen;
-          if (telLanes) F1API.cancelAll();
+          abortStaleLanes();
           syncChips();
         }
-
         function syncChips() {
           drivers.forEach(function (d) {
             const selected = trayHas(d.num, meta.sessionKey);

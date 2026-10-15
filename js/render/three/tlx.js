@@ -4222,7 +4222,14 @@ const TLX = (function () {
           shadowSys.castShadowChunked(mesh, model);
         },
         shadowEnd() { if (shadowSys) shadowSys.shadowEnd(); },
-        carShadowBegin(vp, boxScale) { if (shadowSys) shadowSys.carShadowBegin(vp, boxScale); },
+        // The car map renders every frame and shares the soft-present queue (as
+        // mirrorBegin): submitted while a read waits, it starved that read past
+        // the stale guard on SwiftShader (#2226). KEEP: the map is still valid.
+        carShadowBegin(vp, boxScale) {
+          if (!shadowSys) return;
+          if (_softBlit && _softReadPending) { shadowSys.carShadowKeep(); return; }
+          shadowSys.carShadowBegin(vp, boxScale);
+        },
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
