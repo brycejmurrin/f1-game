@@ -103,7 +103,7 @@ Portimão is `night: false` (sky/TOD only; no dedicated night scenery lamps). La
 
 | Rank | Item | Risk |
 |------|------|------|
-| 1 | Weather/TOD batch (5 heroes) after shared shot PR | — |
+| 1 | Extra wx variants (fog/overcast) if needed | Low |
 | 2 | Terrace inside-corner sky slits | Med |
 | 3 | Optional floodlight dress if night GP enabled | Med |
 | 4 | Motorhome / broadcast row (ground-audit deferred) | Med |
