@@ -8,6 +8,7 @@
 // conflicted merge and feeds the resolvers what git hands them.
 //
 // Run: node --test tests/unit/conflict-cure.test.mjs   (npm run test:tooling-fast)
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
