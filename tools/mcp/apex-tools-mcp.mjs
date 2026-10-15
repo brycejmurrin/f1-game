@@ -25,6 +25,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { shotErrors } from "../gen/bake-flyby.mjs";
+import { aliveRun } from "../ci/test-bg.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import {
@@ -225,7 +226,9 @@ function testBgStatus() {
     return { recorded: true, running: [], browserRunning: [], runs: [], error: "unreadable" };
   }
   const runs = Array.isArray(state.runs) ? state.runs : [];
-  const running = runs.filter((run) => alive(run.pid));
+  // Share the runner’s identity/state oracle: kill(pid, 0) also succeeds
+  // for finished zombie supervisors and recycled PIDs. Neither owns a browser.
+  const running = runs.filter((run) => aliveRun(run));
   // Missing metadata is treated as browser-active for old state files. New
   // test-bg records distinguish Node-only groups so they do not block a dry
   // browser-tool plan or make tooling-fast fail while testing this guard.
