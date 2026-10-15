@@ -21,3 +21,4 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Foreground wait loop killed (137)](foreground-wait-loop-killed.md) — never block a foreground Bash on a multi-minute background run; end the turn and take the notification
 - [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch queues, a third replaces it; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps
 - [Merge method: verify parents](merge-method-verify-parents.md) — a "merge" merge_pull_request landed as a squash (#1743); check two parents after every merge
+- [Merge Desk session](merge-desk-session.md) — persistent Claude Merge Desk session_01R3whHo…; workers send `SWEEP <PR#>`; it never merges
