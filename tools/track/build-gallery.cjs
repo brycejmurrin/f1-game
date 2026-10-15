@@ -239,12 +239,58 @@ function surveyDocUrl(docPath) {
   return `${REPO}/blob/${DOC_BRANCH}/${docPath}`;
 }
 
+const MANIFEST_PATH = path.join(ROOT, "gallery", "tracks", "manifest.json");
+
+/** Shots from a prior gallery build when the survey branch ref is gone from origin. */
+function supplementSurveyShotsFromManifest(byUid) {
+  if (!fs.existsSync(MANIFEST_PATH)) return;
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
+  } catch (_) {
+    return;
+  }
+  const shots = manifest.shots;
+  if (!Array.isArray(shots)) return;
+  for (const shot of shots) {
+    const branch = shot.branch;
+    const repoRel = shot.input;
+    if (!branch || !repoRel || !/-survey/i.test(branch)) continue;
+    const uid = `${branch}:${repoRel}`;
+    if (byUid.has(uid)) continue;
+    const circuitHint = shot.circuit || repoRel.split("/")[3];
+    const meta = parseShotMeta(path.basename(repoRel), {
+      circuitHint,
+      bucket: "tracks",
+      branch,
+      repoRel,
+    });
+    if (!meta) continue;
+    const rawUrl = shot.rawUrl || rawGitHubUrl(GH.owner, GH.repo, branch, repoRel);
+    byUid.set(uid, {
+      ...meta,
+      uid,
+      gitBranch: branch,
+      repoRel,
+      rawUrl,
+      abs: null,
+      branchSlug: branchSlug(branch),
+    });
+  }
+}
+
 function collectSurveyBranchShots() {
   /** @type {Map<string, object>} */
   const byUid = new Map();
   const branches = surveyBranchesToScan(ROOT);
   for (const branch of branches) {
-    for (const repoRel of listBranchTrackImages(ROOT, branch)) {
+    let repoPaths;
+    try {
+      repoPaths = listBranchTrackImages(ROOT, branch);
+    } catch (_) {
+      continue;
+    }
+    for (const repoRel of repoPaths) {
       const circuitHint = repoRel.split("/")[3];
       const meta = parseShotMeta(path.basename(repoRel), {
         circuitHint,
@@ -266,6 +312,7 @@ function collectSurveyBranchShots() {
       });
     }
   }
+  supplementSurveyShotsFromManifest(byUid);
   return [...byUid.values()];
 }
 
