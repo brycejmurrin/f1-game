@@ -1,0 +1,346 @@
+{
+  "jobs": [
+    {
+      "trackId": "istanbul",
+      "frac": 0.005,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s1-pit-main-grandstand-day-dry-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.055,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s1-t1-plunge-day-dry-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.06,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s1-t1-silver1-day-dry-trackside.jpg",
+      "el": 12,
+      "dist": 40,
+      "side": 1
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.15,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s1-t3-4-complex-day-dry-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.29,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s2-silver3-day-dry-trackside.jpg",
+      "el": 12,
+      "dist": 38,
+      "side": 1
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.34,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-entry-day-dry-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.48,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-exit-day-dry-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.418,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-hospitality-day-dry-orbit.jpg",
+      "az": 60,
+      "el": 22,
+      "dist": 75
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.4,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-silver4-day-dry-orbit.jpg",
+      "az": 90,
+      "el": 20,
+      "dist": 80
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.395,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-apex-day-dry-orbit.jpg",
+      "az": 75,
+      "el": 24,
+      "dist": 85
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.615,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s3-t9-10-gravel-day-dry-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.76,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s3-t12-banked-day-dry-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.905,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s3-t13-14-gravel-day-dry-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.93,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s3-stone-portal-day-dry-trackside.jpg",
+      "el": 10,
+      "dist": 35,
+      "side": -1
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.91,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s3-silver8-day-dry-trackside.jpg",
+      "el": 12,
+      "dist": 38,
+      "side": 1
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.965,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s3-pit-straight-day-dry-eye.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.395,
+      "cam": "orbit",
+      "tod": "dawn",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-apex-dawn-dry-orbit.jpg",
+      "az": 75,
+      "el": 24,
+      "dist": 85
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.395,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-apex-dusk-dry-orbit.jpg",
+      "az": 75,
+      "el": 24,
+      "dist": 85
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.395,
+      "cam": "orbit",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-apex-night-dry-orbit.jpg",
+      "az": 75,
+      "el": 24,
+      "dist": 85
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.395,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-apex-day-overcast-orbit.jpg",
+      "az": 75,
+      "el": 24,
+      "dist": 85
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.395,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-apex-day-fog-orbit.jpg",
+      "az": 75,
+      "el": 24,
+      "dist": 85
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.395,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-apex-day-rain-orbit.jpg",
+      "az": 75,
+      "el": 24,
+      "dist": 85
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.395,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-apex-day-wet-orbit.jpg",
+      "az": 75,
+      "el": 24,
+      "dist": 85
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.395,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "storm",
+      "out": "artifacts/shots/tracks/istanbul/s2-t8-apex-day-storm-orbit.jpg",
+      "az": 75,
+      "el": 24,
+      "dist": 85
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.965,
+      "cam": "eye",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s3-pit-dusk-dry-eye.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.965,
+      "cam": "eye",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s3-pit-night-dry-eye.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.965,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/istanbul/s3-pit-day-overcast-eye.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.965,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/istanbul/s3-pit-day-rain-eye.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.965,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/istanbul/s3-pit-day-wet-eye.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.965,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "storm",
+      "out": "artifacts/shots/tracks/istanbul/s3-pit-day-storm-eye.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.055,
+      "cam": "park",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s1-t1-plunge-dusk-dry-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.055,
+      "cam": "park",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/istanbul/s1-t1-plunge-day-overcast-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.055,
+      "cam": "park",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/istanbul/s1-t1-plunge-day-rain-park.jpg"
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.93,
+      "cam": "trackside",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/istanbul/s3-stone-portal-night-dry-trackside.jpg",
+      "el": 10,
+      "dist": 35,
+      "side": -1
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.93,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/istanbul/s3-stone-portal-day-overcast-trackside.jpg",
+      "el": 10,
+      "dist": 35,
+      "side": -1
+    },
+    {
+      "trackId": "istanbul",
+      "frac": 0.93,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/istanbul/s3-stone-portal-day-fog-trackside.jpg",
+      "el": 10,
+      "dist": 35,
+      "side": -1
+    }
+  ]
+}

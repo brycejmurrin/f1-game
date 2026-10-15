@@ -1,0 +1,337 @@
+{
+  "jobs": [
+    {
+      "trackId": "sochi",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/00-s1-start-orbit-day-dry.jpg",
+      "az": 40,
+      "el": 22,
+      "dist": 65
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.005,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/01-s1-grid-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.062,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/02-s1-rings-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.09,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/03-s1-t2-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.115,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/04-s1-flame-orbit-day-dry.jpg",
+      "az": 120,
+      "el": 20,
+      "dist": 80
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.18,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/06-s1-fisht-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.225,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/07-s1-adler-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.245,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/08-s1-shayba-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.29,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/09-s1-iceberg-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.255,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/10-s1-t5-trackside-day-dry.jpg",
+      "el": 12,
+      "dist": 40,
+      "side": -1
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.42,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/11-s2-outer-park-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.545,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/13-s2-t13-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.72,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/15-s3-t17-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.78,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/16-s3-icecube-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.97,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/17-s3-pit-eye-day-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.5,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/18-overview-orbit-day-dry.jpg",
+      "az": 200,
+      "el": 35,
+      "dist": 150
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/sochi/20-start-orbit-day-wet.jpg",
+      "az": 40,
+      "el": 22,
+      "dist": 65
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/sochi/21-start-orbit-day-rain.jpg",
+      "az": 40,
+      "el": 22,
+      "dist": 65
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/sochi/22-start-orbit-day-overcast.jpg",
+      "az": 40,
+      "el": 22,
+      "dist": 65
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/sochi/23-start-orbit-day-fog.jpg",
+      "az": 40,
+      "el": 22,
+      "dist": 65
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "storm",
+      "out": "artifacts/shots/tracks/sochi/24-start-orbit-day-storm.jpg",
+      "az": 40,
+      "el": 22,
+      "dist": 65
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.115,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/sochi/25-flame-orbit-day-wet.jpg",
+      "az": 120,
+      "el": 20,
+      "dist": 80
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.115,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/sochi/26-flame-orbit-day-rain.jpg",
+      "az": 120,
+      "el": 20,
+      "dist": 80
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.115,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/sochi/27-flame-orbit-day-overcast.jpg",
+      "az": 120,
+      "el": 20,
+      "dist": 80
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.115,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/sochi/28-flame-orbit-day-fog.jpg",
+      "az": 120,
+      "el": 20,
+      "dist": 80
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.18,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/sochi/29-fisht-eye-day-wet.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.18,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/sochi/30-fisht-eye-day-rain.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.18,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/sochi/31-fisht-eye-day-overcast.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.18,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/sochi/32-fisht-eye-day-fog.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.97,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/sochi/33-pit-eye-day-wet.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.97,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/sochi/34-pit-eye-day-rain.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.97,
+      "cam": "eye",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/sochi/35-pit-eye-day-overcast.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.5,
+      "cam": "orbit",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/37-overview-orbit-night-dry.jpg",
+      "az": 200,
+      "el": 35,
+      "dist": 150
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.115,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/38-flame-orbit-dusk-dry.jpg",
+      "az": 120,
+      "el": 20,
+      "dist": 80
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.18,
+      "cam": "eye",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/39-fisht-eye-night-dry.jpg"
+    },
+    {
+      "trackId": "sochi",
+      "frac": 0.97,
+      "cam": "eye",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/sochi/40-pit-eye-dusk-dry.jpg"
+    }
+  ]
+}

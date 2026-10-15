@@ -1,0 +1,383 @@
+{
+  "jobs": [
+    {
+      "trackId": "nurburgring",
+      "frac": 0.55,
+      "cam": "orbit",
+      "tod": "dawn",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-burg-nurburg-dawn-dry.jpg",
+      "az": 200,
+      "el": 12,
+      "dist": 180
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.55,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-burg-nurburg-day-dry.jpg",
+      "az": 200,
+      "el": 12,
+      "dist": 180
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.55,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/nurburgring/hero-burg-nurburg-day-fog.jpg",
+      "az": 200,
+      "el": 12,
+      "dist": 180
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.55,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/nurburgring/hero-burg-nurburg-day-overcast.jpg",
+      "az": 200,
+      "el": 12,
+      "dist": 180
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.55,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-burg-nurburg-dusk-dry.jpg",
+      "az": 200,
+      "el": 12,
+      "dist": 180
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.21,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-day-dry.jpg",
+      "az": 120,
+      "el": 18,
+      "dist": 75
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.21,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-day-fog.jpg",
+      "az": 120,
+      "el": 18,
+      "dist": 75
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.21,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-day-rain.jpg",
+      "az": 120,
+      "el": 18,
+      "dist": 75
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.21,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-day-wet.jpg",
+      "az": 120,
+      "el": 18,
+      "dist": 75
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.21,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-dusk-dry.jpg",
+      "az": 120,
+      "el": 18,
+      "dist": 75
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.21,
+      "cam": "orbit",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-bridge-night-dry.jpg",
+      "az": 120,
+      "el": 18,
+      "dist": 75
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.66,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-day-dry.jpg",
+      "el": 14,
+      "dist": 42,
+      "side": -1
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.66,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-day-overcast.jpg",
+      "el": 14,
+      "dist": 42,
+      "side": -1
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.66,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "storm",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-day-storm.jpg",
+      "el": 14,
+      "dist": 42,
+      "side": -1
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.66,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-day-wet.jpg",
+      "el": 14,
+      "dist": 42,
+      "side": -1
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.66,
+      "cam": "trackside",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-dusk-dry.jpg",
+      "el": 14,
+      "dist": 42,
+      "side": -1
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.66,
+      "cam": "trackside",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-dunlop-kehre-night-dry.jpg",
+      "el": 14,
+      "dist": 42,
+      "side": -1
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.11,
+      "cam": "orbit",
+      "tod": "dawn",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-mercedes-arena-dawn-dry.jpg",
+      "az": 55,
+      "el": 22,
+      "dist": 85
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.11,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-mercedes-arena-day-dry.jpg",
+      "az": 55,
+      "el": 22,
+      "dist": 85
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.11,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/nurburgring/hero-mercedes-arena-day-fog.jpg",
+      "az": 55,
+      "el": 22,
+      "dist": 85
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.11,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/nurburgring/hero-mercedes-arena-day-overcast.jpg",
+      "az": 55,
+      "el": 22,
+      "dist": 85
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.11,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/nurburgring/hero-mercedes-arena-day-wet.jpg",
+      "az": 55,
+      "el": 22,
+      "dist": 85
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.11,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-mercedes-arena-dusk-dry.jpg",
+      "az": 55,
+      "el": 22,
+      "dist": 85
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.11,
+      "cam": "orbit",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-mercedes-arena-night-dry.jpg",
+      "az": 55,
+      "el": 22,
+      "dist": 85
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-pit-complex-day-dry.jpg",
+      "az": 35,
+      "el": 20,
+      "dist": 70
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/nurburgring/hero-pit-complex-day-fog.jpg",
+      "az": 35,
+      "el": 20,
+      "dist": 70
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "overcast",
+      "out": "artifacts/shots/tracks/nurburgring/hero-pit-complex-day-overcast.jpg",
+      "az": 35,
+      "el": 20,
+      "dist": 70
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/nurburgring/hero-pit-complex-day-wet.jpg",
+      "az": 35,
+      "el": 20,
+      "dist": 70
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-pit-complex-dusk-dry.jpg",
+      "az": 35,
+      "el": 20,
+      "dist": 70
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/hero-pit-complex-night-dry.jpg",
+      "az": 35,
+      "el": 20,
+      "dist": 70
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.028,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/s1-haug-haken-day-dry.jpg",
+      "el": 12,
+      "dist": 40,
+      "side": -1
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.38,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/s2-forest-loop-day-dry.jpg",
+      "az": 90,
+      "el": 18,
+      "dist": 95
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.968,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/s3-coca-cola-day-dry.jpg"
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.78,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/s3-schumacher-s-day-dry.jpg",
+      "el": 10,
+      "dist": 35,
+      "side": 1
+    },
+    {
+      "trackId": "nurburgring",
+      "frac": 0.93,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/nurburgring/s3-veedol-day-dry.jpg"
+    }
+  ]
+}

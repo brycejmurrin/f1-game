@@ -1,0 +1,391 @@
+{
+  "jobs": [
+    {
+      "trackId": "hockenheim",
+      "frac": 0.828,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/lm-mercedes-tribune-day-dry.jpg",
+      "az": 40,
+      "el": 22,
+      "dist": 75
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/lm-pit-bays-day-dry.jpg",
+      "az": 30,
+      "el": 18,
+      "dist": 65
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.061,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s1-nordkurve-day-dry.jpg"
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.26,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s1-parabolika-entry-day-dry.jpg",
+      "az": 180,
+      "el": 15,
+      "dist": 90
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.02,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s1-pit-straight-day-dry.jpg"
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.33,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s2-ostkurve-day-dry.jpg",
+      "el": 14,
+      "dist": 55,
+      "side": 1
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.33,
+      "cam": "trackside",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s2-ostkurve-trackside-day-dry.jpg",
+      "el": 14,
+      "dist": 55,
+      "side": 1
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.4635,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s2-spitzkehre-day-dry.jpg",
+      "az": 45,
+      "el": 28,
+      "dist": 85
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.76,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s3-motodrom-entry-day-dry.jpg",
+      "az": 120,
+      "el": 22,
+      "dist": 70
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.8675,
+      "cam": "park",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s3-sachskurve-day-dry.jpg"
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.935,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s3-suedtribune-day-dry.jpg",
+      "az": -60,
+      "el": 20,
+      "dist": 72
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.88,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/s3-videowall-day-dry.jpg",
+      "az": 70,
+      "el": 24,
+      "dist": 68
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.15,
+      "cam": "orbit",
+      "tod": "dawn",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-forest-dawn-dry.jpg",
+      "az": 90,
+      "el": 16,
+      "dist": 100
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.15,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-forest-dusk-dry.jpg",
+      "az": 90,
+      "el": 16,
+      "dist": 100
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.15,
+      "cam": "orbit",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-forest-night-dry.jpg",
+      "az": 90,
+      "el": 16,
+      "dist": 100
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.88,
+      "cam": "orbit",
+      "tod": "dawn",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-motodrom-dawn-dry.jpg",
+      "az": 70,
+      "el": 24,
+      "dist": 68
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.88,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-motodrom-dusk-dry.jpg",
+      "az": 70,
+      "el": 24,
+      "dist": 68
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.88,
+      "cam": "orbit",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-motodrom-night-dry.jpg",
+      "az": 70,
+      "el": 24,
+      "dist": 68
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.4635,
+      "cam": "orbit",
+      "tod": "dawn",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-spitzkehre-dawn-dry.jpg",
+      "az": 45,
+      "el": 28,
+      "dist": 85
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.4635,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-spitzkehre-dusk-dry.jpg",
+      "az": 45,
+      "el": 28,
+      "dist": 85
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.4635,
+      "cam": "orbit",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-spitzkehre-night-dry.jpg",
+      "az": 45,
+      "el": 28,
+      "dist": 85
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "dawn",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-start-dawn-dry.jpg",
+      "az": 30,
+      "el": 18,
+      "dist": 65
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "dusk",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-start-dusk-dry.jpg",
+      "az": 30,
+      "el": 18,
+      "dist": 65
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "night",
+      "weather": "dry",
+      "out": "artifacts/shots/tracks/hockenheim/tod-start-night-dry.jpg",
+      "az": 30,
+      "el": 18,
+      "dist": 65
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.15,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/hockenheim/wx-forest-fog-day.jpg",
+      "az": 90,
+      "el": 16,
+      "dist": 100
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.15,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/hockenheim/wx-forest-rain-day.jpg",
+      "az": 90,
+      "el": 16,
+      "dist": 100
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.15,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/hockenheim/wx-forest-wet-day.jpg",
+      "az": 90,
+      "el": 16,
+      "dist": 100
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.88,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/hockenheim/wx-motodrom-fog-day.jpg",
+      "az": 70,
+      "el": 24,
+      "dist": 68
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.88,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/hockenheim/wx-motodrom-rain-day.jpg",
+      "az": 70,
+      "el": 24,
+      "dist": 68
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.88,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/hockenheim/wx-motodrom-wet-day.jpg",
+      "az": 70,
+      "el": 24,
+      "dist": 68
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.4635,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/hockenheim/wx-spitzkehre-fog-day.jpg",
+      "az": 45,
+      "el": 28,
+      "dist": 85
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.4635,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/hockenheim/wx-spitzkehre-rain-day.jpg",
+      "az": 45,
+      "el": 28,
+      "dist": 85
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0.4635,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/hockenheim/wx-spitzkehre-wet-day.jpg",
+      "az": 45,
+      "el": 28,
+      "dist": 85
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "fog",
+      "out": "artifacts/shots/tracks/hockenheim/wx-start-fog-day.jpg",
+      "az": 30,
+      "el": 18,
+      "dist": 65
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "rain",
+      "out": "artifacts/shots/tracks/hockenheim/wx-start-rain-day.jpg",
+      "az": 30,
+      "el": 18,
+      "dist": 65
+    },
+    {
+      "trackId": "hockenheim",
+      "frac": 0,
+      "cam": "orbit",
+      "tod": "day",
+      "weather": "wet",
+      "out": "artifacts/shots/tracks/hockenheim/wx-start-wet-day.jpg",
+      "az": 30,
+      "el": 18,
+      "dist": 65
+    }
+  ]
+}
