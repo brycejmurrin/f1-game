@@ -380,13 +380,10 @@
         addBox(out, vadd(a.c, a.u, 15), [3.5, 1.2, 1.2], LED, [a.r, a.u, a.t]); // bright light head
       }
       if (circuitKit) {
-        // Gap 42: 30 clipped back-row neonTower (severe 1.11 m @ racing 0.042);
-        // 44+ is "footprint rejected" (measured 2026-10-15), so the 55 m the
-        // clip fix chose silently dropped the whole hospitality kit.
-        circuitKit.hospitality({
-          id: "kit:vegas:paddock-hospitality", frac: sl(0.045),
-          side: -1, gap: 42, size: [18, 9, 46], modules: 5,
-        });
+        // No hospitality kit: the paddock strip has no clean slot (measured
+        // 2026-10-15). gap 30 clips a back-row neonTower; 44+ is "footprint
+        // rejected"; 42 culls the canopy (invalid emission); 34-41 and fracs
+        // 0.035-0.050 emit but clip paddock boxes (1-2 severe spots).
         circuitKit.serviceCompound({
           id: "kit:vegas:paddock-service", frac: sl(0.022),
           side: -1, gap: 15, size: [22, 5, 34], vehicles: 8,
