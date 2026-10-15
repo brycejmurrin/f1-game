@@ -1,40 +1,55 @@
 # Red Bull Ring (`redbull`) — circuit survey
 
-**Shots:** 37 committed JPEGs · `artifacts/shots/tracks/redbull/`
+**Frames:** 36 hero matrix JPEGs · `artifacts/shots/tracks/redbull/` (1280px, q≈80, &lt;300 KB)
 
-### Sector 1
+Six anchor views × six lighting/weather combos (dry, wet, rain, overcast, fog, storm across the set).
 
-| | | |
-|:---:|:---:|:---:|
-| ![sec-s1-pit-straight.jpg](../../../artifacts/shots/tracks/redbull/sec-s1-pit-straight.jpg)<br/>**pit straight trackside** · day / dry | ![sec-s1-t1-climb.jpg](../../../artifacts/shots/tracks/redbull/sec-s1-t1-climb.jpg)<br/>**T1 Lauda climb eye** · day / dry | ![sec-s1-bull-hill.jpg](../../../artifacts/shots/tracks/redbull/sec-s1-bull-hill.jpg)<br/>**bull hillside orbit** · day / dry |
-| ![extra-s1-exit-park.jpg](../../../artifacts/shots/tracks/redbull/extra-s1-exit-park.jpg)<br/>**post-T1 park drive** · day / dry | ![extra-sector1-line.jpg](../../../artifacts/shots/tracks/redbull/extra-sector1-line.jpg)<br/>**sector 1 timing orbit** · day / dry | ![extra-wing-orbit.jpg](../../../artifacts/shots/tracks/redbull/extra-wing-orbit.jpg)<br/>**Wing paddock orbit** · day / dry |
-| ![lm-wing-paddock.jpg](../../../artifacts/shots/tracks/redbull/lm-wing-paddock.jpg)<br/>**The Wing paddock** · day / dry | ![lm-start-gantry.jpg](../../../artifacts/shots/tracks/redbull/lm-start-gantry.jpg)<br/>**start gantry eye** · day / dry | ![lm-lauda-stand.jpg](../../../artifacts/shots/tracks/redbull/lm-lauda-stand.jpg)<br/>**Steiermark / Lauda stand** · day / dry |
-| ![lm-bull-plaza.jpg](../../../artifacts/shots/tracks/redbull/lm-bull-plaza.jpg)<br/>**charging bull plaza** · day / dry | ![extra-bull-cinematic.jpg](../../../artifacts/shots/tracks/redbull/extra-bull-cinematic.jpg)<br/>**bull plaza cinematic** · day / dry |
-
-### Sector 2
+### Start straight · The Wing (orbit)
 
 | | | |
 |:---:|:---:|:---:|
-| ![sec-s2-remus-approach.jpg](../../../artifacts/shots/tracks/redbull/sec-s2-remus-approach.jpg)<br/>**Remus approach orbit** · day / dry | ![extra-remus-amphi.jpg](../../../artifacts/shots/tracks/redbull/extra-remus-amphi.jpg)<br/>**Remus amphitheatre** · day / dry | ![sec-s2-remus-crest.jpg](../../../artifacts/shots/tracks/redbull/sec-s2-remus-crest.jpg)<br/>**Remus crest orbit** · day / dry |
-| ![lm-gold-column.jpg](../../../artifacts/shots/tracks/redbull/lm-gold-column.jpg)<br/>**gold observation column** · day / dry | ![lm-chairlift.jpg](../../../artifacts/shots/tracks/redbull/lm-chairlift.jpg)<br/>**chairlift line** · day / dry | ![sec-s2-schlossgold.jpg](../../../artifacts/shots/tracks/redbull/sec-s2-schlossgold.jpg)<br/>**Schlossgold braking** · day / dry |
-| ![extra-s2-park.jpg](../../../artifacts/shots/tracks/redbull/extra-s2-park.jpg)<br/>**descent park drive** · day / dry | ![extra-pine-sector.jpg](../../../artifacts/shots/tracks/redbull/extra-pine-sector.jpg)<br/>**pine forest sector orbit** · day / dry | ![extra-sector2-line.jpg](../../../artifacts/shots/tracks/redbull/extra-sector2-line.jpg)<br/>**sector 2 timing orbit** · day / dry |
-| ![extra-green-hill-bank.jpg](../../../artifacts/shots/tracks/redbull/extra-green-hill-bank.jpg)<br/>**Green Hill bank** · day / dry |
+| ![hero-wing_day-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-wing_day-dry.jpg)<br/>**Start straight · The Wing (orbit)**<br/>day / dry | ![hero-wing_day-overcast.jpg](../../../artifacts/shots/tracks/redbull/hero-wing_day-overcast.jpg)<br/>**Start straight · The Wing (orbit)**<br/>day / overcast | ![hero-wing_day-rain.jpg](../../../artifacts/shots/tracks/redbull/hero-wing_day-rain.jpg)<br/>**Start straight · The Wing (orbit)**<br/>day / rain |
+| ![hero-wing_day-wet.jpg](../../../artifacts/shots/tracks/redbull/hero-wing_day-wet.jpg)<br/>**Start straight · The Wing (orbit)**<br/>day / wet | ![hero-wing_dusk-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-wing_dusk-dry.jpg)<br/>**Start straight · The Wing (orbit)**<br/>dusk / dry | ![hero-wing_night-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-wing_night-dry.jpg)<br/>**Start straight · The Wing (orbit)**<br/>night / dry |
 
-### Sector 3 + context
+### Charging bull plaza (orbit)
 
 | | | |
 |:---:|:---:|:---:|
-| ![sec-s3-green-hill.jpg](../../../artifacts/shots/tracks/redbull/sec-s3-green-hill.jpg)<br/>**scaffold stand trackside** · day / dry | ![sec-s3-mid-descent.jpg](../../../artifacts/shots/tracks/redbull/sec-s3-mid-descent.jpg)<br/>**mid-lap descent park** · day / dry | ![extra-back-straight.jpg](../../../artifacts/shots/tracks/redbull/extra-back-straight.jpg)<br/>**back straight orbit** · day / dry |
-| ![sec-s3-stadium.jpg](../../../artifacts/shots/tracks/redbull/sec-s3-stadium.jpg)<br/>**stadium approach** · day / dry | ![extra-final-sector-park.jpg](../../../artifacts/shots/tracks/redbull/extra-final-sector-park.jpg)<br/>**final sector park** · day / dry | ![lm-fan-village.jpg](../../../artifacts/shots/tracks/redbull/lm-fan-village.jpg)<br/>**stadium fan village** · day / dry |
-| ![extra-broadcast-compound.jpg](../../../artifacts/shots/tracks/redbull/extra-broadcast-compound.jpg)<br/>**broadcast compound** · day / dry | ![extra-stadium-bowl-92.jpg](../../../artifacts/shots/tracks/redbull/extra-stadium-bowl-92.jpg)<br/>**stadium bowl s≈0.92** · day / dry | ![sec-sf-bowl.jpg](../../../artifacts/shots/tracks/redbull/sec-sf-bowl.jpg)<br/>**start/finish bowl** · day / dry |
-| ![lm-styrian-farm.jpg](../../../artifacts/shots/tracks/redbull/lm-styrian-farm.jpg)<br/>**Styrian farmyard** · day / dry | ![ctx-full-bowl.jpg](../../../artifacts/shots/tracks/redbull/ctx-full-bowl.jpg)<br/>**orbit high** · day / dry |
+| ![hero-bull_dawn-fog.jpg](../../../artifacts/shots/tracks/redbull/hero-bull_dawn-fog.jpg)<br/>**Charging bull plaza (orbit)**<br/>dawn / fog | ![hero-bull_day-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-bull_day-dry.jpg)<br/>**Charging bull plaza (orbit)**<br/>day / dry | ![hero-bull_day-overcast.jpg](../../../artifacts/shots/tracks/redbull/hero-bull_day-overcast.jpg)<br/>**Charging bull plaza (orbit)**<br/>day / overcast |
+| ![hero-bull_day-rain.jpg](../../../artifacts/shots/tracks/redbull/hero-bull_day-rain.jpg)<br/>**Charging bull plaza (orbit)**<br/>day / rain | ![hero-bull_dusk-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-bull_dusk-dry.jpg)<br/>**Charging bull plaza (orbit)**<br/>dusk / dry | ![hero-bull_night-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-bull_night-dry.jpg)<br/>**Charging bull plaza (orbit)**<br/>night / dry |
 
-### Weather / lighting (partial)
+### Steiermark / Lauda stand (orbit)
 
 | | | |
 |:---:|:---:|:---:|
-| ![wx-start-wing_dawn-fog.jpg](../../../artifacts/shots/tracks/redbull/wx-start-wing_dawn-fog.jpg)<br/>**start / Wing orbit** · dawn / fog | ![wx-bull-plaza_dawn-fog.jpg](../../../artifacts/shots/tracks/redbull/wx-bull-plaza_dawn-fog.jpg)<br/>**bull plaza orbit** · dawn / fog | ![wx-bull-plaza_wet-road.jpg](../../../artifacts/shots/tracks/redbull/wx-bull-plaza_wet-road.jpg)<br/>**bull plaza orbit** · day / wet |
-| ![wx-remus-crest_dawn-fog.jpg](../../../artifacts/shots/tracks/redbull/wx-remus-crest_dawn-fog.jpg)<br/>**Remus crest orbit** · dawn / fog | ![wx-remus-crest_wet-road.jpg](../../../artifacts/shots/tracks/redbull/wx-remus-crest_wet-road.jpg)<br/>**Remus crest orbit** · day / wet |
+| ![hero-lauda_day-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-lauda_day-dry.jpg)<br/>**Steiermark / Lauda stand (orbit)**<br/>day / dry | ![hero-lauda_day-overcast.jpg](../../../artifacts/shots/tracks/redbull/hero-lauda_day-overcast.jpg)<br/>**Steiermark / Lauda stand (orbit)**<br/>day / overcast | ![hero-lauda_day-rain.jpg](../../../artifacts/shots/tracks/redbull/hero-lauda_day-rain.jpg)<br/>**Steiermark / Lauda stand (orbit)**<br/>day / rain |
+| ![hero-lauda_day-wet.jpg](../../../artifacts/shots/tracks/redbull/hero-lauda_day-wet.jpg)<br/>**Steiermark / Lauda stand (orbit)**<br/>day / wet | ![hero-lauda_dusk-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-lauda_dusk-dry.jpg)<br/>**Steiermark / Lauda stand (orbit)**<br/>dusk / dry | ![hero-lauda_night-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-lauda_night-dry.jpg)<br/>**Steiermark / Lauda stand (orbit)**<br/>night / dry |
+
+### Remus crest amphitheatre (orbit)
+
+| | | |
+|:---:|:---:|:---:|
+| ![hero-remus_dawn-fog.jpg](../../../artifacts/shots/tracks/redbull/hero-remus_dawn-fog.jpg)<br/>**Remus crest amphitheatre (orbit)**<br/>dawn / fog | ![hero-remus_day-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-remus_day-dry.jpg)<br/>**Remus crest amphitheatre (orbit)**<br/>day / dry | ![hero-remus_day-overcast.jpg](../../../artifacts/shots/tracks/redbull/hero-remus_day-overcast.jpg)<br/>**Remus crest amphitheatre (orbit)**<br/>day / overcast |
+| ![hero-remus_day-rain.jpg](../../../artifacts/shots/tracks/redbull/hero-remus_day-rain.jpg)<br/>**Remus crest amphitheatre (orbit)**<br/>day / rain | ![hero-remus_dusk-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-remus_dusk-dry.jpg)<br/>**Remus crest amphitheatre (orbit)**<br/>dusk / dry | ![hero-remus_night-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-remus_night-dry.jpg)<br/>**Remus crest amphitheatre (orbit)**<br/>night / dry |
+
+### Green Hill scaffold stand (trackside)
+
+| | | |
+|:---:|:---:|:---:|
+| ![hero-greenhill_day-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-greenhill_day-dry.jpg)<br/>**Green Hill scaffold stand (trackside)**<br/>day / dry | ![hero-greenhill_day-overcast.jpg](../../../artifacts/shots/tracks/redbull/hero-greenhill_day-overcast.jpg)<br/>**Green Hill scaffold stand (trackside)**<br/>day / overcast | ![hero-greenhill_day-rain.jpg](../../../artifacts/shots/tracks/redbull/hero-greenhill_day-rain.jpg)<br/>**Green Hill scaffold stand (trackside)**<br/>day / rain |
+| ![hero-greenhill_day-wet.jpg](../../../artifacts/shots/tracks/redbull/hero-greenhill_day-wet.jpg)<br/>**Green Hill scaffold stand (trackside)**<br/>day / wet | ![hero-greenhill_dusk-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-greenhill_dusk-dry.jpg)<br/>**Green Hill scaffold stand (trackside)**<br/>dusk / dry | ![hero-greenhill_night-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-greenhill_night-dry.jpg)<br/>**Green Hill scaffold stand (trackside)**<br/>night / dry |
+
+### Stadium fan village (trackside)
+
+| | | |
+|:---:|:---:|:---:|
+| ![hero-fanvillage_day-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-fanvillage_day-dry.jpg)<br/>**Stadium fan village (trackside)**<br/>day / dry | ![hero-fanvillage_day-overcast.jpg](../../../artifacts/shots/tracks/redbull/hero-fanvillage_day-overcast.jpg)<br/>**Stadium fan village (trackside)**<br/>day / overcast | ![hero-fanvillage_day-rain.jpg](../../../artifacts/shots/tracks/redbull/hero-fanvillage_day-rain.jpg)<br/>**Stadium fan village (trackside)**<br/>day / rain |
+| ![hero-fanvillage_day-storm.jpg](../../../artifacts/shots/tracks/redbull/hero-fanvillage_day-storm.jpg)<br/>**Stadium fan village (trackside)**<br/>day / storm | ![hero-fanvillage_dusk-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-fanvillage_dusk-dry.jpg)<br/>**Stadium fan village (trackside)**<br/>dusk / dry | ![hero-fanvillage_night-dry.jpg](../../../artifacts/shots/tracks/redbull/hero-fanvillage_night-dry.jpg)<br/>**Stadium fan village (trackside)**<br/>night / dry |
+
+## Scenery fixes (this branch)
+
+- `backdrop()` burial guard; farm/motorhome setbacks; Remus crowd density.
+- Landmarks: Wing, bull plaza, Lauda stand.
 
 ## Verification
 
