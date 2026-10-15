@@ -1,0 +1,356 @@
+{
+  "job": {
+    "trackId": "montreal",
+    "frac": 0.12,
+    "cam": "orbit",
+    "az": 95,
+    "el": 16,
+    "dist": 60,
+    "side": -1,
+    "tod": "day",
+    "weather": "dry",
+    "showHud": false,
+    "team": null,
+    "out": "/workspace/artifacts/shots/tracks/montreal/s2-basin-shore__wx-dry__tod-day.jpg",
+    "backend": "three",
+    "capture": {
+      "profile": "custom",
+      "width": null,
+      "height": null,
+      "viewport": null,
+      "dpr": 1,
+      "type": null,
+      "quality": null,
+      "scope": "scene",
+      "gpu": "swiftshader",
+      "gpuExplicit": false,
+      "browser": "auto",
+      "trace": false,
+      "tracePath": null,
+      "cacheAssets": false,
+      "reuse": true,
+      "isolated": false,
+      "seed": null,
+      "positionals": []
+    },
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "type": "jpeg",
+    "quality": 85,
+    "raster": false
+  },
+  "browser": {
+    "requested": {
+      "gpu": "swiftshader",
+      "flavor": "auto"
+    },
+    "executable": {
+      "requestedFlavor": "auto",
+      "executablePath": "/usr/local/bin/google-chrome",
+      "source": "PATH:google-chrome",
+      "flavor": "chromium",
+      "pid": 45421
+    },
+    "version": "154.0.8037.92",
+    "actual": {
+      "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+      "vendor": "Google Inc. (Google)",
+      "software": true,
+      "devices": [
+        {
+          "vendorId": 65535,
+          "deviceId": 65535,
+          "vendorString": "Google Inc. (Google)",
+          "deviceString": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0)",
+          "driverVendor": "SwANGLE",
+          "driverVersion": "5.0.0"
+        }
+      ],
+      "featureStatus": {
+        "2d_canvas": "enabled",
+        "direct_rendering_display_compositor": "disabled_off_ok",
+        "gpu_compositing": "enabled",
+        "multiple_raster_threads": "enabled_on",
+        "opengl": "enabled_on",
+        "rasterization": "enabled",
+        "raw_draw": "disabled_off_ok",
+        "skia_graphite": "disabled_off",
+        "trees_in_viz": "disabled_off",
+        "video_decode": "enabled",
+        "video_encode": "disabled_software",
+        "vulkan": "disabled_off",
+        "webgl": "enabled",
+        "webgpu": "unavailable_software",
+        "webgpu_on_vk_via_gl_interop": "disabled_off",
+        "webnn": "disabled_off"
+      }
+    },
+    "error": null
+  },
+  "state": {
+    "diag": {
+      "env": {
+        "backend": "three",
+        "backendState": {
+          "api": "webgpu",
+          "forceWebGL": false,
+          "pin": null,
+          "autoStayGL": false,
+          "hasGpu": true,
+          "gpuAdapterOk": true,
+          "gpuCanvasOk": true,
+          "canvasAlpha": null,
+          "isMobile": false,
+          "mobileTier": false,
+          "isWebKit": false,
+          "liteGpu": true,
+          "softwareGL": true,
+          "softAdapter": true,
+          "headless": true,
+          "forceHw": false,
+          "forceBatches": false,
+          "skipBatches": true,
+          "skipBatchesPin": false,
+          "gpuErrFrames": 0,
+          "envFail": 0,
+          "envFailMsg": "",
+          "softBlit": true,
+          "capPref": null,
+          "fx": {
+            "shadows": 4,
+            "marks": 0,
+            "skidVerts": 0,
+            "glow": 0,
+            "particles": 0,
+            "decals": 5,
+            "lineVerts": 3480
+          },
+          "line": {
+            "meshes": 1,
+            "visible": 1,
+            "inScene": 1,
+            "geo": {
+              "index": 12282,
+              "indexType": "Uint32Array",
+              "range": 10434,
+              "pos": 4096,
+              "attrs": [
+                "position",
+                "lineAcross",
+                "lineSpeed",
+                "lineZone",
+                "lineAlong"
+              ],
+              "renderOrder": 9,
+              "bs": [
+                1003.4
+              ]
+            }
+          },
+          "softRead": {
+            "gen": 11,
+            "lastMs": 4271,
+            "fails": 0,
+            "lastErr": null,
+            "abandoned": 0,
+            "pending": true
+          },
+          "gpuErrors": 0,
+          "gpuFirstError": null,
+          "gpuRecentErrors": [],
+          "presents": 3048,
+          "healed": false,
+          "ctxLost": false,
+          "calls": 1,
+          "arrayNearest": false,
+          "hasMaterialMaps": true,
+          "packLive": true,
+          "drawMatMode": 0
+        }
+      }
+    },
+    "seed": 1,
+    "renderClock": 51.1646000000004,
+    "render": {
+      "scale": 1,
+      "fps": 60,
+      "floorMs": 16.6,
+      "auto": true,
+      "tier": 0,
+      "autoTier": 0,
+      "autoShed": 0,
+      "open": {
+        "frames": 600,
+        "maxMs": 5816.4,
+        "slow": 8
+      },
+      "frameTimes": {
+        "frames": 2048,
+        "p50": 16.69999999999709,
+        "p95": 16.79999999998836,
+        "p99": 16.80000000000291,
+        "maxMs": 33.400000000001455,
+        "droppedSimS": 0.18333333333333332,
+        "physicsSteps": 11,
+        "windowFrames": 2048
+      },
+      "userTier": 0,
+      "tierFloor": 0,
+      "crashStrikes": 0,
+      "scaleFutile": false,
+      "tierFutile": false,
+      "tierHold": false
+    },
+    "camera": {
+      "eye": [
+        -224.607005453367,
+        18.265586807289065,
+        -734.3499514672576
+      ],
+      "target": [
+        -194.1598144531246,
+        1.7273454582691175,
+        -783.3313085937498
+      ],
+      "fov": 64.0001351943837,
+      "previousAnchor": [
+        -194.1597797526965,
+        -783.3312910155245
+      ],
+      "nextAnchor": [
+        -194.1597797526965,
+        -783.3312910155245
+      ],
+      "renderFrame": 3048,
+      "simulationTime": 1.3999999999999986,
+      "renderTime": 51.1646000000004
+    },
+    "info": {
+      "state": "race",
+      "track": "montreal",
+      "n": 1087,
+      "total": 4347.008612900277,
+      "timeTrial": false,
+      "seasonMode": false,
+      "flow": "gp",
+      "session": "race",
+      "career": false,
+      "practice": false,
+      "duel": false,
+      "raceQuali": false,
+      "raceGrid": "random",
+      "lapsTarget": 3,
+      "sectors": [
+        0.277,
+        0.607
+      ],
+      "turns": 14
+    }
+  },
+  "renderer": {
+    "requested": "three",
+    "matchesRequested": true,
+    "actual": "three",
+    "api": "webgpu",
+    "state": {
+      "api": "webgpu",
+      "forceWebGL": false,
+      "pin": null,
+      "autoStayGL": false,
+      "hasGpu": true,
+      "gpuAdapterOk": true,
+      "gpuCanvasOk": true,
+      "canvasAlpha": null,
+      "isMobile": false,
+      "mobileTier": false,
+      "isWebKit": false,
+      "liteGpu": true,
+      "softwareGL": true,
+      "softAdapter": true,
+      "headless": true,
+      "forceHw": false,
+      "forceBatches": false,
+      "skipBatches": true,
+      "skipBatchesPin": false,
+      "gpuErrFrames": 0,
+      "envFail": 0,
+      "envFailMsg": "",
+      "softBlit": true,
+      "capPref": null,
+      "fx": {
+        "shadows": 4,
+        "marks": 0,
+        "skidVerts": 0,
+        "glow": 0,
+        "particles": 0,
+        "decals": 5,
+        "lineVerts": 3480
+      },
+      "line": {
+        "meshes": 1,
+        "visible": 1,
+        "inScene": 1,
+        "geo": {
+          "index": 12282,
+          "indexType": "Uint32Array",
+          "range": 10434,
+          "pos": 4096,
+          "attrs": [
+            "position",
+            "lineAcross",
+            "lineSpeed",
+            "lineZone",
+            "lineAlong"
+          ],
+          "renderOrder": 9,
+          "bs": [
+            1003.4
+          ]
+        }
+      },
+      "softRead": {
+        "gen": 11,
+        "lastMs": 4271,
+        "fails": 0,
+        "lastErr": null,
+        "abandoned": 0,
+        "pending": true
+      },
+      "gpuErrors": 0,
+      "gpuFirstError": null,
+      "gpuRecentErrors": [],
+      "presents": 3048,
+      "healed": false,
+      "ctxLost": false,
+      "calls": 1,
+      "arrayNearest": false,
+      "hasMaterialMaps": true,
+      "packLive": true,
+      "drawMatMode": 0
+    },
+    "positive": true,
+    "signal": "live-backend-state-and-presented-scene-pixels"
+  },
+  "readiness": {
+    "mode": "source-generation",
+    "required": 12,
+    "shown": 12
+  },
+  "pixels": {
+    "brightFraction": 0.9996744791666666,
+    "centerBrightFraction": 1,
+    "variance": 322.8215139766662,
+    "black": false,
+    "blackHudOnly": false,
+    "meaningful": true,
+    "classification": "scene-content"
+  },
+  "image": {
+    "path": "/workspace/artifacts/shots/tracks/montreal/s2-basin-shore__wx-dry__tod-day.jpg",
+    "bytes": 118710,
+    "via": "game-soft",
+    "scope": "scene"
+  }
+}

@@ -1,228 +1,253 @@
 [
   {
-    "file": "ctx-lagoon__day__dry.jpg",
+    "file": "ctx-lagoon__wx-dry__tod-day.jpg",
     "id": "lagoon",
     "sector": "Lap",
     "view": "Jean-Doré lagoon",
     "tod": "day",
     "weather": "dry",
-    "kb": 79
+    "kb": 95,
+    "reshoot": true
   },
   {
-    "file": "ctx-orbit-mid__day__dry.jpg",
+    "file": "ctx-orbit-mid__wx-dry__tod-day.jpg",
     "id": "orbit-mid",
     "sector": "Lap",
     "view": "Mid-lap orbit",
     "tod": "day",
     "weather": "dry",
-    "kb": 85
+    "kb": 135,
+    "reshoot": true
   },
   {
-    "file": "ctx-orbit-mid__day__overcast.jpg",
+    "file": "ctx-orbit-mid__wx-overcast__tod-day.jpg",
     "id": "orbit-mid",
     "sector": "Lap",
     "view": "Mid-lap orbit",
     "tod": "day",
     "weather": "overcast",
-    "kb": 77
+    "kb": 105,
+    "reshoot": true
   },
   {
-    "file": "ctx-orbit-mid__dusk__dry.jpg",
+    "file": "ctx-orbit-mid__wx-dry__tod-dusk.jpg",
     "id": "orbit-mid",
     "sector": "Lap",
     "view": "Mid-lap orbit",
     "tod": "dusk",
     "weather": "dry",
-    "kb": 68
+    "kb": 95,
+    "reshoot": true
   },
   {
-    "file": "s1-basin__day__dry.jpg",
+    "file": "s1-basin__wx-dry__tod-day.jpg",
     "id": "basin",
     "sector": "S1",
     "view": "Olympic Basin approach",
     "tod": "day",
     "weather": "dry",
-    "kb": 95
+    "kb": 100,
+    "reshoot": true
   },
   {
-    "file": "s1-senna__day__dry.jpg",
+    "file": "s1-senna__wx-dry__tod-day.jpg",
     "id": "senna",
     "sector": "S1",
     "view": "Senna S (trackside)",
     "tod": "day",
     "weather": "dry",
-    "kb": 65
+    "kb": 84,
+    "reshoot": true
   },
   {
-    "file": "s1-sf__dawn__dry.jpg",
+    "file": "s1-sf__wx-dry__tod-dawn.jpg",
     "id": "sf",
     "sector": "S1",
     "view": "Start/finish (park)",
     "tod": "dawn",
     "weather": "dry",
-    "kb": 49
+    "kb": 75,
+    "reshoot": true
   },
   {
-    "file": "s1-sf__day__dry.jpg",
+    "file": "s1-sf__wx-dry__tod-day.jpg",
     "id": "sf",
     "sector": "S1",
     "view": "Start/finish (park)",
     "tod": "day",
     "weather": "dry",
-    "kb": 69
+    "kb": 91,
+    "reshoot": true
   },
   {
-    "file": "s1-sf__day__rain.jpg",
+    "file": "s1-sf__wx-rain__tod-day.jpg",
     "id": "sf",
     "sector": "S1",
     "view": "Start/finish (park)",
     "tod": "day",
     "weather": "rain",
-    "kb": 64
+    "kb": 74,
+    "reshoot": true
   },
   {
-    "file": "s1-sf__day__wet.jpg",
+    "file": "s1-sf__wx-wet__tod-day.jpg",
     "id": "sf",
     "sector": "S1",
     "view": "Start/finish (park)",
     "tod": "day",
     "weather": "wet",
-    "kb": 63
+    "kb": 72,
+    "reshoot": true
   },
   {
-    "file": "s1-sf__dusk__dry.jpg",
+    "file": "s1-sf__wx-dry__tod-dusk.jpg",
     "id": "sf",
     "sector": "S1",
     "view": "Start/finish (park)",
     "tod": "dusk",
     "weather": "dry",
-    "kb": 58
+    "kb": 88,
+    "reshoot": true
   },
   {
-    "file": "s1-sf__night__dry.jpg",
+    "file": "s1-sf__wx-dry__tod-night.jpg",
     "id": "sf",
     "sector": "S1",
     "view": "Start/finish (park)",
     "tod": "night",
     "weather": "dry",
-    "kb": 50
+    "kb": 98,
+    "reshoot": true
   },
   {
-    "file": "s2-basin-shore__day__dry.jpg",
+    "file": "s2-basin-shore__wx-dry__tod-day.jpg",
     "id": "basin-shore",
     "sector": "S2",
     "view": "Basin shore band",
     "tod": "day",
     "weather": "dry",
-    "kb": 87
+    "kb": 116,
+    "reshoot": true
   },
   {
-    "file": "s2-biosphere__day__dry.jpg",
+    "file": "s2-biosphere__wx-dry__tod-day.jpg",
     "id": "biosphere",
     "sector": "S2",
     "view": "Biosphère (far bank)",
     "tod": "day",
     "weather": "dry",
-    "kb": 101
+    "kb": 118,
+    "reshoot": true
   },
   {
-    "file": "s2-calder__day__dry.jpg",
+    "file": "s2-calder__wx-dry__tod-day.jpg",
     "id": "calder",
     "sector": "S2",
     "view": "Calder Trois disques",
     "tod": "day",
     "weather": "dry",
-    "kb": 89
+    "kb": 122,
+    "reshoot": true
   },
   {
-    "file": "s2-casino__day__dry.jpg",
+    "file": "s2-casino__wx-dry__tod-day.jpg",
     "id": "casino",
     "sector": "S2",
     "view": "Casino de Montréal",
     "tod": "day",
     "weather": "dry",
-    "kb": 98
+    "kb": 131,
+    "reshoot": true
   },
   {
-    "file": "s2-casino__day__fog.jpg",
+    "file": "s2-casino__wx-fog__tod-day.jpg",
     "id": "casino",
     "sector": "S2",
     "view": "Casino de Montréal",
     "tod": "day",
     "weather": "fog",
-    "kb": 91
+    "kb": 114,
+    "reshoot": true
   },
   {
-    "file": "s2-casino__day__overcast.jpg",
+    "file": "s2-casino__wx-overcast__tod-day.jpg",
     "id": "casino",
     "sector": "S2",
     "view": "Casino de Montréal",
     "tod": "day",
     "weather": "overcast",
-    "kb": 90
+    "kb": 115,
+    "reshoot": true
   },
   {
-    "file": "s2-casino__dusk__dry.jpg",
+    "file": "s2-casino__wx-dry__tod-dusk.jpg",
     "id": "casino",
     "sector": "S2",
     "view": "Casino de Montréal",
     "tod": "dusk",
     "weather": "dry",
-    "kb": 92
+    "kb": 113,
+    "reshoot": true
   },
   {
-    "file": "s2-casino-straight__day__dry.jpg",
+    "file": "s2-casino-straight__wx-dry__tod-day.jpg",
     "id": "casino-straight",
     "sector": "S2",
     "view": "Casino straight + basin",
     "tod": "day",
     "weather": "dry",
-    "kb": 88
+    "kb": 126,
+    "reshoot": true
   },
   {
-    "file": "s2-ferris__day__dry.jpg",
+    "file": "s2-ferris__wx-dry__tod-day.jpg",
     "id": "ferris",
     "sector": "S2",
     "view": "La Ronde ferris wheel",
     "tod": "day",
     "weather": "dry",
-    "kb": 89
+    "kb": 130,
+    "reshoot": true
   },
   {
-    "file": "s2-floralies__day__dry.jpg",
+    "file": "s2-floralies__wx-dry__tod-day.jpg",
     "id": "floralies",
     "sector": "S2",
     "view": "Floralies parterres",
     "tod": "day",
     "weather": "dry",
-    "kb": 85
+    "kb": 92,
+    "reshoot": true
   },
   {
-    "file": "s2-footbridge__day__dry.jpg",
+    "file": "s2-footbridge__wx-dry__tod-day.jpg",
     "id": "footbridge",
     "sector": "S2",
     "view": "Casino footbridge",
     "tod": "day",
     "weather": "dry",
-    "kb": 87
+    "kb": 110,
+    "reshoot": true
   },
   {
-    "file": "s2-footbridge__dusk__dry.jpg",
+    "file": "s2-footbridge__wx-dry__tod-dusk.jpg",
     "id": "footbridge",
     "sector": "S2",
     "view": "Casino footbridge",
     "tod": "dusk",
     "weather": "dry",
-    "kb": 72
+    "kb": 88,
+    "reshoot": true
   },
   {
-    "file": "s2-habitat__day__dry.jpg",
+    "file": "s2-habitat__wx-dry__tod-day.jpg",
     "id": "habitat",
     "sector": "S2",
     "view": "Habitat 67",
     "tod": "day",
     "weather": "dry",
-    "kb": 87
+    "kb": 123,
+    "reshoot": true
   },
   {
     "file": "s2-hairpin__day__dry.jpg",

@@ -3,7 +3,39 @@
 **Date:** 2026-10-14  
 **Branch:** `cursor/montreal-survey-6a71`  
 **Live:** [Circuit on GitHub Pages](https://brycejmurrin.github.io/f1-game/)  
-**Shots:** 36 JPEG frames in [`artifacts/shots/tracks/montreal/`](../../../artifacts/shots/tracks/montreal/) (`<id>__<tod>__<weather>.jpg`, 1280px, q≈80, ≤300 KB). Captured with `node tools/shot/shot.mjs --batch --jpeg --present-timeout 90 --capture-retries 4 --wait 120`.
+**Shots:** Re-shoot in progress with shared tooling ([#1862](https://github.com/brycejmurrin/f1-game/pull/1862)): `__wx-<weather>__tod-<time>.jpg` under [`artifacts/shots/tracks/montreal/`](../../../artifacts/shots/tracks/montreal/). Batch via `docs/tracks/surveys/montreal-capture-jobs.json` / `capture-jobs.jsonl`.
+
+```sh
+node tools/shot/shot.mjs --batch artifacts/shots/tracks/montreal/capture-jobs.jsonl \
+  --jpeg --present-timeout 120 --capture-retries 4 --wait 180
+```
+
+**Run 1 (this PR):** 25 / 36 frames re-captured (SwiftShader default; do not set `APEX_GL=llvmpipe` — black frames).
+
+## Re-shoot panel grid (25 frames, run 1)
+
+| ![Jean-Doré lagoon](../../../artifacts/shots/tracks/montreal/ctx-lagoon__wx-dry__tod-day.jpg) | ![Mid-lap orbit](../../../artifacts/shots/tracks/montreal/ctx-orbit-mid__wx-dry__tod-day.jpg) | ![Mid-lap orbit](../../../artifacts/shots/tracks/montreal/ctx-orbit-mid__wx-overcast__tod-day.jpg) |
+| **Jean-Doré lagoon** · wx=dry · tod=day | **Mid-lap orbit** · wx=dry · tod=day | **Mid-lap orbit** · wx=overcast · tod=day |
+| ![Mid-lap orbit](../../../artifacts/shots/tracks/montreal/ctx-orbit-mid__wx-dry__tod-dusk.jpg) | ![Olympic Basin approach](../../../artifacts/shots/tracks/montreal/s1-basin__wx-dry__tod-day.jpg) | ![Senna S (trackside)](../../../artifacts/shots/tracks/montreal/s1-senna__wx-dry__tod-day.jpg) |
+| **Mid-lap orbit** · wx=dry · tod=dusk | **Olympic Basin approach** · wx=dry · tod=day | **Senna S (trackside)** · wx=dry · tod=day |
+| ![Start/finish (park)](../../../artifacts/shots/tracks/montreal/s1-sf__wx-dry__tod-dawn.jpg) | ![Start/finish (park)](../../../artifacts/shots/tracks/montreal/s1-sf__wx-dry__tod-day.jpg) | ![Start/finish (park)](../../../artifacts/shots/tracks/montreal/s1-sf__wx-rain__tod-day.jpg) |
+| **Start/finish (park)** · wx=dry · tod=dawn | **Start/finish (park)** · wx=dry · tod=day | **Start/finish (park)** · wx=rain · tod=day |
+| ![Start/finish (park)](../../../artifacts/shots/tracks/montreal/s1-sf__wx-wet__tod-day.jpg) | ![Start/finish (park)](../../../artifacts/shots/tracks/montreal/s1-sf__wx-dry__tod-dusk.jpg) | ![Start/finish (park)](../../../artifacts/shots/tracks/montreal/s1-sf__wx-dry__tod-night.jpg) |
+| **Start/finish (park)** · wx=wet · tod=day | **Start/finish (park)** · wx=dry · tod=dusk | **Start/finish (park)** · wx=dry · tod=night |
+| ![Basin shore band](../../../artifacts/shots/tracks/montreal/s2-basin-shore__wx-dry__tod-day.jpg) | ![Biosphère (far bank)](../../../artifacts/shots/tracks/montreal/s2-biosphere__wx-dry__tod-day.jpg) | ![Calder Trois disques](../../../artifacts/shots/tracks/montreal/s2-calder__wx-dry__tod-day.jpg) |
+| **Basin shore band** · wx=dry · tod=day | **Biosphère (far bank)** · wx=dry · tod=day | **Calder Trois disques** · wx=dry · tod=day |
+| ![Casino de Montréal](../../../artifacts/shots/tracks/montreal/s2-casino__wx-dry__tod-day.jpg) | ![Casino de Montréal](../../../artifacts/shots/tracks/montreal/s2-casino__wx-fog__tod-day.jpg) | ![Casino de Montréal](../../../artifacts/shots/tracks/montreal/s2-casino__wx-overcast__tod-day.jpg) |
+| **Casino de Montréal** · wx=dry · tod=day | **Casino de Montréal** · wx=fog · tod=day | **Casino de Montréal** · wx=overcast · tod=day |
+| ![Casino de Montréal](../../../artifacts/shots/tracks/montreal/s2-casino__wx-dry__tod-dusk.jpg) | ![Casino straight + basin](../../../artifacts/shots/tracks/montreal/s2-casino-straight__wx-dry__tod-day.jpg) | ![La Ronde ferris wheel](../../../artifacts/shots/tracks/montreal/s2-ferris__wx-dry__tod-day.jpg) |
+| **Casino de Montréal** · wx=dry · tod=dusk | **Casino straight + basin** · wx=dry · tod=day | **La Ronde ferris wheel** · wx=dry · tod=day |
+| ![Floralies parterres](../../../artifacts/shots/tracks/montreal/s2-floralies__wx-dry__tod-day.jpg) | ![Casino footbridge](../../../artifacts/shots/tracks/montreal/s2-footbridge__wx-dry__tod-day.jpg) | ![Casino footbridge](../../../artifacts/shots/tracks/montreal/s2-footbridge__wx-dry__tod-dusk.jpg) |
+| **Floralies parterres** · wx=dry · tod=day | **Casino footbridge** · wx=dry · tod=day | **Casino footbridge** · wx=dry · tod=dusk |
+| ![Habitat 67](../../../artifacts/shots/tracks/montreal/s2-habitat__wx-dry__tod-day.jpg) | | |
+| **Habitat 67** · wx=dry · tod=day | | |
+
+**Remaining (run 2+):** hairpin, skyline, S3 heroes, and remaining weather matrix cells (11 frames).
+
+## Legacy panel grids (pre–#1862 filenames)
 
 ## Code map
 
