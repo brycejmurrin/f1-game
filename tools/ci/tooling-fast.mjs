@@ -693,6 +693,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pu-harvest-audio.test.mjs",
   // shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.
   "tests/unit/publish-shots.test.mjs",
+  // Push hold: queued + running Actions JOBS by OS vs the 40 Linux / 5 macOS slots, never runs. Fixtures.
+  "tests/unit/queue-depth.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
@@ -812,6 +814,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // skidmarks.js lays marks per SECOND of laying (was per frame): a VM run of
   // the ring buffer at three refresh rates, ~0.1 s.
   "tests/unit/skidmarks-cadence.test.mjs",
+  "tests/unit/skill-hint-hook.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
   // skill-routing-eval.py against a fake `claude` on PATH (no model calls), ~1.5 s.
   "tests/unit/skill-routing-eval.test.mjs",
@@ -862,6 +865,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,
   // a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.
   "tests/unit/storm-weather.test.mjs",
+  // SubagentStop report-contract hook (.claude/hooks/subagent-contract.py): spawns it on fake payloads, < 1 s.
+  "tests/unit/subagent-contract-hook.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
   // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
   "tests/unit/survey-hud.test.mjs",

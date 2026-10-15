@@ -128,6 +128,17 @@ html:has(#pausemenu[open]) #ios-install {
   margin-inline: auto;
 }
 #res-ghost-clear { opacity: 0.6; }
+/* Results footage keeps only its controls over the scene. The dialog remains
+   modal so keyboard focus stays on BACK TO RESULTS / MENU / NEXT. */
+#results[data-results-playback="playing"] { align-items: end !important; background: transparent !important; }
+#results[data-results-playback="playing"]::backdrop { background: transparent !important; }
+#results[data-results-playback="playing"] > .sheet { display: flex; flex-direction: column; }
+#results[data-results-playback="playing"] > .sheet > .sheet-head,
+#results[data-results-playback="playing"] > .sheet > .sheet-body { display: none; }
+#results[data-results-playback="playing"] > .sheet > .sheet-foot {
+  width: 100%; flex-wrap: wrap !important;
+}
+
 #results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot { justify-content: center; }
 #res-settle-unsaved { margin-top: var(--gap); color: #ffd180; font-weight: 800; }
 /* THE SHORT WIDE RESULT SHEET (a landscape phone). MEASURED (layout-audit,
