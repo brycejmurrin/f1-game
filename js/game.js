@@ -4611,14 +4611,6 @@ function update(dt) {
       // reaches the gantry, and then the lap is driven from the line.
       if (isQuali() && !wasRestart) launchFlyingLap();
     }
-    ranked.length = 0;
-    for (const c of cars) if (!c.retired) ranked.push(c);
-    ranked.sort(byProgDesc);
-    for (let i = 0; i < cars.length; i++) {
-      const c = cars[i];
-      c._snapProg = c.prog; c._snapX = c.x; c._snapSpeed = c.speed;
-    }
-    for (const c of cars) updateCar(c, dt, ranked);
     _gridIdleOpts.soundOn = soundOn; _gridIdleOpts.wet = isWetRoad(); _gridIdleOpts.step = _audioParamStep;
     GameAudio.setGridIdle(player, _gridIdleOpts); return;
   }
