@@ -9,8 +9,8 @@
       const { K, lapBounds, out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
-      // is skipped instead of staged and dropped (295 per build here,
-      // every build, visible in verify-track's guard-drop report). Same node,
+      // is skipped instead of staged and dropped (295 per build here
+      // before this wrapper; verify-track's guard-drop report shows what is left). Same node,
       // side and XZ as the engine's own test; the props that survive are the
       // props that always did (graph-parity).
       const backdrop = (k, side, dist, sz, col) => {
@@ -36,7 +36,12 @@
           const h = hash(i * 7 + rg.extra), j = hash(i * 19 + rg.extra + 3);
           const a = (i + (j - 0.5) * 0.35) / rg.count * 6.2832;
           const w = Math.max(rg.wMin + h * 110, span * 1.55);
-          mountain(cx + Math.cos(a) * ring, cz + Math.sin(a) * ring, pyMin,
+          // The lap is elongated: a ring peak at the long-axis ends can sit
+          // inside its own footprint of a parallel stretch, and mountain()
+          // drops it (2 per build). Step it outward until its reach clears.
+          let rr = ring;
+          for (let push = 0; push < 5 && onTrack(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, 0.7 * w + 15); push++) rr += 80;
+          mountain(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, pyMin,
                    w, rg.hMin + h * rg.hVar, Object.assign({ seg: rg.seg, seed: i * 13 + rg.extra }, rg.opts));
         }
       }
@@ -120,7 +125,7 @@
 
       // Trackside advertising hoardings around the lap.
       for (const [s, side, col] of [
-        [0.04, 1, rbRed], [0.12, 1, rbNavy], [0.18, -1, rbYel], [0.30, 1, rbRed],
+        [0.04, 1, rbRed], [0.12, 1, rbNavy], [0.18, -1, rbYel], [0.335, 1, rbRed],
         [0.44, -1, rbNavy], [0.58, 1, rbRed], [0.68, -1, rbYel], [0.82, 1, rbNavy], [0.88, -1, rbRed],
       ]) billboard(Math.round(n * s) % n, side, 7, 11, 3.4, col);
 
@@ -195,6 +200,8 @@
           for (const ox of [-1.2, 1.2]) {
             addBox(out, vadd(vadd(a.c, a.r, ox), a.u, 9.2), [0.55, 0.28, 0.55], [0.98, 0.96, 0.82], [a.r, a.u, a.t]);
           }
+          // Hand-built pole: register its lens so a dusk/night session lights it.
+          api.lampPost({ pos: vadd(a.c, a.u, 9.0), k, side, kind: "halogen" });
         }
       });
       // Grandstand lamp posts flanking the stadium bowl (s≈0.70–0.95).
@@ -206,6 +213,7 @@
           // floodlight head cluster
           addBox(out, vadd(a.c, a.u, 20), [4.5, 0.5, 1.2], [0.95, 0.92, 0.78], [a.r, a.u, a.t]);
           addBox(out, vadd(vadd(a.c, a.t, 0.8), a.u, 19.6), [4.5, 0.5, 1.2], [0.95, 0.92, 0.78], [a.r, a.u, a.t]);
+          api.lampPost({ pos: vadd(a.c, a.u, 19.5), k, side, kind: "halogen" });
         }
       });
 
@@ -340,7 +348,7 @@
       grandstandEx(0.70, 1, 8, 26, shell, rbNavy, { roof: "cantilever" });
       grandstandEx(0.72, -1, 8, 28, shell, rbRed, { tiers: 2, roof: "truss", pylons: true, h: 12 });
       grandstandEx(0.76, -1, 9, 24, shell, rbNavy, { roof: "flat" });
-      grandstandEx(0.80, 1, 8, 22, null, null, { livery: "crimson", roof: "cantilever" });
+      grandstandEx(0.80, 1, 12, 22, shell, rbRed, { livery: "crimson", roof: "cantilever" });
       grandstandEx(0.86, -1, 8, 26, shell, rbRed, { tiers: 2, roof: "cantilever", suites: true, h: 12 });
       grandstandEx(0.88, 1, 8, 34, shell, rbNavy, { tiers: 2, roof: "truss", pylons: true, suites: true, h: 13 });
       grandstandEx(0.92, 1, 9, 28, shell, rbRed, { roof: "flat" });
@@ -369,22 +377,6 @@
           hedge(k / n, k / n + 0.0025, side, d, 0.85 + hash(k * 131 + side) * 0.25, [0.20, 0.44, 0.18]);
         }
       });
-
-      {
-        const kR = Math.round(n * 0.30) % n;
-        const rA = anchor(kR, 1, 22);
-        // Base plinth: thin cylinder just proud of terrain (not sunk below ground).
-        addCyl(out, rA.c, 4.0, 1.2, [0.62, 0.60, 0.56], 8, [rA.r, rA.u, rA.t]);
-        // Main golden column rising from the plinth top.
-        addCyl(out, vadd(rA.c, rA.u, 1.2), 2.6, 48.8, [0.96, 0.84, 0.18], 8, [rA.r, rA.u, rA.t]);
-        // Observation ring / balcony band near top.
-        addBox(out, vadd(rA.c, rA.u, 46), [7, 1.0, 7], [0.70, 0.68, 0.64], [rA.r, rA.u, rA.t]);
-        // Red spire cap on top of the column.
-        const rTop = vadd(rA.c, rA.u, 50);
-        addCone(out, rTop, 3.8, 8, [0.90, 0.08, 0.14], 8, [rA.r, rA.u, rA.t]);
-        // Night-ready accent: warm light ring just below the observation deck.
-        addBox(out, vadd(rA.c, rA.u, 44.5), [6.5, 0.25, 6.5], [1.0, 0.88, 0.50], [rA.r, rA.u, rA.t]);
-      }
 
       {
         const GN = [0.28, 0.52, 0.22], GM = [0.22, 0.44, 0.18], GF = [0.16, 0.36, 0.14];
