@@ -106,6 +106,9 @@
     "playwright-official",
     "chrome-devtools"
   ],
+  "enabledPlugins": {
+    "code-review@claude-plugins-official": true
+  },
   "hooks": {
     "SessionStart": [
       {
