@@ -99,6 +99,9 @@ const lazyBundles = LazyBundles.create({
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active),
     });
+    jumpStartPenalty = JumpStartPenalty.create(G, {
+      autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
+    });
   },
 });
 const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
@@ -774,43 +777,6 @@ function blueFlagCall(ev) {
   resultT = 0;
   announce("+" + ev.sec + "s IGNORING BLUE FLAGS", 3, "penalty-hit");
   if (soundOn) GameAudio.penalty();
-}
-// FALSE START (FIA 2026 SR B5.11.1; js/race/sporting-regs.js): throttle at green
-// or a launch faster than the minimum reaction window. Grid physics stay locked
-// until lights-out — detection runs at green and in the first REACT_S of the race.
-function jumpStartThrottleLevel(c) {
-  if (!c || !c.human) return 0;
-  if (autoThrottle()) return 0;
-  const inp = inputOf(c);
-  if (inp) return inp.throttle ? (inp.throttleLevel ?? 1) : 0;
-  return Math.max(0, Input.throttleLevel());
-}
-function fineJumpStart(c) {
-  if (!c || c.jumpStartFined || c.retired || c.finished || session !== "race" || isQuali() || isTimeTrial()) return;
-  c.jumpStartFined = true;
-  c.penalty += SportingRegs.JUMP_START_PEN_S;
-  c.penaltyWhy = c.penaltyWhy ? c.penaltyWhy + "; " + SportingRegs.JUMP_START_WHY : SportingRegs.JUMP_START_WHY;
-  Log[c.isPlayer ? "info" : "debug"]("game", "Jump start car=" + c.code + " +5s total=" + c.penalty + "s");
-  if (!c.isPlayer) return;
-  resultT = 0;
-  announce("+5s FALSE START", 2.5, "penalty-hit");
-  if (soundOn) GameAudio.penalty();
-}
-function tickJumpStartAtGreen(c) {
-  if (!track || !c || c.jumpStartFined || c.retired || c.finished || session !== "race" || isQuali() || isTimeTrial()) return;
-  if (c.human && SportingRegs.jumpStartEarlyThrottle(jumpStartThrottleLevel(c), autoThrottle())) fineJumpStart(c);
-}
-function tickJumpStartReaction(c) {
-  if (!track || !c || c.jumpStartFined || c.retired || c.finished || session !== "race" || isQuali() || isTimeTrial()) return;
-  const t = raceT - launchT0;
-  if (t > SportingRegs.JUMP_START_REACT_S) return;
-  const vRef = vTop();
-  if (c.human) {
-    if (SportingRegs.jumpStartFastLaunch(t, c.speed || 0, vRef)) fineJumpStart(c);
-    return;
-  }
-  if (c.launchOn && c.launch && t < c.launch.react
-      && SportingRegs.jumpStartFastLaunch(t, c.speed || 0, vRef)) fineJumpStart(c);
 }
 // The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
 // called in and still on your way to the box. Not `out`/`served`/`merge` — by
@@ -3650,6 +3616,9 @@ let raceRadio = RaceRadio.create(G);      // LAZY_RACE_SESSION — recreated on 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // LAZY_RACE_SESSION
+var jumpStartPenalty = JumpStartPenalty.create(G, {
+  autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
+});   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
@@ -4601,7 +4570,7 @@ function update(dt) {
       // every later race and suppresses quali flying laps. Ledger 2026-09-22.
       const wasRestart = restartPending;
       restartPending = false;
-      for (const c of cars) tickJumpStartAtGreen(c);
+      for (const c of cars) jumpStartPenalty.tickAtGreen(c);
       // Nothing consumes RECOVER/shift/boost edges before green, so a tap on the grid fired at lights-out (a free ~58 km/h re-place, or 2nd gear with no drive).
       Input.clearDriveEdges();
       announce("LIGHTS OUT!", 1.4, "race");
@@ -4678,8 +4647,8 @@ function update(dt) {
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars);
   for (const c of cars) updateCar(c, dt, ranked);
-  if (raceT - launchT0 <= SportingRegs.JUMP_START_REACT_S) {
-    for (const c of cars) tickJumpStartReaction(c);
+  if (jumpStartPenalty.reactWindowOpen()) {
+    for (const c of cars) jumpStartPenalty.tickReaction(c);
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
