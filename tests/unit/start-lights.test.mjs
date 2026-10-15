@@ -17,6 +17,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/start-lights.js"), "utf8");
@@ -240,8 +241,7 @@ test("#1882: countCredit gives nothing back at full rate and caps a resumed tab 
 });
 
 test("#1882: tickBody credits the countdown only solo, after the step loop", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const body = game.slice(game.indexOf("function tickBody("), game.indexOf("\n}\n", game.indexOf("function tickBody(")));
+  const body = symbolSource("function tickBody(");
   const at = body.indexOf("startLights.countCredit(_dtMs / 1000, dt, dropped)");
   assert.ok(at > body.indexOf("update(PHYS_DT)"), "credited after the fixed steps");
   assert.match(body, /state === "count" && !netStart && !\(netPlay && netPlay\.awaitingStart && netPlay\.awaitingStart\(\)\)\) countT \+= startLights\.countCredit/);
