@@ -466,11 +466,11 @@
       // Keep footprints CLEAR of every road leg: long/wide patches on the Foro
       // inside and midfield folds were footprint-rejected (terrain-over-road
       // Mexico migration pin: models.suppressed must stay []).
-      const FIELD = [0.30, 0.44, 0.24];
+      const FIELD = [0.38, 0.45, 0.25];
       const DIRT  = [0.50, 0.40, 0.28];
       const PLAZA = [0.70, 0.68, 0.64];
       const ASPH  = [0.30, 0.30, 0.32];
-      const LAWN  = [0.34, 0.50, 0.28];
+      const LAWN  = [0.40, 0.47, 0.26];
       // Trackside verge — short along-track pieces so the Foro inside corner
       // never chords onto the road (foro-verge-r-* was footprint-rejected).
       for (const s of [0.74, 0.77, 0.80, 0.83]) {
