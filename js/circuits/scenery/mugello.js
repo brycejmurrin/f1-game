@@ -36,8 +36,8 @@
       // parallel and evenly spaced, each stepping out and shearing slightly to
       // follow a contour, over bare tilled soil, with end posts on the wire.
       {
-        const VINE     = [0.27, 0.37, 0.20];
-        const VINE_DRY = [0.33, 0.41, 0.23];
+        const VINE     = [0.33, 0.46, 0.18];   // fresh canopy, lighter than the soil strip is dark
+        const VINE_DRY = [0.42, 0.45, 0.20];
         const SOIL     = [0.46, 0.35, 0.25];
         const POST     = [0.53, 0.45, 0.33];
         for (const [sf, side, gap, rows, len, ang] of [
@@ -73,8 +73,17 @@
             const bw = flatBasis(a);
             seat.box(out, foot, [4.6, 0.12, rowLen], SOIL, bw);
             out._mat = MAT.FOLIAGE;
-            seat.box(out, [foot[0], foot[1] + 0.12, foot[2]], [1.5, 1.5, rowLen],
-                     hv < 0.5 ? VINE : VINE_DRY, bw);
+            // A trellised row, not a hedge wall: ~7 m runs of a 0.55 m canopy on
+            // its wire with a clear gap at every run (survey defect 1).
+            const nSeg = Math.max(2, Math.round(rowLen / 8)), segL = rowLen / nSeg;
+            for (let q = 0; q < nSeg; q++) {
+              const off = -rowLen / 2 + (q + 0.5) * segL;
+              const sx = foot[0] + bw[2][0] * off, sz = foot[2] + bw[2][2] * off;
+              const sy = Math.max(groundUnder(sx, sz) ?? -Infinity, terrainYAt(sx, sz) ?? -Infinity);
+              out._mat = MAT.FOLIAGE;
+              seat.box(out, [sx, (Number.isFinite(sy) ? sy : baseY) + 0.18, sz], [0.55, 1.25, segL * 0.74],
+                       (hv + q * 0.13) % 1 < 0.5 ? VINE : VINE_DRY, bw);
+            }
             out._mat = 0;
             out._mat = MAT.WOOD;
             for (const e of [-rowLen / 2, rowLen / 2]) {
@@ -104,7 +113,7 @@
         // def.scenery(), the roadside scatter and treelines route around it.
         const RENDER = [0.78, 0.71, 0.58], RENDER_D = [0.70, 0.63, 0.51];
         const TILE   = [0.62, 0.34, 0.22], TILE_D = [0.54, 0.29, 0.19];
-        const CYP    = [0.14, 0.26, 0.15];
+        const CYP    = [0.04, 0.12, 0.07];
         for (const [sf, side, gap] of [
           [0.150, -1, 112], [0.385,  1, 108], [0.640, -1,  98], [0.800,  1, 116],
         ]) {
@@ -148,10 +157,11 @@
         }
       }
 
-      const PINE = [0.12, 0.29, 0.15], PINE_D = [0.09, 0.23, 0.13];
-      const LEAF = [0.20, 0.44, 0.20], LEAF_D = [0.15, 0.36, 0.17];
+      const PINE = [0.06, 0.16, 0.09], PINE_D = [0.05, 0.13, 0.08];
+      const LEAF = [0.13, 0.31, 0.14], LEAF_D = [0.10, 0.25, 0.12];   // olive-dark Tuscan oak, was a bright generic green
       const GRAVEL = [0.68, 0.61, 0.44];
-      const CYP = [0.11, 0.27, 0.15], CYP_D = [0.08, 0.21, 0.12];
+      // Near-black: the lighting rig lifts these to a dark mid green, so the cypress spire stays darker than the broadleaf.
+      const CYP = [0.04, 0.12, 0.07], CYP_D = [0.03, 0.09, 0.05];
       const STONE = [0.82, 0.76, 0.62], TRAV = [0.88, 0.85, 0.76];
       const TERRA = [0.62, 0.33, 0.23], ROSSO = [0.80, 0.12, 0.10];
       const OLIVE = [0.44, 0.48, 0.34], VINE = [0.30, 0.40, 0.22];
@@ -173,15 +183,19 @@
       // Open through San Donato (0.10-0.18): its bowl and stands stand there.
       // Also clear Poggio Secco / Materassi outside (0.200-0.260).
       const openArea = (s) => (s >= 0.92 || s <= 0.18) || (s >= 0.36 && s <= 0.46)
-        || (s >= 0.200 && s <= 0.260);
+        || (s >= 0.200 && s <= 0.260)
+        || (s >= 0.286 && s <= 0.342) || (s >= 0.852 && s <= 0.906);   // Casanova / Bucine terrazze
       every(22, (k) => {
         const s = k / n;
         if (openArea(s)) return;
         const h = hash(k * 31);
         if (h < 0.24) return;
         const side = h < 0.5 ? -1 : 1;
-        if (offCasale(k, side, 11 + h * 9)) tree(k, side, 11 + h * 9, 12 + h * 9, h < 0.45 ? LEAF_D : LEAF);
-        if (h > 0.55 && offCasale(k, -side, 14 + h * 10)) pine(k, -side, 14 + h * 10, 15 + h * 10, PINE);
+        if (offCasale(k, side, 11 + h * 9)) {
+          if (h > 0.40 && !(side === 1 && s >= 0.60 && s <= 0.74)) cypress(k, side, 11 + h * 9, 13 + h * 7);   // about half the roadside planting is cypress
+          else tree(k, side, 11 + h * 9, 12 + h * 9, LEAF_D);
+        }
+        if (h > 0.55 && !(-side === 1 && s >= 0.60 && s <= 0.74) && offCasale(k, -side, 14 + h * 10)) cypress(k, -side, 14 + h * 10, 14 + h * 8);   // cypress, not generic pine (survey defect 2)
       });
       every(34, (k) => {
         const s = k / n;
@@ -195,7 +209,7 @@
         // lower tiers, and the top cone was left 22 m up (float-audit).
         const ps = h > 0.86 ? -1 : 1, pd = 44 + h * 22, ph = 18 + h * 10;
         const pa = anchor(k, ps, pd);
-        if (!onTrack(pa.c[0], pa.c[2], ph * 0.3) && offCasale(k, ps, pd)) pine(k, ps, pd, ph, PINE_D);
+        if (!onTrack(pa.c[0], pa.c[2], ph * 0.3) && offCasale(k, ps, pd)) cypress(k, ps, pd, ph * 0.85);
       });
       every(26, (k) => {
         const s = k / n;
@@ -223,14 +237,18 @@
         addCyl(out, a.c, 0.22, h * 0.16, [0.30, 0.22, 0.14], 5, b);
         out._mat = MAT.FOLIAGE;
         addCone(out, vadd(a.c, a.u, h * 0.10), 1.45, h * 0.58, col, 6, b);
-        addCone(out, vadd(a.c, a.u, h * 0.44), 1.10, h * 0.42, col, 6, b);
-        addCone(out, vadd(a.c, a.u, h * 0.70), 0.70, h * 0.32, col, 6, b);
+        addCone(out, vadd(a.c, a.u, h * 0.44), 0.92, h * 0.42, col, 6, b);   // slopes differ per tier: stacked tiers at equal slope fought (coplanar)
+        addCone(out, vadd(a.c, a.u, h * 0.70), 0.52, h * 0.32, col, 6, b);
         out._mat = 0;
       }
       // Avenue up to the paddock, and ranks on the hillside above the Arrabbiate.
       for (let i = 0; i < 10; i++) cypress(K(0.955 + i * 0.005), 1, 46 + (i % 2) * 4, 15 + hash(i * 9) * 6);
       for (let i = 0; i < 8; i++) cypress(K(0.470 + i * 0.008), 1, 54 + (i % 2) * 5, 14 + hash(i * 5) * 6);
       for (let i = 0; i < 6; i++) cypress(K(0.180 + i * 0.008), -1, 50 + (i % 2) * 4, 13 + hash(i * 11) * 6);
+      // More ordered ranks on the ridge lines (the single most identifying plant).
+      for (let i = 0; i < 10; i++) cypress(K(0.262 + i * 0.0028), 1, 50 + (i % 2) * 4, 14 + hash(i * 13) * 6);
+      for (let i = 0; i < 10; i++) cypress(K(0.575 + i * 0.006), -1, 48 + (i % 2) * 5, 14 + hash(i * 17) * 6);
+      for (let i = 0; i < 10; i++) cypress(K(0.775 + i * 0.006), 1, 52 + (i % 2) * 5, 14 + hash(i * 19) * 6);
 
       for (const [i, s] of [0.945, 0.963, 0.981, 0.999].entries()) {
         const a = anchor(K(s), 1, 16);
@@ -270,6 +288,21 @@
           }
           stage._mat = 0;
         }, { required: true });
+      }
+      // Continuous garage row (docs/tracks/mugello.md §4): plain infill between the four
+      // hero bays, same stone body / hospitality storey / terracotta eave (survey defect 8).
+      for (const s of [0.954, 0.972, 0.990]) {
+        const a = anchor(K(s), 1, 16);
+        const b = [a.r, a.u, a.t];
+        out._mat = MAT.STONE;
+        addBox(out, vadd(a.c, a.u, 3.6), [14, 7.2, 51], STONE, b);
+        out._mat = 0;
+        addBox(out, vadd(vadd(a.c, a.r, -7.0), a.u, 2.6), [0.3, 4.6, 48], [0.20, 0.20, 0.22], b);
+        out._mat = MAT.CONCRETE;
+        addBox(out, vadd(vadd(a.c, a.r, 1.6), a.u, 9.6), [10, 5.2, 50], TRAV, b);
+        addBox(out, vadd(vadd(a.c, a.r, -3.3), a.u, 7.4), [1.2, 0.9, 51], ROSSO, b);
+        out._mat = 0;
+        addPrism(out, vadd(vadd(a.c, a.r, -0.5), a.u, 12.2), [14, 1.9, 51], TERRA, b);
       }
       {
         const a = anchor(K(0.988), 1, 28);
@@ -431,7 +464,10 @@
       groundPatch(K(0.312), 1, 5, [26, 0.18, 34], GRAVEL,
         { id: "mugello-casanova-gravel", samples: 6 });
       tyreWall(0.298, 0.328, 1, 4, [0.20, 0.40, 0.85]);
-      terrazza(0.292, 0.334, -1, 18, { rows: 6 });          // Casanova-Savelli
+      // Casanova is R~35 m and this is the INSIDE of it: tiers pitched 18 m out converge and
+      // overlap 1.1 m at the apex (clip 0.297-0.301), so the bowl stops short of the apex.
+      terrazza(0.292, 0.2935, -1, 18, { rows: 5 });
+      terrazza(0.3095, 0.334, -1, 18, { rows: 5 });         // Casanova-Savelli
       marshalPost(K(0.306), -1, 9);
 
       groundPatch(K(0.495), -1, 6, [30, 0.18, 40], GRAVEL,
@@ -508,11 +544,11 @@
       const { cx, cz, radius: rad } = lapBounds();
       for (const rg of [
         { extra: 200, wMin: 170, hMin: 50, hVar: 44, wVar: 80, count: 28, phase: 0.0,
-          opts: { seg: 7, rough: 0.30, forest: [0.14, 0.34, 0.17], rock: [0.40, 0.38, 0.32], snowline: 2 } },
+          opts: { seg: 7, rough: 0.30, forest: [0.12, 0.28, 0.14], rock: [0.24, 0.30, 0.17], snowline: 2 } },
         { extra: 300, wMin: 320, hMin: 84, hVar: 60, wVar: 130, count: 22, phase: 0.5,
-          opts: { seg: 7, rough: 0.32, forest: [0.18, 0.38, 0.20], rock: [0.46, 0.44, 0.38], snowline: 2 } },
+          opts: { seg: 7, rough: 0.32, forest: [0.15, 0.31, 0.16], rock: [0.30, 0.35, 0.20], snowline: 2 } },
         { extra: 450, wMin: 380, hMin: 120, hVar: 90, wVar: 150, count: 18, phase: 0.25,
-          opts: { seg: 7, rough: 0.34, forest: [0.24, 0.42, 0.26], rock: [0.54, 0.52, 0.48], snowline: 2 } },
+          opts: { seg: 7, rough: 0.34, forest: [0.20, 0.34, 0.22], rock: [0.38, 0.42, 0.30], snowline: 2 } },
       ]) {
         const ring = rad + rg.extra;
         for (let i = 0; i < rg.count; i++) {
@@ -625,13 +661,15 @@
               if (i + 1 < segs.length) len = Math.min(len, flatD(base, segs[i + 1].bases[r]));
               // World-Y seat + flatBasis — banked a.u after terrainYAt rewrite
               // buried rows up to 10.9 m into the hillside (ground-audit).
-              const vh = 1.9 + 0.04 * ((i + 2 * r) % 4);
+              const vh = 1.5 + 0.04 * ((i + 2 * r) % 4);
               const gy = groundUnder(base[0], base[2]);
               const footY = (gy != null ? gy : base[1]) + 0.05;
               const bw = flatBasis(a);
               out._mat = MAT.FOLIAGE;
+              // 0.55 m canopy over 70 % of each run: a gap every ~11 m, so the
+              // lap reads as trellis rows, not a slab (survey defect 1).
               addBox(out, [base[0], footY + vh * 0.5, base[2]],
-                [0.9, vh, len * 0.96], r & 1 ? VINE : [0.26, 0.36, 0.20], bw);
+                [0.55, vh, len * 0.70], r & 1 ? VINE : [0.30, 0.42, 0.18], bw);
               out._mat = 0;
             } else {
               const h = hash(k * 7 + r * 13);
@@ -650,7 +688,7 @@
       // Turn signage and broadcast towers.
       signBoard(K(0.150), -1, 8, "corner", 1);
       signBoard(K(0.312), -1, 8, "corner", 6);
-      signBoard(K(0.495), 1, 8, "corner", 9);
+      signBoard(K(0.521), 1, 8, "corner", 9);   // Arrabbiata 2 = turns[8]
       signBoard(K(0.880), 1, 8, "corner", 15);
       sponsorHoarding(0.930, 0.060, -1, 3.6, { h: 1.2, step: 10,
         palette: [ROSSO, [0.94, 0.92, 0.88], [0.10, 0.34, 0.20], [0.96, 0.76, 0.06]] });
@@ -658,11 +696,15 @@
       cameraTower(K(0.152), -1, 30, { h: 18 });
       cameraTower(K(0.500), 1, 30, { h: 18 });
       cameraTower(K(0.880), 1, 28, { h: 16 });
-      for (const [s0, s1] of [[0.18, 0.34], [0.48, 0.9]]) {
-        for (const side of [-1, 1])
-          forestEdge(s0, s1, side, 14, { density: 0.64, hMin: 11, hMax: 20, pineFrac: 0.45, col: PINE, col2: LEAF_D });
+      // Forest edge stops short of the Casanova (-1, 0.292-0.334) and Bucine (+1, 0.858-0.902)
+      // terrazze: their foliage cones cut the tier boxes (clip-audit 0.294-0.334, 0.888).
+      for (const [s0, s1, side] of [
+        [0.18, 0.282, -1], [0.18, 0.34, 1],
+        [0.48, 0.9, -1], [0.48, 0.850, 1],
+      ]) {
+        if (s1 > s0) forestEdge(s0, s1, side, 14, { density: 0.64, hMin: 11, hMax: 20, pineFrac: 0.12, col: PINE, col2: LEAF_D });
       }
-      forestEdge(0.50, 0.68, 1, 30, { density: 0.22, hMin: 15, hMax: 24, pineFrac: 0.5, col: PINE_D, col2: LEAF_D });
+      forestEdge(0.50, 0.68, 1, 30, { density: 0.22, hMin: 15, hMax: 24, pineFrac: 0.12, col: PINE_D, col2: LEAF_D });
 
       grandstandEx(0.154, -1, 36, 88, null, null,
         { livery: "crimson", tiers: 2, roof: "cantilever", suites: true,
