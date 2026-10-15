@@ -20,11 +20,11 @@
 
 | Item | Status |
 |------|--------|
-| **Night dry (TLX / webgl2, park + orbit)** | 16 frames captured (see grids below) |
-| **Weather / TOD matrix** | **Pending** — blocked until shared PR *tools: shared shot tooling for circuit surveys* lands `wx` batch on `shot.mjs` / track-session and `.gitignore` exception for `artifacts/shots/tracks/**` |
-| **Repo paths** | Frames staged at `artifacts/shots/tracks/singapore/*.jpg` (currently under root `artifacts/` gitignore; will commit after rebase on shared tooling PR) |
+| **Committed frames** | **34** JPEGs under `artifacts/shots/tracks/singapore/` (`git add -f`; max 1280px, q≈80, &lt;300 KB each) |
+| **Conditions in this pass** | **night · dry** only (TLX / webgl2, `APEX_GL=llvmpipe`) |
+| **Weather / TOD matrix** | **Pending** — wet / rain / overcast / fog / dusk / dawn after shared shot-tooling PR (`wx` batch) |
 
-**Planned weather/lighting repeats (4 hero views × 7 modes, ~28 frames):** pit straight `s≈0`, Marina Bay Sands `s≈0.18`, Merlion `s≈0.58`, Flyer `s≈0.86` — `dry`, `wet`, `rain`, `overcast`, `fog` plus `dusk` / `dawn` / `night` via `__apex.weather()` + `setTimeOfDay()` ([`docs/DEBUG-HOOKS.md`](../../DEBUG-HOOKS.md)).
+**Follow-up (4 hero views × extra modes):** pit `s≈0`, Sands `s≈0.18`, Merlion `s≈0.58`, Flyer `s≈0.86` — see [`docs/DEBUG-HOOKS.md`](../../DEBUG-HOOKS.md) `race(track, tod, weather)`.
 
 ## Offline audit (2026-10-14, post-fix tip)
 
@@ -74,52 +74,42 @@ Bay reflection strip logic **unchanged** from deploy (loosening skip raised buri
 
 ---
 
-## Screenshot grids — Sector 1 (racing `s` 0.00–0.33, night dry)
+## Screenshot panels (34 frames)
 
-Filenames under `artifacts/shots/tracks/singapore/` (committed after shared shot-tooling PR). PR body carries inline panels until then.
+Lap order (sector 1 → 3, then hero orbits). Each cell: **view** · time of day · weather · camera.
 
-| Pit straight (orbit) | CBD towers (orbit) | CBD (park) |
-|:---:|:---:|:---:|
-| `01-pit-straight.jpg` | `02-cbd-towers.jpg` | `02-cbd-towers-drive.jpg` |
+| **pit straight** · night · dry · orbit<br/>![s1-pit-straight](../../../artifacts/shots/tracks/singapore/s1-pit-straight__night-dry__orbit.jpg) | **cbd towers** · night · dry · orbit<br/>![s1-cbd-towers](../../../artifacts/shots/tracks/singapore/s1-cbd-towers__night-dry__orbit.jpg) | **cbd towers** · night · dry · park<br/>![s1-cbd-towers](../../../artifacts/shots/tracks/singapore/s1-cbd-towers__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **turn1 complex** · night · dry · park<br/>![s1-turn1-complex](../../../artifacts/shots/tracks/singapore/s1-turn1-complex__night-dry__park.jpg) | **straight sheares approach** · night · dry · park<br/>![s1-straight-sheares-approach](../../../artifacts/shots/tracks/singapore/s1-straight-sheares-approach__night-dry__park.jpg) | **sheares underpass** · night · dry · park<br/>![s1-sheares-underpass](../../../artifacts/shots/tracks/singapore/s1-sheares-underpass__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **sheares** · night · dry · eye<br/>![s1-sheares](../../../artifacts/shots/tracks/singapore/s1-sheares__night-dry__eye.jpg) | **marina bay sands** · night · dry · park<br/>![s1-marina-bay-sands](../../../artifacts/shots/tracks/singapore/s1-marina-bay-sands__night-dry__park.jpg) | **supertrees** · night · dry · park<br/>![s1-supertrees](../../../artifacts/shots/tracks/singapore/s1-supertrees__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **hotel billboards** · night · dry · park<br/>![s1-hotel-billboards](../../../artifacts/shots/tracks/singapore/s1-hotel-billboards__night-dry__park.jpg) | **bay approach** · night · dry · park<br/>![s1-bay-approach](../../../artifacts/shots/tracks/singapore/s1-bay-approach__night-dry__park.jpg) | **bay skyline** · night · dry · park<br/>![s2-bay-skyline](../../../artifacts/shots/tracks/singapore/s2-bay-skyline__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **bay** · night · dry · trackside<br/>![s2-bay](../../../artifacts/shots/tracks/singapore/s2-bay__night-dry__trackside.jpg) | **river section** · night · dry · park<br/>![s2-river-section](../../../artifacts/shots/tracks/singapore/s2-river-section__night-dry__park.jpg) | **fullerton hotel** · night · dry · park<br/>![s2-fullerton-hotel](../../../artifacts/shots/tracks/singapore/s2-fullerton-hotel__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **merlion park** · night · dry · park<br/>![s2-merlion-park](../../../artifacts/shots/tracks/singapore/s2-merlion-park__night-dry__park.jpg) | **anderson bridge** · night · dry · park<br/>![s2-anderson-bridge](../../../artifacts/shots/tracks/singapore/s2-anderson-bridge__night-dry__park.jpg) | **esplanade approach** · night · dry · park<br/>![s2-esplanade-approach](../../../artifacts/shots/tracks/singapore/s2-esplanade-approach__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **esplanade** · night · dry · park<br/>![s2-esplanade](../../../artifacts/shots/tracks/singapore/s2-esplanade__night-dry__park.jpg) | **parliament house** · night · dry · park<br/>![s2-parliament-house](../../../artifacts/shots/tracks/singapore/s2-parliament-house__night-dry__park.jpg) | **padang** · night · dry · park<br/>![s3-padang](../../../artifacts/shots/tracks/singapore/s3-padang__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **national gallery** · night · dry · park<br/>![s3-national-gallery](../../../artifacts/shots/tracks/singapore/s3-national-gallery__night-dry__park.jpg) | **st andrews** · night · dry · park<br/>![s3-st-andrews](../../../artifacts/shots/tracks/singapore/s3-st-andrews__night-dry__park.jpg) | **supreme court** · night · dry · park<br/>![s3-supreme-court](../../../artifacts/shots/tracks/singapore/s3-supreme-court__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **helix bridge** · night · dry · park<br/>![s3-helix-bridge](../../../artifacts/shots/tracks/singapore/s3-helix-bridge__night-dry__park.jpg) | **helix** · night · dry · trackside<br/>![s3-helix](../../../artifacts/shots/tracks/singapore/s3-helix__night-dry__trackside.jpg) | **singapore flyer** · night · dry · park<br/>![s3-singapore-flyer](../../../artifacts/shots/tracks/singapore/s3-singapore-flyer__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **finish billboards** · night · dry · park<br/>![s3-finish-billboards](../../../artifacts/shots/tracks/singapore/s3-finish-billboards__night-dry__park.jpg) | **finish underpass** · night · dry · park<br/>![s3-finish-underpass](../../../artifacts/shots/tracks/singapore/s3-finish-underpass__night-dry__park.jpg) | **pit gantry** · night · dry · park<br/>![s3-pit-gantry](../../../artifacts/shots/tracks/singapore/s3-pit-gantry__night-dry__park.jpg) |
+| :---: | :---: | :---: |
+| **pit** · night · dry · orbit<br/>![hero-pit](../../../artifacts/shots/tracks/singapore/hero-pit__night-dry__orbit.jpg) | **sands** · night · dry · orbit<br/>![hero-sands](../../../artifacts/shots/tracks/singapore/hero-sands__night-dry__orbit.jpg) | **merlion** · night · dry · orbit<br/>![hero-merlion](../../../artifacts/shots/tracks/singapore/hero-merlion__night-dry__orbit.jpg) |
+| :---: | :---: | :---: |
+| **flyer** · night · dry · orbit<br/>![hero-flyer](../../../artifacts/shots/tracks/singapore/hero-flyer__night-dry__orbit.jpg) | | |
 
-| Sheares underpass | Marina Bay Sands | Supertrees |
-|:---:|:---:|:---:|
-| `03-sheares-underpass.jpg` | `04-marina-bay-sands.jpg` | `05-supertrees.jpg` |
+## Weather / lighting matrix (pending wx batch)
 
-| Hotel / billboards |
-|:---:|
-| `06-hotel-billboards.jpg` |
-
-## Sector 2 (`s` 0.33–0.68, night dry)
-
-| Bay skyline | Fullerton | Merlion |
-|:---:|:---:|:---:|
-| `07-bay-skyline.jpg` | `08-fullerton.jpg` | `09-merlion.jpg` |
-
-| Anderson Bridge | Esplanade |
-|:---:|:---:|
-| `10-anderson-bridge.jpg` | `11-esplanade.jpg` |
-
-## Sector 3 (`s` 0.68–1.00, night dry)
-
-| Padang | Helix Bridge | Singapore Flyer |
-|:---:|:---:|:---:|
-| `12-padang.jpg` | `13-helix-bridge.jpg` | `14-flyer.jpg` |
-
-| Finish underpass |
-|:---:|
-| `15-finish-underpass.jpg` |
-
-## Weather / lighting matrix (pending shared tooling)
-
-| View | dry day | wet | rain | overcast | fog | dusk | dawn | night |
-|------|---------|-----|------|----------|-----|------|------|-------|
-| Pit `s≈0` | pending | pending | pending | pending | pending | pending | pending | captured |
+| View | dry day | wet | rain | overcast | fog | dusk | dawn | night dry |
+|------|---------|-----|------|----------|-----|------|------|-----------|
+| Pit `s≈0` | pending | pending | pending | pending | pending | pending | pending | **34-frame pass** |
 | Sands `s≈0.18` | pending | pending | pending | pending | pending | pending | pending | captured |
 | Merlion `s≈0.58` | pending | pending | pending | pending | pending | pending | pending | captured |
 | Flyer `s≈0.86` | pending | pending | pending | pending | pending | pending | pending | captured |
-
-After rebase: fill this table with `artifacts/shots/tracks/singapore/hero-*__{tod}-{wx}.jpg` frames (target 30–36 total).
 
 ## Survey backlog (post–wx tooling)
 
