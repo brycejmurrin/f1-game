@@ -656,18 +656,19 @@ body:has(dialog[open]) #save-warning { display: none; }
   display: flex;
   flex-direction: column;
   gap: calc(var(--gap) / 3);
-  max-height: calc(32 * var(--svhz));
+  /* All four seats without scrolling: 4 rows + 3 gaps. Not `32 * --svhz`,
+     which is 32 % of the viewport (125 px at 844x390) and hid the guest row. */
+  max-height: calc(4 * var(--tap-paint) + var(--gap));
   overflow-y: auto;
   overscroll-behavior-y: contain;
 }
 #vsfriend .vs-roster-seat { margin: 0; }
-/* Landscape phone (~844×390): guest rows carry verify + Remove; keep one line
-   at the same 32px rhythm as the host's own row. */
+/* Landscape phone (~844×390): guest rows carry verify + Remove; keep one line,
+   each row exactly one compact tap target tall (the host's own row too). */
 #vsfriend .vs-roster .vs-driver {
   flex-wrap: nowrap;
   overflow: hidden;
-  min-height: calc(32 * var(--svhz));
-  max-height: calc(32 * var(--svhz));
+  min-height: var(--tap-paint);
   padding-top: 0;
   padding-bottom: 0;
 }
@@ -678,7 +679,8 @@ body:has(dialog[open]) #save-warning { display: none; }
   font-size: var(--fs-micro);
   margin-left: auto;
   white-space: nowrap;
-  padding: 0 calc(var(--gap) / 3);
+  min-height: var(--tap-paint);
+  padding: 0 calc(var(--gap) * 2 / 3);
   line-height: 1.2;
 }
 #vsfriend .vs-roster-dot {
