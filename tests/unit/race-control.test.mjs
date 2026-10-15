@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DEBRIS_SRC = readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8");
@@ -584,8 +585,7 @@ test("a red flag whose restart is declined (a car has finished) still holds OVER
 });
 
 test("game.js redFlagRestart lowers the hold only on the path that rewinds the lap", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const body = src.slice(src.indexOf("function redFlagRestart()"), src.indexOf("function gridUp("));
+  const body = symbolSource("function redFlagRestart()");
   assert.match(body, /if \(state !== "race" \|\| !track \|\| cars\.some\(\(c\) => c\.finished\)\) return false;/);
   assert.match(body, /raceCtl\.rewound\(\);/);
   assert.ok(body.indexOf("raceCtl.rewound()") > body.indexOf("c.lap = lapNew"), "after the rewind, past the decline");
