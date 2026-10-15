@@ -214,7 +214,7 @@ test("wall-clamp source: AI wall path calls fieldContact, player path still Game
   assert.match(WALL_SRC, /!c\.isPlayer && soundOn/);
   // Player block still uses collision() and collideT re-arm — byte-identical contract.
   assert.match(WALL_SRC, /c\.isPlayer && c\.collideT <= 0 && soundOn/);
-  assert.match(WALL_SRC, /GameAudio\.collision\(fxInc/);
+  assert.match(WALL_SRC, /GameAudio\.collision\(fxInc,[^)]*,\s*into\)/);
 });
 
 test("collideFx gate: rival–rival forwards fieldContact; player branch keeps collision()", () => {
@@ -225,5 +225,6 @@ test("collideFx gate: rival–rival forwards fieldContact; player branch keeps c
   const fx = src.slice(start, start + 2800);
   assert.match(fx, /GameAudio\.fieldContact\("bump"/);
   assert.match(fx, /!a\.isPlayer && !b\.isPlayer/);
-  assert.match(fx, /if \(soundOn\) GameAudio\.collision\(impact\)/);
+  assert.match(fx, /GameAudio\.collision\(impact, false, side\)/);
+  assert.match(fx, /const side = Math\.abs\(lat\) > 0\.08/);
 });

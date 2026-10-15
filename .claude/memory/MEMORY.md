@@ -20,4 +20,9 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
 - [Foreground wait loop killed (137)](foreground-wait-loop-killed.md) — never block a foreground Bash on a multi-minute background run; end the turn and take the notification
 - [gpu-census: one run per branch](gpu-census-one-run-per-branch.md) — a second dispatch queues, a third replaces it; dispatch A/B arms sequentially, pair ≥2 runs per arm, read counts not fps
+- [Orchestrator may spawn sessions](orchestrator-may-spawn-sessions.md) — fleet work: launch sibling sessions without asking, tell Bryce each time; respect a single denied launch
 - [Merge method: verify parents](merge-method-verify-parents.md) — a "merge" merge_pull_request landed as a squash (#1743); check two parents after every merge
+- [Merge Desk session](merge-desk-session.md) — persistent Claude Merge Desk session_01WQY3pk…; workers send `SWEEP <PR#>`; it never merges
+- [MCP allow rules, measured](mcp-allow-rules-measured.md) — read `permission_decision` in list_events; a repo can't approve its own .mcp.json servers (auto mode's classifier does); auto siblings need an auto parent + `source_url`; MDN/BrowserStack prompt regardless (claude.ai connector setting)
+- [Survey PRs merge to assets; cap 5](survey-prs-merge-to-assets-cap5.md) — 2026-10-15: green survey PRs merge into track-survey-assets; full-tier cap 5 while queue ok, 3 on hold
+- [Standing Merge Desk](standing-merge-desk.md) — since 2026-10-15 a Sonnet `[Merge Desk]` sibling (agent merge-desk.md) runs sweeps and spawns Sonnet lane workers, woken hourly; send SWEEP there

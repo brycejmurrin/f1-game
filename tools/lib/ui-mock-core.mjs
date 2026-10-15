@@ -1,4 +1,4 @@
-// @doc Shared core of the "mock" UI shot tools (hud-mock, menu-mock): held rAF loop, labelled boxes, cheap CDP capture (png|jpeg, clip), contact sheet, content-hash cell cache.
+// @doc Core of hud-mock/menu-mock: held rAF loop, labelled boxes, CDP capture (png|jpeg, clip), contact sheet, cell cache.
 //
 // WHY. hud-mock proved the fast shape for a DOM-only question: boot ONE page per pointer
 // type, turn the 3D off, change the viewport in place, and capture composited DOM
