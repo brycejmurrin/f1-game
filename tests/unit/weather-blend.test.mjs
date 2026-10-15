@@ -173,6 +173,37 @@ test("dusk and dawn fog take the horizon's hue, not the midday grey", () => {
   assert.deepEqual(host(day.G.frame.fogColor), [0.74, 0.76, 0.78], "day fog keeps its grey");
 });
 
+test("daytime rain and storm stay overcast daylight; night storm stays as dark as before", () => {
+  const dayTracks = ["monza", "spa", "bahrain", "suzuka"];
+  for (const track of dayTracks) {
+    const dry = boot(track);
+    dry.G.raceTimeOfDay = "day";
+    dry.G.raceWeather = "dry";
+    dry.atmo.applyRaceSettings();
+    const dryZ = lum(dry.G.frameSky.zenith);
+    for (const wx of ["rain", "storm"]) {
+      const { G, atmo } = boot(track);
+      G.raceTimeOfDay = "day";
+      G.raceWeather = wx;
+      atmo.applyRaceSettings();
+      const z = lum(G.frameSky.zenith);
+      assert.ok(z >= 0.45, `${track} day ${wx}: zenith luminance ${z.toFixed(3)} reads like night`);
+      assert.ok(G.frame.exposure >= 1.0, `${track} day ${wx}: exposure ${G.frame.exposure}`);
+      assert.ok(z >= dryZ * 0.85, `${track} day ${wx}: zenith must not plunge below dry (${z.toFixed(3)} vs ${dryZ.toFixed(3)})`);
+      if (wx === "storm") {
+        assert.ok(sum(G.frame.sunColor) < sum(dry.G.frame.sunColor) * 0.55,
+          `${track} day storm sun must be much softer than dry`);
+      }
+    }
+  }
+  const night = boot("monza");
+  night.G.raceTimeOfDay = "night";
+  night.G.raceWeather = "storm";
+  night.atmo.applyRaceSettings();
+  assert.ok(lum(night.G.frameSky.zenith) < 0.03, "night storm zenith stays near-black");
+  assert.ok(night.G.frame.exposure < 0.85, "night storm exposure stays suppressed");
+});
+
 test("wet and rain fog follow the sky's overcast grey, so terrain meets the skyline", () => {
   const { G, atmo } = boot();
   atmo.applyRaceSettings();
