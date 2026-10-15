@@ -399,6 +399,8 @@
     "// Garage before pack: recipe, MANIFEST, fetch --help / no-pack, workflow is",
     "// not Car shot. Pure + spawn, no network / Chromium.",
     "tests/unit/garage-before.test.mjs",
+    "// The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.",
+    "tests/unit/garage-crew.test.mjs",
     "tests/unit/garage-defaults.test.mjs",
     "tests/unit/garage-interior-gate.test.mjs",
     "tests/unit/garage-mesh.test.mjs",
