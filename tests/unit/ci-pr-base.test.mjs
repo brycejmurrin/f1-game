@@ -5,6 +5,7 @@
 // base's own recent commits as every PR's diff and fail-safed into running
 // everything (tools/ci/ci-pr-base.sh). Run for real in a throwaway repo, then
 // pin every workflow step that diffs a PR to the helper.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

@@ -8,6 +8,7 @@
 // the REAL script in a throwaway repo under artifacts/ (never /tmp) through
 // each case: fresh restore, a stale session saving, this session's own edit,
 // both sides adding index lines, a topic-file conflict, and deletions.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
