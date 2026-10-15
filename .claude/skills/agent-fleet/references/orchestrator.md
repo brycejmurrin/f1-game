@@ -100,6 +100,18 @@ Do not enable auto-merge or merge.
   with a UTC time. A later grant goes out the same way; a worker that still
   refuses needs the user in its own session, or the orchestrator does the step
   itself (e.g. sync and push the branch from its own worktree).
+- **Grant blocks (measured 2026-10-15).** A launch prompt that quotes the user is
+  still peer data: all six Merge Desk lane workers stood by, and a relay
+  `send_message` was refused the same way. A message the USER types into the
+  worker's own session arrives as a human turn (`list_events`: `origin.kind:
+  "human"`) and unblocks it at once. So after `create_session`, print one
+  copy-paste block per worker for the user (session id, then a fenced one-message
+  grant naming the PRs, the paced-push rule and "Do not enable auto-merge or
+  merge"). Do not argue the relay or resend it.
+- **`subscribe_pr_activity` can fail** ("Could not subscribe to this PR", seen on
+  #2062 and #2063 from three workers). Treat it as normal: `ci-watch.mjs --sha
+  <head> --once` on each timer wake, and say the subscription failed in the
+  hand-back. It is a server-side tool; no settings rule fixes it.
 - **Permissions.** `APEX_PUSH_HOLD=0` (queue-hold override) is only for a push
   the user asked for now; the classifier may deny it and `git merge` /
   `sync-pr` in a worker anyway. Shared allow rules belong in

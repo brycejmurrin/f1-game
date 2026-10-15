@@ -7,6 +7,22 @@ vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.u
 const Arrival = vm.runInContext('GarageArrival', context);
 vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context);
 const TrackPit = vm.runInContext('TrackPit', context);
+function raceEntryProfileStub({ budgetMs = 30000, now = () => 0 } = {}) {
+  let t0 = now();
+  const noop = () => {};
+  return {
+    spanAsync: (_n, fn) => fn(),
+    span: (_n, fn) => fn(),
+    mark: noop,
+    lap: noop,
+    beginUi() { t0 = now(); },
+    setProgressSink: noop,
+    introBudgetExpired: () => now() - t0 >= budgetMs,
+    introBudgetLeft: () => Math.max(0, budgetMs - (now() - t0)),
+  };
+}
+const PERF_GOV_STUB = { softwareRaster: () => false };
+const UI_EXPERIENCE_STUB = { isPracticePick: () => false };
 function harness(reduced = false) {
   const elements = new Map();
   const $ = id => {
@@ -156,9 +172,9 @@ test('cold preparation settles before the drive-out; a warm world opens on the g
   assert.match(warm, /if \(cold\) introCover\(info, n\); else studioOpen\(n, info\);/);
   assert.match(game, /if \(!built && introGarage\(go\)\) return;/, 'a ready, warm world opens on it too (reduce-motion included)');
   assert.match(warm,
-    /if \(cold\) \{\s*\/\/ Cold:[^\n]*\n\s*const ready = await introPrepare\(live, key, info, n, true\);[\s\S]*?studioOpen\(n, info\); await studioDone\(live, n\);/,
+    /if \(cold\) \{\s*\/\/ Cold:[^\n]*\n\s*const ready = await introPrepare\(live, key, info, n, true\);[\s\S]*?studioOpen\(n, info\); await RaceEntryProfile\.spanAsync\("studioDone", \(\) => studioDone\(live, n\)\);/,
     'cold motion starts only after compilation settles');
-  assert.match(warm, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await studioDone\(live, n\);/,
+  assert.match(warm, /const prepP = introPrepare\(live, key, info, n, false\); prepP\.catch\(\(\) => \{\}\);[^\n]*\n\s*await RaceEntryProfile\.spanAsync\("studioDone", \(\) => studioDone\(live, n\)\);/,
     'warm path: garage-out overlaps prepare, never blocked behind it');
   assert.match(game, /if \(built && _introSkip === _introRun\) _introSkip = 0;   \/\/ skipped in the garage: only the drive-out ends/, 'a skip in the garage ends the drive-out only: the card and the flyby still follow');
   assert.ok(!/_introSkip === _introRun\) \{ _introSkip = 0; go\(\); return; \}/.test(game), 'no garage skip jumps past the flyby to the race');
@@ -217,7 +233,9 @@ test('the first presented garage frame takes over its preparation cover, then ha
       setupCam: { startDriveOut: () => mode === 'off' ? 0 : 5000, stopDriveOut() { events.push('out'); }, driveOutLeft: () => (mode === 'warming' ? 5000 : Math.max(0, 5000 - now)) },
       titleIfBare() {},
       menuSlice: async () => { now += 1000; if (!c.gfx.warming()) c.studioShown(); if (mode === 'quit' && now >= 2000) c.state = 'race'; if (mode === 'skip' && now === 2000) c._skip();  },
-      raceIntro: () => events.push(c._introSkip === c._introRun ? 'skip:' + c._introKey : 'fly:' + c._introKey), go: () => events.push('go'), Log: { warn() {} } };
+      raceIntro: () => events.push(c._introSkip === c._introRun ? 'skip:' + c._introKey : 'fly:' + c._introKey), go: () => events.push('go'), Log: { warn() {} },
+      RaceEntryProfile: raceEntryProfileStub({ budgetMs: 1e9, now: () => now }), PerfGov: PERF_GOV_STUB,
+      UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false };
     vm.createContext(c); vm.runInContext(src, c);
     const took = c.introGarage(c.go);
     for (let i = 0; i < 400; i++) await Promise.resolve();
@@ -468,6 +486,8 @@ test('START from race settings: the sheet covers preparation (PREPARING…), nev
     const ctx = { _introRun: 0, state: 'menu', settings: 'one', flybyBuildTimer: 7, cleared: 0, _menuGate: { generation: 0 },
       $: (id) => (id === 'rs-cancel' ? back : null), clearTimeout(t) { if (t === 7) ctx.cleared++; },
       Log: { warn() {} }, announce() { events.push(['failed']); }, gfx: { warming: () => warming }, performance: { now: () => now }, introNow: () => now,
+      RaceEntryProfile: raceEntryProfileStub({ budgetMs: 30000, now: () => now }), PerfGov: PERF_GOV_STUB,
+      UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
       entrySettings: () => ctx.settings, loadingScreen: { building: () => events.push(['card']), stop() {} }, studioSkip() {},
       cancelIntro() { ctx._introRun++; ctx.sheetRelease(false); },
       // Model a successfully presented garage frame releasing the sheet.
@@ -582,6 +602,8 @@ function garageEntryRegressionHarness() {
     },
     Log: { warn() {} },
     raceIntro() { events.push('handoff'); },
+    RaceEntryProfile: raceEntryProfileStub({ budgetMs: 1e9, now: () => now }),
+    PerfGov: PERF_GOV_STUB, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
     ensureScenery: async () => {}, motionReduced: () => false,
     loadTrackStepped: async () => false,
     prepareMenuCarAssets: async () => {}, warmPrograms() {},
@@ -887,6 +909,8 @@ function sheetRecoveryHarness({ manual = false, pollThrows = false, syncPollThro
       intros.push({ owner: ctx.sheetOwner(), stillWarming: warming, go });
       if (!deferredCold) ctx.sheetRelease(true);
     },
+    RaceEntryProfile: raceEntryProfileStub({ budgetMs: 30000, now: () => clock }),
+    PerfGov: PERF_GOV_STUB, UiExperience: UI_EXPERIENCE_STUB, isTimeTrial: () => false,
   };
   vm.createContext(ctx);
   vm.runInContext(state + warm + helpers + wrapper + ';globalThis.sheetOwner = () => _introSheet;', ctx);

@@ -482,6 +482,7 @@
       gamma: uniform(new THREE.Vector3(1, 1, 1)),
       gain: uniform(new THREE.Vector3(1, 1, 1)),
       hdrGradeOn: uniform(0),
+      sceneHdr: uniform(1),   // 0 = RGBA8 scene (no ACES — mirror uHdr parity)
       carReflect: uniform(0.05), carGloss: uniform(1.0),
       ...perspU(),   // ipXY/ipZW/pXY/pW: the SSR reconstruct + march (D11)
       upVS: uniform(new THREE.Vector3(0, 1, 0)),
@@ -854,7 +855,7 @@
           });
         });
 
-        If(C.hdrGradeOn.greaterThan(0.5), () => {
+        If(C.hdrGradeOn.greaterThan(0.5).and(C.sceneHdr.greaterThan(0.5)), () => {
           const lift = vec3(C.lift).toVar();
           const gain = max(C.gain, vec3(1e-3)).toVar();
           const invGamma = vec3(1.0).div(max(C.gamma, vec3(1e-3))).toVar();
@@ -884,8 +885,15 @@
           c.assign(max(c.mul(newY.div(max(oldY, 1e-6))), vec3(0.0)));
         });
 
-        // Filmic tone-map (parameterised Narkowicz ACES) + WHITE POINT knee.
-        c.assign(acesTonemap(c.div(C.whitePoint)));
+        // Filmic tone-map on the HDR scene only. An 8-bit scene target has
+        // already clamped highlights; running ACES again reads pale/washed
+        // (tlx-post.js hdr probe — mirrorTone gates the same way).
+        If(C.sceneHdr.greaterThan(0.5), () => {
+          c.assign(acesTonemap(c.div(C.whitePoint)));
+        });
+        If(C.sceneHdr.lessThanEqual(0.5), () => {
+          c.assign(clamp(c.div(max(C.whitePoint, float(1e-3))), vec3(0.0), vec3(1.0)));
+        });
 
         colourGradeT(c);
 
