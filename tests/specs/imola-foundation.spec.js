@@ -28,20 +28,20 @@ async function imolaDayDiag(racePage) {
       walls: window.__apex.wallStats(),
       shoulderGaps,
       elevation: {
-        // 7a173519 moved the start line (startFrac 0.495 -> 0.0), rotating
-        // racing fractions by the arc shift (+0.5094); the corners themselves
-        // did not move. Probes re-located onto the corners in the new frame
-        // (headless VM, extremum scan around old frac + shift):
-        //   flat approach 0.15 -> 0.66  (y 0.11)
-        //   Piratella crest 0.34 -> 0.848 (local max 0.8474, y 14.04)
-        //   Acque Minerali 0.48 -> 0.994 (local min 0.9934, y -9.96)
-        //   Variante Alta 0.64 -> 0.148 (local max 0.1487, y 16.10)
-        //   Rivazza 0.80 -> 0.310 (local min 0.3094, y -13.98)
-        flatApproach: at(0.66),
-        piratella: at(0.848),
-        acqueMinerali: at(0.994),
-        varianteAlta: at(0.148),
-        rivazza: at(0.310),
+        // Probes sit on the corners in the RACING frame (js/circuits/imola.js turns[]).
+        // The previous probes (0.66 / 0.848 / 0.994 / 0.148 / 0.310) pinned the pre-fix
+        // elevations, which the engine consumed unshifted so each hill sat ~half a lap off
+        // its corner (+16 m at Tamburello, +14 m at Rivazza, flat 0.40-0.75).
+        //   flat approach  0.30  (Villeneuve -> Tosa, near-flat first third)
+        //   Piratella crest 0.467 (y 11.9)
+        //   Acque Minerali hollow 0.567 (y -6.6)
+        //   Variante Alta crest 0.683 (y 20.9)
+        //   Rivazza shoulder 0.80 (y 5.0, falling to the line)
+        flatApproach: at(0.30),
+        piratella: at(0.467),
+        acqueMinerali: at(0.567),
+        varianteAlta: at(0.683),
+        rivazza: at(0.80),
         range: Math.max(...ys) - Math.min(...ys),
       },
     };
@@ -83,7 +83,9 @@ test.describe("Imola track-owned foundation", () => {
     expect(result.def.sceneryCoordinates).toBe("racing");
     expect(result.def.terrainOuter).toBe(120);
     expect(result.def.dressingExclusions).toEqual([
-      { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
+      { kinds: ["foliage"], s0: 0, s1: 1 },
+      { kinds: ["lighting"], s0: 0.3306, s1: 0.5406 },
+      { kinds: ["lighting"], s0: 0.7906, s1: 0.1706 },
     ]);
     expect(result.geometry.every((entry) => entry.ok)).toBe(true);
     expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);
@@ -92,9 +94,9 @@ test.describe("Imola track-owned foundation", () => {
     expect(result.walls.tightFrac).toBeGreaterThan(0.3);
     expect(Math.abs(result.elevation.flatApproach)).toBeLessThan(0.5);
     expect(result.elevation.piratella).toBeGreaterThan(10);
-    expect(result.elevation.acqueMinerali).toBeLessThan(-8);
-    expect(result.elevation.varianteAlta).toBeGreaterThan(12);
-    expect(result.elevation.rivazza).toBeLessThan(-10);
+    expect(result.elevation.acqueMinerali).toBeLessThan(-5);
+    expect(result.elevation.varianteAlta).toBeGreaterThan(15);
+    expect(result.elevation.rivazza).toBeGreaterThan(3);
     expect(result.elevation.range).toBeGreaterThan(25);
     expect(result.shoulderGaps.filter((sample) => sample.gap > 0.18)).toEqual([]);
 

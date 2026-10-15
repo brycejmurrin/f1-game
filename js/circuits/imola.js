@@ -28,8 +28,12 @@
     baseHW: 7,
     terrainOuter: 120,
     dressingExclusions: [
-      // Bespoke parkland and selective lamps below own the full circuit.
-      { kinds: ["foliage", "lighting"], s0: 0, s1: 1 },
+      // Bespoke parkland owns the full circuit. The hand-placed lamp runs own racing
+      // 0.84–0.05 (pit straight) and 0.30–0.68; engine masts light 0.05–0.30 and 0.68–0.84.
+      // Windows are SCENERY-frame (racing frac + 0.4906, i.e. scenery sl()).
+      { kinds: ["foliage"], s0: 0, s1: 1 },
+      { kinds: ["lighting"], s0: 0.3306, s1: 0.5406 },
+      { kinds: ["lighting"], s0: 0.7906, s1: 0.1706 },
     ],
     pal: { zenith: [0.24, 0.44, 0.74], horizon: [0.80, 0.72, 0.56], grass: [0.24, 0.46, 0.16], runoff: [0.44, 0.42, 0.36], sunDir: [0.7874615506676528, 0.5468482990747588, 0.2843611155188746], sun: [1, 0.9, 0.65], sunColor: [1, 0.88, 0.62] },
     // Keys are AUTHORED-frame (fmap'd to racing by def.js, ≈ +0.014 here); the racing-lap
