@@ -192,6 +192,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/career-settle.test.mjs",
   "tests/unit/career-ui-lazy.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
+  // gpu-census.yml's real-GPU Verdict as functions (tools/gfx/census-verdict.mjs)
+  // plus its plan gate (nightly skip, push request) executed on a scratch repo; < 1 s.
+  "tests/unit/census-verdict.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/change-kind.test.mjs",
   "tests/unit/changed-files.test.mjs",
@@ -838,6 +841,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 track engine: surfaceFolds / centreline diagnostics, running-surface fold clamp, opt-in splineAlpha (unset = byte-identical path).
   "tests/unit/spline-fold-diagnostics.test.mjs",
   "tests/unit/sporting-regs.test.mjs",
+  "tests/unit/spotter-lifecycle.test.mjs",
   // The start gantry's five lamps follow the countdown: one additive glow per
   // lit lamp, on the gantry nearest the line, out at green. VM, ~0.1 s.
   "tests/unit/start-lights.test.mjs",
