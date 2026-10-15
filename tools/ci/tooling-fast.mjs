@@ -362,6 +362,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The Cloud Agent bootstrap contract (.cursor/environment.json). The last docs-guards
   // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5; the workflow retired 2026-10-15), ~0.3 s.
   "tests/unit/environment-json.test.mjs",
+  // Job 6: MGU-K electric deploy/harvest + overtake boost cue (fake-audio VM).
+  "tests/unit/ers-audio-layer.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
