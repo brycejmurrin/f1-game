@@ -9,10 +9,13 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import {
   parseShotMeta,
+  parseAgentDoubleUnderscore,
   collectShots,
+  collectSurveyBranchShots,
   build,
   ROOT,
 } from "../../tools/track/build-gallery.cjs";
+import { rawGitHubUrl } from "../../tools/track/survey-gallery-lib.cjs";
 import { STAGE_DIRS } from "../../tools/desktop/stage-files.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -30,6 +33,30 @@ test("look-survey grid sheets parse as overview/grid", () => {
   assert.equal(m.circuit, "spa");
   assert.equal(m.sector, "overview");
   assert.equal(m.weather, "grid");
+});
+
+test("agent hero-abbey__dusk-dry filenames parse sector, tod, and weather", () => {
+  const m = parseAgentDoubleUnderscore("hero-abbey__dusk-dry.jpg", "silverstone");
+  assert.equal(m.circuit, "silverstone");
+  assert.equal(m.sector, "hero-abbey");
+  assert.equal(m.weather, "dusk-dry");
+  assert.equal(m.tod, "dusk");
+  assert.equal(m.condition, "dry");
+});
+
+test("raw GitHub URLs use the committed branch path", () => {
+  const url = rawGitHubUrl("brycejmurrin", "f1-game", "cursor/silverstone-survey-745b",
+    "artifacts/shots/tracks/silverstone/hero-abbey__dusk-dry.jpg");
+  assert.match(url, /^https:\/\/raw\.githubusercontent\.com\/brycejmurrin\/f1-game\/cursor\//);
+  assert.ok(!url.includes("/workspace"));
+});
+
+test("collectSurveyBranchShots includes committed silverstone survey JPEGs", () => {
+  const shots = collectSurveyBranchShots();
+  assert.ok(
+    shots.some((s) => s.circuit === "silverstone" && s.sector === "hero-abbey" && s.tod === "dusk"),
+    `expected silverstone branch shots, got ${shots.length} total`,
+  );
 });
 
 test("tracks-ui preview filenames map to a circuit", () => {

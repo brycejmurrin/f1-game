@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // build-gallery.cjs — static circuit survey gallery from track shots + survey docs.
-// @doc Scans track survey PNGs + docs, writes compressed WebP/JPEG + gallery/tracks/index.html for Pages.
+// @doc Scans open cursor/*-survey* branches + local seeds; WebP + gallery/tracks/index.html for Pages.
 // @skill survey-track
 //
 //   node tools/track/build-gallery.cjs
@@ -8,10 +8,8 @@
 //   npm run gallery:tracks
 //
 // Inputs (see docs/tracks/GALLERY.md):
-//   artifacts/shots/tracks/<circuitId>/*.png   — canonical survey drops (may be force-added)
-//   artifacts/shots/tracks-ui/                 — UI survey seed
-//   docs/look-survey/*_grid.png                  — committed lighting grids
-//   docs/research/wgx-gallery/*.png              — renderer research stills
+//   origin/cursor/*-survey* branches → artifacts/shots/tracks/<circuitId>/*
+//   artifacts/shots/tracks/ (current branch), tracks-ui, look-survey, wgx research
 // Survey prose: docs/tracks/surveys/<id>.md, else docs/tracks/<id>.md
 //
 // Output (committed, staged for GitHub Pages via gallery/):
@@ -21,15 +19,32 @@
 
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
+const {
+  splitTodWeather,
+  parseRepoSlug,
+  rawGitHubUrl,
+  surveyBranchesToScan,
+  listBranchTrackImages,
+  readGitBlob,
+  branchSlug,
+  IMAGE_EXT,
+} = require("./survey-gallery-lib.cjs");
 
 const ROOT = path.resolve(__dirname, "../..");
 const DEFAULT_OUT = path.join(ROOT, "gallery", "tracks");
 const REPO = "https://github.com/brycejmurrin/f1-game";
 const DOC_BRANCH = "claude/f1-game-project-26h3ng";
+const pkg = require(path.join(ROOT, "package.json"));
+const GH = parseRepoSlug(pkg.repository?.url);
 
-const IMAGE_EXT = /\.(png|jpe?g|webp)$/i;
 const CANONICAL_PREFIX = /^([a-z][a-z0-9_]*)-(\d{2,})-(.+)\.(png|jpe?g|webp)$/i;
 const WEATHER_TAIL = /^(?:(?:dawn|day|dusk|night|fog|overcast|grid|ui|unknown)-(?:dry|wet|rain|fog|overcast)|(?:dry|wet|rain|fog|overcast|grid|ui|unknown))$/i;
+
+function enrichTod(meta) {
+  const { tod, condition } = splitTodWeather(meta.weather);
+  return { ...meta, tod, condition };
+}
 
 function parseCanonical(base) {
   const m = base.match(CANONICAL_PREFIX);
@@ -47,28 +62,43 @@ function parseCanonical(base) {
     sector = tokens.slice(0, -1).join("-");
   }
   if (!sector || !weather) return null;
-  return {
+  return enrichTod({
     circuit: m[1],
     seq: m[2],
     sector,
     weather,
     stem: `${m[1]}-${m[2]}-${sector}-${weather}`,
-  };
+  });
 }
 
-/** @typedef {{ circuit: string, seq: string, sector: string, weather: string, source: string, rel: string, stem: string }} ShotMeta */
+function parseAgentDoubleUnderscore(base, circuitId) {
+  const m = base.match(/^(.+?)__(.+)\.(png|jpe?g|webp)$/i);
+  if (!m || !circuitId) return null;
+  const sector = m[1];
+  const weather = m[2];
+  const safe = (s) => s.replace(/[^a-z0-9_-]+/gi, "-");
+  return enrichTod({
+    circuit: circuitId,
+    seq: "55",
+    sector,
+    weather,
+    stem: `${circuitId}-55-${safe(sector)}-${safe(weather)}`,
+  });
+}
 
 function printHelp() {
   console.log(`build-gallery — circuit survey screenshot gallery
 
-  node tools/track/build-gallery.cjs [--out DIR] [--skip-images]
+  node tools/track/build-gallery.cjs [--out DIR] [--skip-images] [--no-fetch]
   npm run gallery:tracks
 
   --out DIR          output root (default gallery/tracks)
-  --skip-images      manifest + HTML only (no sharp resize)
+  --skip-images      manifest + HTML only (use raw.githubusercontent.com URLs)
+  --no-fetch         skip git fetch origin before scanning survey branches
   --help             this text
 
-Convention: <circuit>-<nn>-<sector>-<weather>.png  (docs/tracks/GALLERY.md)
+Scans every open cursor/*-survey* PR branch (and other origin survey branches with
+shots). Convention: docs/tracks/GALLERY.md
 `);
 }
 
@@ -80,15 +110,15 @@ function listImages(dir) {
 }
 
 /**
- * Parse a filename / path into circuit, sector, weather metadata.
- * @param {string} filePath absolute or relative path to image
- * @param {{ circuitHint?: string, bucket?: string }} ctx
- * @returns {ShotMeta | null}
+ * @param {string} filePath
+ * @param {{ circuitHint?: string, bucket?: string, branch?: string, repoRel?: string }} ctx
  */
 function parseShotMeta(filePath, ctx = {}) {
   const base = path.basename(filePath);
   const stem = base.replace(IMAGE_EXT, "");
-  const rel = path.relative(ROOT, filePath).split(path.sep).join("/");
+  const rel = ctx.repoRel || path.relative(ROOT, filePath).split(path.sep).join("/");
+  const circuitHint = ctx.circuitHint
+    || (rel.match(/artifacts\/shots\/tracks\/([^/]+)\//) || [])[1];
 
   const canon = parseCanonical(base);
   if (canon) {
@@ -96,72 +126,101 @@ function parseShotMeta(filePath, ctx = {}) {
       ...canon,
       source: ctx.bucket || "tracks",
       rel,
+      branch: ctx.branch || null,
+    };
+  }
+
+  const agent = parseAgentDoubleUnderscore(base, circuitHint);
+  if (agent) {
+    return {
+      ...agent,
+      source: ctx.branch ? `branch:${ctx.branch}` : "tracks",
+      rel,
+      branch: ctx.branch || null,
     };
   }
 
   let m = base.match(/^([a-z][a-z0-9_]*)_grid\.png$/i);
   if (m) {
-    return {
+    return enrichTod({
       circuit: m[1],
       seq: "00",
       sector: "overview",
       weather: "grid",
       source: "look-survey",
       rel,
+      branch: null,
       stem: `${m[1]}-00-overview-grid`,
-    };
+    });
   }
 
   m = base.match(/preview-([a-z][a-z0-9_]*)/i);
   if (m) {
-    return {
+    return enrichTod({
       circuit: m[1],
       seq: "90",
       sector: "picker-preview",
       weather: "ui",
       source: ctx.bucket || "tracks-ui",
       rel,
+      branch: null,
       stem: `${m[1]}-90-picker-preview-ui`,
-    };
+    });
   }
 
   m = base.match(/track-detail-([a-z][a-z0-9_]*)/i);
   if (m) {
-    return {
+    return enrichTod({
       circuit: m[1],
       seq: "91",
       sector: "detail-card",
       weather: "ui",
       source: ctx.bucket || "tracks-ui",
       rel,
+      branch: null,
       stem: `${m[1]}-91-detail-card-ui`,
-    };
+    });
   }
 
   if (ctx.circuitHint && /^[a-z0-9_-]+\.(png|jpe?g|webp)$/i.test(base)) {
     const id = ctx.circuitHint.replace(/\.(png|jpe?g|webp)$/i, "");
-    return {
+    return enrichTod({
       circuit: id,
       seq: "00",
       sector: "still",
       weather: "unknown",
       source: ctx.bucket || "research",
       rel,
+      branch: ctx.branch || null,
       stem: `${id}-00-still-unknown`,
-    };
+    });
   }
 
   if (ctx.bucket === "tracks-ui") {
     const tag = stem.replace(/^\d+-/, "").slice(0, 40) || "misc";
-    return {
+    return enrichTod({
       circuit: "tracks-ui",
       seq: (stem.match(/^(\d+)/) || ["", "99"])[1],
       sector: tag,
       weather: "ui",
       source: "tracks-ui",
       rel,
+      branch: null,
       stem: `tracks-ui-${(stem.match(/^(\d+)/) || ["", "99"])[1]}-${tag}`,
-    };
+    });
+  }
+
+  if (circuitHint) {
+    return enrichTod({
+      circuit: circuitHint,
+      seq: "99",
+      sector: stem.slice(0, 48),
+      weather: "unknown",
+      source: ctx.branch ? `branch:${ctx.branch}` : "tracks",
+      rel,
+      branch: ctx.branch || null,
+      stem: `${circuitHint}-99-${stem}`.replace(/[^a-z0-9_-]+/gi, "-").slice(0, 80),
+    });
   }
 
   return null;
@@ -180,18 +239,56 @@ function surveyDocUrl(docPath) {
   return `${REPO}/blob/${DOC_BRANCH}/${docPath}`;
 }
 
-function collectShots() {
-  /** @type {Map<string, ShotMeta & { abs: string }>} */
+function collectSurveyBranchShots() {
+  /** @type {Map<string, object>} */
+  const byUid = new Map();
+  const branches = surveyBranchesToScan(ROOT);
+  for (const branch of branches) {
+    for (const repoRel of listBranchTrackImages(ROOT, branch)) {
+      const circuitHint = repoRel.split("/")[3];
+      const meta = parseShotMeta(path.basename(repoRel), {
+        circuitHint,
+        bucket: "tracks",
+        branch,
+        repoRel,
+      });
+      if (!meta) continue;
+      const uid = `${branch}:${repoRel}`;
+      const rawUrl = rawGitHubUrl(GH.owner, GH.repo, branch, repoRel);
+      byUid.set(uid, {
+        ...meta,
+        uid,
+        gitBranch: branch,
+        repoRel,
+        rawUrl,
+        abs: null,
+        branchSlug: branchSlug(branch),
+      });
+    }
+  }
+  return [...byUid.values()];
+}
+
+function collectLocalShots() {
+  /** @type {Map<string, object>} */
   const byStem = new Map();
 
   const add = (abs, ctx) => {
     const meta = parseShotMeta(abs, ctx);
     if (!meta) return;
-    const prev = byStem.get(meta.stem);
-    // Prefer canonical track survey folder over seeds.
+    const uid = `local:${meta.rel}`;
+    const prev = byStem.get(uid);
     const rank = (s) => (s === "tracks" ? 3 : s === "look-survey" ? 2 : 1);
     if (!prev || rank(meta.source) > rank(prev.source)) {
-      byStem.set(meta.stem, { ...meta, abs });
+      byStem.set(uid, {
+        ...meta,
+        uid,
+        abs,
+        gitBranch: null,
+        repoRel: meta.rel,
+        rawUrl: null,
+        branchSlug: "local",
+      });
     }
   };
 
@@ -218,10 +315,23 @@ function collectShots() {
     add(abs, { bucket: "wgx-gallery", circuitHint: hint });
   }
 
-  return [...byStem.values()].sort((a, b) =>
+  return [...byStem.values()];
+}
+
+function collectShots() {
+  const branchShots = collectSurveyBranchShots();
+  const local = collectLocalShots();
+  const byUid = new Map();
+  for (const s of branchShots) byUid.set(s.uid, s);
+  for (const s of local) {
+    if (!byUid.has(s.uid)) byUid.set(s.uid, s);
+  }
+  return [...byUid.values()].sort((a, b) =>
     a.circuit.localeCompare(b.circuit) ||
-    a.seq.localeCompare(b.seq) ||
-    a.sector.localeCompare(b.sector));
+    a.sector.localeCompare(b.sector) ||
+    (a.tod || "").localeCompare(b.tod || "") ||
+    a.weather.localeCompare(b.weather) ||
+    (a.branch || "").localeCompare(b.branch || ""));
 }
 
 async function loadSharp() {
@@ -239,39 +349,60 @@ async function writeImages(shots, mediaRoot, skipImages) {
   for (const shot of shots) {
     const dir = path.join(mediaRoot, shot.circuit);
     fs.mkdirSync(dir, { recursive: true });
-    const thumbName = `${shot.stem}-thumb.webp`;
-    const webName = `${shot.stem}-web.webp`;
+    const fileKey = `${shot.branchSlug}-${shot.stem}`.replace(/[^a-z0-9_-]+/gi, "-").slice(0, 120);
+    const thumbName = `${fileKey}-thumb.webp`;
+    const webName = `${fileKey}-web.webp`;
     const thumbRel = `media/${shot.circuit}/${thumbName}`;
     const webRel = `media/${shot.circuit}/${webName}`;
-    const thumbAbs = path.join(dir, thumbName);
-    const webAbs = path.join(dir, webName);
 
-    if (sharp && !skipImages) {
-      const input = sharp(shot.abs);
-      await input.clone().resize({ width: 420, withoutEnlargement: true }).webp({ quality: 72 }).toFile(thumbAbs);
-      await input.clone().resize({ width: 1600, withoutEnlargement: true }).webp({ quality: 82 }).toFile(webAbs);
-    } else {
-      // Fallback: copy PNG as web (gallery still works; CI should have sharp).
-      const ext = path.extname(shot.abs).toLowerCase();
-      const copyName = `${shot.stem}-web${ext}`;
-      const copyRel = `media/${shot.circuit}/${copyName}`;
-      fs.copyFileSync(shot.abs, path.join(dir, copyName));
-      fs.copyFileSync(shot.abs, path.join(dir, `${shot.stem}-thumb${ext}`));
+    if (shot.rawUrl && (skipImages || !sharp)) {
       out.push({
         ...shot,
-        thumb: `media/${shot.circuit}/${shot.stem}-thumb${ext}`,
-        web: copyRel,
+        thumb: shot.rawUrl,
+        web: shot.rawUrl,
       });
       continue;
     }
 
-    out.push({ ...shot, thumb: thumbRel, web: webRel });
+    let buf = null;
+    if (shot.abs && fs.existsSync(shot.abs)) buf = fs.readFileSync(shot.abs);
+    else if (shot.gitBranch && shot.repoRel) {
+      try {
+        buf = readGitBlob(ROOT, shot.gitBranch, shot.repoRel);
+      } catch (e) {
+        console.warn(`build-gallery: skip ${shot.repoRel} on ${shot.gitBranch}: ${e.message}`);
+        if (shot.rawUrl) {
+          out.push({ ...shot, thumb: shot.rawUrl, web: shot.rawUrl });
+        }
+        continue;
+      }
+    }
+
+    if (!buf) continue;
+
+    if (sharp) {
+      const input = sharp(buf);
+      await input.clone().resize({ width: 420, withoutEnlargement: true }).webp({ quality: 72 })
+        .toFile(path.join(dir, thumbName));
+      await input.clone().resize({ width: 1600, withoutEnlargement: true }).webp({ quality: 82 })
+        .toFile(path.join(dir, webName));
+      out.push({ ...shot, thumb: thumbRel, web: webRel });
+    } else {
+      const ext = path.extname(shot.repoRel || shot.abs || ".png").toLowerCase() || ".png";
+      const copyName = `${fileKey}-web${ext}`;
+      fs.writeFileSync(path.join(dir, copyName), buf);
+      out.push({
+        ...shot,
+        thumb: `media/${shot.circuit}/${copyName}`,
+        web: `media/${shot.circuit}/${copyName}`,
+      });
+    }
   }
   return out;
 }
 
 function uniqueSorted(values) {
-  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
 
 function buildHtml(manifest) {
@@ -311,7 +442,7 @@ function buildHtml(manifest) {
   #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.88); display: none; align-items: center; justify-content: center; z-index: 9; padding: 24px; }
   #lightbox.open { display: flex; }
   #lightbox img { max-width: min(1200px, 96vw); max-height: 90vh; border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
-  #lightbox .cap { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); color: #ddd; font-size: 13px; text-align: center; }
+  #lightbox .cap { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); color: #ddd; font-size: 13px; text-align: center; max-width: 90vw; }
   #lightbox button.close { position: absolute; top: 16px; right: 20px; background: var(--panel); border: 1px solid var(--line); color: var(--text); border-radius: 6px; padding: 8px 12px; cursor: pointer; }
   @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } nav { border-right: 0; border-bottom: 1px solid var(--line); max-height: 140px; } }
 </style>
@@ -319,14 +450,15 @@ function buildHtml(manifest) {
 <body>
 <header>
   <h1>Apex 26 — circuit survey gallery</h1>
-  <p class="sub">Sectors × weather/lighting stills from track survey agents. Rebuild: <code>npm run gallery:tracks</code> — see <code>docs/tracks/GALLERY.md</code>.</p>
+  <p class="sub">All open <code>cursor/*-survey*</code> branches + seeds · ${manifest.shots.length} shots · rebuild <code>npm run gallery:tracks</code></p>
 </header>
 <div class="layout">
   <nav id="circuit-nav" aria-label="Circuits"></nav>
   <main>
     <div class="filters">
       <div><label for="sector-filter">Sector</label><br><select id="sector-filter"><option value="">All sectors</option></select></div>
-      <div><label for="weather-filter">Weather / lighting</label><br><select id="weather-filter"><option value="">All conditions</option></select></div>
+      <div><label for="tod-filter">Time of day</label><br><select id="tod-filter"><option value="">All times</option></select></div>
+      <div><label for="weather-filter">Weather</label><br><select id="weather-filter"><option value="">All weather</option></select></div>
       <p class="doc-link" id="survey-doc"></p>
     </div>
     <div class="grid" id="shot-grid"></div>
@@ -346,6 +478,7 @@ function buildHtml(manifest) {
   const nav = document.getElementById("circuit-nav");
   const grid = document.getElementById("shot-grid");
   const sectorSel = document.getElementById("sector-filter");
+  const todSel = document.getElementById("tod-filter");
   const weatherSel = document.getElementById("weather-filter");
   const docEl = document.getElementById("survey-doc");
   const lb = document.getElementById("lightbox");
@@ -353,9 +486,13 @@ function buildHtml(manifest) {
   const lbCap = document.getElementById("lb-cap");
   let activeCircuit = circuits[0] || "";
 
+  function escAttr(s) {
+    return String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;");
+  }
+
   function fillSelect(sel, values, label) {
     sel.innerHTML = '<option value="">All ' + label + "</option>" +
-      values.map((v) => '<option value="' + v + '">' + v + "</option>").join("");
+      values.map((v) => '<option value="' + escAttr(v) + '">' + v + "</option>").join("");
   }
 
   function circuitShots(id) { return shots.filter((s) => s.circuit === id); }
@@ -363,13 +500,16 @@ function buildHtml(manifest) {
   function refreshFilters() {
     const pool = activeCircuit ? circuitShots(activeCircuit) : shots;
     fillSelect(sectorSel, [...new Set(pool.map((s) => s.sector))].sort(), "sectors");
-    fillSelect(weatherSel, [...new Set(pool.map((s) => s.weather))].sort(), "conditions");
+    fillSelect(todSel, [...new Set(pool.map((s) => s.tod))].sort(), "times");
+    fillSelect(weatherSel, [...new Set(pool.map((s) => s.condition || s.weather))].sort(), "weather");
   }
 
   function renderNav() {
-    nav.innerHTML = circuits.map((c) =>
-      '<button type="button" data-circuit="' + c + '"' + (c === activeCircuit ? ' class="active"' : "") + ">" + c + "</button>"
-    ).join("");
+    nav.innerHTML = circuits.map((c) => {
+      const n = shots.filter((s) => s.circuit === c).length;
+      return '<button type="button" data-circuit="' + escAttr(c) + '"' +
+        (c === activeCircuit ? ' class="active"' : "") + ">" + c + " (" + n + ")</button>";
+    }).join("");
     nav.querySelectorAll("button").forEach((btn) => btn.addEventListener("click", () => {
       activeCircuit = btn.dataset.circuit;
       renderNav();
@@ -381,26 +521,28 @@ function buildHtml(manifest) {
   function renderDoc() {
     const row = manifest.circuitDocs[activeCircuit];
     docEl.innerHTML = row && row.url
-      ? '<a href="' + row.url + '" target="_blank" rel="noopener">Survey doc (' + row.path + ")</a>"
+      ? '<a href="' + escAttr(row.url) + '" target="_blank" rel="noopener">Survey doc</a>'
       : "";
   }
 
   function renderGrid() {
     const sec = sectorSel.value;
+    const tod = todSel.value;
     const wx = weatherSel.value;
     const list = shots.filter((s) => {
       if (activeCircuit && s.circuit !== activeCircuit) return false;
       if (sec && s.sector !== sec) return false;
-      if (wx && s.weather !== wx) return false;
+      if (tod && s.tod !== tod) return false;
+      if (wx && (s.condition || s.weather) !== wx) return false;
       return true;
     });
-    grid.innerHTML = list.map((s) =>
-      '<article class="card" tabindex="0" data-web="' + s.web + '" data-cap="' +
-      s.circuit + " · " + s.sector + " · " + s.weather + '">' +
-      '<img src="' + s.thumb + '" alt="" loading="lazy">' +
-      '<div class="meta"><strong>' + s.circuit + "</strong><span>" + s.sector + " · " + s.weather +
-      (s.source !== "tracks" ? " · " + s.source : "") + "</span></div></article>"
-    ).join("");
+    grid.innerHTML = list.map((s) => {
+      const cap = s.circuit + " · " + s.sector + " · " + (s.tod || "?") + " · " + (s.condition || s.weather);
+      const sub = (s.branch ? s.branch.split("/").pop() + " · " : "") + s.sector;
+      return '<article class="card" tabindex="0" data-web="' + escAttr(s.web) + '" data-cap="' + escAttr(cap) + '">' +
+        '<img src="' + escAttr(s.thumb) + '" alt="" loading="lazy">' +
+        '<div class="meta"><strong>' + s.circuit + "</strong><span>" + sub + "</span></div></article>";
+    }).join("");
     grid.querySelectorAll(".card").forEach((card) => {
       const open = () => {
         lbImg.src = card.dataset.web;
@@ -414,6 +556,7 @@ function buildHtml(manifest) {
   }
 
   sectorSel.addEventListener("change", renderGrid);
+  todSel.addEventListener("change", renderGrid);
   weatherSel.addEventListener("change", renderGrid);
   document.getElementById("lb-close").addEventListener("click", () => lb.classList.remove("open"));
   lb.addEventListener("click", (e) => { if (e.target === lb) lb.classList.remove("open"); });
@@ -428,12 +571,24 @@ function buildHtml(manifest) {
 </html>`;
 }
 
+function maybeFetchOrigin(skipFetch) {
+  if (skipFetch) return;
+  try {
+    execFileSync("git", ["fetch", "origin", "--prune"], { cwd: ROOT, stdio: "pipe" });
+  } catch (e) {
+    console.warn(`build-gallery: git fetch origin failed (${e.message}) — using local refs`);
+  }
+}
+
 async function build(opts = {}) {
   const outRoot = opts.outRoot || DEFAULT_OUT;
   const skipImages = !!opts.skipImages;
+  maybeFetchOrigin(!!opts.noFetch);
+
   const rawShots = collectShots();
+  const branches = surveyBranchesToScan(ROOT);
   if (!rawShots.length) {
-    console.warn("build-gallery: no shots found — add PNGs under artifacts/shots/tracks/<id>/");
+    console.warn("build-gallery: no shots found — commit under artifacts/shots/tracks/<id>/ on survey branches");
   }
 
   const mediaRoot = path.join(outRoot, "media");
@@ -450,27 +605,33 @@ async function build(opts = {}) {
 
   const manifest = {
     builtAt: new Date().toISOString(),
-    convention: "<circuit>-<nn>-<sector>-<weather>.png",
+    convention: "<circuit>-<nn>-<sector>-<tod>-<condition> or <view>__<tod>-<condition>",
+    surveyBranches: branches,
     docBranch: DOC_BRANCH,
     circuits,
     sectors: uniqueSorted(processed.map((s) => s.sector)),
-    weathers: uniqueSorted(processed.map((s) => s.weather)),
+    tods: uniqueSorted(processed.map((s) => s.tod)),
+    weathers: uniqueSorted(processed.map((s) => s.condition || s.weather)),
     circuitDocs,
     shots: processed.map((s) => ({
       circuit: s.circuit,
       seq: s.seq,
       sector: s.sector,
       weather: s.weather,
+      tod: s.tod,
+      condition: s.condition,
+      branch: s.gitBranch,
       source: s.source,
       thumb: s.thumb,
       web: s.web,
-      input: s.rel,
+      rawUrl: s.rawUrl,
+      input: s.repoRel || s.rel,
     })),
   };
 
   fs.writeFileSync(path.join(outRoot, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   fs.writeFileSync(path.join(outRoot, "index.html"), buildHtml(manifest));
-  console.log(`= gallery ${processed.length} shots, ${circuits.length} circuits → ${path.relative(ROOT, outRoot)}/`);
+  console.log(`= gallery ${processed.length} shots, ${circuits.length} circuits, ${branches.length} survey branches → ${path.relative(ROOT, outRoot)}/`);
   return manifest;
 }
 
@@ -483,7 +644,8 @@ async function main() {
   const outArg = argv.find((a) => a.startsWith("--out="));
   const outRoot = outArg ? path.resolve(outArg.slice("--out=".length)) : DEFAULT_OUT;
   const skipImages = argv.includes("--skip-images");
-  await build({ outRoot, skipImages });
+  const noFetch = argv.includes("--no-fetch");
+  await build({ outRoot, skipImages, noFetch });
 }
 
 if (require.main === module) {
@@ -495,9 +657,12 @@ if (require.main === module) {
 
 module.exports = {
   parseShotMeta,
+  parseAgentDoubleUnderscore,
   collectShots,
+  collectSurveyBranchShots,
   surveyDocPath,
   build,
   parseCanonical,
+  splitTodWeather,
   ROOT,
 };
