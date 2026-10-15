@@ -29,6 +29,9 @@
       { kind: "foliage", s0: 0.36, s1: 0.50 },
       { kind: "foliage", s0: 0.68, s1: 0.82 },
       { kind: "foliage", s0: 0.86, s1: 1.0 },
+      // Subida dos Boxes climb: generic roadside belt reads as temperate
+      // conifers in park cam (survey 2026-10-14 f084); authored stands own it.
+      { kind: "foliage", s0: 0.80, s1: 0.90 },
       { kind: "foliage", s0: 0.0, s1: 0.02 },
     ],
     pal: { zenith: [0.34, 0.54, 0.78], horizon: [0.64, 0.72, 0.62], grass: [0.30, 0.55, 0.26], fog: [0.56, 0.62, 0.56], fogDensity: 0.0018, sunDir: [0.18032487743269374, 0.8214799971933825, 0.5409746322980812], sun: [1, 0.96, 0.84], sunColor: [1, 0.94, 0.82] },

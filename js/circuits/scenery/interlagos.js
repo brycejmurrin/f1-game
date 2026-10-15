@@ -186,9 +186,11 @@
             for (let j = 0; j * 0.82 < len - 2; j++) {
               const h2 = hash(k * 23 + t * 61 + j * 19);
               if (h2 < 0.30) continue;          // a famously full house
+              // y+1.34: bench cap top ~y+1.23; raising crowd clears coplanar but
+              // ground-audit counts them unsupported (no bench in support graph).
               seat.box(stage,
                 vadd(vadd(vadd(a.c, a.r, lat), a.t, -len / 2 + 1.2 + j * 0.82), a.u, y + 1.34),
-                [0.5, 0.92, 0.42], crowdCols[Math.floor(h2 * 61) % crowdCols.length], b);
+                [0.5, 0.88, 0.40], crowdCols[Math.floor(h2 * 61) % crowdCols.length], b);
             }
             stage._mat = MAT.CONCRETE;
           }
@@ -196,8 +198,8 @@
           for (let i = 0; i * 2.6 < len; i++)
             seat.cyl(stage, vadd(vadd(a.c, a.t, -len / 2 + i * 2.6 + 1.3), a.r, IN * 6.2),
               0.07, 1.2, RAIL_G, 4, b);
-          addBox(stage, vadd(vadd(a.c, a.r, IN * 6.2), a.u, 1.2), [0.11, 0.11, len], RAIL_Y, b);
-          addBox(stage, vadd(vadd(a.c, a.r, IN * 6.2), a.u, 0.72), [0.09, 0.09, len], RAIL_G, b);
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 6.2), a.u, 1.26), [0.11, 0.11, len], RAIL_Y, b);
+          addBox(stage, vadd(vadd(a.c, a.r, IN * 6.2), a.u, 0.66), [0.09, 0.09, len], RAIL_G, b);
           // Rusted canopy on open lattice trusses, over the BACK rows only.
           if (opts.roof !== false) {
             stage._mat = MAT.RUST;
@@ -850,7 +852,7 @@
       place(kj, -1, 2,   [0.5, 0.18, 9], [0.80, 0.18, 0.18]);
       place(kj, -1, 4.2, [3.0, 0.18, 9], [0.92, 0.92, 0.92]);
       marshalPost(K(0.7414), 1, 9);
-      arquibancada("interlagos-arq-juncao", 0.72, -1, 16, 5, { rows: 6, roof: false, brFlag: true });
+      arquibancada("interlagos-arq-juncao", 0.7414, -1, 16, 5, { rows: 6, roof: false, brFlag: true });
 
       grandstandEx(0.826,  -1, 11, 46, null, [0.96, 0.82, 0.16],
                    { livery: "concrete", roof: "truss", endWalls: true });
