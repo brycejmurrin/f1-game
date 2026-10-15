@@ -1,0 +1,1 @@
+1792048653	Bryce Murrin	Root-delegated replay event/reel trace-clock bounds and unavailable-driver selection only: js/race/real-replay.js, js/ui/watch-transport.js, tests/unit/real-replay-vm.test.mjs. Excludes PR1978 AUTO/retired fallback and PR2050 DSQ filter. Local commit handoff only.  [cursor/replay-bounds-c82e; session 72caf385d62dc63645ff5aed]
