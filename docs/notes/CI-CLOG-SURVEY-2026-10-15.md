@@ -205,4 +205,6 @@ Landed in the same change as this note (stacked on #1758, which carried the audi
   `queue: max` admission control for ready-tier browser legs is a follow-up once the required-check change frees
   the job names.
 
+Later the same day Bryce moved the deploy branch's protection to the single `CI` check, dropped `Docs guards` from it and turned off squash and rebase merging; `.github/workflows/docs-guards.yml` was then deleted (one job start per PR event, 615 runs on 2026-10-14; `test:docs-guards` stays as the local alias). The job names are free to change now, so the `queue: max` browser lanes and a node-slice rebalance need no further settings round.
+
 Re-measure with the same three numbers as §5 after a day of agent traffic.
