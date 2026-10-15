@@ -45,6 +45,8 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Cached phone-controller links keep their own page offline, and updates preserve working offline Career access when its UI cannot be installed.
 - Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
 
+- Repeated track and lighting warm-ups reuse their renderer probes and release them with their resources, avoiding retained warm-up meshes.
+
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
 - Startup preferences, shortcut entry, and delayed menu navigation behave correctly again (#1495)
