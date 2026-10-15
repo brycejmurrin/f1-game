@@ -649,7 +649,8 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command), { env });
   for (const c of ["gh run cancel 38683549544", "gh run cancel 1 --repo o/r", "gh api -X POST repos/o/r/actions/runs/123/cancel",
     "curl -X POST -H 'Authorization: Bearer x' https://api.github.com/repos/o/r/actions/runs/123/cancel",
-    "curl -X POST \"https://api.github.com/repos/o/r/actions/runs/123/cancel\"", "bash -c 'gh run cancel 5'"]) {
+    "curl -X POST \"https://api.github.com/repos/o/r/actions/runs/123/cancel\"", "bash -c 'gh run cancel 5'",
+    "gh api -X POST repos/o/r/actions/runs/123/force-cancel", "gh api -X POST \"repos/o/r/actions/runs/$id/cancel\""]) {
     const r = run(c);
     assert.equal(r.status, 2, `must block: ${c} (${r.stderr})`);
     assert.match(r.stderr, /BLOCKED: cancelling an Actions run/);
@@ -661,6 +662,7 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   assert.equal(run("APEX_RUN_CANCEL_OK=1 gh run cancel 1").status, 0, "the user asked: command override");
   const mcp = (tool_input, env = {}) => decisionOf(hook("github-mcp-guard.sh", { tool_name: "mcp__github__actions_run_trigger", tool_input }, { env }));
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }), "deny");
+  assert.equal(mcp({ method: "force_cancel_workflow_run", run_id: 1 }), "deny");
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_RUN_CANCEL_OK: "1" }), null, "the user asked");
   assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }), "ask", "a re-run is at most once, infra only");
   assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }), "ask");

@@ -151,7 +151,7 @@ wrapped as `apex_*`. Routes: live canvas → skill `mcp-probe`; pre-push or depl
 `verify-agent`; `--base <ref>` is the "was it already red?" check); live `version.json` → agent `deploy-research`; dead
 code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps → skill `ci-watch` + `tools/ci/pr-board.mjs`
 (agent `ci-watcher` returns the board); owning PRs → skill `steward`; messaging, claims and authority between sessions
-→ skill `agent-fleet`; failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`.
+→ skill `agent-fleet`; failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`; a scoped change handed to a subagent you message mid-task → agent `worker`.
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence. Bulk or post-deploy web reading goes to agent `deploy-research`.
 
@@ -164,13 +164,13 @@ Cloud agent stall abort, handoff fields, and merge-not-rebase: `docs/notes/AGENT
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`mcpServerAllowlist` = `.mcp.json`'s servers); Cursor enters via
 `.cursor/rules/apex-shared.mdc` (the Cursor-only rules: model id, cloud MCP namespaces, cloud browser), Codex via `.codex/config.toml` and the tracked `.agents/skills/` symlinks (`tools/env/mirror-skills.sh` repairs them).
-Checklist: `docs/AGENT-SURFACE.md` §Bootstrap. Multi-agent runs (orchestrator, workers, launch prompts): skill `agent-fleet`.
+Checklist: `docs/AGENT-SURFACE.md` §Bootstrap. Multi-agent runs (orchestrator, workers, launch prompts): skill `agent-fleet`; sibling sessions launch in auto mode, and a worker acts only on user grants quoted in its launch prompt (relayed authority is refused): `references/orchestrator.md` §Authority.
 
 ## Git branch & deploy
 Work happens on a `cursor/<topic>-<hash>` branch (topic slug + 4–8 char disambiguator); legacy `claude/<topic>` PRs
 finish as they are, with no new ones. The deploy branch `claude/f1-game-project-26h3ng` is protected (a direct push is
 refused; a PR needs green fast-tier checks), so work lands through a PR (`deploy.mjs --pr`) and only it ships
-(https://brycejmurrin.github.io/f1-game/). A deploy merges other sessions' work: re-measure on the merged tree, and never force-push or rebase.
+(https://brycejmurrin.github.io/f1-game/). Track-survey images/galleries/reports ALWAYS go on `track-survey-assets` (PR base, never merged to the deploy branch; fixes a survey finds go in a separate image-free PR; `docs/notes/SURVEY-ASSETS-BRANCH.md`). A deploy merges other sessions' work: re-measure on the merged tree, and never force-push or rebase.
 Before fixing a red you did NOT cause, run `node tools/ci/who-is-on-it.mjs` (`--claim "<text>"` before you start, `--release` after) and list the host's live sessions: a fix already pushed, a live claim, or a session already on your paths → STOP (binding; `docs/notes/SHARED-BRANCH-COORDINATION.md`).
 SYNC ONLY WHEN YOU MUST: GitHub reports CONFLICTING/DIRTY or a required tip check is red; clean-behind is not a reason, and every re-sync buys a full PR run. Sync by merging origin/ship through `node tools/ci/sync-pr.mjs <branch>`, never a hand merge (it cures ratchets and generated-file conflicts, leaves you ON `sync-pr-<branch>`, and pushes nothing without `--push`; recovery in check-changes).
 `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge → `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it cures generated-file conflicts and stops on any other).
