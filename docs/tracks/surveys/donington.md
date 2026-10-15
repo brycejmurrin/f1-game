@@ -1,6 +1,6 @@
 # Donington Park — circuit survey (2026-10-14)
 
-Parent brief: [`donington.md`](../donington.md). **40** survey JPEGs in `artifacts/shots/tracks/donington/` (1280px wide, q80).
+Parent brief: [`donington.md`](../donington.md). **36** survey JPEGs in `artifacts/shots/tracks/donington/` (1280px wide, q80, &lt;300 KB). Captures: GLX (`backend: webgl2`), SwiftShader default, shared `shot.mjs` batch (`--jpeg --present-timeout 90 --capture-retries 4 --wait 120`).
 
 ## Findings (summary)
 
@@ -18,69 +18,60 @@ Parent brief: [`donington.md`](../donington.md). **40** survey JPEGs in `artifac
 
 ## Sector 1 — pit straight, Collection, Redgate
 
-| Pits · orbit · day · dry | Start/finish · cinematic · day · dry | Collection · orbit · day · dry |
+| Pits · orbit · dry · day | Start/finish · cinematic · dry · day | Collection · orbit · dry · day |
 |:---:|:---:|:---:|
-| ![Pits · orbit · day · dry](../../../artifacts/shots/tracks/donington/s1-pits-day-dry-orbit.jpg) | ![Start/finish · cinematic · day · dry](../../../artifacts/shots/tracks/donington/s1-sf-day-dry-cinematic.jpg) | ![Collection · orbit · day · dry](../../../artifacts/shots/tracks/donington/s1-collection-day-dry-orbit.jpg) |
+| ![Pits · orbit · dry · day](../../../artifacts/shots/tracks/donington/s01-pits-orbit-day-dry.jpg) | ![Start/finish · cinematic · dry · day](../../../artifacts/shots/tracks/donington/s01-sf-cinematic-day-dry.jpg) | ![Collection · orbit · dry · day](../../../artifacts/shots/tracks/donington/s01-collection-orbit-day-dry.jpg) |
 
-| Redgate · trackside · day · dry | Redgate · trackside · dawn · dry | Start/finish · cinematic · dusk · dry |
+| Redgate · trackside · dry · day | Start/finish · cinematic · dry · dusk | Start/finish · cinematic · overcast · day |
 |:---:|:---:|:---:|
-| ![Redgate · trackside · day · dry](../../../artifacts/shots/tracks/donington/s1-redgate-day-dry-trackside.jpg) | ![Redgate · trackside · dawn · dry](../../../artifacts/shots/tracks/donington/s1-redgate-dawn-dry-trackside.jpg) | ![Start/finish · cinematic · dusk · dry](../../../artifacts/shots/tracks/donington/s1-sf-dusk-dry-cinematic.jpg) |
-
-| Start/finish · cinematic · day · overcast |  |  |
-|:---:|:---:|:---:|
-| ![Start/finish · cinematic · day · overcast](../../../artifacts/shots/tracks/donington/s1-sf-day-overcast-cinematic.jpg) |  |  |
+| ![Redgate · trackside · dry · day](../../../artifacts/shots/tracks/donington/s01-redgate-trackside-day-dry.jpg) | ![Start/finish · cinematic · dry · dusk](../../../artifacts/shots/tracks/donington/s01-sf-cinematic-dusk-dry.jpg) | ![Start/finish · cinematic · overcast · day](../../../artifacts/shots/tracks/donington/s01-sf-cinematic-day-overcast.jpg) |
 
 ## Sector 2 — Hollywood, Craner, Old Hairpin
 
-| Hollywood · orbit · day · dry | Hollywood · orbit · dusk · dry | Hollywood · orbit · night · dry |
+| Hollywood · orbit · dry · day | Hollywood · orbit · dry · dusk | Hollywood · orbit · dry · night |
 |:---:|:---:|:---:|
-| ![Hollywood · orbit · day · dry](../../../artifacts/shots/tracks/donington/s2-hollywood-day-dry-orbit.jpg) | ![Hollywood · orbit · dusk · dry](../../../artifacts/shots/tracks/donington/s2-hollywood-dusk-dry-orbit.jpg) | ![Hollywood · orbit · night · dry](../../../artifacts/shots/tracks/donington/s2-hollywood-night-dry-orbit.jpg) |
+| ![Hollywood · orbit · dry · day](../../../artifacts/shots/tracks/donington/s02-hollywood-orbit-day-dry.jpg) | ![Hollywood · orbit · dry · dusk](../../../artifacts/shots/tracks/donington/s02-hollywood-orbit-dusk-dry.jpg) | ![Hollywood · orbit · dry · night](../../../artifacts/shots/tracks/donington/s02-hollywood-orbit-night-dry.jpg) |
 
-| Hollywood · orbit · day · overcast | Hollywood · orbit · day · rain | Hollywood · orbit · day · fog |
+| Hollywood · orbit · rain · day | Hollywood · orbit · fog · day | Hollywood · orbit · wet · day |
 |:---:|:---:|:---:|
-| ![Hollywood · orbit · day · overcast](../../../artifacts/shots/tracks/donington/s2-hollywood-day-overcast-orbit.jpg) | ![Hollywood · orbit · day · rain](../../../artifacts/shots/tracks/donington/s2-hollywood-day-rain-orbit.jpg) | ![Hollywood · orbit · day · fog](../../../artifacts/shots/tracks/donington/s2-hollywood-day-fog-orbit.jpg) |
+| ![Hollywood · orbit · rain · day](../../../artifacts/shots/tracks/donington/s02-hollywood-orbit-day-rain.jpg) | ![Hollywood · orbit · fog · day](../../../artifacts/shots/tracks/donington/s02-hollywood-orbit-day-fog.jpg) | ![Hollywood · orbit · wet · day](../../../artifacts/shots/tracks/donington/s02-hollywood-orbit-day-wet.jpg) |
 
-| Hollywood · orbit · day · wet | Craner infield · eye · day · dry | Craner · trackside · day · dry |
+| Hollywood · orbit · storm · day | Craner infield · eye · dry · day | Craner · trackside · dry · day |
 |:---:|:---:|:---:|
-| ![Hollywood · orbit · day · wet](../../../artifacts/shots/tracks/donington/s2-hollywood-day-wet-orbit.jpg) | ![Craner infield · eye · day · dry](../../../artifacts/shots/tracks/donington/s2-craner-infield-day-dry-eye.jpg) | ![Craner · trackside · day · dry](../../../artifacts/shots/tracks/donington/s2-craner-day-dry-trackside.jpg) |
+| ![Hollywood · orbit · storm · day](../../../artifacts/shots/tracks/donington/s02-hollywood-orbit-day-storm.jpg) | ![Craner infield · eye · dry · day](../../../artifacts/shots/tracks/donington/s02-craner-infield-eye-day-dry.jpg) | ![Craner · trackside · dry · day](../../../artifacts/shots/tracks/donington/s02-craner-trackside-day-dry.jpg) |
 
-| Craner · trackside · day · wet | Craner · trackside · day · rain | Craner · trackside · day · fog |
+| Craner · trackside · wet · day | Craner · trackside · rain · day | Old Hairpin · orbit · dry · day |
 |:---:|:---:|:---:|
-| ![Craner · trackside · day · wet](../../../artifacts/shots/tracks/donington/s2-craner-day-wet-trackside.jpg) | ![Craner · trackside · day · rain](../../../artifacts/shots/tracks/donington/s2-craner-day-rain-trackside.jpg) | ![Craner · trackside · day · fog](../../../artifacts/shots/tracks/donington/s2-craner-day-fog-trackside.jpg) |
-
-| Old Hairpin · orbit · day · dry |  |  |
-|:---:|:---:|:---:|
-| ![Old Hairpin · orbit · day · dry](../../../artifacts/shots/tracks/donington/s2-oldhairpin-day-dry-orbit.jpg) |  |  |
+| ![Craner · trackside · wet · day](../../../artifacts/shots/tracks/donington/s02-craner-trackside-day-wet.jpg) | ![Craner · trackside · rain · day](../../../artifacts/shots/tracks/donington/s02-craner-trackside-day-rain.jpg) | ![Old Hairpin · orbit · dry · day](../../../artifacts/shots/tracks/donington/s02-oldhairpin-orbit-day-dry.jpg) |
 
 ## Sector 3 — Starkey's, Schwantz, McLeans, EMA, Ratcliffe
 
-| Starkey's · park · day · dry | Starkey's · park · dusk · dry | Starkey's · park · night · dry |
+| Starkey's · park · dry · day | Starkey's · park · dry · dusk | Starkey's · park · dry · night |
 |:---:|:---:|:---:|
-| ![Starkey's · park · day · dry](../../../artifacts/shots/tracks/donington/s3-starkeys-day-dry-park.jpg) | ![Starkey's · park · dusk · dry](../../../artifacts/shots/tracks/donington/s3-starkeys-dusk-dry-park.jpg) | ![Starkey's · park · night · dry](../../../artifacts/shots/tracks/donington/s3-starkeys-night-dry-park.jpg) |
+| ![Starkey's · park · dry · day](../../../artifacts/shots/tracks/donington/s03-starkeys-park-day-dry.jpg) | ![Starkey's · park · dry · dusk](../../../artifacts/shots/tracks/donington/s03-starkeys-park-dusk-dry.jpg) | ![Starkey's · park · dry · night](../../../artifacts/shots/tracks/donington/s03-starkeys-park-night-dry.jpg) |
 
-| Starkey's · park · day · wet | Starkey's · under bridge · eye · day · dry | Schwantz · trackside · day · dry |
+| Starkey's · park · wet · day | Starkey's under bridge · under-bridge eye · dry · day | Schwantz · trackside · dry · day |
 |:---:|:---:|:---:|
-| ![Starkey's · park · day · wet](../../../artifacts/shots/tracks/donington/s3-starkeys-day-wet-park.jpg) | ![Starkey's · under bridge · eye · day · dry](../../../artifacts/shots/tracks/donington/s3-starkeys-day-dry-under-bridge.jpg) | ![Schwantz · trackside · day · dry](../../../artifacts/shots/tracks/donington/s3-schwantz-day-dry-trackside.jpg) |
+| ![Starkey's · park · wet · day](../../../artifacts/shots/tracks/donington/s03-starkeys-park-day-wet.jpg) | ![Starkey's under bridge · under-bridge eye · dry · day](../../../artifacts/shots/tracks/donington/s03-starkeys-underbridge-eye-day-dry.jpg) | ![Schwantz · trackside · dry · day](../../../artifacts/shots/tracks/donington/s03-schwantz-trackside-day-dry.jpg) |
 
-| McLeans · orbit · day · dry | EMA · orbit · day · dry | EMA · orbit · day · overcast |
+| McLeans · orbit · dry · day | EMA · orbit · dry · day | EMA · orbit · dry · dusk |
 |:---:|:---:|:---:|
-| ![McLeans · orbit · day · dry](../../../artifacts/shots/tracks/donington/s3-mcleans-day-dry-orbit.jpg) | ![EMA · orbit · day · dry](../../../artifacts/shots/tracks/donington/s3-ema-day-dry-orbit.jpg) | ![EMA · orbit · day · overcast](../../../artifacts/shots/tracks/donington/s3-ema-day-overcast-orbit.jpg) |
+| ![McLeans · orbit · dry · day](../../../artifacts/shots/tracks/donington/s03-mcleans-orbit-day-dry.jpg) | ![EMA · orbit · dry · day](../../../artifacts/shots/tracks/donington/s03-ema-orbit-day-dry.jpg) | ![EMA · orbit · dry · dusk](../../../artifacts/shots/tracks/donington/s03-ema-orbit-dusk-dry.jpg) |
 
-| EMA · orbit · dusk · dry | Ratcliffe · horizon · orbit · day · dry |  |
+| EMA · orbit · overcast · day | Ratcliffe horizon · orbit · dry · day |  |
 |:---:|:---:|:---:|
-| ![EMA · orbit · dusk · dry](../../../artifacts/shots/tracks/donington/s3-ema-dusk-dry-orbit.jpg) | ![Ratcliffe · horizon · orbit · day · dry](../../../artifacts/shots/tracks/donington/s3-ratcliffe-day-dry-horizon.jpg) |  |
+| ![EMA · orbit · overcast · day](../../../artifacts/shots/tracks/donington/s03-ema-orbit-day-overcast.jpg) | ![Ratcliffe horizon · orbit · dry · day](../../../artifacts/shots/tracks/donington/s03-ratcliffe-horizon-orbit-day-dry.jpg) |  |
 
 ## Sector 4 — Coppice, Esses, Melbourne, Goddards
 
-| Coppice · trackside · day · dry | Coppice · trackside · night · dry | Esses · orbit · day · dry |
+| Coppice · trackside · dry · day | Esses · orbit · dry · day | Esses · orbit · dry · night |
 |:---:|:---:|:---:|
-| ![Coppice · trackside · day · dry](../../../artifacts/shots/tracks/donington/s4-coppice-day-dry-trackside.jpg) | ![Coppice · trackside · night · dry](../../../artifacts/shots/tracks/donington/s4-coppice-night-dry-trackside.jpg) | ![Esses · orbit · day · dry](../../../artifacts/shots/tracks/donington/s4-esses-day-dry-orbit.jpg) |
+| ![Coppice · trackside · dry · day](../../../artifacts/shots/tracks/donington/s04-coppice-trackside-day-dry.jpg) | ![Esses · orbit · dry · day](../../../artifacts/shots/tracks/donington/s04-esses-orbit-day-dry.jpg) | ![Esses · orbit · dry · night](../../../artifacts/shots/tracks/donington/s04-esses-orbit-night-dry.jpg) |
 
-| Esses · orbit · day · rain | Esses · orbit · night · dry | Melbourne · trackside · day · dry |
+| Esses · orbit · rain · day | Melbourne · trackside · dry · day | Melbourne · trackside · fog · day |
 |:---:|:---:|:---:|
-| ![Esses · orbit · day · rain](../../../artifacts/shots/tracks/donington/s4-esses-day-rain-orbit.jpg) | ![Esses · orbit · night · dry](../../../artifacts/shots/tracks/donington/s4-esses-night-dry-orbit.jpg) | ![Melbourne · trackside · day · dry](../../../artifacts/shots/tracks/donington/s4-melbourne-day-dry-trackside.jpg) |
+| ![Esses · orbit · rain · day](../../../artifacts/shots/tracks/donington/s04-esses-orbit-day-rain.jpg) | ![Melbourne · trackside · dry · day](../../../artifacts/shots/tracks/donington/s04-melbourne-trackside-day-dry.jpg) | ![Melbourne · trackside · fog · day](../../../artifacts/shots/tracks/donington/s04-melbourne-trackside-day-fog.jpg) |
 
-| Melbourne · trackside · day · fog | Goddards · orbit · day · dry | Goddards · orbit · day · wet |
+| Goddards · orbit · dry · day |  |  |
 |:---:|:---:|:---:|
-| ![Melbourne · trackside · day · fog](../../../artifacts/shots/tracks/donington/s4-melbourne-day-fog-trackside.jpg) | ![Goddards · orbit · day · dry](../../../artifacts/shots/tracks/donington/s4-goddards-day-dry-orbit.jpg) | ![Goddards · orbit · day · wet](../../../artifacts/shots/tracks/donington/s4-goddards-day-wet-orbit.jpg) |
-
+| ![Goddards · orbit · dry · day](../../../artifacts/shots/tracks/donington/s04-goddards-orbit-day-dry.jpg) |  |  |
