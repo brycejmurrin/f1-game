@@ -2034,7 +2034,14 @@ const NetLobby = (function () {
       on("vs-paste-answer", () => pasteInto("answer"));
       on("vs-scan-cancel", () => { stopScan(); say(""); });
       on("vs-edit-race", () => { if (role === "host" && G.openRaceSetup) G.openRaceSetup(); });
-      on("vs-edit-car", () => { if (G.openGarageFrom) G.openGarageFrom("vsfriend"); });
+      // Withdraw READY BEFORE the garage opens (#1919): the garage edits G.driverIdx
+      // live, and a host seeing our old profile as READY could start with it.
+      // Exit (roomChanged("car")) re-announces; READY again is the player's call.
+      on("vs-edit-car", () => {
+        if (!G.openGarageFrom) return;
+        if (selfReady) setReady(false);
+        G.openGarageFrom("vsfriend");
+      });
       on("vs-ready", tiltToo(() => setReady(!selfReady)));
       on("vs-invite-more", inviteAnother);
       on("vs-code-host", tiltToo(() => codeHost()));   // never the click event as opts
