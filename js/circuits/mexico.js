@@ -28,14 +28,21 @@
     // would stand inside it.
     ownPitStraight: true,
     dressingExclusions: [
-      // The generic city pass is off for the whole lap. Mexico's brief is park
-      // first: it stood 20-50 m towers 25-30 m off both edges at 0.02-0.30 and
-      // 0.48-0.94 (measured 44 props h > 20 within 60 m, then 27 towers 20-45 m
-      // tall), and the open windows 0.94-0.02 (pit straight) and 0.30-0.48
-      // (T3 -> Horquilla) put brick towers 15-30 m off the road, with neon bands
-      // from cityStyle at night on a daytime circuit. The skyline is the scenery
-      // file's own: far ring, backdrop, cityFront facades and three towers.
-      { kind: "city" },
+      // The generic city pass is off for the whole lap, as contiguous windows
+      // (terrain-over-road.spec.js pins the first two verbatim). Park first:
+      // 0.02-0.30 (Magdalena Mixiuhca park, T1 -> Esses) stood 20-50 m towers
+      // 25-30 m off both edges (measured 44 props h > 20 within 60 m);
+      // 0.48-0.94 is the park's sports-facility side (27 towers 20-45 m tall
+      // 23-32 m off the road). The windows below close the gaps that were left:
+      // the pit straight 0.94-0.02 and T3 -> Horquilla 0.30-0.48 put brick towers
+      // 15-30 m off the road, with neon bands from cityStyle at night on a daytime
+      // circuit. The skyline is the scenery file's own: far ring, backdrop,
+      // cityFront facades and three towers.
+      { kind: "city", s0: 0.02, s1: 0.30 },
+      { kind: "city", s0: 0.48, s1: 0.94 },
+      { kind: "city", s0: 0.30, s1: 0.48 },
+      { kind: "city", s0: 0.94, s1: 1.0 },
+      { kind: "city", s0: 0.0, s1: 0.02 },
       { kinds: ["foliage", "lighting"], s0: 0.70, s1: 0.89 },
     ],
     pal: { zenith: [0.56, 0.72, 0.92], horizon: [0.68, 0.72, 0.78], grass: [0.34, 0.52, 0.26], runoff: [0.52, 0.38, 0.24], fog: [0.70, 0.74, 0.80], fogDensity: 0.0022, sunDir: [0.24111167647565865, 0.8639835073711102, 0.44203807353870755], sun: [1, 0.98, 0.88], sunColor: [1, 0.96, 0.86] },
