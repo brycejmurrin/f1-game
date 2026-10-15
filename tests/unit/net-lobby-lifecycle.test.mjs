@@ -1441,6 +1441,28 @@ test("the last guest leaving the ROOM seals the reopened code and restores every
   } finally { h.lobby.cancel(); }
 });
 
+test("INVITE ANOTHER stops the reopened code room, and CLOSE brings the same code back (#2197)", async () => {
+  // inviteAnother() invalidated the reopened room's generation without stopping
+  // it: the room kept reposting its offer while mintOffer/onJoiner returned
+  // early, so a friend typing the code the host was told was "still open" got
+  // nothing — and CLOSE then killed it for good.
+  const { h, rooms, ts, until, withGuest } = codeRoomHarness();
+  h.lobby.wire();
+  try {
+    await withGuest();
+    const pending = ts[ts.length - 1];
+    assert.equal((await h.lobby.inviteAnother()).ok, true);
+    assert.equal(rooms[1].stopped, 1, "INVITE ANOTHER must stop the room it would otherwise orphan");
+    assert.equal(pending.status, "closed", "…and drop its half-built transport");
+    h.click("vs-close");                               // back to the room, nothing new minted
+    await until(() => rooms.length === 3, "CLOSE reopened the room");
+    assert.equal(rooms[2].code, "ABC234", "…under the code the host was told is still open");
+    assert.equal(rooms[2].stopped, 0);
+    await rooms[2].onJoiner("g2", "answer-2");
+    assert.equal(rooms[2].stopped, 1, "a joiner's answer on the reopened room is acted on");
+  } finally { h.lobby.cancel(); }
+});
+
 // Room-code / phone-pad acceptInvite used to pass gatherTimeoutMs: 2500 as a
 // workaround for courier peer loss during a long gather. readyIce already races
 // the credentials prefetch at ICE_WAIT_MS=2500; the short gather cap is leftover

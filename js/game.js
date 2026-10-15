@@ -3001,8 +3001,8 @@ function layoutDocks(steerBtns, manual) {
 // orders disagree exactly when it matters — a close finish. Early returns so
 // every "keep our own order" reason is one visible line rather than a nest.
 function netOrder(order) {
-  if (!netPlay.active()) return order;
-  if (netPlay.ownsClassification()) {
+  const kept = netPlay.active() ? null : netPlay.lastResult(); if (!netPlay.active() && !kept) return order;   // kept: the host quit just after its RESULT (#2199)
+  if (!kept && netPlay.ownsClassification()) {
     // Keyed by driverId, NOT by cars.indexOf: indices are NOT stable across
     // peers — makeCars() drops the custom team unless the local player selected
     // it, so the two grids differ in length and order, and a guest would re-read
@@ -3016,7 +3016,7 @@ function netOrder(order) {
     })));
     return order;
   }
-  const verdict = netPlay.peerResult();
+  const verdict = kept || netPlay.peerResult();
   // Array.isArray, not just a truthy .length: this is the HOST's payload off
   // the wire, and `{length:1}` passes a length test then throws on .map —
   // straight into index.html's error overlay, which eats the classification
@@ -4302,7 +4302,7 @@ let netPlay = {
   active: () => false, owns: () => false, role: () => null,
   ownsRaceControl: () => true, ownsClassification: () => true,
   awaitingStart: () => false, awaitingResult: () => false,
-  rivalDriverIds: () => [], peerLaps: () => [], peerResult: () => null,
+  rivalDriverIds: () => [], peerLaps: () => [], peerResult: () => null, lastResult: () => null,
   predict: () => null, status: () => ({ active: false, role: null }),
   tick: () => {}, stop: () => {}, hostStart: () => {},
   start: () => ({ ok: false, error: "no_net", message: "Multiplayer is not loaded." }),
