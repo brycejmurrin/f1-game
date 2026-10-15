@@ -59,11 +59,11 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 332,
+      "ceiling": 334,
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 180,
+      "ceiling": 181,
       "slack": 0
     },
     "rawSpacing": {
