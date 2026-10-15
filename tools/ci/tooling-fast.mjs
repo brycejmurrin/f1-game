@@ -638,6 +638,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/model-pack-format.test.mjs",
   "tests/unit/move-tree.test.mjs",
   "tests/unit/net-audio-revs-vm.test.mjs",
+  "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/node-plan.test.mjs",
@@ -670,6 +671,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pause-key-tools.test.mjs",
   "tests/unit/pause-opts.test.mjs",
   "tests/unit/perf-governor.test.mjs",
+  "tests/unit/perf-race-entry.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/perf-try.test.mjs",
   // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a

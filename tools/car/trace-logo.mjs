@@ -32,6 +32,7 @@ import zlib from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { decodePNG, encodePNG } from "../gen/assets.mjs";
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // The last commit that carried assets/logos/*.png. Pinned rather than resolved
@@ -398,12 +399,19 @@ function preview(t, size) {
 
 function main() {
   const args = process.argv.slice(2);
-  const flag = (n, d) => { const i = args.indexOf("--" + n); return i < 0 ? d : args[i + 1]; };
-  const write = args.includes("--write");
-  const pv = args.includes("--preview");
+  // --help and a typo'd flag answer before any trace or --write (#1708).
+  exitIfHelp(args, `usage: node tools/car/trace-logo.mjs [teamId ...] [--write] [--preview [--size 240]]
+                                 [--rev <sha>] [--layers <n>] [--parts]
+  Traces team logo bitmaps (read from git history, default rev ${DEFAULT_REV}) into crest
+  path data. Prints JSON; --write regenerates js/car/crest-paths.js. No browser.`);
+  const VALUED = ["--rev", "--layers", "--size"];
+  const F = parseFlags(args, [...VALUED, "--write", "--preview", "--parts"]);
+  const flag = (n, d) => F.flag("--" + n, d);
+  const write = F.has("--write");
+  const pv = F.has("--preview");
   const rev = flag("rev", DEFAULT_REV);
   const layers = flag("layers", null);
-  const ids = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && ["--rev", "--layers"].includes(args[i - 1])));
+  const ids = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && VALUED.includes(args[i - 1])));
   const list = ids.length ? ids : Object.keys(SOURCES);
 
   const out = {};

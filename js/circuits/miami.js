@@ -37,7 +37,7 @@
     ],
     pal: { zenith: [0.22, 0.5, 0.88], horizon: [0.80, 0.86, 0.90], grass: [0.20, 0.42, 0.18], runoff: [0.34, 0.33, 0.32], fogDensity: 0.0014, sunDir: [0.3131803839972462, 0.7933903061263571, 0.521967306662077], sun: [1, 0.96, 0.82], sunColor: [1, 0.94, 0.8] },
     elevations: [
-      { s: 0.8605, halfM: 220, rise: 3.5 },
+      { s: 0.8605, halfM: 220, rise: 3.5 },   // T18 approach rise (peak y ~3.4 m); not sourced from a real survey — the real circuit is near-flat
       { s: 0.662, halfM: 95, rise: 3.4 },   // Turnpike chicane crest (~11 ft under 2nd deck)
     ],
     bankZones: [
