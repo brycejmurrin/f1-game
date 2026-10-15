@@ -198,6 +198,12 @@ def check(file, tool, ti, proposed=None, how=""):
     if how == "git-resolve":
         return
 
+    # The per-branch ratchet raise fragments are tool-written like ratchets.json
+    # (tools/check/ratchets.mjs --auto-raise; #2291).
+    if not allow and rel.replace(os.sep, "/").startswith("tests/data/ratchets.d/") and rel.endswith(".json"):
+        block(f"{rel}{via} is GENERATED — the commit hook's ratchets.mjs --auto-raise writes it (a delta for this "
+              "branch); --fold / --update sum it into tests/data/ratchets.json. Edit the source and re-commit.", root)
+
     if rel in GENERATED and not allow:
         block(f"{rel}{via} is GENERATED — {GENERATED[rel]}. Edit the source and run the generator.", root)
 
