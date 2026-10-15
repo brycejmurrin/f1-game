@@ -119,7 +119,7 @@ for (const [label, slots, mobileTier] of [
 
 test("lampCap with traffic never budgets above LightBudget.slots() (pit-canopy contract)", () => {
   const src = read("js/lighting/frame-lights.js");
-  const anchor = "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats };";
+  const anchor = "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release };";
   assert.ok(src.includes(anchor));
   const ctx = vm.createContext({
     LightKnobs: { LT: { lampCull: 40 } },
@@ -127,7 +127,7 @@ test("lampCap with traffic never budgets above LightBudget.slots() (pit-canopy c
     performance: { now: () => 0 },
     LightBudget: { MAX: 48, MOBILE: 24, TAIL_RESERVE: 5, slots: () => 16 },
   });
-  vm.runInContext(src.replace(anchor, "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, lampCap };"), ctx);
+  vm.runInContext(src.replace(anchor, "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, lampCap };"), ctx);
   const api = vm.runInContext("FrameLights", ctx);
   assert.equal(api.lampCap(10, false), 16);
   assert.equal(api.lampCap(10, true), 16, "phone tier still clamped by live slots, not MOBILE alone");
