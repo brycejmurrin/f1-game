@@ -208,7 +208,7 @@ test.describe("garage-out before race/session card", () => {
     const tl = await startRaceFromSettings(page);
     const m = assertGarageThenCard(tl, "reduce");
     // Reduce must still enter data-phase=garage, and play it at the tuner's pace
-    // (speed 1 → GarageArrival.OUT_DURATION, 7.6 s): the old 4× cut (~1.9 s) read
+    // (speed 1 → GarageArrival.OUT_DURATION, ~10.6 s): the old 4× cut (~1.9 s) read
     // as a glitch. A wall-clocked drive-out never finishes early on a slow box.
     expect(m.hadGaragePhase, "reduce must play garage phase, not skip it").toBe(true);
     expect(m.garageMs, "reduce must not speed the garage-out up (full OUT_DURATION at speed 1)").toBeGreaterThan(6000);
