@@ -42,6 +42,7 @@ const flag = (n, d) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < arg
 const BOOT_MS = 45000, TRACK_MS = 60000, PRESENT_MS = 90000;
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 const TODS = new Set(["day", "dusk", "dawn", "night"]);
+const WEATHERS = new Set(["dry", "wet", "rain", "overcast", "fog", "storm"]);
 const NAME_RE = /^[A-Za-z0-9._-]{1,80}$/;
 
 if (!argv.includes("--serve")) {
@@ -83,12 +84,14 @@ async function shot(op) {
   if (!CAMS.has(cam)) throw new Error(`cam must be one of ${[...CAMS].join("|")}`);
   const tod = String(op.tod || "day");
   if (!TODS.has(tod)) throw new Error(`tod must be one of ${[...TODS].join("|")}`);
+  const weather = op.weather == null || op.weather === "" ? null : String(op.weather);
+  if (weather && !WEATHERS.has(weather)) throw new Error(`weather must be one of ${[...WEATHERS].join("|")}`);
   const frac = Number(op.frac ?? 0.1);
   if (!(frac >= 0 && frac <= 1)) throw new Error("frac must be 0..1");
   const name = op.shot === true || op.shot == null ? `shot-${shots.length + 1}` : String(op.shot);
   if (!NAME_RE.test(name)) throw new Error("shot name: letters, digits, . _ - only");
   const num = (v, d) => (v == null || v === "" ? d : Number(v));
-  const args = { frac, cam, tod, az: num(op.az, 45), el: num(op.el, 18), dist: num(op.dist, 45),
+  const args = { frac, cam, tod, weather, az: num(op.az, 45), el: num(op.el, 18), dist: num(op.dist, 45),
     side: Number(op.side) === -1 ? -1 : 1, hud: !!op.hud,
     // eye: an explicit el is the pitch (degrees, + up); none keeps eyeAt's look-ahead.
     pitch: op.el == null || op.el === "" ? null : Number(op.el),
@@ -106,6 +109,7 @@ async function shot(op) {
     const a = window.__apex;
     a.go(); a.park(o.frac); a.freeze(true);
     if (a.setTimeOfDay && a.setTimeOfDay() !== o.tod) a.setTimeOfDay(o.tod);
+    if (o.weather && a.weather && a.weather() !== o.weather) a.weather(o.weather);
     if (a.hud) a.hud(o.hud);
     if (o.cam === "eye") {
       const r = a.eyeAt(o.frac, 0, o.h == null ? 2.5 : o.h);
@@ -136,7 +140,7 @@ async function shot(op) {
     throw new Error(`frame is blank (pixel spread ${spread.toFixed(2)})`);
   }
   const prev = shots.findIndex((s) => s.name === name);
-  const rec = { name, png, frac, cam, tod, track };
+  const rec = { name, png, frac, cam, tod, weather, track };
   if (prev >= 0) shots[prev] = rec; else shots.push(rec);
   return { png, spread: +spread.toFixed(1), kb: +(cap.buf.length / 1024).toFixed(1), frame, readiness, pixels, scope: scope === "page" || args.hud ? "page" : "scene", profile: options.profile };
 }
