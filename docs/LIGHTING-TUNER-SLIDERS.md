@@ -604,7 +604,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
-| `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, glx.js×4 |
+| `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, atmosphere.js×3, glx.js×4 |
 | `fogHeight` | FOG HEIGHT FALLOFF | 0 … 0.25 | 0.018 | `uFogHeight` | ✓ | game.js×5, glx.js×4 |
 | `fogTint` | FOG WARM / COOL | -6 … 3.9 | 0 | `uFogTint` | ✓ | glx.js×2 |
 | `fogColorSat` | FOG COLOUR SATURATION | 0 … 2.5 | 1 | — |   | atmosphere.js×2 |
@@ -618,7 +618,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `fogClip` | FOG GLOW CLIP | 0 … 1.75 | 0.7 | `uLampFogClip` | ✓ | glx.js×2 |
 | `fogSunCore` | FOG SUN CORE | 0 … 1.5 | 0.6 | `uFogSunCore` |   | glx.js×2 |
 | `overcastFogMul` | OVERCAST FOG BOOST | 1 … 2.75 | 1.7 | — |   | atmosphere.js×2 |
-| `fogWxMul` | FOG BOOST | 1 … 6 | 3 | — |   | atmosphere.js×2 |
+| `fogWxMul` | FOG BOOST | 1 … 6 | 1.5 | — |   | atmosphere.js×2 |
 | `lampVolBase` | BEAMS (CLEAR) | 0 … 0.7 | 0.05 | — | ✓ | game.js |
 | `lampVolHaze` | BEAMS (HAZE) | 0 … 1.5 | 0.65 | — | ✓ | game.js |
 | `lampVolCap` | BEAM CEILING | 0 … 1.5 | 0.7 | — | ✓ | game.js |

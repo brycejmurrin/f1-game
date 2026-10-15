@@ -406,12 +406,64 @@ test("applyRaceSettings resolves floodEmit with the session, not on the next fra
 });
 
 test("day FOG weather is opaque by ~500 m and its horizon IS the fog colour (survey: 'fog hazes ground only')", () => {
-  const { G, atmo } = boot();
+  const { G, atmo, LT } = boot();
   G.raceTimeOfDay = "day"; G.raceWeather = "fog";
   atmo.applyRaceSettings();
-  const d = G.frame.fogDensity, fd = 500 * d;
+  const d = G.frame.fogDensity * LT.fogDensityMul, fd = 500 * d;
   assert.ok(1 - Math.exp(-fd * fd) > 0.97, `exp² haze at 500 m must be >97 %, density ${d}`);
   assert.deepEqual(host(G.frameSky.horizon), host(G.frame.fogColor), "sky horizon meets the fog colour seamlessly");
+});
+
+// Gallery D (#2256): every shipped `<track>|<tod>|fog` row pins fogDensityMul ~2 on top of
+// FOG BOOST, and the renderers multiply the two — a fog session ran 0.011-0.026 effective
+// (white within ~150 m). The EFFECTIVE density (frame.fogDensity x LT.fogDensityMul, what the
+// shaders and the chunk cull use) must sit in the floor..ceiling band at the default boost.
+test("FOG weather effective density stays in the readable band on shipped presets (#2256)", () => {
+  const seen = [];
+  for (const id of ["spa", "qatar", "monza", "singapore"]) {
+    for (const tod of ["dawn", "day", "dusk", "night"]) {
+      const { G, atmo, LT } = boot(id);
+      G.frame.fogDensity = id === "spa" ? 0.0043 : 0.0017;   // spa's measured dawn base; a mid base elsewhere
+      G.raceTimeOfDay = tod; G.raceWeather = "fog";
+      atmo.applyRaceSettings();
+      const eff = G.frame.fogDensity * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
+      const at = (m) => 1 - Math.exp(-(m * eff) * (m * eff));
+      seen.push(`${id}|${tod} ${eff.toFixed(5)}`);
+      assert.ok(at(500) > 0.97, `${id}|${tod}|fog not opaque by 500 m (eff ${eff})`);
+      assert.ok(at(150) < 0.65, `${id}|${tod}|fog is a white wall by 150 m (eff ${eff})`);
+    }
+  }
+  assert.equal(seen.length, 16);
+});
+
+test("FOG BOOST still scales fog: the band follows the knob, so pea-soup stays reachable", () => {
+  const eff = (boost) => {
+    const { G, atmo, LT, ltStore } = boot("spa");
+    G.frame.fogDensity = 0.0043; G.raceTimeOfDay = "day"; G.raceWeather = "fog";
+    ltStore.set("fogWxMul", boost); atmo.applyRaceSettings();
+    return G.frame.fogDensity * LT.fogDensityMul;
+  };
+  assert.ok(eff(6) > eff(1.5) * 3, `FOG BOOST 6 must thicken well past the default (${eff(6)} vs ${eff(1.5)})`);
+});
+
+test("dawn/dusk FOG: horizon IS the fog colour and the zenith is pulled to it (#2257)", () => {
+  for (const tod of ["dawn", "dusk"]) {
+    const { G, atmo } = boot();
+    G.raceTimeOfDay = tod; G.raceWeather = "fog";
+    atmo.applyRaceSettings();
+    const fc = G.frame.fogColor, z = G.frameSky.zenith;
+    assert.deepEqual(host(G.frameSky.horizon), host(fc), `${tod}: horizon must meet the fog colour`);
+    const dist = Math.hypot(z[0] - fc[0], z[1] - fc[1], z[2] - fc[2]);
+    assert.ok(dist < 0.12, `${tod}: zenith ${JSON.stringify(host(z))} stays a clear-sky colour over fog ${JSON.stringify(host(fc))}`);
+  }
+});
+
+test("NIGHT fog keeps its dark sky (the twilight fog deck must not reach it)", () => {
+  const { G, atmo } = boot();
+  G.raceTimeOfDay = "night"; G.raceWeather = "fog";
+  atmo.applyRaceSettings();
+  const z = G.frameSky.zenith;
+  assert.ok(Math.max(...z) < 0.2, `night fog zenith lifted to ${JSON.stringify(host(z))}`);
 });
 
 test("day OVERCAST fog colour follows the grey deck, not the clear-sky blue", () => {
