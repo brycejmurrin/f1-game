@@ -36,6 +36,36 @@ function rig({ legends = false } = {}) {
 const team = (id) => ({ id, drivers: [{ num: 1 }] });
 const names = (list) => list.map((c) => c.id);
 
+test("invalidated livery jobs stop retrying when the idle budget stays low", () => {
+  for (const deadline of [{ didTimeout: false, timeRemaining: () => 0 }, { didTimeout: true, timeRemaining: () => 50 }]) {
+    const r = rig(), t = team("me"), m = new Float32Array(16);
+    for (let i = 0; i < 12; i++) {
+      r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+      r.carDraw.invalidateDecalTextures("me");
+    }
+    assert.equal(r.idle.length, 12);
+    for (const cb of r.idle.splice(0)) cb(deadline);
+    assert.equal(r.idle.length, 0, "obsolete jobs must not request another idle callback");
+    assert.equal(r.hiBuilds.length, 0);
+  }
+});
+
+test("dropping an obsolete idle job preserves a replacement for the same livery", () => {
+  const r = rig(), t = team("me"), m = new Float32Array(16);
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  const obsolete = r.idle.shift();
+  r.carDraw.invalidateDecalTextures("me");
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true);
+  obsolete({ didTimeout: false, timeRemaining: () => 0 });
+  assert.equal(r.idle.length, 1, "only the replacement owns a pending callback");
+  r.idle.shift()({ didTimeout: false, timeRemaining: () => 0 });
+  assert.equal(r.idle.length, 1, "live work still retries when the budget is low");
+  assert.equal(r.hiBuilds.length, 0);
+  r.drain();
+  assert.deepEqual(r.hiBuilds, ["me#1"]);
+  assert.equal(r.carDraw.getCarDecalTexture(t, 1, true).canvas.id, "me#1:hi");
+});
+
 test("the garage reaps the preview a hi-res swap parked; the race waits for flushDecals", () => {
   const r = rig();
   const t = team("me");

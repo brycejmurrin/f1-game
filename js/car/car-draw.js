@@ -509,6 +509,7 @@ const CarDraw = (function () {
       const enqueue = function () {
         if (typeof requestIdleCallback === "function") {
           requestIdleCallback(function (deadline) {
+            if (!owns()) { done(); return; }
             if (deadline && (deadline.didTimeout ||
                 (typeof deadline.timeRemaining === "function" && deadline.timeRemaining() < 10))) {
               enqueue();
