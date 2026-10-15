@@ -988,9 +988,10 @@ const Input = (function () {
   const TOUCH_DEAD_PX = 5;         // slop around the anchor: a tap is not a steer
   let touchRangeFrac = TOUCH_RANGE_FRAC;
   // DRAG AT SPEED. 1 = the drag takes the whole ADAPTIVE BUTTONS shed
-  // (digitalRateIn / KEY_RAMP_IN). 0 is the old fixed fraction. Steer-tuning
-  // pushes the slider; 1 is the shipped default so a finger matches the keys.
-  let touchSpeedMix = 1;
+  // (digitalRateIn / KEY_RAMP_IN). 0 is the fixed fraction every player has
+  // today, and the shipped default: the speed-sensitive range is OPT-IN
+  // (orchestrator decision 2026-10-15) so nobody's drag feel moves under them.
+  let touchSpeedMix = 0;
   // Safety only. The digital rate may approach 0; a drag that approaches 0
   // cannot turn the car. 5 % of static lock is the floor, and the default
   // assist (mix 4/9) never reaches it.

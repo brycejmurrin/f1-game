@@ -78,6 +78,21 @@ function rangeAt(speed, opts) {
   return arm(speed, opts).Input.debugState().touchRangePx;
 }
 
+test("OPT-IN: with no DRAG AT SPEED choice the range is the tip's fixed range at rest and at 300 km/h", () => {
+  // Shipped defaults: no setTouchSpeedMix call, ADAPTIVE BUTTONS at its own
+  // default. The ship tip's touchRangePx() is max(40, long edge × 0.12) at
+  // every speed, so an existing player must read BASE at both ends.
+  for (const speed of [0, 300 / 3.6]) {
+    const r = boot();
+    r.Input.reset();
+    r.Input.setSteerMode("touch");
+    r.Input.setSpeedStd(speed);
+    const st = r.Input.debugState();
+    assert.equal(st.touchSpeedMix, 0, "the speed-sensitive range is off by default");
+    assert.equal(st.touchRangePx, BASE, `range at ${(speed * 3.6).toFixed(0)} km/h is the tip's ${BASE}px, got ${st.touchRangePx}`);
+  }
+});
+
 test("at rest the drag range is the old fixed fraction, with the assist on or off", () => {
   const off = rangeAt(0, { adapt: 0, touch: 0 });
   const on = rangeAt(0, { adapt: 1, touch: 1 });
@@ -154,6 +169,6 @@ test("touchSpeedFromSlider: notch 1 is off, notch 10 is full, monotonic", () => 
   assert.equal(f(10), 1);
   assert.ok(Math.abs(f(5) - 4 / 9) < 1e-12);
   for (let v = 1; v < 10; v++) assert.ok(f(v + 1) > f(v), `not increasing at notch ${v}`);
-  assert.match(src, /store\.get\("touchDragSpeed", 10\)/);
-  assert.match(src, /wireTune\("pm-touchdragspeed", "touchDragSpeed", 10/);
+  assert.match(src, /store\.get\("touchDragSpeed", 1\)/, "OPT-IN: an absent key is notch 1, the fixed range");
+  assert.match(src, /wireTune\("pm-touchdragspeed", "touchDragSpeed", 1,/);
 });
