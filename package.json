@@ -65,6 +65,8 @@
     "ui:gallery": "node tools/ui/layout-audit.mjs --gallery",
     "ui:audit": "node tools/ui/layout-audit.mjs",
     "wgx:gallery": "node tools/gfx/wgx-shot.mjs --gallery --lite",
+    "gallery:tracks": "node tools/track/build-gallery.cjs",
+    "gallery:pr-panel": "node tools/track/pr-survey-panel.cjs",
     "ab:light": "node tools/lighting/ab-lighting.mjs",
     "setup:browsers": "bash tools/env/install-browsers.sh",
     "physics:sweep": "node tools/check/physics-tune-sweep.mjs",
