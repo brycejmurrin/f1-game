@@ -21,7 +21,15 @@
 #             * changed on both sides → MEMORY.md is line-merged (sessions add
 #               index lines at once); a topic file keeps the REPO copy and the
 #               conflict is reported, never overwritten;
-#             * a deletion propagates only from the side that made it.
+#             * a deletion propagates only from the side that made it;
+#             * after HEAD moved (checkout, merge), a memory missing from the
+#               repo is a deletion only if a commit in HEAD's history deleted
+#               it; otherwise the branch simply never had it, so the live copy
+#               stays and is written back to ride this branch's next commit,
+#               and MEMORY.md keeps the live index lines the branch lacks
+#               (2026-10-15, #2128: a memory committed on one topic branch
+#               vanished from the live dir on the next checkout). The
+#               baseline records HEAD in .head to tell a move from an edit.
 #           Until 2026-10-02 save copied every differing live file over the
 #           repo and deleted repo files the session lacked: a resumed session,
 #           whose live dir predated a branch checkout, reverted other sessions'
@@ -57,9 +65,21 @@ except Exception: print("")' 2>/dev/null)
 fi
 
 mkdir -p "$LIVE" "$REPO" "$BASE" 2>/dev/null || exit 0
-LIVE="$LIVE" REPO="$REPO" BASE="$BASE" MODE="$MODE" python3 - <<'PY' || true
-import os, shutil, sys
+HEAD_NOW=$(git -C "$MAIN" rev-parse HEAD 2>/dev/null || true)
+LIVE="$LIVE" REPO="$REPO" BASE="$BASE" MODE="$MODE" MAIN="$MAIN" HEAD_NOW="$HEAD_NOW" python3 - <<'PY' || true
+import os, shutil, subprocess, sys
 live, repo, base, mode = (os.environ[k] for k in ("LIVE", "REPO", "BASE", "MODE"))
+main, head = os.environ["MAIN"], os.environ["HEAD_NOW"]
+try:
+    with open(os.path.join(base, ".head"), encoding="utf-8") as h: prev_head = h.read().strip()
+except OSError: prev_head = None
+moved = prev_head is not None and prev_head != head
+def deleted_in_history(f):
+    """True when a commit reachable from HEAD deleted this memory file."""
+    if not head: return False
+    r = subprocess.run(["git", "-C", main, "log", "-1", "--diff-filter=D", "--format=%H", head, "--",
+                        os.path.relpath(os.path.join(repo, f), main)], capture_output=True, text=True)
+    return bool(r.stdout.strip())
 def read(d, f):
     p = os.path.join(d, f)
     try:
@@ -93,6 +113,17 @@ for f in sorted(names):
         if l is None: drop(repo, f)
         else: write(repo, f, l)
         n_out += 1; final = l
+    elif repo_changed and not live_changed and moved and l is not None and (
+            (r is None and not deleted_in_history(f)) or f == "MEMORY.md"):
+        # HEAD moved: a branch that never had this memory is not a deletion,
+        # and an index line the branch lacks is not a removal (#2128).
+        if r is None: final = l
+        else:
+            rl = r.splitlines()
+            final = "\n".join(rl + [x for x in l.splitlines() if x not in rl]) + "\n"
+        write(repo, f, final)
+        if final != l: write(live, f, final); n_in += 1
+        n_out += 1
     elif repo_changed and not live_changed:     # someone else's: take it
         if r is None: drop(live, f)
         else: write(live, f, r)
@@ -107,6 +138,7 @@ for f in sorted(names):
         final = r
     if final is None: drop(base, f)
     else: write(base, f, final)
+write(base, ".head", head + "\n")
 if mode == "restore" or n_in or n_out or conflicts:
     msg = f"memory: {n_in} in from .claude/memory/, {n_out} out"
     if conflicts: msg += "; CONFLICT kept the repo copy of " + ", ".join(conflicts) + " (re-apply your edit)"
