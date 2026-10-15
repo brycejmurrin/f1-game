@@ -172,6 +172,7 @@ function detailRows(path3, g, { tlxLeg }) {
   } else if (_rc) {
     const _w = _rc.warm, _d = _rc.driven;
     rows.push(`${IND}race:  gate=${_rc.gateMs}ms beats=${_rc.beats}` +
+      (_rc.warmMark !== undefined ? ` entryWarm=${_rc.warmMark || "none"}` : "") +
       (_w ? `  warm scene=${_w.scene} post=${_w.post} shadow=${_w.shadow} total=${_w.total} ms attempts=${_w.attempts} failed=${_w.failed}` : "  warm: none (no TLX warm on this leg)") +
       (_d ? `  | driven ${_d.frames}f ${_d.distM} m mean ${_d.meanSpeed} m/s offRoad=${_d.offRoadFrames}f${_d.error ? " driverError=" + _d.error : ""}` : _rc.drive ? `  | driver ${_rc.driver || "not started"}` : "  | PARKED (--no-drive)"));
   } else {
@@ -258,7 +259,7 @@ function detailRows(path3, g, { tlxLeg }) {
   if (_gw && _gw.rows && _gw.rows.length) {
     rows.push(`${IND}gaps:  ${_gw.summary}`);
     for (const x of _gw.rows.slice(0, 6)) {
-      rows.push(`${IND}  ${String(x.gapMs).padStart(6)} ms [${x.phase}] at +${x.atMs} ms: step before ${x.prevFrameMs} ms, long tasks ${x.longTaskMs} ms — prev: ${x.prev} | between: ${x.between}`);
+      rows.push(`${IND}  ${String(x.gapMs).padStart(6)} ms [${x.phase}] at +${x.atMs} ms: step before ${x.prevFrameMs} ms${x.prevCallbacks != null ? ` (${x.prevCallbacks} cb)` : ""}, long tasks ${x.longTaskMs} ms — prev: ${x.prev} | between: ${x.between}`);
     }
   } else if (_gw && (_gw.summary || _gw.note)) {
     rows.push(`${IND}gaps:  ${_gw.summary || _gw.note}`);
@@ -292,11 +293,26 @@ function detailRows(path3, g, { tlxLeg }) {
   // THE CAMERA THE WINDOW DROVE (hunt 4 H5) and the mirror chain it left.
   const _cam = g.cam, _mir = g.mirror || {}, _mb = _mir.backend || {};
   if (_cam) {
-    const off = _cam.error || (_cam.asked && _cam.set !== _cam.asked) || (_cam.atWindowEnd && _cam.set && _cam.atWindowEnd !== _cam.set);
+    const _sw = g.camSwitch, _endWant = _cam.switchedTo || _cam.set;
+    const off = _cam.error || (_cam.asked && _cam.set !== _cam.asked) || (_cam.atWindowEnd && _endWant && _cam.atWindowEnd !== _endWant) || (_sw && _sw.error);
     rows.push(`${IND}cam:   ${_cam.set || "?"} (asked ${_cam.asked || "game default"}, at window end ${_cam.atWindowEnd || "?"})` +
+      (_sw ? `  switch>${_sw.to} at beat ${_sw.beat}` : "") +
       (_mir.mode !== undefined ? `  mirror=${_mir.mode} shown=${_mir.shown}` : "") +
       (_mb.mips !== undefined ? ` mips=${_mb.mips} cap=${_mb.mipCap} full=${_mb.mipFull}` : "") +
-      (off ? `   <- CAMERA NOT AS ASKED${_cam.error ? ": " + _cam.error : ""}` : ""));
+      (off ? `   <- CAMERA NOT AS ASKED${_cam.error ? ": " + _cam.error : _sw && _sw.error ? ": " + _sw.error : ""}` : ""));
+  }
+  const _we = g.warmEnd;
+  if (_we && (_we.mirrorDeferred || _we.mirrorLazy)) {
+    const _ml = _we.mirrorLazy;
+    rows.push(`${IND}mirwarm: deferred=${_we.mirrorDeferred} lazy=` +
+      (_ml ? `${_ml.ms} ms drawn=${_ml.drawn} ok=${_ml.ok}` : "not paid (no mirror view asked)") + ` entryMirror=${_we.mirror}`);
+  }
+  if (g.entry && g.entry !== "api") {
+    const _mn = g.menu || {}, _at = _mn.atGo || {}, _mc = _at.cars;
+    rows.push(`${IND}menu:  entry=${g.entry} ok=${_mn.ok} prepReady=${_mn.prepReady} waited=${_mn.prepWaitMs}ms` +
+      ` done=${_at.done} warmed=${_at.warmed}${_at.warmable ? "" : "(no warm)"} garage=${_mn.garage ? _mn.garage.garageReady : "?"}` +
+      (_mc ? `  cars=${_mc.cars} steps=${_mc.steps} lod=${_mc.lod} cpu=${_mc.cpuMs}ms max=${_mc.maxCpuMs}ms` : "  cars: no prep recorded") +
+      (_mn.error ? `   <- MENU ENTRY FAILED: ${_mn.error}` : _mn.prepNote ? `   <- ${_mn.prepNote}` : ""));
   }
   rows.push(`${IND}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
     `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
@@ -332,6 +348,16 @@ function entryRows(g) {
     rows.push(`${IND}entry: window=${re.entryMs}ms longestBlock=${re.longestBlockMs}ms ` +
       `otherBlock=${re.otherBlockMs}ms tasks=${re.tasks}`);
     rows.push(`${IND}       ${verdict}`);
+  }
+  const _lf = re.loaf;
+  if (_lf && _lf.summary) {
+    rows.push(`${IND}loaf:  ${_lf.summary}`);
+    for (const f of (_lf.longest || []).slice(0, 4)) {
+      rows.push(`${IND}  ${String(f.duration).padStart(7)} ms at +${f.atMs} ms${f.span ? " [" + f.span + "]" : ""}: ` +
+        ((f.scripts || []).slice(0, 3).map((s) => `${s.invokerType} ${s.invoker || "?"}${s.sourceFunctionName ? " " + s.sourceFunctionName : ""} ${s.duration} ms`).join(" | ") || "no script attributed"));
+    }
+  } else if (_lf && _lf.note) {
+    rows.push(`${IND}loaf:  NOT MEASURED — ${_lf.note}`);
   }
   // WHICH HALF a worker would move: the track build, and which phase of it.
   const bp = g.buildProfile || {};
