@@ -690,17 +690,17 @@ const DrivingCoach = (function () {
       }
       const watching = typeof RealRace !== "undefined" && !!RealRace.status().watch;
       const panel = $("pm-pit-panel");
+      const pitHelp = $("pm-pit-help"), note = $("pm-pit-estimate");
       if (panel) panel.hidden = watching;
       if (watching) {
         SettingRow.disable($("pm-pit-choice"), true);
-        for (const id of ["pm-pit-help", "pm-pit-estimate"]) { const el = $(id); if (el) el.textContent = "Pit strategy is unavailable while watching a replay."; }
+        if (pitHelp) pitHelp.textContent = "Pit strategy is unavailable while watching a replay.";
+        if (note) note.textContent = "Pit strategy is unavailable while watching a replay.";
         return;
       }
-      const note = $("pm-pit-estimate");
       const names = new Map(G.pits.ownedTyres().map(o => [o.id, o.label]));
       const compoundName = id => names.get(id) || id.replace(/_/g, " ");
       const selected = G.player && G.player.pitNext;
-      const pitHelp = $("pm-pit-help");
       // AUTO NAMES ITS PICK: the set pickFor would fit right now (the plan's
       // letter, never one that breaks the two-compound rule), so AUTO is a
       // choice the player can read rather than a surprise in the box.
