@@ -290,13 +290,37 @@ const HudArrange = (() => {
       ["flag", [[document.getElementById("hud-flag"), "YELLOW \u00b7 SECTOR 2"]]],
       ["limits", []],
       ["damage", []],
+      ["rel", [], true],
+      ["strat", [], true],
+      ["inputs", []],
     ];
     function reveal() {
       revealed = [];
-      for (const [id, texts] of SAMPLE) {
+      for (const [id, texts, preview] of SAMPLE) {
         const el = elOf(id);
-        if (!el || !el.hidden) continue;
-        const rec = { el, hidden: el.hidden, text: [] };
+        const optional = id === "rel" || id === "strat" || id === "inputs";
+        if (!el || (!el.hidden && !optional)) continue;
+        const rec = { el, hidden: el.hidden, text: [], children: [], drop: el.getAttribute("data-col-drop") };
+        if (optional) el.removeAttribute("data-col-drop");
+        if (preview && el.hidden) {
+          // Keep producer-owned nodes intact: its paint cache must still match on resume.
+          for (const child of el.children) { rec.children.push({ el: child, hidden: child.hidden }); child.hidden = true; }
+          rec.preview = document.createElement("div");
+          // Match the bounded producer rows and their compact-column selectors.
+          if (id === "rel") {
+            rec.preview.setAttribute("data-col-row", "");
+            for (const [k, text] of [["pos", "P2"], ["code", "YOU"], ["gap", "+0.8"], ["tyre", "M"], ["lap", ""]]) {
+              const cell = document.createElement("span"); cell.setAttribute("data-k", k); cell.textContent = text;
+              rec.preview.appendChild(cell);
+            }
+          } else {
+            rec.preview.setAttribute("data-k", "next");
+            const head = document.createElement("span"), value = document.createElement("b");
+            head.textContent = "NEXT"; value.textContent = "LAP 12";
+            rec.preview.appendChild(head); rec.preview.appendChild(value);
+          }
+          el.appendChild(rec.preview);
+        }
         for (const [t, txt] of texts) {
           if (!t) continue;
           rec.text.push({ el: t, text: t.textContent });
@@ -309,7 +333,10 @@ const HudArrange = (() => {
     function conceal() {
       for (const rec of revealed) {
         for (const t of rec.text) t.el.textContent = t.text;
+        if (rec.preview) rec.el.removeChild(rec.preview);
+        for (const child of rec.children) child.el.hidden = child.hidden;
         rec.el.hidden = rec.hidden;
+        if (rec.drop !== null) rec.el.setAttribute("data-col-drop", rec.drop);
       }
       revealed = [];
     }
@@ -479,7 +506,7 @@ const HudArrange = (() => {
       const dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (dirs[e.key] && selected && e.target && e.target.id === "hud-arrange-move") {
         e.preventDefault(); e.stopPropagation(); flush();
-        const cur = current(selected), d = dirs[e.key], step = e.shiftKey ? 5 : 1;
+        const cur = dragOrig(selected), d = dirs[e.key], step = e.shiftKey ? 5 : 1;
         HudLayout.set(selected, { x: clamp(cur.x + d[0] * step, -50, 50), y: clamp(cur.y + d[1] * step, -50, 50) }, context.set, context.profile);
         after(); return;
       }

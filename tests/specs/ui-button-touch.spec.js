@@ -831,6 +831,46 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     expect(await page.evaluate(() => (document.body.dataset.hudHide || "").split(" "))).not.toContain("sectors");
   });
 
+  test("keyboard radio moves one step and disabled readouts remain editable while paused", async ({ page }) => {
+    await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await openPauseSettings(page);
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
+    const original = await page.evaluate(() => Object.fromEntries(["rel", "strat", "inputs"].map(id =>
+      [id, { hidden: document.getElementById("hud-" + id).hidden, on: HudElements.isOn(id) }])));
+    await page.locator("#pm-hud-arrange").click();
+    const picker = page.locator("#hud-arrange-element");
+    for (const id of ["rel", "strat", "inputs"]) {
+      await picker.selectOption(id);
+      await expect(page.locator("#hud-" + id)).toBeVisible();
+    }
+    await picker.selectOption("announce");
+    const before = await page.locator("#announce").boundingBox();
+    await page.locator("#hud-arrange-move").focus();
+    await page.keyboard.press("ArrowRight");
+    const after = await page.locator("#announce").boundingBox();
+    // HudLayout persists whole percentages: the first placement snaps the
+    // visible origin to that existing grid, then adds the keyboard step.
+    const expectedX = LANDSCAPE.width * (0.5 + Math.round((before.x / LANDSCAPE.width - 0.5) * 100 + 1) / 100);
+    const expectedY = LANDSCAPE.height * (0.25 + Math.round((before.y / LANDSCAPE.height - 0.25) * 100) / 100);
+    expect(Math.abs(after.x - expectedX)).toBeLessThan(2);
+    expect(Math.abs(after.y - expectedY)).toBeLessThan(2);
+    await page.keyboard.press("Shift+ArrowDown");
+    const shifted = await page.locator("#announce").boundingBox();
+    expect(Math.abs(shifted.y - after.y - LANDSCAPE.height / 20)).toBeLessThan(2);
+    await picker.selectOption("inputs");
+    await expect(page.locator("#hud-arrange-vis")).toHaveText("SHOW");
+    await page.locator("#hud-arrange-vis").click();
+    await expect(page.locator("#hud-arrange-vis")).toHaveText("HIDE");
+    await page.locator("#hud-arrange-vis").click();
+    await page.locator("#hud-arrange-done").click();
+    expect(await page.evaluate(() => Object.fromEntries(["rel", "strat", "inputs"].map(id =>
+      [id, { hidden: document.getElementById("hud-" + id).hidden, on: HudElements.isOn(id) }])))).toEqual(original);
+  });
+
   test("a dragged radio card leaves auto-placement and stays where it was dropped; RESET hands it back", async ({ page }) => {
     await page.addInitScript(() => localStorage.removeItem("apex26.hudLayout"));
     await page.goto("/");
