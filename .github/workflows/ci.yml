@@ -461,10 +461,13 @@ jobs:
           [ "$A" = success ] && [ "$B" = success ]
 
   node-suites:
-    # Name MUST be exactly `Pure-node unit suites (<slice>)` — those six
-    # strings are the deploy branch's required checks. Do not interpolate
-    # matrix.needed (or any other matrix key) into the name, or branch
-    # protection never sees the expected check (#454 a9a805839).
+    # Name `Pure-node unit suites (<slice>)`: the six strings WERE the deploy
+    # branch's required checks until 2026-10-15, when Bryce made `CI` the one
+    # required check (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §4 C). They are
+    # still what pages-train.mjs, ready-gate.mjs and the tests read, so keep
+    # them stable; a rename is a tool edit now, not a settings round. Do not
+    # interpolate matrix.needed (or any other matrix key) into the name
+    # (#454 a9a805839: the expected check never appeared).
     name: Pure-node unit suites (${{ matrix.slice }})
     needs: [select]
     runs-on: ubuntu-latest
@@ -514,9 +517,10 @@ jobs:
         # shards (APEX_CIRCUIT_SHARD=i/2), game-vm-b is two time-balanced
         # partitions, and vm-page / node-slow stand alone. The ≈ 3 min wall that
         # split promised no longer holds: vm-b1 and page are the floor now.
-        # The slice names are the deploy branch's REQUIRED CHECKS
-        # ("Pure-node unit suites (<slice>)"): renaming one means editing the
-        # branch-protection rule in the same breath, or every PR blocks.
+        # The slice names ("Pure-node unit suites (<slice>)") were the deploy
+        # branch's REQUIRED CHECKS until 2026-10-15; `CI` alone is required
+        # now, so a rename is a tooling change (pick-unit-slices SLICES,
+        # pages-train, ready-gate, the tests), not a settings round.
         # Job wall, MEDIAN of 12 green ship pushes (38522092373..38580219820,
         # 2026-10-14; setup included; a skipped row's ~0.1 min is in the sample):
         #   vm-a1  game-vm-a, circuits 1,3,5,…      2.4 min
@@ -534,10 +538,12 @@ jobs:
         #   vm-a1 ~200 s, vm-a2 ~220 s, vm-b1 ~320 s, vm-b2 ~320 s, slow ~200 s,
         #   page ~520 s — vm-page is the floor now (one TAP test, no per-spec
         #   breakdown in the log); runner-minutes per push unchanged.
-        # Matrix rows come from select's plan step / pick-unit-slices. Every NODE_SLICE
-        # name is ALWAYS present (needed true|false): branch protection pins
-        # those six check names, and a subset left vm-a1/vm-a2 unreported on
-        # #454 (BLOCKED with an otherwise green CI). Unneeded rows exit 0.
+        # Matrix rows come from select's plan step / pick-unit-slices. On a
+        # deploy push and the train every NODE_SLICE name is present (needed
+        # true|false) for pages-train.mjs's reuse check; a pull request lists
+        # only the needed rows (2026-10-15: `CI` is the one required check —
+        # until then a subset left vm-a1/vm-a2 unreported on #454, BLOCKED
+        # with an otherwise green CI). Unneeded rows exit 0.
         # node-plan.mjs (step below) still skips scripts INSIDE a needed runner.
         include: ${{ fromJSON(needs.select.outputs.slices) }}
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
@@ -625,8 +631,9 @@ jobs:
           # line: deploy.mjs and twinned-specs.mjs read this step's text.
           # `planned <script>` is the plan step's predicate (true on every
           # non-PR event); a skip prints SKIPPED <script> and the reason.
-          # matrix.needed=false: check name still reports (branch protection)
-          # but no work runs for a slice this diff does not select.
+          # matrix.needed=false (deploy push / train rows): the name still
+          # reports for pages-train.mjs's reuse check, but no work runs for a
+          # slice this diff does not select.
           if [ "${{ steps.reuse.outputs.reuse }}" = "true" ]; then
             echo "SKIPPED slice ${{ matrix.slice }} — draft fast-tier already green on this head SHA"
             exit 0
@@ -2689,8 +2696,9 @@ jobs:
   # needed job skipped by its `if:` is a pass here too, so each needed job
   # owns the rule for when skipping is honest (selected-verdict owns the
   # selected gate's — an empty or dropped plan — which is why it is needed
-  # here, not just `selected`). Branch protection should require `CI`: it is
-  # the only check that also carries smoke, the sweeps, renderer-macos and xr.
+  # here, not just `selected`). Branch protection requires `CI` and nothing
+  # else (Bryce, 2026-10-15; it was twelve names): it is the only check that
+  # also carries smoke, the sweeps, renderer-macos and xr.
   # tools/ci/ci-verdict.mjs.
   #
   # EVERY JOB BUT ONE: poke-train is not a verdict, it is the train's
