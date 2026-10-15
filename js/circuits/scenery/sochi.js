@@ -449,7 +449,8 @@
       signBoard(K(0.255), 1, 7, "corner", 6);
       signBoard(K(0.545), -1, 7, "corner", 13);
       signBoard(K(0.815), 1, 7, "corner", 17);
-      sponsorHoarding(0.930, 0.075, 1, 5.0, { h: 1.2, step: 10 });
+      // Gap 6.0: 5.0 m buried the LED footings ≤0.31 m on the cambered funnel (ground-audit).
+      sponsorHoarding(0.930, 0.075, 1, 6.5, { h: 1.2, step: 10 });
       // Camera towers at the show corners — gaps bumped so monopole feet clear
       // cambered terrain (tighter gaps bury them ≤0.14 m).
       cameraTower(K(0.085), 1, 68, { h: 20 });
