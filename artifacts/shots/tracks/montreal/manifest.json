@@ -1,362 +1,326 @@
 [
   {
-    "file": "ctx-lagoon__day.jpg",
-    "id": "ctx-lagoon",
-    "tod": "day",
-    "weather": "dry",
+    "file": "ctx-lagoon__day__dry.jpg",
+    "id": "lagoon",
     "sector": "Lap",
     "view": "Jean-Doré lagoon",
-    "kb": 43,
-    "quality": 80
-  },
-  {
-    "file": "ctx-orbit-mid__day.jpg",
-    "id": "ctx-orbit-mid",
     "tod": "day",
     "weather": "dry",
-    "sector": "Lap",
-    "view": "Mid-lap orbit",
-    "kb": 48,
-    "quality": 80
+    "kb": 79
   },
   {
-    "file": "ctx-orbit-mid__dusk.jpg",
-    "id": "ctx-orbit-mid",
+    "file": "ctx-orbit-mid__day__dry.jpg",
+    "id": "orbit-mid",
+    "sector": "Lap",
+    "view": "Mid-lap orbit",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 85
+  },
+  {
+    "file": "ctx-orbit-mid__day__overcast.jpg",
+    "id": "orbit-mid",
+    "sector": "Lap",
+    "view": "Mid-lap orbit",
+    "tod": "day",
+    "weather": "overcast",
+    "kb": 77
+  },
+  {
+    "file": "ctx-orbit-mid__dusk__dry.jpg",
+    "id": "orbit-mid",
+    "sector": "Lap",
+    "view": "Mid-lap orbit",
     "tod": "dusk",
     "weather": "dry",
-    "sector": "Lap",
-    "view": "Mid-lap orbit",
-    "kb": 44,
-    "quality": 80
+    "kb": 68
   },
   {
-    "file": "ctx-orbit-mid__night.jpg",
-    "id": "ctx-orbit-mid",
-    "tod": "night",
-    "weather": "dry",
-    "sector": "Lap",
-    "view": "Mid-lap orbit",
-    "kb": 41,
-    "quality": 80
-  },
-  {
-    "file": "s1-basin__day.jpg",
-    "id": "s1-basin",
-    "tod": "day",
-    "weather": "dry",
+    "file": "s1-basin__day__dry.jpg",
+    "id": "basin",
     "sector": "S1",
     "view": "Olympic Basin approach",
-    "kb": 62,
-    "quality": 80
-  },
-  {
-    "file": "s1-gantry__day.jpg",
-    "id": "s1-gantry",
     "tod": "day",
     "weather": "dry",
-    "sector": "S1",
-    "view": "Start gantry",
-    "kb": 24,
-    "quality": 80
+    "kb": 95
   },
   {
-    "file": "s1-senna__day.jpg",
-    "id": "s1-senna",
-    "tod": "day",
-    "weather": "dry",
+    "file": "s1-senna__day__dry.jpg",
+    "id": "senna",
     "sector": "S1",
     "view": "Senna S (trackside)",
-    "kb": 38,
-    "quality": 80
+    "tod": "day",
+    "weather": "dry",
+    "kb": 65
   },
   {
-    "file": "s1-sf__dawn.jpg",
-    "id": "s1-sf",
+    "file": "s1-sf__dawn__dry.jpg",
+    "id": "sf",
+    "sector": "S1",
+    "view": "Start/finish (park)",
     "tod": "dawn",
     "weather": "dry",
-    "sector": "S1",
-    "view": "Start/finish (park)",
-    "kb": 35,
-    "quality": 80
+    "kb": 49
   },
   {
-    "file": "s1-sf__day.jpg",
-    "id": "s1-sf",
+    "file": "s1-sf__day__dry.jpg",
+    "id": "sf",
+    "sector": "S1",
+    "view": "Start/finish (park)",
     "tod": "day",
     "weather": "dry",
-    "sector": "S1",
-    "view": "Start/finish (park)",
-    "kb": 49,
-    "quality": 80
+    "kb": 69
   },
   {
-    "file": "s1-sf__dusk.jpg",
-    "id": "s1-sf",
+    "file": "s1-sf__day__rain.jpg",
+    "id": "sf",
+    "sector": "S1",
+    "view": "Start/finish (park)",
+    "tod": "day",
+    "weather": "rain",
+    "kb": 64
+  },
+  {
+    "file": "s1-sf__day__wet.jpg",
+    "id": "sf",
+    "sector": "S1",
+    "view": "Start/finish (park)",
+    "tod": "day",
+    "weather": "wet",
+    "kb": 63
+  },
+  {
+    "file": "s1-sf__dusk__dry.jpg",
+    "id": "sf",
+    "sector": "S1",
+    "view": "Start/finish (park)",
     "tod": "dusk",
     "weather": "dry",
-    "sector": "S1",
-    "view": "Start/finish (park)",
-    "kb": 43,
-    "quality": 80
+    "kb": 58
   },
   {
-    "file": "s1-sf__night.jpg",
-    "id": "s1-sf",
+    "file": "s1-sf__night__dry.jpg",
+    "id": "sf",
+    "sector": "S1",
+    "view": "Start/finish (park)",
     "tod": "night",
     "weather": "dry",
-    "sector": "S1",
-    "view": "Start/finish (park)",
-    "kb": 34,
-    "quality": 80
+    "kb": 50
   },
   {
-    "file": "s2-basin-shore__day.jpg",
-    "id": "s2-basin-shore",
-    "tod": "day",
-    "weather": "dry",
+    "file": "s2-basin-shore__day__dry.jpg",
+    "id": "basin-shore",
     "sector": "S2",
     "view": "Basin shore band",
-    "kb": 48,
-    "quality": 80
-  },
-  {
-    "file": "s2-biosphere__day.jpg",
-    "id": "s2-biosphere",
     "tod": "day",
     "weather": "dry",
+    "kb": 87
+  },
+  {
+    "file": "s2-biosphere__day__dry.jpg",
+    "id": "biosphere",
     "sector": "S2",
     "view": "Biosphère (far bank)",
-    "kb": 68,
-    "quality": 80
-  },
-  {
-    "file": "s2-calder__day.jpg",
-    "id": "s2-calder",
     "tod": "day",
     "weather": "dry",
+    "kb": 101
+  },
+  {
+    "file": "s2-calder__day__dry.jpg",
+    "id": "calder",
     "sector": "S2",
     "view": "Calder Trois disques",
-    "kb": 56,
-    "quality": 80
-  },
-  {
-    "file": "s2-casino-plaza__day.jpg",
-    "id": "s2-casino-plaza",
     "tod": "day",
     "weather": "dry",
+    "kb": 89
+  },
+  {
+    "file": "s2-casino__day__dry.jpg",
+    "id": "casino",
     "sector": "S2",
-    "view": "Casino plaza cue",
-    "kb": 54,
-    "quality": 80
-  },
-  {
-    "file": "s2-casino-straight__day.jpg",
-    "id": "s2-casino-straight",
+    "view": "Casino de Montréal",
     "tod": "day",
     "weather": "dry",
+    "kb": 98
+  },
+  {
+    "file": "s2-casino__day__fog.jpg",
+    "id": "casino",
+    "sector": "S2",
+    "view": "Casino de Montréal",
+    "tod": "day",
+    "weather": "fog",
+    "kb": 91
+  },
+  {
+    "file": "s2-casino__day__overcast.jpg",
+    "id": "casino",
+    "sector": "S2",
+    "view": "Casino de Montréal",
+    "tod": "day",
+    "weather": "overcast",
+    "kb": 90
+  },
+  {
+    "file": "s2-casino__dusk__dry.jpg",
+    "id": "casino",
+    "sector": "S2",
+    "view": "Casino de Montréal",
+    "tod": "dusk",
+    "weather": "dry",
+    "kb": 92
+  },
+  {
+    "file": "s2-casino-straight__day__dry.jpg",
+    "id": "casino-straight",
     "sector": "S2",
     "view": "Casino straight + basin",
-    "kb": 57,
-    "quality": 80
-  },
-  {
-    "file": "s2-casino__dawn.jpg",
-    "id": "s2-casino",
-    "tod": "dawn",
-    "weather": "dry",
-    "sector": "S2",
-    "view": "Casino de Montréal",
-    "kb": 58,
-    "quality": 80
-  },
-  {
-    "file": "s2-casino__day.jpg",
-    "id": "s2-casino",
     "tod": "day",
     "weather": "dry",
-    "sector": "S2",
-    "view": "Casino de Montréal",
-    "kb": 64,
-    "quality": 80
+    "kb": 88
   },
   {
-    "file": "s2-casino__dusk.jpg",
-    "id": "s2-casino",
-    "tod": "dusk",
-    "weather": "dry",
-    "sector": "S2",
-    "view": "Casino de Montréal",
-    "kb": 59,
-    "quality": 80
-  },
-  {
-    "file": "s2-ferris__day.jpg",
-    "id": "s2-ferris",
-    "tod": "day",
-    "weather": "dry",
+    "file": "s2-ferris__day__dry.jpg",
+    "id": "ferris",
     "sector": "S2",
     "view": "La Ronde ferris wheel",
-    "kb": 57,
-    "quality": 80
-  },
-  {
-    "file": "s2-floralies__day.jpg",
-    "id": "s2-floralies",
     "tod": "day",
     "weather": "dry",
+    "kb": 89
+  },
+  {
+    "file": "s2-floralies__day__dry.jpg",
+    "id": "floralies",
     "sector": "S2",
     "view": "Floralies parterres",
-    "kb": 54,
-    "quality": 80
-  },
-  {
-    "file": "s2-footbridge__day.jpg",
-    "id": "s2-footbridge",
     "tod": "day",
     "weather": "dry",
-    "sector": "S2",
-    "view": "Casino footbridge",
-    "kb": 62,
-    "quality": 80
+    "kb": 85
   },
   {
-    "file": "s2-footbridge__dusk.jpg",
-    "id": "s2-footbridge",
+    "file": "s2-footbridge__day__dry.jpg",
+    "id": "footbridge",
+    "sector": "S2",
+    "view": "Casino footbridge",
+    "tod": "day",
+    "weather": "dry",
+    "kb": 87
+  },
+  {
+    "file": "s2-footbridge__dusk__dry.jpg",
+    "id": "footbridge",
+    "sector": "S2",
+    "view": "Casino footbridge",
     "tod": "dusk",
     "weather": "dry",
-    "sector": "S2",
-    "view": "Casino footbridge",
-    "kb": 51,
-    "quality": 80
+    "kb": 72
   },
   {
-    "file": "s2-habitat__day.jpg",
-    "id": "s2-habitat",
-    "tod": "day",
-    "weather": "dry",
+    "file": "s2-habitat__day__dry.jpg",
+    "id": "habitat",
     "sector": "S2",
     "view": "Habitat 67",
-    "kb": 54,
-    "quality": 80
-  },
-  {
-    "file": "s2-hairpin__day.jpg",
-    "id": "s2-hairpin",
     "tod": "day",
     "weather": "dry",
-    "sector": "S2",
-    "view": "L'Épingle hairpin",
-    "kb": 62,
-    "quality": 80
+    "kb": 87
   },
   {
-    "file": "s2-hairpin__dusk.jpg",
-    "id": "s2-hairpin",
-    "tod": "dusk",
+    "file": "s2-hairpin__day__dry.jpg",
+    "id": "hairpin",
+    "sector": "S2",
+    "view": "L'Épingle hairpin",
+    "tod": "day",
     "weather": "dry",
-    "sector": "S2",
-    "view": "L'Épingle hairpin",
-    "kb": 54,
-    "quality": 80
+    "kb": 95
   },
   {
-    "file": "s2-hairpin__night.jpg",
-    "id": "s2-hairpin",
+    "file": "s2-hairpin__day__storm.jpg",
+    "id": "hairpin",
+    "sector": "S2",
+    "view": "L'Épingle hairpin",
+    "tod": "day",
+    "weather": "storm",
+    "kb": 49
+  },
+  {
+    "file": "s2-hairpin__day__wet.jpg",
+    "id": "hairpin",
+    "sector": "S2",
+    "view": "L'Épingle hairpin",
+    "tod": "day",
+    "weather": "wet",
+    "kb": 71
+  },
+  {
+    "file": "s2-hairpin__night__dry.jpg",
+    "id": "hairpin",
+    "sector": "S2",
+    "view": "L'Épingle hairpin",
     "tod": "night",
     "weather": "dry",
-    "sector": "S2",
-    "view": "L'Épingle hairpin",
-    "kb": 62,
-    "quality": 80
+    "kb": 86
   },
   {
-    "file": "s2-skyline__day.jpg",
-    "id": "s2-skyline",
+    "file": "s2-skyline__day__dry.jpg",
+    "id": "skyline",
+    "sector": "S2",
+    "view": "Downtown skyline",
     "tod": "day",
     "weather": "dry",
-    "sector": "S2",
-    "view": "Downtown skyline / Cartier truss",
-    "kb": 61,
-    "quality": 80
+    "kb": 109
   },
   {
-    "file": "s2-tyre-hairpin__day.jpg",
-    "id": "s2-tyre-hairpin",
-    "tod": "day",
-    "weather": "dry",
-    "sector": "S2",
-    "view": "Hairpin tyre walls",
-    "kb": 47,
-    "quality": 80
-  },
-  {
-    "file": "s3-backstraight__day.jpg",
-    "id": "s3-backstraight",
-    "tod": "day",
-    "weather": "dry",
+    "file": "s3-backstraight__day__dry.jpg",
+    "id": "backstraight",
     "sector": "S3",
     "view": "Back straight",
-    "kb": 41,
-    "quality": 80
-  },
-  {
-    "file": "s3-final-chicane__day.jpg",
-    "id": "s3-final-chicane",
     "tod": "day",
     "weather": "dry",
+    "kb": 68
+  },
+  {
+    "file": "s3-final-chicane__day__dry.jpg",
+    "id": "final-chicane",
     "sector": "S3",
     "view": "Final chicane",
-    "kb": 60,
-    "quality": 80
-  },
-  {
-    "file": "s3-pit-entry__day.jpg",
-    "id": "s3-pit-entry",
     "tod": "day",
     "weather": "dry",
+    "kb": 90
+  },
+  {
+    "file": "s3-pit-entry__day__dry.jpg",
+    "id": "pit-entry",
     "sector": "S3",
     "view": "Pit entry / kit complex",
-    "kb": 56,
-    "quality": 80
-  },
-  {
-    "file": "s3-woc__day.jpg",
-    "id": "s3-woc",
     "tod": "day",
     "weather": "dry",
-    "sector": "S3",
-    "view": "Wall of Champions",
-    "kb": 48,
-    "quality": 80
+    "kb": 99
   },
   {
-    "file": "s3-woc__dusk.jpg",
-    "id": "s3-woc",
-    "tod": "dusk",
+    "file": "s3-woc__day__dry.jpg",
+    "id": "woc",
+    "sector": "S3",
+    "view": "Wall of Champions",
+    "tod": "day",
     "weather": "dry",
-    "sector": "S3",
-    "view": "Wall of Champions",
-    "kb": 47,
-    "quality": 80
+    "kb": 89
   },
   {
-    "file": "s3-woc__night.jpg",
-    "id": "s3-woc",
+    "file": "s3-woc__day__rain.jpg",
+    "id": "woc",
+    "sector": "S3",
+    "view": "Wall of Champions",
+    "tod": "day",
+    "weather": "rain",
+    "kb": 58
+  },
+  {
+    "file": "s3-woc__night__dry.jpg",
+    "id": "woc",
+    "sector": "S3",
+    "view": "Wall of Champions",
     "tod": "night",
     "weather": "dry",
-    "sector": "S3",
-    "view": "Wall of Champions",
-    "kb": 43,
-    "quality": 80
-  },
-  {
-    "file": "s3-wood-stand__day.jpg",
-    "id": "s3-wood-stand",
-    "tod": "day",
-    "weather": "dry",
-    "sector": "S3",
-    "view": "Wood deck stand (s≈0.74)",
-    "kb": 52,
-    "quality": 80
+    "kb": 68
   }
 ]
