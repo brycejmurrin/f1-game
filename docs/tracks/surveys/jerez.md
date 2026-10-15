@@ -1,77 +1,69 @@
 # Jerez (`jerez`) — circuit survey (2026-10-14)
 
-**Live:** [Circuito de Jerez](https://brycejmurrin.github.io/f1-game/)  
-**Brief:** `docs/tracks/jerez.md`  
-**Def / dressing:** `js/circuits/jerez.js`, `js/circuits/scenery/jerez.js`  
-**Shots committed:** 37 JPEGs in `artifacts/shots/tracks/jerez/` (1280px, q≈80).
+**Brief:** `docs/tracks/jerez.md` · **Dressing:** `js/circuits/scenery/jerez.js`  
+**Shots:** 34 JPEGs in `artifacts/shots/tracks/jerez/` (1280px, q≈80, &lt;300 KB).  
+**Tooling:** `shot.mjs` on `cursor/shared-shot-tooling-5b45` (`--jpeg --present-timeout 90 --capture-retries 4 --wait 120`).
 
-## Summary
+## Fixes
 
-- Fixed two buried paddock/support motorhomes (`seatOk` + gap ladder); `verify-track` + `audit-circuit` green.
-- Weather matrix (night / overcast / rain / fog) deferred until shared shot batch tooling lands; **5 dusk/dry** landmark previews included from an earlier partial capture.
+Motorhome burial on paddock/Michelin grade (`seatOk` + `motorhomeAt`).
 
-## Audit
+## Backlog
 
-```
-verify-track: OK — 0 folds
-ground: buried 0, unsupported 0, flatCoplanar within baseline
-```
+Peluqui terrace coplanar; engine green verge; optional flood pass (`furniture.lamp: "none"`).
 
 ---
 
-## Panels — day dry (32 frames)
-
-### Start / finish
+## Panels — sectors (day · dry)
 
 | | | |
 |:---:|:---:|:---:|
-| ![ovni-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/landmark-ovni-orbit-day-dry.jpg)<br/>ovni-orbit · orbit · day · dry | ![pit-paddock-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/landmark-pit-paddock-orbit-day-dry.jpg)<br/>pit-paddock-orbit · orbit · day · dry | ![tower-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/landmark-tower-orbit-day-dry.jpg)<br/>tower-orbit · orbit · day · dry |
-| ![sf-eye · eye · day · dry](../../../artifacts/shots/tracks/jerez/sector-sf-eye-day-dry.jpg)<br/>sf-eye · eye · day · dry | ![sf-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/sector-sf-orbit-day-dry.jpg)<br/>sf-orbit · orbit · day · dry | ![sf-cinematic · cinematic · day · dry](../../../artifacts/shots/tracks/jerez/view-sf-cinematic-day-dry.jpg)<br/>sf-cinematic · cinematic · day · dry |
+| ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/sector-angel-orbit-day-dry.jpg)<br/>sector-angel-orbit-day-dry<br/>orbit · dry · day | ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/sector-climb-orbit-day-dry.jpg)<br/>sector-climb-orbit-day-dry<br/>orbit · dry · day | ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/sector-drysack-orbit-day-dry.jpg)<br/>sector-drysack-orbit-day-dry<br/>orbit · dry · day |
+| ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/sector-expo-orbit-day-dry.jpg)<br/>sector-expo-orbit-day-dry<br/>orbit · dry · day | ![trackside · dry · day](../../../artifacts/shots/tracks/jerez/sector-ferrari-trackside-day-dry.jpg)<br/>sector-ferrari-trackside-day-dry<br/>trackside · dry · day | ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/sector-lorenzo-orbit-day-dry.jpg)<br/>sector-lorenzo-orbit-day-dry<br/>orbit · dry · day |
+| ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/sector-michelin-orbit-day-dry.jpg)<br/>sector-michelin-orbit-day-dry<br/>orbit · dry · day | ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/sector-peluqui-orbit-day-dry.jpg)<br/>sector-peluqui-orbit-day-dry<br/>orbit · dry · day | ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/sector-sf-orbit-day-dry.jpg)<br/>sector-sf-orbit-day-dry<br/>orbit · dry · day |
+| ![trackside · dry · day](../../../artifacts/shots/tracks/jerez/sector-t1-trackside-day-dry.jpg)<br/>sector-t1-trackside-day-dry<br/>trackside · dry · day | | |
 
-### Expo / T1
-
-| | | |
-|:---:|:---:|:---:|
-| ![expo-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/sector-expo-orbit-day-dry.jpg)<br/>expo-orbit · orbit · day · dry | ![t1-trackside · trackside · day · dry](../../../artifacts/shots/tracks/jerez/sector-t1-trackside-day-dry.jpg)<br/>t1-trackside · trackside · day · dry | ![expo-cinematic · cinematic · day · dry](../../../artifacts/shots/tracks/jerez/view-expo-cinematic-day-dry.jpg)<br/>expo-cinematic · cinematic · day · dry |
-| ![t1-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/view-t1-orbit-day-dry.jpg)<br/>t1-orbit · orbit · day · dry | | | | |
-
-### Michelin / climb
+## Panels — landmarks (day · dry)
 
 | | | |
 |:---:|:---:|:---:|
-| ![climb-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/sector-climb-orbit-day-dry.jpg)<br/>climb-orbit · orbit · day · dry | ![michelin-eye · eye · day · dry](../../../artifacts/shots/tracks/jerez/sector-michelin-eye-day-dry.jpg)<br/>michelin-eye · eye · day · dry | ![michelin-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/sector-michelin-orbit-day-dry.jpg)<br/>michelin-orbit · orbit · day · dry |
-| ![michelin-orbit-wide · orbit · day · dry](../../../artifacts/shots/tracks/jerez/view-michelin-orbit-wide-day-dry.jpg)<br/>michelin-orbit-wide · orbit · day · dry | ![michelin-trackside · trackside · day · dry](../../../artifacts/shots/tracks/jerez/view-michelin-trackside-day-dry.jpg)<br/>michelin-trackside · trackside · day · dry | | |
+| ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/landmark-ovni-orbit-day-dry.jpg)<br/>landmark-ovni-orbit-day-dry<br/>orbit · dry · day | ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/landmark-pedrosa-orbit-day-dry.jpg)<br/>landmark-pedrosa-orbit-day-dry<br/>orbit · dry · day | ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/landmark-pit-paddock-orbit-day-dry.jpg)<br/>landmark-pit-paddock-orbit-day-dry<br/>orbit · dry · day |
+| ![orbit · dry · day](../../../artifacts/shots/tracks/jerez/landmark-tower-orbit-day-dry.jpg)<br/>landmark-tower-orbit-day-dry<br/>orbit · dry · day | | |
 
-### Dry Sack
+## Panels — hero views (weather & time of day)
 
-| | | |
-|:---:|:---:|:---:|
-| ![pedrosa-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/landmark-pedrosa-orbit-day-dry.jpg)<br/>pedrosa-orbit · orbit · day · dry | ![drysack-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/sector-drysack-orbit-day-dry.jpg)<br/>drysack-orbit · orbit · day · dry | ![drysack-trackside · trackside · day · dry](../../../artifacts/shots/tracks/jerez/sector-drysack-trackside-day-dry.jpg)<br/>drysack-trackside · trackside · day · dry |
-| ![drysack-cinematic · cinematic · day · dry](../../../artifacts/shots/tracks/jerez/view-drysack-cinematic-day-dry.jpg)<br/>drysack-cinematic · cinematic · day · dry | | | | |
-
-### Outfield / mid-lap
+### hero-ovni
 
 | | | |
 |:---:|:---:|:---:|
-| ![outfield-eye · eye · day · dry](../../../artifacts/shots/tracks/jerez/sector-outfield-eye-day-dry.jpg)<br/>outfield-eye · eye · day · dry | ![midlap-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/view-midlap-orbit-day-dry.jpg)<br/>midlap-orbit · orbit · day · dry | ![outfield-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/view-outfield-orbit-day-dry.jpg)<br/>outfield-orbit · orbit · day · dry |
+| ![orbit · fog · day](../../../artifacts/shots/tracks/jerez/hero-ovni-orbit-day-fog.jpg)<br/>hero-ovni-orbit-day-fog<br/>orbit · fog · day | ![orbit · rain · day](../../../artifacts/shots/tracks/jerez/hero-ovni-orbit-day-rain.jpg)<br/>hero-ovni-orbit-day-rain<br/>orbit · rain · day | ![orbit · dry · dusk](../../../artifacts/shots/tracks/jerez/hero-ovni-orbit-dusk-dry.jpg)<br/>hero-ovni-orbit-dusk-dry<br/>orbit · dry · dusk |
+| ![orbit · dry · night](../../../artifacts/shots/tracks/jerez/hero-ovni-orbit-night-dry.jpg)<br/>hero-ovni-orbit-night-dry<br/>orbit · dry · night | | |
 
-### Stadium
-
-| | | |
-|:---:|:---:|:---:|
-| ![stadium-peluqui-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/landmark-stadium-peluqui-orbit-day-dry.jpg)<br/>stadium-peluqui-orbit · orbit · day · dry | ![angel-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/sector-angel-orbit-day-dry.jpg)<br/>angel-orbit · orbit · day · dry | ![ferrari-trackside · trackside · day · dry](../../../artifacts/shots/tracks/jerez/sector-ferrari-trackside-day-dry.jpg)<br/>ferrari-trackside · trackside · day · dry |
-| ![peluqui-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/sector-peluqui-orbit-day-dry.jpg)<br/>peluqui-orbit · orbit · day · dry | ![angel-cinematic · cinematic · day · dry](../../../artifacts/shots/tracks/jerez/view-angel-cinematic-day-dry.jpg)<br/>angel-cinematic · cinematic · day · dry | ![ferrari-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/view-ferrari-orbit-day-dry.jpg)<br/>ferrari-orbit · orbit · day · dry |
-| ![peluqui-trackside · trackside · day · dry](../../../artifacts/shots/tracks/jerez/view-peluqui-trackside-day-dry.jpg)<br/>peluqui-trackside · trackside · day · dry | | | | |
-
-### Lorenzo / pit straight
+### hero-michelin
 
 | | | |
 |:---:|:---:|:---:|
-| ![lorenzo-marker-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/landmark-lorenzo-marker-orbit-day-dry.jpg)<br/>lorenzo-marker-orbit · orbit · day · dry | ![lorenzo-orbit · orbit · day · dry](../../../artifacts/shots/tracks/jerez/sector-lorenzo-orbit-day-dry.jpg)<br/>lorenzo-orbit · orbit · day · dry | ![lorenzo-trackside · trackside · day · dry](../../../artifacts/shots/tracks/jerez/view-lorenzo-trackside-day-dry.jpg)<br/>lorenzo-trackside · trackside · day · dry |
+| ![orbit · dry · dawn](../../../artifacts/shots/tracks/jerez/hero-michelin-orbit-dawn-dry.jpg)<br/>hero-michelin-orbit-dawn-dry<br/>orbit · dry · dawn | ![orbit · overcast · day](../../../artifacts/shots/tracks/jerez/hero-michelin-orbit-day-overcast.jpg)<br/>hero-michelin-orbit-day-overcast<br/>orbit · overcast · day | ![orbit · wet · day](../../../artifacts/shots/tracks/jerez/hero-michelin-orbit-day-wet.jpg)<br/>hero-michelin-orbit-day-wet<br/>orbit · wet · day |
+| ![orbit · dry · night](../../../artifacts/shots/tracks/jerez/hero-michelin-orbit-night-dry.jpg)<br/>hero-michelin-orbit-night-dry<br/>orbit · dry · night | | |
 
-## Panels — dusk dry (landmark previews, 5 frames)
+### hero-drysack
 
 | | | |
 |:---:|:---:|:---:|
-| ![drysack-orbit · orbit · dusk · dry](../../../artifacts/shots/tracks/jerez/landmark-drysack-orbit-dusk-dry.jpg)<br/>drysack-orbit · orbit · dusk · dry | ![lorenzo-orbit · orbit · dusk · dry](../../../artifacts/shots/tracks/jerez/landmark-lorenzo-orbit-dusk-dry.jpg)<br/>lorenzo-orbit · orbit · dusk · dry | ![michelin-orbit · orbit · dusk · dry](../../../artifacts/shots/tracks/jerez/landmark-michelin-orbit-dusk-dry.jpg)<br/>michelin-orbit · orbit · dusk · dry |
-| ![peluqui-orbit · orbit · dusk · dry](../../../artifacts/shots/tracks/jerez/landmark-peluqui-orbit-dusk-dry.jpg)<br/>peluqui-orbit · orbit · dusk · dry | ![sf-orbit · orbit · dusk · dry](../../../artifacts/shots/tracks/jerez/landmark-sf-orbit-dusk-dry.jpg)<br/>sf-orbit · orbit · dusk · dry | | |
+| ![orbit · overcast · day](../../../artifacts/shots/tracks/jerez/hero-drysack-orbit-day-overcast.jpg)<br/>hero-drysack-orbit-day-overcast<br/>orbit · overcast · day | ![orbit · storm · day](../../../artifacts/shots/tracks/jerez/hero-drysack-orbit-day-storm.jpg)<br/>hero-drysack-orbit-day-storm<br/>orbit · storm · day | ![orbit · dry · dusk](../../../artifacts/shots/tracks/jerez/hero-drysack-orbit-dusk-dry.jpg)<br/>hero-drysack-orbit-dusk-dry<br/>orbit · dry · dusk |
+| ![orbit · dry · night](../../../artifacts/shots/tracks/jerez/hero-drysack-orbit-night-dry.jpg)<br/>hero-drysack-orbit-night-dry<br/>orbit · dry · night | | |
+
+### hero-peluqui
+
+| | | |
+|:---:|:---:|:---:|
+| ![orbit · fog · day](../../../artifacts/shots/tracks/jerez/hero-peluqui-orbit-day-fog.jpg)<br/>hero-peluqui-orbit-day-fog<br/>orbit · fog · day | ![orbit · rain · day](../../../artifacts/shots/tracks/jerez/hero-peluqui-orbit-day-rain.jpg)<br/>hero-peluqui-orbit-day-rain<br/>orbit · rain · day | ![orbit · dry · dusk](../../../artifacts/shots/tracks/jerez/hero-peluqui-orbit-dusk-dry.jpg)<br/>hero-peluqui-orbit-dusk-dry<br/>orbit · dry · dusk |
+| ![orbit · dry · night](../../../artifacts/shots/tracks/jerez/hero-peluqui-orbit-night-dry.jpg)<br/>hero-peluqui-orbit-night-dry<br/>orbit · dry · night | | |
+
+### hero-lorenzo
+
+| | | |
+|:---:|:---:|:---:|
+| ![orbit · dry · dawn](../../../artifacts/shots/tracks/jerez/hero-lorenzo-orbit-dawn-dry.jpg)<br/>hero-lorenzo-orbit-dawn-dry<br/>orbit · dry · dawn | ![orbit · overcast · day](../../../artifacts/shots/tracks/jerez/hero-lorenzo-orbit-day-overcast.jpg)<br/>hero-lorenzo-orbit-day-overcast<br/>orbit · overcast · day | ![orbit · wet · day](../../../artifacts/shots/tracks/jerez/hero-lorenzo-orbit-day-wet.jpg)<br/>hero-lorenzo-orbit-day-wet<br/>orbit · wet · day |
+| ![orbit · dry · night](../../../artifacts/shots/tracks/jerez/hero-lorenzo-orbit-night-dry.jpg)<br/>hero-lorenzo-orbit-night-dry<br/>orbit · dry · night | | |
+
