@@ -333,8 +333,8 @@
           // Boat-bay door on the lake-facing wall
           addBox(stage, vadd(vadd(a.c, a.u, wallH * 0.42), a.r, -side * (w / 2 - 0.05)),
                  [0.15, wallH * 0.72, d * 0.55], [0.20, 0.19, 0.17], b);
-          // Timber launch ramp — foot on grade (was a.u −0.35 → buried).
-          seat.box(stage, vadd(vadd(a.c, a.r, -side * (w / 2 + 3)), a.t, 0),
+          // Timber launch ramp — foot on grade (was a.u −0.35 → buried; +0.06 u clears ~0.04 m).
+          seat.box(stage, vadd(vadd(vadd(a.c, a.r, -side * (w / 2 + 3)), a.t, 0), a.u, 0.06),
                    [5.5, 0.3, 6], [0.55, 0.48, 0.36], b);
           stage._mat = 0;
           // A couple of upturned hulls resting beside the shed
