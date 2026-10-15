@@ -1,99 +1,76 @@
 # Anderstorp (Scandinavian Raceway) — circuit survey
 
-**Date:** 2026-10-14  
+**Date:** 2026-10-15  
 **Brief:** `docs/tracks/anderstorp.md`  
-**Shots (committed):** `artifacts/shots/tracks/anderstorp/` — **30** JPEG frames (1280px max, q≈80).
+**Shots:** **36** JPEGs in `artifacts/shots/tracks/anderstorp/` (SwiftShader / TLX, `shot.mjs --batch`, `--present-timeout 90`, `--capture-retries 4`).
 
 ## Code map
 
-| Layer | Path | Role |
-|-------|------|------|
-| Circuit def | `js/circuits/anderstorp.js` | OSM centreline (~4.02 km), `theme: "green"`, `classic: true`, 8 turns, `terrainOuter: 110` |
-| Scenery | `js/circuits/scenery/anderstorp.js` | Blocks 0–20; runway `RW0–RW1`; four required `modelGroup` landmarks |
-| Landmarks | `tests/data/landmarks/anderstorp.json` | press stand, speaker tower, stations 1968, flight hangars |
+| Layer | Path |
+|-------|------|
+| Def | `js/circuits/anderstorp.js` — OSM ~4.02 km, `theme: green`, 8 turns |
+| Scenery | `js/circuits/scenery/anderstorp.js` — runway corridor, four `modelGroup` landmarks |
+| Landmarks | `tests/data/landmarks/anderstorp.json` |
 
-**Weather / TOD in game:** `G.raceWeather` — dry, wet, rain, overcast, fog (`js/race/race-settings.js`); `setTimeOfDay` — dawn, day, dusk, night. Lighting presets include `anderstorp|night|*` (`js/lighting/presets.js`). Circuit meta marks `night: false` but night TOD still runs for surveys.
+**Weather / TOD:** `dry`, `wet`, `rain`, `overcast`, `fog`, `storm` × `day`, `dawn`, `dusk`, `night` (`js/race/race-settings.js`, `__apex.weather` / `setTimeOfDay`). Def `night: false` — night is sky/fog only, no dedicated night race lighting.
 
-## Audits (circuit-only fixes on branch)
+## Audits & fixes (circuit-only)
 
 | Check | Result |
 |-------|--------|
-| `verify-track` | OK, 0 surface folds |
-| float / clip | 0 |
-| coplanar | 0 spots (baseline cap remains 2 — not lowered on this branch) |
-| ground | buried 2 (shared `city.js` detail), flatCoplanar within baseline |
+| `verify-track` | OK |
+| `audit-circuit` | float/clip 0; coplanar 0 (cap 2, baseline unchanged) |
 
-**Scenery fixes (this PR):** extended `FOOT_SPAN` for S/F and T8 stands; removed duplicate wrapped hardstand patch; removed redundant T8 `spectatorHill`.
+Scenery: `FOOT_SPAN` for S/F + T8 stands; removed duplicate hardstand patch; removed T8 `spectatorHill`.
 
-## Backlog (weather / lighting)
+## Lighting backlog
 
-| ID | Issue | Seen in |
-|----|--------|---------|
-| L1 | **Night floodlights** sparse on Flight Straight / forest sections (`lamp: "none"` in def) | `wx-*-night-dry-*` |
-| L2 | **Fog** thickens horizon; runway edge paint low contrast | `wx-*-day-fog-*` |
-| L3 | **Rain/wet** darkens pine mass; wet sheen on apron OK | `wx-*-day-rain/wet-*` |
-| L4 | **UI track detail** may not assert selected circuit in automation | `ui-track-detail.jpg` |
-| L5 | **T8 / hangars weather matrix** incomplete until shared batch tooling lands | only S/F + runway + one hangars dusk frame |
+| Issue | Frames |
+|-------|--------|
+| Sparse floodlights on Flight Straight (`furniture.lamp: "none"`) | `*-dry-night` heroes |
+| Fog lowers runway marking contrast | `*-fog-day` |
+| Storm/rain darken pine mass (expected) | `*-storm-day`, `*-rain-day` |
 
 ---
 
 ## Panel grids
 
-Relative image root: `../../../artifacts/shots/tracks/anderstorp/`
+Path prefix: `../../../artifacts/shots/tracks/anderstorp/`
 
-### UI
-
-| | | |
-|:---:|:---:|:---:|
-| Circuit select<br/>![Circuit select](../../../artifacts/shots/tracks/anderstorp/ui-circuit-select.jpg) | Track detail modal<br/>![Track detail](../../../artifacts/shots/tracks/anderstorp/ui-track-detail.jpg) | |
-
-### Sector 1 — T1, paddock, Södra, bog (day, dry)
+### UI (day · dry)
 
 | | | |
 |:---:|:---:|:---:|
-| T1 trackside<br/>day · dry<br/>![T1](../../../artifacts/shots/tracks/anderstorp/sector1-t1-day-dry-trackside.jpg) | Infield paddock orbit<br/>day · dry<br/>![Paddock](../../../artifacts/shots/tracks/anderstorp/sector1-paddock-day-dry-orbit.jpg) | Södra Kurvan trackside<br/>day · dry<br/>![Södra](../../../artifacts/shots/tracks/anderstorp/sector1-sodra-day-dry-trackside.jpg) |
-| Anderstorpsån bog eye<br/>day · dry<br/>![Bog](../../../artifacts/shots/tracks/anderstorp/sector1-bog-aan-day-dry-eye.jpg) | | |
+| Circuit select · orbit n/a · **day** · **dry**<br/>![01](../../../artifacts/shots/tracks/anderstorp/01-ui-circuit-select-dry-day.jpg) | Track detail · **day** · **dry**<br/>![02](../../../artifacts/shots/tracks/anderstorp/02-ui-track-detail-dry-day.jpg) | |
 
-### Sector 2 — Opel, T5, scrub, runway entry (day, dry)
-
-| | | |
-|:---:|:---:|:---:|
-| Opel Kurvan trackside<br/>day · dry<br/>![Opel](../../../artifacts/shots/tracks/anderstorp/sector2-opel-day-dry-trackside.jpg) | Turn 5 orbit<br/>day · dry<br/>![T5](../../../artifacts/shots/tracks/anderstorp/sector2-t5-day-dry-orbit.jpg) | Infield scrub → hangars orbit<br/>day · dry<br/>![Scrub](../../../artifacts/shots/tracks/anderstorp/sector2-scrub-hangars-day-dry-orbit.jpg) |
-| Runway entry orbit<br/>day · dry<br/>![Runway entry](../../../artifacts/shots/tracks/anderstorp/sector2-runway-entry-day-dry-orbit.jpg) | | |
-
-### Sector 3 — S/F, hangars, runway far, T8 (day, dry)
+### Lap coverage (day · dry)
 
 | | | |
 |:---:|:---:|:---:|
-| S/F grandstands orbit<br/>day · dry<br/>![S/F stands](../../../artifacts/shots/tracks/anderstorp/sector3-sf-grandstands-day-dry-orbit.jpg) | Landmarks eye (press/tower)<br/>day · dry<br/>![Landmarks](../../../artifacts/shots/tracks/anderstorp/sector3-sf-landmarks-day-dry-eye.jpg) | Pit garages orbit<br/>day · dry<br/>![Pit garages](../../../artifacts/shots/tracks/anderstorp/sector3-pit-garages-day-dry-orbit.jpg) |
-| Flight hangars eye<br/>day · dry<br/>![Hangars](../../../artifacts/shots/tracks/anderstorp/sector3-flight-hangars-day-dry-eye.jpg) | Runway far trackside<br/>day · dry<br/>![Runway far](../../../artifacts/shots/tracks/anderstorp/sector3-runway-far-day-dry-trackside.jpg) | Off-runway T7 trackside<br/>day · dry<br/>![Off runway](../../../artifacts/shots/tracks/anderstorp/sector3-off-runway-day-dry-trackside.jpg) |
-| T8 terrace orbit<br/>day · dry<br/>![T8](../../../artifacts/shots/tracks/anderstorp/sector3-t8-terrace-day-dry-orbit.jpg) | | |
+| S/F grandstands · **orbit** · dry · day<br/>![03](../../../artifacts/shots/tracks/anderstorp/03-sf-grandstands-orbit-dry-day.jpg) | Landmarks · **eye** · dry · day<br/>![04](../../../artifacts/shots/tracks/anderstorp/04-sf-landmarks-eye-dry-day.jpg) | T1 · **trackside** · dry · day<br/>![05](../../../artifacts/shots/tracks/anderstorp/05-t1-trackside-dry-day.jpg) |
+| Paddock · **orbit** · dry · day<br/>![06](../../../artifacts/shots/tracks/anderstorp/06-paddock-orbit-dry-day.jpg) | Södra · **trackside** · dry · day<br/>![07](../../../artifacts/shots/tracks/anderstorp/07-sodra-trackside-dry-day.jpg) | Bog · **eye** · dry · day<br/>![08](../../../artifacts/shots/tracks/anderstorp/08-bog-eye-dry-day.jpg) |
+| Opel · **trackside** · dry · day<br/>![09](../../../artifacts/shots/tracks/anderstorp/09-opel-trackside-dry-day.jpg) | T5 · **orbit** · dry · day<br/>![10](../../../artifacts/shots/tracks/anderstorp/10-t5-orbit-dry-day.jpg) | Runway entry · **orbit** · dry · day<br/>![11](../../../artifacts/shots/tracks/anderstorp/11-runway-entry-orbit-dry-day.jpg) |
+| Hangars · **eye** · dry · day<br/>![12](../../../artifacts/shots/tracks/anderstorp/12-hangars-eye-dry-day.jpg) | Runway far · **trackside** · dry · day<br/>![13](../../../artifacts/shots/tracks/anderstorp/13-runway-far-trackside-dry-day.jpg) | T8 terrace · **orbit** · dry · day<br/>![14](../../../artifacts/shots/tracks/anderstorp/14-t8-terrace-orbit-dry-day.jpg) |
 
-### Weather / lighting — Start/finish hero (orbit)
-
-| | | |
-|:---:|:---:|:---:|
-| dusk · dry<br/>![S/F dusk](../../../artifacts/shots/tracks/anderstorp/wx-sf-dusk-dry-orbit.jpg) | night · dry<br/>![S/F night](../../../artifacts/shots/tracks/anderstorp/wx-sf-night-dry-orbit.jpg) | overcast · day<br/>![S/F overcast](../../../artifacts/shots/tracks/anderstorp/wx-sf-day-overcast-orbit.jpg) |
-| wet · day<br/>![S/F wet](../../../artifacts/shots/tracks/anderstorp/wx-sf-day-wet-orbit.jpg) | rain · day<br/>![S/F rain](../../../artifacts/shots/tracks/anderstorp/wx-sf-day-rain-orbit.jpg) | fog · day<br/>![S/F fog](../../../artifacts/shots/tracks/anderstorp/wx-sf-day-fog-orbit.jpg) |
-
-### Weather / lighting — Flight Straight hero (orbit)
+### Hero — Start/finish (orbit)
 
 | | | |
 |:---:|:---:|:---:|
-| dusk · dry<br/>![Runway dusk](../../../artifacts/shots/tracks/anderstorp/wx-runway-dusk-dry-orbit.jpg) | night · dry<br/>![Runway night](../../../artifacts/shots/tracks/anderstorp/wx-runway-night-dry-orbit.jpg) | overcast · day<br/>![Runway overcast](../../../artifacts/shots/tracks/anderstorp/wx-runway-day-overcast-orbit.jpg) |
-| wet · day<br/>![Runway wet](../../../artifacts/shots/tracks/anderstorp/wx-runway-day-wet-orbit.jpg) | rain · day<br/>![Runway rain](../../../artifacts/shots/tracks/anderstorp/wx-runway-day-rain-orbit.jpg) | fog · day<br/>![Runway fog](../../../artifacts/shots/tracks/anderstorp/wx-runway-day-fog-orbit.jpg) |
+| dry · **dawn**<br/>![15](../../../artifacts/shots/tracks/anderstorp/15-hero-sf-orbit-dry-dawn.jpg) | dry · **dusk**<br/>![16](../../../artifacts/shots/tracks/anderstorp/16-hero-sf-orbit-dry-dusk.jpg) | dry · **night**<br/>![17](../../../artifacts/shots/tracks/anderstorp/17-hero-sf-orbit-dry-night.jpg) |
+| **overcast** · day<br/>![18](../../../artifacts/shots/tracks/anderstorp/18-hero-sf-orbit-overcast-day.jpg) | **wet** · day<br/>![19](../../../artifacts/shots/tracks/anderstorp/19-hero-sf-orbit-wet-day.jpg) | **rain** · day<br/>![20](../../../artifacts/shots/tracks/anderstorp/20-hero-sf-orbit-rain-day.jpg) |
+| **fog** · day<br/>![21](../../../artifacts/shots/tracks/anderstorp/21-hero-sf-orbit-fog-day.jpg) | **storm** · day<br/>![22](../../../artifacts/shots/tracks/anderstorp/22-hero-sf-orbit-storm-day.jpg) | |
 
-### Weather / lighting — Hangars (partial matrix)
+### Hero — Flight Straight (orbit)
 
 | | | |
 |:---:|:---:|:---:|
-| hangars eye · dusk · dry<br/>![Hangars dusk](../../../artifacts/shots/tracks/anderstorp/wx-hangars-dusk-dry-eye.jpg) | | |
+| dry · **dawn**<br/>![23](../../../artifacts/shots/tracks/anderstorp/23-hero-runway-orbit-dry-dawn.jpg) | dry · **dusk**<br/>![24](../../../artifacts/shots/tracks/anderstorp/24-hero-runway-orbit-dry-dusk.jpg) | dry · **night**<br/>![25](../../../artifacts/shots/tracks/anderstorp/25-hero-runway-orbit-dry-night.jpg) |
+| **overcast** · day<br/>![26](../../../artifacts/shots/tracks/anderstorp/26-hero-runway-orbit-overcast-day.jpg) | **wet** · day<br/>![27](../../../artifacts/shots/tracks/anderstorp/27-hero-runway-orbit-wet-day.jpg) | **rain** · day<br/>![28](../../../artifacts/shots/tracks/anderstorp/28-hero-runway-orbit-rain-day.jpg) |
+| **fog** · day<br/>![29](../../../artifacts/shots/tracks/anderstorp/29-hero-runway-orbit-fog-day.jpg) | **storm** · day<br/>![30](../../../artifacts/shots/tracks/anderstorp/30-hero-runway-orbit-storm-day.jpg) | |
 
----
+### Hero — Hangars (eye) & T8 (orbit)
 
-## Ranked improvements (future)
-
-1. Complete T8 + hangars weather grid after shared survey shot tooling PR.  
-2. Sparse night lamps on runway corridor (`furniture.lamp: "none"`).  
-3. Shared `building()` footing bury (2 prims) — engine or per-building opts.  
-4. Historical halfway F1 pits — documented UNCERTAIN, not built.
+| | | |
+|:---:|:---:|:---:|
+| hangars · dry · **dusk**<br/>![31](../../../artifacts/shots/tracks/anderstorp/31-hero-hangars-eye-dry-dusk.jpg) | hangars · dry · **night**<br/>![32](../../../artifacts/shots/tracks/anderstorp/32-hero-hangars-eye-dry-night.jpg) | hangars · **wet** · day<br/>![33](../../../artifacts/shots/tracks/anderstorp/33-hero-hangars-eye-wet-day.jpg) |
+| hangars · **storm** · day<br/>![34](../../../artifacts/shots/tracks/anderstorp/34-hero-hangars-eye-storm-day.jpg) | T8 · dry · **dusk**<br/>![35](../../../artifacts/shots/tracks/anderstorp/35-hero-t8-orbit-dry-dusk.jpg) | T8 · dry · **night**<br/>![36](../../../artifacts/shots/tracks/anderstorp/36-hero-t8-orbit-dry-night.jpg) |
