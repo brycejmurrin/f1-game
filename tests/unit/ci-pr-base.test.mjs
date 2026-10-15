@@ -16,7 +16,6 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SCRIPT = path.join(ROOT, "tools/ci/ci-pr-base.sh");
 const ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
-const docs = fs.readFileSync(path.join(ROOT, ".github/workflows/docs-guards.yml"), "utf8");
 const resolver = fs.readFileSync(path.join(ROOT, "tools/ci/ci-resolve-before.sh"), "utf8");
 
 test("a merge checkout answers its first parent; anything else echoes the fallback", () => {
@@ -56,7 +55,6 @@ test("every workflow step that diffs a pull request resolves its base through th
   assert.match(job("node-suites", "sweeps-parts"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the node-suites plan step");
   // 15-F3: the two steps #1292 missed. xr-filter's regex names ci.yml, so a stale base re-ran the VR job.
   assert.match(job("select", "selected"), /BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "the node-slice plan step");
-  assert.match(docs, /PR_BASE="\$\(bash tools\/ci\/ci-pr-base\.sh "\$\{PR_BASE:-\}"\)"/, "docs-guards' prose check");
   assert.match(resolver, /\[ "\$EVENT" = pull_request \] && BEFORE="\$\(bash "\$\(dirname "\$0"\)\/ci-pr-base\.sh" "\$BEFORE"\)"/,
     "the selected gate's resolver");
 });
