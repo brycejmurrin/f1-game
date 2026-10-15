@@ -163,7 +163,7 @@
         ]
       },
       {
-        "matcher": "^mcp__github__(enable_pr_auto_merge|merge_pull_request|update_pull_request|actions_run_trigger)$",
+        "matcher": "^mcp__github__(enable_pr_auto_merge|merge_pull_request|update_pull_request)$",
         "hooks": [
           {
             "type": "command",

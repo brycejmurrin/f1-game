@@ -99,9 +99,6 @@ const lazyBundles = LazyBundles.create({
     flyingStart = FlyingStart.create(G, {
       realRace: () => !!(typeof realRace !== "undefined" && realRace && realRace.status().active),
     });
-    jumpStartPenalty = JumpStartPenalty.create(G, {
-      autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
-    });
   },
 });
 const { SCENERY_DIR, sceneryResident, ensureCircuit, ensureScenery, ensureTrackBuild, ensureDataHub, ensureNet, ensureAudio, ensureRaceSession, wantAgentSurface, loadAgentSurface, bootAgentSurface } = lazyBundles;
@@ -1909,7 +1906,6 @@ function redFlagRestart() {
     const rh = DriverRatings.hash32(simSeed() + ":restart:" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (rh & 0xffff) / 65536);
     c.launchOn = !c.human;
-    c.jumpStartFined = false; c.penaltyWhy = null;
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   seedPlayerPose();
@@ -1969,7 +1965,7 @@ function gridUp(preOrder) {
     OvertakeMode.reset(c); c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finPos = 0; c.retired = false; c.dnf = null; c.dnfAt = null; c.dnfWhy = null; c._coastHeld = undefined;   // last race's classification: makeCars' values (CarFields declares _coastHeld; a delete would make the car a dictionary); a race re-arms via armReliability
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.penaltyWhy = null; c.jumpStartFined = false; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.qualiCut = false; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0; c.errCount = 0; Damage.reset(c);   // mistakes THIS race — the instrument's denominator, cleared only by a NEW race
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.digEscHeld = false; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
@@ -3631,9 +3627,6 @@ let raceRadio = RaceRadio.create(G);      // LAZY_RACE_SESSION — recreated on 
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const realRace = RealRace.create(G);      // a real Grand Prix replayed from its timing script (js/race/real-race.js)
 let flyingStart = FlyingStart.create(G, { realRace: () => realRace.status().active });   // LAZY_RACE_SESSION
-var jumpStartPenalty = JumpStartPenalty.create(G, {
-  autoThrottle, inputOf, launchT0: () => launchT0, soundOn: () => soundOn, isQuali, isTimeTrial,
-});   // LAZY_RACE_SESSION — recreated in onRaceSessionReady
 titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G),
   director = Director.create(G, () => !realRace.isWatch() && !replayBuf.isScrubbing()),
@@ -4585,7 +4578,6 @@ function update(dt) {
       // every later race and suppresses quali flying laps. Ledger 2026-09-22.
       const wasRestart = restartPending;
       restartPending = false;
-      for (const c of cars) jumpStartPenalty.tickAtGreen(c);
       // Nothing consumes RECOVER/shift/boost edges before green, so a tap on the grid fired at lights-out (a free ~58 km/h re-place, or 2nd gear with no drive).
       Input.clearDriveEdges();
       announce("LIGHTS OUT!", 1.4, "race");
@@ -4662,9 +4654,6 @@ function update(dt) {
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars);
   for (const c of cars) updateCar(c, dt, ranked);
-  if (jumpStartPenalty.reactWindowOpen()) {
-    for (const c of cars) jumpStartPenalty.tickReaction(c);
-  }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
   collide.resolveCollisions(ranked, dt);
@@ -5414,7 +5403,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // headway never held the car (it hovered at the edge, uncapped), so queue
     // pressure never built and a stuck car never got impatient.
     const followR = blocker ? AiDrive.followGap(aiT, !!track.street, c.speed, c.passOf || c.atkOn || c.towing > 0 ? 1 : c.atkWant ? 0.6 : 0, c.team, c.seat, blocker, c.houseStats, (c.runT || 0) + AiDrive.startGapT(c.calm = AiDrive.startCalm(c.launchOn, c.calmUntil, raceT))) : 0;
-    const qWin = Math.max(16, followR + 6 + AiDrive.startQWinBonus(c.calm, raceT - launchT0));
+    const qWin = Math.max(16, followR + 6);
     const capBlocks = blocker && blockerGap < qWin &&
       !(blocker === c.passOf && Math.abs(c.x - blocker._snapX) >= 1.8);
     if (blocker && blockerGap < qWin) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)

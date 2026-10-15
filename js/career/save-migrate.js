@@ -308,19 +308,7 @@ const SaveMigrate = (function () {
     return season;
   }
 
-  // SaveSchemaRegistry career validator: clone before migrateCareer because the
-  // ladder mutates in place and a validation pass must not touch live cache data.
-  function validateCareerSave(v) {
-    if (v == null) return true;
-    if (typeof v !== "object" || Array.isArray(v)) return false;
-    try {
-      const c = JSON.parse(JSON.stringify(v));
-      return migrateCareer(c) !== null;
-    } catch (_) { return false; }
-  }
-
   return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V, tallyOf,
-           validateCareerSave,
            LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT }) };
 })();
 Object.freeze(SaveMigrate);

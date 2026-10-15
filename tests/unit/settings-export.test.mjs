@@ -237,7 +237,7 @@ const POISON = {
   "apex26.customTeam": JSON.stringify({ id: "custom", name: "X", drivers: [{ name: "You", code: "YOU", num: 99 }] }),
   "apex26.career.driver.0": JSON.stringify({ money: 1 }),
   "apex26.season": JSON.stringify([1, 2]),
-  "apex26.ttlb.monza": JSON.stringify([{ t: 80, teamId: "mclaren", code: "NOR", name: "Test" }]),
+  "apex26.ttlb.monza": JSON.stringify([80]),
   "apex26.ghost.v1": "xxx",
   "apex26.daily.v1": JSON.stringify({ best: 1 }),
   "apex26.spotify.token": "SECRET",
@@ -329,14 +329,8 @@ test("the binding tables count as changed by Input's word, not by value", () => 
 test("nothing outside the allowlist leaks, whatever the store holds", () => {
   const { collect } = boot({ disk: POISON });
   for (const mode of ["changes", "all"]) {
-    const file = collect(mode);
-    const { excluded: _ex, ttlb: _tt, ...rest } = file;
-    const scrubbed = JSON.stringify(rest);
-    assert.ok(!/SECRET|parts|livery|setup\.|customTeam|career|ghost|daily|spotify|turn|nostr|envProbeOff|gfxWgxFail|crashStrikes|wss:/.test(scrubbed), mode + " mentions an excluded key");
-    if (mode === "all") {
-      assert.ok(file.ttlb && file.ttlb.monza, "poison ttlb board exports in the optional section");
-      assert.ok(!/"apex26\.ttlb/.test(JSON.stringify(file)), "raw storage keys never appear in the file");
-    }
+    const text = JSON.stringify(collect(mode));
+    assert.ok(!/SECRET|parts|livery|setup\.|customTeam|career|ttlb|ghost|daily|spotify|turn|nostr|envProbeOff|gfxWgxFail|crashStrikes|wss:/.test(text.replace(/"excluded":"[^"]*"/, "")), mode + " mentions an excluded key");
   }
 });
 
@@ -536,7 +530,7 @@ test("throwing storage is reported as failed for settings and garage imports", (
   const settings = target.loadSettings({ format: "apex26-settings-v1", settings: {
     audio: { volMusic: 0.4 }, camera: { cockpitHalo: "0" }, display: { gfxBackend: null },
   } });
-  assert.deepEqual(settings, { ok: true, applied: 0, skipped: 0, failed: 3, rejectedTtlb: 0, reason: null });
+  assert.deepEqual(settings, { ok: true, applied: 0, skipped: 0, failed: 3, reason: null });
   const garage = target.loadGarage({ format: "apex26-garage-v1", garage: { "parts.mercedes": { wing: 3 } } });
   assert.deepEqual(garage, { ok: true, applied: 0, skipped: 0, failed: 1, reason: null });
 });

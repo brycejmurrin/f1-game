@@ -67,7 +67,7 @@ test("ci.yml: only `green` narrows the node plan and the sweeps on a push; the t
   assert.match(nodeJob, /permissions:\n\s+contents: read\n\s+actions: read/, "base-green needs actions:read");
   // The sweeps job sits out the deploy push (its `if:`), so its circuit lane
   // needs no lookup: a pull request, or the train whose before_sha is live.
-  const sweeps = ci.slice(ci.indexOf("\n  sweeps:\n"), ci.indexOf("\n  sweeps-roll-up:\n"));
+  const sweeps = ci.slice(ci.indexOf("\n  sweeps:\n"), ci.indexOf("\n  ship-filter:\n"));
   assert.match(sweeps, /if \[ "\$CALLED" = true \] \|\| \[ "\$EVENT" = pull_request \]; then SCOPE_OK=true; fi/);
   assert.doesNotMatch(sweeps, /bash tools\/ci\/base-green\.sh/, "the sweeps job never runs on a push; no lookup there");
 });

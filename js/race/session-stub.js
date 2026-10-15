@@ -137,12 +137,3 @@ var FlyingStart = {
   create: () => ({ update: function () {}, stop: function () {}, owns: () => false, active: () => false }),
   runUpMetres: () => 0,
 };
-
-var JumpStartPenalty = {
-  _stub: true,
-  create: () => ({
-    tickAtGreen: function () {},
-    tickReaction: function () {},
-    reactWindowOpen: () => false,
-  }),
-};

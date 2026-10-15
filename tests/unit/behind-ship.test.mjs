@@ -70,10 +70,8 @@ test("CLI always exits 0 even when over threshold or unresolved", () => {
 
 test("guards job wires behind-ship as a non-blocking PR step", () => {
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
-  // Since 2026-10-15 the step runs at the end of tooling B (the `Structural
-  // guards` aggregator checks out nothing); it is still a Structural guards step.
-  const guards = yml.split("\n  guards-b:\n")[1]?.split(/^  [a-z][\w-]*:$/m)[0] || "";
-  assert.match(guards, /behind-ship\.mjs/, "Structural guards (tooling B) must run behind-ship.mjs");
+  const guards = yml.split("\n  guards:\n")[1]?.split(/^  [a-z][\w-]*:$/m)[0] || "";
+  assert.match(guards, /behind-ship\.mjs/, "Structural guards must run behind-ship.mjs");
   assert.match(guards, /How far behind ship\?/, "step must be named");
   assert.match(guards, /if: github\.event_name == 'pull_request'/,
     "behind-ship is PR-only (ship-push already IS ship)");
