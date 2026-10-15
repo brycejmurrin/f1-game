@@ -1068,7 +1068,7 @@ const WGX = (function () {
     // BlitU tone lanes (_blitParams): the stand-in the fallback blit and the boot
     // smoke tests resolve with — the knob defaults, Narkowicz at white point 1.
     const _TONE_IDS = ["acesA", "acesB", "acesC", "acesD", "acesE", "whitePoint"];
-    const _TONE_STANDIN = Object.freeze({ acesA: 2.51, acesB: 0.03, acesC: 2.43, acesD: 0.59, acesE: 0.14, whitePoint: 1 });
+    const _TONE_STANDIN = Object.freeze({ acesA: 2.51, acesB: 0.03, acesC: 2.43, acesD: 0.59, acesE: 0.12, whitePoint: 1 });
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
     const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
     const _projZ01  = new Float32Array(16);   // Z01·P scratch (off-axis garage/setup)

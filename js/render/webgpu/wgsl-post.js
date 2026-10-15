@@ -508,7 +508,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   //      gain        : vec4<f32>  off 208   (RGB gain, carReflect)
   //      aces        : vec4<f32>  off 224   (acesA, acesB, acesC, acesD) — ACES
   //                                          TONE CURVE knobs; defaults 2.51/0.03/
-  //                                          2.43/0.59 (+ acesE 0.14 in tuneFx.z)
+  //                                          2.43/0.59 (+ acesE 0.12 in tuneFx.z)
   //      dirtFx      : vec4<f32>  off 240   (lensDirt, hazeU, hazeV, hazeStr) —
   //                                          LENS DIRT veil + heat-haze UV/str;
   //                                          samples binding(6) dirtTex grime map

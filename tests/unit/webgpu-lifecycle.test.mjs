@@ -799,10 +799,10 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   let composite = h.writes.filter((write) => write.buffer === compositeBuffer).at(-1).values;
   assert.equal(composite[31], 0.5);
   assert.ok(Math.abs(composite[32] - 0.35) < 1e-6);
-  // tuneFx.y/z/w = FLARE CORE STREAK (0.5) + ACES tone-curve e (0.14) + FLARE
+  // tuneFx.y/z/w = FLARE CORE STREAK (0.5) + ACES tone-curve e (0.12) + FLARE
   // STREAK width (7.0) defaults.
   assert.ok(Math.abs(composite[33] - 0.5) < 1e-6, "flareStreak2 default in tuneFx.y (float 33)");
-  assert.ok(Math.abs(composite[34] - 0.14) < 1e-6, "acesE default in tuneFx.z (float 34)");
+  assert.ok(Math.abs(composite[34] - 0.12) < 1e-6, "acesE default in tuneFx.z (float 34)");
   assert.ok(Math.abs(composite[35] - 7.0) < 1e-6, "flareStreak default in tuneFx.w (float 35)");
   assert.deepEqual(composite.slice(36, 44), [0, 0, 0, 0, 0, 0, 0, 0]);
   assert.deepEqual(composite.slice(44, 48), [0, 0, 0, 0], "lift RGB + wetness pad");

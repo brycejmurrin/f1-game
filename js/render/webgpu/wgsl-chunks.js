@@ -51,7 +51,7 @@ fn fbm(p_in: vec2<f32>) -> f32 {
   //    by the sky (which outputs HDR straight to an LDR swapchain here), but
   //    included as the seed of the shared post-math the Composite port will use.
   // Coefficients are passed in (TONE CURVE knobs on the composite and mirror
-  // paths; the fallback BLIT passes the shipped defaults). Defaults 2.51/0.03/2.43/0.59/0.14
+  // paths; the fallback BLIT passes the shipped defaults). Defaults 2.51/0.03/2.43/0.59/0.12
   // reproduce the Narkowicz curve byte-for-byte. e is floored >0 by the slider
   // min so the denominator can't reach 0 for x>=0.
   // Surface-family hash/noise (GLXChunks.surfaceNoise / ignoise). Distinct from
