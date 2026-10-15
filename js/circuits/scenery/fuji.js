@@ -209,7 +209,7 @@
         // contrast, not brightness, is what makes a cap read.
         addMountain(stage, [fx, FUJI_BASE, fz], FUJI_W * 0.5, FUJI_H, {
           seg: 24, seed: 11, rough: 0.05, snowline: 0.50,
-          snow: [0.97, 0.98, 1.00], rock: [0.30, 0.27, 0.32], forest: [0.12, 0.20, 0.19],
+          snow: [0.90, 0.95, 1.00], rock: [0.30, 0.27, 0.32], forest: [0.12, 0.20, 0.19],
         });
       };
       modelGroup("fuji-mount-fuji", {
@@ -564,12 +564,13 @@
           }
         }
       });
-      // Hazed cedar backdrop mass — 14 (was 30); outfield only past 420 m.
+      // Hazed cedar backdrop mass — 14 (was 30); outfield only past 420 m. Low and
+      // dark blue-green: at 34-60 m and bright green they read as pyramids.
       for (let i = 0; i < 14; i++) {
         const f = 0.25 + (i / 14) * 0.72, k = K(f), h = hash(i * 9.7);
         backdrop(k, -1, 430 + h * 160,
-          [110 + h * 70, 34 + h * 26, 80 + h * 40],
-          [0.14 + h * 0.03, 0.28 + h * 0.05, 0.18 + h * 0.03]);
+          [140 + h * 90, 20 + h * 14, 90 + h * 40],
+          [0.09 + h * 0.02, 0.17 + h * 0.03, 0.17 + h * 0.02]);
       }
 
       // 14. BARRIERS, POSTS AND CAMERAS — the continuous furniture pass.
