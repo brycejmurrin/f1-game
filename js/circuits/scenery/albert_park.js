@@ -43,7 +43,7 @@
       const WATER  = [0.20, 0.45, 0.62];
       const WHITE  = [0.92, 0.92, 0.92], RED = [0.80, 0.15, 0.15];
       {
-        const a = anchor(k(0.145), 1, 62);
+        const a = anchor(k(0.145), -1, 62);
         if (!onTrack(a.c[0], a.c[2], 30)) {
           const b = [a.r, a.u, a.t];
           const PALE  = [0.86, 0.86, 0.84];
@@ -180,7 +180,10 @@
         [0.50, 350, 22, 190, 18, [0.30, 0.38, 0.50]],  // eastern mid hero
         [0.44, 375, 20, 170, 12, [0.34, 0.42, 0.54]],  // depth filler behind Eureka
       ]) {
-        tower(k(s), -1, dist, bw, th, { col, seg: 8,
+        // The three mid heroes are windowed blocks (lit at dusk/night); Eureka
+        // and the slab stay silhouette towers (mast / dark slab).
+        if (th <= 210) building(k(s), -1, dist - bw / 2, bw, th, bw, { wall: col, lit: true });
+        else tower(k(s), -1, dist, bw, th, { col, seg: 8,
           cap: true, capCol: [0.20, 0.26, 0.36], mast });
       }
       // Thin haze silhouette band — distant mid-rise depth, not a wall
@@ -204,9 +207,9 @@
           // The 0.9125 right-hand mound: its frustum base is culled (footprint)
           // and the dome cap hung 21 m in the air (float-audit, frac 0.944).
           if (side === 1 && kk === k(0.9125)) continue;
-          const dist = 165 + hash(kk * 6 + side) * 60;
+          const dist = 260 + hash(kk * 6 + side) * 60;
           const w    = 130 + hash(kk * 11 + side) * 60;  // 130–190 m footprint (wider, fewer)
-          const h    =  24 + hash(kk * 17 + side) * 16;  // 24–40 m mound height
+          const h    =   9 + hash(kk * 17 + side) *  6;  // 9–15 m (x0.9–1.25 in build) far berm: flat parkland, not hills
           // Green-dominant: col[1] > col[0] and col[1] > col[2]*1.05
           backdrop(kk, side, dist, [w, h, 90], [0.18, 0.38 + hash(kk * 23 + side) * 0.06, 0.20]);
         }
@@ -218,66 +221,80 @@
       forestEdge(0.00, 0.10, -1, 11, {
         density: 0.45, hMin: 9, hMax: 16,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
 
       forestEdge(0.00, 0.10, 1, 13, {
         density: 0.40, hMin: 8, hMax: 14,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
 
       forestEdge(0.10, 0.27, -1, 9, {
         density: 0.60, hMin: 10, hMax: 17,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
       forestEdge(0.10, 0.27, 1, 10, {
         density: 0.55, hMin: 9, hMax: 16,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
 
       forestEdge(0.27, 0.65, 1, 13, {
         density: 0.45, hMin: 10, hMax: 17,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
 
       forestEdge(0.27, 0.65, -1, 19, {
         density: 0.40, hMin: 11, hMax: 18,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
 
       forestEdge(0.65, 0.85, -1, 9, {
         density: 0.70, hMin: 11, hMax: 19,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
       forestEdge(0.65, 0.85, 1, 10, {
         density: 0.65, hMin: 10, hMax: 18,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
 
       forestEdge(0.85, 1.00, -1, 9, {
         density: 0.45, hMin: 9, hMax: 15,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
       forestEdge(0.85, 1.00, 1, 12, {
         density: 0.40, hMin: 8, hMax: 14,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
 
       forestEdge(0.75, 0.82, -1, 11, {
         density: 0.70, hMin: 13, hMax: 20,
         col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
       forestEdge(0.75, 0.82, 1, 12, {
         density: 0.65, hMin: 12, hMax: 19,
         col: EUC2, col2: [0.36, 0.48, 0.32], pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
 
       forestEdge(0.12, 0.25, 1, 27, {
         density: 0.30, hMin: 13, hMax: 20,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
       forestEdge(0.68, 0.84, -1, 26, {
         density: 0.34, hMin: 14, hMax: 21,
         col: EUC, col2: EUC2, pineFrac: 0,
+        treeOptions: { crown: "lobed", maxDetailed: 30 },
       });
 
       every(60, (kk) => {
@@ -285,7 +302,7 @@
           if (side === -1 && kk >= k(0.27) && kk <= k(0.65)) continue; // keep lake sightline open
           if (hash(kk * 53 + side) > 0.45) continue;
           const dist = 34 + hash(kk * 57 + side) * 44;
-          tree(kk, side, dist, 13 + hash(kk * 61 + side) * 8, EUC);
+          tree(kk, side, dist, 13 + hash(kk * 61 + side) * 8, EUC, { crown: "lobed" });
         }
       });
 
@@ -458,10 +475,15 @@
         h: 4.8, thick: 3.2, shell: [0.50, 0.51, 0.54], step: 10,
         crowdCols: [[0.82, 0.22, 0.18], [0.92, 0.78, 0.24], [0.22, 0.46, 0.72]],
       });
-      bowlSeatWall(0.755, 0.815, 1, 18, {
-        h: 5.2, thick: 3.4, shell: [0.48, 0.49, 0.52], step: 9,
-        crowdCols: [[0.86, 0.24, 0.18], [0.88, 0.86, 0.82], [0.18, 0.52, 0.36]],
-      });
+      // T11 (apex 0.788) is an ~18 m radius right-hander, so a gap-18 wall on
+      // the inside (+1) folds through its own centre. Two segments clear of the
+      // apex, pushed out to gap 30 (> radius), keep the bowl without the pile-up.
+      for (const [s0, s1] of [[0.755, 0.772], [0.805, 0.815]]) {
+        bowlSeatWall(s0, s1, 1, 30, {
+          h: 5.2, thick: 3.4, shell: [0.48, 0.49, 0.52], step: 9,
+          crowdCols: [[0.86, 0.24, 0.18], [0.88, 0.86, 0.82], [0.18, 0.52, 0.36]],
+        });
+      }
 
       // The pit complex — lane, wall, garages, race control — is the ENGINE's
       // now (js/track/core/pit.js + js/track/scenery/pits.js), built from the
