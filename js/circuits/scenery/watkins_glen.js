@@ -225,7 +225,8 @@
       // Paddock RVs removed — they buried into the hillside (~8 prims). Tech
       // sheds already read as the paddock.
       // OB compound pushed past the tech sheds so vans clear the slope.
-      broadcastCompound(K(0.918), 1, 110, { vans: 2, dishes: 2, mastH: 9 });
+      // Was 110: one van chassis skirt buried 0.10 m (ground-audit 2026-10-14).
+      broadcastCompound(K(0.918), 1, 125, { vans: 2, dishes: 2, mastH: 9 });
       // Was 6.5: after the closing-chord centerline fix the default panel face
       // sat 9.5 mm off the generic crowdBank riser (gap 6.55) at the start seam.
       // 6.0 leaves ~24 cm clear of the riser's trackward face (MIN_SEP = 3 cm).

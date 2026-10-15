@@ -392,6 +392,21 @@ test("the test-suite counts in the agent docs and README.md match the files on d
   assert.ok(sawSpecCount, "neither CLAUDE.md nor README.md states a Playwright spec count any more");
 });
 
+test("docs/TESTING.md quotes no hard spec ratio or twin count — the tools print them (#2168)", () => {
+  // Four such figures drifted at once (120 of 127 fixture adopters, 36 of 127
+  // VM-portable, "fourteen" twins listing thirteen, "11 browser specs" beside
+  // "12 specs, 129 tests"), because nothing read TESTING.md for them. The
+  // measuring tools — fixture-consumer-audit.mjs, vm-portable.mjs,
+  // twinned-specs.mjs — print the live figure; the doc names the tool.
+  const text = read("docs/TESTING.md");
+  const hits = [];
+  for (const re of [/\b\d+ of \d+ specs\b/gi,
+    /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|twenty)\s+(?:of those browser specs|browser specs whose|`?\*-vm\.test\.mjs`? TWINS)/gi,
+    /\b\d+ specs, \d+ tests\b/gi])
+    for (const m of text.matchAll(re)) hits.push(`"${m[0]}" at line ${text.slice(0, m.index).split("\n").length}`);
+  assert.deepEqual(hits, [], "name the measuring tool (fixture-consumer-audit / vm-portable / twinned-specs) instead of a count");
+});
+
 test("the gate ladder is a ladder, and no doc commits its sizes", async () => {
   // The rung sizes ("N of M unit files", "the other N", the ladder table) were
   // committed into five docs until 2026-09-30. Every PR that added a test file

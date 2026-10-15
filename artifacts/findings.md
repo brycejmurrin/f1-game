@@ -1,7 +1,7 @@
 # Menu / Settings / How-to-Play screenshot survey
 
 **Source:** live `https://brycejmurrin.github.io/f1-game/` (2026-10-05)  
-**Shots:** `artifacts/shots/menus-settings-htp/` (35 PNGs + `manifest.json`)  
+**Shots:** `artifacts/shots/menus-settings-htp/` (35 PNGs + `manifest.json`) — moved to `track-survey-assets` (https://github.com/brycejmurrin/f1-game/tree/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/artifacts/shots/menus-settings-htp)  
 **Method:** Playwright Chromium against the live URL (host Playwright/Chrome MCP not attached in this Cloud catalog; CLI fallback).  
 **bc:** `bc-258e9826-b9f2-5d79-8b20-6f85d8cdd9f6`
 
@@ -29,7 +29,7 @@
 
 ## Handoff
 
-- Paths: `artifacts/shots/menus-settings-htp/*.png`, `artifacts/findings.md`, `artifacts/shots/menus-settings-htp/manifest.json`
+- Paths: `artifacts/shots/menus-settings-htp/*.png` — moved to `track-survey-assets` (https://github.com/brycejmurrin/f1-game/tree/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/artifacts/shots/menus-settings-htp), `artifacts/findings.md`, `artifacts/shots/menus-settings-htp/manifest.json`
 - Branch: `cursor/shots-menus-a4f2`
 - Capture scripts (local, gitignored): `scratch/shots-menus/capture-live.mjs`, `capture-extra2.mjs`
 - No game source / ratchet / merge changes.
