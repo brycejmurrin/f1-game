@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  LINUX_SLOTS, MACOS_SLOTS, QUEUED_HOLD, MAX_RUNS, DEFAULT_OUT,
+  LINUX_SLOTS, LINUX_HOLD, MACOS_SLOTS, QUEUED_HOLD, MAX_RUNS, DEFAULT_OUT,
   isMac, countJobs, evaluate, reportLine, measure,
 } from "../../tools/ci/queue-depth.mjs";
 
@@ -19,6 +19,7 @@ const many = (n, status, os) => Array.from({ length: n }, () => job(status, os))
 
 test("thresholds are the measured account slots", () => {
   assert.equal(LINUX_SLOTS, 40);
+  assert.equal(LINUX_HOLD, 60);
   assert.equal(MACOS_SLOTS, 5);
   assert.equal(QUEUED_HOLD, 10);
   assert.equal(MAX_RUNS, 30);
@@ -38,17 +39,17 @@ test("jobs split by runner label; completed and environment-waiting jobs hold no
 });
 
 test("ok under every threshold; the line names jobs in flight, queued and macOS", () => {
-  const v = evaluate(countJobs([...many(30, "in_progress"), ...many(9, "queued"), ...many(4, "in_progress", "macos-latest")]),
+  const v = evaluate(countJobs([...many(50, "in_progress"), ...many(9, "queued"), ...many(4, "in_progress", "macos-latest")]),
     { runsExamined: 7, runsLive: 7 });
   assert.equal(v.verdict, "ok");
   assert.equal(v.hold, false);
-  assert.equal(reportLine(v), "= queue ok (39 Linux jobs in flight / 40, 9 queued, 4 macOS / 5)");
+  assert.equal(reportLine(v), "= queue ok (59 Linux jobs in flight / 40, 9 queued, 4 macOS / 5)");
 });
 
 test("each threshold alone is a hold", () => {
-  const linux = evaluate(countJobs(many(40, "in_progress")));
+  const linux = evaluate(countJobs(many(60, "in_progress")));
   assert.equal(linux.verdict, "hold");
-  assert.match(reportLine(linux), /^= queue hold \(40 Linux jobs in flight \/ 40, 0 queued, 0 macOS \/ 5\) — Linux jobs in flight 40 ≥ 40/);
+  assert.match(reportLine(linux), /^= queue hold \(60 Linux jobs in flight \/ 40, 0 queued, 0 macOS \/ 5\) — Linux jobs in flight 60 ≥ 60/);
   const queued = evaluate(countJobs([...many(5, "queued"), ...many(5, "queued", "macos-latest")]));
   assert.equal(queued.verdict, "hold", "macOS queued jobs count toward the queued threshold");
   assert.deepEqual(queued.reasons, ["queued jobs 10 ≥ 10", "macOS jobs in flight 5 ≥ 5"]);

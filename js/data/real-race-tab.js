@@ -881,7 +881,7 @@ const DataRealRace = (function () {
           if (tr.nextSibling) tbody.insertBefore(open, tr.nextSibling); else tbody.appendChild(open);
         };
         tr.addEventListener("click", toggle);
-        tr.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+        tr.addEventListener("keydown", (e) => { if (e.target === tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle(); } });
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);

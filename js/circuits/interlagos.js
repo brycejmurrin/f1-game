@@ -31,7 +31,7 @@
       { kind: "foliage", s0: 0.86, s1: 1.0 },
       { kind: "foliage", s0: 0.0, s1: 0.02 },
     ],
-    pal: { zenith: [0.34, 0.54, 0.78], horizon: [0.64, 0.72, 0.62], grass: [0.30, 0.55, 0.26], fog: [0.56, 0.62, 0.56], fogDensity: 0.0018, sunDir: [0.18032487743269374, 0.8214799971933825, 0.5409746322980812], sun: [1, 0.96, 0.84], sunColor: [1, 0.94, 0.82] },
+    pal: { zenith: [0.34, 0.54, 0.78], horizon: [0.62, 0.70, 0.68], grass: [0.30, 0.55, 0.26], fog: [0.58, 0.65, 0.64], fogDensity: 0.0045, sunDir: [0.18032487743269374, 0.8214799971933825, 0.5409746322980812], sun: [1, 0.96, 0.84], sunColor: [1, 0.94, 0.82] },
     // Elevation from SRTM bake in js/track/circuit-elevations.js
     // (`node tools/gen/bake-elevation.mjs interlagos`). One authored cosine
     // bump left ~71% of the lap dead-flat between Senna S and the climb —
@@ -52,7 +52,7 @@
     // re-seats turns when the start line moves.
     sectors: [0.3, 0.65],
     turns: [0.0654, 0.0896, 0.3137, 0.3557, 0.4547, 0.4865, 0.5285, 0.5528, 0.5985, 0.6275, 0.6629, 0.6825, 0.7414, 0.7722, 0.8375],
-    furniture: { tree: "palm",  fol: [0.26, 0.48, 0.20], lamp: "none" },  // warm subtropical
+    furniture: { tree: "palm",  fol: [0.26, 0.48, 0.20], lamp: "post", lc: [1.0, 0.86, 0.58], sparse: true },  // warm subtropical; sodium-warm posts so night/dusk lights the straights
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "panel",     gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["concrete", "sandstone", "terracotta"],  // sun-bleached tropical concrete, not three greys
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
