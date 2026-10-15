@@ -388,6 +388,36 @@ test("observer callbacks are conservatively scoped to the owning generation", as
   b.held.resolve(); await b.request; h.P.end();
 });
 
+test("stageTable and diffStages summarise span legs for probes", () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });
+  P.begin("race");
+  t = 50;
+  P.mark("awaitIntroWarm:start");
+  t = 1050;
+  P.mark("awaitIntroWarm:end");
+  P.lap("afterWarm");
+  t = 1100;
+  P.lap("loadTrack");
+  const table = P.stageTable();
+  assert.equal(table.entry, "race");
+  assert.equal(table.budgetMs, 45000);
+  assert.ok(table.stages.some((r) => r.n === "awaitIntroWarm" && r.ms === 1000));
+  assert.ok(table.stages.some((r) => r.n === "loadTrack" && r.ms === 50));
+  const other = { legs: [{ n: "loadTrack", ms: 10 }], marks: [{ n: "awaitIntroWarm:start", t: 0 }, { n: "awaitIntroWarm:end", t: 40 }] };
+  const diff = P.diffStages(P.snapshot(), other);
+  assert.ok(diff.rows.some((r) => r.n === "awaitIntroWarm" && r.deltaMs > 900));
+});
+
+test("introBudgetExpired fires after the soft budget elapses", () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });
+  P.begin("race");
+  assert.equal(P.introBudgetExpired(), false);
+  t = 45001;
+  assert.equal(P.introBudgetExpired(), true);
+});
+
 test("successful completion waits for presentation even when no handoff exists", async () => {
   const h = profileSessionHarness(), a = h.start("success"); await a.entered;
   h.P.afterPresent(h.idle, { warming: () => false });

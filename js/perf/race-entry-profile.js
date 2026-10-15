@@ -32,6 +32,29 @@ const RaceEntryProfile = (() => {
   // True after beginUi until continueWindow/begin consumes it — keeps cover marks
   // for one tap→startRace handoff without suppressing a superseding startRace begin().
   let uiPending = false;
+  let entryKind = "";
+  let introBudgetT0 = 0;
+  let introBudgetMs = 0;
+  let introBudgetArmed = false;
+  let progressSink = null;
+  const INTRO_BUDGET_SOFT_MS = 45000;
+  const INTRO_BUDGET_HW_MS = 120000;
+  const STAGE_LABELS = {
+    awaitIntroWarm: "Shaders",
+    ensureScenery: "Scenery",
+    loadTrackStepped: "Track",
+    prepareMenuCarAssets: "Cars",
+    introPlan: "Flyby plan",
+    introWarmPrograms: "Programs",
+    lampBake: "Lighting",
+    introPrepare: "Prepare",
+    studioDone: "Garage",
+    studioOpen: "Garage open",
+    warmCarAssets: "Car warm",
+    debrisPrime: "Debris",
+    mirrorPrepare: "Mirror",
+    gridCountdown: "Grid",
+  };
 
   function now() {
     try { return performance.now(); } catch (_) { return Date.now(); }
@@ -79,6 +102,91 @@ const RaceEntryProfile = (() => {
     observer = null;
   }
 
+  function softwareRaster() {
+    try {
+      return typeof PerfGov !== "undefined" && !!(PerfGov.softwareRaster && PerfGov.softwareRaster());
+    } catch (_) { return false; }
+  }
+
+  function armIntroBudget(tag) {
+    if (tag) entryKind = String(tag);
+    introBudgetArmed = true;
+    introBudgetT0 = now();
+    introBudgetMs = softwareRaster() ? INTRO_BUDGET_SOFT_MS : INTRO_BUDGET_HW_MS;
+  }
+
+  function introBudgetLeft() {
+    if (!introBudgetArmed) return INTRO_BUDGET_HW_MS;
+    return Math.max(0, introBudgetMs - (now() - introBudgetT0));
+  }
+
+  function introBudgetExpired() {
+    return introBudgetArmed && introBudgetLeft() <= 0;
+  }
+
+  function setProgressSink(fn) {
+    progressSink = typeof fn === "function" ? fn : null;
+  }
+
+  function stagesFromSnapshot(snap) {
+    const rows = [];
+    for (const leg of snap.legs || []) {
+      if (!leg || !(leg.ms >= 0)) continue;
+      rows.push({ n: leg.n, ms: +leg.ms, kind: "leg" });
+    }
+    const marks = snap.marks || [];
+    for (let i = 0; i < marks.length; i++) {
+      const m = marks[i];
+      if (!m || !/:start$/.test(m.n)) continue;
+      const base = m.n.slice(0, -6);
+      const e = marks.slice(i + 1).find((x) => x && x.n === base + ":end");
+      rows.push({
+        n: base,
+        ms: e ? +((e.t - m.t)).toFixed(2) : null,
+        kind: "span",
+        open: !e,
+      });
+    }
+    return rows;
+  }
+
+  function stageTable(snap) {
+    const s = snap || snapshot();
+    const stages = stagesFromSnapshot(s);
+    const totalMs = s.windowMs || 0;
+    return {
+      entry: entryKind,
+      software: softwareRaster(),
+      budgetMs: introBudgetMs,
+      budgetLeftMs: introBudgetT0 ? +introBudgetLeft().toFixed(2) : null,
+      windowMs: totalMs,
+      stages,
+      blockMs: s.blockMs,
+      maxBlockMs: s.maxBlockMs,
+    };
+  }
+
+  function diffStages(raceSnap, practiceSnap) {
+    const a = stagesFromSnapshot(raceSnap || snapshot());
+    const b = stagesFromSnapshot(practiceSnap || { legs: [], marks: [] });
+    const names = new Set([...a.map((r) => r.n), ...b.map((r) => r.n)]);
+    const rows = [];
+    for (const n of names) {
+      const ra = a.find((r) => r.n === n);
+      const pb = b.find((r) => r.n === n);
+      const raceMs = ra && ra.ms != null ? ra.ms : null;
+      const practiceMs = pb && pb.ms != null ? pb.ms : null;
+      rows.push({
+        n,
+        raceMs,
+        practiceMs,
+        deltaMs: raceMs != null && practiceMs != null ? +(raceMs - practiceMs).toFixed(2) : null,
+      });
+    }
+    rows.sort((x, y) => Math.abs(y.deltaMs || 0) - Math.abs(x.deltaMs || 0));
+    return { entryRace: raceSnap && raceSnap.entry, entryPractice: practiceSnap && practiceSnap.entry, rows };
+  }
+
   function begin(tag) {
     disarmObserver();
     generation++; presentationEnabled = true;
@@ -92,6 +200,7 @@ const RaceEntryProfile = (() => {
     winT0 = now(); winT1 = winT0;
     lapT0 = winT0;
     armed = true;
+    armIntroBudget(tag);
     armObserver();
     if (tag) pushMark("begin:" + tag);
   }
@@ -103,6 +212,7 @@ const RaceEntryProfile = (() => {
     if (armed) { mark("ui:tap"); return; }
     begin(tag || "uiStart");
     uiPending = true;
+    mark("entry:" + (entryKind || tag || "ui"));
   }
 
   function continueWindow(tag) {
@@ -148,6 +258,10 @@ const RaceEntryProfile = (() => {
   function mark(n) {
     if (!armed) return;
     pushMark(n);
+    if (progressSink && /:end$/.test(n)) {
+      const base = n.slice(0, -4);
+      try { progressSink(STAGE_LABELS[base] || base); } catch (_) { /* UI only */ }
+    }
   }
 
   /** First warming present and first ready present only — not every frame. */
@@ -246,6 +360,8 @@ const RaceEntryProfile = (() => {
 
   function snapshot() {
     return {
+      entry: entryKind,
+      winT0,
       legs: legs.slice(),
       marks: marks.slice(),
       longTasks: longTasks.slice(),
@@ -254,13 +370,16 @@ const RaceEntryProfile = (() => {
       supported,
       armed,
       windowMs: armed || marks.length ? +((armed ? now() : winT1) - winT0).toFixed(2) : 0,
+      budgetMs: introBudgetMs,
+      budgetLeftMs: introBudgetT0 ? +introBudgetLeft().toFixed(2) : null,
     };
   }
 
   return {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
     requestWarm, raiseHandoff, span, spanAsync, afterPresent, runSession,
-    snapshot,
+    snapshot, stageTable, diffStages, stagesFromSnapshot,
+    introBudgetLeft, introBudgetExpired, setProgressSink, softwareRaster,
     legs: () => legs.slice(),
     armed: () => armed,
     supported: () => supported,

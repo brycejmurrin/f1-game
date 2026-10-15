@@ -951,6 +951,14 @@ return {
     if (_pendingVerify && _pendingVerify.kind === "tier") _pendingVerify = null;
     if (_live) _govCoolMs = Math.max(_govCoolMs, VERIFY_COOL);
   },
+  // SwiftShader / llvmpipe / soft-blit paths: intro shortcuts and one shared
+  // race-entry budget (RaceEntryProfile) read this instead of guessing from tier.
+  softwareRaster() {
+    try {
+      const s = _gfx && _gfx.backendState && _gfx.backendState();
+      return !!(s && (s.softwareGL || s.softAdapter));
+    } catch (_) { return false; }
+  },
 };
 })();
 Object.freeze(PerfGov);
