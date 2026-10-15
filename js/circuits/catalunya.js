@@ -6,7 +6,7 @@
     id: "catalunya",
     classic: true,
     reverse: false,
-    // The trace opens on the 700 m main straight, and its first vertex IS the
+    // The trace opens on the ~990 m main straight (measured, curvature < 0.0008 from frac 0.935), and its first vertex IS the
     // Start/finish line. Snapped to the real one: coord 0.2 m off centreline; = trace vertex 0.
     // 0.03 also measures straight (mean |k| 0.00036 over 120 m) but
     // is the wrong PART of the lap. See docs/tracks/START-LINES.md.
