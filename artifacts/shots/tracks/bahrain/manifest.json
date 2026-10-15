@@ -1,0 +1,86 @@
+{
+  "circuit": "bahrain",
+  "count": 10,
+  "shots": [
+    {
+      "file": "s1-pit-straight-night-dry.jpg",
+      "view": "S1 pit straight",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 41411,
+      "quality": 80
+    },
+    {
+      "file": "s1-t1-schumacher-night-dry.jpg",
+      "view": "S1 T1 Schumacher",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 54058,
+      "quality": 80
+    },
+    {
+      "file": "s2-t4-university-night-dry.jpg",
+      "view": "S2 T4 University",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 56967,
+      "quality": 80
+    },
+    {
+      "file": "s2-t567-sweep-night-dry.jpg",
+      "view": "S2 T5–T7 sweep",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 54595,
+      "quality": 80
+    },
+    {
+      "file": "s2-t8-hairpin-night-dry.jpg",
+      "view": "S2 T8 hairpin",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 53956,
+      "quality": 80
+    },
+    {
+      "file": "s3-t10-beyon-night-dry.jpg",
+      "view": "S3 T9–10 Beyon",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 45452,
+      "quality": 80
+    },
+    {
+      "file": "s3-final-corner-night-dry.jpg",
+      "view": "S3 final corner",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 45342,
+      "quality": 80
+    },
+    {
+      "file": "s1-sakhir-tower-night-dry.jpg",
+      "view": "S1 Sakhir Tower",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 48803,
+      "quality": 80
+    },
+    {
+      "file": "s3-midfield-dunes-night-dry.jpg",
+      "view": "S3 midfield dunes",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 75763,
+      "quality": 80
+    },
+    {
+      "file": "s1-pit-chase-night-dry.jpg",
+      "view": "S1 pit chase cam",
+      "weather": "dry",
+      "tod": "night",
+      "bytes": 53030,
+      "quality": 80
+    }
+  ]
+}
