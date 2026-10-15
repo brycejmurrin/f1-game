@@ -1,1 +1,0 @@
-1791973656	Cursor Agent	HUD touch-control label min font (>=10 CSS px). OWNED: css/touch-controls.css label font rules + touch label sizing JS + new unit/spec for floor. FORBIDDEN: race-setup.css, ui-redesign.spec.js, hud-arrange.js + PR #1501/#1490/#1503/#1507/#1725 files.  [claude/f1-game-project-26h3ng; session a6ce5a00149f785d1f19b843]
