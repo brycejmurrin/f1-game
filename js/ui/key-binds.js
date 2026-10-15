@@ -16,6 +16,23 @@ function create(G) {
   const { $, store } = G;
   const tick = () => { if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiTick(); };
   const sections = [];
+  let calibTimer = 0;
+  const padIdOf = (p) => String((p && p.id) || "").slice(0, 120);
+  const drivingPadId = () => {
+    if (!Input.pickPad || typeof navigator === "undefined" || !navigator.getGamepads) return "";
+    const pads = [];
+    for (const gp of navigator.getGamepads()) if (gp) pads.push(gp);
+    const wheel = !!(Input.getPadAxisMap && Input.padAxesAreDefault && !Input.padAxesAreDefault());
+    const p = Input.pickPad(pads, null, wheel);
+    return p ? padIdOf(p) : "";
+  };
+  const controlsPageActive = () => {
+    const panel = $("pm-panel-controls");
+    if (panel) return !panel.hidden;
+    const host = $("pm-pad");
+    return !!(host && !(host.closest && host.closest("[hidden]")));
+  };
+  const cancelCalib = () => { if (calibTimer) { clearTimeout(calibTimer); calibTimer = 0; } };
 
   // The same activity report drives Help and first-run coaching prompts.
   const activeInputKind = () => Input.activeInputSource ? Input.activeInputSource()
@@ -167,6 +184,9 @@ function create(G) {
     // The rows follow the CONTROLS page's setting-row grammar (label left, the
     // control cluster right, one line at every UI SIZE): label, then two chips.
     function render(focus) {
+      // A rebuild drops the armed chip from the DOM; disarm first so padCapture
+      // cannot steal the next button press (gamepad connect, brand switch, …).
+      if (armed) clearArmed();
       host.textContent = "";
       let focusBtn = null;
       for (const a of dev.list()) {
@@ -289,6 +309,7 @@ function create(G) {
     && (!Input.padAxesAreDefault || Input.padAxesAreDefault())
     && (!Input.padRest || Input.padRest() === 0);
   const resetController = () => {
+    cancelCalib();
     Input.resetPad();
     if (Input.setPadAxisMap) {
       Input.setPadAxisMap(null);
@@ -321,7 +342,7 @@ function create(G) {
   });
   // A pad that appears mid-session (gamepadconnected fires on its first press)
   // reveals the section and may rename the chips (a PlayStation pad).
-  if (pad) for (const ev of ["gamepadconnected", "gamepaddisconnected"]) window.addEventListener(ev, () => pad.render());
+  if (pad) for (const ev of ["gamepadconnected", "gamepaddisconnected"]) window.addEventListener(ev, () => { cancelCalib(); pad.render(); });
   // The first physical key on a touch device reveals the KEYBOARD table.
   // Input.init (which sets the latch) is wired AFTER this create, so its
   // listener runs after this one for the same keydown: the check is deferred
@@ -375,26 +396,35 @@ function create(G) {
   const calibNote = $("pm-pad-calib-note");
   const say = (t) => { if (calibNote) calibNote.textContent = t; };
   const calibBtn = $("pm-pad-calib");
-  if (calibBtn && Input.calibratePad) calibBtn.onclick = () => {
-    if (!Input.padPresent()) { say("No controller detected. Press a button on it first — a browser hides a pad until you do."); return; }
-    // The press that ran this button is not the stick, so sample on the next
-    // turn of the loop rather than the instant of the click.
-    say("Let go of the stick…");
-    setTimeout(() => {
-      if (Input.calibratePad()) {
-        // Stored: the hint promises the offset applies "from then on", and it
-        // used to be lost on the next reload (loaded back below).
-        store.set("padRest", Input.padRestStore ? Input.padRestStore() : Input.padRest());
-        say(`Centre captured (offset ${(Input.padRest() * 100).toFixed(1)}%). If the car still pulls, raise DEAD ZONE a point or two.`);
-        tick();
-        // Rest offset is part of controllerIsDefault — enable RESET without a
-        // second rebind.
-        if (pad) pad.render();
-      } else {
-        say("The stick was not resting — let go of it completely, then press CALIBRATE STICK again.");
-      }
-    }, 450);
-  };
+  if (calibBtn && Input.calibratePad) {
+    if (typeof SettingsNav !== "undefined" && SettingsNav && SettingsNav.onLeave) {
+      SettingsNav.onLeave((id) => { if (id === "controls") cancelCalib(); });
+    }
+    calibBtn.onclick = () => {
+      cancelCalib();
+      if (!Input.padPresent()) { say("No controller detected. Press a button on it first — a browser hides a pad until you do."); return; }
+      const calibPadId = drivingPadId();
+      // The press that ran this button is not the stick, so sample on the next
+      // turn of the loop rather than the instant of the click.
+      say("Let go of the stick…");
+      calibTimer = setTimeout(() => {
+        calibTimer = 0;
+        if (!Input.padPresent() || !controlsPageActive() || drivingPadId() !== calibPadId) return;
+        if (Input.calibratePad()) {
+          // Stored: the hint promises the offset applies "from then on", and it
+          // used to be lost on the next reload (loaded back below).
+          store.set("padRest", Input.padRestStore ? Input.padRestStore() : Input.padRest());
+          say(`Centre captured (offset ${(Input.padRest() * 100).toFixed(1)}%). If the car still pulls, raise DEAD ZONE a point or two.`);
+          tick();
+          // Rest offset is part of controllerIsDefault — enable RESET without a
+          // second rebind.
+          if (pad) pad.render();
+        } else {
+          say("The stick was not resting — let go of it completely, then press CALIBRATE STICK again.");
+        }
+      }, 450);
+    };
+  }
 
   /* THE WHEEL WIZARD. A wheel enumerates as a Gamepad with mapping "" — the
      only standard layout the spec defines is the Xbox-style pad — so its
@@ -509,6 +539,7 @@ function create(G) {
   return {
     render() { for (const s of sections) s.render(); },
     disarmAll() {
+      cancelCalib();
       for (const s of sections) s.disarm(true, false);   // closeSettings: nothing stays armed into a race
       if (abortWheel) abortWheel();
     },
