@@ -345,3 +345,35 @@ test("sanitizeCustom keeps only real finShape / numFont / finish ids", () => {
   const good = run({ finShape: M.Car3D.FIN_SHAPE_IDS[0], numFont: M.LiveryTex.NUM_FONT_IDS[0], finish: "gloss" });
   assert.deepEqual(Object.keys(good).sort(), ["finShape", "finish", "numFont"], "real ids pass");
 });
+
+test("My Team livery adapters stay within the active slot and invalidate cache without a store write", () => {
+  let active = true, selected = 0, revision = 1, refused = false;
+  const global = new Map([["livery.custom", "gp"], ["livery.custom.custom", [{ id: "gp", c1: [0,1,0], c2: [0,1,0] }]]]);
+  const slots = [
+    new Map([["livery.custom", "a"], ["livery.custom.custom", [{ id: "a", c1: [1,0,0], c2: [1,0,0] }]]]),
+    new Map([["livery.custom", "b"], ["livery.custom.custom", [{ id: "b", c1: [0,0,1], c2: [0,0,1] }]]]),
+  ];
+  const store = { rev: 0, get: (key, fallback) => global.get(key) ?? fallback, set(key, value) { global.set(key, value); this.rev++; return true; } };
+  const ctx = vm.createContext({ Career: {
+    inCareer: () => active, data: () => ({ flavour: "myteam" }), identityRevision: () => revision,
+    identityValue: (key, fallback) => slots[selected].get(key) ?? fallback,
+    setIdentityValue(key, value) { if (refused) return false; slots[selected].set(key, value); revision++; return true; },
+  } });
+  vm.runInContext(LIVERIES_SRC, ctx);
+  const Custom = vm.runInContext(CUSTOM_LIV_SRC + ";CustomLiveries", ctx), api = Custom.create({ store });
+  const team = { id: "custom", color: [1,1,1], color2: [0,0,0] };
+  assert.equal(api.resolveLivery(team).id, "a");
+  selected = 1; revision++;
+  assert.equal(api.resolveLivery(team).id, "b"); assert.equal(store.rev, 0);
+  assert.equal(api.saveLiveryId("custom", "default"), true);
+  assert.equal(api.resolveLivery(team).id, "default");
+  refused = true;
+  assert.equal(api.saveLiveryId("custom", "gp"), false);
+  assert.equal(api.setCustomLiveries("custom", []), false);
+  assert.equal(global.get("livery.custom"), "gp");
+  assert.equal(global.get("livery.custom.custom").length, 1);
+  active = false;
+  assert.equal(api.resolveLivery(team).id, "gp", "leaving career restores global paint despite unchanged store.rev");
+  assert.equal(api.saveLiveryId("ferrari", "red"), true, "other team paint still uses its ordinary GP store");
+  assert.equal(global.get("livery.ferrari"), "red");
+});
