@@ -4,7 +4,7 @@
 **Circuit id:** `indianapolis`  
 **Live:** https://brycejmurrin.github.io/f1-game/  
 **Brief:** `docs/tracks/indianapolis.md`  
-**Shots on disk:** `artifacts/shots/tracks/indianapolis/` (34 frames, day default + six time-of-day variants; **weather matrix deferred** until shared shot tooling PR lands — see PR handoff)
+**Shots:** 34 JPEGs in `artifacts/shots/tracks/indianapolis/` (1280px max, q≈80, under 300 KB each; committed on branch via `git add -f`). **Weather matrix** (wet/rain/fog/overcast) deferred until shared shot batch tooling lands.
 
 ## Code map
 
@@ -26,61 +26,56 @@
 
 ## Capture method
 
-- **Tool:** `node tools/shot/shot.mjs --batch` (stock CLI: `tod` only; no batch `weather` until shared tooling PR).
-- **Count:** 34 PNGs — 28 sector landmarks @ `tod: day`, plus 6 `dusk` / `night` repeats on key views (SF, banked T1, pagoda, pit).
-- **Pending:** dry/wet/rain/overcast/fog matrix on 4–6 anchors after rebase on `tools: shared shot tooling for circuit surveys`.
+- **Tool:** `node tools/shot/shot.mjs --batch` (stock CLI: `tod` in batch; batch `weather` pending shared tooling PR).
+- **Count:** 34 JPEGs — 28 sector frames @ day/dry, plus 6 dusk/night repeats (SF, banked T1, pagoda, pits).
+- **Paths in panels:** relative from this file → `../../../artifacts/shots/tracks/indianapolis/<file>.jpg`.
 
-## Sector panels (day / dry)
+## Survey panels (by sector)
 
-Paths are repo-relative; PNGs live under `artifacts/shots/tracks/indianapolis/` (gitignored until shared `.gitignore` exception).
+### A — Start / finish & paddock
 
-### A — Start / finish & paddock (s ≈ 0.00–0.05, 0.92–0.98)
+| | | |
+|:---:|:---:|:---:|
+| ![SF orbit s=0](../../../artifacts/shots/tracks/indianapolis/sf-orbit.jpg)<br/>*orbit · dry · day* | ![SF bricks & pylon](../../../artifacts/shots/tracks/indianapolis/sf-trackside-bricks.jpg)<br/>*trackside · dry · day* | ![Pagoda from SF](../../../artifacts/shots/tracks/indianapolis/sf-orbit-pagoda-face.jpg)<br/>*orbit · dry · day* |
+| ![Pagoda s≈0.005](../../../artifacts/shots/tracks/indianapolis/pagoda-hero.jpg)<br/>*orbit · dry · day* | ![Scoring pylon s≈0.03](../../../artifacts/shots/tracks/indianapolis/scoring-pylon.jpg)<br/>*orbit · dry · day* | ![Pit stalls s≈0.955](../../../artifacts/shots/tracks/indianapolis/pit-stalls.jpg)<br/>*trackside · dry · day* |
+| ![Gasoline Alley s≈0.92](../../../artifacts/shots/tracks/indianapolis/gasoline-alley.jpg)<br/>*orbit · dry · day* | ![Infield parking s≈0.04](../../../artifacts/shots/tracks/indianapolis/sf-parking-infield.jpg)<br/>*orbit · dry · day* | |
 
-| Panel | Panel | Panel |
-|-------|-------|-------|
-| `sf-orbit.png` — SF orbit s=0 | `sf-trackside-bricks.png` — bricks + pylon | `sf-orbit-pagoda-face.png` — pagoda from SF |
-| `pagoda-hero.png` — pagoda s≈0.005 | `scoring-pylon.png` — pylon s≈0.03 | `pit-stalls.png` — pit stalls s≈0.955 |
-| `gasoline-alley.png` — Gasoline Alley s≈0.92 | `sf-parking-infield.png` — infield parking s≈0.04 | |
+### B — Oval bowl & banking
 
-### B — Oval bowl & banking (s ≈ 0.76–0.91)
+| | | |
+|:---:|:---:|:---:|
+| ![Oval stand wall s≈0.78](../../../artifacts/shots/tracks/indianapolis/oval-stand-wall.jpg)<br/>*orbit · dry · day* | ![Short chute s≈0.76](../../../artifacts/shots/tracks/indianapolis/oval-short-chute.jpg)<br/>*orbit · dry · day* | ![Banked T1 s≈0.88](../../../artifacts/shots/tracks/indianapolis/banked-t1-chase.jpg)<br/>*park chase · dry · day* |
+| ![Banked T1](../../../artifacts/shots/tracks/indianapolis/banked-t1-orbit.jpg)<br/>*orbit · dry · day* | ![Banked T1](../../../artifacts/shots/tracks/indianapolis/banked-t1-trackside.jpg)<br/>*trackside · dry · day* | ![Spectator hill s≈0.11](../../../artifacts/shots/tracks/indianapolis/spectator-hill-t1.jpg)<br/>*orbit · dry · day* |
 
-| Panel | Panel | Panel |
-|-------|-------|-------|
-| `oval-stand-wall.png` — stand wall s≈0.78 | `oval-short-chute.png` — short chute s≈0.76 | `banked-t1-chase.png` — banked T1 chase s≈0.88 |
-| `banked-t1-orbit.png` — banked T1 orbit | `banked-t1-trackside.png` — banked T1 trackside | `spectator-hill-t1.png` — spectator hill s≈0.11 |
+### C — Road-course infield
 
-### C — Road-course infield (s ≈ 0.14–0.74)
+| | | |
+|:---:|:---:|:---:|
+| ![F1 T1 off straight s≈0.145](../../../artifacts/shots/tracks/indianapolis/f1-t1-chase.jpg)<br/>*park chase · dry · day* | ![F1 T1](../../../artifacts/shots/tracks/indianapolis/f1-t1-orbit.jpg)<br/>*orbit · dry · day* | ![Infield s≈0.25](../../../artifacts/shots/tracks/indianapolis/infield-t2.jpg)<br/>*orbit · dry · day* |
+| ![Gravel s≈0.30](../../../artifacts/shots/tracks/indianapolis/infield-gravel-a.jpg)<br/>*orbit · dry · day* | ![Aerial s≈0.40](../../../artifacts/shots/tracks/indianapolis/infield-aerial.jpg)<br/>*eye · dry · day* | ![Mid infield s≈0.50](../../../artifacts/shots/tracks/indianapolis/infield-mid-orbit.jpg)<br/>*orbit · dry · day* |
+| ![Scaffold stand s≈0.52](../../../artifacts/shots/tracks/indianapolis/infield-scaffold-stand.jpg)<br/>*orbit · dry · day* | ![Sector 2 s≈0.55](../../../artifacts/shots/tracks/indianapolis/sector2-apex.jpg)<br/>*orbit · dry · day* | ![Late infield s≈0.66](../../../artifacts/shots/tracks/indianapolis/infield-late-chase.jpg)<br/>*park chase · dry · day* |
+| ![Gravel s≈0.66](../../../artifacts/shots/tracks/indianapolis/infield-gravel-c.jpg)<br/>*trackside · dry · day* | ![Rejoin s≈0.74](../../../artifacts/shots/tracks/indianapolis/sector3-rejoin.jpg)<br/>*orbit · dry · day* | |
 
-| Panel | Panel | Panel |
-|-------|-------|-------|
-| `f1-t1-chase.png` — F1 T1 off straight s≈0.145 | `f1-t1-orbit.png` — F1 T1 orbit | `infield-t2.png` — infield s≈0.25 |
-| `infield-gravel-a.png` — gravel s≈0.30 | `infield-aerial.png` — aerial s≈0.40 | `infield-mid-orbit.png` — mid s≈0.50 |
-| `infield-scaffold-stand.png` — scaffold s≈0.52 | `sector2-apex.png` — sector 2 s≈0.55 | `infield-late-chase.png` — late s≈0.66 |
-| `infield-gravel-c.png` — gravel s≈0.66 | `sector3-rejoin.png` — rejoin s≈0.74 | |
+### D — Museum / golf / horizon
 
-### D — Museum / golf / horizon (s ≈ 0.08, 0.60, 0.805)
+| | | |
+|:---:|:---:|:---:|
+| ![Museum & golf s≈0.805](../../../artifacts/shots/tracks/indianapolis/museum-golf-campus.jpg)<br/>*orbit · dry · day* | ![Golf pond s≈0.60](../../../artifacts/shots/tracks/indianapolis/golf-pond-b.jpg)<br/>*orbit · dry · day* | ![Speedway town s≈0.08](../../../artifacts/shots/tracks/indianapolis/speedway-town-horizon.jpg)<br/>*orbit · dry · day* |
 
-| Panel | Panel | Panel |
-|-------|-------|-------|
-| `museum-golf-campus.png` — museum + golf s≈0.805 | `golf-pond-b.png` — pond s≈0.60 | `speedway-town-horizon.png` — town horizon s≈0.08 |
+### Time-of-day variants (dry)
 
-## Time-of-day variants (key views only)
-
-Stock `shot.mjs` supports `tod` in batch jobs (`dawn|day|dusk|night`). Weather (`dry|wet|rain|overcast|fog`) batch support is **blocked** on this branch.
-
-| Panel | Panel | Panel |
-|-------|-------|-------|
-| `sf-orbit.png` — SF **day** | `sf-orbit-dusk.png` — SF **dusk** | `sf-orbit-night.png` — SF **night** |
-| `banked-t1-orbit.png` — bank **day** | `banked-t1-orbit-dusk.png` — bank **dusk** | `banked-t1-orbit-night.png` — bank **night** |
-| `pagoda-hero.png` — pagoda **day** | `pagoda-hero-dusk.png` — pagoda **dusk** | `pit-stalls-night.png` — pits **night** |
+| | | |
+|:---:|:---:|:---:|
+| ![SF orbit s=0](../../../artifacts/shots/tracks/indianapolis/sf-orbit-dusk.jpg)<br/>*orbit · dry · dusk* | ![SF orbit s=0](../../../artifacts/shots/tracks/indianapolis/sf-orbit-night.jpg)<br/>*orbit · dry · night* | ![Banked T1 s≈0.88](../../../artifacts/shots/tracks/indianapolis/banked-t1-orbit-dusk.jpg)<br/>*orbit · dry · dusk* |
+| ![Banked T1 s≈0.88](../../../artifacts/shots/tracks/indianapolis/banked-t1-orbit-night.jpg)<br/>*orbit · dry · night* | ![Pagoda s≈0.005](../../../artifacts/shots/tracks/indianapolis/pagoda-hero-dusk.jpg)<br/>*orbit · dry · dusk* | ![Pit stalls s≈0.955](../../../artifacts/shots/tracks/indianapolis/pit-stalls-night.jpg)<br/>*trackside · dry · night* |
 
 ### Lighting-specific backlog (from TOD passes)
 
 | Issue | Severity | Evidence | Notes |
 |-------|----------|----------|-------|
-| Oval flood masts dark at night | Med | `sf-orbit-night.png`, `banked-t1-orbit-night.png` | `floodMast(..., { light: false, pool: false })` — lattice geometry only; presets exist in `presets.js` but lamps do not emit |
-| Pit / pagoda readable at night | Low | `pit-stalls-night.png` | Ambient night preset sufficient for silhouettes; no dedicated pit lighting |
-| Dusk warmth on stands | Info | `sf-orbit-dusk.png` | `indianapolis\|dusk\|dry` preset tints read well on navy/crimson seats |
+| Oval flood masts dark at night | Med | `sf-orbit-night.jpg`, `banked-t1-orbit-night.jpg` | `floodMast(..., { light: false, pool: false })` — lattice geometry only; presets exist in `presets.js` but lamps do not emit |
+| Pit / pagoda readable at night | Low | `pit-stalls-night.jpg` | Ambient night preset sufficient for silhouettes; no dedicated pit lighting |
+| Dusk warmth on stands | Info | `sf-orbit-dusk.jpg` | `indianapolis\|dusk\|dry` preset tints read well on navy/crimson seats |
 | Weather not surveyed | — | — | After shared tooling: repeat SF, bank, pagoda, infield-mid, museum, pit @ rain/fog/wet/overcast |
 
 ## Node-VM audit
@@ -103,11 +98,11 @@ node tools/track/audit-circuit.cjs indianapolis
 
 | Severity | Topic | Evidence | Action |
 |----------|-------|----------|--------|
-| **Fixed** | Flood mast vs stand roof clip | `banked-t1-orbit.png` (pre-fix) | `floodMast` gap 48→56 m, h 34→32 m in scenery |
+| **Fixed** | Flood mast vs stand roof clip | `banked-t1-orbit.jpg` (pre-fix) | `floodMast` gap 48→56 m, h 34→32 m in scenery |
 | **Fixed** | Retaining-wall coplanar | `coplanar-audit` | Alternate slab radial offset 30→48 mm |
 | Med | Inner bowl stands missing | Brief §4; SF orbit | IN-side terraces s 0.90–0.20 not authored; bleacher trial → unsupported legs (ground-audit) — use `spectatorHill` + footing |
 | Med | Night oval lighting | TOD night panels | Enable lamp pools on flood masts when `night` race allowed, or gate via lighting-tuner |
-| Low | Gasoline Alley terrain wedge | `gasoline-alley.png` | Dark inner-edge splice ~0.92; centreline clean — likely terrain/road join near pit complex |
+| Low | Gasoline Alley terrain wedge | `gasoline-alley.jpg` | Dark inner-edge splice ~0.92; centreline clean — likely terrain/road join near pit complex |
 | Low | Main-stand seat coplanar | ground-audit | 12.4 m² @ `emitMain` line 90 (baseline) |
 | Low | Infield sparsity | Mid-orbit panels | Intentional golf openness; could add fairway signage |
 
