@@ -111,6 +111,9 @@
         [0.412, 0.428,  1], [0.448, 0.462, -1], [0.513, 0.527,  1],
         [0.568, 0.582, -1], [0.648, 0.662,  1],
         [0.888, 0.958,  1], [0.898, 0.912, -1], [0.912, 0.968, -1],
+        // T4 Horquilla approach: avenue crowns clipped the cityFront lattice
+        // (clip-audit 1.98 m @ frac 0.429, broadleafFall vs neonTowerBody).
+        [0.38, 0.46, -1], [0.38, 0.46,  1],
       ];
       const blocked = (s, side) => SOLID.some(([a, b, sd]) =>
         sd === side && (a <= b ? (s >= a && s <= b) : (s >= a || s <= b)));
@@ -838,10 +841,10 @@
       // themselves (1.85 m, clip-audit 2026-10-05).
       terrace(0.215, 0.248,  1, 20, { rows: 4, rise: 1.6, depth: 2.6,
         crowd: crowdCols, density: 0.6, step: 9 });
-      // gap 18, not 20: with the trees that grew through it now kept out
-      // (blocked() below), its back rows over the falling ground read as
-      // unsupported at 20 (ground-audit 13 > 11); 2 m closer they seat.
-      terrace(0.915, 0.965, -1, 18, { rows: 4, rise: 1.6, depth: 2.6,
+      // gap 16: Peraltada banking drops ~0.9 m across the span; gap 20 left
+      // three unsupported back cells (ground-audit). One fewer row keeps the
+      // flatCoplanar budget (terrace backs vs bowl shell).
+      terrace(0.915, 0.965, -1, 16, { rows: 3, rise: 1.6, depth: 2.5,
         crowd: crowdCols, density: 0.6, step: 9 });
 
       avenue(0.60, 0.70, -1, 15, 30);
