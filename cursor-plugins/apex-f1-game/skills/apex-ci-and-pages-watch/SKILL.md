@@ -26,7 +26,7 @@ Use `node tools/ci/ci-watch.mjs --sha <head> [--pages] [--once]` (rule 12). Matc
 
 If `mergeable_state` is `dirty`, sync by **merging** `origin/claude/f1-game-project-26h3ng` (`sync-pr.mjs`), never rebase or force-push. Sync only when CONFLICTING/DIRTY or a required tip check is red. Ship-checkpoint freeze: no sync pushes/merges. After merge, watch **ship** CI and Pages, not the closed PR.
 
-Queue hold: if `apex-status/queue-depth.json` says hold (or >15 runs queued), commit locally only — do not push a sync.
+Queue hold: if `node tools/ci/queue-depth.mjs` prints `= queue hold` (exit 1; it counts queued + running JOBS by OS against the 40 Linux / 5 macOS slots, never runs), commit locally only — do not push a sync.
 
 ## Reading failures (required path)
 
