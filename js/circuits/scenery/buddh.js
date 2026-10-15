@@ -405,7 +405,7 @@
       runoffApron(K(0.296), -1, 7, [14, 0.35, 44], PALE);
       runoffApron(K(0.308), -1, 7, [14, 0.35, 44], PALE);
       tyreWall(0.284, 0.320, -1, 24, TYRECAP);
-      scaffoldStand(0.288, 0.316, -1, 38);
+      scaffoldStand(0.288, 0.316, -1, 42);
       runoffApron(K(0.302), -1, 58, [28, 0.42, 52], DUST);
       for (let i = 0; i < 4; i++)
         runoffApron(K(0.286 + i * 0.016), -1, 96 + i * 26, 64, i % 2 ? FIELD_B : STUBBLE);
