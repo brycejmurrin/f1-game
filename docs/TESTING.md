@@ -1127,7 +1127,9 @@ Two always-judged checks give the gate fixed names:
 
 | Lane | When | What |
 |---|---|---|
-| **Draft PR** | `pull_request` + draft | Fast tier: Structural guards A/B shards + aggregator (incl. behind-ship on the aggregator), unit-plan / node slices, parts census, driving-model, change-aware `select`/`selected`. Heavy jobs skipped: geometry sweeps, wide smoke shards, real-GPU `renderer-macos`, emulated XR, desktop pack-smoke. |
+| **Draft PR** | `pull_request` + draft, no `run-ci` label | **No CI** on `synchronize` (only the advisory `Draft push (CI skipped — add run-ci label)` job). Opt in with label `run-ci` (`labeled` trigger), `workflow_dispatch`, or mark **ready** (`ready_for_review`) for the full tier. |
+| **Draft PR + `run-ci`** | `pull_request` + draft + label | Same as a ready PR fast path when explicitly requested. |
+| **Ready PR** | `pull_request` + not draft | Fast tier runs first; heavy jobs (`sweeps`, `smoke`, `selected` matrix, `renderer-macos`, `xr`, desktop `pack-smoke`) wait on **Structural guards** + **Pure-node unit suites** completing successfully (`needs:`). Planners merged into one **CI plan** job; named planner checks are thin forwarders. |
 | **Ready PR** | `ready_for_review` / non-draft | Full tier on the same head: smoke + sweeps + ship-filter, plus path-gated renderer-macos / xr when the diff reaches them. Desktop pack-smoke is packaging-path-gated (`desktop/**`, `tools/desktop/**`, `desktop.yml` only — not `js/**` / `css/**`). Shares the PR concurrency group with the draft run (`cancel-in-progress: true`) so marking ready cancels the fast run. |
 
 **Check names (GitHub UI)** — fast tier on a **draft** PR or a **deploy-branch push** (`ci.yml` jobs unless noted):

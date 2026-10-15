@@ -181,7 +181,7 @@ on:
     # geometry sweeps) on the same head, and the train gates the tip again.
     # `ready_for_review` is not a default type; the other three are.
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     # NO paths-ignore HERE (2026-09-30). Branch protection on the deploy
     # branch requires this workflow's fast-tier jobs, and a required check
     # that never reports blocks the merge for good — so a prose-only PR,
@@ -337,40 +337,140 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  reuse-draft:
-    name: Reuse draft fast-tier?
+
+  draft-ci-skipped:
+    name: Draft push (CI skipped — add run-ci label)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 2
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci') }}
+    steps:
+      - run: echo "No CI on draft synchronize without the run-ci label. Use workflow_dispatch or add label run-ci."
+
+  plan:
+    name: CI plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true && (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) }}
     permissions:
       contents: read
       actions: read
     outputs:
-      reuse: ${{ steps.r.outputs.reuse }}
+      reuse: ${{ steps.reuse.outputs.reuse }}
+      slices: ${{ steps.unit.outputs.slices }}
+      any_node: ${{ steps.unit.outputs.any_node }}
+      driving: ${{ steps.unit.outputs.driving }}
+      reason: ${{ steps.unit.outputs.reason }}
+      ships: ${{ steps.ship.outputs.ships }}
+      renderer: ${{ steps.renderer.outputs.renderer || 'false' }}
+      xr: ${{ steps.xr.outputs.xr || 'false' }}
+      shards: ${{ steps.sel.outputs.shards }}
+      any: ${{ steps.sel.outputs.any }}
+      dropped: ${{ steps.sel.outputs.dropped }}
+      select_reason: ${{ steps.sel.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: tools/ci
+          fetch-depth: ${{ github.event_name == 'pull_request' && github.event.pull_request.commits + 1 || 0 }}
+          filter: blob:none
+      - name: Fetch comparison bases
+        run: |
+          set -u
+          PR_BASE="${{ github.event.pull_request.base.sha }}"
+          BEFORE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          bash tools/ci/ci-fetch-diff-base.sh "$PR_BASE" || true
+          bash tools/ci/ci-fetch-diff-base.sh "$BEFORE" || true
+      - uses: ./.github/actions/setup-apex
       - name: Was this head already green as a draft?
-        id: r
+        id: reuse
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_EVENT_ACTION: ${{ github.event.action }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
+      - name: Plan node unit slices
+        id: unit
+        env:
+          EVENT: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+          LIVE_BEFORE: ${{ inputs.before_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/ci-unit-plan-output.sh
+      - name: Does this diff change anything that ships?
+        id: ship
+        env:
+          EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+          SMOKE_ONLY: ${{ inputs.smoke_only }}
+        run: bash tools/ci/ci-ship-filter-step.sh
+      - name: Does this diff touch the renderer?
+        id: renderer
+        if: ${{ inputs.smoke_only != true && !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
+        env:
+          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: bash tools/ci/ci-renderer-filter-step.sh
+      - name: Does this diff touch WebXR?
+        id: xr
+        if: ${{ inputs.smoke_only != true && !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
+        env:
+          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          EVENT: ${{ github.event_name }}
+        run: bash tools/ci/ci-xr-filter-step.sh
+      - name: Restore last run's failing specs
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .selected-failed.txt
+          key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            selected-failed-${{ github.ref_name }}-
+            selected-failed-claude/f1-game-project-26h3ng-
+      - name: Select specs for this change
+        id: sel
+        env:
+          EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
+          PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
+          BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || '' }}
+          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
+        run: bash tools/ci/ci-select-specs-step.sh
+      - name: Was the base already red?
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_BRANCH: claude/f1-game-project-26h3ng
+        run: bash tools/ci/base-verdict.sh "$GITHUB_SHA"
+
+
+  reuse-draft:
+    name: Reuse draft fast-tier?
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && inputs.fast_tier_run == '' && inputs.smoke_only != true }}
+    outputs:
+      reuse: ${{ needs.plan.outputs.reuse }}
+    steps:
+      - run: echo "reuse=${{ needs.plan.outputs.reuse }} (planned in CI plan)"
 
   guards-a:
     name: Structural guards (tooling A)
     needs: reuse-draft
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.fast_tier_run == '' && inputs.smoke_only != true) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: ${{ github.event_name == 'pull_request' && github.event.pull_request.commits + 1 || 0 }}
+          filter: blob:none
         if: needs.reuse-draft.outputs.reuse != 'true'
       - uses: ./.github/actions/setup-apex
         if: needs.reuse-draft.outputs.reuse != 'true'
@@ -388,12 +488,13 @@ jobs:
     needs: reuse-draft
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.fast_tier_run == '' && inputs.smoke_only != true) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: ${{ github.event_name == 'pull_request' && github.event.pull_request.commits + 1 || 0 }}
+          filter: blob:none
         if: needs.reuse-draft.outputs.reuse != 'true'
       - uses: ./.github/actions/setup-apex
         if: needs.reuse-draft.outputs.reuse != 'true'
@@ -410,7 +511,7 @@ jobs:
     name: Structural guards
     needs: [reuse-draft, guards-a, guards-b]
     runs-on: ubuntu-latest
-    if: ${{ !cancelled() && inputs.fast_tier_run == '' && inputs.smoke_only != true }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!cancelled() && inputs.fast_tier_run == '' && inputs.smoke_only != true) }}
     timeout-minutes: 10
     steps:
       - name: Tooling halves must be green
@@ -424,7 +525,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          fetch-depth: 0
+          fetch-depth: ${{ github.event_name == 'pull_request' && github.event.pull_request.commits + 1 || 0 }}
+          filter: blob:none
+      - name: Fetch ratchet comparison base
+        if: needs.reuse-draft.outputs.reuse != 'true'
+        run: |
+          base="${{ github.event.pull_request.base.sha || github.event.before || 'origin/claude/f1-game-project-26h3ng' }}"
+          bash tools/ci/ci-fetch-diff-base.sh "$base" || true
       - uses: ./.github/actions/setup-apex
         if: needs.reuse-draft.outputs.reuse != 'true'
       - name: Ratchet ceilings vs the base
@@ -474,76 +581,17 @@ jobs:
   # and an unneeded row reports green in seconds (see node-suites' `if:`).
   unit-plan:
     name: Plan node unit slices
+    needs: plan
     runs-on: ubuntu-latest
-    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true }}
-    # actions:read for base-green.sh on a deploy push (same contract as
-    # node-suites' plan step). A job that names permissions gets ONLY what
-    # it names, hence contents too.
-    permissions:
-      contents: read
-      actions: read
-    timeout-minutes: 5
+    timeout-minutes: 2
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && inputs.fast_tier_run == '' && inputs.smoke_only != true }}
     outputs:
-      slices: ${{ steps.plan.outputs.slices }}
-      any_node: ${{ steps.plan.outputs.any_node }}
-      driving: ${{ steps.plan.outputs.driving }}
-      reason: ${{ steps.plan.outputs.reason }}
+      slices: ${{ needs.plan.outputs.slices }}
+      any_node: ${{ needs.plan.outputs.any_node }}
+      driving: ${{ needs.plan.outputs.driving }}
+      reason: ${{ needs.plan.outputs.reason }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-      - name: Plan node unit slices
-        id: plan
-        env:
-          EVENT: ${{ github.event_name }}
-          PUSH_BEFORE: ${{ github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          CALLED: ${{ inputs.concurrency_key != '' }}
-          LIVE_BEFORE: ${{ inputs.before_sha }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -u
-          # Schedule / dispatch: no meaningful diff — run every slice.
-          case "$EVENT" in
-            schedule|workflow_dispatch)
-              node tools/ci/pick-unit-slices.mjs --all --github-output
-              exit 0
-              ;;
-          esac
-          # Same delta-gate base as node-suites' plan step (base-green.sh):
-          # Pages call → live commit; PR → event base; push → before only when
-          # that tip was gated green (else fail-safe --all).
-          BASE=""
-          if [ "$CALLED" = "true" ]; then
-            BASE="${LIVE_BEFORE:-}"
-          elif [ "$EVENT" = "pull_request" ]; then
-            # The test commit's first parent, not the event's base.sha, which lags
-            # one sync behind (tools/ci/ci-pr-base.sh; 15-F3, 2026-10-10).
-            BASE="$(bash tools/ci/ci-pr-base.sh "${PR_BASE:-}")"
-          elif [ "$EVENT" = "push" ]; then
-            if [ "$(bash tools/ci/base-green.sh "${PUSH_BEFORE:-}")" = green ]; then
-              BASE="${PUSH_BEFORE:-}"
-            else
-              echo "the previous tip ${PUSH_BEFORE:-?} is not known green: every slice runs" >&2
-              node tools/ci/pick-unit-slices.mjs --all --github-output
-              exit 0
-            fi
-          fi
-          case "${BASE}" in
-            ""|0000000000000000000000000000000000000000)
-              echo "no base SHA — fail-safe --all" >&2
-              node tools/ci/pick-unit-slices.mjs --all --github-output
-              exit 0
-              ;;
-          esac
-          if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-            echo "base $BASE unreachable — fail-safe --all" >&2
-            node tools/ci/pick-unit-slices.mjs --all --github-output
-            exit 0
-          fi
-          node tools/ci/pick-unit-slices.mjs --since "$BASE" --github-output
+      - run: echo "unit plan forwarded from CI plan"
 
   node-suites:
     # Name MUST be exactly `Pure-node unit suites (<slice>)` — those six
@@ -561,7 +609,7 @@ jobs:
     # runs; an unneeded row (matrix.needed=false) skips checkout / npm ci /
     # plan below and reports green in seconds.
     # ready_for_review on the same head SHA: reuse-draft skips the work; names still report.
-    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.fast_tier_run == '' && inputs.smoke_only != true) }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -807,7 +855,7 @@ jobs:
     # change never censused against what is live. On the train the filter diffs
     # live..tip and skips cheaply when no parts path moved.
     # ready_for_review on an unchanged head SHA reuses the draft census.
-    if: ${{ inputs.smoke_only != true }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.smoke_only != true) }}
     # One subtest of parts-visual-distinctness ("every option resolves to
     # itself") measured 559 s of the 999 s sweeps run on 2026-09-01. Its own
     # runner, unconditional and in parallel, so the geometry sweeps finish in
@@ -895,10 +943,11 @@ jobs:
         run: echo "SKIPPED parts census — draft fast-tier already green on this head SHA"
 
   sweeps:
+    needs: [guards, node-suites]
     name: Per-circuit geometry sweeps (${{ matrix.shard }}of4)
     runs-on: ubuntu-latest
     # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
-    if: ${{ inputs.smoke_only != true && !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.smoke_only != true && !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     # FOUR suite shards (2026-10-14). Pages train 38500310338 spent 1118 s in
     # the single-runner Geometry sweeps step (1218 s job) while every browser
     # spec shard was done by ~529 s — ~11 min of train idle on this job alone.
@@ -1157,7 +1206,7 @@ jobs:
   sweeps-roll-up:
     name: Per-circuit geometry sweeps
     needs: [sweeps]
-    if: ${{ always() && !cancelled() && needs.sweeps.result != 'skipped' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (always() && !cancelled() && needs.sweeps.result != 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1166,167 +1215,20 @@ jobs:
 
   ship-filter:
     name: Does this diff change anything that ships?
+    needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # ONE ANSWER, ONCE — not the same answer computed four times behind four
-    # `npm ci`s (2026-09-22). This filter lived inside the smoke job, which is a
-    # FOUR-SHARD matrix, so every shard did a full-history checkout and a
-    # dependency install (3m32s-5m02s measured) BEFORE asking a question whose
-    # answer might be "do not run" — and then each asked the deployments API for
-    # the live SHA and walked its statuses, up to 21 round-trips per shard, four
-    # times over, for one identical string. `renderer-filter` below has been a
-    # separate cheap job all along; this is the same shape.
-    #
-    # Checkout only: no setup-apex, because the script needs `git`, `curl` and
-    # the runner's preinstalled `node`, and none of the repo's dependencies.
-    #
-    # THE SAME `if:` AS SMOKE, deliberately. When smoke does not run, this must
-    # not either, and smoke's `needs: ship-filter` then skips it with this one —
-    # the behaviour the inline filter had by construction.
-    if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
+    timeout-minutes: 2
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
     outputs:
-      ships: ${{ steps.shipfilter.outputs.ships }}
+      ships: ${{ needs.plan.outputs.ships }}
     steps:
-      # fetch-depth: 0 — the filter diffs against the SHA that is currently live
-      # on Pages, which is arbitrarily far back. Same reason the sweeps job takes
-      # the full history.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
-      # DOES THIS DIFF CHANGE ANYTHING THAT ACTUALLY SHIPS?
-      #
-      # pages.yml stages a fixed list of runtime paths into _site/. A commit that
-      # touches none of them deploys BYTE-IDENTICAL content to what is already
-      # live, so a browser gate on it re-proves a page that has not changed.
-      # MEASURED 2026-08-14: runs 1416 and 1417 were both `tests/specs/*` only and
-      # each spent ~13 minutes of smoke to ship an artifact identical to the one
-      # already serving — 26 minutes, twice, for no information.
-      #
-      # DIFFED AGAINST WHAT IS LIVE, NOT AGAINST `before`. The obvious base is the
-      # push's before-SHA, and it is wrong here in a way that fails OPEN: this
-      # branch takes rapid pushes from several concurrent sessions and their runs
-      # cancel each other constantly (eight cancellations on 2026-08-14 alone,
-      # one of them a run that died a single spec from green). So a js/ push whose
-      # run was cancelled, followed by a tests-only push, would diff clean against
-      # `before` and deploy the UNVERIFIED js/ change with the gate skipped. The
-      # github-pages deployment SHA is what is genuinely proven, so that is the
-      # base — cancelled runs in between simply mean more of the diff is visible,
-      # which is the safe direction.
-      #
-      # EVERY uncertainty runs the gate: no token, API error, unparseable reply,
-      # no deployment yet, a SHA git cannot reach (force push), or a diff that
-      # fails. Same fail-safe discipline as the sweeps filter above, for the same
-      # reason — a filter that guesses "nothing changed" when it cannot tell is
-      # how a gate stops gating without anyone noticing.
-      - name: Does this diff change anything that ships?
-        id: shipfilter
-        env:
-          EVENT: ${{ github.event_name }}
-          GH_TOKEN: ${{ github.token }}
-          CALLED: ${{ inputs.concurrency_key != '' }}
-          SMOKE_ONLY: ${{ inputs.smoke_only }}
-        run: |
-          set -u
-          run_all() { echo "ships=true" >> "$GITHUB_OUTPUT"; echo "RUNNING SMOKE: $1"; exit 0; }
-          [ "$SMOKE_ONLY" = "true" ] && run_all "Pages ship-reuse: one smoke shard"
-          # `workflow_call` never appears here: a called workflow sees the
-          # CALLER's event name (`schedule` or `workflow_dispatch` from the
-          # pages.yml train), same as the sweeps filter — so a Pages call is
-          # recognised by its concurrency_key, and it diffs against the live
-          # deployment exactly like a push does.
-          case "$EVENT" in
-            push) ;;
-            *) [ "$CALLED" = "true" ] || run_all "event is '$EVENT', not a push or a Pages call" ;;
-          esac
-          # The staged list is DERIVED from tools/desktop/stage-files.mjs — the
-          # same allow-list pages.yml stages via tools/desktop/stage.mjs. Parsing
-          # `cp … _site/` out of pages.yml went empty when staging moved to the
-          # shared script (ships=true on every train). An empty list is FATAL,
-          # not "run all smoke".
-          PATHS_FILE="${RUNNER_TEMP:-.}/staged-paths.txt"
-          node --input-type=module -e '
-            import { stagedNames } from "./tools/desktop/stage-files.mjs";
-            const names = [...stagedNames()].sort();
-            if (!names.length) {
-              console.error("FATAL: tools/desktop/stage-files.mjs stagedNames() is empty");
-              process.exit(1);
-            }
-            process.stdout.write(names.join("\n") + "\n");
-          ' > "$PATHS_FILE" || { echo "FATAL: could not read staged path list from tools/desktop/stage-files.mjs"; exit 1; }
-          if ! [ -s "$PATHS_FILE" ]; then
-            echo "FATAL: staged path list is empty — refusing to mark ships=true"
-            exit 1
-          fi
-          echo "--- staged paths ($(wc -l < "$PATHS_FILE") entries) ---"; cat "$PATHS_FILE"; echo "--------------------"
-          API="${GITHUB_API_URL:-https://api.github.com}/repos/${GITHUB_REPOSITORY}/deployments?environment=github-pages&per_page=20"
-          RESP=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
-                       -H "Accept: application/vnd.github+json" "$API") \
-            || run_all "could not reach the deployments API"
-          DEPLOYMENTS_FILE="${RUNNER_TEMP:-.}/pages-deployments.tsv"
-          printf '%s' "$RESP" | node -e '
-            let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
-              try {
-                const j = JSON.parse(s);
-                if (!Array.isArray(j)) process.exit(1);
-                for (const d of j) {
-                  if (!d || !d.sha || !d.statuses_url) process.exit(1);
-                  process.stdout.write(`${d.sha}\t${d.statuses_url}\n`);
-                }
-              } catch (_) { process.exit(1); }
-            });' > "$DEPLOYMENTS_FILE" || run_all "could not parse the deployments API reply"
-          [ -s "$DEPLOYMENTS_FILE" ] || run_all "no github-pages deployment recorded yet"
-          LIVE=""
-          while IFS=$'\t' read -r SHA STATUSES_URL; do
-            STATUS_RESP=$(curl -sS -H "Authorization: Bearer ${GH_TOKEN}" \
-                               -H "Accept: application/vnd.github+json" "${STATUSES_URL}?per_page=1") \
-              || run_all "could not read deployment status for $SHA"
-            STATE=$(printf '%s' "$STATUS_RESP" | node -e '
-              let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
-                try { const j = JSON.parse(s); if (Array.isArray(j) && j[0] && j[0].state) process.stdout.write(j[0].state); }
-                catch (_) {}
-              });') || run_all "could not parse deployment status for $SHA"
-            case "$STATE" in
-              success) LIVE="$SHA"; break ;;
-              inactive|failure|error|queued|pending|in_progress) ;;
-              *) run_all "deployment $SHA has no trustworthy status" ;;
-            esac
-          done < "$DEPLOYMENTS_FILE"
-          case "${LIVE:-}" in "") run_all "no successful active github-pages deployment found" ;; esac
-          git cat-file -e "${LIVE}^{commit}" 2>/dev/null || run_all "live SHA $LIVE unreachable in this checkout"
-          CHANGED=$(git diff --name-only "$LIVE" "$GITHUB_SHA") || run_all "git diff against $LIVE failed"
-          echo "--- changed since live ($LIVE) ---"; echo "$CHANGED"; echo "----------------------------------"
-          # Content hashes cover only index.html tags. Deferred renderer code
-          # uses ?v=<build>, and mutable assets/manifest/icons/vendor are served
-          # cache-first at stable paths, so those bytes require a strictly newer
-          # shell/service-worker generation than the active deployment.
-          # (The "strictly newer build generation" check that stood here is
-          # gone: pages.yml stamps the generation from the commit count at
-          # deploy time, so it is newer by construction — 2026-09-01.)
-          # smoke.spec.js is deliberately excluded from the generic selected
-          # job, whose 120 s cap is too short for its measured render probes.
-          # A test-only edit does not change _site, but must still exercise the
-          # fixed 420 s smoke shards that own this spec's blocking coverage.
-          if printf '%s\n' "$CHANGED" | grep -qx 'tests/specs/smoke.spec.js'; then
-            run_all "the fixed smoke spec itself changed"
-          fi
-          # A staged entry is either a file (index.html) or a directory (js) — match
-          # the whole name or anything under it, anchored so `jsfoo/x` cannot pass
-          # as `js`.
-          while IFS= read -r p; do
-            [ -n "$p" ] || continue
-            if printf '%s\n' "$CHANGED" | grep -qE "^${p}(/|$)"; then
-              run_all "the diff touches a shipped path ($p)"
-            fi
-          done < "$PATHS_FILE"
-          echo "ships=false" >> "$GITHUB_OUTPUT"
-          echo "SKIPPING SMOKE: nothing in this diff reaches _site/ — the deployed bytes are unchanged since $LIVE"
+      - run: echo "ships=${{ needs.plan.outputs.ships }}"
+
   smoke:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
     # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
-    if: ${{ !(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
     # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
     # branch and PR push: `inputs` is empty on a plain push, null coerces like
@@ -1426,7 +1328,7 @@ jobs:
     # the condition instead, checkout and the dependency install included: on a
     # diff that ships nothing this job starts, does nothing, and reports success
     # in seconds, exactly as it did when the filter was its first step.
-    needs: [ship-filter]
+    needs: [ship-filter, guards, node-suites]
     steps:
       # fetch-depth: 1 is enough now. The full history was here for the filter,
       # which diffed against an arbitrarily old live SHA; that work moved to the
@@ -1636,7 +1538,7 @@ jobs:
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
     # Also skipped when unit-plan says this diff does not need the characterization
     # (ci-verdict treats that skip as a pass).
-    if: ${{ inputs.fast_tier_run == '' && inputs.smoke_only != true && needs.unit-plan.outputs.driving == 'true' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.fast_tier_run == '' && inputs.smoke_only != true && needs.unit-plan.outputs.driving == 'true') }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1742,99 +1644,18 @@ jobs:
   # still pay for the macOS checkout and npm ci on every push.
   renderer-filter:
     name: Does this diff touch the renderer?
+    needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # NOT IN THE DEPLOY GATE — a decision, not an omission. pages.yml reaches
-    # this file through `ci: uses: ./.github/workflows/ci.yml` and then
-    # `publishable: needs: ci`, so the called workflow's conclusion is the
-    # AGGREGATE of every job in it: there is no `needs:` list to leave a job
-    # out of, and any new job that RUNS on a Pages call joins the gate by
-    # itself. The gate's whole recorded history in this header is a job that
-    # was never measured, timed out on a starved runner, and blocked deploys
-    # while reporting "0 failures". A brand-new job on an image nothing here
-    # has ever run a Playwright spec on is exactly that risk, and §4.5 of the
-    # plan puts the gate at guards + driving-model + one smoke shard +
-    # conditional sweeps (~5 min) with the GPU work on the nightly cron. So:
-    # skipped on the Pages call (a skipped job does not fail the aggregate),
-    # run nightly, on dispatch, and on READY (non-draft) PRs. Draft PRs stay
-    # on the fast tier without a macOS runner (2026-09-02 Actions-minutes cut
-    # still applies to drafts and branch pushes); a ready PR whose diff
-    # touches js/render/** must not claim green without Metal — the path
-    # filter below is what decides, and a skipped filter skips renderer-macos
-    # through `needs:`.
-    #
-    # The Pages call is recognised by `inputs.concurrency_key`, which pages.yml
-    # ALWAYS forwards and nothing else sets — not by `github.event_name`, which
-    # a reusable workflow reports as the CALLER's event ("push"), which is why
-    # the sweeps and smoke filters accept `push` alone. Promoting this
-    # job into the gate once it has a measured green history is one line:
-    # delete this `if:`.
-    if: ${{ inputs.smoke_only != true && !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
+    timeout-minutes: 2
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && inputs.smoke_only != true && !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
     outputs:
-      renderer: ${{ steps.filter.outputs.renderer }}
+      renderer: ${{ needs.plan.outputs.renderer }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
-      # Same shape as the sweeps filter, same rule: FAIL SAFE, NEVER FAIL OPEN.
-      # Any path that cannot resolve a diff RUNS the job. A pull request is
-      # diffed against its own base (pull_request.base.sha) rather than
-      # fail-safed, or every PR would pay for a macOS runner. This comment used
-      # to claim the sweeps filter had no such base to diff; it always had one,
-      # and on the strength of that claim the sweeps filter went on
-      # fail-safing every PR into the full fleet until 2026-09-22.
-      - name: Does this diff touch the renderer?
-        id: filter
-        env:
-          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          EVENT: ${{ github.event_name }}
-        run: |
-          set -u
-          run_all() { echo "renderer=true" >> "$GITHUB_OUTPUT"; echo "RUNNING RENDERER SPECS: $1"; exit 0; }
-          case "$EVENT" in
-            push|pull_request) ;;
-            *) run_all "event is '$EVENT', not a push/pull_request" ;;
-          esac
-          # A PR diffs against the test commit's first parent (ci-pr-base.sh):
-          # the event's base.sha lags one sync behind it.
-          [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
-          case "${BEFORE:-}" in
-            ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push)" ;;
-          esac
-          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable (force push?)"
-          CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
-          echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
-          # The spec half is DERIVED from package.json's test:gfx, as the sweeps
-          # filter derives its suite list — a retyped list drifts.
-          SPECS_FILE="${RUNNER_TEMP:-.}/gfx-specs.txt"
-          node -e 'const s=require("./package.json").scripts["test:gfx"]||"";const m=s.match(/tests\/specs\/[^\s]+/g)||[];if(!m.length)process.exit(1);process.stdout.write(m.join("\n")+"\n")' > "$SPECS_FILE" \
-            || run_all "could not read the gfx spec list out of package.json"
-          echo "--- gfx specs ---"; cat "$SPECS_FILE"; echo "-----------------"
-          # js/render/** is every backend (GLX, WGX, TLX, gltf, assets); the
-          # js/lighting/ files are the lighting/atmosphere/tuner modules whose
-          # numbers the lighting-ab / image-grade / tuner-grade specs pin.
-          # The two playwright configs carry the launch flags this job depends
-          # on, tests/helpers/ is what every spec boots through, and the
-          # workflow file is here so an edit to THIS job runs it.
-          # NOT .github/workflows/ci.yml (2026-09-30): every CI-tooling PR was
-          # buying 13-14 min of macOS (821 s measured on #499, 10x Linux
-          # billing) to re-prove six gfx specs its diff could not touch. A
-          # change to THIS job's steps is tested by `renderer_macos: true` on
-          # a dispatch, or by the nightly.
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/lighting/|playwright(\.gpu)?\.config\.js$|tests/helpers/)' \
-            || printf '%s\n' "$CHANGED" | grep -qxF -f "$SPECS_FILE"; then
-            echo "renderer=true" >> "$GITHUB_OUTPUT"
-            echo "RUNNING RENDERER SPECS: the diff touches the renderer, its lighting modules, a gfx spec or the launch config"
-          else
-            echo "renderer=false" >> "$GITHUB_OUTPUT"
-            echo "SKIPPING RENDERER SPECS: nothing in this diff reaches the renderer"
-          fi
+      - run: echo "renderer=${{ needs.plan.outputs.renderer }}"
 
   renderer-macos:
     name: Renderer specs on a real GPU (macos-latest, Metal)
-    needs: renderer-filter
+    needs: [renderer-filter, guards, node-suites]
     # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
     # comment forbids it, because this job is already outside the deploy gate
     # (renderer-filter is skipped on the Pages call, so this is too). The
@@ -1931,53 +1752,18 @@ jobs:
   # (the rotation excludes test:xr for the same reason gfx is excluded).
   xr-filter:
     name: Does this diff touch WebXR?
+    needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # Draft PRs stay on the fast tier (2026-09-30): emulated XR is a heavy
-    # Chromium suite — same draft skip as renderer-filter / smoke / sweeps.
-    # Ready PRs, topic pushes, and dispatch still path-gate it.
-    if: ${{ inputs.smoke_only != true && !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
+    timeout-minutes: 2
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && inputs.smoke_only != true && !inputs.concurrency_key && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
     outputs:
-      xr: ${{ steps.filter.outputs.xr }}
+      xr: ${{ needs.plan.outputs.xr }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - name: Does this diff touch WebXR?
-        id: filter
-        env:
-          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          EVENT: ${{ github.event_name }}
-        run: |
-          set -u
-          run_all() { echo "xr=true" >> "$GITHUB_OUTPUT"; echo "RUNNING test:xr: $1"; exit 0; }
-          case "$EVENT" in
-            push|pull_request) ;;
-            *) run_all "event is '$EVENT' (dispatch forces the suite)" ;;
-          esac
-          # A PR diffs against the test commit's first parent (ci-pr-base.sh): the
-          # event's base.sha lags one sync behind it, and this filter's regex names
-          # ci.yml, so a stale base re-ran the 25-minute VR job on every ready PR
-          # whose base had taken a ci.yml merge since (15-F3, 2026-10-10).
-          [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
-          case "${BEFORE:-}" in
-            ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push)" ;;
-          esac
-          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable"
-          CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
-          echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/xr/|tests/specs/vr-emulated\.spec\.js$|tests/helpers/iwer-install\.mjs$|tests/vendor/iwer-2\.5\.0\.min\.js$|playwright\.config\.js$|\.github/workflows/ci\.yml$)'; then
-            echo "xr=true" >> "$GITHUB_OUTPUT"
-            echo "RUNNING test:xr: the diff touches WebXR, IWER, or the xr-emulated project"
-          else
-            echo "xr=false" >> "$GITHUB_OUTPUT"
-            echo "SKIPPING test:xr: nothing in this diff reaches WebXR"
-          fi
+      - run: echo "xr=${{ needs.plan.outputs.xr }}"
 
   xr:
     name: Emulated VR (IWER / xr-emulated)
-    needs: xr-filter
+    needs: [xr-filter, guards, node-suites]
     if: needs.xr-filter.outputs.xr == 'true'
     runs-on: ubuntu-latest
     # Unmeasured on CI; local IWER suite is minutes. Cap generously.
@@ -2030,97 +1816,17 @@ jobs:
   # context is the caller's push) use event.before, with HEAD~1 as the fallback.
   select:
     name: Select specs for this change
+    needs: plan
     runs-on: ubuntu-latest
-    # A Pages call (the train) is a gate too: it carries a concurrency_key and
-    # its before_sha is the live commit, so the plan reads "what changed since
-    # what is live". The caller's event is `schedule` there, hence the third
-    # clause rather than an event test.
-    # `schedule` is the nightly's CHANGE-AWARE lane (tools/ci/ci-resolve-before.sh):
-    # every spec the last day of merges routed, with room for more overflow
-    # shards than one change gets — so a spec a 15-minute per-change budget
-    # squeezes out runs within a day, not on its group's night in 11.
-    if: ${{ inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'merge_group' || inputs.concurrency_key != '') }}
-    # actions:read on top of the workflow default — the base-verdict step at the
-    # end lists this workflow's runs on the deploy branch. A job that names
-    # permissions gets ONLY what it names, hence contents too.
-    permissions:
-      contents: read
-      actions: read
-    timeout-minutes: 10
+    timeout-minutes: 2
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'merge_group' || inputs.concurrency_key != '') }}
     outputs:
-      shards: ${{ steps.sel.outputs.shards }}
-      any: ${{ steps.sel.outputs.any }}
-      # How many routed specs the plan could NOT run, and why the plan exists at
-      # all. poke-train needs both to tell an empty plan from an unaffordable one.
-      dropped: ${{ steps.sel.outputs.dropped }}
-      reason: ${{ steps.sel.outputs.reason }}
+      shards: ${{ needs.plan.outputs.shards }}
+      any: ${{ needs.plan.outputs.any }}
+      dropped: ${{ needs.plan.outputs.dropped }}
+      reason: ${{ needs.plan.outputs.select_reason }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-          filter: blob:none
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-      # PREVIOUSLY-FAILING SPECS, carried across runs. Fowler's TIA survey
-      # records Microsoft's TIA and Google's Testar both re-running the last
-      # run's failures unconditionally — a test that just failed is the single
-      # best predictor of failing again, and a fresh runner otherwise forgets.
-      # restore-keys makes a miss harmless: the file is simply absent and the
-      # selector proceeds without it.
-      - name: Restore last run's failing specs
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .selected-failed.txt
-          key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
-          # A PR also inherits the DEPLOY BRANCH's last failures: only the train
-          # used to promote a spec that just failed there to rank 1, so a PR
-          # touching the same routes could skip it and merge onto the red.
-          restore-keys: |
-            selected-failed-${{ github.ref_name }}-
-            selected-failed-claude/f1-game-project-26h3ng-
-      # tools/ci/ci-select-specs-step.sh: base via ci-resolve-before.sh, then
-      # select-specs.mjs --json; it fails closed on "unmatched" and writes the
-      # `shards` matrix (one budgeted shard plus one per oversize affected spec,
-      # each with its derived cap) and `any` to $GITHUB_OUTPUT.
-      - name: Select specs for this change
-        id: sel
-        env:
-          # On a Pages call the resolver is handed the train's base as a push:
-          # EVENT=push with PUSH_BEFORE = the live commit. EMPTY when the live
-          # site was unreadable — and CALLED makes that select EVERYTHING (the
-          # empty tree), like the sweeps/parts/ship filters, never HEAD~1: a
-          # one-commit slice of a tip carrying every unpublished commit.
-          EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
-          PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
-          PR_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-          CALLED: ${{ inputs.concurrency_key != '' }}
-          # The nightly lane (tools/ci/ci-resolve-before.sh): a day's union diff
-          # routes ~70 specs, so 60-minute shards and 12 overflow shards, stale
-          # first. Simulated on 2026-09-29's 85 merges: 19 shards, 606 tests,
-          # no routed spec left skipped (menu-traversal, ui-redesign and
-          # time-trial — the day's latent reds — all run). Once a night.
-          BUDGET_MIN: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '60' || '' }}
-          OVERFLOW_SHARDS: ${{ github.event_name == 'schedule' && !inputs.concurrency_key && '12' || '' }}
-        run: bash tools/ci/ci-select-specs-step.sh
-      # WHOSE RED IS IT? A gate that goes red asks two different questions
-      # depending on a fact nobody has to hand: was the base already red?
-      # Train #2348 (2026-09-16) failed on the sweeps and on `selected` while
-      # the change under it was a tooling edit that could touch neither, and
-      # establishing that took several API calls and a log download. One line
-      # in the summary answers it for every run, red or green.
-      #
-      # It lives here because this job already has what the lookup needs — a
-      # fetch-depth: 0 checkout (ancestry is a git question) and npm ci — and
-      # because `select` runs on every push, PR and Pages call. `if: always()`
-      # plus continue-on-error, belt and braces: a report may never decide a
-      # verdict, and the script itself exits 0 on every failure.
-      - name: Was the base already red?
-        if: always()
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DEPLOY_BRANCH: claude/f1-game-project-26h3ng
-        run: bash tools/ci/base-verdict.sh "$GITHUB_SHA"
+      - run: echo "select forwarded from CI plan"
 
   selected:
     name: Selected specs (change-aware gate)
@@ -2135,10 +1841,10 @@ jobs:
     # on the few runs whose guards are red (4 of 100 ship runs).
     # (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
     # — "If a job fails or is skipped, all jobs that need it are skipped".)
-    needs: [select]
+    needs: [select, guards, node-suites]
     # Drafts skip the matrix (required name is selected-verdict). smoke_only
     # Pages skips.
-    if: ${{ inputs.smoke_only != true && needs.select.outputs.any == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.smoke_only != true && needs.select.outputs.any == 'true' && !(github.event_name == 'pull_request' && github.event.pull_request.draft)) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -2365,7 +2071,7 @@ jobs:
     # BEFORE deciding: failures in junit stay a hard fail; clean junit marks
     # infra-retry and exits 0. ci-verdict defers `selected` to this job when
     # this job is green, so the aggregator does not re-fail on the rollup.
-    if: ${{ !cancelled() && inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group' || inputs.concurrency_key != '') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!cancelled() && inputs.smoke_only != true && (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'merge_group' || inputs.concurrency_key != '')) }}
     steps:
       # Junit must land BEFORE the verdict: cancel/red with clean junit is
       # infra-retry (selected-gate-verdict.mjs). Carry-forward still uses the
@@ -2483,7 +2189,7 @@ jobs:
     # "re-bless, then confirm across a few runs", which a nightly and a
     # dispatch answer without a runner slot on every push while 200-290 jobs
     # queue (docs/notes/CI-CAPACITY-2026-09-29.md).
-    if: ${{ inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -2567,7 +2273,7 @@ jobs:
     # SKIPPED node-suites / driving-model ARE a pass when unit-plan said the
     # slice was not needed (path-filtered). A skip for any other reason (cancelled
     # parent, plan failure) is not a poke.
-    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.unit-plan.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.unit-plan.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.unit-plan.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) && needs.select.outputs.dropped == '0' }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (!cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.unit-plan.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.unit-plan.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.unit-plan.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) && needs.select.outputs.dropped == '0') }}
     permissions:
       actions: write
       contents: read
@@ -2655,6 +2361,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs:
+      - plan
       - reuse-draft
       - guards-a
       - guards-b
@@ -2676,7 +2383,7 @@ jobs:
       - selected-verdict
       - baseline-trial
       - poke-train
-    if: ${{ !cancelled() }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && !cancelled() }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
