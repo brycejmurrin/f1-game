@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // run-group.mjs — run one tests/groups.json script's files (optionally minus tooling-fast).
-// @doc PR-only topical runner: drop TOOLING_FAST_FILES so always-on vm-b1 riders do not double-bill.
+// @doc PR-only topical runner: drop TOOLING_FAST_FILES so the always-on riders (vm-a1 / vm-a2 / slow arms) do not double-bill.
 //
 //   node tools/ci/run-group.mjs test:steering-unit           # every file in the group
 //   node tools/ci/run-group.mjs test:steering-unit --skip-tf # omit tooling-fast overlap
 //
-// ci.yml's vm-b1 arm calls this when the node-plan sets NODE_PLAN_SKIP_TF=1
+// ci.yml's vm-a1 / vm-a2 / slow arms call this when the node-plan sets NODE_PLAN_SKIP_TF=1
 // (pull_request matched plans only). Deploy / Pages / nightly keep
 // `npm run test:<x>` unchanged. Empty after filter → exit 0 with SKIPPED.
 import { spawnSync } from "node:child_process";

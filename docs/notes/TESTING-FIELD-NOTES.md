@@ -2217,3 +2217,27 @@ the real sign-off anyway. The GLX leg's `#game-soft` capture stays the way to
 SEE a wet-weather frame locally (`scratchpad` script: race → `weather("rain")`
 AFTER the build, since `race()` applies the race settings' weather → `go` →
 `jump` → 7 s for the 0.8/s rain ramp → `screenshotPresentedCanvas`).
+
+## 2026-10-14 — isolated CI retries yes, a `gl` test lock not yet (#1716)
+
+Pinned Playwright is 1.63; both options exist (`retryStrategy` since 1.62,
+https://playwright.dev/docs/api/class-testconfig#test-config-retry-strategy;
+per-test / per-describe `lock`, https://playwright.dev/docs/test-parallel —
+not settable per project or config).
+
+- **`retryStrategy: "isolated"` under CI — adopted.** Retries run after the
+  shard, one by one in one worker. The 2026-09-30 entry above is the case for
+  it: a load-induced capture timeout re-ran immediately beside the same load.
+  Cost is the retries' own time, already inside `select-budget`'s
+  `perFailureSec` (a retry is a retry either way). Local runs keep
+  `immediate` (retries are 0 there). Pinned by `browser-workers.test.mjs`.
+- **`lock: "gl"` — not adopted, not measured.** A lock only matters with
+  `workers > 1`, and every place that runs this suite is at 1 render worker:
+  `LOCAL_WORKERS` is 1 on ≤ 4 cores, `browser-group.yml` defaults `workers`
+  to 1 after the entry above, and CI's headless/render project split already
+  keeps JSON-only specs off the GL budget. Measuring it would mean
+  `LOCAL_WORKERS > 1` on a 4-core box — the configuration that entry showed
+  turns green specs red. Revisit when a runner with ≥ 8 cores runs the
+  render project: tag the render specs with `test.describe.configure({ lock:
+  "gl" })` and compare loadavg and false timeouts at `--workers=2` against
+  one worker.

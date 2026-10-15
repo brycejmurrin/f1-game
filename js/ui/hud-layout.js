@@ -833,7 +833,7 @@ const HudLayout = (function () {
 
   // Temporary screen-pixel corrections never enter the saved MOVE & SIZE layout.
   // Controls and primary instruments reserve their space before optional panels.
-  const CLEAR_READOUTS = ["speed", "limits", "announce", "damage", "rel", "strat", "inputs"];
+  const CLEAR_READOUTS = ["map", "speed", "limits", "announce", "damage", "rel", "strat", "inputs"];
   function resetClearance() {
     if (!doc || !doc.querySelector) return;
     for (const [id, , sel] of ELEMENTS) {
@@ -860,8 +860,17 @@ const HudLayout = (function () {
     const inset = (name) => safe && safe.getPropertyValue ? Math.max(0, parseFloat(safe.getPropertyValue(name)) || 0) : 0;
     const bounds = { left: EDGE + inset("--sal"), top: EDGE + inset("--sat"), right: W - EDGE - inset("--sar"), bottom: H - EDGE - inset("--sab") };
     const inside = (r) => r.left >= bounds.left && r.top >= bounds.top && r.right <= bounds.right && r.bottom <= bounds.bottom;
+    const mapEl = doc.querySelector("#minimap");
+    const mapBox = mapEl && !has("desktop") && has("hud-prof-broadcast") && W > H
+      && !mapEl.hasAttribute("data-hl-user") ? box(mapEl) : null;
+    const autoMap = mapBox && Array.from(doc.querySelectorAll(".touchbtn, .steerbtn, .shiftbtn")).some((el) => {
+      const r = box(el);
+      return r && mapBox.left < r.right - 0.5 && mapBox.right > r.left + 0.5
+        && mapBox.top < r.bottom - 0.5 && mapBox.bottom > r.top + 0.5;
+    });
     const blocks = [];
     for (const el of doc.querySelectorAll(".touchbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
+      if (autoMap && el === mapEl) continue;
       const r = box(el); if (r) blocks.push(r);
     }
     // A player-placed radio is an obstacle, never another automatic candidate.
@@ -877,6 +886,9 @@ const HudLayout = (function () {
         el.removeAttribute("data-lane-collapsed");
       }
       let r = box(el); if (!r) continue;
+      // Only the shipped broadcast map yields to controls; custom maps remain
+      // fixed obstacles, retaining their saved offset and dimensions.
+      if (id === "map" && !autoMap) continue;
       if (id === "announce" && placedRadio) { blocks.push(r); continue; }
       // SPEED moves only for the desktop visor, where its shipped vertical
       // offset can meet the enlarged gearbox. Everywhere else it has priority.
