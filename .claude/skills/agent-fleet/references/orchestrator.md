@@ -55,7 +55,21 @@ Do not enable auto-merge or merge.
   with `get_session` right after the spawn: `permission_mode` is what the child
   actually got (a request for `default` landed as `auto` on 2026-10-15 and the
   reverse happened too), and a `default` child's prompts appear only in the
-  app, where the user must answer them in that session.
+  app, where the user must answer them in that session. An auto child needs an
+  auto parent: from a `default` session `create_session` refuses with
+  "permission_mode 'auto' requires the parent session to be in auto mode", so
+  ask the user to switch YOUR session to Auto before a launch.
+- **What an auto worker can do unattended** (measured 2026-10-15 on 76637056,
+  about 100 calls in two auto siblings: 0 prompts, 0 blocks): git and worktree
+  commits, the `worker` and `Explore` subagents, tasks, worktree tools,
+  sibling-to-sibling `send_message` (both ways, ~20 s), GitHub reads, skills,
+  web, and every MCP server. The `.mcp.json` servers (apex-tools,
+  chrome-devtools, playwright-official), MDN, BrowserStack, Bash and Agent are
+  approved by the classifier, not a rule: a repository cannot pre-approve the
+  servers it defines itself, so no `.claude/settings.json` entry helps them.
+  Still gated by design: merges and ready flips (`github-mcp-guard.sh`), and
+  `APEX_PUSH_HOLD=0` (the classifier rejects it as `[Safety Bypass Flag]`, so a
+  worker waits for `queue-depth.mjs` to read ok, or the user pushes it).
 - **The repo is not inherited.** `create_session` without `source_url` makes a
   session with an EMPTY working directory, tagged `config:no-git-repo` (two
   census siblings on 2026-10-15 stopped at their first `git log`). Always pass
