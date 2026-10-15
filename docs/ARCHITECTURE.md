@@ -562,6 +562,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
 | `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
+| `shot-clear.js` | `ShotClear` | LAZY_AGENT | ShotClear: keeps the agent's free cameras (__apex.orbit / cinematic / view) from shooting through a hill, a building or a tree. blocker() walks the eye→target… |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
 
 **`js/circuits/`**

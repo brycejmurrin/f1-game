@@ -147,6 +147,7 @@
     LAZY_AGENT: [
     "js/agent/agentview-raster.js",
     "js/agent/agentview.js",
+    "js/agent/shot-clear.js",
     "js/agent/apex.js"
   ],
     LAZY_EDGES: [

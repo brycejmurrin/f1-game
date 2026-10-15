@@ -3,7 +3,9 @@
 // @doc Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`.
 // @skill playwright-probe
 //
-//   node tools/shot/apex-eval.mjs <trackId> "<expr>"
+//   node tools/shot/apex-eval.mjs <trackId> "<expr>"   # expr may be multi-statement; extra argv words join the expr
+//   node tools/shot/apex-eval.mjs <trackId> --expr-file path.js
+//   node tools/shot/apex-eval.mjs <trackId> -   # read expr from stdin (multi-line)
 //   node tools/shot/apex-eval.mjs monaco "a.camera()"
 //   node tools/shot/apex-eval.mjs spa    "a.corners().length"
 //   node tools/shot/apex-eval.mjs monza  "(a.go(), a.jump(0.2,55), a.physState())"
@@ -34,6 +36,8 @@
 
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
@@ -41,6 +45,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, 
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `usage: node tools/shot/apex-eval.mjs <trackId> "<expr>" [--raw] [--backend three|webgl2|webgpu] [--vm]
   \`a\` is window.__apex inside the expr (async is awaited); default output is shape-compacted, --raw dumps it.
+  Expr may span lines (--expr-file, stdin \`-\`, or multiple argv tokens after the track id).
   Boots its own static server + Chromium; --vm boots js/game.js in a Node VM instead (no browser, no pixels,
   \`g\` is the VM handle). Examples in the header of this file.`);
 const raw = argv.includes("--raw");
@@ -59,6 +64,7 @@ for (let i = 0; i < argv.length; i++) {
   if (a === "--raw" || a === "--vm") continue;
   const m = /^--backend(?:=(.*))?$/.exec(a);
   if (m) { backend = m[1] != null ? m[1] : argv[++i]; backendPinned = true; continue; }
+  if (a === "--expr-file") { rest.push(a, argv[++i]); continue; }
   rest.push(a);
 }
 if (!BACKENDS.includes(backend)) {
@@ -66,7 +72,25 @@ if (!BACKENDS.includes(backend)) {
   process.exit(2);
 }
 const track = rest[0] || "monza";
-const expr = rest[1] || "a.info()";
+
+function resolveExpr(parts) {
+  if (!parts.length) return "a.info()";
+  if (parts[0] === "--expr-file") {
+    const p = parts[1];
+    if (!p) throw new Error("apex-eval: --expr-file requires a path");
+    return readFileSync(resolve(p), "utf8").trim();
+  }
+  if (parts[0] === "-") return readFileSync(0, "utf8").trim();
+  return parts.join(" ").trim() || "a.info()";
+}
+
+let expr;
+try {
+  expr = resolveExpr(rest.slice(1));
+} catch (e) {
+  console.error(e.message || e);
+  process.exit(2);
+}
 if (vmRoute && backendPinned) {
   console.error("apex-eval: --vm has no renderer, so --backend means nothing there; drop one of them");
   process.exit(2);

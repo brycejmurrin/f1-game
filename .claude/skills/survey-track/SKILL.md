@@ -85,6 +85,48 @@ hands over to **new-track**, not dressing; routing is in the description.
 Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
 before re-applying that fix.
 
+## PARENT survey captures (shared shot tooling)
+
+Use the real tools — not legacy `props-over-road-audit` names:
+
+| Step | Command |
+|------|---------|
+| Baseline aerial + orbit/EYE grid | `node tools/track/survey-track.mjs <id> before` |
+| Offline measurements | `node tools/track/audit-circuit.cjs <id> --json` |
+| Bespoke frames / weather variants | `node tools/shot/shot.mjs` or `--batch jobs.jsonl` |
+| Numeric probes (no pixels) | `node tools/shot/apex-eval.mjs <id> "<expr>"` or `--vm` |
+
+**Weather** (per job or `--weather`): `dry`, `wet`, `rain`, `overcast`, `fog`, `storm`
+(game: `js/race/weather-arc.js`). **Time of day** (`--tod`): `day`, `dawn`, `dusk`,
+`night`. Night race lighting is authored only on circuits with `night: true` in the
+def (`abudhabi`, `bahrain`, `baku`, `jeddah`, `qatar`, `singapore`, `vegas`); other
+tracks accept `night` for sky/fog but lack dedicated night scenery.
+
+**Filename convention** (committed survey goldens):
+
+`artifacts/shots/tracks/<id>-<nn>-<view>-<weather>-<tod>.png`
+
+(`nn` = two-digit sequence, `view` = cam slug e.g. `orbit`, `eye`, `aerial`.)
+
+**Recommended plan:** 30–36 PNGs per circuit — core orbit/EYE/aerial stations plus
+weather variants on **4–6 key views** (dry day baseline, dusk, night where supported,
+wet/rain/fog on one landmark straight and one corner). Batch via JSONL; one Chromium
+boot groups compatible `track` / `team` / `tod` / `weather` jobs.
+
+```sh
+# Parent: run capture once in the background; do not parallel with browser tests.
+node tools/shot/shot.mjs --batch artifacts/shots/tracks/<id>-jobs.jsonl \
+  --present-timeout 90 --wait 120 &
+```
+
+Default renderer **`three` (TLX)**. On GPU-less VMs prefer SwiftShader (default);
+**`--gpu llvmpipe` often trips the black-frame guard** — use `--present-timeout`
+and retries, or avoid llvmpipe for survey goldens.
+
+**Guards:** never loosen shared audit baselines (`audit-circuit.cjs`, `verify-track`,
+`tests/data/*-baselines.json`) to make a survey green — fix the circuit or report
+the baseline gap to the parent.
+
 ## Load on demand
 
 - Probe flags, Montreal worked example, gotchas, and the PARENT-only steps
