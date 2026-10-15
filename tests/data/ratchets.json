@@ -34,8 +34,8 @@
       "lines": 757
     },
     "js/ui/hud.js": {
-      "codeLines": 1594,
-      "lines": 2652
+      "codeLines": 1596,
+      "lines": 2656
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
