@@ -42,10 +42,13 @@
       ambientSky:    [0.54, 0.56, 0.60],
       ambientGround: [0.34, 0.31, 0.24],
       fogColor:      [0.80, 0.78, 0.70],
-      grass:         [0.34, 0.40, 0.21],
+      grass:         [0.46, 0.46, 0.34],   // bleached limestone plateau; [0.34,0.40,0.21] read olive-green, [0.56,0.53,0.38] desert-orange
       runoff:        [0.42, 0.44, 0.62],   // the famous blue-tinted abrasive runoff
       sunDir:        [0.34, 0.78, 0.24],
     },
+    // SOURCE fracs (control-point index) on this reversed def, NOT racing fracs:
+    // built profile is +3.1 m at racing 0.70, -3.6 m at 0.35, +2.5 m at 0.12.
+    // docs/tracks/paul_ricard.md §3 reads them as racing positions (doc fix).
     elevations: [
       { s: 0.30, halfM: 460, rise: 3.0 },
       { s: 0.66, halfM: 420, rise: -3.5 },
