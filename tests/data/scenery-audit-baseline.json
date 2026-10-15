@@ -1,6 +1,5 @@
 {
   "buried": {
-    "abudhabi": 0,
     "albert_park": 3,
     "anderstorp": 2,
     "bahrain": 19,
@@ -8,7 +7,7 @@
     "brands_hatch": 3,
     "buenos_aires": 1,
     "catalunya": 5,
-    "cota": 11,
+    "cota": 10,
     "dijon": 1,
     "donington": 3,
     "fuji": 12,
@@ -30,7 +29,6 @@
     "paul_ricard": 2,
     "qatar": 8,
     "redbull": 3,
-    "sepang": 7,
     "shanghai": 11,
     "silverstone": 40,
     "singapore": 4,
@@ -85,7 +83,6 @@
     "okayama": 1,
     "paul_ricard": 10,
     "qatar": 2,
-    "sepang": 1,
     "silverstone": 6,
     "singapore": 4,
     "sochi": 4,
