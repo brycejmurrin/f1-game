@@ -4821,7 +4821,12 @@ function collideFx(a, b, impact) {
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
-  if (soundOn) GameAudio.collision(impact);
+  if (soundOn) {
+    const other = a.isPlayer ? b : a;
+    const lat = (other.x != null ? other.x : 0) - (pc.x != null ? pc.x : 0);
+    const side = Math.abs(lat) > 0.08 ? Math.max(-1, Math.min(1, lat / 3.5)) : 0;
+    GameAudio.collision(impact, false, side);
+  }
   shake = Math.min(1, shake + impact * 0.45);
   hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;

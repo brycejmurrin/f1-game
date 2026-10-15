@@ -688,6 +688,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
   "tests/unit/platform-session-install.test.mjs",
+  // Player collision stereo side: default centred blip path; optional pan via contact pool.
+  "tests/unit/player-collision-side.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
