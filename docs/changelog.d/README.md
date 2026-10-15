@@ -16,8 +16,11 @@ only, no refactors, CI or tooling). A PR with no player-facing change adds no fr
 
 Check: `node tools/gen/gen-changelog.mjs --check` (part of `npm run gen:check`).
 
-Fold (Merge Desk or the deploy, after the build number is stamped in `version.json`):
+Fold: Merge Desk opens one fold PR (`npm run fold` on a fresh branch off the deploy tip) when the
+fragments pile up, at most daily. A fold PR conflicts with no open PR, because no PR edits CHANGELOG.md or
+another PR's fragment. It folds the ratchet raise fragments too (`tests/data/ratchets.d/`,
+`docs/notes/RATCHET-FRAGMENTS-2026-10-15.md`):
 
 ```sh
-node tools/gen/gen-changelog.mjs --fold     # fragments -> "## <build>" in CHANGELOG.md, fragments deleted
+npm run fold     # gen-changelog --fold (fragments -> "## <build>" from version.json) + ratchets.mjs --fold
 ```

@@ -37,7 +37,7 @@ line) solved DIFFERENT modules; no layout of an absolute number can solve the SA
   (`tests/unit/ratchet-merge-hotspot.test.mjs` asserts it).
 - `--update` (a deliberate snap, and deploy.mjs's conflict cure) and `--fold` write the sum back as absolutes and
   delete the fragments. A fold commit touches only ratchets.json and deletes fragment files, which no open PR edits
-  either, so it conflicts with no open PR. Run `--fold` whenever the directory grows long. The release step is the
-  natural home for it, next to the CHANGELOG fold.
+  either, so it conflicts with no open PR. `npm run fold` runs it together with the CHANGELOG fold
+  (`docs/changelog.d/README.md`): one Merge Desk fold PR when the fragments pile up.
 - The deploy branch or a detached HEAD still writes absolutes: nothing merges into either except through a PR.
 - The fragments are tool-written: `protect-files.py` refuses a hand edit, like ratchets.json.
