@@ -56,10 +56,9 @@
             const h = 2.0 + t * 2.9;
             addBox(out, vadd(a.c, a.u, h * 0.5), [3.9, h, seg],
               t % 3 === 2 ? EARTH_D : (t & 1 ? STONE_D : EARTH), b);
-            // Crowd band: sink 5 cm into the terrace (supported via BFS touch)
-            // and shorten/nudge on t so end-walls are not flat-coplanar.
-            addBox(out, vadd(vadd(a.c, a.t, (t & 1 ? 0.35 : -0.35)), a.u, h + 0.55),
-              [2.8, 1.2, seg * 0.82],
+            // Crowd band: slight lip over terrace top (h) — shallow, still BFS-supported.
+            addBox(out, vadd(vadd(a.c, a.t, (t & 1 ? 0.35 : -0.35)), a.u, h + 0.62),
+              [2.7, 1.05, seg * 0.76],
               CROWD[(i + t) % 3 === 0 ? 0 : (i + t) % 3], b);
           }
           i++;
@@ -224,7 +223,7 @@
         if (!(s > 0.90 || s < 0.05) || h < 0.55) return;
         // Further out on flatter apron (was 56+h*10 → bury on the grade).
         if (h < 0.72) return;
-        motorhome(k, 1, 80 + h * 16, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
+        motorhome(k, 1, 88 + h * 18, 10, 4, 6, { wall: [0.64 + h * 0.26, 0.64, 0.66] });
       });
       broadcastCompound(K(0.915), 1, 72, { vans: 3, dishes: 2, mastH: 9 });
       for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.86, 0.16, 0.14]);
@@ -350,6 +349,6 @@
       });
       for (const [s0, s1] of [[0.1, 0.32], [0.48, 0.91]]) {
         for (const side of [-1, 1])
-          forestEdge(s0, s1, side, 20, { density: 0.42, hMin: 9, hMax: 17, pineFrac: 0.72, col: PINE, col2: PINE_D });
+          forestEdge(s0, s1, side, 20, { density: 0.34, hMin: 9, hMax: 16, pineFrac: 0.72, col: PINE, col2: PINE_D });
       }
     };
