@@ -125,3 +125,13 @@ test("RENDER_HEAVY_SPEC_IDS stays aligned with playwright.config.js RENDER_SPECS
   const ids = [...block[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]);
   assert.deepEqual([...RENDER_HEAVY_SPEC_IDS].sort(), [...ids].sort());
 });
+
+test("CI retries run isolated at the end of the shard; local runs keep immediate (#1716)", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const read = (ci) => execFileSync(process.execPath, ["--input-type=module", "-e",
+    "const c = (await import(process.argv[1])).default; process.stdout.write(JSON.stringify({ r: c.retries, s: c.retryStrategy }))",
+    path.join(ROOT, "playwright.config.js")],
+  { cwd: ROOT, encoding: "utf8", env: { ...process.env, CI: ci ? "true" : "" } });
+  assert.deepEqual(JSON.parse(read(true)), { r: 1, s: "isolated" });
+  assert.deepEqual(JSON.parse(read(false)), { r: 0, s: "immediate" });
+});
