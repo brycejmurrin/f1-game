@@ -731,6 +731,21 @@ const WGX = (function () {
     let _softBlitSeq = 0;
     let _softBlitShown = 0;
     let _softDisplayPending = false, _softDisplayEpoch = 0;
+    // SOFT-PRESENT BACK-PRESSURE (TLX present() parity, #2226). A software
+    // readback lands only after the GPU process drains every submission queued
+    // ahead of its map, so rendering every rAF while one waits grew the queue
+    // without bound: measured on SwiftShader (montreal), the first blit took
+    // 32 s behind ~500 frames and the next never landed inside a probe's 60 s.
+    // begin() refuses frames while a read waits. Past the bound it lets ONE
+    // frame through and re-arms (a map that never settles must not stall the
+    // loop for good), never a flood: frames drawn while the copy is refused
+    // reach no pixel, they only queue ahead of the read.
+    const SOFT_HOLD_MAX_MS = 20000;
+    let _softDisplaySince = 0;
+    const _softNow = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+    function _softFrameHeld() {
+      return _softGpu && _softDisplayPending && _softNow() - _softDisplaySince <= SOFT_HOLD_MAX_MS;
+    }
     let _softSceneGen = 0, _softShownGen = 0;
     let _softLastMaxPx = 0, _softLastSkip = "";
     // sessionStorage apex26.wgxHoldPresent=1 (set before reload) skips copy+map
@@ -2088,6 +2103,7 @@ const WGX = (function () {
         );
         _softBlitSeq++;
         _softDisplayPending = true;
+        _softDisplaySince = _softNow();
         return { buf, bpr, w, h, seq: _softBlitSeq, epoch: _softDisplayEpoch, sceneGen: _softSceneGen };
       } catch (_) {
         try { if (buf) buf.destroy(); } catch (_) { /* partial encode */ }
@@ -3643,6 +3659,10 @@ const WGX = (function () {
       _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
       if (_gpuErrLastPresent >= 0 && _presentCount - _gpuErrLastPresent > GPU_ERR_QUIET_FRAMES) { _gpuErrFrames = 0; _gpuErrRun = 0; }
       if (_lost) return false;
+      if (_softGpu && _softDisplayPending) {
+        if (_softFrameHeld()) return false;
+        _softDisplaySince = _softNow();
+      }
       try {
         // Before ANY of this frame's work: a pending capture that needs a
         // copyable swapchain gets its reconfigure here, where nothing has been
@@ -5813,7 +5833,12 @@ const WGX = (function () {
     const castShadow = (...a) => SHD.castShadow(...a);
     const castShadowChunked = (...a) => SHD.castShadowChunked(...a);
     const shadowEnd = (...a) => SHD.shadowEnd(...a);
-    const carShadowBegin = (...a) => SHD.carShadowBegin(...a);
+    // The car map renders every frame on its own encoder: while a soft read
+    // waits it was the last per-frame submitter (#2226). KEEP the map instead.
+    const carShadowBegin = (...a) => {
+      if (_softGpu && _softDisplayPending) { SHD.carShadowKeep(); return; }
+      SHD.carShadowBegin(...a);
+    };
     const carShadowEnd = (...a) => SHD.carShadowEnd(...a);
     const lampShadowBegin = (...a) => SHD.lampShadowBegin(...a);
     const lampShadowEnd = (...a) => SHD.lampShadowEnd(...a);
