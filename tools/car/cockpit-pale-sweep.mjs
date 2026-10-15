@@ -18,6 +18,7 @@
 // The guard built on this lives in tests/unit/cockpit-pale-surfaces.test.mjs.
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
 
 // Pale = bright in EVERY channel with a modest spread, i.e. reads as a blank
 // grey/white panel rather than as a coloured surface. A saturated accent
@@ -111,6 +112,12 @@ export function sweep(mesh, { vfov = 78, aspect = 2.2, step = 1.5 } = {}) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // --help and a typo'd flag answer before the cockpit build (#1708); no flags exist.
+  const argv = process.argv.slice(2);
+  exitIfHelp(argv, `usage: node tools/car/cockpit-pale-sweep.mjs [teamId ...]
+  Ray-casts the Car3D cockpit from the driver's eye and lists pale vertex-colour
+  hits per team (default: every team). Offline, no browser; exit 1 on any hit.`);
+  parseFlags(argv, []);
   const { Car3D, Teams, Parts, Liveries } = loadCar3D();
   const visualTiers = (t) => (Parts && t ? Parts.getVisualTiers(Parts.DEFAULTS, t) : undefined);
   // The team's own default livery — the paint a player actually races in.
@@ -118,8 +125,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const byTeam = (Liveries.BY_TEAM && Liveries.BY_TEAM[t.id]) || [];
     return byTeam[0] || (Liveries.UNIVERSAL && Liveries.UNIVERSAL[0]) || undefined; };
   const list = (Teams && (Teams.LIST || Teams.ALL || Teams.teams)) || [];
-  const want = process.argv.slice(2);
-  const teams = want.length ? want : list.map((t) => t.id);
+  const teams = argv.length ? argv : list.map((t) => t.id);
+  // An unknown id used to sweep the fallback colours under that name and say CLEAN.
+  const unknown = teams.filter((id) => !list.some((x) => x.id === id));
+  if (unknown.length) {
+    console.error(`cockpit-pale-sweep: unknown team ${unknown.join(" ")}\n  teams: ${list.map((t) => t.id).join(" ")}`);
+    process.exit(1);
+  }
   let bad = 0;
   for (const id of teams) {
     const t = list.find ? list.find((x) => x.id === id) : null;

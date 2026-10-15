@@ -249,8 +249,57 @@ const HudReadouts = (function () {
     return { tick, reset };
   }
 
+  function cbCuesOn() {
+    return typeof A11yOpts !== "undefined" && A11yOpts.cuesOn && A11yOpts.cuesOn();
+  }
+
+  /** session | personal | slow | "" — mirrors hud.js sector colour states. */
+  function sectorTimingKind(t, sessionBest, personalBest) {
+    if (t == null) return "";
+    if (sessionBest) return "session";
+    if (personalBest) return "personal";
+    return "slow";
+  }
+
+  /** yellow | vsc | sc | red | blue | "" for data-flag-cue on #hud-flag. */
+  function flagCueKind(caution, blue) {
+    if (blue) return "blue";
+    if (!caution || !(caution.level > 0)) return "";
+    if (caution.level === 4) return "red";
+    if (caution.level === 3) return "sc";
+    if (caution.level === 2) return "vsc";
+    if (caution.level === 1) return "yellow";
+    return "";
+  }
+
+  function paintSectorRow(rowEl, t, sessionBest, personalBest) {
+    if (!rowEl || !rowEl.dataset) return;
+    if (!cbCuesOn()) {
+      if (rowEl.dataset.secTiming != null) delete rowEl.dataset.secTiming;
+      return;
+    }
+    const k = sectorTimingKind(t, sessionBest, personalBest);
+    if (k) {
+      if (rowEl.dataset.secTiming !== k) rowEl.dataset.secTiming = k;
+    } else if (rowEl.dataset.secTiming != null) delete rowEl.dataset.secTiming;
+  }
+
+  /** opt: { caution } | { blue: true } | null — only when the chip is visible. */
+  function paintFlag(el, opt) {
+    if (!el || !el.dataset) return;
+    if (!cbCuesOn()) {
+      if (el.dataset.flagCue != null) delete el.dataset.flagCue;
+      return;
+    }
+    const k = opt && opt.blue ? "blue" : flagCueKind(opt && opt.caution, false);
+    if (k) {
+      if (el.dataset.flagCue !== k) el.dataset.flagCue = k;
+    } else if (el.dataset.flagCue != null) delete el.dataset.flagCue;
+  }
+
   return { lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap, GAP_FINE_LT,
     ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
-    spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH };
+    spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,
+    sectorTimingKind, flagCueKind, paintSectorRow, paintFlag };
 })();
 Object.freeze(HudReadouts);

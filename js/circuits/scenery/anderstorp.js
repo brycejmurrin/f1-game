@@ -9,7 +9,7 @@
      2  start/finish complex                                   (§4 0.005 +1)
      3  pit-straight outside: colonnade pine + hoarding        (§4 0.020 -1)
      4  Turn 1: grey sand, tyres, camera tower                 (§4 0.045 -1)
-     5  infield paddock: corrugated rank + motorhomes          (§4 0.095 +1)
+     5  infield paddock: corrugated rank + sheds (motorhomes removed) (§4 0.095 +1)
      6  pine right up to the armco                             (§4 0.150 -1)
      7  Turns 2-3 Sodra Kurvan: mown infield, low hill         (§4 0.185 +1)
      8  back into the trees: flag/timing hut                   (§4 0.245 -1)
@@ -21,7 +21,7 @@
     14  runway far side: mown grass to a distant treeline      (§4 0.740 -1)
     15  end of the apron: sheds, concrete gives way            (§4 0.820 +1)
     16  Turn 7 — off the runway, the corridor narrows          (§4 0.860 -1)
-    17  Turn 8: long banked final corner onto the pit straight (§4 0.920 -1)
+    17  Turn 8: long slow final corner onto the pit straight   (§4 0.920 -1; flat — the def builds no banking)
     18  Anderstorpsån bog strip + reeds (-1, s≈0.11–0.28)
     19  Flight Straight offset runway pavement (+1 apron clearance band)
     20  paddock helipad (16×16 m, ESMP medevac pad)
@@ -39,7 +39,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall,
         marshalPost, cameraTower, billboard, sponsorHoarding, gantry,
-        motorhome, groundPatch, runoffApron, waterBand,
+        groundPatch, runoffApron, waterBand,
         place, addBox, addCyl, addFrustum, vadd,
         modelGroup, seat, MAT } = api;
 
@@ -132,6 +132,9 @@
         [0.136,  1,  66, 4.6, 4.6],    // block 5 fuel silo
         [0.136,  1,  74, 3.0, 3.0],    // block 5 second tank
         [0.478, -1, 24.5, 5,  7],      // block 11 marshal hut
+        [0.222,  1,  34,  8, 12],      // block 7 refreshments
+        [0.204,  1,65.5,  7, 10],      // block 7 hut
+        [0.192,  1,  51,  6,  8],      // block 7 commentary hut
       ];
       const spanPts = FOOT_SPAN.map(([s0, s1, side, g0, g1]) => {
         const pts = [], k0 = K(s0), k1 = K(s1);
@@ -438,7 +441,7 @@
 
       // ---------------------------------------------------------------- 5.
       // 0.095 +1 — INFIELD PADDOCK. A low corrugated rank in faded blue and
-      // cream, single storey, with motorhomes nose-in on grey hardstanding.
+      // cream, single storey, on grey hardstanding.
       // This is the working part of the site and it looks it: a second and a
       // third rank of sheds behind the first, transporters, drums, a silo.
       groundPatch(K(0.100), 1, 24, [46, 0.18, 60], HARDSTAND);
@@ -509,7 +512,7 @@
       // The public side of the circuit: a commentary hut, a refreshment
       // shed, campers parked on the grass behind the bank.
       groundPatch(K(0.185), 1, 14, [48, 0.18, 62], GRASS);
-      groundPatch(K(0.205), 1, 18, [40, 0.16, 48], GRASS);
+      groundPatch(K(0.205), 1, 18, [28, 0.16, 48], GRASS);   // was 40 wide: it met the widened runway apron
       groundPatch(K(0.226), 1, 22, [30, 0.20, 36], GRASS_M);
       spectatorHill(0.172, 0.212, 1, 28, {});
       marshalPost(K(0.178), 1, 14);
@@ -670,7 +673,8 @@
         // Inner slab only — outer reach capped so hangar pads at gap 72+ stay clear.
         // No weathering overlays: they co-planed with the parent on shared
         // patchSeq lift slots (flatCoplanar 570×573/574).
-        groundPatch(k, 1, 6, [Math.min(22, 20 * f), 0.18, ln], CONCRETE);
+        groundPatch(k, 1, 6, [Math.min(18.5, 16.5 * f), 0.18, ln],   // 3.5 m less reach: the edge is 3.5 m wider
+          pick(hash(i * 31 + 7), [CONCRETE, CONC_W, CONC_D, CONCRETE]));
       }
       // ESMP: 30 m pavement, 20 m runway — ~10 m clearance offset on the apron
       // side; seated slabs avoid a second groundPatch row (flatCoplanar on fold).
@@ -810,7 +814,7 @@
       // a lift slot on the same footprint (was flatCoplanar self-pair at :613).
       for (let i = 0; i < 8; i++) {
         groundPatch(K(RW0 + 0.02 + (i / 7) * (RW1 - RW0 - 0.04)), -1, 14 + (i % 2) * 8,
-          [56, 0.18, 90], i & 1 ? GRASS_M : GRASS);
+          [56, 0.18, 90], pick(hash(i * 17 + 3), [GRASS, GRASS_M, GRASS_S, GRASS]));
       }
       for (let i = 0; i < 6; i++) {   // mown bands, lighter, further out
         groundPatch(K(RW0 + 0.04 + (i / 5) * (RW1 - RW0 - 0.08)), -1, 100 + (i % 2) * 10,
@@ -830,7 +834,7 @@
         farPine(k, -1, 128 + h * 40, 16 + h * 9, PINE_B);
         if (h > 0.40) farPine(k, -1, 176 + h * 60, 17 + h * 8, PINE_F);
       }
-      forestEdge(RW0, RW1, -1, 96, { col: PINE_D, spacing: 20 });
+      forestEdge(RW0, RW1, -1, 92, { col: PINE_D, spacing: 20 });   // was 96: the edge moved out 3.5 m
       fence(RW0 + 0.010, RW1 - 0.010, -1, 60, 1.4, [0.56, 0.58, 0.55]);
       building(K(0.762), -1, 122, 16, 8, 26, { col: FALU });    // field barn
       building(K(0.780), -1, 124, 8, 5, 12, { col: FALU_D });
@@ -858,10 +862,12 @@
       // other leg ~19 m away, leaving the rooftop plant hanging 8.7 m up.
       // Grass patches stay OUTSIDE the Flight Straight apron window (APR1
       // ends 0.830) so they do not co-plane with runway slabs.
-      building(K(0.820), 1, 34, 14, 7.5, 24, { col: CORR_BLUE });
+      // Gap 31: anchor gaps run from the road EDGE and the runway is now 3.5 m
+      // wider each side, so 34 would put the roof cap 3.5 m closer to the Sodra leg.
+      building(K(0.820), 1, 28, 12, 7.5, 24, { col: CORR_BLUE });
       // Gap 32, not 38: further out it crossed onto the Sodra leg's roadside
       // pine (clip @0.224), the lap folding back across the infield.
-      building(K(0.802), 1, 32, 9, 5.0, 14, { col: CORR_RUST });
+      building(K(0.802), 1, 28.5, 9, 5.0, 14, { col: CORR_RUST });   // was 32; the edge moved out 3.5 m
       building(K(0.842), 1, 40, 7, 4.2, 10, { col: TIMBER });
       sponsorHoarding(0.808, 0.836, 1, 26, {});
       groundPatch(K(0.838), 1, 36, [16, 0.20, 32], CONC_W);
@@ -872,7 +878,7 @@
         place(K(0.806 + i * 0.0060), 1, 33, [1.2, 1.7, 1.2], i % 2 ? DRUM : STEEL);
       }
       billboard(K(0.856), 1, 20, 9, 3.6, [0.78, 0.30, 0.22]);
-      marshalPost(K(0.830), 1, 24);
+      marshalPost(K(0.830), 1, 20.5);   // was 24; anchor gaps run from the (now 3.5 m wider) edge
 
       // --------------------------------------------------------------- 16.
       // 0.860 -1 — TURN 7, OFF THE RUNWAY. The corridor narrows again: armco
@@ -903,7 +909,8 @@
       }
 
       // --------------------------------------------------------------- 17.
-      // 0.920 -1 — TURN 8, the long slow banked sweep onto the pit straight.
+      // 0.920 -1 — TURN 8, the long slow sweep onto the pit straight (flat: the def
+      // has no bankZones, so nothing here leans).
       // Low timber terracing on the outside with a bank extending it,
       // billboards along the barrier, tyres and grey sand, forest behind.
       // The corner takes forever, so the outside gets a second stand, a

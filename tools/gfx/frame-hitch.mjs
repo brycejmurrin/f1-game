@@ -39,11 +39,30 @@ import {
   startStaticServer, launchChromium, shutdown, sleep, WEBGPU_CHROMIUM_ARGS,
 } from "../lib/harness.mjs";
 
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
-function parseArgs(argv) {
+// Every flag parseArgs reads. The CLI entry checks argv against these through
+// the shared parser (#1708); parseArgs itself stays module-scope and lenient
+// because gpu-game-check and the unit tests import the analysers from here.
+const VALUED = ["--backend", "--seconds", "--settle", "--steer-hz", "--ls", "--json", "--selftest-kb", "--ablate", "--cpu-profile"];
+const KNOWN = [...VALUED, "--tlx-webgpu", "--capture", "--quiet"];
+const USAGE = `usage: node tools/gfx/frame-hitch.mjs [track=montreal] [--backend three|webgpu|webgl2]
+       [--tlx-webgpu] [--capture] [--seconds N] [--settle N] [--steer-hz N] [--ls k=v]
+       [--json PATH] [--quiet] [--selftest-kb N] [--ablate NAME] [--cpu-profile N]
+  Launches Chromium, records every rAF callback's main-thread cost and reports
+  periodic hitches (spike train + autocorrelation). Summary on stderr, JSON on stdout.`;
+
+function parseArgs(argvIn) {
   const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false, capture: false, selftestKb: 0, ablate: "", cpuProfile: 0 };
   const skip = new Set();
+  // The loop below reads the space form only; split `--seconds=10` so the
+  // `=` form the shared parser accepts is not silently dropped.
+  const argv = argvIn.flatMap((a) => {
+    const eq = a.indexOf("=");
+    return eq > 2 && a.startsWith("--") && VALUED.includes(a.slice(0, eq)) ? [a.slice(0, eq), a.slice(eq + 1)] : [a];
+  });
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const next = () => argv[++i];
     if (a === "--backend") { o.backend = next(); skip.add(o.backend); }
@@ -375,7 +394,10 @@ export function analyseGapWork(gaps, { marks = {}, win = null, longTasks = [] } 
     for (const [s, d] of lt) { const o = Math.min(end, s + d) - Math.max(g.at, s); if (o > 0) ltMs += o; }
     const prev = g.prevFrameMs || 0;
     return { phase: phaseOf(g.at), atMs: +((m.raceCall != null ? g.at - m.raceCall : g.at)).toFixed(0),
-      gapMs: +g.gapMs.toFixed(0), prevFrameMs: +prev.toFixed(1), outsideMs: +Math.max(0, g.gapMs - prev).toFixed(0),
+      gapMs: +g.gapMs.toFixed(0), prevFrameMs: +prev.toFixed(1),
+      // rAF callbacks in that step (hunt 5 E): one long one vs many short; null on an older recorder.
+      prevCallbacks: typeof g.prevCallbacks === "number" ? g.prevCallbacks : null,
+      outsideMs: +Math.max(0, g.gapMs - prev).toFixed(0),
       longTaskMs: +ltMs.toFixed(0), armed: !!g.armed, prev: fmt(g.prevWork), between: fmt(g.between) };
   }).sort((a, b) => b.gapMs - a.gapMs);
   const byPhase = {};
@@ -457,6 +479,15 @@ export function raceEntrySpanList(rep, warm) {
   }
   return { spans, points };
 }
+// From race() (RACE!) to the later of the profile's last mark (present:ready,
+// end) and the census arming its window: the whole of race entry. Page ms.
+export function raceEntryWindow(rep, censusMarks, win) {
+  const cm = censusMarks || {};
+  const from = typeof cm.raceCall === "number" ? cm.raceCall : rep.winT0;
+  const ends = [rep.winT0 + (Array.isArray(rep.marks) ? rep.marks : []).reduce((m, x) => (x && typeof x.t === "number" && x.t > m ? x.t : m), 0)];
+  if (win && typeof win.t0 === "number") ends.push(win.t0);
+  return { from, to: Math.max(...ends) };
+}
 export function analyseRaceEntrySpans({ rep = null, warm = null, censusMarks = {}, gaps = [], longTasks = [], win = null } = {}, topN = 12) {
   if (!rep || rep.note || rep.error) return { note: "no raceEntryProfile snapshot — " + ((rep && (rep.note || rep.error)) || "not read") };
   if (typeof rep.winT0 !== "number") return { note: "raceEntryProfile has no window origin (never armed) — nothing to place events in" };
@@ -464,12 +495,7 @@ export function analyseRaceEntrySpans({ rep = null, warm = null, censusMarks = {
   const cm = censusMarks || {};
   for (const k of Object.keys(cm)) if (typeof cm[k] === "number") points.push({ n: "census:" + k, at: cm[k] });
   points.sort((a, b) => a.at - b.at);
-  // From race() (RACE!) to the later of the profile's last mark (present:ready,
-  // end) and the census arming its window: the whole of race entry.
-  const from = typeof cm.raceCall === "number" ? cm.raceCall : rep.winT0;
-  const ends = [rep.winT0 + (Array.isArray(rep.marks) ? rep.marks : []).reduce((m, x) => (x && typeof x.t === "number" && x.t > m ? x.t : m), 0)];
-  if (win && typeof win.t0 === "number") ends.push(win.t0);
-  const to = Math.max(...ends);
+  const { from, to } = raceEntryWindow(rep, cm, win);
   const events = [];
   for (const t of Array.isArray(longTasks) ? longTasks : []) {
     if (Array.isArray(t) && t[0] + t[1] > from && t[0] < to) events.push({ kind: "longtask", t0: t[0], t1: t[0] + t[1] });
@@ -512,6 +538,56 @@ export function analyseRaceEntrySpans({ rep = null, warm = null, censusMarks = {
     summary: `${nTask} long task(s) (${Math.round(taskMs)} ms) + ${nGap} rAF gap(s) in ${Math.round(to - from)} ms of race entry; `
       + (ranked.length ? ranked.slice(0, 4).map(([n, b]) => `${n} ${Math.round(b.ms)} ms/${b.tasks}`).join(", ") : "no long task in a named span")
       + (unattributedMs ? `; ${Math.round(unattributedMs)} ms in no span` : "") };
+}
+
+// LONG ANIMATION FRAMES IN RACE ENTRY (hunt 5 E). A long task says the main
+// thread was blocked; a LoAF (Chrome 123+, PerformanceObserver type
+// "long-animation-frame", >= 50 ms) says WHICH SCRIPTS ran in that frame and how
+// each was invoked: `invokerType` user-callback (a rAF callback), resolve-promise
+// (an await continuation, e.g. startRaceBody after scheduler.yield),
+// event-listener, classic-script... That is the question a ~1 s GLX task inside
+// the stepped car warm poses, where every warm step is <= 221 ms: one rAF step,
+// or yield continuations landing inside it. gpu-game-check records compact
+// entries from page load — { t, d, rs, bd, s: [{ it, inv, fn, url, t, d }] }
+// (startTime, duration, renderStart, blockingDuration; scripts' invokerType,
+// invoker, sourceFunctionName, sourceURL, startTime, duration) — and this keeps
+// the `topN` longest frames overlapping race entry (raceEntryWindow), each named
+// by the race-entry span it overlaps most, with times in ms from race()/RACE!.
+// https://developer.chrome.com/docs/web-platform/long-animation-frames
+export function analyseRaceEntryLoaf({ loaf = null, supported = null, rep = null, warm = null, censusMarks = {}, win = null } = {}, topN = 20) {
+  if (supported === false) return { supported: false, note: "no long-animation-frame PerformanceObserver in this browser (Chrome 123+) — nothing was measured" };
+  if (!Array.isArray(loaf)) return { note: "no LoAF series recorded" };
+  if (!rep || rep.note || rep.error || typeof rep.winT0 !== "number") return { note: "no raceEntryProfile window — LoAF entries cannot be placed in race entry" };
+  const { from, to } = raceEntryWindow(rep, censusMarks, win);
+  const { spans } = raceEntrySpanList(rep, warm);
+  const r1 = (x) => (typeof x === "number" ? +x.toFixed(1) : null);
+  const inWin = loaf.filter((f) => f && typeof f.t === "number" && typeof f.d === "number" && f.t + f.d > from && f.t < to);
+  const byInvokerType = {};
+  let framesMs = 0;
+  for (const f of inWin) {
+    framesMs += f.d;
+    for (const s of Array.isArray(f.s) ? f.s : []) {
+      const k = s.it || "?", b = byInvokerType[k] || (byInvokerType[k] = { scripts: 0, ms: 0 });
+      b.scripts++; b.ms = r1(b.ms + (s.d || 0));
+    }
+  }
+  const longest = inWin.slice().sort((a, b) => b.d - a.d).slice(0, topN).map((f) => {
+    const hit = spans.map((s) => ({ s, o: Math.min(f.t + f.d, s.t1) - Math.max(f.t, s.t0) })).filter((h) => h.o > 0)
+      .sort((a, b) => (a.s.kind === "envelope") - (b.s.kind === "envelope") || b.o - a.o || (a.s.t1 - a.s.t0) - (b.s.t1 - b.s.t0))[0];
+    return { atMs: r1(f.t - from), startTime: r1(f.t), duration: r1(f.d),
+      renderStart: f.rs > 0 ? r1(f.rs - from) : null, blockingDuration: r1(f.bd),
+      span: hit ? hit.s.n : null,
+      scripts: (Array.isArray(f.s) ? f.s : []).map((s) => ({ invokerType: s.it || null, invoker: s.inv || null,
+        sourceFunctionName: s.fn || null, sourceURL: s.url || null, startTime: r1(s.t - from), duration: r1(s.d) })) };
+  });
+  const ranked = Object.entries(byInvokerType).sort((a, b) => b[1].ms - a[1].ms);
+  const w = longest[0];
+  return { supported: true, windowMs: Math.round(to - from), frames: inWin.length, framesMs: Math.round(framesMs),
+    byInvokerType: Object.fromEntries(ranked), longest,
+    summary: !inWin.length ? `no long animation frame in ${Math.round(to - from)} ms of race entry`
+      : `${inWin.length} LoAF(s), ${Math.round(framesMs)} ms in ${Math.round(to - from)} ms of race entry; scripts by invoker: `
+        + (ranked.length ? ranked.slice(0, 4).map(([k, b]) => `${k} ${Math.round(b.ms)} ms/${b.scripts}`).join(", ") : "none attributed")
+        + `; longest ${w.duration} ms at +${Math.round(w.atMs)} ms${w.span ? " in " + w.span : ""}` };
 }
 
 // WHICH PASSES THE SPIKE FRAMES RUN. The recorder fingerprints every render
@@ -960,7 +1036,12 @@ export function analysePasses(passes, t0, dur, threshMs) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  // --help and a typo'd flag answer before the server binds or Chromium launches.
+  exitIfHelp(process.argv.slice(2), USAGE);
+  parseFlags(process.argv.slice(2), KNOWN);
+  await main();
+}
 
 async function main() {
   const srv = await startStaticServer(ROOT);

@@ -11,7 +11,7 @@
         broadcastCompound, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge,
-        acacia, mountain, circuitKit, addPyramid, groundUnder, terrainYAt } = api;
+        acacia, mountain, circuitKit, addPyramid, groundUnder, terrainYAt, floodMast } = api;
 
       const THORN = [0.24, 0.36, 0.20], THORN_D = [0.19, 0.30, 0.17];
       const GUM = [0.20, 0.34, 0.22];
@@ -56,9 +56,14 @@
         const s = k / n;
         // Clear of spectator banks and the main-GS bowl (clip-audit).
         if ((s >= 0.22 && s <= 0.30) || (s >= 0.42 && s <= 0.52) || (s >= 0.93 || s <= 0.02)) return;
-        bush(k, h < 0.72 ? -1 : 1, 7 + h * 6, h < 0.6 ? SCRUB : SCRUB_D);
+        // Low wide mound of dry scrub (bush() is a green cone that read as a marker on straw ground).
+        const side = h < 0.72 ? -1 : 1, a = anchor(k, side, 7 + h * 6);
+        if (onTrack(a.c[0], a.c[2], 3)) return;
+        out._mat = MAT.FOLIAGE;
+        addFrustum(out, vadd(a.c, a.u, -0.2), 1.5 + h * 0.8, 0.7, 0.75, h < 0.6 ? SCRUB : SCRUB_D, 5, [a.r, a.u, a.t]);
+        out._mat = 0;
       });
-      // Blue-gum windbreak rows on the boundary — tall, narrow, in lines.
+      // Blue-gum windbreak rows on the boundary — tall, in lines; lobed eucalypt crowns (columnar read as conifers).
       // Park-circuit fold: 52 m off one edge can sit over a parallel stretch
       // (props-over-road S6 band-span at frac ~0.236, dark crown over the road).
       every(20, (k) => {
@@ -69,7 +74,7 @@
         const h = 18 + hash(k * 7) * 6;
         const a = anchor(k, side, dist);
         if (onTrack(a.c[0], a.c[2], 12)) return;
-        tree(k, side, dist, h, GUM, { crown: "columnar" });
+        tree(k, side, dist, h, GUM, { crown: "lobed" });
       });
       for (const [id, s, side, d, w, l] of [
         ["kyalami-earth-crowthorne", 0.115, -1, 26, 22, 90],
@@ -187,7 +192,7 @@
           for (let i = 0; i <= bays; i++) {          // raked red-oxide trusses
             const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
             seat.cyl(stage, vadd(p, a.r, -inw * 6.0), 0.17, backH + 4.6, OXIDE, 5, b);
-            seat.cyl(stage, vadd(p, a.r, inw * 5.4), 0.15, backH + 1.4, OXIDE, 5, b);
+            seat.cyl(stage, vadd(p, a.r, inw * 6.2), 0.15, backH + 1.4, OXIDE, 5, b);   // clear of row 0 (lat 5.4, 1.35 deep)
             addBox(stage, vadd(vadd(p, a.r, -inw * 0.3), a.u, backH + 3.0),
               [11.8, 0.16, 0.16], OXIDE, b);
             addBox(stage, vadd(vadd(p, a.r, -inw * 0.3), a.u, backH + 2.0),
@@ -246,7 +251,7 @@
             for (let i = 0; i <= bays; i++) {
               const p = vadd(a.c, a.t, (i - bays / 2) * pitch);
               seat.cyl(stage, vadd(p, a.r, -inw * 6.2), 0.18, backH + 4.8, OXIDE, 5, b);
-              seat.cyl(stage, vadd(p, a.r, inw * 5.6), 0.15, backH + 1.6, OXIDE, 5, b);
+              seat.cyl(stage, vadd(p, a.r, inw * 6.2), 0.15, backH + 1.6, OXIDE, 5, b);   // clear of row 0 (lat 5.6, 1.4 deep)
               addBox(stage, vadd(vadd(p, a.r, -inw * 0.3), a.u, backH + 3.2),
                 [12.2, 0.18, 0.18], OXIDE, b);
             }
@@ -331,7 +336,7 @@
       {
         const k = K(0.55);
         for (let i = 0; i < 9; i++) {
-          building(k, 1, 320 + i * 24, 16, 26 + (i % 4) * 12, 16,
+          building(k, 1, 520 + i * 24, 16, 14 + (i % 4) * 5, 16,
             { kind: "podium", wall: [0.62 + i * 0.012, 0.64 + i * 0.012, 0.70], window: [0.54, 0.56, 0.62] });
         }
       }
@@ -447,7 +452,7 @@
       // Blue-gum / thorn treeline further out than spectator banks.
       for (const [s0, s1] of [[0.12, 0.34], [0.5, 0.9]]) {
         for (const side of [-1, 1])
-          forestEdge(s0, s1, side, 40, { density: 0.22, hMin: 6, hMax: 10, pineFrac: 0.08, col: GUM, col2: THORN });
+          forestEdge(s0, s1, side, 40, { density: 0.22, hMin: 6, hMax: 10, pineFrac: 0, col: GUM, col2: THORN });
       }
 
       // ── 2026-10 deep pass ─────────────────────────────────────────────────
@@ -476,12 +481,12 @@
       //     as dark blue-grey squares on the horizon, taller than everything
       //     but the mine headgear. Outside skirt, 95-125 m out.
       const GUM_B = [0.27, 0.36, 0.33];
-      for (const [s, rows, cols] of [[0.300, 3, 5], [0.505, 3, 4], [0.665, 4, 5], [0.790, 3, 6]]) {
+      for (const [s, rows, cols] of [[0.300, 3, 5], [0.505, 3, 4], [0.665, 4, 4], [0.790, 3, 5]]) {
         const k0 = K(s);
         for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
           const h = hash(k0 * 13 + r * 7 + c * 3);
           tree(k0 + c * 2, 1, 98 + r * 8 + (c % 2) * 2, 24 + h * 8, h < 0.5 ? GUM : GUM_B,
-            { crown: "columnar", spread: 1.25, deadChance: 0 });
+            { crown: "lobed", deadChance: 0 });
         }
       }
 
@@ -507,6 +512,14 @@
           size: [16, 9, 44], modules: 5 });
         circuitKit.hospitality({ id: "kit:kyalami:hospitality-b", frac: 0.976, side: 1, gap: 58,
           size: [16, 9, 40], modules: 4 });
+      }
+      // Pit straight + main grandstand: furniture.lamp is "none"; registered floods
+      // carry the night-race wash (bahrain / catalunya pattern).
+      if (typeof floodMast === "function") {
+        for (const [s, side, gap] of [
+          [0.010, 1, 36], [0.030, 1, 40], [0.985, -1, 30], [0.968, -1, 34],
+          [0.390, -1, 32], [0.410, -1, 36], [0.250, 1, 34],
+        ]) floodMast(K(s), side, gap, { h: 38, cool: true, pool: false, arms: 2 });
       }
       // Kyalami International Convention Centre: a long, low exhibition hall
       // on the estate beside the paddock, on the flat floor beyond the skirt.

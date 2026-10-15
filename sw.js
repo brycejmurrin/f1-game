@@ -421,6 +421,7 @@ async function precacheAssetLists() {
     "js/race/start-lights.js",
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
+    "js/race/jump-start-penalty.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
@@ -439,6 +440,7 @@ async function precacheAssetLists() {
     "js/audio/soundtrack.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
+    "js/audio/ers-layer.js",
     "js/audio/engine.js",
     "js/audio/music-lib.js",
     "js/audio/spotify.js",

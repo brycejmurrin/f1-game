@@ -6,8 +6,9 @@
      * KEYBOARD FOCUS — Standard / High (html[data-focus]); High thickens the
        :focus-visible ring on menus and settings.
      * COLOURBLIND CUES — Off / On (html[data-cb-cues]); adds S/M/H/I/W letters
-       on Data Hub compound chips and ISO country codes beside circuit flags
-       in menus. HUD tyre/flag cues are a follow-up (HUD files are out of scope).
+       on Data Hub compound chips, ISO country codes beside circuit flags in
+       menus, and matching letter/shape cues on the race HUD (tyres, flags,
+       sector splits).
      * GAS / LOOK BACK — Hold / Toggle per action on keyboard and controller
        (apex26.holdMode; on-screen GAS latch stays under CONTROLS › THROTTLE).
 
@@ -137,7 +138,7 @@ const A11yOpts = (function () {
     if (cbSel) cbSel.setAttribute("aria-describedby", "pm-cbcues-help");
     panel.appendChild(cb.row);
     panel.appendChild(help("pm-cbcues-help",
-      "ON adds S/M/H/I/W letters on Data Hub tyre chips and country codes beside circuit flags. Race HUD cues are still under APPEARANCE › COLOUR VISION and DISPLAY › LINE COLOUR."));
+      "ON adds S/M/H/I/W letters on Data Hub tyre chips, country codes beside circuit flags, and the same compound letters plus flag and sector shape cues on the race HUD."));
 
     const gas = SettingRow.build("pm-hold-throttle", "GAS (KEYBOARD / PAD)", HOLD);
     const gasSel = gas.row.querySelector("select");

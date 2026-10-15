@@ -170,6 +170,7 @@ const FULL = [
   // after SettingsDefaults, so a stored player garage still wins. Generated
   // from an apex26-garage-v1 export via tools/gen/garage-defaults.mjs.
   "js/data/garage-defaults.js",
+  "js/core/save-schema-registry.js",
   "js/core/store.js",
   "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
@@ -252,6 +253,7 @@ const FULL = [
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
+  "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "js/garage/arrival.js",
   "js/garage/setup-camera.js",
@@ -544,6 +546,7 @@ const TRACK_VM = [
   "js/garage/scene-prims.js",
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
+  "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "@circuits",
   "js/track/circuit-elevations.js",
@@ -654,6 +657,7 @@ const HARD_EDGES = [
   ["js/garage/scene-prims.js", "js/garage/scene.js"],             // the bay destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene.js"],         // ...GarageEquipment (the fan and screen anchors)
   ["js/garage/scene-live.js", "js/garage/scene.js"],              // ...and GarageLive (the atlas size and painters)
+  ["js/garage/scene-prims.js", "js/garage/scene-crew.js"],        // the crew destructures GaragePrims at eval
   // The garage preview camera eases its flaps at the car's own X_OPEN_RATE /
   // X_CLOSE_RATE, destructured off PhysicsConsts at EVAL time exactly as
   // js/game.js destructures the rest of them.
@@ -690,6 +694,8 @@ const HARD_EDGES = [
   ["js/data/teams.js", "js/career/ai-dev.js"],
   ["js/core/mat4.js", "js/career/ai-dev.js"],         // aliases M4.clamp at eval
   ["js/career/ai-dev.js", "js/career/career.js"],     // rolloverTeams calls CareerAiDev.developWinter
+  ["js/career/save-migrate.js", "js/core/save-schema-registry.js"],
+  ["js/core/save-schema-registry.js", "js/core/store.js"],
   ["js/career/save-migrate.js", "js/core/store.js"],
   ["js/career/save-migrate.js", "js/career/career-backup.js"], // migrateCareer on import
   ["js/core/store.js", "js/career/career-backup.js"],          // store.write + keyRevision
@@ -890,6 +896,7 @@ const LAZY_RACE_SESSION = [
   "js/race/start-lights.js",
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
+  "js/race/jump-start-penalty.js",
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/race/radio-lines.js", "js/race/race-radio.js"],
@@ -906,6 +913,7 @@ const LAZY_AUDIO = [
   "js/audio/soundtrack.js",
   "js/audio/radio-fx.js",
   "js/audio/tone-model.js",
+  "js/audio/ers-layer.js",
   "js/audio/engine.js",
   "js/audio/music-lib.js",
   "js/audio/spotify.js",
@@ -923,6 +931,7 @@ const LAZY_AUDIO_EDGES = [
   ["js/audio/soundtrack.js", "js/audio/engine.js"],
   ["js/audio/radio-fx.js", "js/audio/engine.js"],
   ["js/audio/tone-model.js", "js/audio/engine.js"],
+  ["js/audio/ers-layer.js", "js/audio/engine.js"],
   ["js/audio/engine.js", "js/audio/music-lib.js"],
   ["js/audio/voice-pack.js", "js/audio/radio-voice.js"],
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],

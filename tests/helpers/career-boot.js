@@ -1,7 +1,7 @@
 // @ts-check
 // Shared boot helpers for the career Playwright specs (virgin-page fixture).
 import { expect } from "@playwright/test";
-import { BOOT_MS } from "./fixtures.js";
+import { BOOT_MS, awaitTrackBuild } from "./fixtures.js";
 
 export { BOOT_MS };
 export const LANDSCAPE = { width: 844, height: 390 };
@@ -57,5 +57,8 @@ export async function goRacing(page) {
   await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
   await page.locator("#q-sim").click();
   await page.locator("#q-go").click();
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  // UI race entry can exceed BOOT_MS on a loaded CI shard (bahrain ~54 s measured
+  // on run 38668575599 while parallel career specs run). Stall detection, not a
+  // wall clock — same contract as fixtures.js loadTrack / pit-lane specs.
+  await awaitTrackBuild(page);
 }
