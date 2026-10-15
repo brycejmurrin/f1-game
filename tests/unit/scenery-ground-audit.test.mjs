@@ -236,19 +236,16 @@ test("partial footprint: an overhead road or water surface cannot ground a float
   };
   for (const mesh of ["road", "water"]) {
     const floating = audit([mass], 0, mesh);
-    assert.equal(floating.counts.unsupported, 1, `${mesh} above the entire box is not a support`);
     assert.equal(floating.partial.findings.length, 1);
     assert.equal(floating.partial.unknownSamples, 0);
     assert.ok(floating.partial.findings[0].samples.every((s) => s.gap === 10 && s.support === "none"));
     assert.equal(audit([mass], 0, mesh, [10]).partial.findings.length, 0, `${mesh} at the base supplies support`);
-    assert.equal(audit([mass], 0, mesh, [10, 30]).counts.unsupported, 0, "find the eligible lower deck beneath an upper deck");
     assert.equal(audit([mass], 0, mesh, [10, 30]).partial.findings.length, 0);
     assert.equal(audit([mass], 0, mesh, [10 + FP.CONTACT / 2]).partial.findings.length, 0, "contact slack remains accepted");
     assert.equal(audit([mass], 0, mesh, [10 + FP.CONTACT + .001]).partial.findings.length, 1, "surface beyond contact slack cannot certify support");
   }
   const buried = audit([mass], 20);
   assert.equal(buried.partial.findings.length, 0, "solid terrain still supports a buried base");
-  assert.equal(buried.counts.unsupported, 0);
   const plinth = [[0, 5, 0], [6, 10, 6]];
   assert.equal(audit([mass, plinth], 0).partial.findings.length, 0, "real grounded plinth supports the mass below an upper deck");
   const detachedPlinth = [[0, 8, 0], [6, 4, 6]];

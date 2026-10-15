@@ -163,7 +163,7 @@ function analyse(env, track, prims, opt) {
     const s = faceSamples(p, false);
     let gap = Infinity;
     for (let k = 0; k < s.length; k += 3) {
-      const g = groundY(s[k], s[k + 2], s[k + 1]);
+      const g = groundY(s[k], s[k + 2]);
       if (g !== null && s[k + 1] - g < gap) gap = s[k + 1] - g;
     }
     gapOf[i] = gap;
