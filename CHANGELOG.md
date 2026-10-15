@@ -19,6 +19,10 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
 - Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
+- Restoring a career backup keeps your Daily Challenge class bests, so the share line no longer reads NO LAP (#2165).
+- A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
+- Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
+- A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
 - CONTINUE on a career names the save's own next circuit and round count, matching the career hub (#2160).
 - CONTINUE no longer offers yesterday's Daily, which opened today's on another circuit (#2155).
 - RACE IN PORTRAIT can be turned off again: SETTINGS › DISPLAY › RACE IN PORTRAIT (#2157).

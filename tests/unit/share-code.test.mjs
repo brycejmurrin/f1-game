@@ -484,3 +484,30 @@ test("failed completion marker leaves durable pending recovery; failed Undo mark
   store.retryFailed();
   assert.deepEqual(j(q.reload().store.get("shareUndo")), rec);
 });
+
+// #2191: the undo snapshot read store.get(), which falls back to GarageDefaults
+// (setup.mercedes, livery.* ship there). UNDO then wrote the shipped default as a
+// STORED value, pinning it so a later default change never reached the player.
+test("UNDO of a setup code on an empty store leaves the key absent, not pinned to the garage default (#2191)", () => {
+  const { ShareCode, sandbox } = harness();
+  const disk = new Map();
+  sandbox.localStorage = {
+    getItem: (k) => (disk.has(k) ? disk.get(k) : null),
+    setItem: (k, v) => disk.set(k, String(v)),
+    removeItem: (k) => disk.delete(k),
+  };
+  sandbox.Log = { warn() {}, info() {}, debug() {}, error() {}, enabled: () => false };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  for (const f of ["js/data/garage-defaults.js", "js/core/hash32.js", "js/core/mat4.js", "js/career/save-migrate.js", "js/core/store.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: f });
+  }
+  const store = vm.runInContext("GameStore.store", ctx);
+  assert.ok(store.get("setup.mercedes", null), "the shipped default is visible through get()");
+  assert.equal(store.getStored("setup.mercedes"), undefined);
+  const code = ShareCode.encode("setup", { team: "mercedes", tune: { arbF: 11, arbR: 11, rideF: 15, rideR: 40, brakeBias: 62 } }).code;
+  assert.equal(ShareCode.apply(ShareCode.decode(code), { store }).ok, true);
+  assert.equal(store.getStored("setup.mercedes").arbF, 11);
+  assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, true);
+  assert.equal(store.getStored("setup.mercedes"), undefined, "absent again, so the shipped default keeps following releases");
+});

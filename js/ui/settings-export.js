@@ -471,9 +471,13 @@ function typeOk(v, def) {
 }
 function applySettings(file, G) {
   if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
-  const groups = file.settings || {};
+  // A file is player input: a non-object `settings` or group is "nothing here",
+  // never a value to assign into (strict mode throws on a primitive, #2191).
+  const isPlain = (o) => o !== null && typeof o === "object" && !Array.isArray(o);
+  const groups = isPlain(file.settings) ? file.settings : {};
   // Legacy: REDUCE MOTION lived under appearance before ACCESSIBILITY.
-  if (groups.appearance && Object.prototype.hasOwnProperty.call(groups.appearance, "motion")
+  if (isPlain(groups.appearance) && Object.prototype.hasOwnProperty.call(groups.appearance, "motion")
+      && (groups.a11y == null || isPlain(groups.a11y))
       && !(groups.a11y && Object.prototype.hasOwnProperty.call(groups.a11y, "motion"))) {
     (groups.a11y ||= {}).motion = groups.appearance.motion;
   }
@@ -483,7 +487,7 @@ function applySettings(file, G) {
     // back: an older number would re-run migrations that have already run.
     if (row.info) continue;
     const g = groups[row.group];
-    if (!g || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
+    if (!isPlain(g) || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
     const v = row.normalize ? row.normalize(g[row.k]) : g[row.k];
     if (v === undefined) { skipped++; continue; }
     if (v === null && row.perDevice) continue;   // unset on the device that saved it (collect)
@@ -892,8 +896,10 @@ function create(G) {
       disarm();
       pick((obj) => {
         if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
-        const r = apply(obj, revisions);
-        if (!r.ok) { flash(b, label, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
+        let r;
+        // A throw here would surface as an unhandled rejection over the game (#2191).
+        try { r = apply(obj, revisions); } catch (e) { Log.warn("ui", "file load threw", e && e.message); r = null; }
+        if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
         if (r.failed) { flash(b, label, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
@@ -1017,7 +1023,7 @@ function create(G) {
       }
       disarm();
       const r = resetGarage();
-      if (!r.ok) { flash(resetBtn, resetLabel, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
+      if (!r.ok) { flash(resetBtn, resetLabel, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
       Log.info("ui", "garage reset to shipped defaults", { applied: r.applied, skipped: r.skipped, failed: r.failed });
       if (r.failed) { flash(resetBtn, resetLabel, `STORAGE FULL — ${r.failed} NOT SAVED`, 3200); return; }
       if (!r.applied) { flash(resetBtn, resetLabel, "NOTHING TO RESET", 2200); return; }
