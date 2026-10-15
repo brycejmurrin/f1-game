@@ -16,7 +16,7 @@ Use when launching a Cursor cloud agent for the Apex (f1-game) repo.
 - Topic heads: `cursor/<topic>-<hash>` (Cursor often supplies the suffix). No new `claude/<topic>` feature branches; legacy `claude/<topic>` PRs stay mid-flight.
 - Model: `default` (Auto) **only**. Never invent other model ids. Do **not** fall back to an alternate model if Auto is blocked — tell the user and stop.
 - Never clone the repo onto the box; cloud agent does coding.
-- Cap: max **6 launches / 10 min**. If `/workspace/apex-status/queue-depth.json` says `hold`, or >15 runs queued, do not launch (and launched agents commit locally only).
+- Cap: max **6 launches / 10 min**. If `node tools/ci/queue-depth.mjs` says `= queue hold` (JOBS, not runs: ≥ 40 Linux in flight, ≥ 10 queued or ≥ 5 macOS; `--write /workspace/apex-status/queue-depth.json` leaves the same verdict as JSON), do not launch (and launched agents commit locally only).
 - Ship-checkpoint freeze: no sync **pushes** or **merges** while freeze is on.
 
 ## Prompt template (fill gaps)
