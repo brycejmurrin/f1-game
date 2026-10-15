@@ -112,13 +112,18 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   // The CAM and PAUSE buttons follow HUD SIZE (css/hud.css --tap-hud), but
   // only UP: --hud-btn-z is the top band's zoom floored at 1, so --tap-hud
   // never drops under the --tap rung. The restore eye stays on --tap itself.
-  for (const id of ["#pausebtn", "#btn-cam"]) {
-    assert.equal(decl(ov, id, "height"), "var(--tap-hud)", `${id} rides --tap-hud (HUD SIZE, floored at --tap)`);
-  }
+  // Past 150 % BUTTON SIZE PAUSE PAINTS bigger (--tap-btn, up to 200 %) while every layout reader keeps the
+  // --tap-hud band; CAM keeps the band height (its span crosses the sector plate) and moves left by PAUSE.
+  assert.equal(decl(ov, "#pausebtn", "height"), "var(--tap-btn, var(--tap-hud))", "#pausebtn paints --tap-btn, floored at the band");
+  assert.equal(decl(ov, "#btn-cam", "height"), "var(--tap-hud)", "#btn-cam keeps the --tap-hud band height");
+  assert.match(decl(ov, "#btn-cam", "right"), /var\(--tap-btn, var\(--tap-hud\)\)/, "CAM sits left of PAUSE's painted width");
+  const tb = decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--tap-btn");
+  assert.match(tb, /^max\(var\(--tap-hud\),/, "--tap-btn never paints under the band");
+  assert.match(tb, /var\(--dock-r-w, 0px\)/, "--tap-btn stops at the sector plate (it stands off --dock-r-w)");
   assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
   const hudCss = css("css/hud.css");
   assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
-  assert.match(decl(hudCss, ":root", "--hud-btn-z"), /^max\(1, /, "the HUD zoom can grow the buttons, never shrink them");
+  assert.equal(decl(hudCss, ":root", "--hud-btn-z"), "clamp(1, var(--hud-btn-scale, 1), 1.5)", "camera and pause use button size independently of HUD size");
 });
 
 test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {
@@ -193,14 +198,8 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   // Against what the dock actually paints at: BUTTON SIZE floored at 1 (the tap
   // floor in css/touch-controls.css), or a cap between BUTTON SIZE and 1 is dropped.
   assert.match(hud, /set\("--hud-z-dock", capDock, Math\.max\(btnFloor, btnScale\)\)/, "the dock cap is judged against the floored BUTTON SIZE (--hud-btn-floor, the 44px rung)");
-  // FALLS BACK TO HUD SIZE TIMES THE COARSE RATIO, not to HUD SIZE. Unset, the
-  // dock is `calc(var(--hud-scale) * var(--hud-btn-mult))` — and calc() inside a
-  // custom property is never reduced, so the token reads back as a literal
-  // string and coerces to NaN. A bare `|| scale` therefore sized the cap 25%
-  // small on every touch device from the moment the ratio stopped being 1.
-  assert.match(hud, /getPropertyValue\("--hud-btn-scale"\) \|\| scale \* mult/,
-    "and falls back to HUD SIZE times the button ratio while unset");
-  assert.match(hud, /--hud-btn-mult/, "resolved from the ratio token, not by parsing calc()");
+  assert.match(hud, /getPropertyValue\("--hud-btn-scale"\) \|\| mult/,
+    "unset controls use a fixed default independent of HUD size");
   const capTilt = (H - 3 * air) / tallestTilt;
   assert.ok(capTilt >= 2, `tilt/manual cap (${capTilt.toFixed(2)}) only bites past 200 % on 390px — the raw slider fits every setting`);
   const capButtons = (H - 3 * air) / tallestButtons;
@@ -546,7 +545,6 @@ test("HUD: OFF on touch hides the readouts but keeps the driving controls (hunt3
   assert.ok(readoutsHidden, "the readouts still go: every #hud child but the dock");
 });
 
-
 test("final pad disconnect neutralizes free look immediately and through recovery probes", () => {
   const pad = { index: 0, connected: true, mapping: "standard", id: "pad", axes: [0, 0, .8, -.7], buttons: [] };
   let live = [pad]; const h = bootInput({ pads: () => live });
@@ -589,4 +587,70 @@ test("a spare pad disconnect preserves held action edge baselines", () => {
   assert.equal(h.Input.consumeCameraCycle(), true);
   live = [pad]; h.fire("gamepaddisconnected", { gamepad: spare }); h.Input.poll();
   assert.equal(h.Input.consumeCameraCycle(), false);
+});
+
+/* ── touch-control LABEL floor (GAS/BRAKE/BOOST/OT/PAUSE/CAM) ───────────────
+ * fitHud writes --hud-z-dock (js/ui/hud.js, not touched here). The dock then
+ * `zoom`s, so an authored --fs-micro (14px) paints at 9.7px on a 390px-tall
+ * landscape phone at HUD 150% (css/touch-controls.css, 2026-10-14). The floor
+ * is a font-size max() that divides 10 CSS px by that zoom — width/height stay
+ * on --tap/--hold, so hit areas do not grow. */
+const LABEL_FLOOR_PX = 10;
+
+function paintedLabelPx(authoredPx, dockZoom) {
+  const z = Math.max(0.4, +dockZoom || 1);
+  return Math.max(authoredPx, LABEL_FLOOR_PX / z) * z;
+}
+
+test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () => {
+  const ov = css("css/touch-controls.css");
+  const land = { context: /orientation:\s*landscape/ };
+  assert.equal(decl(ov, ":root", "--touch-label-floor"), "10px",
+    "--touch-label-floor is the 10 CSS-px painted minimum");
+
+  const dock = ruleFor(ov, /body:not\(\.desktop\) \.dock/, "zoom", land);
+  assert.ok(dock, "landscape dock publishes zoom");
+  assert.equal(dock.decls.get("--touch-label-z"),
+    "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+    "the label-z token tracks the dock's own zoom (capped or slider)");
+
+  const tapFont = decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "font-size", land);
+  assert.match(String(tapFont), /max\(/, "tap labels clamp with max()");
+  assert.match(String(tapFont), /var\(--touch-label-floor\)/, "tap labels consume the 10px floor");
+  assert.match(String(tapFont), /var\(--touch-label-z/, "tap labels divide the floor by dock zoom");
+  assert.doesNotMatch(String(tapFont), /\bwidth\b|\bheight\b/, "the font rule does not restyle hit boxes");
+
+  const holdFont = decl(ov, /body:not\(\.desktop\) \.dock \.pedal/, "font-size", land);
+  assert.match(String(holdFont), /max\(/);
+  assert.match(String(holdFont), /var\(--touch-label-floor\)/);
+  assert.match(String(holdFont), /var\(--touch-label-z/);
+
+  const shiftFont = decl(ov, /^body:not\(\.desktop\) \.dock \.shiftbtn, body\.desktop \.dock \.shiftbtn$/, "font-size", land);
+  assert.match(String(shiftFont), /max\(15px/);
+  assert.match(String(shiftFont), /var\(--touch-label-floor\)/);
+
+  const pauseFont = decl(ov, "#pausebtn", "font-size");
+  assert.match(String(pauseFont), /var\(--touch-label-floor\)/, "PAUSE keeps the same 10px floor");
+  const camFont = decl(ov, "#btn-cam", "font-size");
+  assert.match(String(camFont), /var\(--touch-label-floor\)/, "CAM keeps the same 10px floor");
+
+  // The 9.7px case: authored 14px × dock zoom 0.69. Without the floor that
+  // paints 9.66; with it, 10. Width/height stay on --tap/--hold (not asserted
+  // as a computed box here — the selectors above never mention them).
+  assert.ok(paintedLabelPx(14, 0.69) >= LABEL_FLOOR_PX - 1e-9, "14px @ 0.69 zoom paints ≥ 10");
+  assert.ok(paintedLabelPx(14, 0.69) < 14 * 0.69 + 1, "the floor does not enlarge labels that already clear 10px by much");
+  for (const z of [0.4, 0.5, 0.69, 0.82, 1, 1.25, 1.5]) {
+    for (const authored of [11, 14, 15, 18]) {
+      assert.ok(paintedLabelPx(authored, z) + 1e-9 >= LABEL_FLOOR_PX,
+        `${authored}px × zoom ${z} must paint ≥ ${LABEL_FLOOR_PX} (got ${paintedLabelPx(authored, z)})`);
+    }
+  }
+
+  // Hit-area tokens stay size tokens — the floor must not leak into --tap/--hold.
+  const tap = dock.decls.get("--tap");
+  const hold = dock.decls.get("--hold");
+  assert.match(String(tap), /^max\(54px/);
+  assert.match(String(hold), /^max\(72px/);
+  assert.doesNotMatch(String(tap), /touch-label-floor/);
+  assert.doesNotMatch(String(hold), /touch-label-floor/);
 });

@@ -277,6 +277,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `session-entry.js` | `SessionEntry` | tag | One owner for the asynchronous gap before a race or qualifying sheet commits. |
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
 | `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
+| `storm.js` | `Storm` | tag | STORM (⛈): the weather above RAIN. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
 | `overtake-mode.js` | `OvertakeMode` | tag | OVERTAKE MODE (FIA 2026 Sporting Regs B7.2.3(c)): one Detection Line per circuit, the 1 s check there, and the 0.5 MJ allowance granted at the Activation Line… |
 | `pace-math.js` | `PaceMath` | tag | PACE / ERS math: vTop/vStd/aStd, X-mode aero gains, paceRef buffer, ERS drain/regen/overtake duration, aeroDfMult, and gearHi/rpmFor. |
@@ -285,6 +286,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `real-replay.js` | `RealReplay` | tag | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
 | `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
+| `forecast.js` | `Forecast` | tag | WEATHER FORECAST (Forecast): what the pit wall KNOWS about a dynamic-weather race, as a timed, located-in-laps statement with honest uncertainty. |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
 | `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
 | `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |

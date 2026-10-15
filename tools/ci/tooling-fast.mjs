@@ -353,6 +353,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // graining and blistering say different things (one heals, one does not),
   // the axle call names an end of the car, and it does not nag. ~0.1 s.
   "tests/unit/engineer.test.mjs",
+  // The Cloud Agent bootstrap contract (.cursor/environment.json). The one docs-guards
+  // file tooling-fast lacked (ACTIONS-AUDIT-2026-10-14 finding 5), ~0.3 s.
+  "tests/unit/environment-json.test.mjs",
   "tests/unit/evaluate-scope-lint.test.mjs",
   "tests/unit/extra-rigs.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
@@ -390,6 +393,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-shots.test.mjs",
   "tests/unit/flying-start.test.mjs",
   "tests/unit/font-digits.test.mjs",
+  // The weather FORECAST (js/race/forecast.js): timeline off the arc's own road lag (drift-guarded against
+  // weather-arc.js), bounded seeded uncertainty, and the engineer's early / 2-lap / 1-lap / here / drying calls. VM, < 0.5 s.
+  "tests/unit/forecast.test.mjs",
   // Portrait HFOV floor + landscape HFOV cap (js/camera/fov-fit.js); pure VM, <0.1 s.
   "tests/unit/fov-fit.test.mjs",
   // The FRAMING REPORT fleet diff (tools/lib/frame-fleet.mjs): frame identity across
@@ -492,6 +498,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Portrait phone bottom cluster: TYRES stays in the column (landscape-only
   // dock anchor), fitHud caps --hud-z-bot vs AERO/OT, tip clash shapes.
   "tests/unit/hud-portrait-cluster.test.mjs",
+  // One radio home per HUD profile: BROADCAST lights hud-radio-top /
+  // data-radio-corner; leftover 14svh #announce home is gone.
+  "tests/unit/hud-radio-slot.test.mjs",
   "tests/unit/hud-readouts.test.mjs",
   "tests/unit/hud-relative.test.mjs",
   "tests/unit/hud-speed-parity.test.mjs",
@@ -602,6 +611,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The HUD rear-view mirror's game side (js/render/shared/mirror-pass.js) in a VM:
   // when it shows, the pass order, and the main camera handed back. ~0.1 s.
   "tests/unit/mirror-pass.test.mjs",
+  // Job 5: mix duck under announcer/radio. Fake-audio VM: SFX bus −8 dB
+  // via setTargetAtTime (80 ms / 400 ms), overlap hold, interrupt/rebuild
+  // restore, zero per-frame nodes. ~0.2 s.
+  "tests/unit/mix-duck-radio.test.mjs",
   // Capacitor Android (task 45): frozen identity, config shape, manifest,
   // Gradle version wiring, sync-web stamp gate, NativeDownload via Plugins.
   "tests/unit/mobile-config.test.mjs",
@@ -680,6 +693,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pu-harvest-audio.test.mjs",
   // shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.
   "tests/unit/publish-shots.test.mjs",
+  // Push hold: queued + running Actions JOBS by OS vs the 40 Linux / 5 macOS slots, never runs. Fixtures.
+  "tests/unit/queue-depth.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/race-control.test.mjs",
   "tests/unit/race-entry-profile.test.mjs",
@@ -739,11 +754,15 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/report-server.test.mjs",
   // Results cam (js/camera/results-cam.js): chequered→orbit, highlights reel, results early-return pin. ~0.05 s.
   "tests/unit/results-cam.test.mjs",
+  "tests/unit/rival-attach-init.test.mjs",
   "tests/unit/rival-audio.test.mjs",
+  "tests/unit/rival-contact-sfx.test.mjs",
   "tests/unit/rival-passby-pool.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
+  // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
+  "tests/unit/s8-once-per-frame.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
   // The garage LIVE atlas on a LAZY_CIRCUIT stub: paintLive skips the map instead of
@@ -842,6 +861,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/store-registry.test.mjs",
+  // STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,
+  // a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.
+  "tests/unit/storm-weather.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
   // APEX_SURVEY_HUD=1: flag parse (query|hash|localStorage) + HUD-visible stub without race warm. Pure, ~0.1 s.
   "tests/unit/survey-hud.test.mjs",
@@ -881,7 +903,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tlx-hunt4.test.mjs",
   // TLX perf hunt 4 (lane TLX-W): A-W2 4-byte vertex strides on three's WebGL2 path (the real packer, both ways; the lit GLSL reads the widened colour as vec3); A-H5 the mirror target's capped mip chain (the real prepareMirrorTarget over three r186); A-P1 the scene depth invalidated on frames whose post reads none of it (the real post chain); A-W1 the program warm's draw stage (the real startProgramWarm: 1x1 draws, never the canvas, state restored).
   "tests/unit/tlx-hunt4b.test.mjs",
-  // TLX perf hunt 4 (lane TLX-H4): A-H4 the real tlx-shadow caster as a plain attribute-instanced Mesh (Stream, no UBO pad) over three r186 on the fake WebGL2 with a GPU-buffer model — each pass's draw reads its own rows, bytes = rows written, 0 on a render that wrote none; apex26.tlxCasterAttr=0 is the padded Dynamic InstancedMesh.
+  // TLX perf hunt 4 (lane TLX-H4): A-H4 the real tlx-shadow caster as a plain attribute-instanced Mesh (Stream, no UBO pad) over three r186 on the fake WebGL2 with a GPU-buffer model — each pass's draw reads its own rows, bytes = rows written, 0 on a render that wrote none; apex26.tlxCasterAttr=0 is the padded Dynamic InstancedMesh. B-F3.1 the real program warm defers the mirror stage on AUTO to the first mirrorBegin (apex26.tlxMirWarmLazy=0 eager).
   "tests/unit/tlx-hunt4c.test.mjs",
   // TLX's instanced cull reuses its resident pack by surviving CELL SET
   // (InstCells, GLX/WGX parity); lifts the real cullInstances/updateInstances.
@@ -970,19 +992,39 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/tyre-peak-slip.test.mjs",
   // Factory/sig tyre recipes after #1190 open rims: distinct geom + cover copy needs cover:1.
   "tests/unit/tyre-recipes-open-rim.test.mjs",
+  // Job 4: slip-driven tyre squeal — threshold, lat/long monotonic gain+pitch,
+  // setTargetAtTime ramps, zero per-frame nodes. Fake-audio VM, < 1 s.
+  "tests/unit/tyre-squeal-slip.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  // ui-fit r7: camera tuner rail-off portrait — #ct-previews placed in grid
+  // row 3, one minmax column, #ct-close / #ct-prev-* --tap-paint floors
+  // (#camtune-inner / #ct-* only; lighting untouched).
+  "tests/unit/ui-fit-camtune-portrait-r7.test.mjs",
   // ui-fit round 5: camera tuner compact foot/preview/copy-from --tap-paint
   // floors (#camtune-inner only; lighting untouched).
   "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
+  // ui-fit round 6: flyby editor compact foot / pose-select --tap-paint
+  // floors (#flyby-inner / #fb-* only; camera/lighting untouched).
+  "tests/unit/ui-fit-flyby-tap-r6.test.mjs",
+  // ui-fit round 6: Garage LIVERY grid chips floor at --tap/--tap-paint
+  // (survey rank 1; 26×26 vs 52, 82 soft taps) and SATIN/CHROME tags do
+  // not ellipsis (20 trunc). css/carsetup.css #cs-options.cs-liv-grid only.
+  "tests/unit/ui-fit-garage-livery-r6.test.mjs",
   // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
   // floors (#lighting-inner / #lt-* only; camera untouched).
   "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
   // ui-fit round 6: Photo Studio #ps-* setting-row selects floor at
   // --tap-paint (portrait 114×43 soft taps; landscape already clean).
   "tests/unit/ui-fit-photostudio-tap-r6.test.mjs",
+  // ui-fit round 6: Settings ACCESSIBILITY #pm-panel-a11y pad / scroll-pad
+  // so the last colourblind help clears BACK (survey rank 8; 844×390).
+  "tests/unit/ui-fit-settings-a11y-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
+  // ui-fit round 6: Track Designer tool-strip labels wrap+balance and
+  // floor taps at --tap (survey r5 rank 4; 36–57px clip on 390×844 / 844×390).
+  "tests/unit/ui-fit-trackdesigner-toolbar-r6.test.mjs",
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",
@@ -1015,6 +1057,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 WGX: buffers freed while an encoder (or the pending shadow encoder) is live retire through _retiredBufs; the swapchain self-test pops its validation scope before its first await.
   "tests/unit/wgx-free-retire.test.mjs",
   "tests/unit/who-is-on-it.test.mjs",
+  // Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane
+  // quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.
+  "tests/unit/wind-speed.test.mjs",
   "tests/unit/xr-backend-pin.test.mjs",
   "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",

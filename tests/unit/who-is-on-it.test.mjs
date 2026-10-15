@@ -217,3 +217,17 @@ test("against real git: the commits-only mirror lists every branch of the origin
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("a board write pokes fleet.yml by REST workflow_dispatch on the deploy branch, and a failure is only a note", async () => {
+  // A push to claude/claims-board cannot trigger fleet.yml (GitHub runs a
+  // push-triggered workflow from the pushed tree, which has no .github/), so
+  // the claim tool dispatches it — measured live on #1518, 2026-10-14.
+  const { pokeFleetBoard } = await import("../../tools/ci/who-is-on-it.mjs");
+  let seen;
+  assert.equal(pokeFleetBoard((cmd, args) => { seen = [cmd, ...args]; return { status: 0 }; }), "dispatched");
+  assert.deepEqual(seen.slice(0, 4), ["gh", "api", "-X", "POST"]);
+  assert.match(seen[4], /^repos\/[^/]+\/[^/]+\/actions\/workflows\/fleet\.yml\/dispatches$/);
+  assert.deepEqual(seen.slice(5), ["-f", "ref=claude/f1-game-project-26h3ng"]);
+  assert.match(pokeFleetBoard(() => ({ status: 1 })), /not dispatched/);
+  assert.match(pokeFleetBoard(() => ({ status: null, error: new Error("ENOENT") })), /not dispatched/);
+});

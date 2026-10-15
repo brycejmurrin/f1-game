@@ -15,9 +15,11 @@ Already own the PR and a push went red: start at step 3, then 4
    then `--claim "<PR/topic>"` (`--release` at the end). Overlap with a live
    session: STAND-DOWN. Continue an existing PR by checking out its branch;
    new work is `cursor/<topic>-<hash>`.
-2. **Subscribe.** `subscribe_pr_activity` on each PR you own (`agent-fleet` comms:
-   one watcher per PR; if another agent holds it, poll `ci-watch.mjs --sha
-   <head> --once` at checkpoints instead).
+2. **Subscribe.** Subscribe with your host's own tool — Claude Code
+   `subscribe_pr_activity`; Cursor `subscribe_github_ci` + `subscribe_github_pr`
+   (`cursor-subscriptions`). Never call a name your host does not list
+   (`agent-fleet` comms). One watcher per PR; if another agent holds it, poll
+   `ci-watch.mjs --sha <head> --once` at checkpoints instead.
 3. **Read the CURRENT head.** Before any decision and before EVERY push, re-read
    the PR head sha (`git fetch`, then `git rev-parse origin/<branch>`, or
    `node tools/ci/pr-board.mjs --pr <n>`). Another session may have pushed. If
@@ -31,7 +33,8 @@ Already own the PR and a push went red: start at step 3, then 4
    `node tools/ci/tooling-fast.mjs --jobs=3 > artifacts/logs/tooling-fast.log 2>&1`
    as ONE background task (rule 4); the change-aware pick from `pick-tests`;
    `node tools/ci/deploy.mjs --gate-only > artifacts/logs/gate.log 2>&1`
-   (background, rule 4) before the push; `apex-status/queue-depth.json` hold:
+   (background, rule 4) before the push; `node tools/ci/queue-depth.mjs` says
+   `= queue hold` (queued + running JOBS vs the 40 Linux / 5 macOS slots):
    commit locally only. Browser groups only as
    `node tools/ci/remote-group.mjs <group>` AFTER the push (rule 4 table), never a local group while Actions is healthy. Commit, then one push
    per green cycle. Never a force-push or rebase; catch up only when GitHub says

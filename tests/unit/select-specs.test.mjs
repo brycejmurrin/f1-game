@@ -1315,6 +1315,19 @@ test("a spec this tool cannot READ is reported, never silently dropped", () => {
   }
 });
 
+test("full HUD leg has its modeled timeout margin through artifact cleanup", () => {
+  // CI38623761327:46 assertions passed, then the18min job cap cancelled cleanup.
+  const file = "tests/specs/hud-layout.spec.js";
+  const [job] = shards(fit([file], 30, { rank: () => 0, db: EMPTY }), EMPTY)
+    .filter((j) => j.specs.includes(file));
+  const modeled = 2 * Math.ceil(job.sec / 60) + Math.ceil(job.perTest / 60)
+    + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN;
+  assert.ok(job.timeout >= modeled,
+    `HUD job requires ${modeled}min for work/timeout/setup/wrap, got ${job.timeout}`);
+  assert.ok(job.timeout * 60 > job.sec + (SELECTED_SETUP_MIN + SELECTED_WRAP_MIN) * 60,
+    "setup and artifact cleanup cannot consume the test work budget");
+});
+
 test("career / hud-layout selected legs use 2 workers instead of a fake Playwright shard", () => {
   // Pages 37420997285: --shard=1/5 of career.spec.js billed 21 tests per
   // shard but ran ~101 on shard 1 (~22 min) because Playwright shards GROUPS.

@@ -49,6 +49,36 @@ test("fitHud: portrait path caps --hud-z-bot against the side button columns", (
     "portrait width budget reads dock discs without dynamic getElementById");
 });
 
+test("CSS: portrait phone left-aligns the tower so it cannot cover #hud-sectors", () => {
+  assert.match(CSS,
+    /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?\.hud-top\s*\{[\s\S]*?flex-wrap:\s*wrap/,
+    "portrait .hud-top wraps and leaves the right column for #hud-sectors");
+  assert.match(CSS,
+    /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?\.hud-top\s*\{[\s\S]*?max-width:\s*calc\(100vw/,
+    "portrait .hud-top max-width reserves the sector plate");
+});
+
+test("CSS: portrait phone floors tower labels and sector times at 10 CSS px", () => {
+  assert.match(CSS,
+    /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?#hud-sectors[\s\S]*?font-size:\s*max\(\s*var\(--fs-micro\),\s*calc\(var\(--fs-micro\)\s*\/\s*1\.4\s*\/\s*var\(--hud-z,\s*1\)\)\)/,
+    "portrait #hud-sectors / .sec-* use max(--fs-micro, --fs-micro/1.4/--hud-z)");
+  assert.match(CSS,
+    /@media\s*\(orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)\s*\{[\s\S]*?\.hud-top \.hud-label[\s\S]*?var\(--fs-micro\)\s*\/\s*1\.4\s*\/\s*var\(--hud-z/,
+    "portrait tower labels share the 10 CSS px floor (--fs-micro/1.4)");
+});
+
+test("fitHud: portrait top-band capFor stacks the map under the tower and floors --hud-z-top", () => {
+  const fit = HUD_JS.slice(HUD_JS.indexOf("function fitHud("), HUD_JS.indexOf("function paintInstruments"));
+  assert.match(fit, /portraitPhone/,
+    "fitHud names a portraitPhone flag for the stacked budget");
+  assert.match(fit, /orientation:\s*portrait\)\s*and\s*\(max-width:\s*500px\)/,
+    "portrait stacked budget matches the CSS max-width: 500px query");
+  assert.match(fit, /READABLE_Z = 10 \/ 14/,
+    "portrait --hud-z-top floor is 10/14 (10 CSS px over --fs-micro 14)");
+  assert.match(fit, /portraitPhone && prop === "--hud-z-top"/,
+    "the 10/14 floor applies only to portrait --hud-z-top, not the dock/bottom bands");
+});
+
 test("analyzeOverlap: tip portrait clash shapes are the failure mode we clear", () => {
   // Synthetic 390×844 @ ~150% from artifacts/hud-survey/before-portrait.
   const W = 390, H = 844, ins = { sal: 0, sar: 0, sat: 47, sab: 34 };

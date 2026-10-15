@@ -147,6 +147,47 @@ test("TLX soft present serializes reads, coalesces newest, and rejects stale siz
   assert.match(resize, /_softReadQueued = null/);
 });
 
+test("TLX displayed source generation rejects old async completion and follows newest queued frame", async () => {
+  const src = read("js/render/three/tlx.js");
+  const scheduler = src.slice(src.indexOf("function _softBlitNotify()"), src.indexOf("// present()'s failure ladder"));
+  const pending = [];
+  const sandbox = {
+    Date,
+    renderer: { readRenderTargetPixelsAsync: (rt) => new Promise((resolve) => pending.push({ rt, resolve })) },
+    _displayCanvas: { width: 4, height: 1 },
+    _displayCtx: { createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} },
+    _unstrideIntoSoft: () => 64,
+  };
+  vm.runInNewContext(`
+    let _softBlit = true, _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
+    let _softSubmittedGen = 0, _softShownGen = 0, _softBlitGen = 0, _softImg = null;
+    let W = 4, H = 1;
+    const _softPresentWaiters = [];
+    ${scheduler}
+    globalThis.queue = _queueSoftBlit;
+    globalThis.cancel = _cancelSoftBlits;
+    globalThis.state = () => ({ submitted: _softSubmittedGen, shown: _softShownGen });
+  `, sandbox);
+  const flush = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+  sandbox.queue({ name: "old-inflight", width: 4, height: 1 });
+  sandbox.queue({ name: "old-queued", width: 4, height: 1 });
+  const required = sandbox.state().submitted + 1;
+  sandbox.queue({ name: "requested-camera", width: 4, height: 1 });
+  pending[0].resolve(new Uint8Array(16)); await flush();
+  assert.equal(sandbox.state().shown, 1);
+  assert.ok(sandbox.state().shown < required, "a completion submitted before the camera request cannot satisfy freshness");
+  assert.equal(pending[1].rt.name, "requested-camera", "the latest frame replaces the stale queued frame");
+  pending[1].resolve(new Uint8Array(16)); await flush();
+  assert.equal(sandbox.state().shown, required);
+  sandbox.queue({ name: "voided", width: 4, height: 1 });
+  sandbox.cancel();
+  sandbox.queue({ name: "new-epoch", width: 4, height: 1 });
+  pending[2].resolve(new Uint8Array(16)); await flush();
+  assert.equal(sandbox.state().shown, required, "an invalidated epoch cannot advance the displayed source token");
+  pending[3].resolve(new Uint8Array(16)); await flush();
+  assert.equal(sandbox.state().shown, 5);
+});
+
 test("TLX voiding an in-flight soft read releases its gate", () => {
   // The voided completion skips _finishSoftBlitRead (epoch mismatch), so a gate
   // left held wedges presentation until the stale guard: 60 s+ under load, which

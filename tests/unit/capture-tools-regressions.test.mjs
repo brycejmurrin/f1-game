@@ -4,8 +4,9 @@ import { readFileSync, mkdirSync, mkdtempSync, writeFileSync, existsSync, rmSync
 import { resolve, join, relative, isAbsolute, basename, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import vm from 'node:vm';
+import { EventEmitter } from 'node:events';
 import sharp from 'sharp';
-import { screenshotPresentedCanvas } from '../../tools/shot/probe-page.mjs';
+import { screenshotPresentedCanvas, awaitCaptureReady, mutateCaptureScene } from '../../tools/shot/probe-page.mjs';
 import { poolMap, startWorkerPool, waitCaptureFrame, openPage } from '../../tools/shot/apex-capture.mjs';
 import { parseCssPlayArgs, screenClicks, SCREENS, swapStylesheet } from '../../tools/ui/css-play.mjs';
 import { menuReady, previewMapSettled } from '../../tools/ui/menu-readiness.mjs';
@@ -13,8 +14,11 @@ import { parseSurveyTrackArgs } from '../../tools/track/survey-track.mjs';
 import { parseCaptureArgs, pixelEvidence, rendererEvidence, ROOT } from '../../tools/shot/capture-contract.mjs';
 import { pendingWatchCancellation } from '../../tools/check/lifecycle-census.mjs';
 import { recordCapture, stageRace, runBoundedCapture, visibleScreen, waitNextGameRender, captureContextOptions, captureFailureSnapshot, captureOperationBudget, captureOperation } from '../../tools/shot/capture-runtime.mjs';
+import { parseBenchmarkArgs, summarizeBenchmarkSamples, captureSample } from '../../tools/shot/capture-benchmark.mjs';
 import { registerTeardownResource, shutdown } from '../../tools/lib/harness.mjs';
 import { cameraDelta, loadFixture, exitReplayThroughUi, preflightReplayFixture, cameraOnlyFixture, controlClickGuard, verifiedControlClick } from '../../tools/shot/replay-camera-probe.mjs';
+import { parseCaptureOptions, captureViewport, captureContextOptions as profileContextOptions, captureScreenshotOptions, captureExtension, captureLaunchOptions, applyCaptureProfile } from '../../tools/shot/capture-options.mjs';
+import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from '../../tools/shot/capture-diagnostics.mjs';
 
 test('agent help boots once with the selected seed and measured startup budget', async () => {
   const source = readFileSync(resolve(ROOT, 'tools/shot/agent.mjs'), 'utf8')
@@ -100,34 +104,37 @@ test('partial capture pool boot closes both previously ready and failed browsers
   assert.equal(launches, 2); assert.deepEqual(closed.sort(), [0, 1]);
 });
 
-test('capture waits for two fresh soft presents and rejects timeout instead of saving stale pixels', async () => {
-  let calls = 0;
-  await waitCaptureFrame({ evaluate: async () => { calls++; return true; } });
-  assert.equal(calls, 3);
-  calls = 0;
-  await assert.rejects(waitCaptureFrame({ evaluate: async () => { calls++; return calls === 1; } }), /no fresh presented frame/);
-  assert.equal(calls, 2);
-  const before = 5;
-  let waited = false;
-  calls = 0;
-  await waitCaptureFrame({ evaluate: async () => { calls++; return calls === 1 ? false : before; },
-    waitForFunction: async (_fn, frame, opts) => { assert.equal(frame, before); assert.equal(opts.polling, 100); waited = true; } });
-  assert.equal(waited, true);
+test('capture generation ignores the old readback and stops at the first matching displayed source', async () => {
+  let submitted = 9, shown = 8, waits = 0;
+  const gfx = { softPresent: () => true, softPresentState: () => ({ submittedGen: submitted, shownGen: shown }),
+    awaitSoftPresent: async () => { waits++; if (waits === 1) shown = 9; else { submitted = 12; shown = 10; } return shown; } };
+  const page = { evaluate: (fn, ms) => vm.runInNewContext('(' + fn.toString() + ')(timeout)',
+    { GLX: gfx, timeout: ms, window: {}, setTimeout, clearTimeout, Date }) };
+  const result = await waitCaptureFrame(page);
+  assert.equal(result.mode, 'source-generation'); assert.equal(result.required, 10);
+  assert.equal(result.shown, 10); assert.equal(waits, 2);
 });
 
-test('native frame barrier checks actual presentation capability, not an immediately resolved soft promise', async () => {
-  const previous = { GLX: globalThis.GLX, window: globalThis.window };
-  let presents = 0, waited = false;
-  globalThis.GLX = { softPresent: () => false, awaitSoftPresent: async () => { presents++; } };
-  globalThis.window = { __apex: { cameraState: () => ({ renderFrame: 17 }) } };
-  try {
-    await waitCaptureFrame({ evaluate: async (fn) => fn(), waitForFunction: async (fn, frame, opts) => {
-      assert.equal(frame, 17); assert.equal(fn(frame), false); assert.equal(opts.polling, 100);
-      globalThis.window.__apex.cameraState = () => ({ renderFrame: 19 });
-      assert.equal(fn(frame), true); waited = true;
-    } });
-    assert.equal(presents, 0); assert.equal(waited, true);
-  } finally { Object.assign(globalThis, previous); }
+test('a matching next source needs only one present and a stalled source rejects capture', async () => {
+  let shown = 4, waits = 0;
+  const gfx = { softPresent: () => true, softPresentState: () => ({ submittedGen: shown, shownGen: shown }),
+    awaitSoftPresent: async () => { waits++; shown = 5; return shown; } };
+  const page = { evaluate: (fn, ms) => vm.runInNewContext('(' + fn.toString() + ')(timeout)',
+    { GLX: gfx, timeout: ms, window: {}, setTimeout, clearTimeout, Date }) };
+  assert.equal((await awaitCaptureReady(page)).shown, 5); assert.equal(waits, 1);
+  gfx.awaitSoftPresent = () => new Promise(() => {});
+  await assert.rejects(awaitCaptureReady(page, { timeoutMs: 10 }), /timed out/);
+  await assert.rejects(screenshotPresentedCanvas(page, { awaitMs: 10 }), /timed out/);
+});
+
+test('native frame barrier checks real game render progress rather than a resolved soft promise', async () => {
+  let frame = 17, presents = 0;
+  const gfx = { softPresent: () => false, awaitSoftPresent: async () => { presents++; } };
+  const page = { evaluate: (fn, ms) => vm.runInNewContext('(' + fn.toString() + ')(timeout)',
+    { GLX: gfx, timeout: ms, window: { __apex: { cameraState: () => ({ renderFrame: frame++ }) } }, setTimeout, clearTimeout, Date }) };
+  const result = await waitCaptureFrame(page);
+  assert.equal(result.mode, 'native-frame'); assert.ok(result.shown >= result.before + 2);
+  assert.equal(presents, 0);
 });
 
 test('capture page keeps backend AUTO and closes failed context before a reused browser takes another job', async () => {
@@ -328,7 +335,7 @@ test('capture runtime obeys actual soft screenshot file and numeric present-wait
     waitForFunction: async () => true,
     evaluate: async (fn, arg) => {
       const body = String(fn);
-      if (body.includes('GLX.awaitSoftPresent')) { assert.equal(arg, 30000); waits++; return; }
+      if (body.includes('const deadline = Date.now() + ms')) { assert.equal(arg.ms, 30000); waits++; return; }
       if (body.includes('const a = window.__apex')) return { diag: { env: { backend: 'three', backendState: { api: 'webgl2', gpuErrors: 0 } } }, frame: { camera: { eye: [0, 1, 2] } } };
       if (fn === visibleScreen) return { url: 'http://local/?seed=1', title: 'Apex', visibleRoots: [], errorOverlay: null };
       if (body.includes('const softLive')) return { b64: png.toString('base64'), id: 'game-soft' };
@@ -373,7 +380,7 @@ test('recordCapture passes the real CDP helper sixty-second cap or smaller remai
   const page = { waitForFunction: async () => true, context: () => ({ newCDPSession: async () => ({ send: async () => ({ data: png.toString('base64') }), detach: async () => { detached++; } }) }),
     evaluate: async (fn, arg) => {
       const body = String(fn);
-      if (body.includes('GLX.awaitSoftPresent')) { presents++; assert.ok(arg > 0 && arg <= 30000); return; }
+      if (body.includes('const deadline = Date.now() + ms')) { presents++; assert.ok(arg.ms > 0 && arg.ms <= 30000); return; }
       if (body.includes('const a = window.__apex')) return { diag: { env: { backend: 'three', backendState: { api: 'webgl2', gpuErrors: 0 } } }, frame: { camera: { eye: [0, 1, 2] } } };
       if (fn === visibleScreen) return { errorOverlay: null, visibleRoots: [] };
       if (body.includes('const softLive')) return null;
@@ -632,4 +639,214 @@ test('track-session diff containment is outDir + separator, not a bare prefix', 
       assert.throws(() => pngOf(bad), /unknown shot/, bad);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('capture profiles preserve command defaults and validate explicit dimensions/encoding', () => {
+  const custom = parseCaptureOptions(['identity', 'output', '--seed', '0'], {});
+  assert.deepEqual(custom.positionals, ['identity', 'output']);
+  assert.equal(custom.seed, 0);
+  assert.equal(custom.type, null);
+  assert.equal(custom.viewport, null);
+  assert.deepEqual(profileContextOptions(custom, { width: 844, height: 390 }), { viewport: { width: 844, height: 390 }, deviceScaleFactor: 1 });
+  const preview = parseCaptureOptions(['--profile=preview', '--width', '800', '--scope', 'page', '--browser', 'unified', '--trace=trace.json'], {});
+  assert.deepEqual(captureViewport(preview), { width: 800, height: 360 });
+  assert.deepEqual(captureScreenshotOptions(preview), { type: 'jpeg', quality: 80, scope: 'page' });
+  assert.equal(captureExtension(preview), 'jpg');
+  assert.equal(preview.browser, 'chromium');
+  assert.equal(preview.tracePath, 'trace.json');
+  const comparison = parseCaptureOptions(['--profile', 'comparison', '--isolated'], {});
+  assert.equal(comparison.reuse, false);
+  assert.deepEqual(comparison.viewport, { width: 1280, height: 720 });
+  for (const args of [['--width'], ['--height', '--scope', 'page'], ['--dpr', 'NaN'], ['--width', '3.5'], ['--height', '0'], ['--seed', '-1'], ['--quality', '101'], ['--type', 'png', '--quality', '80'], ['--profile', 'unknown'], ['--gpu', 'unknown'], ['--browser', 'firefox'], ['--scope', 'hud'], ['--reuse', '--isolated'], ['--reuse=false'], ['--width', '8192', '--height', '8192', '--dpr', '2']]) {
+    assert.throws(() => parseCaptureOptions(args, {}), /capture:/, args.join(' '));
+  }
+});
+
+test('comparison profile pins real render/governor hooks and previews leave them alone', async () => {
+  const calls = [];
+  const page = { evaluate: (fn) => vm.runInNewContext('(' + fn.toString() + ')()', { window: { __apex: {
+    renderScale(value) { calls.push(['scale', value]); return { scale: value ?? 0.75 }; },
+    govHold(value) { calls.push(['hold', value]); return { tierHold: value }; },
+    renderClock(value, hold) { calls.push(['clock', value, hold]); return value; },
+  } } }) };
+  assert.equal(await applyCaptureProfile(page, { profile: 'preview' }), null);
+  assert.deepEqual(calls, []);
+  const result = await applyCaptureProfile(page, { profile: 'comparison' });
+  assert.equal(result.scale.scale, 1);
+  assert.equal(result.tier.tierHold, true);
+  assert.deepEqual(calls, [['scale', undefined], ['scale', 1], ['hold', true], ['clock', 0, true]]);
+  await assert.rejects(async () => applyCaptureProfile({ evaluate: (fn) => vm.runInNewContext('(' + fn.toString() + ')()', { window: {} }) }, { profile: 'comparison' }), /requires __apex/);
+});
+
+test('GPU diagnostics omit raw command lines and reject explicit fallback capabilities', async () => {
+  let detached = 0;
+  const session = { detach: async () => { detached++; }, send: async () => ({ commandLine: '--proxy-server=user:password@host', gpu: { auxAttributes: { glRenderer: 'ANGLE SwiftShader' }, devices: [], featureStatus: { webgl: 'enabled' } } }) };
+  const diagnostics = await captureBrowserDiagnostics({ version: () => 'Chromium test', newBrowserCDPSession: async () => session }, { requested: { gpu: 'swiftshader' }, executable: { path: '/chrome', source: 'fixture' } });
+  assert.equal(detached, 1);
+  assert.equal(diagnostics.actual.software, true);
+  assert.equal('commandLine' in diagnostics.actual, false);
+  assert.doesNotThrow(() => assertCaptureGpuCapability(diagnostics, { gpu: 'swiftshader', gpuExplicit: true }));
+  assert.throws(() => assertCaptureGpuCapability(diagnostics, { gpu: 'hardware', gpuExplicit: true }), /actual renderer/);
+  assert.throws(() => assertCaptureGpuCapability({ actual: null, error: 'no info' }, { gpu: 'hardware', gpuExplicit: true }), /cannot verify/);
+  assert.doesNotThrow(() => assertCaptureGpuCapability({ actual: null }, { gpuExplicit: false }));
+});
+
+test('GPU diagnostics clean up sessions created after a timeout without changing returned provenance', async () => {
+  let resolveSession, detached = 0, sent = 0;
+  const creation = new Promise((resolve) => { resolveSession = resolve; });
+  const diagnostics = await captureBrowserDiagnostics({ version: () => 'test', newBrowserCDPSession: () => creation }, { timeoutMs: 5 });
+  assert.match(diagnostics.error, /timed out/);
+  let resolveDetached;
+  const cleanup = new Promise((resolve) => { resolveDetached = resolve; });
+  resolveSession({ detach: async () => { detached++; resolveDetached(); }, send: async () => { sent++; return {}; } });
+  await cleanup;
+  assert.equal(detached, 1);
+  assert.equal(sent, 0);
+  assert.equal(diagnostics.actual, null);
+});
+
+test('Chromium capture trace streams bounded data, closes IO, and stop is idempotent', async () => {
+  const dir = mkdtempSync(resolve(ROOT, 'scratch/trace-stream-'));
+  const session = new EventEmitter(), calls = []; let detached = 0;
+  session.detach = async () => { detached++; };
+  session.send = async (method, args) => {
+    calls.push([method, args]);
+    if (method === 'Tracing.end') queueMicrotask(() => session.emit('Tracing.tracingComplete', { stream: 'trace' }));
+    if (method === 'IO.read') return { data: Buffer.from('{"traceEvents":[]}').toString('base64'), base64Encoded: true, eof: true };
+    return {};
+  };
+  try {
+    const tracePath = resolve(dir, 'trace.json');
+    const trace = await startCaptureTrace({ newBrowserCDPSession: async () => session }, { path: tracePath });
+    const result = await trace.stop();
+    assert.deepEqual(await trace.stop(), result);
+    assert.equal(readFileSync(tracePath, 'utf8'), '{"traceEvents":[]}');
+    assert.equal(result.bytes, 18);
+    assert.equal(detached, 1);
+    assert.equal(calls[0][1].transferMode, 'ReturnAsStream');
+    assert.ok(calls.some(([method]) => method === 'IO.close'));
+    assert.equal(session.listenerCount('Tracing.tracingComplete'), 0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('Chromium capture trace rejects oversized or absent streams and removes partial files', async () => {
+  const dir = mkdtempSync(resolve(ROOT, 'scratch/trace-errors-'));
+  try {
+    for (const mode of ['oversized', 'no-stream', 'timeout']) {
+      const session = new EventEmitter(); let detached = 0, closed = 0;
+      session.detach = async () => { detached++; };
+      session.send = async (method) => {
+        if (method === 'Tracing.end' && mode !== 'timeout') queueMicrotask(() => session.emit('Tracing.tracingComplete', mode === 'no-stream' ? {} : { stream: 'trace' }));
+        if (method === 'IO.read') return { data: 'too large', eof: true };
+        if (method === 'IO.close') closed++;
+        return {};
+      };
+      const output = resolve(dir, mode + '.json');
+      const trace = await startCaptureTrace({ newBrowserCDPSession: async () => session }, { path: output, maxBytes: 3, stopTimeoutMs: 10 });
+      await assert.rejects(trace.stop(), mode === 'oversized' ? /exceeded 3 bytes/ : mode === 'no-stream' ? /without an IO stream/ : /timed out/);
+      assert.equal(existsSync(output), false);
+      assert.equal(detached, 1);
+      assert.equal(closed, mode === 'oversized' ? 1 : 0);
+      assert.equal(session.listenerCount('Tracing.tracingComplete'), 0);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test('benchmark validates unique capability cells offline and excludes failures from timing medians', () => {
+  const opts = parseBenchmarkArgs(['--plan', '--samples=2', '--cases=swiftshader:auto:preview,hardware:chromium:comparison', '--seed=0']);
+  assert.equal(opts.samples, 2); assert.equal(opts.seed, 0); assert.equal(opts.matrix.length, 2);
+  for (const args of [['--samples=0'], ['--samples=NaN'], ['--cases=hardware:firefox:preview'], ['--cases=swiftshader:auto'], ['--cases=swiftshader:auto:preview,swiftshader:auto:preview']]) assert.throws(() => parseBenchmarkArgs(args));
+  const samples = [10, 30, 20].map((ms) => ({ status: 'passed', manifest: { ms, shots: [{ bytes: ms * 100, timings: { presentMs: ms / 2 } }] } }));
+  samples.push({ status: 'failed', manifest: { ms: 1, shots: [] } });
+  assert.deepEqual(summarizeBenchmarkSamples(samples), { attempted: 4, passed: 3, medianMs: 20, medianPresentMs: 10, medianBytes: 2000 });
+  assert.equal(summarizeBenchmarkSamples([{ status: 'failed' }]).medianMs, null);
+});
+
+
+test('benchmark deadline escalates only its IPC-owned browsers and child after graceful teardown stalls', async () => {
+  const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+  const signals = [], reaped = [];
+  child.kill = (signal) => { signals.push(signal); if (signal === 'SIGKILL') queueMicrotask(() => child.emit('close', null, 'SIGKILL')); };
+  const operation = captureSample(['fixture'], 5, { graceMs: 5, kill: (pid, signal) => reaped.push([pid, signal]), spawnChild: () => child });
+  child.emit('message', { type: 'unrelated', pid: 9999 });
+  child.emit('message', { type: 'capture-browser-owned', pid: 12345 });
+  const result = await operation;
+  assert.equal(result.timedOut, true); assert.equal(result.signal, 'SIGKILL');
+  assert.deepEqual(signals, ['SIGTERM', 'SIGKILL']);
+  assert.deepEqual(reaped, [[-12345, 'SIGKILL']]);
+});
+
+test('benchmark success releases browser ownership and never force-kills a completed sample', async () => {
+  const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter();
+  child.kill = () => assert.fail('finished child must not be killed');
+  const operation = captureSample(['fixture'], 1000, { kill: () => assert.fail('released browser must not be killed'), spawnChild: () => child });
+  child.emit('message', { type: 'capture-browser-owned', pid: 12345 });
+  child.emit('message', { type: 'capture-browser-closed', pid: 12345 });
+  child.emit('close', 0, null);
+  const result = await operation;
+  assert.equal(result.code, 0); assert.equal(result.timedOut, false);
+});
+
+test('legacy presentation requires advancing generations and native unsupported clocks fail explicitly', async () => {
+  const gfx = { softPresent: () => true, softPresentState: () => ({ gen: 4 }), awaitSoftPresent: async () => 4 };
+  const page = { evaluate: (fn, ms) => vm.runInNewContext('(' + fn.toString() + ')(timeout)',
+    { GLX: gfx, timeout: ms, window: {}, setTimeout, clearTimeout, Date }) };
+  await assert.rejects(awaitCaptureReady(page, { timeoutMs: 20 }), /stale presentation generation/);
+  let gen = 4; gfx.awaitSoftPresent = async () => ++gen;
+  assert.equal((await awaitCaptureReady(page)).shown, 6);
+  gfx.softPresent = () => false;
+  await assert.rejects(awaitCaptureReady(page), /no usable presentation clock/);
+});
+
+
+test('WGX copy-generation readiness invalidates the previous scene and rejects its pending copy', async () => {
+  const state = { seq: 4, shown: 3 }; let invalidated = 0, waits = 0;
+  const gfx = { softPresent: () => true, softPresentState: () => state,
+    invalidateSoftPresent: () => { invalidated++; },
+    awaitSoftPresent: async () => { waits++; state.seq = 5; state.shown = waits === 1 ? 4 : 5; return state.shown; } };
+  const page = { evaluate: (fn, ms) => vm.runInNewContext('(' + fn.toString() + ')(timeout)',
+    { GLX: gfx, timeout: ms, window: {}, setTimeout, clearTimeout, Date }) };
+  const result = await awaitCaptureReady(page);
+  assert.equal(result.mode, 'copy-generation'); assert.equal(result.required, 5);
+  assert.equal(result.shown, 5); assert.equal(waits, 2); assert.equal(invalidated, 1);
+});
+
+
+test('atomic capture mutation preserves callback result and accepts a frame already displayed after mutation', async () => {
+  const state = { submittedGen: 4, shownGen: 3 };
+  let waits = 0;
+  const context = vm.createContext({ GLX: { softPresent: () => true, softPresentState: () => state,
+    awaitSoftPresent: async () => { waits++; throw new Error('already displayed target must not wait'); } },
+    window: { __apex: { camera: null } }, setTimeout, clearTimeout, Date });
+  const page = { evaluate: (fn, arg) => { context.payload = arg; return vm.runInContext('(' + fn.toString() + ')(payload)', context); } };
+  assert.equal(await mutateCaptureScene(page, async (value) => { window.__apex.camera = value; return 'changed-' + value; }, 'eye'), 'changed-eye');
+  state.submittedGen = 8; state.shownGen = 5; // intervening frames after the atomic marker
+  const result = await awaitCaptureReady(page);
+  assert.equal(result.required, 5); assert.equal(result.shown, 5); assert.equal(waits, 0);
+  assert.equal(context.window.__apex.camera, 'eye');
+  await assert.rejects(mutateCaptureScene(page, 'not a callback'), /function callback/);
+});
+
+test('atomic WGX mutations invalidate exactly once and a renderer reset rebases stale markers', async () => {
+  let invalidated = 0, waits = 0;
+  const state = { seq: 4, shown: 3, epoch: 1, display: [640, 360] };
+  const context = vm.createContext({ GLX: { softPresent: () => true, softPresentState: () => state,
+    invalidateSoftPresent: () => { invalidated++; }, awaitSoftPresent: async () => { waits++; state.seq = state.shown = 2; return 2; } },
+    window: {}, setTimeout, clearTimeout, Date });
+  const page = { evaluate: (fn, arg) => { context.payload = arg; return vm.runInContext('(' + fn.toString() + ')(payload)', context); } };
+  await mutateCaptureScene(page, () => 123);
+  state.seq = state.shown = 5;
+  assert.equal((await awaitCaptureReady(page)).required, 5); assert.equal(invalidated, 1); assert.equal(waits, 0);
+  await mutateCaptureScene(page, () => null);
+  state.seq = state.shown = 1; state.epoch = 2;
+  assert.equal((await awaitCaptureReady(page)).required, 2); assert.equal(invalidated, 3); assert.equal(waits, 1);
+});
+
+test('WebGPU capture launch uses the verified software adapter pins and refuses WebGL-only llvmpipe', () => {
+  const swift = parseCaptureOptions(['--gpu', 'swiftshader']);
+  const launch = captureLaunchOptions(swift, { backend: 'webgpu' });
+  assert.ok(launch.args.includes('--use-webgpu-adapter=swiftshader'));
+  assert.ok(launch.args.includes('--use-vulkan=swiftshader'));
+  assert.throws(() => captureLaunchOptions(parseCaptureOptions(['--gpu', 'llvmpipe']), { backend: 'webgpu' }), /WebGL-only/);
 });

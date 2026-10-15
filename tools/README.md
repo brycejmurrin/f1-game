@@ -79,10 +79,10 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
 | **ci/prune-branches.mjs** | Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first. | check-changes |
 | **ci/ready-gate.mjs** | Gate for marking a PR ready: require green tooling-fast / Structural guards on the tip SHA. | steward |
-| **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml), shards packed by measured time; a line per shard,… | check-changes |
+| **ci/remote-group.mjs** | One test:* browser group on 4 llvmpipe runners (browser-group.yml), time-packed shards; line per shard, then `= group`. | check-changes |
 | **ci/repo-size.mjs** | Full-history size report: largest blobs ever committed and on-disk totals per top-level directory (repo-size.yml). | check-changes |
 | **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so always-on vm-b1 riders do not double-bill. | — |
-| **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, test verdicts, live run); `--pr` adds live PR… | check-changes |
+| **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, verdicts, live run); `--pr` adds live PR state. | check-changes |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 | **ci/who-is-on-it.mjs** | Recent pushes per branch, who touched your paths, live claims: the check before fixing a shared red. | check-changes |
@@ -176,8 +176,11 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/cam-corners.mjs** | Straight-vs-corner camera swing on Monaco, Spa, Suzuka, Monza, and Zandvoort. | — |
 | **shot/cam-motion.mjs** | Chase/far/heli speed-open and per-mode corner pose, from the rig not a second dolly. | — |
 | **shot/cam-videos.mjs** | Record one silent mp4 per camera, plus a page a phone can autoplay. | — |
+| **shot/capture-benchmark.mjs** | Sequential cold-scene benchmark across GPU/browser/profile combinations; records unsupported cells. | playwright-probe |
 | **shot/capture-bundle.mjs** | Capture one backend-aware evidence bundle: identity, camera, actual renderer, pixels, console and viewport. | playwright-probe |
 | **shot/capture-contract.mjs** | Shared bounded input/output and pixel evidence contracts for capture CLIs. | — |
+| **shot/capture-diagnostics.mjs** | Bounded Chromium GPU provenance and opt-in streamed capture tracing. | — |
+| **shot/capture-options.mjs** | Validated shared screenshot profiles, scope, rendering stack, and session options. | — |
 | **shot/capture-runtime.mjs** | Serial browser capture lifecycle with identity, diagnostics and teardown on every path. | — |
 | **shot/flicker-gate.mjs** | Rendered z-fighting gate: still camera at known fight sites, sub-mm dolly jitter, per-site flip ceiling; JSON + exit 1. | playwright-probe |
 | **shot/flyby.mjs** | Contact sheet + JSON of the pre-race FLYBY shots, flagging a camera in scenery. `--track --frames --out --u --shots`. | — |
@@ -405,10 +408,12 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
+| **ci/pages-train.mjs** | Pages release train: the tip's own fast-tier state for the reuse verdict, and the end-of-run re-arm decision. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
 | **ci/publish-shots.mjs** | Publish review screenshots to a shots/<topic> evidence branch cut from the ship tip, touching no PR branch. |
+| **ci/queue-depth.mjs** | Actions queue gauge: queued + running JOBS by OS vs the 40 Linux / 5 macOS slots; `= queue ok\|hold`. |
 | **ci/ready-full-cap.mjs** | Cap concurrent ready-PR full-tier CI: refuse mark-ready when ≥N ready PRs already run full CI. |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |
