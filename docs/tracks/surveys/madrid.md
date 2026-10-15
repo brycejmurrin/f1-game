@@ -7,7 +7,7 @@
 
 ## Scope note
 
-**Weather / TOD matrix deferred** until rebase on *tools: shared shot tooling for circuit surveys*. This branch ships **30** frames: **day · dry** only (JPEG q≈80, ≤1280 px wide, under `artifacts/shots/tracks/madrid/`).
+**36** committed survey JPEGs (q≈80, ≤1280 px wide, &lt;300 KB each) under `artifacts/shots/tracks/madrid/`: **30** sector tour frames (**day · dry**) plus **6** hero **weather / time-of-day** frames captured with shared `shot.mjs` (`--jpeg --present-timeout 90 --capture-retries 4 --wait 120`, WebGL2 / SwiftShader).
 
 ## Code map
 
@@ -36,9 +36,18 @@ Paths are relative to this file. Each cell: **view · weather · time of day · 
 | ![s25](../../../artifacts/shots/tracks/madrid/s25-s3-entry-day-dry-orbit.jpg)<br>**s25** orbit · dry · day · s=0.66<br>S3 entry | ![s26](../../../artifacts/shots/tracks/madrid/s26-monumental-outside-day-dry-orbit.jpg)<br>**s26** orbit · dry · day · s=0.74<br>Monumental outside | ![s27](../../../artifacts/shots/tracks/madrid/s27-monumental-mid-day-dry-park.jpg)<br>**s27** park · dry · day · s=0.81<br>Monumental mid |
 | ![s28](../../../artifacts/shots/tracks/madrid/s28-pelouse-bridge-day-dry-trackside.jpg)<br>**s28** trackside · dry · day · s=0.88<br>Pelouse / bridge | ![s29](../../../artifacts/shots/tracks/madrid/s29-valdebebas-day-dry-orbit.jpg)<br>**s29** orbit · dry · day · s=0.93<br>Valdebebas | ![s30](../../../artifacts/shots/tracks/madrid/s30-barajas-horizon-day-dry-orbit.jpg)<br>**s30** orbit · dry · day · s=0.025<br>Barajas horizon |
 
+## Hero weather & lighting (6 shots)
+
+Same caption order: **view · weather · time of day · s**.
+
+| | | |
+|:---:|:---:|:---:|
+| ![wx01](../../../artifacts/shots/tracks/madrid/wx-monumental-night-dry-eye.jpg)<br>**wx01** eye · dry · night · s=0.78<br>Monumental bowl | ![wx02](../../../artifacts/shots/tracks/madrid/wx-monumental-day-rain-eye.jpg)<br>**wx02** eye · rain · day · s=0.78<br>Monumental rain | ![wx03](../../../artifacts/shots/tracks/madrid/wx-sf-dusk-dry-park.jpg)<br>**wx03** park · dry · dusk · s=0.00<br>S/F dusk |
+| ![wx04](../../../artifacts/shots/tracks/madrid/wx-sf-night-dry-park.jpg)<br>**wx04** park · dry · night · s=0.00<br>S/F night | ![wx05](../../../artifacts/shots/tracks/madrid/wx-overpass-day-fog-eye.jpg)<br>**wx05** eye · fog · day · s=0.085<br>Overpass fog | ![wx06](../../../artifacts/shots/tracks/madrid/wx-bunker-day-wet-park.jpg)<br>**wx06** park · wet · day · s=0.48<br>El Búnker wet |
+
 ## Findings & fixes
 
-See prior survey notes: foliage exclusions (urban + IFEMA), El Búnker plaza nudge. Weather backlog: Monumental, S/F, overpass, Búnker after shared shot PR.
+Foliage exclusions (urban + IFEMA), El Búnker plaza nudge. Weather heroes: Monumental (night / rain), S/F (dusk / night), overpass (fog), Búnker (wet).
 
 ## Verification
 
