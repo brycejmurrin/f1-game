@@ -971,8 +971,9 @@ test("startCalm: full while launching, fades out by calmUntil, never for a car t
   assert.equal(A.startCalm(false, 24, 24), 0, "and gone at calmUntil");
   assert.equal(A.startCalm(false, undefined, 3), 0, "placed at speed, no launch: no calm");
   assert.equal(A.startCalmS(), 24);
-  assert.ok(A.startGapT(1) > 0.35 && A.startGapT(0) === 0);
-  assert.equal(A.startGapT(1), 0.38, "lap-1 headway bump is pinned");
+  assert.ok(A.startGapT(1) > 0.4 && A.startGapT(0) === 0);
+  assert.equal(A.startGapT(1), 0.42, "lap-1 headway bump is pinned");
+  assert.equal(A.startQWinBonus(1, 5), 0, "qWin does not widen on calm — headway only");
   assert.equal(A.startCalm(false, 32, 30), 0.2, "calm fades over 10 s, not a step");
   const t = { craft: 0.75 };
   const zone = { traits: t, speed: 46, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 80, attackQ: 0.55 };

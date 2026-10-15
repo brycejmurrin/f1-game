@@ -630,13 +630,17 @@ const AiDrive = (function () {
   // last 10 s and nothing changes after. `until` is game.js's c.calmUntil,
   // set when the launch ends, so a car placed at speed (a test rig, a rolling
   // start) never had a launch and is never calm.
-  const START_CALM = 24, START_GAP_T = 0.38, START_ATTACK = 0.45;
+  const START_CALM = 24, START_GAP_T = 0.42, START_ATTACK = 0.45;
   function startCalm(launching, until, t) {
     if (launching) return 1;
     return until > t ? clamp((until - t) / 10, 0, 1) : 0;
   }
   function startCalmS() { return START_CALM; }
   function startGapT(calm) { return START_GAP_T * (calm || 0); }
+  // Calm is already zero after startCalmS, but widening qWin during the opening
+  // seconds reshapes the whole race (measured: +0.7 s Bahrain normal ai-pace).
+  // Lap-1 headway is startGapT only.
+  function startQWinBonus() { return 0; }
 
   // PACE PHASE. Two AI cars of equal pace ran in lockstep for a whole race:
   // identical vmax, identical acceleration, so the gap between them never
@@ -1609,7 +1613,7 @@ const AiDrive = (function () {
     letPassCase, letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     digOutBudget, digOutEscalated, digOutHeld,
     otWant, repassLock, attemptRoll, runExtra, latchLate, cornerK, sbsCommitT, sbsEase, passSideBonus, queueTime, queuePatience, queuePress, passReach, passTarget, passSideClosed, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes, paceSample,
-    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
+    launchPlan, launchMul, launchDone, startCalm, startCalmS, startGapT, startQWinBonus, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor, strategyTemper, tasteRoll,
