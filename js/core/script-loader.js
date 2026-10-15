@@ -29,7 +29,9 @@ function integrity(src) {
     _lazyIntegrity = null;
     try {
       const el = document.getElementById && document.getElementById("apex-lazy-integrity");
-      if (el) {
+      // Only the deployment metadata script defines a map. A preview or
+      // inert DOM may expose an unrelated element with this id.
+      if (el && el.tagName === "SCRIPT" && el.type === "application/json") {
         _lazyIntegrity = {};
         const map = JSON.parse(el.textContent);
         if (map && typeof map === "object" && !Array.isArray(map)) _lazyIntegrity = map;

@@ -51,7 +51,7 @@ test("a healthy prepareLazyLoad still loads everything", async () => {
 
 // Model the browser's SRI boundary: a successful generation check cannot
 // authorize bytes published later at the same query-keyed Pages URL.
-function integrityLoad(body, published, block) {
+function integrityLoad(body, published, block, tagName = "SCRIPT") {
   const expected = "sha256-" + createHash("sha256").update(body).digest("base64");
   const appended = [];
   let executed = false;
@@ -61,7 +61,7 @@ function integrityLoad(body, published, block) {
     document: {
       getElementById(id) {
         if (id === "apex-lazy-v") return { textContent: JSON.stringify({ "audio.js": "dc460e50ab8e" }) };
-        if (id === "apex-lazy-integrity" && block !== null) return { textContent: block === undefined ? JSON.stringify({ "audio.js": expected }) : block };
+        if (id === "apex-lazy-integrity" && block !== null) return { tagName, type: "application/json", textContent: block === undefined ? JSON.stringify({ "audio.js": expected }) : block };
         return null;
       },
       createElement: () => ({ dataset: {}, remove() {} }),
@@ -100,3 +100,9 @@ for (const block of ["{", "{}", '{"audio.js":"sha256-dc460e50ab8e"}', '[]']) {
     assert.equal(result.appended.length, 0);
   });
 }
+
+test("an unrelated DOM element is not deployment integrity metadata", async () => {
+  const result = await integrityLoad("old", "new", "", "DIV");
+  assert.equal(result.ok, true);
+  assert.equal(result.appended[0].integrity, undefined);
+});
