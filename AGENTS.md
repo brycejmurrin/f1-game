@@ -151,7 +151,7 @@ wrapped as `apex_*`. Routes: live canvas → skill `mcp-probe`; pre-push or depl
 `verify-agent`; `--base <ref>` is the "was it already red?" check); live `version.json` → agent `deploy-research`; dead
 code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps → skill `ci-watch` + `tools/ci/pr-board.mjs`
 (agent `ci-watcher` returns the board); owning PRs → skill `steward`; messaging, claims and authority between sessions
-→ skill `agent-fleet`; failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`.
+→ skill `agent-fleet`; failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`; a scoped change handed to a subagent you message mid-task → agent `worker`.
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence. Bulk or post-deploy web reading goes to agent `deploy-research`.
 
