@@ -477,6 +477,25 @@ export const shardCapMin = (expectedSec, perTestSec = SELECTED_GATE.perTestTimeo
   return Math.min(maxMin, Math.max(6, 2 * workMin + timeoutMin + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN));
 };
 
+/** HOW MANY NATIVE `--shard=i/n` PIECES A LEG NEEDS SO ITS CAP CAN HOLD IT
+ *  (Actions audit C4, 2026-10-14). shardCapMin clamps at `maxMin`, so a leg
+ *  whose expected work plus setup and wrap-up exceeds that ceiling is killed by
+ *  design: ship 38525816649 oversize-hud-layout billed 945 s (42 tests, two
+ *  workers) under an 18 min cap that could never hold 15.75 min of work + 3 of
+ *  setup + 2 of wrap-up — cancelled at 39/42 with 0 failed, and 38522250272's
+ *  hud-layout leg (923 s) the same way; the verdict then read "left no junit".
+ *  The answer is more pieces, never a longer cap or test timeout: the smallest
+ *  n with `sec / n` minutes + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN inside
+ *  `maxMin`, bounded by the test count (an empty shard is a green leg that ran
+ *  nothing). config `fullyParallel: true` makes Playwright --shard split by
+ *  TEST (https://playwright.dev/docs/test-sharding). */
+export function piecesToFitCap(sec, tests = Infinity, maxMin = MAX_SELECTED_JOB_MIN) {
+  const room = maxMin - SELECTED_SETUP_MIN - SELECTED_WRAP_MIN;
+  if (!(room > 0) || !(sec > 0)) return 1;
+  const n = Math.ceil(sec / 60 / room);
+  return Math.max(1, Math.min(n, Math.max(1, Math.floor(tests) || 1)));
+}
+
 
 /** Seconds one row of the plan is expected to take: its tests at the spec's
  *  own measured rate, or the fallback (select-budget's MEASURED). */
@@ -793,21 +812,30 @@ export function shards(r, db = timings(), quarantine = loadQuarantine()) {
     // --retries=0, so a quarantined flake could never pass on retry and the
     // quarantine was inert here. Nothing else ever shares that retry.
     const retries = quarantine.has(s.file) ? 1 : 0;
-    // Pages 37420997285 job oversize-career-1of5: Playwright --shard splits
-    // TEST GROUPS, not tests. A default-mode describe is one group, so shard
-    // 1/5 of career.spec.js ran ~101 tests (~22 min) while 2–5 finished in
-    // ~40 s. Fat UI files (career*, hud-layout) get 2 workers on ONE job
-    // instead of a fake even --shard.
+    // Fat UI files (career*, hud-layout) run 2 workers per leg, billed at
+    // FAT_UI_SEC_PER_TEST. ONE leg while it fits its cap; a leg that cannot
+    // (piecesToFitCap — hud-layout 945 s under 18 min, C4 2026-10-14) splits
+    // into native --shard=i/n pieces, still 2 workers each.
+    // Pages 37420997285 oversize-career-1of5 (101 tests, ~22 min, its four
+    // siblings empty) was NOT Playwright sharding by group: the 4of5 log reads
+    // "peeled 1 mega-sweep spec(s) from the shared shard ... mega solos only"
+    // — run-playwright's mega peel dropped --shard and ran the whole file on
+    // the one shard megaShardPlan picked. partitionMegaSweepArgs no longer
+    // peels a lone spec + --shard (PR #1113), and the config's
+    // `fullyParallel: true` shards by test.
     const fatUi = /(?:^|\/)(career|career-season|career-hub|hud-layout)\.spec\.js$/.test(s.file);
     if (fatUi) {
       const workers = 2;
-      const secFat = Math.max(sec / workers, (s.tests * FAT_UI_SEC_PER_TEST) / workers);
-      items.push({ solo: true, name: `oversize-${base}`, files: [s.file], shard: "",
-        tests: s.tests, sec: Math.max(1, secFat), perTest, workers,
-        maxCapMin: FAT_UI_SELECTED_JOB_MIN, retries });
+      const secFat = Math.max(1, Math.max(sec / workers, (s.tests * FAT_UI_SEC_PER_TEST) / workers));
+      const nFat = piecesToFitCap(secFat, s.tests, FAT_UI_SELECTED_JOB_MIN);
+      for (let i = 1; i <= nFat; i++) {
+        items.push({ solo: true, name: nFat > 1 ? `oversize-${base}-${i}of${nFat}` : `oversize-${base}`, files: [s.file],
+          shard: nFat > 1 ? `${i}/${nFat}` : "", tests: nFat > 1 ? Math.ceil(s.tests / nFat) : s.tests,
+          sec: secFat / nFat, perTest, workers, maxCapMin: FAT_UI_SELECTED_JOB_MIN, retries });
+      }
       continue;
     }
-    const n = Math.max(nTime, nTests);
+    const n = Math.max(nTime, nTests, piecesToFitCap(sec, s.tests));
     if (n > 1) {
       for (let i = 1; i <= n; i++) {
         items.push({ solo: true, name: `oversize-${base}-${i}of${n}`, files: [s.file], shard: `${i}/${n}`,
