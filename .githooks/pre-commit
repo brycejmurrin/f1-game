@@ -17,6 +17,13 @@ ROOT=$(git rev-parse --show-toplevel) || exit 1
 cd "$ROOT" || exit 1
 mkdir -p artifacts
 LOG=artifacts/pre-commit-guards.log
+# Tests create their own Git repositories. Keep the hook's staged-index context
+# for ratchets/git add, but do not let fixture subprocesses inherit its selectors.
+without_local_git_context() (
+  local git_name
+  while IFS= read -r git_name; do unset "$git_name"; done < <(git rev-parse --local-env-vars)
+  "$@"
+)
 if [ ! -d node_modules ]; then
   echo "pre-commit: BLOCKED — node_modules is missing, so test:guards cannot run. Install first (npm install, or bash tools/env/cloud-agent-install.sh)." >&2
   exit 1
@@ -33,7 +40,7 @@ done <<LIST
 $STAGED
 LIST
 if [ "$DOCS_ONLY" = 1 ]; then
-  if ! node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1; then
+  if ! without_local_git_context node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1; then
     echo "pre-commit: BLOCKED — docs-integrity is red ($LOG):" >&2
     grep -E 'not ok|expected|actual' "$LOG" | tail -15 >&2
     exit 1

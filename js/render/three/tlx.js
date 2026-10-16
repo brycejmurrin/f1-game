@@ -617,6 +617,7 @@ const TLX = (function () {
         }
       }
       _abortRenderer = renderer;
+      try { setTimeout(function () { if (/^apex26\\.ctxLostReloads=\\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -924,6 +925,11 @@ const TLX = (function () {
       const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
       let _shownAt = -1e9;
       let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
+      const _fallbackLossCount = () => {
+        try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
+        catch (_) { return 0; }
+      };
+      const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
       try {
         document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
         window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
@@ -965,7 +971,7 @@ const TLX = (function () {
           try {
             n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
             sessionStorage.setItem(rk, String(n));
-          } catch (_) { n = ++_sessLostN; }
+          } catch (_) { n = Math.max(++_sessLostN, _fallbackLossCount() + 1); _rememberFallbackLoss(n); }
           if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
             // Third loss in one tab. GLX's identical 2-cap ends in a frozen
@@ -1019,7 +1025,7 @@ const TLX = (function () {
             // reload looped on a device that loses the context every boot.
             // Storage failure must not skip the reload (GLX: dead canvas).
             var n = 0;
-            try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = _sessLostN; }
+            try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
             if (n > 2) return;
             try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
           }, false);
@@ -3955,7 +3961,12 @@ const TLX = (function () {
         try {
           n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
           sessionStorage.setItem("apex26.ctxLostReloads", String(n));
-        } catch (_) { n = ++_sessLostN; }
+        } catch (_) {
+          let prior = 0;
+          try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
+          n = Math.max(++_sessLostN, prior + 1);
+          try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
+        }
         if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
         try {
           if (typeof window.__apexReportError === "function")
