@@ -1135,6 +1135,13 @@ function openTrackDetail() {
   if (!modal) return;
   const crns = TrackMaps.corners(t);
   document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
+  // The canvas labels are part of the modal's accessible reading order. Keep
+  // them tied to the selected circuit rather than making every map sound like
+  // the same generic diagram when a player moves between tracks.
+  const mapCanvas = document.getElementById("track-detail-canvas");
+  if (mapCanvas) mapCanvas.setAttribute("aria-label", t.name + " circuit layout diagram");
+  const elevCanvas = document.getElementById("track-detail-elev");
+  if (elevCanvas) elevCanvas.setAttribute("aria-label", t.name + " elevation profile");
   const dz = TrackMaps.drsZones(t);
   const dir = TrackMaps.direction(t);
   const elev = TrackMaps.elevRange(t);
