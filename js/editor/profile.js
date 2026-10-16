@@ -108,22 +108,31 @@ const DesignerProfile = (function () {
       sel = i; span = j;
       tellSelect();
     }
+    // Bound the common offset before applying it so a span keeps its hills.
+    function boundedDelta(origins, dh) {
+      const cap = lim().rise;
+      let lo = -Infinity, hi = Infinity;
+      for (const h of origins) { lo = Math.max(lo, -cap - h); hi = Math.min(hi, cap - h); }
+      return Math.min(hi, Math.max(lo, dh));
+    }
     /** Offset one node (or the whole selected span) by (nu − h0) at the anchor. */
     function hand(i, h0, nu) {
-      const next = clampH(nu), base = clampH(h0);
-      if (next === base) return false;
-      const dh = next - base;
       const group = (span >= 0 && span !== sel && inGroup(i)) ? groupOf(sel, span) : [i];
       const origins = group.map((j) => clampH(nodeH[j] || 0));
+      const dh = boundedDelta(origins, clampH(nu) - clampH(h0));
+      liveH = null;
+      if (!dh) return false;
       nodeH = nodeH.slice();
       for (let k = 0; k < group.length; k++) nodeH[group[k]] = clampH(origins[k] + dh);
-      liveH = null;
       if (hooks.onChange) hooks.onChange(i, nodeH[i], false, nodeH.slice());
       return true;
     }
     function paintLive(anchor, cur) {
-      const dh = clampH(cur) - clampH(drag.h0);
       const group = drag.group || [anchor];
+      const dh = boundedDelta(drag.origins, clampH(cur) - clampH(drag.h0));
+      const next = clampH(drag.h0 + dh);
+      if (next === drag.cur) return;
+      drag.cur = next;
       liveH = nodeH.slice();
       for (let k = 0; k < group.length; k++) liveH[group[k]] = clampH((drag.origins[k] || 0) + dh);
       if (hooks.onChange) hooks.onChange(anchor, liveH[anchor], true, liveH.slice());
@@ -175,10 +184,7 @@ const DesignerProfile = (function () {
         drag.moved = true;
       }
       const next = clampH(drag.h0 - dy * drag.mpp);
-      if (next !== drag.cur) {
-        drag.cur = next;
-        paintLive(drag.i, next);
-      }
+      paintLive(drag.i, next);
       render();
     }
     function onUp(ev) {

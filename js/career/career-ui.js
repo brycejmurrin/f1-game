@@ -135,6 +135,8 @@ function create(G) {
       flavours: [otherConfirmed ? (focusFlavour === "driver" ? "myteam" : "driver") : focusFlavour],
       includeProgressExtras: !otherConfirmed,
       rawText,
+      recovery: !!pending.recovery,
+      expectedSeasonRevision: pending.seasonRevision,
     });
     if (result.ok) {
       G.refreshCareerButton();
@@ -219,12 +221,15 @@ function create(G) {
       exp.setAttribute("data-cr-act", "export");
       exp.setAttribute("aria-label", `Export all career saves (backup from ${modeName} slot ${s.i + 1})`);
       exp.onclick = (ev) => {
+        if (exp.disabled) return;
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
         armedDelete = "";
+        exp.disabled = true;
         CareerBackup.exportAll().then((r) => {
           announce(r && r.ok === false ? "EXPORT FAILED" : "CAREER BACKUP SAVED");
-        }).catch(() => announce("EXPORT FAILED"));
+        }).catch((e) => announce(typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "EXPORT CANCELLED" : "EXPORT FAILED"))
+          .finally(() => { exp.disabled = false; });
       };
       card.appendChild(exp);
     }
@@ -258,9 +263,11 @@ function create(G) {
         pickBackupFile((obj, err, text, filename) => {
           if (err === "too-large") { announce("IMPORT FAILED — TOO LARGE"); return; }
           if (!obj) { announce("IMPORT FAILED — BAD FILE"); return; }
-          const v = CareerBackup.validate(obj, text);
+          const recovery = obj.format === "apex26-recovery-v1";
+          const v = recovery ? CareerBackup.recoveryEnvelope(obj, { flavour: s.flavour, i: s.i }, text) : CareerBackup.validate(obj, text);
           if (!v.ok) { announce("IMPORT FAILED — " + String(v.reason || "error").toUpperCase()); return; }
-          pendingImport = { envelope: obj, focusFlavour: s.flavour, rawText: text, filename, revisions: expectedRevisions() };
+          pendingImport = { envelope: v.envelope || obj, focusFlavour: s.flavour, rawText: text, filename, revisions: expectedRevisions(),
+            recovery, seasonRevision: recovery && GameStore.store.keyRevision ? GameStore.store.keyRevision("season") : null };
           armedImport = id;
           build();
         });
@@ -289,6 +296,17 @@ function create(G) {
         }
         for (const text of preview.extras || []) card.appendChild(el("div", "cr-note", text));
         card.appendChild(el("div", "cr-note", "Empty backup slots leave existing saves unchanged."));
+        if (pendingImport.recovery) {
+          if (pendingImport.envelope.season) {
+            const current = GameStore.store.get("season", null), incoming = pendingImport.envelope.season;
+            card.appendChild(el("div", "cr-note", `Standalone season: current ${current ? current.round | 0 : 0} rounds completed; recovery ${incoming.round | 0} rounds completed. Newer local progress is kept.`));
+          }
+          card.appendChild(el("div", "cr-note", `Recovery file targets this ${mode} slot only. Keep the original file until saving is confirmed.`));
+          const cancel = el("button", "", "CANCEL IMPORT");
+          cancel.type = "button"; cancel.setAttribute("data-cr-act", "import-cancel");
+          cancel.onclick = (ev) => { ev.stopPropagation(); armedImport = ""; pendingImport = null; build(); };
+          card.appendChild(cancel);
+        }
       }
     }
     if (s.used) {
@@ -833,6 +851,8 @@ function create(G) {
     const numIn = addField("NUMBER", draft.num == null || Number.isNaN(draft.num) ? "" : String(draft.num), 2, (v) => {
       const t = String(v).trim();
       if (!t) { draft.num = null; return; }
+      // Read the whole numeric value: parseInt turned 1e2 and 1.5 into 1,
+      // bypassing draftErrors' integer/range gate. Integral 1e1 means 10.
       const n = Number(t);
       draft.num = Number.isFinite(n) ? n : null;
     }, "number", "num");

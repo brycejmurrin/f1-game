@@ -116,6 +116,7 @@ const SPEC = [
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
   { k: "buildWorker", lane: "raw", group: "display", def: "1", src: "js/track/build-client.js BUILD IN BACKGROUND (unset = ON when multi-core; \"0\"/\"1\" force)", oneOf: ["0", "1"] },
+  { k: "portraitOk", lane: "raw", group: "display", def: "0", src: "js/game.js RACE IN PORTRAIT (\"1\" = race upright, else the rotate blocker)", oneOf: ["0", "1"] },
   { k: "debris", lane: "raw", group: "display", def: "0", src: "js/ui/debris-opts.js + js/physics/debris-world.js create() (only \"1\" is on)" },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
@@ -163,6 +164,7 @@ const SPEC = [
   { k: "touchCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "padCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "touchRange", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js touchRangeFromSlider (0.12 of the long edge at 5)" },
+  { k: "touchDragSpeed", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js touchSpeedFromSlider (1 = off, the default; 10 = full ADAPTIVE BUTTONS shed on drag range)" },
   { k: "dragSmooth", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js dragCutoffFromSlider (1 = filter off)" },
   { k: "digitalRate", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js steerRateFromSlider (KEY_RAMP_IN)" },
   { k: "analogSpeedSteer", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js analogSpeedFromSlider (1 = off)" },
@@ -172,6 +174,20 @@ const SPEC = [
   { k: "padSaturation", lane: "json", group: "driving", def: 0, src: "js/input/steer-tuning.js (percent short of the rim that is full lock)" },
   { k: "padLabels", lane: "json", group: "driving", def: "auto", src: "js/ui/key-binds.js (Xbox/PlayStation/Nintendo button names)" },
   { k: "padAxes", lane: "json", group: "driving", def: null, src: "js/ui/key-binds.js wheel wizard (axis indices + signs)" },
+  { k: "padProfiles", lane: "json", group: "driving", def: { v: 1, devices: [], legacyClaimed: false }, src: "js/input/controller-profiles.js",
+    normalize: (v) => {
+      if (typeof ControllerProfiles === "undefined" || !isObj(v) || ("v" in v && v.v !== 1)
+          || (!("devices" in v) && !("legacyClaimed" in v))
+          || ("devices" in v && (!Array.isArray(v.devices) || v.devices.length > ControllerProfiles.MAX))
+          || ("v" in v && !Array.isArray(v.devices))
+          || ("legacyClaimed" in v && typeof v.legacyClaimed !== "boolean")) return undefined;
+      // CHANGED files carry only object fields off their defaults. Merge those
+      // defaults; full legacy v1 maps still let clean infer legacyClaimed.
+      const raw = Object.assign({ v: 1, devices: [], legacyClaimed: false }, v);
+      if (v.v === 1 && !("legacyClaimed" in v)) delete raw.legacyClaimed;
+      const clean = ControllerProfiles.clean(raw);
+      return clean.devices.length === raw.devices.length ? clean : undefined;
+    } },
   { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
   { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },
@@ -208,6 +224,7 @@ const SPEC = [
   { k: "throttleLatch", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
   { k: "dirtyAir", lane: "json", group: "driving", def: "classic", oneOf: ["off", "classic", "cfd"], src: "js/game.js PhysicsConsts.DirtyAir" },
+  { k: "wind", lane: "json", group: "driving", def: "real", oneOf: ["off", "real"], src: "js/race/race-settings.js WIND row → Wind.setLevel" },
   { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
   { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
@@ -871,7 +888,7 @@ function create(G) {
         flash(b, label, `SAVED (${n})`);
         Log.info("ui", "file saved", { id, n });
       } catch (e) {
-        flash(b, label, "FAILED");
+        flash(b, label, typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "CANCELLED" : "FAILED");
         Log.warn("ui", "file save failed", e && e.message);
       } finally {
         b.disabled = false;
@@ -972,8 +989,8 @@ function create(G) {
           const ti = Teams.LIST.findIndex((t) => t.id === teamId);
           if (ti >= 0) G.teamIdx = ti;
         },
-        openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
-        openDaily: () => { if (G.openDailyPicker) G.openDailyPicker(); },
+        openGarage: (from) => { if (G.openGarage) { if (G.closeSettings) G.closeSettings(); G.openGarage(from || "share"); } },
+        openDaily: () => { if (G.openDailyPicker) { if (G.closeSettings) G.closeSettings(); G.openDailyPicker(); } },
       });
       shareStatus.textContent = ShareCode.messageFor(started.n ? { ok: false } : applied);
     };

@@ -263,7 +263,11 @@ const DataExport = (function () {
         }).then(function () { running = false; gatherBtn.textContent = "Gather"; });
       });
 
-      function triggerDownload(blob, name) {
+      async function triggerDownload(blob, name) {
+        if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+          await NativeDownload.saveBlob(blob, name);
+          return;
+        }
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url; a.download = name;
@@ -288,9 +292,9 @@ const DataExport = (function () {
             });
           });
         });
-        chain.then(function () {
+        chain.then(async function () {
           const zip = makeZip(files);
-          triggerDownload(zip, "apex-startlines-" + result.year + ".zip");
+          await triggerDownload(zip, "apex-startlines-" + result.year + ".zip");
           log("Downloaded apex-startlines-" + result.year + ".zip — " + files.length +
               " file(s), " + Math.round(zip.size / 1024) + " KB");
         }).catch(function (e) {

@@ -2,7 +2,7 @@
 // APEX_MCP_MOCK=1 / dryRun only — no Chromium, no network.
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import { createRequire } from "node:module";
@@ -758,6 +758,53 @@ test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", ()
     assert.equal(r.status, 1, r.stderr);
     const body = JSON.parse(r.stdout);
     assert.equal(body.error, "playwright_live");
+  });
+});
+
+test("a completed zombie supervisor cannot block browser tools", { skip: process.platform !== "linux", timeout: 25_000 }, async () => {
+  // A real zombie passes kill(pid, 0). Keep its parent alive so this test,
+  // rather than PID 1, can explicitly reap it in finally. No browser starts.
+  const supervisor = spawn("python3", ["-c", [
+    "import os, sys, time",
+    "pid = os.fork()",
+    "if pid == 0: os._exit(0)",
+    "try:",
+    " for _ in range(200):",
+    "  state = open('/proc/%d/stat' % pid).read().rsplit(')', 1)[1].split()[0]",
+    "  if state == 'Z': break",
+    "  time.sleep(.01)",
+    " print(pid, flush=True)",
+    " sys.stdin.readline()",
+    "finally: os.waitpid(pid, 0)",
+  ].join("\n")], { stdio: ["pipe", "pipe", "pipe"] });
+  const closed = new Promise((resolve) => {
+    supervisor.once("close", resolve);
+    supervisor.once("error", () => resolve(null));
+  });
+  try {
+    const pid = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("zombie fixture did not report its child")), 3000);
+      supervisor.stdout.once("data", (b) => { clearTimeout(timer); resolve(Number(b.toString().trim())); });
+      supervisor.once("error", (e) => { clearTimeout(timer); reject(e); });
+    });
+    assert.match(fs.readFileSync(`/proc/${pid}/stat`, "utf8"), /\) Z /);
+    assert.doesNotThrow(() => process.kill(pid, 0), "kill(0) alone incorrectly calls this zombie live");
+    withFakeRegistry({ runs: [{ pid, group: "finished-browser", browser: true }] }, (reg) => {
+      const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
+      assert.equal(r.status, 0, r.stderr + r.stdout);
+      assert.equal(JSON.parse(r.stdout).ok, true);
+    });
+  } finally {
+    supervisor.stdin.end("reap\n");
+    assert.equal(await closed, 0, "the fixture supervisor must reap its child and exit");
+  }
+});
+
+test("a reused PID with a different start identity cannot block browser tools", () => {
+  withFakeRegistry({ runs: [{ pid: process.pid, starttime: "impossible-previous-start", browser: true }] }, (reg) => {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.equal(JSON.parse(r.stdout).ok, true);
   });
 });
 

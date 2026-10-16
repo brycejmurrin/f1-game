@@ -120,7 +120,7 @@ test("WP1 wait-polling-lint counts a sloppy-mode .cjs and a parse failure is an 
 
 // ---- G1: an unknown flag fell through to WRITE mode -----------------------------------
 test("G1 every generator refuses an unknown flag with exit 2 and writes nothing", () => {
-  const gens = ["gen-tools-readme", "gen-slider-doc", "gen-hooks-table", "gen-arch-table", "gen-circuit-meta", "gen-test-groups", "title-art", "gen-shell"];
+  const gens = ["gen-tools-readme", "gen-slider-doc", "gen-hooks-table", "gen-flags-table", "gen-arch-table", "gen-circuit-meta", "gen-test-groups", "title-art", "gen-shell"];
   const targets = ["tools/README.md", "docs/LIGHTING-TUNER-SLIDERS.md", "docs/DEBUG-HOOKS.md", "docs/ARCHITECTURE.md", "js/track/circuit-meta.js", "package.json", "index.html"];
   const sig = () => targets.map((t) => crypto.createHash("sha1").update(fs.existsSync(path.join(ROOT, t)) ? read(t) : "").digest("hex")).join();
   const before = sig();

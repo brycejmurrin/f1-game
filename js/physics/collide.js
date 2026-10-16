@@ -161,6 +161,8 @@ const Collide = (() => {
     chaser: null, chaserGap: Infinity,
     alongO: null, alongDx: 0, alongDprog: 0, alongAdx: Infinity,
   };
+  // Born Double, values kept: a 0 literal is a Smi field, and the first fractional store split the map mid-race (PERF-HUNT-5).
+  _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0.5; _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0;
   function _onTrafO(o) {
     const s = _traf, c = s.c;
     // A finisher coasting past the line is still a car on the road: it blocks,
@@ -202,6 +204,7 @@ const Collide = (() => {
     return s;
   }
   const _ot = { c: null, L: 0, W: 0, ahead: null, gapAhead: Infinity, skip: null };
+  _ot.L = _ot.W = 0.5; _ot.L = _ot.W = 0;   // born Double, like _traf
   function _onOtO(o) {
     const s = _ot, c = s.c;
     if (o.finished || o.retired || (s.skip && s.skip(o))) return;
@@ -242,6 +245,7 @@ const Collide = (() => {
   // the gantry legs — a copy of the limit block at the top of WallClamp.apply
   // (js/physics/wall-clamp.js; keep the two in step). Fills `out` {r, l, laneMin, side}.
   const _lim = { r: 0, l: 0, laneMin: 0, side: 0 }, _postLim = { r: 0, l: 0, minOut: 0, side: 0 };
+  _lim.laneMin = 0.5; _lim.laneMin = 0;   // born Double, like _traf
   function _wallLimits(track, s, x, out) {
     let wallR = Tracks.wallAt(track, s, 1), wallL = Tracks.wallAt(track, s, -1);
     let laneMin = 0, pitSd = 0;
@@ -371,7 +375,14 @@ const Collide = (() => {
           // per-generation cache of live state: computed later, it is the same.
           // A NaN sweep (non-finite prog or NaN x skips that hypot gate) never rejects here.
           const sx = b.x - pb.x, sd = b.prog - pb.prog;
-          if (sx === sx && sd - sd === 0 && Math.abs(deltaS(pa.prog - pb.prog)) > reachA + Math.max(6, Math.abs(b.speed) * dt * 2 + 1)) continue;
+          if (sx === sx && sd - sd === 0) {
+            // Unwrapped first (hunt-2 P6): inside one lap, |d| clear of both reach
+            // bands by 1 mm is far apart without deltaS's two `%`; the 1 mm dwarfs
+            // its rounding, and anything nearer takes the exact test below.
+            const reach = reachA + Math.max(6, Math.abs(b.speed) * dt * 2 + 1), dp = pa.prog - pb.prog, ad = dp < 0 ? -dp : dp;
+            if (ad > reach + 1e-3 && ad < track.total - reach - 1e-3) continue;
+            if (Math.abs(deltaS(dp)) > reach) continue;
+          }
           if (ownsPose(b) || incidentSim.owns(b) || netPlay.owns(b)) continue;
           sweepMotion(b, pb, dt);
           if (!pb.sweepEligible) continue;
@@ -429,6 +440,7 @@ const Collide = (() => {
     // so nothing aliases across a pair and the relaxation loop stays allocation-free.
     const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
     const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, aSp: 0, bSp: 0, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
+    _ct.dProg = _ct.dX = _ct.penLong = _ct.penLat = _ct.aSp = _ct.bSp = 0.5; _ct.dProg = _ct.dX = _ct.penLong = _ct.penLat = _ct.aSp = _ct.bSp = 0;   // born Double, like _traf
     // Reused AiDrive ctxs — not a fresh object literal to wantBoost /
     // otShouldFire / brakeDecision / wantX / adaptLane / otPull / defendPull /
     // isBoxed every physics step (~8 × 20 cars × 60 Hz). Same
@@ -456,6 +468,7 @@ const Collide = (() => {
 
     // Bucket-pair callbacks + per-pass inputs in module state — no closure per pass.
     let _colCbLast = false, _colCbRub = 1;
+    let _colTouched = false;   // a relaxation pass reached a contact (hunt-2 P6)
     const COL_SLOP = 0.05;   // separation slop — small, avoids a hard per-frame snap
     function _colResolveCB(a, b) { _colResolvePair(a, b, _colCbLast, _colCbRub); }
     function _colSepCB(a, b) { _colSepPair(a, b, COL_SLOP); }
@@ -533,6 +546,7 @@ const Collide = (() => {
       if (a.finished && b.finished) return;   // coasting home: kinematic, and never racing each other
       const ct = pairContact(a, b);
       if (!ct) return;
+      _colTouched = true;
       if (ct.oriented) { orientedResponse(a, b, ct, last); return; }
       const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
       if (sideContact) {
@@ -637,6 +651,7 @@ const Collide = (() => {
       if (a.finished && b.finished) return;   // coasting home: kinematic, and never racing each other
       const ct = pairContact(a, b);
       if (!ct) return;
+      _colTouched = true;
       if (ct.oriented) {
         const corr = Math.max(0, ct.depth - SLOP);
         shiftLong(a, ct.nx * corr * ct.sA); shiftLong(b, -ct.nx * corr * ct.sB);
@@ -734,6 +749,10 @@ const Collide = (() => {
         Log.debug("game", "resolveCollisions all-pairs n=" + ranked.length);
       }
       for (let pass = 0; pass < PASSES; pass++) {
+        // A pass that reached no contact moved nothing, so every later pass would
+        // read the same poses and reach none either (hunt-2 P6): stop there.
+        if (pass > 0 && !_colTouched) break;
+        _colTouched = false;
         const last = pass === PASSES - 1;
         if (useBuckets) {
           // Re-bucket only when shiftLong moved someone — idle passes keep the grid.

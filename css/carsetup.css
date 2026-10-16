@@ -1142,7 +1142,12 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   grid-auto-rows: min-content;
   align-content: start;
 }
-#cs-inner[data-pair="on"] #cs-tabs .cs-tab-row { display: contents; }
+#cs-inner[data-pair="on"] #cs-tabs .cs-tab-row {
+  display: contents;
+  /* These groups are horizontal strips only in the stacked layout. Their
+     pan-x restriction can block vertical swipes starting on a rail tab. */
+  touch-action: pan-y;
+}
 #cs-inner[data-pair="on"] #cs-tabs .cs-tab {
   flex: initial; white-space: normal;
 }

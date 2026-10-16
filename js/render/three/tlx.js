@@ -1034,10 +1034,7 @@ const TLX = (function () {
       let presentW = 1, presentH = 1;
       let spatialUpscale = false;
       try {
-        const q = typeof location !== "undefined" && location.search &&
-          /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
-        const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
-        spatialUpscale = !!(q || ls);
+        spatialUpscale = typeof DevFlags !== "undefined" && !!DevFlags.get("upscale");
       } catch (_) { spatialUpscale = false; }
       function setSpatialUpscale(on) {
         spatialUpscale = !!on;
@@ -1086,7 +1083,7 @@ const TLX = (function () {
       // Opt-in only (?three-devtools=1): the bare globals pin the whole scene graph and would collide with any
       // future `scene`/`camera` identifier. The heap-census tooling and track-switch-memory.spec.js set the flag.
       try {
-        if (typeof location !== "undefined" && /(?:^|[?&])three-devtools=1(?:&|$)/.test(location.search || "")) {
+        if (typeof DevFlags !== "undefined" && DevFlags.get("three-devtools")) {
           window.scene = scene; window.camera = camera; window.renderer = renderer;
           window.THREE = THREE;
           Log.info("gfx", "[TLX] window.scene / camera / renderer / THREE exposed — Three.js DevTools will find the scene");
@@ -1125,8 +1122,7 @@ const TLX = (function () {
 
       const vizMode = (function () {
         try {
-          return new URL(location.href).searchParams.get("viz")
-            || localStorage.getItem("apex26.tlxViz") || null;
+          return typeof DevFlags !== "undefined" ? DevFlags.get("viz") : null;
         } catch (_) { return null; }
       })();
       const LIT_VIZ = ["mat", "normal", "lamp"];
@@ -2553,8 +2549,11 @@ const TLX = (function () {
           if (!b) continue;
           const ix = _instRegistry.indexOf(b.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
-          scene.remove(b.imesh);
-          b.imesh.geometry.dispose();
+          // dropWrapper, not a bare remove: geometry.dispose() alone only nulls three's attribute mirror, so each
+          // RenderObject stayed a "dispose" listener on the shared run materials, pinning the mesh, the view and its
+          // CO_CAP x 19-float buffer once per pass that drew it (#2150). The view goes with it (_ownGeo).
+          b.imesh._ownGeo = true;
+          dropWrapper(b.imesh);
           b.rec = -1;
         }
       }
@@ -3272,6 +3271,7 @@ const TLX = (function () {
         m.visible = false;
         if (_warmPending) { _dropQueue.push(m); return; }
         try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        if (m._ownGeo && m.geometry) m.geometry.dispose();   // a mesh that owns its geometry (an R1 run's view)
         m.geometry = null; m.material = null;
       }
       function flushDropped() {
@@ -3572,33 +3572,42 @@ const TLX = (function () {
        * WebGL2 readback could not write (better a colour-shifted pack than
        * none). Returns the number of layers written. */
       function readbackTextureLayers(size, images, n, data) {
-        const page = size * size * 4;
         let done = [];
         try {
           if (typeof Assets !== "undefined" && Assets.readLayerBytes) done = Assets.readLayerBytes(size, images, n, data);
         } catch (_) { done = []; }
         let filled = done.length;
-        const have = new Set(done);
-        let c2d = null;
+        const have = new Set(done), c2d = { ctx: null };
         for (let i = 0; i < n; i++) {
-          const img = images[i];
-          if (!img || have.has(i)) continue;
-          try {
-            if (!c2d) {
-              const cv2 = (typeof OffscreenCanvas !== "undefined")
-                ? new OffscreenCanvas(size, size)
-                : Object.assign(document.createElement("canvas"), { width: size, height: size });
-              c2d = cv2.getContext("2d", { willReadFrequently: true });
-              if (!c2d) return filled;
-            }
-            c2d.clearRect(0, 0, size, size);
-            c2d.drawImage(img, 0, 0, size, size);
-            data.set(c2d.getImageData(0, 0, size, size).data, i * page);
-            filled++;
-          } catch (_) { /* one bad layer must not sink the pack (GLX parity) */ }
+          if (!images[i] || have.has(i)) continue;
+          const r = fill2dLayer(c2d, size, images[i], i, data);
+          if (r < 0) return filled;
+          filled += r;
         }
         return filled;
       }
+      // The 2d round-trip for one layer the WebGL2 readback refused: 1 written, 0 a bad layer, -1 no 2d context.
+      function fill2dLayer(c2d, size, img, i, data) {
+        try {
+          if (!c2d.ctx) {
+            const cv2 = (typeof OffscreenCanvas !== "undefined")
+              ? new OffscreenCanvas(size, size)
+              : Object.assign(document.createElement("canvas"), { width: size, height: size });
+            c2d.ctx = cv2.getContext("2d", { willReadFrequently: true });
+            if (!c2d.ctx) return -1;
+          }
+          c2d.ctx.clearRect(0, 0, size, size);
+          c2d.ctx.drawImage(img, 0, 0, size, size);
+          data.set(c2d.ctx.getImageData(0, 0, size, size).data, i * size * size * 4);
+          return 1;
+        } catch (_) { return 0; /* one bad layer must not sink the pack (GLX parity) */ }
+      }
+      // P4 for TLX (#2149): the layer bytes come back through Assets.readLayerBytesAsync (PIXEL_PACK_BUFFER + fence)
+      // instead of 34 blocking readPixels — WGX's path (wgx.js createTextureArray; 126 ms mid-race on the macOS
+      // census). apex26.tlxPackAsync=0 is the kill switch back to readbackTextureLayers.
+      let _packAsync = true;
+      try { _packAsync = localStorage.getItem("apex26.tlxPackAsync") !== "0"; } catch (_) { /* no storage: async */ }
+      let _matBindGen = 0;
 
       // CSS-box observation is shared; TLX still owns renderer.setSize(),
       // backend limits and post-target allocation.
@@ -4143,8 +4152,18 @@ const TLX = (function () {
           }
           return { __tlx: true, geo: buildGeometry(data), chunked: true, count: (data.idx && data.idx.length) || 0 };
         },
-        createTexture(src) {
+        createTexture(src, opts) {
           const t = new THREE.Texture(src);
+          // Borrow sources by default. A caller-created bitmap must stay open
+          // for three's flipY checks/reuploads, then close when its texture dies.
+          if (opts && typeof opts.disposeSource === "function") {
+            const disposeSource = opts.disposeSource;
+            const release = () => {
+              t.removeEventListener("dispose", release);
+              try { disposeSource(src); } catch (_) { /* keep GPU disposal running */ }
+            };
+            t.addEventListener("dispose", release);
+          }
           t.flipY = true;                       // GLX uploads UNPACK_FLIP_Y
           t.anisotropy = 4;
           t.colorSpace = THREE.NoColorSpace;    // no-sRGB calibration invariant
@@ -4219,8 +4238,18 @@ const TLX = (function () {
             const data = new Uint8Array(size * size * 4 * n);
             data.fill(128);
             for (let i = 3; i < data.length; i += 4) data[i] = 255;
-            const filled = readbackTextureLayers(size, images, n, data);
-            if (!filled) return null;
+            // Async first (P4): the token comes back at once with `pending` and `ready` (true = filled and
+            // uploadable; false = nothing landed, or freed in flight). needsUpdate waits for every layer, and
+            // setMaterialMaps holds a pending token back, so no frame samples a half-filled array.
+            let filled = 0;
+            const c2d = { ctx: null };
+            const job = _packAsync && typeof Assets !== "undefined" && Assets.readLayerBytesAsync
+              ? Assets.readLayerBytesAsync(size, images, n, data, (i, bytes) => {
+                if (bytes) filled++;
+                else if (images[i] && fill2dLayer(c2d, size, images[i], i, data) > 0) filled++;   // refused: 2d, sync
+              }) : null;
+            if (!job) filled = readbackTextureLayers(size, images, n, data);
+            if (!job && !filled) return null;
             const t = new THREE.DataArrayTexture(data, size, size, n);
             t.format = THREE.RGBAFormat; t.type = THREE.UnsignedByteType;
             t.colorSpace = THREE.NoColorSpace;
@@ -4233,7 +4262,17 @@ const TLX = (function () {
             // 512). Drop it once the first upload has run; the dims stay so a later size query still answers. A context
             // loss reloads the page, so nothing re-reads the bytes. (createTexture's releaseTexSource, for arrays.)
             t.onUpdate = (tex) => { tex.onUpdate = null; tex.image = { data: null, width: size, height: size, depth: n }; };
-            t.needsUpdate = true;
+            if (!job) { t.needsUpdate = true; return t; }
+            t.pending = true;
+            t.addEventListener("dispose", () => { t._freed = true; });   // freeTexture / a superseding bind
+            const settle = () => {
+              t.pending = false;
+              if (t._freed) return false;
+              if (!filled) { t.dispose(); return false; }
+              t.needsUpdate = true;
+              return true;
+            };
+            t.ready = job.then(settle, () => { filled = 0; return settle(); });
             return t;
           } catch (_) { return null; }
         },
@@ -4243,47 +4282,63 @@ const TLX = (function () {
         // after disposing any owned pack textures — GLX deleteTexture parity.
         setMaterialMaps(maps) {
           if (!lit || !lit.setMaterialMaps) return;
-          // A caller re-passing a texture it already handed over must not have
-          // it disposed under the new binding (assets.js always builds fresh
-          // arrays; webbake/__apex/tests need not).
-          function releaseOwned(keep) {
-            const kept = new Set();
-            if (keep) {
-              if (keep.albedo) kept.add(keep.albedo);
-              if (keep.normal) kept.add(keep.normal);
-            }
-            const seen = new Set();
-            for (const t of [matOwnedAlbedo, matOwnedNormal]) {
-              if (!t || seen.has(t) || kept.has(t)) continue;
-              seen.add(t);
-              try { t.dispose(); } catch (_) { /* already disposed */ }
-            }
-            matOwnedAlbedo = null;
-            matOwnedNormal = null;
-          }
-          releaseOwned(maps);
-          if (!maps) {
-            // Restore placeholder .value bindings and zero scales.
-            if (matPlaceAlbedo || matPlaceNormal) {
-              lit.setMaterialMaps({
-                albedo: matPlaceAlbedo, normal: matPlaceNormal,
-              });
-            } else {
-              lit.setMaterialMaps(null);
-            }
+          // P4: a token still filling is held back (the procedural look stays bound) and bound once ready; a newer
+          // call supersedes the wait, and the never-bound tokens it held are freed instead (WGX parity).
+          const gen = ++_matBindGen;
+          const waits = maps ? [maps.albedo, maps.normal].filter((t) => t && t.pending && t.ready).map((t) => t.ready) : [];
+          if (waits.length) {
+            Promise.all(waits).then(() => {
+              const live = (t) => !!(t && !t.pending && !t._freed);
+              const a = live(maps.albedo) ? maps.albedo : null, nn = live(maps.normal) ? maps.normal : null;
+              if (gen !== _matBindGen || !a) { for (const t of [a, nn]) if (t) t.dispose(); return; }
+              bindNow(Object.assign({}, maps, { albedo: a, normal: nn }));
+            });
             return;
           }
-          if (maps.albedo) matOwnedAlbedo = maps.albedo;
-          if (maps.normal) matOwnedNormal = maps.normal;
-          // A map the new pack lacks (an albedo-only pack) must rebind the
-          // placeholder: lit.setMaterialMaps skips a falsy slot, which left
-          // the node sampling the texture releaseOwned() just disposed.
-          if ((!maps.albedo && matPlaceAlbedo) || (!maps.normal && matPlaceNormal)) {
-            lit.setMaterialMaps(Object.assign({}, maps, {
-              albedo: maps.albedo || matPlaceAlbedo, normal: maps.normal || matPlaceNormal,
-            }));
-          } else {
-            lit.setMaterialMaps(maps);
+          bindNow(maps);
+          function bindNow(maps) {
+            // A caller re-passing a texture it already handed over must not have
+            // it disposed under the new binding (assets.js always builds fresh
+            // arrays; webbake/__apex/tests need not).
+            function releaseOwned(keep) {
+              const kept = new Set();
+              if (keep) {
+                if (keep.albedo) kept.add(keep.albedo);
+                if (keep.normal) kept.add(keep.normal);
+              }
+              const seen = new Set();
+              for (const t of [matOwnedAlbedo, matOwnedNormal]) {
+                if (!t || seen.has(t) || kept.has(t)) continue;
+                seen.add(t);
+                try { t.dispose(); } catch (_) { /* already disposed */ }
+              }
+              matOwnedAlbedo = null;
+              matOwnedNormal = null;
+            }
+            releaseOwned(maps);
+            if (!maps) {
+              // Restore placeholder .value bindings and zero scales.
+              if (matPlaceAlbedo || matPlaceNormal) {
+                lit.setMaterialMaps({
+                  albedo: matPlaceAlbedo, normal: matPlaceNormal,
+                });
+              } else {
+                lit.setMaterialMaps(null);
+              }
+              return;
+            }
+            if (maps.albedo) matOwnedAlbedo = maps.albedo;
+            if (maps.normal) matOwnedNormal = maps.normal;
+            // A map the new pack lacks (an albedo-only pack) must rebind the
+            // placeholder: lit.setMaterialMaps skips a falsy slot, which left
+            // the node sampling the texture releaseOwned() just disposed.
+            if ((!maps.albedo && matPlaceAlbedo) || (!maps.normal && matPlaceNormal)) {
+              lit.setMaterialMaps(Object.assign({}, maps, {
+                albedo: maps.albedo || matPlaceAlbedo, normal: maps.normal || matPlaceNormal,
+              }));
+            } else {
+              lit.setMaterialMaps(maps);
+            }
           }
         },
         materialMapState() {

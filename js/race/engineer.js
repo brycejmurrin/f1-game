@@ -112,10 +112,12 @@ var RaceEngineer = (function () {
         case "drying": return lapBucket(s.dryInLaps);
         case "easing": return lapBucket(s.easeInLaps);
         case "here": return s.hereAt;
+        case "where": return s.rainWhere;                       // news when the shower moves sector
         case "plan0": case "plan1": return s.lap + ":" + s.nextCode;
         case "gone": return s.lap;
         case "manage": return s.stintLeft;
         case "push": return s.ahead;
+        case "gust": return s.gust;                              // one call per gusty spell (Wind.gustCall's ~90 s bucket)
         default: return "";
       }
     }
@@ -169,6 +171,9 @@ var RaceEngineer = (function () {
       // (its plan's window, PitLane.windowOf) and ours is near. Boxing first
       // is the cover; a driver who knows can choose.
       if (s.threat && take(s.threat + " CAN UNDERCUT — BOX NEXT LAP TO COVER", "threat")) return;
+      // A LOCAL SHOWER: where it is, and whether the lap as a whole wants rubber for it (treadFor on the lap mean)
+      // — the dilemma a blanket rain never posed.
+      if (s.rainWhere && take("RAIN IN SECTOR " + s.rainWhere + (s.wantTread > 0 ? " — " + TREAD_WORD[s.wantTread] + " FOR THE LAP" : " — REST OF THE LAP IS DRY, STAY OUT"), "where")) return;
       if (s.rainInLaps != null) {
         if (s.lapsToStop != null && s.rainInLaps <= s.lapsToStop) {
           // The box lap is the forecast's own (the lap the stated onset falls on — a grid start is lap 0), and
@@ -220,6 +225,8 @@ var RaceEngineer = (function () {
         && take("MANAGE THE TYRES — " + s.stintLeft + " LAPS TO THE FLAG ON THAT SET", "manage")) return;
       if (s.planned && s.setLaps != null && s.stintLeft != null && s.setLaps >= s.stintLeft + PUSH_SPARE && s.ahead
         && take("TYRES ARE GOOD — PUSH, " + s.ahead + " IS " + s.aheadGap.toFixed(1) + "s AHEAD", "push")) return;
+      // WIND (js/race/wind.js): a strong gust is worth a word, below everything a driver can act on in the pits.
+      if (s.gust != null && take("GUSTY OUT THERE — " + s.gustKmh + " KM/H, CAREFUL ON THE BRAKES", "gust")) return;
       if (s.step >= 0) take("TYRES AT " + Math.round((1 - WEAR_STEPS[s.step]) * 100) + "%", "wear" + s.step);
     }
 
@@ -307,7 +314,8 @@ var RaceEngineer = (function () {
       if (arc && arc.seq) {
         for (let i = 0; i < arc.seq.length; i++) { if (WET.indexOf(arc.seq[i]) >= 0) { wetAt = i / arc.seq.length; break; } }
       }
-      const rainT = arc ? (Number.isFinite(arc.wetIn) ? arc.wetIn : arc.dur * wetAt) : 0;
+      // A local shower (arc.cell) that never wets enough of the lap to want inters has no onset to count to.
+      const rainT = arc ? (Number.isFinite(arc.wetIn) ? arc.wetIn : arc.cell ? 0 : arc.dur * wetAt) : 0;
       const left = arc ? Math.max(0, rainT - arc.t) : 0;
       // THE FORECAST (js/race/forecast.js): the same onset, STATED with an error that shrinks as it nears, on
       // a lap estimate that exists from the green (the car's own last lap once it has one). Re-read on a 0.5 s
@@ -413,6 +421,9 @@ var RaceEngineer = (function () {
       out.dryInLaps = !noStop && tread >= 1 && !byKind.easing && byKind.drying ? latchLaps(b, "drying", byKind.drying, lapF) : null;
       // "Here" is the road's own verdict (treadFor wants rubber for water now), inside HERE_S of the arc's onset —
       // not `arc.t >= wetIn`, which a bisected wetIn can miss by a hair on the very step it turns.
+      out.rainWhere = arc && arc.cell && fc ? b.where || null : null;
+      out.gust = typeof Wind !== "undefined" ? Wind.gustCall() : null;
+      out.gustKmh = out.gust != null ? Wind.state().kmh : null;
       out.hereAt = arc && wantTread > 0 && Number.isFinite(arc.wetIn) && arc.wetIn > 0 && arc.t - arc.wetIn <= HERE_S
         ? Math.round(arc.wetIn) : null;
       return out;
@@ -431,7 +442,10 @@ var RaceEngineer = (function () {
       const seed = net ? 0 : (typeof G.simSeed === "function" ? G.simSeed() : 0);
       const tot = G.track && G.track.total > 0 ? G.track.total : 0;
       const lapPos = tot > 0 && c.prog != null ? (((c.prog % tot) + tot) % tot) / tot : 0;
-      b.fc = Forecast.compute({ arc, raceT: G.raceT, lapS: lapF, lap: c.lap || 0, lapPos, seed, rainAt: rainT });
+      // WHERE a local shower is (js/race/rain-cells.js): the sectors under it now — WeatherArc publishes them on the arc.
+      const where = arc.cell && Array.isArray(arc.where) ? arc.where.slice() : null;
+      b.where = where && where.length ? where.join(" & ") : null;
+      b.fc = Forecast.compute({ arc, raceT: G.raceT, lapS: lapF, lap: c.lap || 0, lapPos, seed, rainAt: rainT, where, wetNow: G.trackWetness ? G.trackWetness() : undefined });
       b.fcT = FC_S; b.fcFor = arc;
       const k = b.fcKinds = {};
       if (b.fc) for (let i = 0; i < b.fc.events.length; i++) k[b.fc.events[i].kind] = b.fc.events[i];

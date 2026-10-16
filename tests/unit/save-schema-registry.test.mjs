@@ -30,6 +30,7 @@ const PREFIX_WRITES = [
 
 /** Files that only write keys already named in SPEC / PREFIX helpers. */
 const PASSTHROUGH_FILES = new Set([
+  "js/career/restore-points.js",   // writes the captured slot key back, never a new one
   "js/ui/settings-export.js",
   "js/ui/scale.js",
   "js/ui/screen-looks.js",
