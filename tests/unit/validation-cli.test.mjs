@@ -14,7 +14,7 @@ import { update, updateReceipt, DATA } from "../../tools/check/ratchets.mjs";
 import { project, main as importMain } from "../../tools/track/import-circuit-path.mjs";
 import { validatePresets, presetChanges } from "../../tools/lighting/preset-validation.mjs";
 import { skyDepthErrors } from "../../tools/gfx/wgx-validate.mjs";
-import { encodePNG, decodePNG } from "../../tools/gen/assets.mjs";
+import { encodePNG, decodePNG, sampleRadianceHdr } from "../../tools/gen/assets.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = (file, args = [], env = {}) => spawnSync(process.execPath, [file, ...args], {
@@ -276,6 +276,39 @@ test("lighting check mode reports actual snapshot/delta changes without writing 
     assert.match(wet.stderr, /wetness must not be baked/);
   }
   assert.deepEqual(fs.readFileSync(path.join(ROOT, "js/lighting/presets.js")), before);
+});
+
+test("HDR sampler preserves valid run/literal and flat scanlines", () => {
+  const header = (w) => Buffer.from(`#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y 2 +X ${w}\n`);
+  const sky = [100, 50, 25, 129], ground = [10, 20, 30, 128];
+  const run = [2, 2, 0, 8, ...sky.flatMap((v) => [136, v])];
+  const literal = [2, 2, 0, 8, ...ground.flatMap((v) => [8, ...Array(8).fill(v)])];
+  const rle = sampleRadianceHdr(Buffer.concat([header(8), Buffer.from([...run, ...literal])]));
+  const flat = sampleRadianceHdr(Buffer.concat([header(2), Buffer.from([...sky, ...sky, ...ground, ...ground])]));
+  for (const result of [rle, flat]) {
+    for (let c = 0; c < 3; c++) {
+      assert.ok(Math.abs(result.sky[c] - sky[c] * 2 / 255) < 1e-12);
+      assert.ok(Math.abs(result.ground[c] - ground[c] / 255) < 1e-12);
+    }
+    assert.equal(result.height, 2);
+  }
+  assert.equal(rle.width, 8);
+  assert.equal(flat.width, 2);
+});
+
+test("HDR sampler rejects zero, truncated and overrunning RLE packets", () => {
+  const image = (data) => Buffer.concat([Buffer.from("#?RADIANCE\n\n-Y 1 +X 8\n"), Buffer.from(data)]);
+  for (const [payload, error] of [
+    [[2, 2, 0], /truncated HDR scanline/],
+    [[2, 2, 0, 8], /truncated HDR RLE packet/],
+    [[2, 2, 0, 8, 0], /zero HDR RLE packet/],
+    [[2, 2, 0, 8, 136], /truncated HDR RLE payload/],
+    [[2, 2, 0, 8, 8, 1, 2], /truncated HDR RLE payload/],
+    [[2, 2, 0, 8, 137, 42], /overruns scanline/],
+    [[2, 2, 0, 8, 9, ...Array(9).fill(42)], /overruns scanline/],
+    [[2, 2, 0, 8, 135, 42, 130, 42], /overruns scanline/],
+    [[100, 50, 25, 129], /truncated HDR scanline/],
+  ]) assert.throws(() => sampleRadianceHdr(image(payload)), error);
 });
 
 test("material PNG decoder rejects damaged signature, CRC and truncated image data", () => {

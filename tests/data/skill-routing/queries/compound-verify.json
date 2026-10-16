@@ -1,0 +1,34 @@
+[
+  {
+    "query": "/compound-verify inspect the current tool change.",
+    "expect": "compound-verify"
+  },
+  {
+    "query": "Use compound-verify on this scoped change.",
+    "expect": "compound-verify"
+  },
+  {
+    "query": "I explicitly want the compound-verify workflow for this task.",
+    "expect": "compound-verify"
+  },
+  {
+    "query": "Please invoke compound-verify and report the evidence.",
+    "expect": "compound-verify"
+  },
+  {
+    "query": "Apply the compound-verify supporting workflow while respecting project gates.",
+    "expect": "compound-verify"
+  },
+  {
+    "query": "Pick the pre-push tests for the changed files and verify the deploy gate.",
+    "expect": "check-changes"
+  },
+  {
+    "query": "The WATCH camera jumps after seeking; fix its camera history.",
+    "expect": "f1-animation-cameras"
+  },
+  {
+    "query": "The game renderer is black after switching to WebGPU.",
+    "expect": "renderer-debug"
+  }
+]

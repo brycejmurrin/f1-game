@@ -1,0 +1,34 @@
+[
+  {
+    "query": "/compound-review inspect the current tool change.",
+    "expect": "compound-review"
+  },
+  {
+    "query": "Use compound-review on this scoped change.",
+    "expect": "compound-review"
+  },
+  {
+    "query": "I explicitly want the compound-review workflow for this task.",
+    "expect": "compound-review"
+  },
+  {
+    "query": "Please invoke compound-review and report the evidence.",
+    "expect": "compound-review"
+  },
+  {
+    "query": "Apply the compound-review supporting workflow while respecting project gates.",
+    "expect": "compound-review"
+  },
+  {
+    "query": "Pick the pre-push tests for the changed files and verify the deploy gate.",
+    "expect": "check-changes"
+  },
+  {
+    "query": "The WATCH camera jumps after seeking; fix its camera history.",
+    "expect": "f1-animation-cameras"
+  },
+  {
+    "query": "The game renderer is black after switching to WebGPU.",
+    "expect": "renderer-debug"
+  }
+]
