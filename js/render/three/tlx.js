@@ -2115,6 +2115,20 @@ const TLX = (function () {
         if (mat) pushRec(null, null, mat, drawEm(opts), drawAl(opts), 0, null, batch);
       }
 
+      // THREE.InstancedMesh owns a dispose() method, but the attribute-backed
+      // mirror path deliberately uses a plain Mesh. Mesh has no dispose()
+      // method; its render-object cache is released by the documented
+      // Object3D dispose event. Keep this distinction in one helper so a
+      // track switch cannot leave a plain mirror's render object pinned (or
+      // hide the TypeError from calling a nonexistent Mesh.dispose()).
+      function disposeInstancedObject(mesh) {
+        if (!mesh) return;
+        try {
+          if (mesh.isInstancedMesh && typeof mesh.dispose === "function") mesh.dispose();
+          else if (typeof mesh.dispatchEvent === "function") mesh.dispatchEvent({ type: "dispose" });
+        } catch (_) { /* best-effort: the renderer may already be tearing down */ }
+      }
+
       function freeInstancedBatch(batch) {
         if (!batch) return;
         if (shadowSys && shadowSys.freeInstanced) shadowSys.freeInstanced(batch);   // its keyed shadow caster
@@ -2124,7 +2138,7 @@ const TLX = (function () {
           const ix = _instRegistry.indexOf(mv.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
           try { scene.remove(mv.imesh); } catch (_) { /* */ }
-          try { mv.imesh.dispose(); } catch (_) { /* */ }
+          disposeInstancedObject(mv.imesh);
           try { mv.imesh.geometry.dispose(); } catch (_) { /* */ }
           mv.imesh = null; mv.cells = null; mv.srcMatrices = mv.srcColors = mv.packMatrices = mv.packColors = null;
         }
@@ -2132,7 +2146,7 @@ const TLX = (function () {
           const ix = _instRegistry.indexOf(batch.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
           try { scene.remove(batch.imesh); } catch (_) { /* */ }
-          try { batch.imesh.dispose(); } catch (_) { /* */ }
+          disposeInstancedObject(batch.imesh);
           batch.imesh = null;
         }
         if (batch.geo) {
