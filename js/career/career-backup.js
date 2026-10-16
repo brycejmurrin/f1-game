@@ -343,7 +343,8 @@ const CareerBackup = (function () {
   }
   function num(v, lo, hi) { return typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : null; }
   // A Daily class key is Ghost.contextKey(): JSON of the car/tune config, never an
-  // ID (#2165). Bounded and never a prototype name; the 8-per-day cap still holds.
+  // ID (#2165). Keys are bounded and never prototype names; the whole history
+  // uses the file-byte budget, since native play and merges can add classes.
   const CLASS_KEY_MAX = 4096;
   function classKey(k) {
     return k.length > 0 && k.length <= CLASS_KEY_MAX && k !== "__proto__" && k !== "constructor" && k !== "prototype";
@@ -450,8 +451,7 @@ const CareerBackup = (function () {
     if (own(e, "best")) out.best = cleanBest(e.best);
     if (own(e, "laps")) out.laps = num(e.laps, 0, 1e6) | 0;
     if (!nested && isObj(e.classes)) {
-      if (Object.keys(e.classes).filter(classKey).length > 8) throw new Error("too many daily classes");
-      out.classes = idMap(e.classes, 8, (v) => cleanDayEntry(v, true), classKey);
+      out.classes = idMap(e.classes, Infinity, (v) => cleanDayEntry(v, true), classKey);
     }
     return out;
   }
@@ -462,7 +462,6 @@ const CareerBackup = (function () {
       const src = plain(r.days);
       const days = {};
       const dates = Object.keys(src).filter((k) => DAY_RE.test(k)).sort();
-      if (dates.length > 120) throw new Error("too many daily days");
       for (const day of dates) {
         const e = cleanDayEntry(src[day], false);
         if (e) days[day] = e;
@@ -505,8 +504,8 @@ const CareerBackup = (function () {
   function cleanExtra(name, raw) {
     try {
       const incoming = new Blob([JSON.stringify(raw)]).size;
-      // Daily context keys contain whole car/tune configs: 61 days × eight
-      // classes legitimately exceeds 256 KiB. Only schema-checked Daily data
+      // Daily context keys contain whole car/tune configs; native histories
+      // legitimately exceed 256 KiB. Only schema-checked Daily data
       // gets the file budget; discarded junk retains the original extra cap.
       const limit = name === "daily" ? MAX_BYTES : EXTRA_MAX;
       if (incoming > limit) return { ok: false, reason: name + "-too-large" };
@@ -832,6 +831,22 @@ const CareerBackup = (function () {
       plan.push({ f: f, i: idx, data: row.data, id: id });
     }
 
+    // Two valid histories can exceed the byte budget when combined. Check the
+    // cleaned local input AND the union before any slot/selection/extra writes;
+    // raw local prototype keys must not disappear inside Object.assign first.
+    let mergedDaily = null;
+    if (s && typeof s.write === "function" && envelope.daily != null
+        && o.includeExtras !== false && o.includeProgressExtras !== false) {
+      const rawLocal = s.get("daily.v1", null);
+      const local = cleanExtra("daily", isObj(rawLocal) ? rawLocal : {});
+      if (!local.ok) return local;
+      const incoming = cleanExtra("daily", envelope.daily);
+      if (!incoming.ok) return incoming;
+      const merged = cleanExtra("daily", mergeDaily(local.value, incoming.value));
+      if (!merged.ok) return merged;
+      mergedDaily = merged.value;
+    }
+
     for (let p = 0; p < plan.length; p++) {
       const step = plan[p];
       const id = step.id;
@@ -875,8 +890,7 @@ const CareerBackup = (function () {
       }
       const badges = extra("badges");
       if (badges) recordWrite("badges", s.write("badges", mergeBadges(s.get("badges", null), badges)));
-      const daily = extra("daily");
-      if (daily) recordWrite("daily.v1", s.write("daily.v1", mergeDaily(s.get("daily.v1", null), daily)));
+      if (mergedDaily && progressExtras) recordWrite("daily.v1", s.write("daily.v1", mergedDaily));
       const records = extra("records");
       if (records) recordWrite("records", s.write("records", mergeRecords(s.get("records", null), records)));
       // Identity only with a MY TEAM slot actually written; a key the backup
