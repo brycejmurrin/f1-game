@@ -41,6 +41,11 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Track Designer on a landscape phone: the map gets most of the screen and UNDO / FIT VIEW sit beside it instead of covering it (#2152).
 - Touch: sliders, dropdowns and fold-out rows (OVERALL SPEED, Spotify, EXTRA PAINT, EXTRA FUNDS, free-camera FOV) are big enough to tap (#2158).
 - Free camera with the lighting panel open: the camera bar no longer covers the panel's FREE CAMERA button on a phone (#2159).
+- VS FRIEND: a short network outage mid-race (up to the race's 25 s grace) no longer ends the session; your friend's car is driven by AI until their connection comes back (#2195).
+- VS FRIEND room code: INVITE ANOTHER no longer leaves a dead room behind. Closing back to the room brings the same code back for the next friend (#2197).
+- Phone as controller: an expired pairing code takes its QR down and frees the button, and a phone whose link dropped keeps trying to reconnect for about a minute (#2198).
+- VS FRIEND results: the host's finishing order is kept when the host leaves just after the flag (#2199).
+- VS FRIEND lobby: an expired room code is taken down instead of staying shareable, a failed code join frees its connection, and the scan camera turns off when the lobby leaves its step (#2200).
 
 - Returning tabs refuse changed lazy scripts after a release, preventing mixed-version audio, race and multiplayer code.
 - Cached phone-controller links keep their own page offline, and updates preserve working offline Career access when its UI cannot be installed.
