@@ -1597,6 +1597,7 @@ const TrackDesigner = (function () {
   }
   function close() {
     if (!root || !openFlag) return;
+    ++replacementGeneration;   // pending single-circuit reads/decodes no longer own this visit
     saveDraft();
     cancelLibraryImport(false);
     if (repair) repair.cancel();
