@@ -21,7 +21,8 @@ async function loadRace(page, trackId = "monza") {
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   // jump to mid-track at racing speed so obs() has valid world-space position
   await page.evaluate(() => { window.__apex.jump(0.1, 40, 0); });
-  await page.waitForTimeout(100);
+  // obs() needs player.px, which jump() sets: wait on the hook, not a sleep.
+  await page.waitForFunction(() => { try { return window.__apex.obs() != null; } catch { return false; } }, null, { polling: 100, timeout: BOOT_MS });
 }
 
 test.describe("__apex.headless()", () => {
