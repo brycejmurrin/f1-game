@@ -713,3 +713,9 @@ body.desktop #pm-steer-item,
 body.desktop #pm-calib,
 body.desktop #pm-calib-help { display: none !important; }
 } /* @layer components */
+
+@layer components {
+#pm-hud-elements-list [data-hud-el-row] { min-width:0; }
+#pm-hud-elements-list [data-hud-reason] { display:block; color:var(--dim); font-size:var(--fs-micro); }
+#pm-hud-elements-list [data-hud-reason-link] { font-size:var(--fs-micro); margin-top:calc(var(--gap) / 3); }
+}

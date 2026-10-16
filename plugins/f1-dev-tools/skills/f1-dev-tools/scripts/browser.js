@@ -32,6 +32,82 @@
       reducedMotion: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? null,
     });
   }
+  function diagnose() {
+    const a = api();
+    const sw = globalThis.navigator?.serviceWorker;
+    let controller = null;
+    try {
+      controller = sw?.controller ? {
+        scriptURL: sw.controller.scriptURL || null,
+        state: sw.controller.state || null,
+      } : null;
+    } catch (e) {
+      controller = { unavailable: String(e.message || e) };
+    }
+    let manifest;
+    try {
+      manifest = clone(a.agentHelp());
+    } catch (e) {
+      manifest = { unavailable: String(e.message || e) };
+    }
+    return clone({
+      schema: "f1-dev-diagnostic/v1",
+      capturedAt: new Date().toISOString(),
+      page: {
+        url: globalThis.location?.href || null,
+        visibility: globalThis.document?.visibilityState || null,
+        readyState: globalThis.document?.readyState || null,
+        controller,
+      },
+      manifest,
+      inspection: inspect(),
+    });
+  }
+  function hex(bytes) {
+    return [...new Uint8Array(bytes)].map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  async function checkAssets(urls, { timeoutMs = 15000 } = {}) {
+    if (!Array.isArray(urls) || !urls.length || urls.length > 64) throw new Error("Supply 1..64 asset URLs.");
+    if (!Number.isFinite(timeoutMs) || timeoutMs < 100 || timeoutMs > 120000) throw new Error("timeoutMs must be 100..120000");
+    if (typeof fetch !== "function" || !globalThis.crypto?.subtle) throw new Error("This browser has no fetch or Web Crypto support.");
+    const results = [];
+    for (const raw of urls) {
+      if (typeof raw !== "string" || !raw.trim()) throw new Error("Asset URLs must be non-empty strings.");
+      let url;
+      try { url = new URL(raw, globalThis.location?.href); }
+      catch { throw new Error("Invalid asset URL: " + raw); }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const started = performance.now();
+      try {
+        const response = await fetch(url.href, { cache: "no-store", credentials: "same-origin", signal: controller.signal });
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        results.push({ url: url.href, ok: response.ok, status: response.status,
+          contentType: response.headers.get("content-type"), contentLength: response.headers.get("content-length"),
+          cacheControl: response.headers.get("cache-control"), etag: response.headers.get("etag"),
+          bytes: bytes.byteLength, sha256: hex(await crypto.subtle.digest("SHA-256", bytes)),
+          elapsedMs: Math.round(performance.now() - started) });
+      } catch (e) {
+        results.push({ url: url.href, ok: false, error: String(e.name === "AbortError" ? "timeout" : (e.message || e)),
+          elapsedMs: Math.round(performance.now() - started) });
+      } finally { clearTimeout(timer); }
+    }
+    return { schema: "f1-dev-assets/v1", capturedAt: new Date().toISOString(), results };
+  }
+  async function storageReport() {
+    const entries = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        entries.push({ key, characters: key == null ? 0 : key.length + (localStorage.getItem(key) || "").length });
+      }
+    } catch (e) { entries.push({ unavailable: String(e.message || e) }); }
+    let estimate = null;
+    try { estimate = typeof navigator.storage?.estimate === "function" ? await navigator.storage.estimate() : { unavailable: "storage.estimate unsupported" }; }
+    catch (e) { estimate = { unavailable: String(e.message || e) }; }
+    return { schema: "f1-dev-storage/v1", capturedAt: new Date().toISOString(), localStorage: entries,
+      localStorageCharacters: entries.reduce((sum, item) => sum + (item.characters || 0), 0), estimate: clone(estimate) };
+  }
   function capture() {
     const a = api(), repro = a.repro();
     if (!repro.track || !repro.cars?.length) throw new Error("Enter a race before capturing a scene.");
@@ -177,5 +253,5 @@
       if (a.camera().mode !== originalMode) throw new Error("Unexpected camera mode change during preview.");
     }
   }
-  globalThis.F1Dev = Object.freeze({ inspect, capture, restore, trace, replayCheck, previewPreset });
+  globalThis.F1Dev = Object.freeze({ diagnose, inspect, capture, restore, trace, replayCheck, previewPreset, checkAssets, storageReport });
 })();

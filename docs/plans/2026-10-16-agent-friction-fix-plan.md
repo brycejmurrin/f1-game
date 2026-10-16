@@ -118,6 +118,17 @@ M ≤ half a day, L more. **Payoff** is the measured cost it removes.
 |---|---|---|---|
 | `session-transcript.mjs`: fold quota/heartbeat runs, drop image blobs, `--summary`; transcripts.md: a `kinds` filter cuts page SIZE to 5–20 KB for narrative reads | #2382 | S | 250–2,700 KB pages of noise |
 
+### WS10 — Use what Claude Code already ships · lane: agents/settings · evidence: [`AGENT-TOOLING-MARKETPLACE-2026-10-16.md`](../notes/AGENT-TOOLING-MARKETPLACE-2026-10-16.md)
+
+| item | issue | size | payoff |
+|---|---|---|---|
+| Subagent frontmatter: `omitClaudeMd`, a smaller `model`, `maxTurns` on every read-only agent in `.claude/agents/` | NEW | S | each read-only agent stops re-reading AGENTS.md (theme B) |
+| Committed statusline: context % and 5 h / 7 d usage % (`rate_limits`), read by the quota gate | NEW (with #2380) | S | themes A, B made visible |
+| Playwright MCP `--image-responses omit` by default | NEW (with #2399) | S | theme J |
+| `/insights` + `/usage` run in one long session, compared with this mining | NEW | S | a cheap recurring friction report |
+| Trial `threejs-devtools-mcp` / parallax-threejs on one TLX bug | NEW | M | renderer debugging, if measured |
+| hookify + plugin-dev trial: review skills, turn the top repeated corrections into rules | NEW | S | fewer hand-written hooks |
+
 ## Order of work
 
 1. **This week, all S, highest payoff first:** WS1 launch template + quota gate + park; WS2 `ci-watch` verdict

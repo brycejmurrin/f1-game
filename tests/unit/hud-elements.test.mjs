@@ -33,7 +33,7 @@ function load(stored = {}, opts = {}) {
     document: doc,
     GameStore: {
       store: {
-        get(k, d) { return k in stored ? stored[k] : (k in written ? written[k] : d); },
+        get(k, d) { return k in written ? written[k] : (k in stored ? stored[k] : d); },
         set(k, v) {
           written[k] = v;
           for (let i = 0; i < listeners.length; i++) listeners[i]({ key: k, local: true });
@@ -190,4 +190,38 @@ test("SPEED hide covers the whole #hud-speed plate (number + unit), not a second
   assert.match(shell, /id="hud-speed"[^>]*>\s*<span id="hud-speed-n">[\s\S]*?<span class="hud-unit">/);
   assert.match(css, /body\[data-hud-hide~="speed"\] #hud-speed/);
   assert.equal(H.ELEMENTS.filter((e) => e[0] === "speed").length, 1);
+});
+
+test("effective HUD reasons distinguish saved OFF, style/camera suppression and missing session data", () => {
+  const ctx = load({ hudElements: { inputs: "on", strat: "on", rel: "on" } }), H = ctx.HudElements;
+  assert.equal(H.effective("inputs", { profile: "minimal" }).text, "Hidden by Minimal HUD style");
+  assert.equal(H.effective("inputs", { profile: "standard", broadcastCamera: true }).status, "hidden");
+  assert.equal(H.effective("strat", { profile: "standard", tyreWear: false }).target, "rs-tyres-sel");
+  assert.equal(H.effective("strat", { timeTrial: true, tyreWear: true }).status, "unavailable");
+  assert.equal(H.effective("rel", { timeTrial: true }).status, "unavailable");
+  assert.equal(H.effective("damage", { damageVisible: false }).status, "waiting");
+  assert.equal(H.effective("delta", { deltaReady: false }).text, "Waiting for a reference lap");
+  assert.equal(H.effective("speed", { state: "menu" }).status, "waiting");
+  assert.equal(H.effective("inputs", { profile: "standard", tyreWear: true }).status, "enabled");
+  H.set("inputs", false); assert.equal(H.effective("inputs", { profile: "minimal" }).status, "off", "explicit preference stays authoritative");
+  assert.equal(H.isOn("strat"), true, "availability never writes another preference");
+});
+
+test("actual HUD checklist refreshes contextual reasons and keeps requirement navigation separate from checkbox", async () => {
+  const { makeDom } = await import("../helpers/mini-dom.mjs");
+  const dom = makeDom({ readyState: "loading" });
+  dom.document.getElementById = (id) => dom.document.querySelector("#" + id);
+  const fold = dom.makeElement("details", "pm-hud-details"); dom.body.appendChild(fold);
+  const stored = { hudElements: { inputs: "on", strat: "on" } }, writes = [], nav = [];
+  let context = { profile: "minimal", tyreWear: true, state: "race" };
+  const sandbox = vm.createContext({ document: dom.document, GameStore: { store: { get: (k, d) => stored[k] ?? d, set: (k, v) => { writes.push(k); stored[k] = v; }, subscribe() {} } } });
+  vm.runInContext(SRC + ";this.H=HudElements;", sandbox); const H = sandbox.H;
+  H.initUI(); H.configure({ context: () => context, navigate: (page, target) => nav.push([page, target]) });
+  const inputRow = fold.querySelector('[data-hud-el-row="inputs"]'), box = inputRow.querySelector("input"), reason = inputRow.querySelector("[data-hud-reason]"), link = inputRow.querySelector("button");
+  assert.equal(box.checked, true); assert.equal(box.getAttribute("aria-describedby"), reason.id); assert.match(reason.textContent, /Minimal/);
+  assert.equal(link.closest("label"), null, "link activation cannot toggle the checkbox"); link.onclick(); assert.deepEqual(nav, [["display", "pm-hudprofile-sel"]]); assert.deepEqual(writes, []);
+  context = { profile: "standard", tyreWear: false, state: "race" }; H.refreshVisibility();
+  assert.equal(link.hidden, true); assert.equal(reason.textContent, "Enabled when live data is available");
+  const strat = fold.querySelector('[data-hud-el-row="strat"]'); assert.match(strat.querySelector("[data-hud-reason]").textContent, /Requires tyre wear/); strat.querySelector("button").onclick(); assert.deepEqual(nav[1], ["race-settings", "rs-tyres-sel"]);
+  context = { profile: "standard", tyreWear: true, state: "race" }; H.refreshVisibility(); assert.equal(strat.querySelector("button").hidden, true); assert.equal(box.checked, true); assert.deepEqual(writes, []);
 });

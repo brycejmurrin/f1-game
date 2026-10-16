@@ -141,3 +141,58 @@ test('window release, backgrounding and disconnect center touch steering without
   h.document.hidden = true; emit(h.document, 'visibilitychange'); assert.equal(ctl.state().steer, 0); assert.equal(ctl.state().thr, 0);
   emit(dom.steer, 'keydown', { key: 'ArrowRight' }); ctl.cancel(); assert.equal(ctl.state().steer, 0); assert.equal(dom.steer.hidden, true);
 });
+
+test('actual scanner stops on manual connect/cancel and invalidates pending sensor/media work', async () => {
+  for (const mode of ['manual', 'qr', 'cancel', 'pending-media', 'pending-sensor', 'hidden-sensor', 'hidden-media']) {
+    const h = boot(); let stops = 0, grant, media, codes = [];
+    const stream = { getTracks: () => [{ stop() { stops++; } }] };
+    h.ctx.navigator.mediaDevices = { getUserMedia: () => mode.includes('media') ? new Promise(r => { media = r; }) : Promise.resolve(stream) };
+    class Detector { static async getSupportedFormats() { return ['qr_code']; } async detect() { return codes; } }
+    h.window.BarcodeDetector = Detector;
+    if (mode.includes('sensor')) h.ctx.DeviceOrientationEvent = { requestPermission: () => new Promise(r => { grant = r; }) };
+    vm.runInContext(read('js/net/scan.js'), h.ctx);
+    const Scan = vm.runInContext('NetScan', h.ctx), dom = { body: element(), status: element(), scan: element(), scanBox: element(), video: element(), buttons: {} };
+    Object.assign(dom.video, { play: async () => {}, readyState: 4, videoWidth: 640, videoHeight: 480 });
+    const ctl = h.P.pad(dom, { deps: { scan: () => Scan, rtc: () => wire(), prefetchIce: async () => null,
+      normalise: s => String(s).toUpperCase(), valid: s => s.length === 6, swap: async () => ({ ok: true }) } });
+    const settle = async () => { for (let i = 0; i < 16; i++) await Promise.resolve(); };
+    const pending = ctl.scan(); await settle();
+    if (mode.includes('sensor') || mode.includes('media')) {
+      if (mode.startsWith('hidden')) { h.document.hidden = true; h.document.dispatchEvent(new Event('visibilitychange')); }
+      else ctl.cancel();
+      if (grant) grant('granted'); if (media) media(stream);
+      const result = await pending; assert.equal(result.ok, false, mode);
+      assert.equal(dom.video.srcObject || null, null, mode);
+      assert.equal(stops, mode.includes('media') ? 1 : 0, mode);
+    } else {
+      assert.equal((await pending).ok, true);
+      if (mode === 'manual') await ctl.connect('ABC234');
+      else if (mode === 'qr') { codes = [{ rawValue: 'ABC234' }]; h.beat(); await settle(); }
+      else ctl.cancel();
+      assert.equal(stops, 1, mode); assert.equal(dom.video.srcObject, null, mode);
+      assert.equal(dom.scanBox.hidden, true, mode);
+      if (mode !== 'cancel') assert.equal(ctl.state().linked, true, mode);
+    }
+    ctl.cancel();
+  }
+});
+
+test('an old cancelled camera start cannot hide or stop the newer scan panel', async () => {
+  const h = boot(), requests = []; let oldStops = 0, newStops = 0;
+  h.ctx.navigator.mediaDevices = { getUserMedia: () => new Promise(r => requests.push(r)) };
+  class Detector { static async getSupportedFormats() { return ['qr_code']; } async detect() { return []; } }
+  h.window.BarcodeDetector = Detector; vm.runInContext(read('js/net/scan.js'), h.ctx);
+  const Scan = vm.runInContext('NetScan', h.ctx), dom = { status: element(), scan: element(), scanBox: element(), video: element(), buttons: {} };
+  dom.video.play = async () => {};
+  const ctl = h.P.pad(dom, { deps: { scan: () => Scan } });
+  const settle = async () => { for (let i = 0; i < 16; i++) await Promise.resolve(); };
+  const old = ctl.scan(); await settle(); assert.equal(requests.length, 1);
+  assert.equal((await ctl.scan()).error, 'cancelled');
+  const fresh = ctl.scan(); await settle(); assert.equal(requests.length, 2);
+  const newStream = { getTracks: () => [{ stop() { newStops++; } }] };
+  requests[1](newStream); assert.equal((await fresh).ok, true);
+  requests[0]({ getTracks: () => [{ stop() { oldStops++; } }] }); assert.equal((await old).ok, false);
+  assert.equal(dom.video.srcObject, newStream); assert.equal(dom.scanBox.hidden, false);
+  assert.equal(dom.scan.textContent, 'CANCEL SCAN'); assert.equal(oldStops, 1); assert.equal(newStops, 0);
+  ctl.cancel(); assert.equal(newStops, 1);
+});

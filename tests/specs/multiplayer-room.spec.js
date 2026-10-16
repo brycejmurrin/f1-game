@@ -34,6 +34,10 @@ import { lobbyReset, pinFreePlay } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 const EV = { HELLO: "hello", SETTINGS: "settings", READY: "ready", GO: "go", QUALI: "quali" };
+// A real host always ships the complete race rules (track, laps, weather, tod,
+// quali, difficulty); a guest refuses READY until it has seen all of them, so a
+// fake host has to send the full set too.
+const HOST_RULES = { track: 0, laps: 11, weather: "dry", tod: "day", quali: false, difficulty: "normal" };
 
 // Reach the room over a loopback transport. It is open the moment it exists but
 // has no RTCPeerConnection, so the handshake cannot run over it — lobbyWatch()
@@ -50,6 +54,14 @@ async function enterRoom(page, role = "host") {
 
 const peerSays = (page, type, data) =>
   page.evaluate(([t, d]) => window.__apex.lobbyPeerEvent(t, d), [type, data]);
+
+// The fake host's packet is only delivered on the lobby's own pump, so wait for
+// the room to show the rules before anything (READY, GO) depends on them.
+const hostSays = async (page, extra = {}) => {
+  const rules = { ...HOST_RULES, ...extra };
+  await peerSays(page, EV.SETTINGS, rules);
+  await expect(page.locator("#vs-race-summary")).toContainText(String(rules.laps), { timeout: 5000 });
+};
 
 test.use({ viewport: LANDSCAPE });
 
@@ -126,7 +138,7 @@ test.describe("the waiting room", () => {
     // Settings now change WHILE both players sit here, so they have to
     // replicate on arrival rather than at lights-out.
     await enterRoom(page, "guest");
-    await peerSays(page, EV.SETTINGS, { track: 4, laps: 7, weather: "wet", tod: "night" });
+    await peerSays(page, EV.SETTINGS, { ...HOST_RULES, track: 4, laps: 7, weather: "wet", tod: "night" });
     await expect(page.locator("#vs-race-summary")).toContainText("7", { timeout: 5000 });
     await expect(page.locator("#vs-race-summary")).toContainText(/wet/i);
     await expect(page.locator("#vs-race-summary")).toContainText(/night/i);
@@ -167,7 +179,8 @@ test.describe("the waiting room", () => {
     // SwiftShader builds it on the CPU.
     test.slow();
     await enterRoom(page, "guest");
-    await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day" });
+    await hostSays(page);
+    await page.click("#vs-ready");   // the guest confirms the host's rules; GO is refused until it has
     await peerSays(page, EV.GO, {});
     // The lobby closes and the game leaves the menu — the track build is slow
     // under software GL, so this is given room.
@@ -231,7 +244,8 @@ test.describe("the waiting room", () => {
     // started FROM, which was true until somebody else could start it.
     test.slow();
     await enterRoom(page, "guest");
-    await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day" });
+    await hostSays(page);
+    await page.click("#vs-ready");   // the guest confirms the host's rules; GO is refused until it has
     await page.click("#vs-edit-car");
     // 8.10 s measured on an idle box (see the note on EDIT RACE above): the
     // garage swap cannot make Playwright's default 5 s expect timeout.
@@ -256,7 +270,7 @@ test.describe("qualifying in a friend race", () => {
   test("the host's GRID choice reaches the guest and is shown", async ({ page }) => {
     test.slow();
     await enterRoom(page, "guest");
-    await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
+    await hostSays(page, { quali: true });
     // Wait on the VALUE, not the label. renderRoom() always emits the
     // "Qualifying lap" <dt>, so /qualifying/i matched before the settings
     // packet had been pumped at all — the guard passed instantly and the
@@ -270,7 +284,8 @@ test.describe("qualifying in a friend race", () => {
     async ({ page }) => {
       test.slow();
       await enterRoom(page, "guest");
-      await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
+      await hostSays(page, { quali: true });
+      await page.click("#vs-ready");   // the guest confirms the host's rules; GO is refused until it has
       await peerSays(page, EV.GO, {});
       // The sheet, not the lights.
       await expect(page.locator("#quali")).toBeVisible({ timeout: 60000 });
@@ -291,7 +306,8 @@ test.describe("qualifying in a friend race", () => {
     // below then has to carry the SAME identity the profile implies
     // (team:seat), or it is a lap for a driver nobody is waiting on.
     await peerSays(page, EV.HELLO, { team: "ferrari", driver: 0 });
-    await peerSays(page, EV.SETTINGS, { track: 0, laps: 3, weather: "dry", tod: "day", quali: true });
+    await hostSays(page, { quali: true });
+    await page.click("#vs-ready");   // the guest confirms the host's rules; GO is refused until it has
     await peerSays(page, EV.GO, {});
     await expect(page.locator("#quali")).toBeVisible({ timeout: 60000 });
 

@@ -89,6 +89,10 @@ Keep working on anything the blocker does not touch while you wait.
   A user's "don't commit X" beats the hook.
 - One git verb per Bash call for `push`, `fetch` and `worktree add`; chained
   verbs have hidden a failed push.
+- Before opening a replacement PR, or re-pushing after any wake, re-read
+  `node tools/ci/who-is-on-it.mjs` and the PR's state (open? superseded?). A
+  `STAND DOWN <old PR> superseded by <new PR>` (Merge Desk, #2388) or a
+  `Superseded by #<n>` body line means stop: no push, release the claim, say so.
 - After `SWEEP <PR#>` hand the PR to Merge Desk and stop watching it.
 - Past ~300k context at a verified checkpoint, hand off (PR body current, new
   small session or Merge Desk watches) instead of idling in the big session:
