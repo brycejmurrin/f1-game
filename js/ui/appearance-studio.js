@@ -156,6 +156,10 @@ const AppearanceStudio = (function () {
   function group(host, title) { const box = node("section", "as-box"); box.appendChild(node("h3", "as-heading", title)); host.appendChild(box); return box; }
   function choice(host, label, key, values) {
     const row = node("div", "as-row"), text = node("span", "as-label", label), controls = node("div", "as-segment");
+    // Stable search target for Settings › FIND A SETTING.  The studio is
+    // built lazily, so the search descriptor is registered after this DOM
+    // exists rather than pointing at an absent static shell node.
+    controls.id = "as-" + key;
     const list = []; controls.setAttribute("role", "group"); controls.setAttribute("aria-label", label);
     for (const [id, name] of values) { const b = button(name, () => { const v = snapshot(); v[key] = id; applySnapshot(v); }); controls.appendChild(b); list.push({ id, b }); }
     row.append(text, controls); host.appendChild(row); ui.choices.push({ key, list }); return row;
@@ -167,6 +171,7 @@ const AppearanceStudio = (function () {
   }
   function range(host, label, key, lo, hi) {
     const row = node("label", "as-row"), name = node("span", "as-label", label), input = node("input"), out = node("output"); input.type = "range"; input.min = lo; input.max = hi; input.step = .25; input.setAttribute("aria-label", label);
+    input.id = "as-" + key;
     let before = null; input.addEventListener("pointerdown", () => { before = snapshot(); });
     input.addEventListener("keydown", (e) => {
       // Keyboard and assistive-tech changes do not produce pointerdown. Keep
@@ -328,6 +333,20 @@ const AppearanceStudio = (function () {
       if (settings) observer.observe(settings, { attributes: true, attributeFilter: ["hidden"] });
     }
     render();
+    if (typeof SettingsSearch !== "undefined") SettingsSearch.register("appearance-studio", [
+      { id: "appearance-theme", label: "Theme", page: "appearance", target: "as-uiTheme", aliases: "dark light system colour color" },
+      { id: "appearance-menu-accent", label: "Menu accent", page: "appearance", target: "as-menuAccent", aliases: "colour color highlight brand team custom" },
+      { id: "appearance-text-size", label: "Text size", page: "appearance", target: "as-textSize", aliases: "larger bigger words readability" },
+      { id: "appearance-reduce-motion", label: "Menu motion", page: "appearance", target: "as-motion", aliases: "reduce animation transitions comfort" },
+      { id: "appearance-contrast", label: "High contrast", page: "appearance", target: "as-uiContrast", aliases: "readability sunlight outlines" },
+      { id: "appearance-hud-style", label: "HUD style", page: "appearance", target: "as-hudProfile", aliases: "broadcast minimal standard race" },
+      { id: "appearance-hud-accent-choice", label: "HUD accent", page: "appearance", target: "as-hudAccent", aliases: "race colour color" },
+      { id: "appearance-hud-size", label: "HUD size", page: "appearance", target: "as-hudScale", aliases: "race bigger smaller readouts" },
+      { id: "appearance-hud-layout", label: "HUD layout", page: "appearance", target: "as-hudMetricsLayout", aliases: "timing compact driver metrics" },
+      { id: "appearance-home-scene", label: "Home scene", page: "appearance", target: "as-homeScene", aliases: "garage night studio circuit pitlane background" },
+      { id: "appearance-home-camera", label: "Home camera", page: "appearance", target: "as-homeCamera", aliases: "hero front side rear view" },
+      { id: "appearance-background-motion", label: "Background motion", page: "appearance", target: "as-backgroundMotion", aliases: "ambient still moving scene" },
+    ]);
   }
   // Same readyState rule as SettingsExport.mount: deferred scripts run at
   // "interactive", after DOMContentLoaded would already have missed a late listen.
