@@ -790,7 +790,7 @@ test("VS Friend text uses the menu type scale instead of sub-floor rem literals"
     for (const size of fs.matchAll(/([0-9.]+)rem/g)) if (parseFloat(size[1]) < 0.875) offenders.push(`${r.selector}: ${size[0]}`);
   }
   assert.deepEqual(offenders, []);
-  assert.equal(decl(section, /\.vs-ready$/, "font-size"), "var(--fs-micro)");
+  assert.equal(decl(section, /\.vs-roster-remove$/, "font-size"), "var(--fs-micro)");
   assert.equal(decl(section, /\.vs-summary dd$/, "font-size"), "var(--fs-2)");
 });
 
@@ -1687,8 +1687,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "RESTART looks dead in net / quali-net, same gate as its click handler");
   assert.equal(decl(css("css/career.css"), '#cr-inner:not([data-pair="on"]):not([data-shape="tall"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body', "grid-template-columns"),
     "minmax(0, 1fr) minmax(0, 1fr)", "wide stacked modes picker is two-up; tall stacks");
-  assert.equal(decl(css("css/career.css"), '#cr-inner[data-density="compact"] .cr-note, #cr-inner[data-shape="tall"] .cr-note', "-webkit-line-clamp"),
-    "2", "short/tall career notes give their extra lines back to the slots");
+  assert.match(readCssSource("css/career.css"),
+    /#cr-inner:is\(\[data-density="compact"\], \[data-shape="tall"\]\)[\s\S]*-webkit-line-clamp:\s*2/,
+    "short/tall mode intros clamp; BACKUP / slot notes stay full height");
   assert.equal(decl(css("css/components.css"), "#race-settings", "--sheet-w"), "760px",
     "race settings spends the same safe width as settings / customize");
   assert.equal(decl(css("css/components.css"), "#standings", "--sheet-w"), "760px");

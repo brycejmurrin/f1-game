@@ -1416,9 +1416,12 @@ test("host(): private exchange and unreadable-answer failures release their tran
 });
 
 function wakePad(over = {}) {
-  const events = {}, requests = [], transports = [];
+  const events = {}, requests = [], transports = [], timeouts = [];
   const sb = { URL, URLSearchParams, Promise, Log: { info() {}, warn() {} }, NetTransport,
-    setInterval: () => 1, clearInterval() {}, setTimeout: () => 1, clearTimeout() {},
+    setInterval: () => 1, clearInterval() {},
+    // Recorded, never run: a test fires one by hand (the re-dial backoff).
+    setTimeout: (fn, ms) => { timeouts.push({ fn, ms, cleared: false }); return timeouts.length; },
+    clearTimeout(id) { if (timeouts[id - 1]) timeouts[id - 1].cleared = true; },
     navigator: { wakeLock: { request: () => {
       let resolve, reject;
       const promise = new Promise((a, b) => { resolve = a; reject = b; });
@@ -1446,7 +1449,7 @@ function wakePad(over = {}) {
     return { releases: 0, addEventListener(_t, fn) { onRelease = fn; },
       release() { this.releases++; return Promise.resolve(); }, signal() { if (onRelease) onRelease(); } };
   };
-  return { ctl, dom, requests, transports, lock, doc: sb.document, fire: (t) => { for (const fn of events[t] || []) fn(); } };
+  return { ctl, dom, requests, transports, timeouts, lock, doc: sb.document, fire: (t) => { for (const fn of events[t] || []) fn(); } };
 }
 
 test("phone wake lock is released on pairing failure, including acquisition arriving after failure", async () => {
@@ -1573,4 +1576,62 @@ test('PlatformSession MAKE NEW CODE cancels the current owner before replacement
   hosts[1].options.recovery({ phase: 'waiting', reconnecting: true, publicRelay: false, deadlineAt: Date.now() + 5000 });
   assert.equal(note.textContent, '', 'private relay never claims same-code automatic recovery');
   G.$('pm-phonepad').onclick();
+});
+
+// #2198: an expired desktop room left its dead QR up under VS FRIEND copy, with
+// the button still reading STOP PAIRING and the pending transport open.
+test("host(): an expired pairing room takes the QR down, says so for a phone, and frees the button (#2198)", async () => {
+  const h = hostHarness();
+  h.ui.failedN = 0; h.ui.failed = () => h.ui.failedN++;
+  await settle();
+  assert.equal(h.ctl.state().phase, "waiting");
+  h.room.onFail({ error: "expired", message: "Nobody answered that code. Check the six characters…" });
+  assert.equal(h.ctl.state().phase, "failed");
+  assert.deepEqual(h.ui.qrs.at(-1), { url: null, code: null }, "the dead QR is taken down");
+  assert.match(h.ui.said.at(-1), /^!The code expired — press STEER THIS GAME WITH A PHONE for a new one/);
+  assert.equal(h.ui.failedN, 1, "the page resets its button");
+  assert.equal(h.ui.lostN, 0, "a first pairing that expired is not a lost phone");
+  assert.equal(h.hostEnd.status, "closed", "the pending pairing transport is released");
+  h.ctl.cancel();
+});
+
+// #2198: redialNow() cleared `redial` before connect(), and only onClose re-armed
+// it — so a re-dial that landed before the game re-hosted (expired / reply
+// failed) was the last try, though the game keeps the code open for 120 s.
+test("phone: a failed re-dial is retried on a backoff, and links with no CONNECT tap (#2198)", async () => {
+  const wires = [], swaps = [];
+  let answer = [{ ok: true }, { ok: false, error: "expired" }, { ok: true }];
+  const h = wakePad({
+    rtc: () => {
+      let onClose;
+      const t = { status: "open", send: () => true, pump() {}, onMessage() {}, onOpen() {}, onClose(f) { onClose = f; },
+        close() { t.fail("local"); }, fail(why) { if (t.status === "closed") return; t.status = "closed"; if (onClose) onClose(why); } };
+      wires.push(t); return t;
+    },
+    swap: async (o) => { swaps.push(o.code); return answer.shift() || { ok: false, error: "expired" }; },
+  });
+  await h.ctl.connect("ABC234");
+  assert.equal(h.ctl.state().linked, true);
+  wires[0].fail("failed"); await settle();
+  assert.equal(swaps.length, 2, "the wire drop re-dials at once");
+  assert.equal(h.ctl.state().linked, false, "…and that re-dial found the code not hosted yet");
+  const armed = h.timeouts.filter((t) => !t.cleared && t.ms >= 1000);
+  assert.equal(armed.length, 1, "the failed re-dial is re-armed on a backoff");
+  assert.match(h.dom.status.textContent, /reconnecting/i);
+  armed[0].ran = true; armed[0].fn(); await settle();
+  assert.equal(swaps.length, 3); assert.equal(h.ctl.state().linked, true, "linked again with no CONNECT tap");
+
+  // Three failed retries give up and say so; a manual CONNECT clears the timer.
+  answer = [];
+  wires[wires.length - 1].fail("failed"); await settle();
+  for (let i = 0; i < 3; i++) {
+    const next = h.timeouts.filter((t) => !t.cleared && t.ms >= 1000 && !t.ran);
+    assert.equal(next.length, 1, "retry " + (i + 1) + " is armed");
+    next[0].ran = true; next[0].fn(); await settle();
+  }
+  assert.equal(h.timeouts.filter((t) => !t.cleared && t.ms >= 1000 && !t.ran).length, 0, "capped at three retries");
+  assert.match(h.dom.status.textContent, /CONNECT|new one|new code/i);
+  const total = h.timeouts.filter((t) => t.ms >= 1000).reduce((n, t) => n + t.ms, 0);
+  assert.ok(total <= 90000, "the retries fit inside the game's 120 s re-host window (" + total + " ms)");
+  h.ctl.cancel();
 });

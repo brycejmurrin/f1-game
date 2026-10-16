@@ -1,5 +1,6 @@
 /* Player tools share the menu's spacing, type and target-size ladder. */
 @layer components {
+.pm-doors > .settings-find { flex:1 1 100%; width:100%; }
 .settings-find { flex:1 1 100%; grid-column:1 / -1; min-width:0; display:grid; gap:var(--gap); padding:calc(var(--gap) * .5) 0 var(--gap); border-bottom:1px solid var(--dim); }
 .settings-find label { display:grid; gap:calc(var(--gap) * .5); font-weight:700; }
 .settings-find input { box-sizing:border-box; width:100%; min-width:0; min-height:var(--tap); padding:calc(var(--gap) * .5); font:inherit; color:var(--text); background:var(--bg); border:1px solid var(--dim); border-radius:var(--r-sm); }

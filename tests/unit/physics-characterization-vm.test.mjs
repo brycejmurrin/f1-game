@@ -17,6 +17,7 @@
  * Run: node --test tests/unit/physics-characterization-vm.test.mjs
  */
 import { test, before, after } from "node:test";
+import * as espree from "espree";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -43,13 +44,48 @@ const SCENARIOS = [
 const FIELDS = ["s", "x", "speed", "slipDeg", "head", "prog"];
 const R = (v) => (typeof v === "number" && isFinite(v) ? Math.round(v * 1e4) / 1e4 : v);
 
-test("the scenario list matches the browser spec verbatim", () => {
-  const spec = fs.readFileSync(path.join(HERE, "..", "specs", "physics-characterization.spec.js"), "utf8");
-  for (const s of SCENARIOS) assert.ok(spec.includes(`name: "${s.name}", seed: ${s.seed}, frac: ${s.frac}, speed: ${s.speed}`),
-    `scenario "${s.name}" no longer matches the browser spec`);
+// Read only literal recipe data, never evaluate the browser module or import
+// Playwright. Full AST equality catches durations, inputs, offsets and order.
+function browserScenarios(source) {
+  const ast = espree.parse(source, {ecmaVersion: "latest", sourceType: "module"});
+  const literal = (node) => {
+    if (node.type === "Literal") return node.value;
+    if (node.type === "UnaryExpression" && node.operator === "-") return -literal(node.argument);
+    if (node.type === "ArrayExpression") return node.elements.map(literal);
+    if (node.type === "ObjectExpression") return Object.fromEntries(node.properties.map((p) => {
+      assert.equal(p.type, "Property", "recipe must remain serializable data");
+      return [p.key.name ?? p.key.value, literal(p.value)];
+    }));
+    assert.fail(`unsupported recipe node ${node.type}; keep browser and VM recipes comparable`);
+  };
+  const declaration = ast.body.filter((n) => n.type === "VariableDeclaration")
+    .flatMap((n) => n.declarations).find((n) => n.id.name === "SCENARIOS");
+  assert.ok(declaration, "browser recipe SCENARIOS is required");
+  return literal(declaration.init);
+}
+const browserSource = () => fs.readFileSync(path.join(HERE, "..", "specs", "physics-characterization.spec.js"), "utf8");
+
+test("the complete ordered scenario recipes match the browser spec", () => {
+  const spec = browserSource();
+  assert.deepEqual(browserScenarios(spec), SCENARIOS, "browser/VM recipe drift: compare every input, duration, lateral offset and scenario/stage order");
   assert.ok(spec.includes("if (i % 15 === 0)") && spec.includes("Math.round(v * 1e4) / 1e4"), "spec sampling or rounding changed");
   assert.ok(spec.includes("pinFactorySeat"),
     "browser characterization must pin factory McLaren before loadTrack so GarageDefaults cannot move the baseline");
+});
+
+test("recipe parity detects changes invisible to scenario-name checks", () => {
+  const source = browserSource();
+  for (const [from, to] of [["n: 120", "n: 121"], ["steer: 0.6", "steer: 0.7"],
+    ["x: 11", "x: 12"], ["throttle: true, steer: 0", "throttle: false, steer: 0"]]) {
+    assert.ok(source.includes(from), `mutation anchor missing: ${from}`);
+    assert.notDeepEqual(browserScenarios(source.replace(from, to)), SCENARIOS, from);
+  }
+  const reordered = browserScenarios(source);
+  reordered.reverse();
+  assert.notDeepEqual(reordered, SCENARIOS, "scenario order matters");
+  const stages = browserScenarios(source);
+  stages.find((s) => s.name === "trail brake into rotation").steps.reverse();
+  assert.notDeepEqual(stages, SCENARIOS, "stage order matters");
 });
 
 // ONE boot for the file (createGame ~2-3 s on this box); each scenario is its

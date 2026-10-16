@@ -1076,15 +1076,34 @@ const Input = (function () {
   const TOUCH_RANGE_FRAC = 0.12;   // LONG-edge fractions of drag for full lock
   const TOUCH_DEAD_PX = 5;         // slop around the anchor: a tap is not a steer
   let touchRangeFrac = TOUCH_RANGE_FRAC;
+  // DRAG AT SPEED. 1 = the drag takes the whole ADAPTIVE BUTTONS shed
+  // (digitalRateIn / KEY_RAMP_IN). 0 is the fixed fraction every player has
+  // today, and the shipped default: the speed-sensitive range is OPT-IN
+  // (orchestrator decision 2026-10-15) so nobody's drag feel moves under them.
+  let touchSpeedMix = 0;
+  // Safety only. The digital rate may approach 0; a drag that approaches 0
+  // cannot turn the car. 5 % of static lock is the floor, and the default
+  // assist (mix 4/9) never reaches it.
+  const TOUCH_SPEED_FLOOR = 0.05;
+
+  function touchSpeedScale() {
+    if (touchSpeedMix <= 0 || adaptiveMix <= 0) return 1;
+    const ratio = digitalRateIn() / KEY_RAMP_IN;   // 1 at rest, sheds with speed
+    const scale = 1 - touchSpeedMix * (1 - ratio);
+    return scale < TOUCH_SPEED_FLOOR ? TOUCH_SPEED_FLOOR : scale;
+  }
 
   function touchRangePx() {
     // The LONG edge, not innerWidth. Off the short edge a 393x852 phone gets
     // 47px of drag for full lock against 101px landscape — the identical
     // gesture, twice as twitchy, because the phone turned. Landscape is
     // unchanged (its long edge IS innerWidth). PERF-FINDINGS 5a.
+    // Speed widens that range by 1/touchSpeedScale(), so the same finger
+    // travel is less lock. At rest the scale is 1 and the range is the
+    // static fraction, whatever the mixes.
     const win = typeof window !== "undefined" ? window : null;
     const long = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
-    return Math.max(40, long * touchRangeFrac);
+    return Math.max(40, long * touchRangeFrac) / touchSpeedScale();
   }
 
   function touchCmd(rec) {
@@ -1168,23 +1187,57 @@ const Input = (function () {
       if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); touchActive = true; }
     }
     if (!touchActive) touchSteer = 0;
+    updateDragAnchor();
   }
 
   function canvasTouchIsDriving() { return !menuOverlayOpen(); }
 
-  /* Show where the anchor is, briefly. Looked up lazily and cached: the element
-     is optional (a test harness page may not have it) and this runs on the
-     touch path, so it must never throw and never query per event. */
+  /* Drag-anchor ring + offset dot: optional DOM (#drag-anchor), cached lookups
+     only, transform/left/top updates on the touch path — must never throw. */
   let dragMark = undefined;
-  function showDragAnchor(x) {
-    if (steerMode !== "touch") return;
+  let dragDotEl = null;
+  const DRAG_DOT_CSS = "position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;pointer-events:none;background:rgba(255,255,255,0.65);box-shadow:0 0 0 2px rgba(0,0,0,0.5)";
+  function dragMarkEl() {
     if (dragMark === undefined) dragMark = document.getElementById("drag-anchor") || null;
-    if (!dragMark) return;
-    dragMark.style.left = x + "px";
-    dragMark.classList.add("on");
+    return dragMark;
+  }
+  function dragDot(mark) {
+    if (dragDotEl && dragDotEl.parentNode === mark) return dragDotEl;
+    dragDotEl = null;
+    if (typeof mark.appendChild === "function" && typeof document.createElement === "function") {
+      dragDotEl = document.createElement("span");
+      dragDotEl.setAttribute("aria-hidden", "true");
+      if (dragDotEl.style) dragDotEl.style.cssText = DRAG_DOT_CSS;
+      mark.appendChild(dragDotEl);
+    }
+    return dragDotEl;
+  }
+  function steeringTouchRec() {
+    let best = -1, pick = null;
+    for (const rec of touches.values()) {
+      if (rec.seq > best) { best = rec.seq; pick = rec; }
+    }
+    return pick;
   }
   function hideDragAnchor() {
-    if (dragMark) dragMark.classList.remove("on");
+    const mark = dragMarkEl();
+    if (mark) mark.classList.remove("on");
+  }
+  function updateDragAnchor() {
+    if (steerMode !== "touch" || !canvasTouchIsDriving()) { hideDragAnchor(); return; }
+    const rec = steeringTouchRec();
+    if (!rec) { hideDragAnchor(); return; }
+    const mark = dragMarkEl();
+    if (!mark) return;
+    mark.style.left = rec.anchorX + "px";
+    mark.style.top = rec.anchorY + "px";
+    const dx = rec.x - rec.anchorX;
+    const adx = Math.abs(dx);
+    const range = touchRangePx();
+    const offPx = adx <= TOUCH_DEAD_PX ? 0 : Math.sign(dx) * Math.min(adx - TOUCH_DEAD_PX, range);
+    const dot = dragDot(mark);
+    if (dot && dot.style) dot.style.transform = "translateX(" + offPx + "px)";
+    mark.classList.add("on");
   }
 
   function onTouchStart(e) {
@@ -1192,8 +1245,9 @@ const Input = (function () {
     noteInputSource("touch");
     e.preventDefault();
     for (const t of e.changedTouches) {
-      touches.set(t.identifier, { anchorX: t.clientX, x: t.clientX, seq: ++touchSeq });
-      showDragAnchor(t.clientX);
+      touches.set(t.identifier, {
+        anchorX: t.clientX, anchorY: t.clientY, x: t.clientX, seq: ++touchSeq,
+      });
     }
     recomputeTouchSteer();
   }
@@ -1213,7 +1267,6 @@ const Input = (function () {
     for (const t of e.changedTouches) {
       touches.delete(t.identifier);
     }
-    if (!touches.size) hideDragAnchor();
     recomputeTouchSteer();
   }
 
@@ -1858,6 +1911,9 @@ const Input = (function () {
   function setTouchRange(frac) {
     if (typeof frac === "number" && isFinite(frac)) touchRangeFrac = clamp(frac, 0.06, 0.24);
   }
+  function setTouchSpeedMix(v) {
+    if (typeof v === "number" && isFinite(v)) touchSpeedMix = clamp(v, 0, 1);
+  }
   function setAnalogTrim(src, t) {
     if (!(src in analogTrim)) return;
     if (typeof t === "number" && isFinite(t)) analogTrim[src] = clamp(t, 0.4, 2.2);
@@ -2110,8 +2166,10 @@ const Input = (function () {
     // has no console, so this puts that answer ON SCREEN. Opt-in only:
     // ?inputdebug=1 in the URL, or localStorage apex26.inputDebug = "1".
     try {
-      const want = /[?&]inputdebug=1/.test(location.search) ||
-        localStorage.getItem("apex26.inputDebug") === "1";
+      const want = typeof DevFlags !== "undefined"
+        ? !!DevFlags.get("inputdebug")
+        : (/[?&]inputdebug=1/.test(location.search) ||
+          localStorage.getItem("apex26.inputDebug") === "1");
       if (want) {
         const d = document.createElement("div");
         d.id = "input-debug";
@@ -2295,6 +2353,8 @@ const Input = (function () {
       touchActive,
       touchRangePx: touchRangePx(),
       touchRangeFrac,
+      touchSpeedMix,
+      touchSpeedScale: touchSpeedScale(),
       dragMinCutoff,
       analogTrim: Object.assign({}, analogTrim),
       analogSpeedMix,
@@ -2364,6 +2424,7 @@ const Input = (function () {
     setTiltSmoothing,
     setTiltDeadzone,
     setTouchRange,
+    setTouchSpeedMix,
     setDragSmoothing,
     setAnalogTrim,
     setAnalogSpeedMix,

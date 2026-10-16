@@ -18,13 +18,50 @@ The screen is a canvas (the circuit from above) and a rail with three tabs:
 (this guide, short). Your work autosaves as a draft, so closing the screen or
 the browser loses nothing.
 
+## Choose a workspace
+
+The five mode buttons change the tools in the rail without changing your circuit:
+
+| Mode | Tools |
+|---|---|
+| **DRAW** | Draw a new loop, randomise, track of the day, templates and generated candidates. |
+| **EDIT** | Point/range selection, road shapes, road/span width, reverse, start line and delete. |
+| **ELEVATION** | Point heights, banking, kerbs, berms and road bridges. Select a turn here to bank it. |
+| **SCENERY** | Themes, atmosphere and trackside objects, including water. |
+| **TEST** | Circuit name/country, checks and repairs, speed map, test drive and share-code import. |
+
+Undo, redo and map-view controls stay available across modes. **RANGE** is the
+selection workflow; point numbering and keyboard shortcuts still work.
+
+## Add a road bridge
+
+Open **ELEVATION**, select a control point, then use **ROAD BRIDGES**. Set the
+bridge's total span and rise, then press **ADD BRIDGE AT POINT**. This raises
+the road above the ground with the engine's existing supported bridge deck.
+The list lets you edit the span/rise or remove an individual bridge. Each
+change supports undo and survives drafts, saves, exports and share codes.
+
+Bridge spans cannot overlap, including across the start line. The editor
+refuses a rise that exceeds the stored bridge grade budget. Open **TEST** to
+check slopes, start-line placement and clearance: adding a bridge does not
+by itself guarantee a legal crossing. Decorative footbridges are not included.
+
+## Place water
+
+Open **SCENERY → OBJECTS → WATER**. Choose **WATER** (the original large pond),
+**POND**, **LAKE** or **RIVER**, then choose the point/section, side and roadside
+gap and press **PLACE**. Each kind has its own size and colour. Up to four of
+each water kind fit within the shared sixteen-object circuit budget. Water
+uses the existing scenery surface; the river is a straight, world-axis-aligned
+strip. This palette does not carve riverbeds or create a freehand shoreline.
+
 ## The 60-second start
 
 1. The first time you open it, **RANDOMISE** has already drawn a legal circuit.
-   Press RANDOMISE again for another one, **TRACK OF THE DAY** for the one
+   Open **DRAW** and press RANDOMISE again for another one, **TRACK OF THE DAY** for the one
    everybody gets today, or **START FROM…** to trace a real circuit.
-2. Drag a few white points to make it yours.
-3. Check **5 CHECKS** at the bottom of the rail: green means ready.
+2. Open **EDIT** and drag a few white points to make it yours.
+3. Open **TEST → CHECKS**: green means ready.
 4. **SAVE**, then **RACE** or **TIME TRIAL**.
 
 ## Select several points, then adjust their elevation
@@ -55,16 +92,16 @@ shows height, not slope steepness, over either OUTLINE or LIVE SCENERY.
 **HOW TO** contains expandable task guides and buttons to open each tool.
 On portrait screens, the guide uses the map’s space while it is open.
 
-## 1 SHAPE — the loop
+## EDIT → SHAPE — the loop
 
 | You want to… | Do this |
 |---|---|
 | Select a point | Tap (click) a white point — selecting never moves it. |
-| Select a group (SPAN) | Choose **RANGE**, then tap or drag between points on the map or elevation profile; start/end point numbers also work. The range follows driving order and can cross the start line. Shift-tap, **SELECT END**, and **TURNS** rows also select spans. Switch to **POINT** to drag the selected group. |
+| Select a group (SPAN) | Choose **RANGE**, then tap or drag between points on the map or elevation profile; start/end point numbers also work. The range follows driving order and can cross the start line. Shift-tap, **TURNS** rows also select spans. Switch to **POINT** to drag the selected group. |
 | Move the road | Drag a **selected** point (or drag past a short threshold on mouse). With a SPAN selected, drag any point in the group — the whole stretch moves together. Arrow keys nudge 1 m (10 m with Shift), the whole SPAN when one is selected. **UNDO** restores an accidental move. |
 | Add a point | Tap (click) the road between two points. A circuit holds at most 200 points; at the cap the tap says so and adds nothing. |
 | Remove a point | Double-tap it, press and hold it and choose DELETE, or select it and press **DELETE POINT**. A loop keeps at least 8 points. |
-| Cycle points | **PREV** / **NEXT** in Edit and Elevation, **PREV POINT** / **NEXT POINT** in other modes, Tab, or `[` `]` step through the loop (clears a SPAN); Escape deselects. Enter a point number to jump directly. |
+| Cycle points | **PREV** / **NEXT** in Edit and Elevation, **PREV POINT** / **NEXT POINT** in Test, Tab, or `[` `]` step through the loop (clears a SPAN); Escape deselects. Enter a point number to jump directly. |
 | Draw a new circuit | Pick **DRAW** and draw one closed loop in a single stroke. It closes, smooths and spaces itself, and the start goes on its longest straight. |
 | Look around | Pinch or use the wheel to zoom, drag empty space to pan, **FIT VIEW** to recentre. Pan and zoom never move points. |
 | Turn it around | **REVERSE** runs the circuit the other way; the start line stays put. |
@@ -72,10 +109,10 @@ On portrait screens, the guide uses the map’s space while it is open.
 Every point snaps to a 25 cm grid, which is what keeps a share link short and
 exact.
 
-## 2 CORNERS — stamping shapes
+## EDIT → CORNERS — stamping shapes
 
 Choose **STRAIGHT**, **CORNER**, **HAIRPIN**, **CHICANE** or **S-BEND**. The
-**2 CORNERS** group then shows that shape's settings and names what you are
+**CORNERS** group then shows that shape's settings and names what you are
 about to lay down, for example `CORNER R 60 m × 90° LEFT`:
 
 - **LENGTH m** — a straight's length.
@@ -97,7 +134,7 @@ about to lay down, for example `CORNER R 60 m × 90° LEFT`:
 Then tap the point where the shape should begin: it replaces the road after
 that point and rejoins the loop. **STAMP AT SELECTED POINT** does the same for
 the point you have selected. With a SPAN selected (shift-tap a second point,
-**SELECT END**, or a **TURNS** row), the button reads **REPLACE THE SELECTED
+or a **TURNS** row), the button reads **REPLACE THE SELECTED
 SPAN** and rebuilds exactly that stretch. Not what you wanted? **UNDO**.
 
 ## The start line
@@ -210,27 +247,28 @@ around the loop without moving the track or changing any placed objects. Pine an
 bush clusters allow up to six placements each; marshal shelters and camera towers
 allow four each.
 
-## 4 DETAILS
+## Road tools and circuit details
 
-Name the circuit (24 characters) and set **HALF-WIDTH m**, half the road's
+Name the circuit under **TEST → CIRCUIT DETAILS** (24 characters). Under
+**EDIT → ROAD**, set **HALF-WIDTH m**, half the road's
 width, from 5 to 8 m. **SPAN WIDTH m**, under it, narrows just the stretch
 you have selected (tap a point, shift-tap a second, or tap a row under TURNS)
 down to 5 m, tapering gently in and out (never steeper than 1 m in 20 m);
 step it back up to the half-width and the stretch is full width again. It
 only narrows — the road never gets wider than its half-width — and a circuit
 keeps up to 24 such stretches. They stay on their points when you add, delete
-or stamp elsewhere. Three rows of chips live here too:
+or stamp elsewhere. The other actions have dedicated workspaces:
 
-- **RANDOMISE · TRACK OF THE DAY · START FROM…** — three ways to a new
+- **DRAW → RANDOMISE · TRACK OF THE DAY · START FROM…** — three ways to a new
   circuit. **TRACK OF THE DAY** draws the same circuit for everyone on the
   same day (UTC), so you can race your friends' times on it. **START FROM…**
   opens a card for every shipped circuit; pick one and its real layout becomes
   your design, named `<CIRCUIT> REMIX`, ready to change. Your previous design is
   one UNDO away, and SAVE adds the remix as a new circuit.
-- **REVERSE · START HERE · DELETE POINT · UNDO · REDO · FIT VIEW · SPEED · TEST HERE** —
+- **EDIT → REVERSE · START HERE · DELETE POINT** changes the road; **TEST → SPEED · TEST HERE** checks it. **UNDO · REDO · FIT VIEW** stay above the map.
   **TEST HERE** drives from the selected point (see Test drive). **SPEED** colours the road by how fast a car takes it, yellow (slow) through
   orange and red to purple (flat out); press it again to turn it off.
-- **FAST · TECHNICAL · MIXED** — designed randomise: the designer draws 16
+- **DRAW → FAST · TECHNICAL · MIXED** — designed randomise: the designer draws 16
   circuits, keeps the ones that pass every check, scores them for the style and
   shows the best four as cards (`4.8 km · 14 corners · 2 passing`). **FAST**
   favours long flat-out running and places to overtake; **TECHNICAL** many
@@ -251,7 +289,7 @@ dots mark slope, crest and dip warnings.
   **NEXT** or the point-number field pick a precise point when grips are crowded.
 - **Select several** — choose **RANGE** and drag from a start point to an end
   point on either view, or tap the two endpoints. You can also type the end
-  point number, shift-click, or use **SELECT END**. A range follows driving
+  point number or shift-click. A range follows driving
   order; an end before the start wraps across the start line. **SELECT ALL**
   selects the whole loop; **CLEAR** deselects. Selection never edits the track.
 - **See crowded points** — **FOCUS** centers the map on the selection and zooms
@@ -276,7 +314,7 @@ Every height, bank, kerb or berm edit is one UNDO step.
 
 ## TURNS — every corner, tappable
 
-Under **5 CHECKS**, **TURNS** lists the corners in driving order, for example
+In **EDIT**, **ELEVATION** and **TEST**, **TURNS** lists the corners in driving order, for example
 `T3 · RIGHT 92° · R 45 m · 118 km/h · 140 m`: which way it turns, how far, its
 tightest radius, the slowest speed through it and how long it is. Tap a row
 (or Enter on it) and the designer selects that corner's stretch of road,
@@ -294,7 +332,7 @@ row: `T3 · RIGHT 92° · R 45 m · 118 km/h · 140 m · BANK 6° · 12 m WIDE`.
 Banking reuses the engine's `bankZones`; with **BERMS ON** (the default) the
 outer side of a banked corner grows a grass berm.
 
-## 5 CHECKS and FIX
+## TEST → CHECKS and FIX
 
 The designer builds your circuit with the game's own track engine as you edit,
 and lists what it finds:
@@ -311,7 +349,7 @@ and lists what it finds:
   hill at speed, *Dip* rows where it is squashed into the bottom of one. Many real circuits break one or two; they never block anything
   and FIX ALL leaves them alone.
 - Tap a row to jump to the spot on the canvas.
-- **FIX** on a row repairs that one problem; **FIX ALL** (next to the 5 CHECKS
+- **FIX** on a row repairs that one problem; **FIX ALL** (next to the CHECKS
   label, while a red problem can be repaired) repairs everything it can in one
   go. Each is one UNDO step, so UNDO puts the circuit back exactly.
 - A row with no FIX needs your hands: the message says what to change.
@@ -326,7 +364,7 @@ and lists what it finds:
 
 ## Test drive
 
-Select a point and press **TEST HERE** (the last chip under 4 DETAILS, or in
+Select a point and press **TEST HERE** (under TEST, or in
 the press-and-hold row on the canvas). The designer saves the circuit and drops
 you on that point at a standstill in a **time trial** — your stored weather and
 laps, no race-settings sheet, no rivals. It plays the same pre-race screen as

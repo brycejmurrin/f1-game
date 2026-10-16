@@ -32,6 +32,10 @@ const NativeDownload = (function () {
     return nativeMobile() && !!pluginPair();
   }
 
+  function isCancelled(err) {
+    return !!err && (err.name === "AbortError" || /^share cancel(?:ed|led)\.?$/i.test(String(err.message || err)));
+  }
+
   function safeName(name) {
     const raw = String(name || "apex26-download.bin").replace(/[/\\?%*:|"<>]/g, "_");
     return raw === "." || raw === ".." ? "apex26-download.bin" : raw.slice(0, 180) || "apex26-download.bin";
@@ -117,6 +121,6 @@ const NativeDownload = (function () {
 
   try { install(); } catch (e) { /* document absent in Node VM tests */ }
 
-  return { viable, saveBlob, install, safeName };
+  return { viable, saveBlob, install, safeName, isCancelled };
 })();
 Object.freeze(NativeDownload);

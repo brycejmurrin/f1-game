@@ -14,7 +14,10 @@
 #   js/circuits/scenery/<id>.js   -> node tools/track/verify-track.cjs <id>
 #
 # ADVISORY, NEVER BLOCKING: the edit has already happened, this exits 0, and
-# the check's verdict goes to stdout, where the model reads it as context.
+# the check's verdict reaches the model as hookSpecificOutput.additionalContext.
+# Plain PostToolUse stdout goes to the debug log only ("For most events, Claude
+# Code writes stdout to the debug log", https://code.claude.com/docs/en/hooks),
+# so until 2026-10-15 none of this advice was ever read (#2228 research).
 # A failing check is information ("run npm run gen"), not a veto —
 # AGENTS.md §Verification 2 says edit everything first, verify once, so a
 # hook that argued with each edit would fight the rule it serves.
@@ -38,6 +41,8 @@ REL="${FILE#"$ROOT"/}"
 cd "$ROOT" || exit 0
 
 say() { printf '[post-edit] %s\n' "$*"; }
+
+checks() {
 
 # Any js/ file: does it still parse? (folded in from post-edit-check.sh,
 # 2026-09-22 — the two hooks landed in parallel sessions; this one's advisory
@@ -94,4 +99,13 @@ case "$REL" in
     if [ $RC -eq 0 ]; then say "verify-track $ID: OK ($(printf '%s' "$OUT" | tail -n 1))"
     else say "verify-track $ID FAILED (exit $RC) — the circuit no longer builds headlessly:"; printf '%s\n' "$OUT" | tail -n 12; fi ;;
 esac
+}
+
+# One JSON object on stdout, or nothing (a plain line would be read as text).
+ADVICE=$(checks)
+[ -n "$ADVICE" ] && ADVICE="$ADVICE" python3 -c '
+import json, os
+print(json.dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse",
+                  "additionalContext": os.environ["ADVICE"][:9500]}}))
+'
 exit 0
