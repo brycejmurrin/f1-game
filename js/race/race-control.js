@@ -167,7 +167,7 @@ const RaceControl = (function () {
   // (stuck, rescued) is not classified either — it was paid P2 at half
   // distance. c.lap is the lap a car is ON, so a retirement completed lap - 1
   // and a runner completes lap at its flag. With no finisher (the only human
-  // retired) the leader on the road is the reference. Sets c.classified for
+  // retired) use the leader still running, or the non-DSQ retired leader if none remain. Sets c.classified for
   // every car (SeasonCal.award, career settlement, the sheet's NC); the
   // unclassified — runners, retirements and flagged finishers a lap or more
   // short alike (a finisher missing from `order` had finPos 0) — follow by
@@ -175,7 +175,7 @@ const RaceControl = (function () {
   function classify(cars, fin, run, out) {
     const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
     const done = (c) => (c.retired ? (c.lap || 0) - 1 : lapsAt(c) - 1);
-    const ref = fin.length ? fin : run;
+    const ref = fin.length ? fin : run.length ? run : out.filter((c) => !c.dsq);
     const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
     const cut = Math.floor(0.9 * winDone);
     for (const c of cars) c.classified = !c.dsq && (winDone > 0 ? done(c) >= cut : !c.retired);
@@ -186,13 +186,14 @@ const RaceControl = (function () {
   }
 
   // A RACE THAT NEVER SAW THE FLAG (the only human retired, or the time cap):
-  // `{ laps, of }` — laps the leader completed of the scheduled distance — for
+  // `{ laps, of }` — laps the leader completed (non-DSQ if all retired) of the scheduled distance — for
   // the shortened-race points scale (SeasonCal.payTable); null once any car
   // took the chequered flag, which is a completed race whatever came after.
   function shortRun(cars, lapsTarget) {
     if (!(lapsTarget > 0) || !cars || cars.some((c) => c.finished && !c.retired)) return null;
     const live = cars.filter((c) => !c.retired);
-    return { laps: live.length ? Math.max(0, Math.max(...live.map((c) => c.lap || 0)) - 1) : 0, of: lapsTarget };
+    const ref = live.length ? live : cars.filter((c) => !c.dsq);
+    return { laps: ref.length ? Math.max(0, Math.max(...ref.map((c) => c.lap || 0)) - 1) : 0, of: lapsTarget };
   }
 
   const LABEL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];

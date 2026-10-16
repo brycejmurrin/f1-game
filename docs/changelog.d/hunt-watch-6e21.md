@@ -1,0 +1,1 @@
+Fixed: WATCH retries position downloads that cover only part of a driver's race, including old cached downloads, while preserving genuine early retirements. Telemetry and replay positions now follow timestamp order and ignore duplicate timestamps instead of producing backwards clocks or dropping valid samples.

@@ -69,9 +69,11 @@ const SPEC = [
   { k: "music", lane: "json", group: "audio", def: true, src: "js/game.js" },
   { k: "volMusic", lane: "json", group: "audio", def: 0.6, src: "js/audio/panel.js" },
   { k: "volSfx", lane: "json", group: "audio", def: 0.2, src: "js/audio/panel.js" },
+  { k: "battleEarcon", lane: "json", group: "audio", def: false, src: "js/race/race-radio.js" },
   { k: "radioVoice", lane: "json", group: "audio", def: false, src: "js/audio/panel.js" },
   { k: "announcer", lane: "json", group: "audio", def: true, src: "js/audio/announcer.js" },
   { k: "volRadio", lane: "json", group: "audio", def: 0.8, src: "js/audio/panel.js" },
+  { k: "radioFocusDb", lane: "json", group: "audio", def: 0, src: "js/audio/panel.js", oneOf: [0, 4, 8, 12] },
   { k: "radioFx", lane: "json", group: "audio", def: 1, src: "js/audio/panel.js" },
   { k: "radioPreset", lane: "json", group: "audio", def: "modern", oneOf: ["modern", "clean", "vintage"], src: "js/audio/panel.js" },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
@@ -406,12 +408,12 @@ function collectTtlb() {
 }
 function applyTtlb(bag) {
   if (!bag || typeof bag !== "object" || Array.isArray(bag)) return { applied: 0, skipped: 0, rejected: 0 };
-  if (!GameStore || !GameStore.ttBoardAdd || !GameStore.ttBoard) {
+  if (!GameStore || !GameStore.ttBoardAddResult || !GameStore.ttBoard) {
     return { applied: 0, skipped: 0, rejected: 0 };
   }
   const tracks = Object.keys(bag);
   if (tracks.length > TTLB_TRACKS_MAX) return { applied: 0, skipped: tracks.length, rejected: tracks.length };
-  let applied = 0, skipped = 0, rejected = 0, lapsSeen = 0;
+  let applied = 0, skipped = 0, rejected = 0, failed = 0, lapsSeen = 0;
   for (const trackId of tracks) {
     if (!TTLB_TRACK_RE.test(trackId)) { skipped++; rejected++; continue; }
     const raw = bag[trackId];
@@ -423,13 +425,20 @@ function applyTtlb(bag) {
       if (lapsSeen >= TTLB_LAPS_MAX) { skipped++; continue; }
       lapsSeen++;
       const k = ttlbEntryKey(lap);
-      if (seen.has(k)) { skipped++; continue; }
-      GameStore.ttBoardAdd(trackId, lap);
-      seen.add(k);
-      applied++;
+      if (seen.has(k)) {
+        if (GameStore.store.failedKeys().some((f) => f.key === "ttlb." + trackId)) {
+          try { if (GameStore.ttBoardSaveResult(trackId).durable) applied++; else failed++; } catch (_) { failed++; }
+        } else skipped++;
+        continue;
+      }
+      try {
+        const result = GameStore.ttBoardAddResult(trackId, lap);
+        if (result.ok) seen.add(k);
+        if (result.durable) applied++; else failed++;
+      } catch (_) { failed++; }
     }
   }
-  return { applied, skipped, rejected };
+  return { applied, skipped, rejected, failed };
 }
 
 // THE GARAGE FILE: a SECOND file, deliberately not part of the settings one: the garage is what
@@ -441,7 +450,7 @@ function applyTtlb(bag) {
 // holds career saves, lap records and OAuth tokens under the same namespace,
 // and nothing outside these five shapes is ever read.
 const GARAGE_FORMAT = "apex26-garage-v1";
-const GARAGE_PREFIXES = ["parts.", "livery.", "setup."];   // + ".custom." under livery
+const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets."];   // + ".custom." under livery
 const GARAGE_SINGLES = ["customTeam", "customLogo", "team", "driver"];
 const GARAGE_EXCLUDED = "career and season saves, lap records, ghosts, settings, tuners, control bindings, accounts";
 // A key is a garage key if it is one of the four singles or begins with a
@@ -527,6 +536,7 @@ function applySettings(file, G) {
   const ttlb = applyTtlb(file.ttlb);
   applied += ttlb.applied;
   skipped += ttlb.skipped;
+  failed += ttlb.failed || 0;
   return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, reason: null };
 }
 // A FILE IS PLAYER INPUT AND THE GARAGE DOES NOT DEFEND ITSELF. isGarageKey
@@ -599,6 +609,18 @@ function cleanLivery(l) {
 // the lot: the player's other work is not the file's fault.
 function garageValue(k, v) {
   if (v === undefined || v === null) return undefined;
+  if (k.indexOf("setupPresets.") === 0) {
+    if (typeof SetupPresets === "undefined" || typeof SetupTune === "undefined" || !isObj(v) || v.v !== 1
+        || !Array.isArray(v.items) || v.items.length > SetupPresets.MAX
+        || Object.keys(v).some((key) => key !== "v" && key !== "items")) return undefined;
+    if (v.items.some((row) => !isObj(row) || typeof row.name !== "string" || row.name.trim().length > 32
+        || !(row.trackId === null || typeof row.trackId === "string" && row.trackId.length <= 128) || !Number.isFinite(row.at)
+        || Object.keys(row).some((key) => !["id", "name", "tune", "trackId", "at"].includes(key))
+        || !isObj(row.tune) || Object.keys(row.tune).length !== SetupTune.FIELDS.length
+        || Object.keys(row.tune).some((field) => !SetupTune.FIELDS.includes(field)))) return undefined;
+    const clean = SetupPresets.normalize(v);
+    return clean.items.length === v.items.length ? clean : undefined;
+  }
   if (k.indexOf("livery.custom.") === 0) {
     if (!Array.isArray(v)) return undefined;
     return v.slice(0, GARAGE_LIVERIES_MAX).map(cleanLivery).filter(Boolean);

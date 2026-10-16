@@ -5,10 +5,12 @@
 
 const SaveMigrate = (function () {
 
-  const CAREER_V = 1;
+  const CAREER_V = 2;
   const CAREER_MIGRATIONS = [
     // v0 -> v1: the first shipped shape. A v0 save predates `v` entirely.
     (c) => { c.season = c.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; },
+    // v1 -> v2: legacy Standard brief and original sponsor. No economy changes.
+    (c) => { c.briefStake = null; c.sponsorPicks = {}; },
   ];
 
   // Guarded: the node VM harnesses load this file without js/core/log.js.
@@ -272,7 +274,7 @@ const SaveMigrate = (function () {
       log("warn", "Career save requires a newer build (v" + version + "); update the game to open it. Save preserved.");
       return null;
     }
-    let v = career.v | 0;
+    let v = Number.isSafeInteger(career.v) && career.v >= 0 ? career.v : 0;
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); log("info", "Career save migrated v" + v + "->v" + (v + 1)); v++; }
     career.v = CAREER_V;
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
@@ -345,7 +347,25 @@ const SaveMigrate = (function () {
       else d.pending = null;
       return d;
     }) : null;
+    const stake = career.briefStake;
+    career.briefStake = stake && Number.isInteger(stake.year) && Number.isInteger(stake.round) && stake.round >= 0
+      ? { year: stake.year, round: stake.round, committed: stake.committed === true, escrow: stake.escrow === 50 ? 50 : 0 } : null;
+    const picks = career.sponsorPicks;
+    career.sponsorPicks = {};
+    if (picks && typeof picks === "object" && !Array.isArray(picks))
+      for (const key of Object.keys(picks).slice(0, 1024))
+        if (/^\d{4,8}:\d{1,3}$/.test(key) && (picks[key] === 0 || picks[key] === 1)) career.sponsorPicks[key] = picks[key];
     career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
+    if (career.myTeamIdentity && typeof CareerTeamIdentity !== "undefined") career.myTeamIdentity = CareerTeamIdentity.sanitize(career.myTeamIdentity);
+    const winter = career.winterReport;
+    if (winter && typeof winter === "object" && Number.isInteger(winter.year)) {
+      const text = (v) => typeof v === "string" ? v.replace(/[\u0000-\u001f]/g, "").slice(0, 120) : "";
+      const stat = (v) => typeof v === "number" && Number.isFinite(v) ? Math.max(-100, Math.min(100, v)) : 0;
+      career.winterReport = { year: winter.year, eraChanged: winter.eraChanged === true, explanation: typeof winter.explanation === "string" ? winter.explanation.slice(0, 500) : "", carBuildsChanged: winter.carBuildsChanged === true,
+        team: winter.team && typeof winter.team === "object" ? { id: text(winter.team.id), before: stat(winter.team.before), after: stat(winter.team.after) } : null,
+        drivers: rows(winter.drivers).slice(0, 2).map((d) => { const axes = {}; for (const key of ["pace", "craft", "awareness", "consistency", "experience"]) { const a = d.axes && d.axes[key] || {}; const before = stat(a.before), after = stat(a.after); axes[key] = { before, after, delta: after - before }; } return { code: text(d.code), name: text(d.name), player: d.player === true, axes }; }),
+        teams: rows(winter.teams).slice(0, 3).map((t) => { const before = stat(t.before), after = stat(t.after); return { id: text(t.id), name: text(t.name), before, after, delta: after - before, rankBefore: Math.max(1, Math.min(30, t.rankBefore | 0)), rankAfter: Math.max(1, Math.min(30, t.rankAfter | 0)) }; }) };
+    } else delete career.winterReport;
     return career;
   }
 

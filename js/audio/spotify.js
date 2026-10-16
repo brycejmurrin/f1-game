@@ -104,6 +104,7 @@ window.SpotifyMusic = (function () {
   // requests that already passed through fetch before sign-out.
   let sessionGen = 0;
   let searchT = null;
+  let searchRevision = 0;
   const commandTimers = new Set();
 
   /* ---------------- storage (GameStore's raw lane) ----------------
@@ -895,8 +896,9 @@ window.SpotifyMusic = (function () {
     devVol = v;
     putDeviceVolume(v);
   }
-  function searchPlaylists(q) {
+  function searchPlaylists(q, revision) {
     const gen = sessionGen;
+    const queryRevision = revision == null ? ++searchRevision : revision;
     const term = (q || "").trim();
     if (!term) { results = []; render(); return Promise.resolve([]); }
     return api("/search?type=playlist&limit=10&q=" + encodeURIComponent(term)).then((r) => {
@@ -909,7 +911,7 @@ window.SpotifyMusic = (function () {
           by: (p.owner && p.owner.display_name) || "" }));
       }, () => []);
     }).then((rs) => {
-      if (gen !== sessionGen) return [];
+      if (gen !== sessionGen || queryRevision !== searchRevision) return [];
       results = rs || []; render(); return results;
     });
   }
@@ -929,6 +931,7 @@ window.SpotifyMusic = (function () {
   }
 
   const BACKEND = {
+    prev,
     start() {
       if (!BACKEND.active()) return;
       if (!paused) return;                     // already playing: no-op
@@ -1136,7 +1139,7 @@ window.SpotifyMusic = (function () {
     // stored token outlives its app by an hour, so without this a corrected
     // Client ID (a typo, or the secret pasted by mistake) stays broken until
     // DISCONNECT is pressed, with nothing on screen saying why.
-    if (v !== clientId()) { clearToken(); teardown(); }
+    if (v !== clientId()) endSession();
     lsSet(K_ID, v);
     setStatus("configured", "Client ID saved. Press CONNECT to sign in to Spotify.");
     return v;
@@ -1156,9 +1159,27 @@ window.SpotifyMusic = (function () {
         "Could not renew the Spotify session. Check your connection and try again.") : beginAuth()));
   }
 
-  function disconnect() {
+  // Sign-out must clear credentials synchronously. Send the outgoing pause
+  // first with a snapshot, without api()'s deferred token lookup/401 refresh:
+  // its completion must never act on a replacement session.
+  function endSession() {
+    const t = readToken();
+    if (mode() === "remote" && inUse() && BACKEND.active() && t) {
+      const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+      const done = () => { if (timer !== null) clearTimeout(timer); };
+      try {
+        const opts = { method: "PUT", headers: { Authorization: "Bearer " + t.access_token } };
+        if (ac) opts.signal = ac.signal;
+        Promise.resolve(fetch(API + "/me/player/pause" + remoteQuery(), opts)).then(done, done);
+      } catch (e) { done(); /* sign-out still releases the local session */ }
+    }
     clearToken();
     teardown();
+  }
+
+  function disconnect() {
+    endSession();
     setStatus(available() ? "configured" : "off",
       available() ? "Signed out of Spotify on this device." : copyOff());
   }
@@ -1216,8 +1237,31 @@ window.SpotifyMusic = (function () {
     const live = BACKEND.active();
     const img = el("sp-art");
     if (img) {
-      if (art && img.getAttribute("src") !== art) img.setAttribute("src", art);
-      img.hidden = !art;
+      const current = img.dataset.apexArt || "";
+      if (current !== (art || "")) {
+        const next = art || "";
+        img.dataset.apexArt = next;
+        img.dataset.apexArtFailed = "";
+        img.onerror = next ? () => {
+          // Album art URLs are short-lived CDN links. Hide a failed image and
+          // leave the panel's neutral swatch visible instead of showing a
+          // broken-image glyph. The token prevents a late failure from hiding
+          // newer artwork.
+          if (img.dataset.apexArt === next) {
+            img.dataset.apexArtFailed = next;
+            img.hidden = true;
+          }
+        } : null;
+        if (next) {
+          img.setAttribute("src", next);
+          img.hidden = false;
+        } else {
+          img.removeAttribute("src");
+          img.hidden = true;
+        }
+      } else {
+        img.hidden = !art || img.dataset.apexArtFailed === art;
+      }
     }
     txt("sp-title", title || (live ? "Nothing playing" : "Not connected"));
     txt("sp-artist", artist || "");
@@ -1366,12 +1410,14 @@ window.SpotifyMusic = (function () {
     });
     on("sp-search", "input", (e) => {
       const q = e.target.value;
-      if (searchT !== null) clearTimeout(searchT);
+      const revision = ++searchRevision;
+      if (searchT !== null) { clearTimeout(searchT); searchT = null; }
+      if (!q.trim()) { results = []; render(); return; }
       // Debounced: one request per pause in typing, not per keystroke.
       const gen = sessionGen;
       searchT = setTimeout(() => {
         searchT = null;
-        if (gen === sessionGen) searchPlaylists(q);
+        if (gen === sessionGen && revision === searchRevision) searchPlaylists(q, revision);
       }, 350);
     });
     on("as-sp-playlist", "change", (e) => {

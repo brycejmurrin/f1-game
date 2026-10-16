@@ -1035,7 +1035,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 // Shared neutral fallback for a human car with no resolved setup. Frozen and
 // module-scope so updateCar's per-car binding never allocates.
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
-let lastFrame = 0, raceMessageHistory = null, controllerProfileUi = null;
+let lastFrame = 0, raceMessageHistory = null, controllerProfileUi = null, raceMixUi = null;
 let announceT = 0, radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
 let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race welcome; same inert() deal
 // "box" is the engineer's PIT CALL and nothing else (js/race/engineer.js): an
@@ -1713,7 +1713,13 @@ function makeCars() {
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
-    const factoryParts = Parts.resolveSetup((Career.inCareer() && Career.aiSetup && Career.aiSetup(team)) || Parts.getFactorySetup(team), team);
+    const worksParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
+    const aiSetup = Career.inCareer() && Career.aiSetup && Career.aiSetup(team);
+    const factoryParts = aiSetup ? Parts.resolveSetup(aiSetup, team) : worksParts;
+    // Aero and ERS already feed dedicated channels below. Credit only the other
+    // catalog gains against the current legal works build, without tdev or RNG.
+    const catalogPace = aiSetup ? buildPace(Parts.resolveSetup({ ...factoryParts.setup,
+      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts) : 1;
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
@@ -1769,7 +1775,7 @@ function makeCars() {
         // development rides along in the same number the tier always contributed,
         // so the per-car update below is unchanged in shape. paceMult() is exactly
         // 1 outside career, making GP/TT bit-identical.
-        tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),
+        tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : isP ? 1 : catalogPace),
         // Tread class for gripMult(c); null on an AI car means "fits the right tyre" (wear off; a pit plan gets its set's tread in applyCompound).
         tread: (isP || mate) ? (resolvedParts.options.tyres.wetTread || 0) : null,
         // The fitted catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md
@@ -1923,7 +1929,7 @@ function redFlagRestart() {
     const rh = DriverRatings.hash32(simSeed() + ":restart:" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (rh & 0xffff) / 65536);
     c.launchOn = !c.human;
-    c.jumpStartFined = false; c.penaltyWhy = null;
+    c.jumpStartFined = false;   // another launch can earn a fine; existing same-race penalties and reasons survive
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   seedPlayerPose();
@@ -2903,6 +2909,7 @@ function entrySettings() {
     season ? _seasonEntryIds.get(season) : null, season && season.round,
     season && season.stage, SeasonCal.quali()]);
 }
+const _customTrackStarts = new WeakSet();
 function startRace() {
   // TopModal mirrors hidden→close via MutationObserver (next task). Sync-close
   // so #loading is not trapped under :modal for the rest of this long task.
@@ -2925,7 +2932,11 @@ function startRace() {
   // Menu buttons fire and forget. Observe rejection on a separate branch so
   // those callers do not raise an unhandledrejection overlay; an awaiting agent
   // still receives the original rejecting promise and its original error.
-  request.then((r) => { if (r !== false) CustomTracks.afterStart(); }, (e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));   // afterStart: a designer test drive's restarts go back to its point
+  if (!_customTrackStarts.has(request)) {
+    _customTrackStarts.add(request);
+    request.outcome.then((r) => { if (r.kind === "committed" && sessionEntry.owns(r)) CustomTracks.afterStart(); });
+  }
+  request.catch((e) => Log.debug("game", "startRace rejected (handled by onFail): " + (e && e.message || e)));   // afterStart: a designer test drive's restarts go back to its point
   return request;
 }
 
@@ -3680,7 +3691,9 @@ _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove th
 // panels further down: CustomTeam.create() takes spMeshBust as a value, so
 // the module has to exist by then.
 const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps,
-  teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render });
+  teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render,
+  previewDecalMesh: (team) => { const decal = teamDecalState(team, true), liv = resolveLivery(team);
+    return getCarDecalMesh(decal.val, decal.parts, !!carDraw.modelBuf, team.id, liv.finShape, liv.spineHeight); } });
 const { resetSetupCam, setSetupCamPanel, spMeshBust } = setupCam;
 // The garage pre-built while the menu idles (js/garage/prebuild.js); `timed` measures tap -> first garage frame.
 const garagePre = GaragePrebuild.create(G, { gate: _menuGate, setupCam, menuIdle, menuSlice,
@@ -8894,7 +8907,9 @@ SettingsNav.onEnter((page) => {
   if (page === "controls" && !controllerProfileUi && typeof ControllerProfileControls !== "undefined" && Input.controllerProfile) {
     controllerProfileUi = ControllerProfileControls.create({ host: $("pm-panel-controls"), input: Input, afterReset: () => { if (keyBinds) keyBinds.render(); } });
   }
+  if (page === "audio" && !raceMixUi && typeof RaceMixControls !== "undefined") raceMixUi = RaceMixControls.create(G, $("audioset"));
 });
+SettingsNav.onLeave((page) => { if (page === "audio" && raceMixUi) raceMixUi.stop(); });
 // ── SETTINGS sub-menu ── separates preferences from pause actions;
 // every tuning + toggle control lives on this page. Opening it hides the pause
 // menu (one panel at a time); BACK (or resume) returns to it.

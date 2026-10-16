@@ -247,6 +247,7 @@
     LAZY_AUDIO: [
     "js/audio/signal.js",
     "js/audio/soundtrack.js",
+    "js/audio/race-mix-audition.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
@@ -257,6 +258,7 @@
     "js/audio/crowd.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
+    "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
@@ -295,6 +297,14 @@
     [
       "js/audio/voice-pack.js",
       "js/audio/radio-voice.js"
+    ],
+    [
+      "js/audio/battle-earcon.js",
+      "js/audio/radio-voice.js"
+    ],
+    [
+      "js/audio/battle-earcon.js",
+      "js/audio/panel.js"
     ],
     [
       "js/audio/radio-voice.js",
@@ -523,6 +533,7 @@
     "js/editor/elev-presets.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
+    "js/editor/followup-tools.js",
     "js/editor/scenery-panel.js",
     "js/editor/bridge-panel.js",
     "js/editor/designer.js"
@@ -555,6 +566,10 @@
     [
       "js/editor/shape.js",
       "js/editor/profile.js"
+    ],
+    [
+      "js/editor/followup-tools.js",
+      "js/editor/scenery-panel.js"
     ],
     [
       "js/editor/shape.js",
@@ -602,6 +617,10 @@
     ],
     [
       "js/editor/selection-panel.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/followup-tools.js",
       "js/editor/designer.js"
     ],
     [
@@ -653,9 +672,15 @@
   ],
     LAZY_CAM_EDITOR_EDGES: [],
     LAZY_CAREER_UI: [
+    "js/career/career-planning-ui.js",
     "js/career/career-ui.js"
   ],
-    LAZY_CAREER_UI_EDGES: [],
+    LAZY_CAREER_UI_EDGES: [
+    [
+      "js/career/career-planning-ui.js",
+      "js/career/career-ui.js"
+    ]
+  ],
     LAZY_TRACK_BUILD: [
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",

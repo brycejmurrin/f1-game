@@ -3634,6 +3634,7 @@ const TLX = (function () {
       let _packAsync = true;
       try { _packAsync = localStorage.getItem("apex26.tlxPackAsync") !== "0"; } catch (_) { /* no storage: async */ }
       let _matBindGen = 0;
+      let _matRequested = new Set();
 
       // CSS-box observation is shared; TLX still owns renderer.setSize(),
       // backend limits and post-target allocation.
@@ -4316,12 +4317,16 @@ const TLX = (function () {
           // P4: a token still filling is held back (the procedural look stays bound) and bound once ready; a newer
           // call supersedes the wait, and the never-bound tokens it held are freed instead (WGX parity).
           const gen = ++_matBindGen;
+          _matRequested = new Set(maps ? [maps.albedo, maps.normal] : []);
           const waits = maps ? [maps.albedo, maps.normal].filter((t) => t && t.pending && t.ready).map((t) => t.ready) : [];
           if (waits.length) {
             Promise.all(waits).then(() => {
               const live = (t) => !!(t && !t.pending && !t._freed);
               const a = live(maps.albedo) ? maps.albedo : null, nn = live(maps.normal) ? maps.normal : null;
-              if (gen !== _matBindGen || !a) { for (const t of [a, nn]) if (t) t.dispose(); return; }
+              if (gen !== _matBindGen || !a) {
+                for (const t of new Set([a, nn])) if (t && (gen === _matBindGen || !_matRequested.has(t))) t.dispose();
+                return;
+              }
               bindNow(Object.assign({}, maps, { albedo: a, normal: nn }));
             });
             return;
@@ -4893,6 +4898,7 @@ const TLX = (function () {
           return !!(ownGL || (renderer && renderer.backend && renderer.backend.gl));
         },
         async attachXrSession(session) {
+          const generation = this._xrAttachGeneration = (this._xrAttachGeneration || 0) + 1;
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (!gl) throw new Error("TLX XR needs the WebGL2 backend (apex26.tlxForceGL=1)");
           // Flat boot omits xrCompatible; make the context XR-ready only here
@@ -4900,9 +4906,11 @@ const TLX = (function () {
           if (typeof gl.makeXRCompatible === "function") {
             try { await gl.makeXRCompatible(); } catch (_) { /* already compatible */ }
           }
+          if (generation !== this._xrAttachGeneration) return null;
           if (typeof XRWebGLLayer === "undefined") throw new Error("XRWebGLLayer missing");
           const layer = new XRWebGLLayer(session, gl, { antialias: false, alpha: false });
           await session.updateRenderState({ baseLayer: layer });
+          if (generation !== this._xrAttachGeneration) return null;
           this._xrLayer = layer;
           this._xrSession = session;
           _xrActive = true;
@@ -4930,6 +4938,7 @@ const TLX = (function () {
           return layer;
         },
         detachXrSession() {
+          this._xrAttachGeneration = (this._xrAttachGeneration || 0) + 1;
           this._xrLayer = null;
           this._xrSession = null;
           this._pendingXrEyes = null;

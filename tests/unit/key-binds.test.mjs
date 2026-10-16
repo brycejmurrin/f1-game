@@ -1405,6 +1405,58 @@ test("I-09: a right/middle mouse button neither presses a hold button nor fires 
   assert.equal(taps, 1);
 });
 
+test("analog hold buttons preserve the strongest remaining touch across release paths", () => {
+  for (const axis of ["y", "x"]) for (const releasePath of ["pointerup", "pointercancel", "global", "lostpointercapture"]) {
+    const button = { l: {}, isConnected: true, hidden: false,
+      addEventListener(t, fn) { this.l[t] = fn; }, setPointerCapture() {} };
+    const ctx = vm.createContext({ document: { getElementById: () => button },
+      getComputedStyle: () => ({ display: "block", visibility: "visible" }) });
+    vm.runInContext(read("js/input/hold-buttons.js"), ctx);
+    const api = vm.runInContext("InputHoldButtons", ctx);
+    const resetArgs = [], edges = [], values = [];
+    const hb = api.create({ clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll: (v) => resetArgs.push(v) });
+    hb.wireHold("pedal", (v) => edges.push(v), (v) => values.push(v), { axis, dir: 1 });
+    const event = (pointerId, distance = 0) => ({ pointerId, pointerType: "touch",
+      clientX: 200 - distance, clientY: 200 - distance, preventDefault() {} });
+    const current = () => values.at(-1);
+    button.l.pointerdown(event(1));
+    button.l.pointermove(event(1, 57));
+    assert.equal(current(), 0.5, "single-contact easing is unchanged");
+    button.l.pointerdown(event(2));
+    button.l.pointermove(event(2, 102));
+    assert.equal(current(), 0.5, "a weaker second contact cannot reduce the first");
+    button.l.pointermove(event(2));
+    assert.equal(current(), 1, "the strongest contact wins regardless of event order");
+    const release = (id) => {
+      if (releasePath === "global") hb.holdReleasePointer(id);
+      else {
+        if (releasePath === "lostpointercapture") button.hidden = true;
+        button.l[releasePath](event(id));
+      }
+    };
+    release(2);
+    assert.equal(current(), 0.5, axis + "/" + releasePath + " restores the survivor's travel");
+    assert.deepEqual(edges, [true], "second contact and its release never retrigger a latch");
+    button.l.pointerup(event(2));
+    assert.equal(current(), 0.5, "a duplicate local release after global capture is harmless");
+    release(1);
+    assert.equal(current(), 0);
+    assert.deepEqual(edges, [true, false]);
+    button.hidden = false;
+    button.l.pointerdown(event(3));
+    button.l.pointermove(event(3, 102));
+    hb.holdReleaseAll(true);
+    assert.equal(current(), 0);
+    assert.deepEqual(resetArgs, [true], "release-all preserves the caller's latch policy");
+    button.l.pointermove(event(3));
+    assert.equal(current(), 0, "reset clears both anchors and analog levels");
+    button.l.pointerdown(event(4));
+    assert.equal(current(), 1);
+    button.l.pointerup(event(4));
+    assert.equal(current(), 0, "a new gesture inherits no stale contacts");
+  }
+});
+
 test("deferred stick calibration belongs to the visible Controls request", () => {
   let leave;
   const disk = {};

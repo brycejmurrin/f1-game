@@ -195,9 +195,10 @@ const CarGeometry = (function () {
       let ul = Math.hypot(ux, uy, uz);
       if (ul < 1e-5) { ux = 1; uy = 0; uz = 0; ul = 1; }
       ux = ux / ul * th * 0.5; uy = uy / ul * th * 0.5; uz = uz / ul * th * 0.5;
-      const vx = (dy*uz-dz*uy) * th * 0.5;
-      const vy = (dz*ux-dx*uz) * th * 0.5;
-      const vz = (dx*uy-dy*ux) * th * 0.5;
+      // u already carries the half-thickness; crossing with unit d preserves it.
+      const vx = dy*uz-dz*uy;
+      const vy = dz*ux-dx*uz;
+      const vz = dx*uy-dy*ux;
       const station = (p) => [
         [p[0]-ux-vx,p[1]-uy-vy,p[2]-uz-vz], [p[0]+ux-vx,p[1]+uy-vy,p[2]+uz-vz],
         [p[0]+ux+vx,p[1]+uy+vy,p[2]+uz+vz], [p[0]-ux+vx,p[1]-uy+vy,p[2]-uz+vz],

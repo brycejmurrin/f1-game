@@ -452,7 +452,7 @@ const NetTransport = (function () {
     const EVENT_CRITICAL = {
       go: 1, qgo: 1, start: 1, result: 1, bye: 1,
       armed: 1, left: 1, caution: 1, model: 1,
-      quali: 1, lap: 1, settings: 1, hello: 1, ready: 1,
+      quali: 1, qabort: 1, lap: 1, settings: 1, hello: 1, ready: 1,
     };
     let inbox = [];
     let queuedState = 0;

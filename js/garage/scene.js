@@ -1225,7 +1225,7 @@ function paintBoards(cv, team, liv, info) {
 let lastSpec = null;
 
 const { LIVE, paintLive, paintTrace } = GarageLive;
-let liveTex = null, liveCanvas = null;
+let liveTex = null, liveCanvas = null, liveFail = 0, liveRetryAt = 0;
 const liveMesh = {};
 const LIVE_OPTS = { glow: 0.62 }, FLOOR_DECAL_OPTS = { glow: 0 };
 
@@ -1462,25 +1462,32 @@ function roomKeys(team, liv, info, ctx) {
   const dressId = `${team && team.id}|${(team && team.legend) || ""}|${paint}|${marks}|${logoGen}|${nums}`;
   return { geom, live, dressId, key: `${geom}|${live}|${dressId}|${boardKey(info)}` };
 }
-function uploadLive(team, liv, ctx) {
+function uploadLive(team, liv, ctx, now) {
   if (!_gfx.createTexture || !_gfx.createTexMesh || typeof LiveryTex === "undefined") return;
   try {
     if (!liveCanvas) { liveCanvas = document.createElement("canvas"); liveCanvas.width = liveCanvas.height = LIVE; }
     paintLive(liveCanvas, team, liv, ctx);
     GarageExperience.paintCareer(liveCanvas, ctx);
     if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
+    liveTex = null;
     liveTex = _gfx.createTexture(liveCanvas);
     if (!liveTex || liveTex._phase === 4) throw new Error("live texture upload returned no handle");
     if (!liveMesh.mid) {
       const lg = GarageLive.build(FIXTURES);
       for (const k in lg) if (lg[k].idx.length) liveMesh[k] = _gfx.createTexMesh(lg[k]);
     }
-  } catch (e) { liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
+    liveFail = 0; liveRetryAt = 0;
+  } catch (e) {
+    if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
+    liveFail++; liveRetryAt = now + 1000; liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
 }
 function rebuild(team, liv, info, ctx) {
   const { geom, live, dressId, key } = roomKeys(team, liv, info, ctx);
   const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const uploads = !!(_gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined");
+  if (live !== liveKey) { liveFail = 0; liveRetryAt = 0; }
   if (key === cacheKey && shellMesh &&
+      (liveTex || liveFail >= 3 || now < liveRetryAt || !uploads) &&
       (dressTex || dressFail >= 3 || now < dressRetryAt ||
        !_gfx.createTexture || !_gfx.createTexMesh || typeof LiveryTex === "undefined")) return;
   if (geom !== geomKey || !shellMesh) {
@@ -1525,11 +1532,11 @@ function rebuild(team, liv, info, ctx) {
     // highlights marks nothing. The crest canvas itself is keyed below.
     lastSpec = null;
     geomKey = geom;
-    liveKey = "";
+    liveKey = ""; liveFail = 0; liveRetryAt = 0;
     dressFullKey = "";
   }
-  if (live !== liveKey || !liveTex) {
-    uploadLive(team, liv, ctx);
+  if (uploads && (live !== liveKey || !liveTex) && liveFail < 3 && now >= liveRetryAt) {
+    uploadLive(team, liv, ctx, now);
     liveKey = live;
   }
   if (dressId !== dressIdKey) { dressCanvas = null; dressIdKey = dressId; }
@@ -1875,7 +1882,7 @@ function release() {
   for (const ent of previewMeshes.values()) fm(ent.mesh);
   previewMeshes.clear(); previewHulls.clear();
   dressCanvas = null; liveCanvas = null; lastSpec = null;
-  cacheKey = ""; geomKey = ""; liveKey = ""; dressIdKey = ""; dressFullKey = ""; dressFail = 0; dressRetryAt = 0; traceFail = 0; lastTrace = -1e9;
+  cacheKey = ""; geomKey = ""; liveKey = ""; dressIdKey = ""; dressFullKey = ""; dressFail = 0; dressRetryAt = 0; liveFail = 0; liveRetryAt = 0; traceFail = 0; lastTrace = -1e9;
   _boardInfo = null; _boardInfoKey = "";
   _rigK0 = NaN; _rigK1 = NaN; _rigK2 = NaN; _rig.length = 0; _chase.length = 0;
   return n;

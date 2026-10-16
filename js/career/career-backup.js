@@ -99,6 +99,7 @@ const CareerBackup = (function () {
           // Deep clone so the envelope never holds the store cache object.
           const clone = JSON.parse(JSON.stringify(raw));
           data = migrate(clone) || clone;
+          if (f === "myteam" && typeof CareerTeamIdentity !== "undefined") data.myTeamIdentity = data.myTeamIdentity ? CareerTeamIdentity.sanitize(data.myTeamIdentity) : CareerTeamIdentity.capture(store());
         }
         out.push({ flavour: f, i: i, data: data });
       }
@@ -122,12 +123,9 @@ const CareerBackup = (function () {
     return extras;
   }
 
-  // MY TEAM IDENTITY. A myteam save stores only `team: "custom"`; the team's
-  // name, colours, roster, logo and paint jobs live in GLOBAL garage keys. A
-  // backup restored on a new origin / device without them brought back the
-  // money and seasons under the default "custom" team. These ride along as an
-  // optional `myTeam` block (store key -> value) whenever a MY TEAM slot has
-  // data. One identity for all three slots — a per-slot snapshot is a follow-up.
+  // Legacy envelopes carried one global MY TEAM block. New exports embed a
+  // sanitized identity in each career; importing legacy blocks adopts them per
+  // destination slot and never rewrites the one-off GP garage identity.
   const IDENTITY_KEYS = Object.freeze(["customTeam", "customLogo", "livery.custom.custom", "livery.custom"]);
   function hasMyTeamData(slots) {
     for (const row of slots || []) if (row && row.data != null && flavourIn(row.flavour) === "myteam") return true;
@@ -160,10 +158,6 @@ const CareerBackup = (function () {
       slots: collectSlots(),
     };
     Object.assign(envelope, optionalExtras());
-    if (hasMyTeamData(envelope.slots)) {
-      const id = collectIdentity();
-      if (Object.keys(id).length) envelope.myTeam = id;
-    }
     return envelope;
   }
 
@@ -295,16 +289,26 @@ const CareerBackup = (function () {
         || (data.v != null && (!Number.isSafeInteger(data.v) || data.v < 0 || data.v > SaveMigrate.CAREER_V))) return { ok: false, reason: "unsupported-version" };
       envelope.slots.push({ flavour: target.flavour, i: target.i, data });
     }
-    // A foreign calendar must never be silently shortened by SeasonCal.load.
+    // Career calendars use calIds; standalone calendars use config.trackIds.
+    // Neither may silently lose circuits when the restored save is opened.
+    const careerSeason = clone.career && clone.career.season;
+    const knownCalendar = (ids) => Array.isArray(ids) && ids.length > 0 && ids.length <= 64
+      && new Set(ids).size === ids.length && typeof Tracks !== "undefined" && Array.isArray(Tracks.LIST)
+      && ids.every((id) => typeof id === "string" && Tracks.LIST.some((t) => t.id === id));
+    if (careerSeason && careerSeason.calIds != null && !knownCalendar(careerSeason.calIds)) {
+      return { ok: false, reason: "unsupported-calendar" };
+    }
     for (const season of [clone.career && clone.career.season, clone.season]) {
       if (!season) continue;
       if (!isObj(season)) return { ok: false, reason: "season-not-object" };
       const ids = season.config && season.config.trackIds;
-      if (ids != null && (!Array.isArray(ids) || !ids.length || ids.length > 64 || new Set(ids).size !== ids.length
-        || typeof Tracks === "undefined" || !Array.isArray(Tracks.LIST)
-        || ids.some((id) => !Tracks.LIST.some((t) => t.id === id)))) return { ok: false, reason: "unsupported-calendar" };
+      if (ids != null && !knownCalendar(ids)) return { ok: false, reason: "unsupported-calendar" };
     }
-    if (clone.season != null) {
+    // Older recovery exporters included G.season even during career play,
+    // where it aliases career.season. Keep that snapshot only in its career
+    // slot; restoring it as a standalone championship would mix the two modes.
+    const careerAlias = isObj(careerSeason) && sameSeasonValue(careerSeason, clone.season);
+    if (clone.season != null && !careerAlias) {
       const keys = ["round", "pts", "teamPts", "driverCodes", "finishes", "roundPts", "config", "stage", "lastFl", "seed", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"];
       if (Object.keys(clone.season).some((k) => !keys.includes(k))) return { ok: false, reason: "unsupported-season" };
       if (clone.season.round != null && (!Number.isInteger(clone.season.round) || clone.season.round < 0 || clone.season.round > 200)) return { ok: false, reason: "season-invalid" };
@@ -343,7 +347,8 @@ const CareerBackup = (function () {
   }
   function num(v, lo, hi) { return typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi ? v : null; }
   // A Daily class key is Ghost.contextKey(): JSON of the car/tune config, never an
-  // ID (#2165). Bounded and never a prototype name; the 8-per-day cap still holds.
+  // ID (#2165). Keys are bounded and never prototype names; the whole history
+  // uses the file-byte budget, since native play and merges can add classes.
   const CLASS_KEY_MAX = 4096;
   function classKey(k) {
     return k.length > 0 && k.length <= CLASS_KEY_MAX && k !== "__proto__" && k !== "constructor" && k !== "prototype";
@@ -450,8 +455,7 @@ const CareerBackup = (function () {
     if (own(e, "best")) out.best = cleanBest(e.best);
     if (own(e, "laps")) out.laps = num(e.laps, 0, 1e6) | 0;
     if (!nested && isObj(e.classes)) {
-      if (Object.keys(e.classes).filter(classKey).length > 8) throw new Error("too many daily classes");
-      out.classes = idMap(e.classes, 8, (v) => cleanDayEntry(v, true), classKey);
+      out.classes = idMap(e.classes, Infinity, (v) => cleanDayEntry(v, true), classKey);
     }
     return out;
   }
@@ -462,7 +466,6 @@ const CareerBackup = (function () {
       const src = plain(r.days);
       const days = {};
       const dates = Object.keys(src).filter((k) => DAY_RE.test(k)).sort();
-      if (dates.length > 120) throw new Error("too many daily days");
       for (const day of dates) {
         const e = cleanDayEntry(src[day], false);
         if (e) days[day] = e;
@@ -505,8 +508,8 @@ const CareerBackup = (function () {
   function cleanExtra(name, raw) {
     try {
       const incoming = new Blob([JSON.stringify(raw)]).size;
-      // Daily context keys contain whole car/tune configs: 61 days × eight
-      // classes legitimately exceeds 256 KiB. Only schema-checked Daily data
+      // Daily context keys contain whole car/tune configs; native histories
+      // legitimately exceed 256 KiB. Only schema-checked Daily data
       // gets the file budget; discarded junk retains the original extra cap.
       const limit = name === "daily" ? MAX_BYTES : EXTRA_MAX;
       if (incoming > limit) return { ok: false, reason: name + "-too-large" };
@@ -761,15 +764,7 @@ const CareerBackup = (function () {
       if (envelope.daily != null) extras.push("Daily challenges: combine best laps and streaks");
       if (envelope.records != null) extras.push("Records: add missing entries");
     }
-    if (o.includeExtras !== false && slots.some(r => r.flavour === "myteam") && isObj(envelope.myTeam)) {
-      const labels = { customTeam: "team name, colours and roster", customLogo: "team logo",
-        "livery.custom.custom": "custom paint jobs", "livery.custom": "selected paint job" };
-      const keys = IDENTITY_KEYS.filter(k => {
-        const v = identityValue(k, envelope.myTeam[k]);
-        return v !== undefined && !(Array.isArray(v) && !v.length);
-      });
-      if (keys.length) extras.push("Shared MY TEAM identity: replace " + keys.map(k => labels[k]).join("; ") + " for all MY TEAM slots");
-    }
+    if (slots.some(r => r.flavour === "myteam")) extras.push("MY TEAM identity: restore separately with each imported career; other careers and one-off GP appearance are preserved");
     return { ok: true, slots, extras };
   }
 
@@ -829,7 +824,25 @@ const CareerBackup = (function () {
         if (expected[id] !== now) return { ok: false, reason: "conflict", slot: id };
       }
       if (liveConflict(f, idx)) return { ok: false, reason: "conflict", slot: id };
-      plan.push({ f: f, i: idx, data: row.data, id: id });
+      const data = JSON.parse(JSON.stringify(row.data));
+      if (f === "myteam" && typeof CareerTeamIdentity !== "undefined") data.myTeamIdentity = CareerTeamIdentity.sanitize(data.myTeamIdentity || envelope.myTeam || CareerTeamIdentity.capture(s));
+      plan.push({ f: f, i: idx, data, id: id });
+    }
+
+    // Two valid histories can exceed the byte budget when combined. Check the
+    // cleaned local input AND the union before any slot/selection/extra writes;
+    // raw local prototype keys must not disappear inside Object.assign first.
+    let mergedDaily = null;
+    if (s && typeof s.write === "function" && envelope.daily != null
+        && o.includeExtras !== false && o.includeProgressExtras !== false) {
+      const rawLocal = s.get("daily.v1", null);
+      const local = cleanExtra("daily", isObj(rawLocal) ? rawLocal : {});
+      if (!local.ok) return local;
+      const incoming = cleanExtra("daily", envelope.daily);
+      if (!incoming.ok) return incoming;
+      const merged = cleanExtra("daily", mergeDaily(local.value, incoming.value));
+      if (!merged.ok) return merged;
+      mergedDaily = merged.value;
     }
 
     for (let p = 0; p < plan.length; p++) {
@@ -875,29 +888,11 @@ const CareerBackup = (function () {
       }
       const badges = extra("badges");
       if (badges) recordWrite("badges", s.write("badges", mergeBadges(s.get("badges", null), badges)));
-      const daily = extra("daily");
-      if (daily) recordWrite("daily.v1", s.write("daily.v1", mergeDaily(s.get("daily.v1", null), daily)));
+      if (mergedDaily && progressExtras) recordWrite("daily.v1", s.write("daily.v1", mergedDaily));
       const records = extra("records");
       if (records) recordWrite("records", s.write("records", mergeRecords(s.get("records", null), records)));
-      // Identity only with a MY TEAM slot actually written; a key the backup
-      // lacks (or carries malformed) leaves the local value alone.
-      if (isObj(envelope.myTeam) && o.includeExtras !== false
-          && written.some(function (id) { return id.indexOf("myteam:") === 0; })) {
-        for (const k of IDENTITY_KEYS) {
-          if (!Object.prototype.hasOwnProperty.call(envelope.myTeam, k)) continue;
-          const v = identityValue(k, envelope.myTeam[k]);
-          // An all-garbage livery list cleans to [] — that is not a restore.
-          if (v === undefined || (Array.isArray(v) && !v.length)) continue;
-          const result = recordWrite(k, s.write(k, v));
-          if (result && result.ok !== false) identity.push(k);
-        }
-        // custom-team.js re-syncs Teams.LIST / the logo only on a foreign
-        // change (its own saves sync directly); this restore is one, announced
-        // like the durable mirror's (store.js: foreign + restored).
-        if (typeof s._notify === "function") {
-          for (const k of identity) s._notify({ key: k, foreign: true, clear: false, restored: true });
-        }
-      }
+      // Identity is embedded in each slot above. Global GP garage keys are never replaced by career import.
+
     }
 
     // Recovery restores storage for later deliberate slot selection; load()

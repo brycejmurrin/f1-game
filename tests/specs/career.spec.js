@@ -56,7 +56,7 @@ test.describe.parallel("Career — save", () => {
     await startCareer(page);
     // Driver slot 0 — the two modes keep separate sets of three keys each.
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career.driver.0")));
-    expect(saved.v).toBe(1);
+    expect(saved.v).toBe(2);   // CAREER_V
     expect(saved.flavour).toBe("driver");
     expect(saved.team).toBe("haas");
     expect(saved.year).toBe(2026);
@@ -92,7 +92,7 @@ test.describe.parallel("Career — save", () => {
     });
     await boot(page);
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career.driver.0")));
-    expect(saved.v).toBe(1);
+    expect(saved.v).toBe(2);   // CAREER_V
     expect(saved.season.pts["williams:0"]).toBe(12);   // remapped onto the stable id
     expect(saved.season.pts.SAI).toBeUndefined();
     expect(Array.isArray(saved.owned)).toBe(true);

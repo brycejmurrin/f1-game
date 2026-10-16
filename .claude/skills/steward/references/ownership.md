@@ -38,7 +38,7 @@ Already own the PR and a push went red: start at step 3, then 4
    `node tools/ci/remote-group.mjs <group>` AFTER the push (rule 4 table), never a local group while Actions is healthy. Commit, then one push
    per green cycle. Never a force-push or rebase; catch up only when GitHub says
    CONFLICTING or a required check is red, with `node tools/ci/sync-pr.mjs
-   <branch>` (merge ship).
+   <branch>` (merge ship; run `node tools/ci/needs-sync.mjs <branch>` first, it must say `conflict` or `stale-red`).
 6. **Keep the PR body live** from `.github/pull_request_template.md`: Goal,
    Plan checklist (tick each item with its evidence the moment it lands, add
    discovered work, one **now:** item — `update_pull_request`, no push needed),

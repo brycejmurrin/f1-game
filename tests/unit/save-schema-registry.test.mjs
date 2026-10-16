@@ -30,6 +30,8 @@ const PREFIX_WRITES = [
 
 /** Files that only write keys already named in SPEC / PREFIX helpers. */
 const PASSTHROUGH_FILES = new Set([
+  "js/career/custom-team.js",   // identitySet/Get relays: keys are customTeam / livery.* below
+  "js/car/custom-liveries.js",   // setIdentityValue relay for livery.* keys
   "js/career/restore-points.js",   // writes the captured slot key back, never a new one
   "js/ui/settings-export.js",
   "js/ui/scale.js",
