@@ -109,6 +109,7 @@ function boot(opts = {}) {
   sb.window = sb;
   // #announce-live's one writer, as in the shell (it loads before hud.js).
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: "js/ui/live-region.js" });
+  vm.runInNewContext(src("js/ui/hud-skin.js"), sb, { filename: "js/ui/hud-skin.js" });
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
   // The OVERTAKE chip converts the allowance to MJ through the real module.
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: "js/race/overtake-mode.js" });

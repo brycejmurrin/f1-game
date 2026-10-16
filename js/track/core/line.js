@@ -149,9 +149,13 @@ const TrackLine = (function () {
     const x = new Float32Array(n), w = new Float32Array(n);
     if (!n || !curv) { track.line = x; track.lineW = w; track.lineCorners = []; return track; }
     const wrapI = (i) => ((i % n) + n) % n;
-    // 1. corner runs (wrap-aware): start the scan at a straight node if there is one.
+    // 1. corner runs (wrap-aware): start the scan at a node the hysteresis cannot be holding
+    //    (|curv| <= K_OFF), so no corner is split at the scan seam. A start that was merely
+    //    below K_ON could sit inside a corner's K_OFF..K_ON band (jeddah node 6, |k| 0.0041,
+    //    with nodes 0-5 above K_ON): the run then began one band late and the line jumped
+    //    0.9 m at node 0 (#2545).
     let start = 0;
-    for (let i = 0; i < n; i++) if (Math.abs(curv[i]) <= K_ON) { start = i; break; }
+    for (let i = 0; i < n; i++) if (Math.abs(curv[i]) <= K_OFF) { start = i; break; }
     const runs = [];
     let cur = null;
     for (let step = 0; step < n; step++) {
@@ -163,6 +167,19 @@ const TrackLine = (function () {
       else if (cur) { runs.push(cur); cur = null; }
     }
     if (cur) runs.push(cur);
+    // A lap with no node at or below K_OFF cannot be cut at a straight: the scan seam sits inside
+    // a run, so a corner (or two same-sign ones closer than MERGE_M) is split across the wrap.
+    // Join the last run to the first, the first shifted one lap, so the pair is one run.
+    if (runs.length > 1) {
+      const f = runs[0], l = runs[runs.length - 1];
+      if (f.sgn === l.sgn && (f.i0 + n - l.i1) * ds < MERGE_M) {
+        for (let g = l.i1 + 1; g < f.i0 + n; g++) l.ks.push(0);
+        l.ks = l.ks.concat(f.ks);
+        l.sumKS += f.sumKS + n * f.sumK; l.sumK += f.sumK; l.kMax = Math.max(l.kMax, f.kMax);
+        l.i1 = f.i1 + n;
+        runs.shift();
+      }
+    }
     // merge same-sign runs separated by less than MERGE_M
     const merged = [];
     for (const r of runs) {

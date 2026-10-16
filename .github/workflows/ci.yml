@@ -157,8 +157,8 @@ on:
   # replaced its pending train.
   pull_request:
     # A DRAFT PR with the `run-ci` label is the FAST tier too (the same
-    # expression, below): guards, the selection plan, node suites, parts
-    # census and driving-model — the verdict a work-in-progress push needs,
+    # expression, below): guards, the selection plan, parts census and
+    # driving-model — the verdict a work-in-progress push needs,
     # minutes after it lands. NOT the `selected` browser legs: that job skips
     # every draft, run-ci or not (#2184), so a draft's browser verdict comes
     # at ready. A draft without run-ci runs nothing but the skip notice. Marking
@@ -332,7 +332,7 @@ jobs:
     timeout-minutes: 2
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'labeled' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci') }}
     steps:
-      - run: echo "No CI on a draft without the run-ci label. Add run-ci for the fast tier (guards, node suites, parts census, driving-model; no selected browser specs until ready), or mark it ready for the full tier."
+      - run: echo "No CI on a draft without the run-ci label. Add run-ci for the fast tier (guards, parts census, driving-model; no node suites or selected browser specs until ready), or mark it ready for the full tier."
   guards-a:
     name: Structural guards (tooling A)
     runs-on: ubuntu-latest
@@ -499,13 +499,20 @@ jobs:
     # never appear — the PR sat BLOCKED with every check green. The job always
     # runs; an unneeded row (matrix.needed=false) skips checkout / npm ci /
     # plan below and reports green in seconds.
-    # ready_for_review on the same head SHA: reuse-draft skips the work; names still report.
     # A PULL REQUEST emits only the needed rows (select's --needed-only), and
     # when none is needed the job skips here (2026-10-15: `CI` is the deploy
     # branch's one required check, so the six names no longer have to report
-    # on a ready PR either). A deploy push and the train keep all six rows:
-    # the Pages reuse check wanted at least one expanded node row.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
+    # on a ready PR either).
+    #
+    # READY PRs, THE NIGHTLY AND DISPATCH ONLY (2026-10-16, Bryce's decisions
+    # D1 and D2 in the CI selection plan, PR #2560 §6). Measured
+    # over 40 h: on drafts these slices cost ~5,660 job-min/day and caught 5
+    # reds, all also run by the PR's first ready run (0 unique); on the train
+    # they caught 0 in 5,297 job-min. So a draft (run-ci or not) and the
+    # Pages call (`concurrency_key` set) skip the job; a merge interaction in
+    # a node slice surfaces at the nightly. With no draft run to reuse, this
+    # job no longer asks the ready_for_review reuse question.
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
     # names, hence contents too.
@@ -582,18 +589,8 @@ jobs:
           # which a depth-1 clone cannot show. Same trade as sweeps-parts.
           fetch-depth: 0
           filter: blob:none
-      # The same reuse question as guards-a (2026-10-15): a step, not a job hop.
-      - name: Was this head already green as a draft?
-        id: reuse
-        if: matrix.needed != 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_EVENT_ACTION: ${{ github.event.action }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-        if: matrix.needed != 'false' && steps.reuse.outputs.reuse != 'true'
+        if: matrix.needed != 'false'
       # WHICH SCRIPTS DOES THIS PR NEED? (2026-09-30) On a pull request the
       # four multi-minute scripts (game-vm-a, game-vm-b, vm-page, node-slow)
       # run only when tools/ci/pick-tests.mjs routes the PR's diff to a group
@@ -613,7 +610,7 @@ jobs:
       # unknown previous tip, a first push, a force push or a nightly run
       # everything, as before.
       - name: Plan the slices for this diff
-        if: matrix.needed != 'false' && steps.reuse.outputs.reuse != 'true'
+        if: matrix.needed != 'false'
         env:
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
@@ -655,10 +652,6 @@ jobs:
           # matrix.needed=false (deploy push / train rows): the name still
           # reports for the Pages reuse check, but no work runs for a
           # slice this diff does not select.
-          if [ "${{ steps.reuse.outputs.reuse }}" = "true" ]; then
-            echo "SKIPPED slice ${{ matrix.slice }} — draft fast-tier already green on this head SHA"
-            exit 0
-          fi
           if [ "${{ matrix.needed }}" = "false" ]; then
             echo "SKIPPED slice ${{ matrix.slice }} — not selected for this diff (needed=false)"
             exit 0
@@ -1374,8 +1367,10 @@ jobs:
     runs-on: ubuntu-latest
     # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
     # Also skipped when unit-plan says this diff does not need the characterization
-    # (ci-verdict treats that skip as a pass).
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '' && needs.select.outputs.driving == 'true') }}
+    # (ci-verdict treats that skip as a pass). Not on the Pages call
+    # (`concurrency_key` set; decision D2 in the CI selection plan,
+    # PR #2560 §6): 0 train catches in 40 h; PRs and the nightly keep it.
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && needs.select.outputs.driving == 'true') }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same

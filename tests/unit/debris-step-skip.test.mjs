@@ -284,3 +284,26 @@ test("settled marble grip applies only on the car's road deck", () => {
   ctx._marbleGripOn = true; ctx.world = null;
   assert.equal(grip(c), 1, "cold/disabled side-world stays inert");
 });
+
+// Live debugger hunt 2026-10-16: the world holds the road ribbon only, so a shard
+// thrown off it free-falls (-12 m/s at tick 95 in the live capture), never
+// sleeps, and is never "far" from a player standing above it. It held a pool slot
+// for good and kept the asleep-skip off. The cull now has a kill plane.
+test("_ageAndCullPool retires a body that fell below the floor, keeps one resting on it", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(`let _floorY = -30; ${extractFn(SRC, "_ageAndCullPool")}; globalThis.cull = _ageAndCullPool;`, ctx);
+  const mk = (y, asleep) => ({ live: true, restT: 0, body: {
+    isSleeping: () => asleep, translation: () => ({ x: 0, y, z: 0 }), enabled: true,
+    setEnabled(v) { this.enabled = v; } } });
+  const resting = mk(0.1, false), falling = mk(-31.5, false);
+  const pool = [resting, falling];
+  ctx.cull(pool, 1 / 60, 0, 0, true, 5, 400);
+  assert.equal(resting.live, true, "a piece on the road survives");
+  assert.equal(falling.live, false, "a piece below the floor is retired");
+  assert.equal(falling.body.enabled, false, "and its Rapier body is disabled");
+  // The floor also applies with no player (havePlayer false skipped the position read).
+  const lone = mk(-31.5, false);
+  ctx.cull([lone], 1 / 60, 0, 0, false, 5, 400);
+  assert.equal(lone.live, false, "the kill plane does not depend on a player");
+  assert.match(extractFn(SRC, "buildWorld"), /_floorY = lo - FLOOR_MARGIN_M/, "buildWorld sets the floor from the road mesh");
+});

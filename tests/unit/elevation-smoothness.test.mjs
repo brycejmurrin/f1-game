@@ -25,6 +25,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const manifest = require("../../tools/manifest.cjs");
 
 const MAX_GRADE = 0.055;
+// Per-circuit bake overrides (tools/gen/bake-elevation.mjs GRADE_OVERRIDE): cota's
+// T1 climb is real (raw SRTM +25 m in ~330 m, published 30+ m) and the global
+// 5.5 % cap flattened it to 10.5 m (#2208). Every other circuit keeps the global cap.
+const GRADE_CAP = { cota: 0.08 };
+const capOf = (id) => GRADE_CAP[id] ?? MAX_GRADE;
 const CR_SLOP = 0.005; // Catmull-Rom overshoot between 64-sample posts
 // The fixed Nürburgring knife-edge was 12.8 /km; pin that window only.
 const NURB_KNIFE_JERK = 3.0;
@@ -96,8 +101,15 @@ describe("elevation smoothness (densified centreline)", () => {
         const g = Math.abs(py[(k + 1) % n] - py[k]) / ds;
         if (g > maxG) { maxG = g; atG = k / n; }
       }
-      assert.ok(maxG <= MAX_GRADE + CR_SLOP,
-        `${id}: max grade ${(maxG * 100).toFixed(2)}% at s=${atG.toFixed(4)} exceeds ${(MAX_GRADE + CR_SLOP) * 100}%`);
+      assert.ok(maxG <= capOf(id) + CR_SLOP,
+        `${id}: max grade ${(maxG * 100).toFixed(2)}% at s=${atG.toFixed(4)} exceeds ${(capOf(id) + CR_SLOP) * 100}%`);
+      if (id === "cota") {
+        // The T1 hill: crest within the first tenth of the lap stands >= 25 m over
+        // the lap's low point (was 10.5 m + 11.7 m low = 22 m relief, crest ~10 m).
+        const crest = Math.max(...Array.from({ length: Math.floor(0.1 * n) }, (_, k) => py[k]));
+        const low = Math.min(...py);
+        assert.ok(crest - low >= 25, `cota T1 crest ${(crest - low).toFixed(1)} m over the lap low must be >= 25 m`);
+      }
       if (id === "nurburgring") {
         const relief = Math.max(...py) - Math.min(...py);
         assert.ok(relief >= 45, `nurburgring relief ${relief.toFixed(1)} m must stay ≥ 45 m`);
