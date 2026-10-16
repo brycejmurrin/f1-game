@@ -929,6 +929,15 @@ const Input = (function () {
       kbSeen = true;
       noteInputSource("keyboard");
     }
+    // Native HUD buttons own their activation keys. Let the browser deliver
+    // their click once; releases still clear keys held before focus moved here.
+    const nativeHudActivation = tag === "BUTTON" && active && active.matches &&
+      active.matches("#btn-cam, #pausebtn, #hud-restore") &&
+      (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter");
+    if (nativeHudActivation) {
+      if (!down) { heldKeys.delete(e.code); syncHeldKeys(); }
+      return;
+    }
     /* COMMAND EATS THE KEY-UP, so Command going down is a release-all.
        On macOS the OS does not deliver key-up to an application while Command
        is held: press W, tap Cmd, let go of W, and NO keyup ever arrives. The

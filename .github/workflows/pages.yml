@@ -1,28 +1,39 @@
 name: Deploy to GitHub Pages
 
 on:
-  # THE RELEASE TRAIN (2026-09-10). Not on push. This branch takes 3-131
-  # commits a day (measured 2026-10-14; 140-300 when the train was designed)
-  # from several agents; a deploy per push meant a 14-job gate
-  # and a Pages deployment per commit, gates cancelling each other in bursts,
-  # and the account's 20 job slots spent on re-testing trees that were one
-  # commit apart. The train takes the tip, gates it once, and publishes
-  # exactly that commit. It is started two ways: ci.yml's `poke-train` job
-  # dispatches it when a deploy-branch push's FAST tier (guards, node suites,
-  # census, change-aware selection — the verdict an agent waits for) goes
-  # green. That fast tier runs in ci.yml's no-cancel `ship-fast` group (a
-  # running fast tier finishes; only the newest waiting push stays queued —
-  # see ci.yml's concurrency block). The train itself is unchanged — unique
-  # concurrency_key into ci.yml, and this file's `pages-gate-*` group never
-  # cancels. The cron below is the BACKSTOP.
-  # The cron is not a clock here:
-  # GitHub's scheduler runs this repository's schedules hours late (ci.yml's
-  # 03:17 nightly is created around 08:00 every day), and the old three ticks
-  # an hour arrived ~4.5 times a day (2026-10-14 audit), so one tick an hour
-  # asks for no less than we got. The train RE-ARMS itself instead (the
-  # `rearm` job below): a commit whose fast tier went green while a train ran
-  # was told "NOT POKING" by poke-train and then waited for that cron —
-  # 20 % of commits shipped 18-239 min late. A manual dispatch is "deploy now".
+  # THE RELEASE TRAIN (2026-09-10, on push since 2026-10-16). This branch
+  # takes 3-131 commits a day from several agents; a deploy per push once
+  # meant a 14-job gate and a Pages deployment per commit, gates cancelling
+  # each other in bursts. The train takes the tip, gates it once, and
+  # publishes exactly that commit. Until 2026-10-16 it was started by ci.yml's
+  # `poke-train` job after a deploy-branch push's fast tier went green, by its
+  # own `rearm` job, and by the cron; the push itself starts it now (below),
+  # the single-flight group coalesces a burst, and the cron is the backstop
+  # for prose-only pushes and lost events (GitHub's scheduler runs this
+  # repository's schedules hours late). A manual dispatch is "deploy now".
+  # ON PUSH (2026-10-16, the CI/CD review #2333 finding 3). The ship-push
+  # fast tier in ci.yml reached 38 % of merges (184 pushes a day, 112 replaced
+  # while pending in `ship-fast`, 70 completed) and cost 5,587 job-minutes a
+  # day for verdicts the train repeated; poke-train only pokes from a run that
+  # completed, so most merges waited for this cron. A push now starts the
+  # train directly: the workflow-level `pages-train-<ref>` group keeps one
+  # running and ONE pending run, and a newer push replaces the pending one
+  # (GitHub's default `queue: single`; `queue: max` would gate every
+  # intermediate commit, which is the cost being removed), so a burst costs
+  # one gate per gate length and the train always takes the newest tip.
+  # The same prose paths ci.yml ignored start no train; the cron ships them.
+  # `verdict` still refuses any ref but the deploy branch and diffs the gate
+  # against the LIVE commit, never the push's previous tip (unpublished and
+  # possibly ungated, it is not a base).
+  push:
+    branches:
+      - claude/f1-game-project-26h3ng
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".claude/**"
+      - ".cursor/**"
+      - ".codex/**"
   schedule:
     - cron: "41 * * * *"
   workflow_dispatch:
@@ -45,8 +56,9 @@ permissions:
 # run occupies runners at a time on this branch (plus at most one pending
 # replacement). cancel-in-progress stays false: never kill a live publish or
 # gate mid-flight. Job-level pages-gate / pages groups remain as belt-and-
-# braces for the ci and deploy jobs. poke-train must not dispatch when tip
-# CI is pending/failed (see ci.yml).
+# braces for the ci and deploy jobs. A push to the deploy branch queues here
+# too (2026-10-16): one running, one pending, the newest push replaces the
+# pending one.
 concurrency:
   group: pages-train-${{ github.ref }}
   cancel-in-progress: false
@@ -104,7 +116,6 @@ jobs:
       reuse: ${{ steps.v.outputs.reuse }}
       source: ${{ steps.v.outputs.source }}
       run: ${{ steps.v.outputs.run }}
-      fast_run: ${{ steps.v.outputs.fast_run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -176,15 +187,14 @@ jobs:
     # failed the full gate on that tree — see pages-reuse-verdict.sh).
     if: needs.verdict.outputs.nothing_new != 'true' && needs.verdict.outputs.reuse != 'true'
     # A CALLED workflow may not request more than its caller passes, and the
-    # check happens at startup for every job, skipped or not. ci.yml's
-    # `poke-train` job asks for actions:write (it never runs on a Pages call,
-    # but it is declared), so this call must grant it or the whole run dies
-    # with `startup_failure` before the verdict job exists — run 2241, the
-    # first poked train, 2026-09-10. Nothing here needs pages/id-token; those
+    # check happens at startup for every declared job, skipped or not. ci.yml's
+    # jobs ask for contents: read and actions: read (the fast-tier reuse and
+    # the run-listing steps); poke-train, the one job that needed actions:
+    # write, is gone (2026-10-16). Nothing here needs pages/id-token; those
     # stay with the deploy job's own token.
     permissions:
       contents: read
-      actions: write
+      actions: read
     uses: ./.github/workflows/ci.yml
     with:
       # The live commit, when it is an ancestor of this tip: the sweeps and
@@ -195,11 +205,6 @@ jobs:
       # group that matters is the one on this job. It also tells ci.yml this
       # is the deploy gate (full tier, never the fast one).
       concurrency_key: pages-${{ github.run_id }}
-      # The deploy push's fast tier already passed the tree-only jobs on this
-      # exact tree (verdict looked it up): the gate runs smoke + sweeps +
-      # selection + the parts census (base-diffed, not tree-only) and reuses
-      # the rest — see ci.yml's `fast_tier_run` input.
-      fast_tier_run: ${{ needs.verdict.outputs.fast_run }}
     # ONE TRAIN AT A TIME (rule 1 above). One group per branch, no cancel: a
     # running gate finishes, the next tick waits, a later tick replaces the
     # waiting one. A dispatch shares the group and queues the same way.
@@ -439,43 +444,3 @@ jobs:
               "" \
               "Opened automatically by pages.yml verify-live.")" \
             --label ci || echo "::warning::could not open the issue (label missing or token scope); the failure above still stands"
-
-  # RE-ARM THE TRAIN (2026-10-14, Actions audit T3). poke-train is
-  # single-flight: a fast tier that goes green while a train runs is told
-  # "NOT POKING", and before this job nothing poked again until the cron. Last
-  # job of every run, whatever happened above: when the branch tip moved past
-  # the commit THIS run took, the tip's fast tier concluded success, and no
-  # OTHER pages.yml run is queued or running (the same listing poke-train
-  # reads), dispatch one train for the tip. Never on this run's own sha, so a
-  # red gate does not loop; any API doubt is "no" — a second dispatch would
-  # replace a pending train (one pending run per concurrency group,
-  # https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
-  # A GITHUB_TOKEN dispatch does start a run
-  # (https://docs.github.com/en/actions/concepts/security/github_token); it
-  # queues behind this run in `pages-train-*`. tools/ci/pages-train.mjs.
-  rearm:
-    name: Re-arm the train for a newer green tip
-    needs: [verdict, ci, publishable, deploy, verify-live]
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          sparse-checkout: tools/ci
-      - name: Did the tip move on, green, with no train waiting?
-        id: r
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node tools/ci/pages-train.mjs rearm "$GITHUB_SHA" | tee -a "$GITHUB_STEP_SUMMARY" >> "$GITHUB_OUTPUT"
-      - name: Dispatch pages.yml on the deploy branch
-        if: steps.r.outputs.rearm == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$DEPLOY_BRANCH"
-          echo "Re-armed pages.yml on \`$DEPLOY_BRANCH\` after \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"

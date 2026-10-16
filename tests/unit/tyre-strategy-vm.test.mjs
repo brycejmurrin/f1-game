@@ -299,3 +299,90 @@ test("with wear on an AI runs on the tread it is fitted; with no plan it keeps t
   G.tyres.fit(fixed, G.tyres.classRecord("soft"));
   assert.equal(fixed.tread, null, "an AI with no strategy keeps tread == null (the full-wet column)");
 });
+
+
+test("player wet advice uses remaining set life and keeps wet stints", async () => {
+  for (const [weather, cls] of [["rain", "wet"], ["wet", "inter"]]) {
+    await g.race("bahrain", "day", weather, { laps: 10 });
+    const { G } = g, c = G.player;
+    G.tyres.fit(c, G.tyres.classRecord(cls));
+    c.tyreLog = c.tyreLog.slice(-1); c.tyreLog[0].lap0 = 0;
+    c.tyreLap0 = 0; c.lap = 4;
+    c.tyreWear = c.tyreWearF = c.tyreWearR = 0.5;
+    c._planLap = 3;
+    assert.equal(G.tyres.lapsLeft(c), 3, "three laps of this set remain, seven to race");
+    G.pits.update(c, 1 / 60);  // the live once-per-lap advice path
+    assert.ok(c.pitPlan.stops > 0, `${cls} cannot become a no-stop dry plan`);
+    assert.ok(c.pitPlan.lapsAt[0] <= 6, "stop before this set is spent");
+    assert.ok(c.pitPlan.seq.every(s => s === cls), "future stints use the wet class");
+    assert.match(G.pits.planInfo(c).text, /BOX/);
+    assert.equal(c.pitPlan.stints.reduce((a, b) => a + b, 0), 10);
+    // Even a single-lap correction is required when an existing wet plan
+    // would keep this set on beyond its measured life (including fractions).
+    c.pitPlan.lapsAt[0] = 7;
+    c.tyreWear = c.tyreWearF = c.tyreWearR = 0.54;
+    assert.ok(G.tyres.lapsLeft(c) > 2 && G.tyres.lapsLeft(c) < 3);
+    assert.equal(G.pits.replan(c), true);
+    assert.equal(c.pitPlan.lapsAt[0], 5, "fractional life rounds toward an earlier stop");
+    c.pitPlan.lapsAt[0] = 6;
+    assert.equal(G.pits.replan(c), true, "one lap earlier is not suppressed by dry-plan hysteresis");
+    assert.equal(c.pitPlan.lapsAt[0], 5);
+    // A slowly worn set reaches the flag: no dry stop remains in the advice.
+    c.tyreWear = c.tyreWearF = c.tyreWearR = 0.1;
+    G.pits.replan(c);
+    assert.equal(c.pitPlan.stops, 0);
+    assert.match(G.pits.planInfo(c).text, /NO STOP/);
+    assert.equal(c.pitPlan.seq[0], cls);
+    c.pitPlan.pin = 2;
+    G.pits.replan(c);
+    assert.equal(c.pitPlan.stops, 2, "a pinned extra stop is preserved");
+    assert.ok(c.pitPlan.lapsAt[0] < c.pitPlan.lapsAt[1]);
+    c.pitPlan.pin = 0;
+    c.tyreWear = c.tyreWearF = c.tyreWearR = 0.54;
+    G.pits.replan(c);
+    assert.ok(c.pitPlan.stops > 0, "a zero-stop pin cannot extend worn wet tyre life");
+    // Once the road dries, the weather call must not be replaced by a dry
+    // planner pretending the wet set already on the car is a fresh slick.
+    G.raceWeather = "dry";
+    const plan = JSON.stringify(c.pitPlan);
+    assert.equal(G.pits.replan(c), false);
+    assert.equal(JSON.stringify(c.pitPlan), plan);
+  }
+});
+
+test("an abandoned local lane pass drops its position baseline before the next call", async () => {
+  await g.race("bahrain", "day", "dry", { laps: 10 });
+  const { G } = g, c = G.player;
+  c.pitState = "lane"; c.pitArmed = true; c.pitCommitted = true; c.pitPos0 = 10;
+  c.s = G.track.total * 0.5;
+  G.pits.update(c, 1 / 60);
+  assert.equal(c.pitState, "none");
+  assert.equal(c.pitPos0, 0);
+  G.ranked.splice(0, G.ranked.length, c);
+  G.pits.arm(c, true);
+  assert.equal(c.pitPos0, 1, "a later call stamps the current position");
+});
+
+
+test("future player wet stints include the fuel they will carry", async () => {
+  await g.race("bahrain", "day", "rain", { laps: 25 });
+  const { G } = g, c = G.player;
+  G.tyres.fit(c, G.tyres.classRecord("wet"));
+  c.tyreLog = c.tyreLog.slice(-1); c.tyreLog[0].lap0 = 0;
+  c.tyreLap0 = 0; c.lap = 4;
+  c.tyreWear = c.tyreWearF = c.tyreWearR = 0.8;
+  c.pitPlan.pin = null;
+  G.pits.replan(c);
+  const replacement = G.pits.nextFor(c);
+  const budget = G.tyres.planLaps(replacement.life, G.lapsTarget) / c.pitPlan.loadK;
+  const fuelWear = vm.runInContext("AiDrive.STRAT.FUEL_WEAR", g.ctx);
+  const stops = c.pitPlan.lapsAt;
+  assert.ok(stops.length >= 2, "enough wear to require replacement stints");
+  for (let i = 0; i < stops.length; i++) {
+    const end = i + 1 < stops.length ? stops[i + 1] : G.lapsTarget;
+    const len = end - stops[i];
+    const meanFuel = 1 - (stops[i] + len / 2) / G.lapsTarget;
+    assert.ok(len * (1 + fuelWear * meanFuel) <= budget + 1e-8,
+      `wet stint ${stops[i]}-${end} exceeds its fuel-adjusted life (${budget})`);
+  }
+});

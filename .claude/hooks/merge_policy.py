@@ -7,8 +7,7 @@ shellparse.gh_issues), so the two doors refuse with the same words
 """
 import json
 
-GATE = ("run `node tools/ci/ready-gate.mjs --pr <n>` (must exit 0 on the tip) and `node tools/ci/ready-full-cap.mjs` "
-        "(must find a free full-tier slot) first")
+GATE = "run `node tools/ci/ready-gate.mjs --pr <n>` (must exit 0 on the tip) first"
 DENY_METHOD = ("MERGE-COMMIT-ONLY (AGENTS.md §Concurrent PRs): every PR lands as a merge commit; "
                "use the merge method, never squash or rebase.")
 ASK_MERGE = ("Only Merge Desk arms auto-merge and only Merge Desk / Grok Bot merge (AGENTS.md "
@@ -25,7 +24,7 @@ DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Concurrent PRs, 2026-10
                "are cancelled by the close. APEX_RUN_CANCEL_OK=1 only when the user asked for this cancel.")
 ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra error (AGENTS.md §Concurrent PRs). A re-run "
              "of a SUPERSEDED run joins the branch's ci-<head.ref> group and cancels the live run; prefer "
-             "`node tools/ci/ci-rerun.mjs` when it exists. Confirm by hand.")
+             "`node tools/ci/ci-rerun.mjs`. Confirm by hand.")
 
 
 def squash_or_rebase(method):
