@@ -384,6 +384,85 @@ function beforeQualifying(season) {
   return copy;
 }
 
+function scoredWeekend({ sprint = true, completedLaps = 1, seedBeforeExport = false, previousRound = false } = {}) {
+  const h = loadHarness();
+  vm.runInContext(src("js/race/race-control.js"), h.ctx);
+  h.SeasonCal.engage("season");
+  const season = h.SeasonCal.applyConfig({ trackIds: ["t0", "t1"], sprint, sprintIds: ["t0", "t1"], laps: 10 }).season;
+  const cars = [
+    { driverId: "haas:0", team: { id: "haas" }, code: "YOU", human: true, retired: true, lap: 1 },
+    { driverId: "haas:1", team: { id: "haas" }, code: "BBB", retired: false, lap: completedLaps + 1 },
+  ];
+  if (previousRound) {
+    const finishers = cars.map(car => ({ ...car, retired: false, finished: true }));
+    if (sprint) assert.equal(h.SeasonCal.award(season, finishers, null), "sprint");
+    assert.equal(h.SeasonCal.award(season, finishers, null), "race");
+  }
+  if (seedBeforeExport) h.SeasonCal.luckSeed(season, 77);
+  const envelope = JSON.parse(h.CareerBackup.serialize(h.CareerBackup.build()));
+  h.SeasonCal.luckSeed(season, 77);
+  const run = h.ctx.RaceControl.shortRun(cars, 3);
+  assert.equal(h.SeasonCal.award(season, cars, null, run), sprint ? "sprint" : "race");
+  assert.equal(h.SeasonCal.save(season).ok, true);
+  return { h, envelope, season };
+}
+
+test("older backup keeps the Grand Prix stage after a zero-point sprint", () => {
+  for (const sprint of [true, "rounds"]) for (const seedBeforeExport of [false, true]) for (const previousRound of [false, true]) {
+    const { h, envelope, season } = scoredWeekend({ sprint, seedBeforeExport, previousRound });
+    const total = points => Object.values(points).reduce((sum, pts) => sum + pts, 0);
+    assert.equal(total(season.pts), total(envelope.season.pts));
+    assert.equal(season.round, previousRound ? 1 : 0);
+    assert.equal(h.SeasonCal.stage(season), "race");
+    const revision = h.store.keyRevision("season");
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
+    const result = h.CareerBackup.apply(envelope);
+    assert.equal(result.ok, true);
+    assert.equal(result.applied.includes("season"), false);
+    assert.equal(h.store.keyRevision("season"), revision);
+    assert.equal(h.SeasonCal.stage(h.SeasonCal.load()), "race");
+  }
+});
+
+test("sprint-stage preservation keeps paid-sprint and zero-point Grand Prix protection", () => {
+  for (const options of [{ completedLaps: 2 }, { sprint: false }]) {
+    const { h, envelope } = scoredWeekend(options);
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
+    assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), false);
+  }
+});
+
+test("sprint-stage protection does not retain an unrelated weekend or replace incoming progress", () => {
+  const changes = [
+    ["another championship seed", (local, incoming) => { incoming.seed = 99; }],
+    ["missing local seed", local => { delete local.seed; }],
+    ["invalid local seed", local => { local.seed = "77"; }],
+    ["changed calendar", (local, incoming) => { incoming.config.trackIds = ["t0", "t2"]; }],
+    ["changed rules", (local, incoming) => { incoming.config.laps = 5; }],
+    ["different round", (local, incoming) => { incoming.round = 1; }],
+    ["different driver points", (local, incoming) => { incoming.pts["haas:0"] = 1; }],
+    ["different team points", (local, incoming) => { incoming.teamPts.haas = 1; }],
+    ["different countback", (local, incoming) => { incoming.finishes["haas:0"] = [1]; }],
+    ["different round ledger", (local, incoming) => { incoming.roundPts["haas:0"] = [1]; }],
+    ["different driver identity", (local, incoming) => { incoming.driverCodes["haas:0"] = "OTHER"; }],
+    ["incoming GP stage", (local, incoming) => { incoming.stage = "race"; }],
+    ["non-sprint round", (local, incoming) => {
+      local.config.sprint = incoming.config.sprint = "rounds";
+      local.config.sprintIds = incoming.config.sprintIds = ["t1"];
+    }],
+  ];
+  for (const [name, change] of changes) {
+    const { h, envelope, season } = scoredWeekend({ seedBeforeExport: true });
+    season.config = JSON.parse(JSON.stringify(season.config));
+    change(season, envelope.season);
+    h.SeasonCal.save(season);
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: restore backup progress"), name);
+    const result = h.CareerBackup.apply(envelope);
+    assert.equal(result.ok, true, name);
+    assert.equal(result.applied.includes("season"), true, name);
+  }
+});
+
 test("older backup preserves completed local qualifying, including the first racing seed", () => {
   for (const seed of [undefined, 77]) {
     const h = loadHarness(), weekend = qualifyingWeekend();
@@ -1351,6 +1430,37 @@ test("C8: a restored standalone season re-arms SeasonCal, so its next save is no
   assert.equal(JSON.parse(h.disk.get("apex26.season")).round, 4);
   const res = h.SeasonCal.save(stale);
   assert.notEqual(res.reason, "conflict", "SeasonCal still holds the pre-import revision");
+});
+
+for (const flavour of ["driver", "myteam"]) for (let i = 0; i < 3; i++) {
+  test(`import cannot replace future ${flavour}:${i} or partially write its bag`, () => {
+    const source = loadHarness();
+    fillSix(source);
+    const envelope = source.CareerBackup.build();
+    const target = loadHarness();
+    fillSix(target);
+    const key = `apex26.career.${flavour}.${i}`;
+    target.disk.set(key, JSON.stringify({ v: 2 ** 32, flavour, future: { intact: true } }));
+    target.foreign(key);
+    const before = [...target.disk.entries()];
+    const result = target.CareerBackup.apply(envelope, { otherFlavourConfirmed: true, liveSlot: "myteam:2" });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "newer-version");
+    assert.deepEqual([...target.disk.entries()], before);
+  });
+}
+
+test("a future schema in the last incoming backup row rejects the whole bag before writes", () => {
+  const source = loadHarness();
+  fillSix(source);
+  const envelope = source.CareerBackup.build();
+  envelope.slots[5].data.v = 2 ** 32;
+  const target = loadHarness();
+  fillSix(target);
+  const before = [...target.disk.entries()];
+  const result = target.CareerBackup.apply(envelope, { otherFlavourConfirmed: true });
+  assert.equal(result.reason, "newer-version");
+  assert.deepEqual([...target.disk.entries()], before);
 });
 
 // #2165: a Daily class key is Ghost.contextKey() — JSON of the car/tune config,

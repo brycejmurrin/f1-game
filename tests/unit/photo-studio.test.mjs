@@ -364,3 +364,9 @@ test("leaks #1: closing the studio releases the composed canvas and its preview 
   assert.deepEqual(removed, ["src"], "the ~640x360 JPEG data URL is dropped"); assert.equal(preview.hidden, true);
   await b.api.exportPhoto(); assert.deepEqual(b.downloads, [], "nothing left to export after close");
 });
+
+test("#1895: the Home title art does not paint over a live Photo Studio subject", () => {
+  const css = fs.readFileSync(new URL("../../css/experience.css", import.meta.url), "utf8");
+  assert.match(css, /body\.photo-studio-open #overlay\[data-home-ready="1"\] #title-car \{ display: none; \}/,
+    "once the garage/track subject has painted, #title-car must be hidden while the studio is open");
+});
