@@ -27,3 +27,4 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [Survey PRs merge to assets; cap 5](survey-prs-merge-to-assets-cap5.md) — 2026-10-15: green survey PRs merge into track-survey-assets; full-tier cap 5 while queue ok, 3 on hold
 - [Standing Merge Desk](standing-merge-desk.md) — since 2026-10-15 a Sonnet `[Merge Desk]` sibling (agent merge-desk.md) runs sweeps and spawns Sonnet lane workers, woken hourly; send SWEEP there
 - [Sessions run Sonnet](sessions-run-sonnet.md) — 2026-10-16: lanes/workers/fresh-session scheduled tasks use claude-sonnet-5-5, never Fable
+- [Merge Desk session](merge-desk-session.md) — persistent Claude Merge Desk session_01WQY3pk…; workers send `SWEEP <PR#>`; it never merges

@@ -182,3 +182,47 @@ test("the worker and its scenery import use the deploy's content-hash key (R3-PH
   bare.C.spawn();
   assert.equal(bare.made[0].url, "http://x/js/track/build-worker.js?v=7", "no map (dev shell): the build, as before");
 });
+
+test("page diagnostic settings bypass worker requests and defaults remain eligible", async () => {
+  let diagnostic = true;
+  const { client, workers } = page({ Tracks: { diagnosticBuild: () => diagnostic } });
+  assert.equal(await client.build(0, def, opts, gfx, null), null);
+  assert.equal(workers.length, 0);
+  diagnostic = false;
+  const pending = client.build(0, def, opts, gfx, null);
+  await settle(); assert.equal(workers.length, 1);
+  client.set(false); assert.equal(await pending, null);
+});
+
+ test("Tracks reports compact-off and unchunked diagnostic modes", () => {
+  let unchunked = null;
+  const ctx = vm.createContext({ TrackGeom: {}, TrackSpline: {}, TrackMesh: {},
+    TrackDef: {}, M4: {}, localStorage: { getItem: () => unchunked } });
+  vm.runInContext(readFileSync(new URL("../../js/track/tracks.js", import.meta.url), "utf8"), ctx);
+  const tracks = vm.runInContext("Tracks", ctx);
+  assert.equal(tracks.diagnosticBuild(), false);
+  tracks.setCompactProps(false); assert.equal(tracks.diagnosticBuild(), true);
+  tracks.setCompactProps(true); unchunked = "1"; assert.equal(tracks.diagnosticBuild(), true);
+  unchunked = null; assert.equal(tracks.diagnosticBuild(), false);
+});
+
+test("replay cancellation between upload slices frees uploads and returns null without uploading the rest", async () => {
+  let tick = 0, resume, live = true, uploads = 0;
+  const freed = [];
+  const { client } = page({ performance: { now: () => ++tick * 10 },
+    requestAnimationFrame: r => { resume = r; } });
+  const recs = [0, 1, 2].map(() => ({ op: "mesh", args: [{}] }));
+  const msg = { recs, track: { meshes: {}, buildProfile: [] }, ms: 0 };
+  const gfx = { createMesh() { return ++uploads; }, freeMesh(h) { freed.push(h); } };
+  const result = client.replay(msg, def, gfx, 1, () => live);
+  assert.equal(uploads, 1); live = false; resume();
+  assert.equal(await result, null); assert.equal(uploads, 1);
+  assert.deepEqual(freed, [1]);
+  assert.equal(await client.replay(msg, def, gfx, 1, () => true), null, "taken replay cannot upload twice");
+});
+
+test("replay upload failures still reject instead of masquerading as cancellation", async () => {
+  const { client } = page({ performance: { now: () => 0 } });
+  const msg = { recs: [{ op: "mesh", args: [{}] }], track: { meshes: {}, buildProfile: [] } };
+  await assert.rejects(client.replay(msg, def, { createMesh() { throw new Error("upload refused"); } }, 8, () => true), /upload refused/);
+});

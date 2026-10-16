@@ -3190,6 +3190,7 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
   const makeAssets = () => {
     const calls = { async: 0, sync: 0 };
     let release = null;
+    const releases = [];
     const assets = {
       readLayerBytes(sz, images, nn, data) { calls.sync++; const done = []; for (let i = 0; i < nn; i++) if (images[i]) { data.fill(10 + i, i * page, (i + 1) * page); done.push(i); } return done; },
       readLayerBytesAsync(sz, images, nn, data, onLayer) {
@@ -3203,9 +3204,11 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
             }
             resolve(done);
           };
+          releases.push(release);
         });
       },
       release: () => release && release(),
+      releases,
       calls,
     };
     return assets;
@@ -3242,6 +3245,35 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
     assert.equal(st.albedo, true, "bound once ready"); assert.equal(st.layers, 3); assert.equal(st.pending, 0);
     assert.equal(h.textures.filter((t) => t.destroyed).length, submitsBefore, "nothing destroyed");
     assert.ok(albedo.texture.__wgxMipLadder, "the mips were built after the last layer");
+  }
+  // Re-adopting a pending token transfers the wait, not ownership of its destruction.
+  for (const replacement of ["same", "partial", "different", "unload"]) {
+    const assets = makeAssets();
+    const h = makeGpuHarness({ assets });
+    const gfx = await h.create();
+    // Separate deferred fills let the older completion run before the latest normal finishes.
+    const a = gfx.createTextureArray(size, images, n), normal = gfx.createTextureArray(size, images, n), other = gfx.createTextureArray(size, images, n);
+    const destroys = new Map();
+    for (const t of [a, normal, other]) {
+      const destroy = t.texture.destroy.bind(t.texture);
+      t.texture.destroy = () => { destroys.set(t, (destroys.get(t) || 0) + 1); destroy(); };
+    }
+    gfx.setMaterialMaps({ albedo: a, normal, scales });
+    const latest = replacement === "unload" ? null : { albedo: replacement === "different" ? other : a, normal: replacement === "same" ? normal : other, scales };
+    gfx.setMaterialMaps(latest);
+    assets.releases[0](); assets.releases[1]();
+    await Promise.all([a.ready, normal.ready]); await settle();
+    assets.releases[2](); await other.ready; await settle();
+    assert.equal(gfx.materialMapState().albedo, !!latest, replacement);
+    for (const t of new Set([a, normal])) assert.equal(t.texture.destroyed, !latest || (t !== latest.albedo && t !== latest.normal), replacement);
+    if (latest) for (const t of new Set([latest.albedo, latest.normal])) assert.equal(t.texture.destroyed, false, "latest tokens remain alive");
+    gfx.setMaterialMaps(null);
+    assert.equal(gfx.begin({}), true); gfx.present({});
+    assert.equal(a.texture.destroyed, true);
+    assert.equal(normal.texture.destroyed, true);
+    assert.equal(destroys.get(a), 1, "albedo freed exactly once");
+    assert.equal(destroys.get(normal), 1, "normal freed exactly once");
+    if (latest && (latest.albedo === other || latest.normal === other)) assert.equal(destroys.get(other), 1, "aliased replacement freed once");
   }
   // 2. Freed in flight (a superseded load): the remaining writes are dropped and the texture retires.
   {

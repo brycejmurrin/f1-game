@@ -227,7 +227,8 @@ export function evaluate({ sha, localOnly = false, request = api, localOpts } = 
 }
 
 /** The PR body's `## Plan` checklist (AGENTS.md rule 12). An item is OPEN when
- *  it is neither ticked (`[x]`) nor struck (`~~dropped~~ — why`); an empty
+ *  it is neither ticked (`[x]`), struck (`~~dropped~~ — why`) nor deferred
+ *  (`[~]`, or text starting `Deferred:`); an empty
  *  `- [ ]` (the template's placeholder) is open. HTML comments — where the
  *  template keeps its example items — are not part of the list.
  *  @returns {{ state: "none"|"open"|"done", items: number, open: string[] }} */
@@ -238,10 +239,10 @@ export function planVerdict(body) {
   const rest = text.slice(head.index + head[0].length);
   const next = /^##[ \t]/m.exec(rest);
   const section = next ? rest.slice(0, next.index) : rest;
-  const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX])\][ \t]*(.*)$/gm)];
+  const items = [...section.matchAll(/^[ \t]*[-*][ \t]+\[([ xX~])\][ \t]*(.*)$/gm)];
   if (!items.length) return { state: "none", items: 0, open: [] };
   const open = items
-    .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()))
+    .filter(([, mark, t]) => mark === " " && !/^~~/.test(t.trim()) && !/^(\*\*)?Deferred:/i.test(t.trim()))
     .map(([, , t]) => t.trim() || "(empty item)");
   return { state: open.length ? "open" : "done", items: items.length, open };
 }

@@ -589,6 +589,36 @@ test("share-link decode that finishes mid-race keeps the fragment for a later ti
   assert.deepEqual(opened, ["SAME"]);
 });
 
+
+test("yielded collection review cancels with zero writes and records named add/duplicate/errors", async () => {
+  const { C, writes } = boot(); C.upsert(design()); const before = writes.length;
+  const env = { format: C.COLLECTION_FORMAT, v: 1, items: [design(), design({ name: "New", seed: 17 }), { name: "Broken", pts: [] }] };
+  const progress = [];
+  const review = await C.preflightCollection(env, null, { yieldTask: async () => {}, onProgress: (p) => progress.push(plain(p)) });
+  assert.equal(review.ok, false); assert.equal(review.reason, "invalid");
+  assert.deepEqual(plain(review.records).map((r) => [r.name, r.status]), [["TEST LOOP", "duplicate"], ["NEW", "add"], ["BROKEN", "error"]]);
+  assert.equal(progress.length, 3); assert.equal(writes.length, before);
+  let alive = true, slices = 0;
+  const canceled = await C.preflightCollection(env, null, { valid: () => alive, yieldTask: async () => { if (++slices === 2) alive = false; } });
+  assert.equal(canceled.reason, "canceled"); assert.equal(writes.length, before);
+});
+
+test("collection review owns immutable prepared input and refuses stale or canceled approval", async () => {
+  const { C, writes } = boot(); const env = { format: C.COLLECTION_FORMAT, v: 1, items: [design({ name: "Approved", seed: 12 })] };
+  const plan = await C.preflightCollection(env, null, { yieldTask: async () => {} });
+  assert.equal(plan.ok, true); assert.equal(writes.length, 0);
+  env.items[0].name = "Changed"; plan.records[0].name = "Tampered"; plan.added = 20;
+  const result = C.commitCollectionPreflight(plan);
+  assert.equal(result.ok, true); assert.equal(result.added, 1); assert.equal(C.list()[0].name, "APPROVED");
+  assert.equal(writes.length, 1); assert.equal(C.commitCollectionPreflight(plan).ok, false, "one-shot approval");
+  const next = await C.preflightCollection({ ...env, items: [design({ seed: 13 })] }, null, { yieldTask: async () => {} });
+  C.upsert(design({ seed: 14 })); const before = writes.length;
+  assert.equal(C.commitCollectionPreflight(next).reason, "changed"); assert.equal(writes.length, before);
+  const canceled = await C.preflightCollection({ ...env, items: [design({ seed: 15 })] }, null, { yieldTask: async () => {} });
+  C.cancelCollectionPreflight(canceled);
+  assert.equal(C.commitCollectionPreflight(canceled).ok, false); assert.equal(writes.length, before);
+});
+
 // #2192: upsert({replace}) dropped the old circuit's board and ghosts even when the
 // store refused the write (quota): after a reload the old design was back with its
 // lap records gone for good. The drop now waits for a durable write.

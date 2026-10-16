@@ -141,6 +141,18 @@ and `docs/notes/AGENT-CONFIG-RESEARCH-2026-10-15.md`.
   delivery) and may message sibling owners directly; a fleet-wide instruction
   is one `send_message` per live session.
 
+### Codex in-session adapter
+
+Codex collaboration agents are in-session tasks, not automatically equivalent
+to Claude/Cursor sibling sessions. Reuse the named `.claude/agents/<persona>.md`
+contract, but repeat its OWNED/FORBIDDEN paths, read-only limits, tools and
+hand-back format in the Codex launch prompt because Claude frontmatter is not
+enforcement there. Use Codex children for bounded evidence work such as
+`release-auditor`; keep Merge Desk readiness/arming authority with the
+explicitly designated parent session. Do not claim sibling-session
+subscriptions, PR ownership or merge authority unless the host actually
+provides those APIs and the user granted them.
+
 The last line limits the worker's own actions. It is not a merge veto: the
 worker must not copy it, or any "do not merge" wording, into the PR body or a
 hand-back. To hold a PR, the body carries a line starting `MERGE-HOLD:`.
@@ -183,7 +195,7 @@ launching Cursor workers uses the Cursor API column (needs a key).
 - Workers iterate on what their change touches (`tooling-fast --changed` plus
   the specs `pick-tests` / `select-specs` name) and run the full `tooling-fast`
   once before a code push (AGENTS.md rule 3). At most one merge from the deploy branch per PR per hour unless the PR
-  is `dirty` / conflicting or more than 10 commits behind (`sync-pr.mjs`).
+  is `dirty` / conflicting or `needs-sync.mjs` says `stale-red` (`sync-pr.mjs`); being N commits behind is no reason.
 - A worker is **stalled** when its state has not changed and its branch has
   not moved for ~90 min, or it passed its caps. Ask once, then interrupt and
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.
