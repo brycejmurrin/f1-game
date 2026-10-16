@@ -313,6 +313,8 @@ test("player wet advice uses remaining set life and keeps wet stints", async () 
     G.tyres.fit(c, G.tyres.classRecord(cls));
     c.tyreLog = c.tyreLog.slice(-1); c.tyreLog[0].lap0 = 0;
     c.tyreLap0 = 0; c.lap = 4;
+    c.prog = 3 * G.track.total + c.s;  // three driven laps, not just a scoring-lap change
+    assert.equal(G.tyres.lapsOn(c), 3, "three physically driven laps on the wet set");
     c.tyreWear = c.tyreWearF = c.tyreWearR = 0.5;
     c._planLap = 3;
     assert.equal(G.tyres.lapsLeft(c), 3, "three laps of this set remain, seven to race");
@@ -375,6 +377,8 @@ test("future player wet stints include the fuel they will carry", async () => {
   G.tyres.fit(c, G.tyres.classRecord("wet"));
   c.tyreLog = c.tyreLog.slice(-1); c.tyreLog[0].lap0 = 0;
   c.tyreLap0 = 0; c.lap = 4;
+  c.prog = 3 * G.track.total + c.s;  // measured wear needs the distance driven on this set
+  assert.equal(G.tyres.lapsOn(c), 3, "three physically driven laps before the wet re-cut");
   c.tyreWear = c.tyreWearF = c.tyreWearR = 0.8;
   c.pitPlan.pin = null;
   G.pits.replan(c);
