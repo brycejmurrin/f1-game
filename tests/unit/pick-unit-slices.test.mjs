@@ -133,7 +133,7 @@ test("--github-output writes any_node / driving / slices", () => {
   assert.match(text, /^any_node=true$/m);
   assert.match(text, /^driving=false$/m);
   // Without --needed-only (a deploy push / the train) every NODE_SLICE is
-  // listed so pages-train.mjs's reuse check sees expanded rows (and, until
+  // listed so the Pages reuse check saw expanded rows (and, until
   // 2026-10-15, so the six then-required names reported); scenery needs
   // only vm-a1/vm-a2 (needed=true), the rest needed=false.
   const slicesLine = text.split("\n").find((l) => l.startsWith("slices="));

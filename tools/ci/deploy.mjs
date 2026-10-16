@@ -178,7 +178,7 @@ export function plan() {
       "verify-track for touched circuits",
       flag("--pr") ? "push the session branch and open/update a PR into the deploy branch"
                    : "git push origin HEAD:" + DEPLOY_BRANCH + " (fast-forward, retry ×3)",
-      "the push's green FAST ci.yml run pokes pages.yml, which gates the tip once, stamps the build and verify-live confirms it",
+      "the push starts pages.yml, which gates the tip once (ci.yml called for the full gate), stamps the build and verify-live confirms it",
     ] };
 }
 
@@ -843,7 +843,7 @@ function trainHealth() {
     const run = advisoryGet(url)?.workflow_runs?.[0];
     return run ? { status: run.status, conclusion: run.conclusion, sha: (run.head_sha || "").slice(0, 7), url: run.html_url } : null;
   };
-  for (const [wf, label] of [["ci.yml", "ci"], ["pages.yml", "pages"]]) {
+  for (const [wf, label] of [["pages.yml", "pages"]]) {   // the train is the deploy branch's only push run since 2026-10-16
     const r = api(wf);
     if (!r) { log(`train ${label}: unknown (no API answer)`); continue; }
     const state = r.status === "completed" ? r.conclusion : r.status;
@@ -965,7 +965,7 @@ export function main() {
     ranSweeps = ranSweeps || push.swept;
   }
   verdict.notCovered = notCovered(ranSweeps, targeted);
-  verdict.next = "the push's FAST ci.yml run is your verdict (minutes) and, when green, pokes pages.yml, which gates the tip, stamps the build (2000 + commit count) and verify-live confirms the CDN serves it — a commit is live once it is an ancestor of the live shell's apex-sha (deploy-research)";
+  verdict.next = "the push starts pages.yml (one running + one pending train; a newer push replaces the pending one): its `ci / …` rows are your verdict, then it stamps the build (2000 + commit count) and verify-live confirms the CDN serves it — a commit is live once it is an ancestor of the live shell's apex-sha (deploy-research); `ci-watch.mjs --sha <merge sha>` follows it or says superseded";
   verdict.seconds = Math.round((Date.now() - t0) / 1000);
   if (JSON_OUT) console.log(JSON.stringify(verdict, null, 2));
   else log(JSON.stringify(verdict));
