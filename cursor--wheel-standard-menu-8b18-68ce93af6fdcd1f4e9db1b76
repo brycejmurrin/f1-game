@@ -1,0 +1,1 @@
+1792112473	Bryce Murrin	Residual standard-mapped inverted wheel menu direction after #2262: own js/input/pad-menu.js standard path, existing wheel regression in tests/unit/key-binds.test.mjs, docs/changelog.d/wheel-standard-menu-8b18.md; parent owns browser/gate/publication  [cursor/wheel-standard-menu-8b18; session 68ce93af6fdcd1f4e9db1b76]
