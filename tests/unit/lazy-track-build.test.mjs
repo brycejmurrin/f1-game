@@ -25,6 +25,7 @@ const TRACK_BUILD = [
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
   "js/track/scenery/venue.js",
+  "js/track/scenery/guards.js",
   "js/track/scenery/build-props.js",
 ];
 

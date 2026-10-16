@@ -308,5 +308,5 @@ const HudRelative = (function () {
 
   /** Re-fit only when something fitKey sees moved since the last fit (or when forced). */
   function refit(force) { if (force || fitKey() !== fitSeen) fitRows(); }
-  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, refit, rows });
+  return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, refit, fitKey, rows });
 })();
