@@ -681,6 +681,20 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
     "assets/voice/george.bin", "assets/voice/george.json", "assets/voice/heart.bin", "assets/voice/heart.json"]);
 });
 
+// #2319: `ready()` awaits a real async SubtleCrypto SHA-256 since #2271, so a
+// fixed count of setImmediate ticks is not a bound — under load (loadavg ~7)
+// 20 ticks was short in 1 of 3 runs. Poll the condition against the wall
+// clock instead (the shape tools/check/wait-polling-lint.mjs asks of browser
+// waits): a generous bound, a timer between probes, and a verdict.
+async function until(cond, { timeoutMs = 2000, stepMs = 5 } = {}) {
+  const t0 = Date.now();
+  while (!cond()) {
+    if (Date.now() - t0 > timeoutMs) return false;
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+  return true;
+}
+
 test("ensureStaged does not refetch a pack that is already ready", async () => {
   let calls = 0;
   const sb = sandbox(["js/audio/voice-pack.js"], {
@@ -689,10 +703,10 @@ test("ensureStaged does not refetch a pack that is already ready", async () => {
   });
   const P = sb.VoicePack.create({});
   P.ensureStaged([["george"]]);
-  for (let i = 0; i < 20; i++) { await new Promise((r) => setImmediate(r)); if (P.ready("george")) break; }
+  assert.ok(await until(() => P.ready("george")), "george is ready within the wall-clock bound");
   assert.equal(calls, 2);
   P.ensureStaged([["george"], ["heart"]]);
-  for (let i = 0; i < 20; i++) { await new Promise((r) => setImmediate(r)); if (P.ready("heart")) break; }
+  assert.ok(await until(() => P.ready("heart")), "heart is ready within the wall-clock bound");
   assert.equal(calls, 4, "only the not-yet-loaded pack is fetched");
 });
 
