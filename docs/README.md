@@ -4,6 +4,8 @@ Start here. This page is a **reading order**, not a filing cabinet: the tables
 below say what to read and in what order, and the index at the bottom exists so
 nothing goes unfindable.
 
+Player-facing change notes live in [changelog.d/](changelog.d/).
+
 ## Read in this order
 
 **If you are an agent**, the path is `AGENTS.md` → `ARCHITECTURE.md` →

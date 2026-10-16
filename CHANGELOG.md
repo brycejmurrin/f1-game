@@ -29,7 +29,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - The game still opens when the browser blocks access to saved data at startup.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
-- Recorded radio audio refuses mismatched cached voice files after an update instead of playing incorrect clips or silent slices.
 - Data Hub cancels superseded telemetry selections, clears old session content when a Grand Prix or year has no data, and keeps keyboard navigation inside telemetry dialogs.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
 - Spotify now-playing updates recover when a response body stalls.
