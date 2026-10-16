@@ -4,6 +4,18 @@ Lane: `cursor/live-debug-lighting-season-8d2f` (PR #2567). Debug Chrome (SwiftSh
 844x600) on a local `serve`, driven through the `js-debugger` MCP. Software-browser evidence only: no
 claim about a player's GPU. **Result: no confirmed defect in either area; no source change.**
 
+## Scope covered
+Lighting (day/dusk/night/dawn on 10 circuits, 191 lightTune knobs, lamp cap, mid-race time-of-day) and
+standalone Season rules (`SeasonCal` resume, ranking, drop, sprint/classic/FL scoring). Pauses on caught
+exceptions during circuit switches.
+
+## Findings table
+| id | file:line | severity | verdict | debugger evidence | fix commit | test | issue# |
+|---|---|---|---|---|---|---|---|
+| L1 Madrid→Bahrain night shows `numLights 0`, `bakedLights 0` for 6 s | none (no lighting code implicated) | low | REFUTED as a lighting defect: `info()` read `state:"menu"`, `track:null` when read back, so `bakedLights` (derived from `G.track`) was 0 | `debugger_run` samples i0..i5 all 0; later `info().state` = `menu`; Singapore→Bahrain run held 40 lights, baked 163 | none | none | none |
+| L2 game fell back to `menu` after scripted `race()`+`go()`+`setTimeOfDay()` (Spa, exception pass) | unknown | low | UNCONFIRMED (cause unknown; `Log` ring wrapped past it) | no game-code exception pause; `Log.records` had no `->menu`/error entry in the surviving 500 | none | none | none |
+| S1 `SeasonCal.resume` with an all-unknown calendar → default 24-round calendar at the stored round | js/career/season-cal.js:263-306 | low | VM-ONLY (in-page call, stale-shell only) | `resume({round:2,config:{trackIds:['x','y']}})` → `round 2, cal 24` | none | none | none |
+
 ## Lighting
 
 | probe | result |
@@ -32,7 +44,13 @@ Probed in-page against `SeasonCal` with `flow` set to `"season"`:
 Not covered: the SETUP screen draft (`season-ui.js`), quali on/off through the UI, and a reload with a
 round finished mid-way through the real save path.
 
-## Observations (not confirmed defects)
+## Clean areas (do not re-hunt)
+NaN in `lightState` across 40 condition cells; every `lightTune` knob under NaN/Infinity/±1e9/string/null; lamp cap at `lampCull`; `resume()` calendar compaction, tie countback, drop, sprint/classic/FL scoring.
+
+## Not run
+Browser specs and `test:tooling-fast` (docs-only diff). LightPresets/LightEdits baking, lamp-bake across 10 switches, frame-lights allocation counts, Season SETUP screen, quali on/off via UI, mid-weekend reload through the real save path.
+
+## Observations (detail)
 
 - O1 `SeasonCal.resume()` of a save whose calendar holds ONLY unknown circuit ids: `remap` is null, the
   config normalises to the full default calendar (24 rounds) and the stored round is kept, so a finished
@@ -45,7 +63,7 @@ round finished mid-way through the real save path.
   is unknown. It is a harness-sequencing suspect (a `race()` issued while the previous build or
   rebuild was still settling), not a lighting defect.
 
-## Tool observations (js-debugger)
+## js-debugger tool problems hit
 
 - A long `awaitPromise` loop under `headless(false)` on SwiftShader makes `Runtime.evaluate` time out
   and the page refuse `Debugger.enable` until the render settles; one run needed the debug Chrome
@@ -54,6 +72,9 @@ round finished mid-way through the real save path.
 - `debugger_state` returns every past operation, so its output grows with each probe; reading a result
   costs more context the longer the session runs.
 - `Log.records` can hold holes (`undefined` entries): `Array.from(Log.records).map(x => x.level)` throws.
+
+## Next step
+A pickup should take L2 with `Log.clear()` first and a `State …->menu` breakpoint, and the Season SETUP screen draft.
 
 ## Cleanup
 
