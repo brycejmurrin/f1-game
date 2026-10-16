@@ -1,0 +1,1 @@
+1792138107	Bryce Murrin	User integrate and improve survey-gallery-fix-a1 builder: tools/track/build-gallery.cjs, survey-gallery-lib.cjs, gallery page/local input helpers, targeted tests and docs only. Local capture gallery; no game source or PR2391 changes.  [cursor/gallery-local-captures-6f2a; session 218838e8270a1fa7efba95cd]
