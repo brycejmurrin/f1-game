@@ -349,10 +349,6 @@ async function r1Rig(t, ls = {}) {
     let _warmPending = null;
     ${DROP}
     ${H1_USAGE}
-    ${TLX.match(/const _dropQueue = \[\];/)[0]}
-    let _warmPending = null;
-    ${fnSource(TLX, "function dropWrapper(m, ownedGeometry) {")}
-    ${fnSource(TLX, "function flushDropped() {")}
     ${R1}
     return { warming(value) { _warmPending = value; }, flush: flushDropped, append: _coAppend, drop: _coDrop, runs: _coRuns, stat: _coStat, drawList, resetRecs, materialFor, _instRegistry,
       aiMesh: _aiMesh, aiOf: _aiOf, aiOn: _aiInst, unlitMat,
