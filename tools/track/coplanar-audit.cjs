@@ -147,7 +147,7 @@ function facesOf(p, pos, nrm) {
     if (len > 1e-6 && j - i >= 9) {         // >= 3 verts, real normal
       const ux = nx / len, uy = ny / len, uz = nz / len;
       const [e1, e2] = planeBasis([ux, uy, uz]);
-      let dMin = Infinity, dMax = -Infinity, dSum = 0, n = 0;
+      let dMin = Infinity, dMax = -Infinity, dSum = 0, n = 0, cx = 0, cy = 0, cz = 0;
       let mnx = Infinity, mny = Infinity, mnz = Infinity;
       let mxx = -Infinity, mxy = -Infinity, mxz = -Infinity;
       let a1 = Infinity, b1 = -Infinity, a2 = Infinity, b2 = -Infinity;
@@ -155,7 +155,7 @@ function facesOf(p, pos, nrm) {
         const x = pos[v], y = pos[v + 1], z = pos[v + 2];
         const d = ux * x + uy * y + uz * z;
         if (d < dMin) dMin = d; if (d > dMax) dMax = d;
-        dSum += d; n++;
+        dSum += d; n++; cx += x; cy += y; cz += z;
         if (x < mnx) mnx = x; if (x > mxx) mxx = x;
         if (y < mny) mny = y; if (y > mxy) mxy = y;
         if (z < mnz) mnz = z; if (z > mxz) mxz = z;
@@ -174,7 +174,7 @@ function facesOf(p, pos, nrm) {
           const x = pos[v], y = pos[v + 1], z = pos[v + 2];
           pts.push(e1[0] * x + e1[1] * y + e1[2] * z, e2[0] * x + e2[1] * y + e2[2] * z);
         }
-        out.push({ pi: p.__i, n: [ux, uy, uz], d: dSum / n,
+        out.push({ pi: p.__i, n: [ux, uy, uz], d: dSum / n, c: [cx / n, cy / n, cz / n],
                    mn: [mnx, mny, mnz], mx: [mxx, mxy, mxz],
                    u1: [a1, b1], u2: [a2, b2], pts });
       }
@@ -264,6 +264,17 @@ function overlapArea(a, b) {
   return polyArea(clipPoly(ha, hb));
 }
 
+// Separation of two same-facing faces, point-to-plane both ways, never
+// |d_a - d_b|: each d is taken along its face's OWN normal, and SAME_FACING
+// admits ~2.5 deg, so 800 m from the origin a 0.1 deg difference moves d by
+// ~1.4 m. Vegas 2026-10-15: the neon hoarding and the street-barrier panel,
+// parallel faces 1.37 m apart, read as a 0.7 mm fight (#2205), and the same
+// error hid real pairs (fleet 107 -> 48 spots). d still buckets candidates.
+function planeGap(a, b) {
+  return Math.max(Math.abs(a.n[0] * b.c[0] + a.n[1] * b.c[1] + a.n[2] * b.c[2] - a.d),
+                  Math.abs(b.n[0] * a.c[0] + b.n[1] * a.c[1] + b.n[2] * a.c[2] - b.d));
+}
+
 function analyse(track, prims, opt) {
   const stats = { prims: prims.length, faces: 0, buckets: 0, antiParallel: 0,
                   tooFar: 0, tooSmall: 0, notFighting: 0 };
@@ -349,7 +360,7 @@ function analyse(track, prims, opt) {
         // default mode, without re-counting the vertical pairs the default
         // baseline already ratchets. tools/track/ground-audit.cjs gates it.
         if (opt.flat && Math.abs(a.n[1]) < 0.5) continue;
-        const gap = Math.abs(a.d - b.d);
+        const gap = planeGap(a, b);
         if (gap > opt.gap) continue;
         const area = overlapArea(a, b);
         if (area < opt.area) { stats.tooSmall++; continue; }
@@ -552,5 +563,5 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { fightDist, overlapArea, facesOf, analyse, site, SAME_FACING,
+module.exports = { fightDist, overlapArea, planeGap, facesOf, analyse, site, SAME_FACING,
   DEFAULTS: { gap: GAP_MAX, area: AREA_MIN, fight: FIGHT_MAX, maxDim: MAX_DIM } };

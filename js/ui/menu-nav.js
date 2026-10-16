@@ -458,6 +458,9 @@ window.MenuNav = (function () {
       const ty = (el.type || "text").toLowerCase();
       if (ty === "checkbox" || ty === "radio" || ty === "button" ||
           ty === "submit" || ty === "reset") return false;
+      // Same reason as TEXTAREA: the pad's synthetic Left/Right moves no caret,
+      // so owning it left the field with a dead direction (#2161).
+      if ((key === "ArrowLeft" || key === "ArrowRight") && event && event.isTrusted === false) return false;
       return !!CARET_KEYS[key];
     }
     if (el.getAttribute && el.getAttribute("role") === "tab") return tabOwns(el, key);

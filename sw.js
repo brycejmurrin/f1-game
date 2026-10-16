@@ -445,6 +445,7 @@ async function precacheAssetLists() {
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
     "js/audio/rivals.js",
+    "js/audio/crowd.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
     "js/audio/radio-voice.js",
@@ -500,6 +501,7 @@ async function precacheAssetLists() {
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
     "js/editor/scenery-panel.js",
+    "js/editor/bridge-panel.js",
     "js/editor/designer.js",
     // LAZY_XR — WebXR session behind navigator.xr / ENTER VR
     "js/xr/xr-plan.js",

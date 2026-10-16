@@ -190,7 +190,9 @@ const STRIP = {
   //   T1 / T4): same emission, the 3° camber re-seats roadside prims, −46 survive
   // → survey fixes (2026-10-15, #2049: night far fill, mountains, landmark boxes, sailboats in
   //   scenery/monaco.js): +702 emitted / +702 survive (280539/259319); the strip share is unchanged
-  monaco: { before: 280539, after: 259319 },
+  // → extend the hairpin cliff city/foliage exclusion (Monaco eye at 0.4):
+  //   −3894 emitted / −3121 kept; hand-built Fairmont/Mirabeau remain.
+  monaco: { before: 276645, after: 256198 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)
