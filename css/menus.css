@@ -388,7 +388,9 @@ html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
   touch-action: pan-y; margin-bottom: calc(var(--tap) + var(--gap) * 0.5);
 }
-/* Compact Home keeps destination groups in one scrollable buttons column. */
+/* Compact-wide live Home: subgrid-place #menu-secondary under brand (no DOM move).
+   Keep #menu-buttons as the scroll box — ui-scale @200% scrolls RACE into it.
+   display:contents broke that box and let brand (z-index) steal hits on DATA HUB. */
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
   grid-template-columns: minmax(0, 1fr) min(46%, 400px);
   grid-template-rows: minmax(0, 1fr);
@@ -407,17 +409,37 @@ html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #ov
 }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-meta { margin-top: calc(var(--gap) * 0.5); }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
-  display: flex; flex-direction: column; grid-column: 2; grid-row: 1;
+  display: grid; grid-column: 1 / -1; grid-row: 1;
+  grid-template-columns: subgrid;
+  grid-template-rows: max-content max-content max-content max-content;
+  align-content: start; align-items: start; justify-items: stretch;
   width: auto; height: 100%; max-height: 100%; min-height: 0; align-self: stretch;
   overflow-y: auto; overflow-x: hidden; overscroll-behavior-x: none; overscroll-behavior-y: contain;
+  /* Above brand so zoomed secondary keeps DATA HUB hittable; empty cells pass clicks through. */
   touch-action: pan-y; z-index: 2; background: transparent;
   /* Inline pad: CAREER skewX tip past overflow-x:hidden (B1). */
   padding-block: calc(var(--gap) * 0.5);
   padding-inline: var(--gap);
-  pointer-events: auto;
+  pointer-events: none;
 }
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > * {
-  flex-shrink: 0;
+  pointer-events: auto;
+}
+/* No group zoom: #menu-buttons zooms (ui-scale.spec 200% desktop). */
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-hero, #menu-primary, #menu-explore, #menu-secondary) {
+  width: 100%; align-self: start; justify-self: stretch;
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-hero { grid-column: 2; grid-row: 1; gap: calc(var(--gap) * 0.3); }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-primary { grid-column: 2; grid-row: 2; gap: calc(var(--gap) * 0.3); }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-column: 2; grid-row: 3; gap: calc(var(--gap) * 0.3); }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary {
+  /* Row 2 col 1 under brand. #1537: height auto for 2-line labels; --tap floor stays. */
+  grid-column: 1; grid-row: 2; display: flex; flex-wrap: nowrap; align-items: stretch;
+  gap: calc(var(--gap) * 0.15); min-height: var(--tap); height: auto; max-height: none;
+  --balance-basis: 0%; --balance-min: 0%;
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary.balanced-row > :not([hidden]) {
+  flex: 1 1 0; min-width: 0; width: auto;
 }
 /* #1537: clamp+wrap — nowrap ellipsis clipped TRACK DES / HOW TO P in ~74px cells. */
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary .bigbtn {

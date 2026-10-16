@@ -20,6 +20,19 @@
 #menu-create .bigbtn { white-space: normal; text-wrap: balance; overflow-wrap: anywhere; }
 #menu-create .bigbtn > span { display: inline-flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 6); min-width: 0; max-width: 100%; }
 #menu-create .mb-sub { white-space: normal; overflow-wrap: anywhere; }
+/* Compact desktop Home keeps its two-track grid (menus.css): hero, Play, Garage, Explore and Create stack in the
+   right track and Utilities sit under the brand. One flex column made RACE ~100px lower at 200% UI size. The
+   group labels would only cost that height back, so they are dropped here. */
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
+  grid-template-rows: repeat(5, max-content);
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons > .menu-destination-label { display: none; }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-garage, #menu-create) {
+  width: 100%; align-self: start; justify-self: stretch; grid-column: 2; gap: calc(var(--gap) * 0.3);
+}
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-garage { grid-row: 3; }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-row: 4; }
+html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create { grid-row: 5; }
 .dh-developer-tools { padding: 0 var(--gap) calc(var(--gap) * .5); flex-shrink: 0; }
 .dh-developer-tools > summary { cursor: pointer; color: var(--dim); min-height: var(--tap-min); }
 .dh-developer-tools > button { margin-top: calc(var(--gap) * .3); }
