@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use for change validation, diff-aware test selection, pre-push checks, generated-file policy, browser timeout triage, or PR-to-green stewardship. Red CI → ci-red-triage; PR green → steward."
+description: "Use when asked did I break anything, run or pick the right tests for touched files, validate or pre-push check a change, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging or pushing to the deploy branch, or triaging a Playwright timeout/hang or --wait exit 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
 ---
 
 # Validate changes before committing/pushing
