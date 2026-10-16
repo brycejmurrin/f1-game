@@ -228,7 +228,7 @@ Depends on director + buffer:
 
 1. Make **all** source edits, then verify once (AGENTS rule 2).
 2. `node tools/ci/pick-tests.mjs` → name groups.
-3. `node tools/ci/tooling-fast.mjs --jobs=3` (edit-loop).
+3. `node tools/ci/tooling-fast.mjs --changed --jobs=3` (diff-aware edit-loop).
 4. One browser group via `test-bg.mjs` **or** `remote-group.mjs` on the pushed
    branch when a whole group is needed; else single-spec / unit only.
 5. `node tools/ci/deploy.mjs --gate-only` before push.

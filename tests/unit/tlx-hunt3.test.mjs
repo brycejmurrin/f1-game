@@ -163,6 +163,7 @@ function bootParticles(wrapOn = true) {
     ${fnText("function ensureStream(slot, verts) {")}
     ${fnText("function wrapStream(slot, arr) {")}
     ${fnText("function uploadStream(slot, floats) {")}
+    ${TLX.slice(TLX.indexOf("      const _partEpochs ="), TLX.indexOf("      const partStreams ="))}
     const PART_ATTRS = [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxSize", 1, 8], ["fxAlpha", 1, 9]];
     const partStreams = [
       { geo: null, ib: null, cap: 0, min: 256 * 6, stride: 10, attrs: PART_ATTRS },
@@ -190,8 +191,13 @@ test("R9: drawParticles wraps the producer's Float32Array (no per-frame copy), r
   vertA[0] = 42; P.api.drawParticles(vertA, 400, false, true);
   assert.equal(s.geo, geo0, "same array: same geometry, no rebuild");
   assert.equal(s.ib.updateRanges[0].count, 400);
+  const uploaded = s.ib.version;
   P.api.drawParticles(vertA, 400, false, false);
+  assert.equal(s.ib.version, uploaded, "a clean same-epoch re-issue skips the GPU upload");
   assert.equal(s.geo, geo0, "a clean re-issue keeps the stream");
+  P.api.drawParticles(vertA, 400, true, true);
+  P.api.drawParticles(vertA, 400, false, false);
+  assert.ok(s.ib.version > uploaded, "a dirty upload through another blend invalidates the alpha stream epoch");
   const vertA2 = new Float32Array(900 * 10);   // particles.js rainSeed grew the shower
   P.api.drawParticles(vertA2, 600, false, true);
   assert.equal(s.ib.array, vertA2, "re-wrapped");
@@ -344,7 +350,7 @@ async function r1Rig(t, ls = {}) {
     ${DROP}
     ${H1_USAGE}
     ${R1}
-    return { append: _coAppend, drop: _coDrop, runs: _coRuns, stat: _coStat, drawList, resetRecs, materialFor, _instRegistry,
+    return { warming(value) { _warmPending = value; }, flush: flushDropped, append: _coAppend, drop: _coDrop, runs: _coRuns, stat: _coStat, drawList, resetRecs, materialFor, _instRegistry,
       aiMesh: _aiMesh, aiOf: _aiOf, aiOn: _aiInst, unlitMat,
       show() { for (let i = 0; i < drawList.n; i++) { const r = drawList[i]; if (!r.instanced) continue;
         const b = r.instanced; b.imesh.count = b.visible; b.imesh.material = r.mat; b.imesh.userData.tlxEmissive = r.em; b.imesh.visible = true; } } };`);
@@ -653,4 +659,19 @@ test("A2: tlx.js builds batches, mirror views and their materials on the attribu
   assert.match(sh, /if \(k !== "instanceTint" && !\/\^iM\[0-3\]\$\/\.test\(k\)\) g\.setAttribute\(k, src\.attributes\[k\]\);/, "casterGeo drops the lit stream");
   assert.match(sh, /m = new THREE\.InstancedMesh\(casterGeo\(batch\.geo\), depthMat, sharedInstCap\(batch\.instances \| 0\)\);/, "the caster is still a padded InstancedMesh (R11 / A2 caster: not in this lane)");
   assert.match(sh, /batch\.imesh && batch\.imesh\.instanceMatrix[\s\S]{0,200}batch\.imesh\.instanceMatrix\.array/, "its copy reads the batch's instanceMatrix alias");
+});
+
+
+test("R1: owned run retirement uses the real warm-aware wrapper queue and preserves source geometry", async (t) => {
+  const { R, scene } = await r1Rig(t);
+  const geo=r1Geo();let sourceDisposals=0;geo.addEventListener("dispose",()=>{sourceDisposals++;});
+  assert.equal(R.append(geo,carWheel(0),{roughness:0.55,doubleSided:true,coalesce:true,emissive:0}),true);
+  const views=R.runs.get(geo).filter(Boolean).map(b=>({mesh:b.imesh,geometry:b.imesh.geometry,objects:0,geometries:0}));
+  for(const v of views){v.mesh.addEventListener("dispose",()=>{v.objects++;});v.geometry.addEventListener("dispose",()=>{v.geometries++;});}
+  R.warming(true);R.drop(geo);R.flush();
+  assert.equal(R.runs.has(geo),false);assert.equal(R._instRegistry.length,0);
+  for(const v of views){assert.equal(v.mesh.parent,null);assert.equal(v.mesh.geometry,v.geometry);assert.equal(v.objects,0);assert.equal(v.geometries,0);}
+  R.warming(false);R.flush();R.flush();R.drop(geo);
+  for(const v of views){assert.equal(v.objects,1);assert.equal(v.geometries,1);assert.equal(v.mesh.geometry,null);assert.equal(v.mesh.material,null);}
+  assert.equal(sourceDisposals,0,"the source geometry is borrowed; only each owned run view retires");
 });

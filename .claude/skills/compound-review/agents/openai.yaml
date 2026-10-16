@@ -1,0 +1,5 @@
+interface:
+  display_name: Compound Review
+  short_description: Review a scoped diff for supported defects
+policy:
+  allow_implicit_invocation: false

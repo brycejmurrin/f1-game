@@ -7,7 +7,8 @@ source audits, sharp and typescript for tooling — never shipped). Four vendore
 libraries DO ship, under `vendor/`, each loaded only by the feature that needs
 it: three.js r186 (TLX backend), Rapier (`js/physics/debris-world.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
-static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
+static files (GitHub Pages). Every project runtime JS file under `js/` is an IIFE that
+assigns ONE global; vendored addons may use their upstream module format.
 
 > **New here?** Start with [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) (boot path,
 > layer map, where to edit). This file is the module **contract** — what each
@@ -120,6 +121,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
 | `puddles.js` | `Puddles` | tag | Puddles: the ONE reference for the standing-water mask the three lit shaders hand-mirror (GLX glsl-lit.js, TLX tsl-lit.js, WGX wgsl-chunks.js). |
+| `compatibility-recovery.js` | `GfxRecovery` | tag | a player-controlled escape from a known failed WebGPU renderer. |
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
 | `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
 
@@ -212,6 +214,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `hud-tyres.js` | `HudTyres` | tag | HUD tyre temperature state. |
 | `hud-damage.js` | `HudDamage` | tag | HUD DAMAGE CHIP: paints Damage (js/race/damage.js) on #hud-damage, a small car-outline glyph whose parts are tinted by level, with a short text fallback ("FW… |
 | `live-region.js` | `LiveRegion` | tag | LiveRegion: the ONE writer of #announce-live, the always-present polite region screen readers hear the race through. |
+| `hud-skin.js` | `HudSkin` | tag | HudSkin: the runtime team accent of the HUD (skinAccent + its WCAG ink pick). |
 | `hud-readouts.js` | `HudReadouts` | tag | the race HUD's derived readouts, kept out of js/ui/hud.js. |
 | `hud-relative.js` | `HudRelative` | tag | the opt-in RELATIVE box (iRacing-style) for GameHud. |
 | `hud-strategy.js` | `HudStrategy` | tag | the opt-in STRATEGY panel for GameHud. |
@@ -272,6 +275,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `identity.js` | `SceneryIdentity` | LAZY_TRACK_BUILD | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `pits.js` | `SceneryPits` | LAZY_TRACK_BUILD | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
 | `venue.js` | `SceneryVenue` | LAZY_TRACK_BUILD | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
+| `guards.js` | `SceneryGuards` | LAZY_TRACK_BUILD | SceneryGuards: the road / pit-complex guards of TrackBuildProps (onRoadHit, rejBox, rejRad, onTrack). |
 | `build-props.js` | `TrackBuildProps` | LAZY_TRACK_BUILD | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/track/`**
@@ -352,6 +356,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `followup-tools.js` | `DesignerFollowup` | LAZY_EDITOR | small designer review tools. |
 | `scenery-panel.js` | `DesignerScenery` | LAZY_EDITOR | DesignerScenery: the track designer's scenery inspector. |
 | `bridge-panel.js` | `DesignerBridges` | LAZY_EDITOR | authored road-overpass controls. |
+| `workspace.js` | `DesignerWorkspace` | LAZY_EDITOR | Track Designer workspace: navigation, disclosure groups and review actions. |
 | `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
 
 **`js/car/`**
@@ -433,10 +438,12 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
+| `debris-draw.js` | `DebrisDraw` | tag | DebrisDraw: instanced drawing of the DebrisWorld pools (shard / marble / cone / panel). |
 | `debris-world.js` | `DebrisWorld` | tag | Rapier side-world for render-only debris (adoption phases R0+R1, see spike/ADOPTION-PLAN.md Part 2). |
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
 | `contact-geometry.js` | `ContactGeometry` | tag | Physical road boundaries and oriented boxes in the local road plane. |
 | `collide.js` | `Collide` | tag | Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket broadphase, the mass-weighted relaxation passes, the hard separation pass, the… |
+| `wall-end-face.js` | `WallEndFace` | tag | WALL END FACE: the one case the lateral wall clamp gets wrong. |
 | `wall-clamp.js` | `WallClamp` | tag | WALL CLAMP: per-side barrier / pit-wall / gantry limits, human slide-along + scrub, lane-side pit clamp, and the conditional road→world writeback when xPinned. |
 
 **`js/lighting/`**
@@ -525,6 +532,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
 | `gfx-debug-overlay.js` | `GfxDebug` | tag | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
+| `three-inspector.js` | `ThreeInspector` | tag | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
 
 **`js/xr/`**
@@ -569,6 +577,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `wgx-shadow.js` | `WGXShadow` | DEFERRED:webgpu | WGX shadow subsystem (split out of js/render/webgpu/wgx.js). |
 | `wgx-chunked.js` | `WGXChunked` | DEFERRED:webgpu | WGX chunked-mesh subsystem (split out of js/render/webgpu/wgx.js). |
 | `wgx-post.js` | `WGXPost` | DEFERRED:webgpu | WGX post-processing subsystem (split out of js/render/webgpu/wgx.js). |
+| `wgx-roadlut.js` | `WGXRoadLut` | DEFERRED:webgpu | WGXRoadLut: the pure, device-free half of WGX's road LUT (the packed (s, lateral x, half-width) table) and the toF32 coercion it shares with the mesh packer. |
 | `wgx.js` | `WGX` | DEFERRED:webgpu | WebGPU renderer backend (WGX). |
 
 **`js/render/three/`**
@@ -590,6 +599,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
+| `agentview-corners.js` | `AgentCorners` | LAZY_AGENT | AgentCorners: the corner table of the agent view (buildCorners, roadShapeAt, peakFracs, corners, nextCorner, upcomingCorners). |
 | `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
 

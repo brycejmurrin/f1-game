@@ -47,6 +47,7 @@
 
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
+import { parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -61,6 +62,8 @@ if (argv.includes("--help") || argv.includes("-h")) {
   Env: APEX_WORKERS=N (default 3). Owned by tune-physics.`);
   process.exit(0);
 }
+// A typo (`--tema`) used to fall through to the default sweep; reject it instead.
+parseFlags(argv, ["--sliders", "--tracks", "--notches", "--aggr", "--steps", "--json", "--help"]);
 function flag(name, def) {
   const i = argv.indexOf("--" + name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : def;

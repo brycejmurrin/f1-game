@@ -128,6 +128,12 @@
    CLASSICS stay on screen; the search yields to the chips. */
 #sel-inner[data-density="compact"] #sel-daily > span { display: none; }
 #sel-inner[data-density="compact"] #sel-track-search { flex-basis: 9rem; min-width: 9rem; }
+/* Tall sheets have room for a dedicated search row. Keeping it in the
+   sideways chip strip hid most of the field before the first interaction. */
+#sel-inner[data-shape="tall"] #sel-track-filter { flex-wrap: wrap; }
+#sel-inner[data-shape="tall"] #sel-track-search {
+  flex: 1 0 100%; min-width: 0; width: 100%;
+}
 
 /* THE STRIP. One .track-row per circuit — a flag over a name — in a single
    row that pans sideways; snap so a flick settles on whole tiles. Group
@@ -702,6 +708,11 @@
 /* Compact: the caption moves to the BOTTOM of a short still, over the
    scrim, so the outline has the clear upper half to itself. */
 #sel-inner[data-density="compact"] #sel-hero-cap { top: auto; bottom: calc(var(--pad) * 0.6); }
+/* A short landscape section scrolls over the floored hero row. Keep the
+   selected circuit at the visible start, rather than below that scrollport. */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-hero-cap {
+  top: calc(var(--pad) * 0.6); bottom: auto;
+}
 #sel-inner[data-density="compact"] .sel-map-btn { align-items: flex-start; padding-top: calc(var(--gap) * 0.5); }
 #sel-inner[data-density="compact"] #sel-preview-flag { width: calc(var(--chip-h) * 1.1); }
 #sel-inner[data-density="compact"] #sel-preview-meta dd { font-size: var(--fs-2); }

@@ -1431,7 +1431,7 @@ const api = {
   },
   // Load any circuit (by index or id, e.g. "monza") and start a normal race,
   // optionally forcing time of day ("day" | "night" | "default") and weather
-  // ("dry" | "wet" | "rain" | "overcast" | "fog"). "wet" = damp road, no rain;
+  // ("dry" | "wet" | "rain" | "overcast" | "fog" | "storm"). "wet" = damp road, no rain;
   // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
   // opts.laps: the race distance (default GAME_LAPS) — the tyre-class draw at
   // grid-up reads it, so a long-race bench must set it HERE, not after.
@@ -1457,7 +1457,7 @@ const api = {
     // End the previous session's weather arc FIRST: startRace's restoreBase() puts a live MIXED
     // race's chip weather back over whatever is set below (every in-game exit does this).
     if (G.endWeatherSession) G.endWeatherSession();
-    G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
+    G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog" || weather === "storm") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
     if (opts && opts.grid != null) G.raceGrid = opts.grid;   // the game's setter validates the name
     if (opts && opts.duel != null) {
@@ -1931,6 +1931,12 @@ const api = {
     const ms = gfx.gpuMs ? gfx.gpuMs() : -1, b = gfx.backendState ? gfx.backendState() : null;
     return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null };
   },
+  // inspector(on?) — the opt-in three.js Inspector dev panel (js/perf/three-inspector.js), TLX only; default ON on localhost/file: (not under webdriver), OFF on the deployed site; ?inspector=0|1 overrides.
+  // inspector(true|false) toggles, inspector() reads { on, supported, reason, loading }. GPU timings need WebGPU
+  // timestamp-query; the WebGL2 path still gets CPU/Memory/Timeline/Viewer. While on, gpuTimer() reports off.
+  inspector: (on) => typeof ThreeInspector === "undefined"
+    ? { on: false, supported: false, reason: "three-inspector.js not loaded", loading: false }
+    : ThreeInspector.set(gfx, on),
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
   // tunable. With an object: merges valid entries (clamped to each slider's
@@ -3315,6 +3321,7 @@ const api = {
     return d;
   },
 };
+try { if (typeof ThreeInspector !== "undefined") ThreeInspector.boot(gfx); } catch (_) { /* dev tool: never blocks boot */ }
 lazyTrackEnsure(api);
 return api;
 }

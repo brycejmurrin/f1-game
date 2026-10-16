@@ -65,6 +65,7 @@ export const RULES = [
   [/^(js|css|index\.html|version\.json)/, ["tooling-fast"],
    "load order, docs integrity, api contracts — ~2 min at three files at a time, catches the structural slips"],
 
+  [/^tests\/unit\/render-final-contracts\.test\.mjs$/, ["tooling-fast"], "renderer ownership, post health, material detail and particle residency contracts"],
   // ── renderer ────────────────────────────────────────────────────────────
   // NOT "visual" — tests/manual/tracks-visual.spec.js is PARKED. It has no
   // committed golden baselines and self-skips all 40 circuits, so the group
@@ -308,6 +309,9 @@ export const RULES = [
   // Rewording it to mention the art would put vm-page — logging.spec.js's VM
   // twin — back into every source edit's node plan.
   [/^index\.html/, ["baseline"], "the #title-car art the baseline PNGs pixel-compare"],
+  // index.html IS the precached shell: sw.js installs from the tags it names and its inline boot guard
+  // (version check, broken-install repair) has unit coverage only in the service-worker group (#1704).
+  [/^index\.html/, ["service-worker"], "the precached shell: the SW's install list and the boot guard's repair"],
   [/^(index|cockpit-view)\.html/, ["tiny", "ui"], "script tags + DOM shell"],
   [/^tools\/manifest\.cjs/, ["tooling-fast"], "load order is asserted against index.html"],
   [/^tools\//, ["tooling-fast"], "the tools index and every tool contract live in the tooling suite"],

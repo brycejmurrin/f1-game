@@ -1099,7 +1099,7 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   assert.ok(decl(overlays, "#howtoplay dt[id]", "scroll-margin-block-start"));
   assert.ok(decl(overlays, "#howtoplay .sheet-body::after", "height") ||
     rulesFor(overlays, /#howtoplay \.sheet-body::after/).some((r) => r.decls.get("height")),
-    "HTP body keeps scroll slack so FRIENDS can reach the pane top");
+    "HTP body keeps a trailing reading gap");
   assert.ok(decl(overlays, "#howtoplay .sheet-body", "scroll-padding-block-start") ||
     rulesFor(overlays, /^#howtoplay \.sheet-body$/).some((r) => r.decls.has("scroll-padding-block-start")));
   assert.ok(!rulesFor(overlays, "#howtoplay dl").some((r) => /max-content minmax\(0, 1fr\) max-content/.test(r.decls.get("grid-template-columns") || "")),
@@ -1514,12 +1514,15 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.equal(decl(garage, "#cs-stack", "left"), "auto");
   assert.equal(decl(garage, "#cs-stack", "width"), "max-content");
   // The base (landscape) rule only: portrait has no sheet edge to hug — the
-  // sheet is the full width — so there the stack spans the car band from the
-  // left safe edge, and that rule lives under @media (orientation: portrait).
+  // sheet is the full width — so portrait reserves a separate grid row for
+  // the stack instead of floating it beneath the sheet's footer.
   const stackBase = rulesFor(garage, "#cs-stack").filter((r) => !r.context.some((c) => /@media|@container/.test(c)));
   assert.ok(stackBase.length && !stackBase.some((r) => /calc\(var\(--safe-l\)/.test(r.decls.get("left") || "")));
-  assert.ok(rulesFor(garage, "#cs-stack", { context: /orientation: portrait/ }).some((r) => r.decls.has("left")),
-    "portrait places the camera stack over the car band");
+  const portraitStack = rulesFor(garage, "#cs-stack", { context: /orientation: portrait/ });
+  assert.ok(portraitStack.some((r) => r.decls.get("grid-row") === "2" && r.decls.get("position") === "static" && r.decls.get("width") === "100%"),
+    "portrait reserves a full-width camera row outside the sheet footer");
+  assert.ok(rulesFor(garage, "#carsetup", { context: /orientation: portrait/ }).some((r) => r.decls.get("grid-template-rows") === "minmax(0, 1fr) auto"),
+    "portrait leaves the camera row intrinsic height and lets the sheet yield");
   // A qualifying championship DISABLES the GRID row at QUALIFYING LAP rather
   // than hiding it (the setting is shown, not offered); every other flow gets
   // the rules, pace order first and the qualifying lap second — the option

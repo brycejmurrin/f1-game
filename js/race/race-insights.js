@@ -75,7 +75,8 @@ const RaceInsights = (function () {
     function event(kind, text) {
       boundedPush(events, { seq: ++sequence, time: G.raceT || 0, lap: G.player ? G.player.lap : 0, kind, text }, 128);
     }
-    function reset() { previous = sector = tyreStart = drill = lastDrill = null; events = []; sequence = distance = 0; lapClean = false; weather = null; laps = []; energy = [[], [], []]; attempts = {}; }
+    let runId = null, runs = 0;   // one id per session: settle() replaces its row rather than appending
+    function reset() { runId = null; previous = sector = tyreStart = drill = lastDrill = null; events = []; sequence = distance = 0; lapClean = false; weather = null; laps = []; energy = [[], [], []]; attempts = {}; }
     function startDrill(mode) {
       if (!Object.hasOwn(DRILLS, mode)) mode = "free";
       const c = G.player;
@@ -515,7 +516,11 @@ const RaceInsights = (function () {
       else { sector.valid = false; lapClean = false; tyreStart = current; failDrill("position jumped"); }
       if (current.penalty > previous.penalty) event("penalty", "+" + (current.penalty - previous.penalty) + "s time penalty");
       if (current.warnings > previous.warnings) event("limits", "Track-limits warning " + current.warnings);
-      if (current.invalid && !previous.invalid) event("invalid", "Lap invalidated by an incident or practice reset");
+      if (current.invalid && !previous.invalid) {
+        const why = current.contact ? "car contact" : current.off ? "left the track" : current.warnings > previous.warnings ? "track limits"
+          : current.penalty > previous.penalty ? "penalty" : "incident or practice reset";
+        event("invalid", "Lap invalidated: " + why);
+      }
       if (current.contact && !previous.contact) event("contact", "Car contact");
       if (current.off && !previous.off) event("surface", "Left the track");
       if (current.retired && !previous.retired) event("retirement", "Car retired");
@@ -603,8 +608,21 @@ const RaceInsights = (function () {
       }
       return out;
     }
+    // THE INCIDENT/PENALTY TIMELINE. The journal's penalty, limits, invalid-lap, contact and retirement rows,
+    // ordered by seq, persisted under apex26.incidentLog (last 5 sessions). Re-settling the same session
+    // replaces its row, so showing the results twice never duplicates an entry.
+    const LOG_KINDS = ["penalty", "limits", "invalid", "contact", "retirement"];
+    function settle() {
+      const rows = events.filter((e) => LOG_KINDS.includes(e.kind)).map((e) => ({ seq: e.seq, time: e.time, lap: e.lap, kind: e.kind, text: e.text }));
+      if (!rows.length) return rows;
+      if (!runId) runId = G.records.key() + "@" + Date.now() + "#" + (++runs);
+      const raw = G.store.get("incidentLog", null);
+      const kept = raw && Array.isArray(raw.sessions) ? raw.sessions.filter((x) => x && x.id !== runId) : [];
+      G.store.set("incidentLog", { version: 1, sessions: kept.concat({ id: runId, entries: rows.slice(-40) }).slice(-5) });
+      return rows;
+    }
     function summary() { return { distance, drill: drill ? { mode: drill.mode, done: drill.done, clean: drill.clean, changes: drill.changes, reason: drill.reason, phase: drill.phase } : null, lastDrill: lastDrill ? { ...lastDrill, ...(lastDrill.recovery ? { recovery: { ...lastDrill.recovery } } : {}) } : null }; }
-    return { update, reset, event, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
+    return { update, reset, event, settle, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
       attempts: mode => (attempts[mode] || []).map(a => ({ ...a })) };
   }
   return Object.freeze({ create, DRILLS, needsRivals });

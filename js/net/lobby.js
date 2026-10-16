@@ -252,7 +252,7 @@ const NetLobby = (function () {
           // BOTH branches: during friend quali QualiNet.waiting() reads
           // roomState().peers and would wait forever for a lap the gone host
           // can no longer relay (2p never saw it — no relayed roster).
-          _peers.clear(); _ready.clear(); clashClear();
+          _peers.clear(); _ready.clear(); selfReady = false; clashClear();
           if (racing) {
             say(role === "guest" ? "Host left — rivals are now AI. Keep racing." : "Connection closed.", true);
           } else if (wasHostEvict && role === "host") {
@@ -858,7 +858,7 @@ const NetLobby = (function () {
       return broadcast(NetPlay.EV.SETTINGS, Object.assign(snapshot, { revision: settingsRevision }));
     }
 
-    const WEATHER = new Set(["dry", "wet", "rain", "overcast", "fog"]);
+    const WEATHER = new Set(["dry", "wet", "rain", "overcast", "fog", "storm"]);
     const TIME_OF_DAY = new Set(["default", "dawn", "day", "dusk", "night"]);
     const DIFFICULTY = new Set(["easy", "normal", "hard"]);
     const GRID = new Set(["tier", "quali", "rev10", "revchamp", "random"]);   // game.js GRID_RULES
@@ -1499,7 +1499,11 @@ const NetLobby = (function () {
         friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
         // beginRace hid the lobby — quit rather than idle an open session.
         const screen = els().screen;
-        if (screen && screen.hidden) { cancel(); if (G.quitToMenu) G.quitToMenu(); }
+        if (screen && screen.hidden) {
+          cancel(); if (G.quitToMenu) G.quitToMenu();
+          // say() wrote into the hidden lobby: tell the player on the menu they land on (H30).
+          if (G.announce) G.announce("COULD NOT START THE RACE — BACK TO MENU", 4, "info");
+        }
         return;
       }
       const started = G.netPlay.start({
@@ -2154,7 +2158,7 @@ const NetLobby = (function () {
       try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) { /* the relay race degrades to STUN-only */ }
       const e = els();
       if (!e.screen) return false;
-      _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;
+      _peers.clear(); _ready.clear(); selfReady = false; clashClear(); myRank = Infinity;
       show("pick");
       // inviteAnother() hides these; a fresh open must always offer all four
       // routes again, or a player who once invited a second guest can never
@@ -2208,7 +2212,7 @@ const NetLobby = (function () {
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       teardown();
       role = null;
-      _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity; restoreOwnRules();
+      _peers.clear(); _ready.clear(); selfReady = false; clashClear(); myRank = Infinity; restoreOwnRules();
       // THE ROOM FLAG DIES WITH THE ROOM: only a race start cleared netRoom, so after CLOSE a solo START re-showed this dialog.
       if (G.setNetRoom) G.setNetRoom(false);
       close();

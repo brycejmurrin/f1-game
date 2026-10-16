@@ -3435,7 +3435,7 @@ const G = {
     autoThrottleOpt = store.get("autoThrottle", autoThrottleOpt);
     throttleLatchOpt = store.get("throttleLatch", throttleLatchOpt);
     Input.setThrottleLatch(throttleLatchOpt);
-    SettingRow.paint($("pm-throttlemode"), autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold"));
+    paintThrottleMode();
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
     announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
@@ -3762,6 +3762,7 @@ raceSettings = RaceSettings.create(G, {
   GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
   qualiResults: () => quali.results(), openQuali, enableTilt,
   getSteerMode: () => steerMode, buildStandings, raceIntro: raceIntroFromSheet,
+  previewWxPlan: (o) => wxArc.previewPlan(o),   // the MIXED plan WITHOUT caching it (FORECAST line)
 });
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
 // over the world scheduleFlybyTrack() already warmed, and startRaceBody keeps
@@ -5531,7 +5532,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // headway never held the car (it hovered at the edge, uncapped), so queue
     // pressure never built and a stuck car never got impatient.
     const followR = blocker ? AiDrive.followGap(aiT, !!track.street, c.speed, c.passOf || c.atkOn || c.towing > 0 ? 1 : c.atkWant ? 0.6 : 0, c.team, c.seat, blocker, c.houseStats, (c.runT || 0) + AiDrive.startGapT(c.calm = AiDrive.startCalm(c.launchOn, c.calmUntil, raceT))) : 0;
-    const qWin = Math.max(16, followR + 6 + AiDrive.startQWinBonus(c.calm, raceT - launchT0));
+    const qWin = AiDrive.queueReach(Math.max(16, followR + 6 + AiDrive.startQWinBonus(c.calm, raceT - launchT0)), c.speed, blocker ? blocker._snapSpeed : 0, BRAKE, vT / VMAX);
     const capBlocks = blocker && blockerGap < qWin &&
       !(blocker === c.passOf && Math.abs(c.x - blocker._snapX) >= 1.8);
     if (blocker && blockerGap < qWin) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
@@ -5956,7 +5957,7 @@ function updateCarLateral(c, dt, ranked, S) {
     }
     let defend = 0;
     const caution = raceCtl.level >= 2;   // SC/VSC/red: no cover move either (the attack is gated above), #2175
-    if (chaser && !caution && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
+    if (chaser && !caution && (!blocker || chaserGap < blockerGap) && !letPass && !c.passOf) {   // mid-train too, when the attack behind is nearer than the car ahead
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser._snapSpeed;
@@ -8751,6 +8752,17 @@ function tickBody(now) {
 
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
+function paintThrottleMode() {
+  const mode = autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold");
+  SettingRow.paint($("pm-throttlemode"), mode);
+  const note = $("pm-throttle-note");
+  if (note) note.textContent = {
+    hold: "HOLD: keep your thumb on GAS.",
+    latch: "LATCH: tap GAS to accelerate; tap again to lift.",
+    auto: "AUTO: steer and brake; throttle is automatic.",
+  }[mode];
+}
+
 // STEERING INPUT row (js/ui/setting-row.js) and the one-line note under it.
 // The note is ALWAYS present — its text changes, it is never hidden — so a
 // mode change cannot reflow the page under a finger; same rule that keeps
@@ -9441,9 +9453,11 @@ SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "latch",
     store.set("autoThrottle", autoThrottleOpt);
     store.set("throttleLatch", throttleLatchOpt);
     Input.setThrottleLatch(throttleLatchOpt);
+    paintThrottleMode();
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
   } });
+paintThrottleMode();
 SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
   read: () => (mirrorControls ? "on" : "off"),
   write: (v) => { mirrorControls = v === "on"; store.set("mirrorControls", mirrorControls); applyMirrorControls(); } });

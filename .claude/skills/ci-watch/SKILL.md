@@ -90,6 +90,13 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
    `--timeout 600` or any long foreground poll loop. If the line is still
    `= ci running` or jobs are queued, write a handoff note and end the turn.
 
+## Archiving (#2426)
+
+Archive only session ids named in the sweep's own report, one `archive_session`
+call per id, never from a `list_sessions` filter result. Only finished workers
+whose PR is merged or closed qualify; a live orchestrator or `[Merge Desk]`
+session is never archived.
+
 ## Cadence
 
 About every 10-15 min while any PR is open: `send_later` (re-armed at the end of

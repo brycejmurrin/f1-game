@@ -33,6 +33,16 @@ The five mode buttons change the tools in the rail without changing your circuit
 Undo, redo and map-view controls stay available across modes. **RANGE** is the
 selection workflow; point numbering and keyboard shortcuts still work.
 
+The numbered modes follow the build workflow. Click an inspector section's
+heading to fold or expand its controls; choosing a corner stamp opens its
+parameters automatically. Each mode and workspace remembers its scroll position.
+MY CIRCUITS uses the full screen for saved circuit cards, and HOW TO opens a
+full-width guide. On desktop, HELP opens the guide for the current mode.
+
+SCENERY keeps the current theme, atmosphere and object count above its three
+sections. RESET ATMOSPHERE restores time of day, trees and crowd to the theme
+defaults; it keeps the chosen theme and placed objects.
+
 ## Add a road bridge
 
 Open **ELEVATION**, select a control point, then use **ROAD BRIDGES**. Set the
@@ -375,6 +385,11 @@ time-trial board like any other. **PAUSE → QUIT** brings you straight back to
 the designer with the same point selected.
 
 ## SHARE, EXPORT, IMPORT
+
+Open **SHARE & FILES** in the footer for these actions. Escape closes this
+menu first and returns focus to its trigger. SAVE, RACE and TIME TRIAL stay
+available beside it. The persistent CHECKS button opens TEST and takes you
+to the validation results, including when red issues block saving.
 
 - **SHARE** copies a link. Whoever opens it gets the exact circuit, theme and
   all. If the copy is blocked, the link waits in the **SHARE CODE** field.

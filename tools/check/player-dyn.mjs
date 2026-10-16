@@ -23,6 +23,7 @@
  */
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { parseFlags } from "../lib/cli-args.mjs";
 const require = createRequire(import.meta.url);
 const { createGame, SEATS } = require("../lib/game-vm.cjs");
 
@@ -170,6 +171,7 @@ async function main() {
 Owned by tune-physics.`);
     process.exit(0);
   }
+  parseFlags(process.argv.slice(2), ["--json", "--seat", "--help"]);
   const track = process.env.TRACK || "monza", frac = +(process.env.FRAC || 0);
   const si = process.argv.indexOf("--seat");
   const seatArg = process.argv.find((a) => a.startsWith("--seat="));

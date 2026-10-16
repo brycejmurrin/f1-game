@@ -977,14 +977,14 @@ test("DOCS_ONLY still mirrors the deploy push's paths-ignore (pages.yml since 20
  * the machinery whose whole job is deciding what the gate runs. */
 
 test("the TRACKED infra list names where the selector tools ACTUALLY live", () => {
-  // These four moved tools/ -> tools/ci/ and this list kept the old paths, so
-  // a change to the selection machinery matched no rule, selected ZERO browser
-  // specs, and printed no "SELECTION NARROWER THAN THE CHANGE" warning. A
-  // selector that goes silent precisely when it is the thing being edited is
-  // the failure TRACKED exists to prevent, turned on itself.
+  // Selection machinery must be tracked so a change to the selector itself
+  // cannot silently narrow the gate using unreviewed routing logic.
   const hit = (p) => TRACKED.some((r) => r.test(p));
   for (const f of ["tools/ci/select-specs.mjs", "tools/ci/pick-tests.mjs",
-                   "tools/ci/select-budget.mjs", "tools/ci/run-playwright.mjs"]) {
+                   "tools/ci/select-budget.mjs", "tools/ci/run-playwright.mjs",
+                   "tools/ci/pick-unit-slices.mjs", "tools/ci/node-plan.mjs",
+                   "tools/ci/geometry-paths.mjs", "tools/ci/twinned-specs.mjs",
+                   "tools/ci/ci-select-specs-step.sh", "tools/ci/ci-resolve-before.sh"]) {
     assert.ok(hit(f), `${f} is selection machinery and must be TRACKED`);
     assert.ok(fs.existsSync(path.join(ROOT, f)), `${f} does not exist — re-point TRACKED, do not pin a ghost`);
   }

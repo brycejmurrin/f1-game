@@ -945,6 +945,114 @@
         }
       ],
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "compound-debug",
+      "task": "Check explicit invocation, canonical mirror, project precedence and attribution",
+      "fixture": "tests/unit/agent-config.test.mjs",
+      "pattern": "portable\\ compound\\-debug\\ keeps\\ the\\ explicit\\ F1\\ project\\ contract",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium for browser claims"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Target hardware for device or GPU claims"
+        }
+      ],
+      "evidenceScope": "Only the F1 integration metadata and provenance contract; excludes real routing and complete task behavior"
+    },
+    {
+      "skill": "compound-review",
+      "task": "Check explicit invocation, canonical mirror, project precedence and attribution",
+      "fixture": "tests/unit/agent-config.test.mjs",
+      "pattern": "portable\\ compound\\-review\\ keeps\\ the\\ explicit\\ F1\\ project\\ contract",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium for browser claims"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Target hardware for device or GPU claims"
+        }
+      ],
+      "evidenceScope": "Only the F1 integration metadata and provenance contract; excludes real routing and complete task behavior"
+    },
+    {
+      "skill": "compound-verify",
+      "task": "Check explicit invocation, canonical mirror, project precedence and attribution",
+      "fixture": "tests/unit/agent-config.test.mjs",
+      "pattern": "portable\\ compound\\-verify\\ keeps\\ the\\ explicit\\ F1\\ project\\ contract",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium for browser claims"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Target hardware for device or GPU claims"
+        }
+      ],
+      "evidenceScope": "Only the F1 integration metadata and provenance contract; excludes real routing and complete task behavior"
+    },
+    {
+      "skill": "js-debugger",
+      "task": "Inspect pause generation, one-based positions and nonblocking execution without launching a browser",
+      "fixture": "tests/unit/js-debugger-mcp.test.mjs",
+      "pattern": "pause generation invalidates|step acknowledgment alone|resolved breakpoint coordinates|pending Runtime evaluation|URL breakpoint resolutions follow",
+      "expected": {
+        "minPass": 5,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node22+, npm install and the repository debugger fixtures; no Chrome or daemon required"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized native Chrome; real-page breakpoint/local/step/reload/cleanup flow in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Actual target GPU/device required for performance or physical-input claims; debugger contracts do not establish them"
+        }
+      ],
+      "evidenceScope": "Offline debugger pause/position/concurrency contracts only; excludes game behavior and target-device verification"
     }
   ]
 }

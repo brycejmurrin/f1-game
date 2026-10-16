@@ -30,7 +30,7 @@ function makeGL(opts) {
     ARRAY_BUFFER: 0x8892, ELEMENT_ARRAY_BUFFER: 0x8893, STATIC_DRAW: 0x88e4,
     FLOAT: 0x1406, TRIANGLES: 4, UNSIGNED_INT: 0x1405, UNSIGNED_SHORT: 0x1403,
     VERTEX_SHADER: 0x8b31, FRAGMENT_SHADER: 0x8b30,
-    COMPILE_STATUS: 0x8b81, LINK_STATUS: 0x8b82, CURRENT_PROGRAM: 0x8b8d, LESS: 0x201, LEQUAL: 0x203,
+    COMPILE_STATUS: 0x8b81, LINK_STATUS: 0x8b82, CURRENT_PROGRAM: 0x8b8d, CULL_FACE: 0xb44, LESS: 0x201, LEQUAL: 0x203,
     ANY_SAMPLES_PASSED_CONSERVATIVE: 0x8d6a, QUERY_RESULT: 0x8866, QUERY_RESULT_AVAILABLE: 0x8867,
     _elem: null, _array: null, _draws: 0, _queries: 0, _queryMade: 0,
     _queryDeletes: 0, _boxDraws: 0, _inQuery: false,
@@ -100,12 +100,12 @@ function grid(cells, quadsPerCell) {
            col: new Float32Array(col), idx: new Uint32Array(idx), _keepPositions: true };
 }
 const setup = (glOpts) => {
-  const frame = { viewProj: WIDE_VP, eye: [0, 0, 0], cullDist: 0, perChunkLights: 0 };
+  const frame = { viewProj: WIDE_VP, eye: [-10, 10, -10], cullDist: 0, perChunkLights: 0 };
   const gl = makeGL(glOpts);
   const C = load(gl, frame);
   const mesh = C.createChunkedMesh(grid(6, 400), 72);
   assert.ok(mesh.chunks && mesh.chunks.length > 1, "fixture did not chunk");
-  return { gl, C, mesh };
+  return { gl, C, mesh, frame };
 };
 
 test("it ships OFF, and off means the draw path is untouched", () => {
@@ -240,12 +240,12 @@ test("the occlusion pass restores EVERY piece of context state it touched", () =
   // pixels, so the answer is driver-independent. ANGLE validates its own
   // replays exactly this way and runs it under SwiftShader (tests/helpers/
   // gl-state.mjs has the references).
-  const frame = { viewProj: WIDE_VP, eye: [0, 0, 0], cullDist: 0, perChunkLights: 0 };
+  const frame = { viewProj: WIDE_VP, eye: [-10, 10, -10], cullDist: 0, perChunkLights: 0 };
   // The enum map lets the recorder ANSWER getParameter from the same state the
   // setters write, so the pass's save/restore of CURRENT_PROGRAM behaves as it
   // does in a real context. Without it the restore reads null, skips, and the
   // diff reports a leak the shipped renderer does not have.
-  const rec = stateRecorder(null, { program: 0x8b8d });
+  const rec = stateRecorder({ cull: true }, { program: 0x8b8d, cull: 0xb44 });
   // The context baseline GLX.init() establishes, so "restored" means "back to
   // what the renderer runs with", not merely "back to whatever it was".
   const gl = Object.assign(makeGL(), rec);
@@ -348,7 +348,7 @@ test("occlusion setup invalidates the core VAO cache after direct bindings", asy
       const gl = makeGL({ compileFails });
       let actualVao = null, cachedVao = null, binds = 0;
       gl.bindVertexArray = (vao) => { actualVao = vao; binds++; };
-      const C = load(gl, { viewProj: WIDE_VP, eye: [0, 0, 0], cullDist: 0, perChunkLights: 0 }, {
+      const C = load(gl, { viewProj: WIDE_VP, eye: [-10, 10, -10], cullDist: 0, perChunkLights: 0 }, {
         bindVAO(vao) {
           if (vao !== cachedVao) { gl.bindVertexArray(vao); cachedVao = vao; }
         },
@@ -365,4 +365,31 @@ test("occlusion setup invalidates the core VAO cache after direct bindings", asy
       assert.equal(binds, before + 1);
     });
   }
+});
+
+for (const enabled of [true, false]) test(`proxy queries restore culling ${enabled} after a thrown draw`, () => {
+  const frame = { viewProj: WIDE_VP, eye: [-10, 10, -10], cullDist: 0 };
+  const gl = makeGL(); let cull = enabled; const seen = [];
+  gl.getParameter = (p) => p === gl.CULL_FACE ? cull : null;
+  const C = load(gl, frame, { setCull(on) { cull = on; seen.push(on); } });
+  const mesh = C.createChunkedMesh(grid(6, 400), 72);
+  C.occlusionCull(true); C.drawChunked(mesh, null, {});
+  cull = enabled; seen.length = 0;
+  gl.drawElements = () => { assert.equal(cull, false); throw new Error("query draw"); };
+  assert.throws(() => C.occlusionPass(), /query draw/);
+  assert.equal(cull, enabled); assert.deepEqual(seen, [false, enabled]);
+});
+
+test("eye-inside and near-plane-crossing proxies reset stale hidden results", () => {
+  const { C, gl, mesh, frame } = setup({ result: false });
+  C.occlusionCull(true); C.drawChunked(mesh, null, {}); C.occlusionPass();
+  C.drawChunked(mesh, null, {}); C.occlusionPass();
+  const chunk = mesh.chunks[0];
+  frame.eye = chunk.min.map((n, i) => (n + chunk.max[i]) / 2);
+  C.drawChunked(mesh, null, {}); C.occlusionPass();
+  assert.ok(C.occlusionStats().culled < mesh.chunks.length, "enclosing chunk is visible");
+  frame.eye = [-10, 10, -10];
+  frame.viewProj = new Float32Array(WIDE_VP); frame.viewProj[14] = -1;
+  C.drawChunked(mesh, null, {}); C.occlusionPass();
+  assert.equal(C.occlusionStats().culled, 0, "near-plane crossing chunks stay visible");
 });

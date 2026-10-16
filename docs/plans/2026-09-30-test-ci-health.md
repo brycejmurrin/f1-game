@@ -213,7 +213,7 @@ blocked; do not start 1c before 1b.
 | 4a–b | offender counts 22/15/13 | lower; specs still green (`ui` group or named specs) |
 | 4c | 49 overlap on PR plan | plan JSON shows skip; deploy/nightly plan unchanged; unit pin |
 
-Edit-loop: `npm run test:tooling-fast` (or `tooling-fast.mjs --jobs=3`). Browser:
+Edit-loop: `verify-change.mjs --fast` (or `tooling-fast.mjs --changed --jobs=3`). Browser:
 one group or one spec via `test-bg.mjs` / `remote-group.mjs` per AGENTS.md.
 Pre-push: `deploy.mjs --gate-only`.
 

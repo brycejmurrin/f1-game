@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-VDaDzxpzc09TF8sKjwiLLWzS7+JfGHej+ezVU2djJKc=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -405,16 +405,23 @@
     }
     try { sessionStorage.setItem(RETRY_KEY, "1"); } catch (_) {}
     var go = function () { location.reload(); };
-    Promise.resolve()
+    // OFFLINE IS NOT A BROKEN INSTALL. With no network a missing shell-tag entry
+    // is a cache miss, and sweeping apex26-* would delete the only copy of the
+    // game the player has. The sweep runs only after a network answer (any HTTP
+    // status) proves the edge is reachable; otherwise show the overlay and stop.
+    var offline = function () {
+      show("Module failed to load", el.src,
+        "The network is unreachable, so the local copy was left alone. Reconnect and reload.", true);
+    };
+    if (navigator.onLine === false) { offline(); return; }
+    fetch(el.src, { cache: "reload" })
       .then(function () {
         if (!window.caches) return null;
         return caches.keys().then(function (names) {
           // Only OUR caches: github.io is a SHARED origin, so keys() also lists other projects' Cache Storage.
           return Promise.all(names.filter(function (n) { return n.indexOf("apex26-") === 0; }).map(function (n) { return caches.delete(n); }));
-        });
-      })
-      .then(function () { return fetch(el.src, { cache: "reload" }); })
-      .then(go, go);
+        }).then(go, go);
+      }, offline);
   }, true);
   // A CLEAN load clears the one-shot, so a genuine failure weeks later still
   // gets its retry. A load that lost a script keeps the flag set — that is what
@@ -1026,11 +1033,15 @@
             <span class="tune-label" id="pm-throttlemode-label">THROTTLE</span>
             <div>
               <button id="pm-throttlemode-prev" type="button" data-step="-1" aria-label="Previous throttle mode">&lsaquo;</button>
-              <select id="pm-throttlemode-sel" aria-labelledby="pm-throttlemode-label"></select>
+              <select id="pm-throttlemode-sel" aria-labelledby="pm-throttlemode-label" aria-describedby="pm-throttle-note"></select>
               <button id="pm-throttlemode-next" type="button" data-step="1" aria-label="Next throttle mode">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help">HOLD keeps your thumb on GAS. LATCH makes GAS a switch &mdash; tap once for full throttle, tap again to lift. AUTO drives the throttle for you so you only steer and brake &mdash; less tiring over a long race, and the way TOUCH steering has always worked.</p>
+          <p id="pm-throttle-note" class="adv-help" data-help="keep">HOLD: keep your thumb on GAS.</p>
+          <details id="pm-throttle-compare">
+            <summary>Compare throttle modes</summary>
+            <p class="adv-help" data-help="keep">HOLD keeps your thumb on GAS. LATCH makes GAS a switch &mdash; tap once for full throttle, tap again to lift. AUTO drives the throttle for you so you only steer and brake &mdash; less tiring over a long race, and the way TOUCH steering has always worked.</p>
+          </details>
           <div id="pm-mirror" class="set-row" role="group" aria-labelledby="pm-mirror-label">
             <span class="tune-label" id="pm-mirror-label">LEFT-HANDED</span>
             <div>
@@ -3732,7 +3743,9 @@
 <script defer crossorigin="anonymous" src="js/perf/race-entry-profile.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/quality-preset.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/renderer-picker.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/compatibility-recovery.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/gfx-debug-overlay.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/perf/three-inspector.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dock-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
@@ -3748,6 +3761,7 @@
 <script defer crossorigin="anonymous" src="js/ui/hud-tyres.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-damage.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/live-region.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-skin.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-readouts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-relative.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-strategy.js?v=dev"></script>
@@ -3784,10 +3798,12 @@
 <script defer crossorigin="anonymous" src="js/career/custom-team.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/quali-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/onboard.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/debris-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/debris-world.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/incident-sim.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/contact-geometry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/collide.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/wall-end-face.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/wall-clamp.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/car-fields.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/field-lod.js?v=dev"></script>

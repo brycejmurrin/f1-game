@@ -23,14 +23,48 @@ function setup({ raf, events = [], startT }) {
   const ctx = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/watch-transport.js", import.meta.url), "utf8"), ctx);
   const W = vm.runInContext("WatchTransport", ctx);
-  const seeks = [], state = { T: 0, duration: 100, paused: true, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
+  const seeks = [], actions = [], state = { T: 0, duration: 100, paused: true, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
   const api = { describe: () => ({ name: "GP", startT, drivers: [{ code: "AAA", name: "Alpha" }], events, speeds: [1] }), status: () => state,
-    setPaused() {}, setSpeed() {}, follow() {}, setLocked() {}, setAuto() {}, eventStep() {},
+    setPaused() {}, setSpeed() {}, follow() {},
+    setLocked(v) { actions.push(["lock", v]); state.broadcast.locked = v; },
+    setAuto(v) { actions.push(["auto", v]); state.broadcast.auto = v; if (v) { state.broadcast.locked = false; state.broadcast.manual = false; } },
+    eventStep() {},
     seek: (v) => { seeks.push(v); state.T = v; } };
   const ui = W.create({ camMode: 0 }, api); ui.start();
   const find = (key, p = body) => p.dataset.wt === key ? p : p.children.map((n) => find(key, n)).find(Boolean);
-  return { ui, seeks, state, frames, find, flush: () => frames.splice(0).forEach((f) => f()) };
+  return { ui, seeks, actions, state, frames, find, flush: () => frames.splice(0).forEach((f) => f()) };
 }
+
+test("WATCH director buttons include their visible labels in their accessible names across ownership changes", () => {
+  const t = setup({ raf: false });
+  const auto = t.find("auto"), lock = t.find("lock");
+  const labels = () => {
+    for (const button of [auto, lock, t.find("photo")]) {
+      assert.ok(button.getAttribute("aria-label").toLowerCase().includes(button.textContent.toLowerCase()),
+        `${button.textContent} must remain usable by its visible name`);
+      assert.equal(button.type, "button", "native button activation remains available");
+    }
+    assert.match(auto.getAttribute("aria-label"), /TV director choose the driver and camera/);
+    assert.match(lock.getAttribute("aria-label"), /keep following the selected driver and camera/);
+  };
+  labels();
+  assert.equal(auto.getAttribute("aria-pressed"), "true");
+  assert.equal(lock.getAttribute("aria-pressed"), "false");
+  lock.dispatch("click");
+  assert.deepEqual(t.actions, [["lock", true]], "FOLLOW LOCK still delegates its existing action");
+  assert.equal(auto.getAttribute("aria-pressed"), "false");
+  assert.equal(lock.getAttribute("aria-pressed"), "true");
+  labels();
+  auto.dispatch("click");
+  assert.deepEqual(t.actions, [["lock", true], ["auto", true]], "AUTO still delegates its existing action");
+  assert.equal(auto.getAttribute("aria-pressed"), "true");
+  assert.equal(lock.getAttribute("aria-pressed"), "false");
+  labels();
+  assert.equal(t.state.paused, true);
+  assert.equal(t.state.follow, "AAA");
+  assert.deepEqual(t.seeks, [], "naming and ownership actions do not seek the replay");
+  t.ui.stop();
+});
 
 test("50 scrub `input` events cost at most one seek (one paint) before the next frame", () => {
   const t = setup({ raf: true });

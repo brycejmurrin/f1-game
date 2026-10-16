@@ -429,6 +429,12 @@ export function checkGraph(scan) {
 
 function main() {
   const args = new Set(process.argv.slice(2));
+  if (args.has("--help") || args.has("-h")) {
+    console.log("usage: node tools/check/scan-globals.mjs [--json]\n"
+      + "  Scans every shipped script for global writers/readers, prints a summary and writes artifacts/dep-graph.json.\n"
+      + "  --help: this text; nothing is scanned and no artifact is written.");
+    return;
+  }
   const scan = scanRepo();
   if (scan.errors.length) {
     for (const e of scan.errors) console.error(`PARSE FAIL ${e.file}: ${e.error}`);

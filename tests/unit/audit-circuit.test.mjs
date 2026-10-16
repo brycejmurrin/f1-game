@@ -21,6 +21,28 @@ const require = createRequire(import.meta.url);
 const AC = require("../../tools/track/audit-circuit.cjs");
 const GA = require("../../tools/track/ground-audit.cjs");
 
+test("audit CLI rejects empty, inherited, missing and unknown check selections before execution", (t) => {
+  t.mock.method(console, "error", () => {});
+  for (const args of [
+    ["monza", "--checks", ""], ["monza", "--checks", ", ,"],
+    ["monza", "--checks", "toString"], ["monza", "--checks", "__proto__"],
+    ["monza", "--checks"], ["monza", "--checks", "--json"],
+    ["monza", "--cheks", "verify"], ["monza", "spa", "--checks", "verify"],
+    ["--checks", "verify"],
+  ]) assert.equal(AC.main(args), 2, JSON.stringify(args));
+});
+
+test("audit CLI runs the selected check with options before the circuit and equals syntax", (t) => {
+  const ids = [], output = [];
+  t.mock.method(AC.CHECKS, "verify", (id) => { ids.push(id); return { ok: true, ms: 0 }; });
+  t.mock.method(console, "log", (line) => output.push(line));
+  assert.equal(AC.main(["--checks=verify", "--json", "monza"]), 0);
+  assert.deepEqual(ids, ["monza"]);
+  const result = JSON.parse(output[0]);
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.checks), ["verify"]);
+});
+
 test("float verdict: floaters equal to the cap pass despite float-audit exiting 1", () => {
   assert.equal(AC.floatOk({ status: 1, error: null }, 2, 2), true);
   assert.equal(AC.floatOk({ status: 1, error: null }, 1, 2), true);

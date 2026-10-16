@@ -121,16 +121,48 @@ function bootImportUI(opts = {}) {
 test("backup controls mount once in their own settings page, outside renderer options", () => {
   const b = bootImportUI();
   for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {
-    assert.equal(b.dom.byId(id).parentElement.id, "pm-panel-files");
+    assert.ok(b.dom.byId("pm-panel-files").contains(b.dom.byId(id)));
   }
   b.SettingsExport.create(b.G);
   assert.equal(b.dom.document.querySelectorAll("#pm-settings-load").length, 1);
 });
 
+test("backup action navigation exposes one section without exporting or importing", () => {
+  const b = bootImportUI({ disk: { "apex26.sound": "true" } });
+  const before = [...b.disk];
+  const host = b.dom.byId("pm-panel-files");
+  for (const active of ["save", "restore", "share", "save"]) {
+    const choice = b.dom.byId("pm-files-show-" + active);
+    choice.focus(); choice.click();
+    assert.equal(b.dom.document.activeElement, choice, "navigation retains keyboard focus");
+    for (const id of ["save", "restore", "share"]) {
+      assert.equal(b.dom.byId("pm-files-" + id).hidden, id !== active);
+      assert.equal(b.dom.byId("pm-files-show-" + id).getAttribute("aria-pressed"), String(id === active));
+      assert.equal(b.dom.byId("pm-files-show-" + id).getAttribute("aria-controls"), "pm-files-" + id);
+    }
+  }
+  assert.equal(b.dom.document.querySelector("input"), null, "navigation must not launch a file chooser");
+  assert.equal(b.reloads(), 0);
+  assert.deepEqual([...b.disk], before);
+  assert.ok(host.children.some((el) => el.getAttribute("data-help") === "keep" && /accounts are excluded/.test(el.textContent)), "backup exclusions stay visible outside optional help");
+});
+
+test("leaving Restore disarms its overwrite confirmation", () => {
+  const b = bootImportUI();
+  b.dom.byId("pm-files-show-restore").click();
+  b.button.click();
+  assert.match(b.button.textContent, /OVERWRITE SETTINGS/);
+  b.dom.byId("pm-files-show-save").click();
+  assert.equal(b.button.textContent, "LOAD SETTINGS FILE");
+  b.dom.byId("pm-files-show-restore").click();
+  b.button.click();
+  assert.equal(b.dom.document.querySelector("input"), null, "returning requires a fresh confirmation");
+});
+
 test("Files share feedback stays visible and accessible with Undo instructions", () => {
   const b = bootImportUI();
   const input = b.dom.byId("pm-share-code-in"), status = b.dom.byId("pm-share-code-status");
-  assert.equal(status.parentElement.id, "pm-panel-files");
+  assert.equal(status.parentElement.id, "pm-files-share");
   assert.equal(status.hidden, false);
   assert.equal(status.getAttribute("role"), "status");
   assert.equal(status.getAttribute("aria-live"), "polite");
@@ -138,7 +170,7 @@ test("Files share feedback stays visible and accessible with Undo instructions",
   assert.equal(status.getAttribute("data-help"), "keep");
   assert.equal(input.getAttribute("aria-describedby"), "pm-share-code-help pm-share-code-status");
   assert.match(b.dom.byId("pm-share-code-help").textContent, /paste UNDO here to restore it/);
-  assert.match(b.dom.byId("pm-share-code-help").textContent, /APXG1 \/ #ghost=/);
+  assert.match(b.dom.byId("pm-share-code-help").textContent, /Ghost recording codes and links are imported separately/);
 });
 
 for (const kind of ["setup", "livery", "daily", "undo", "invalid"]) test(`Files ${kind} share import releases the Settings modal only when navigating`, () => {
@@ -211,7 +243,7 @@ test("ensureMounted remounts after the files panel was emptied", () => {
   assert.equal(typeof b.SettingsExport.ensureMounted, "function");
   b.SettingsExport.ensureMounted();
   for (const id of ["pm-settings-changed", "pm-settings-all", "pm-settings-load"]) {
-    assert.equal(b.dom.byId(id).parentElement.id, "pm-panel-files");
+    assert.ok(b.dom.byId("pm-panel-files").contains(b.dom.byId(id)));
   }
 });
 

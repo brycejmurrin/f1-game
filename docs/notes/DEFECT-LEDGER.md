@@ -36,8 +36,12 @@ Each reproduced in the VM or a unit harness first (probes in `scratch/hunt-*`).
   at run-off termini (`RUNOFF_DEFAULT` 9 ↔ tyre `hw+1.1`); `wallAt`'s
   `Math.min` + the clamp teleported `c.x`. `TrackBuildProps.featherBarrierEnds`
   (two passes, cliff 1.5 m, 5 nodes, `pit.keep` protected) ramps off-pit
-  clearance jumps under 1.5 m (`barrier-runoff-jumps.test.mjs`). Pit-edge
-  end-face clamp deferred.
+  clearance jumps under 1.5 m (`barrier-runoff-jumps.test.mjs`). The pit-edge
+  step that feathering cannot touch (a pit-wall taper tightens the limit 5-9 m in
+  one step on Monaco/Monza/Silverstone) is FIXED by #1623: `WallEndFace`
+  (`js/physics/wall-end-face.js`, called from `WallClamp.apply`) treats it as an
+  end face — holds s, scrubs speed, keeps x — pinned by `wall-end-face-vm.test.mjs`
+  (player |dx| 8.1 m -> < 1.5 m per step).
 - OPEN: The AI brakes by `excess / pace`, so at OVERALL SPEED 1.34 it
   overshoots corners (pinned the other way by ai-drive.test's pace-invariance
   case — needs a decision). An AI wedged behind a PARKED player is never
