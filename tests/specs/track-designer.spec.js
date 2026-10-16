@@ -36,6 +36,9 @@ test.describe("Touch designer workspace", () => {
       await root.getByRole("tab", { name: "DESIGN", exact: true }).tap();
       for (const mode of ["edit", "elevation"]) {
         await root.locator(`[data-role="mode-bar"] [data-mode="${mode}"]`).tap();
+        await expect(root.locator('canvas[data-role="profile"]')).toBeVisible();
+        expect(await root.evaluate((e) => Math.min(...[...e.querySelectorAll(".td-stage > canvas")]
+          .flatMap((c) => { const r = c.getBoundingClientRect(); return [r.width, r.height]; }))), "both drawing surfaces retain usable dimensions").toBeGreaterThanOrEqual(44);
         await expect.poll(() => root.evaluate((e) => {
           const stage = e.querySelector(".td-stage").getBoundingClientRect();
           const profile = e.querySelector('canvas[data-role="profile"]').getBoundingClientRect();
@@ -49,7 +52,7 @@ test.describe("Touch designer workspace", () => {
       }
       for (const name of ["MY CIRCUITS", "HOW TO", "DESIGN"]) await root.getByRole("tab", { name, exact: true }).tap();
       await root.locator('[data-role="file-menu"] > summary').tap();
-      await root.getByRole("button", { name: "EXPORT", exact: true }).click({ trial: true });
+      for (const name of ["SHARE", "Share a picture card of this circuit", "EXPORT", "IMPORT"]) await root.getByRole("button", { name, exact: true }).click({ trial: true });
       await page.keyboard.press("Escape");
       expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), `${width}x${height}@${scale}: no horizontal escape`).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`responsive-${width}x${height}-${scale}.jpg`) });
