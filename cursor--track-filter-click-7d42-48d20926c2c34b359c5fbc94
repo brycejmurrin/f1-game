@@ -1,1 +1,0 @@
-1792110734	Bryce Murrin	Investigate user-reported Season/Classics clicks in track selector; own js/ui/select-screen.js and matching existing regression only. Local browser reproduction, no external rooms or credentials.  [cursor/track-filter-click-7d42; session 48d20926c2c34b359c5fbc94]
