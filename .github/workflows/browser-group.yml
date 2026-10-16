@@ -123,7 +123,7 @@ jobs:
           WORKERS: ${{ inputs.workers }}
         run: node tools/ci/remote-group.mjs --run-shard
       - name: Failure artifacts
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-artifacts-${{ inputs.group }}-${{ matrix.shard }}

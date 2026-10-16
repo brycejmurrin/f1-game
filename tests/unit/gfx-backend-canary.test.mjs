@@ -2473,13 +2473,9 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   const post = code("js/render/three/tlx-post.js");
   assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
   assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
-  // ForceGL / WebGL2 path: readPixels must not run in the Promise executor —
-  // Appearance's MutationObserver → previewScene used to freeze 10–15 s on that
-  // turn under llvmpipe (2026-10-05). setTimeout(run, 0) yields one macrotask.
-  const capBody = fnBody(tlx, "capturePixels");
-  assert.match(capBody, /setTimeout\s*\(\s*run\s*,\s*0\s*\)/,
-    "WebGL capturePixels defers sync readPixels off the caller's turn");
-  assert.match(capBody, /gl\.readPixels/, "the deferred run still readPixels");
+  // WebGL2 readback timing/state/cleanup are exercised against the production
+  // capture method in renderer-soft-lifecycle. The old timer + client-memory
+  // readPixels pin only deferred a synchronous GPU stall to another turn.
   assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
   assert.match(fnBody(tlx, "softPresentState"), /\bon:\s*!!\s*_softBlit\b/,
     "softPresentState must be OWN so descriptor-copy does not keep GLX's");
@@ -4042,7 +4038,12 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
   assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
-  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, ""), /m\.geometry = null; m\.material = null;/,
+  const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
+  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
+    "warm probes dispose before clearing references, after pending compilation settles");
+  assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
+    "a retired probe releases when its last compiler settles");
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
@@ -6186,6 +6187,23 @@ test("TLX mirror honours software readback backpressure and resumes when the rea
   assert.equal(opened, 2);
 });
 
+test("TLX car shadow pass honours software readback backpressure (#2226)", () => {
+  // Measured 2026-10-15 (SwiftShader, monaco orbit): the car map was the only
+  // submitter while a soft read waited, ~30 queue.submit/s, so the read missed
+  // the stale guard and every replacement queued behind that backlog —
+  // awaitSoftPresent timed out at 90 s. A held frame KEEPs the map instead.
+  let _softBlit = true, _softReadPending = true, began = 0, kept = 0;
+  const shadowSys = { carShadowBegin() { began++; }, carShadowKeep() { kept++; return true; } };
+  const begin = eval("(function(vp,boxScale){" + fnBody(code("js/render/three/tlx.js"), "carShadowBegin") + "})");
+  for (let i = 0; i < 60; i++) begin([], 1);
+  assert.equal(began, 0, "a pending read cannot accumulate car-shadow submissions");
+  assert.equal(kept, 60, "a held frame keeps the car map armed (no shadow strobe)");
+  _softReadPending = false; begin([], 1);
+  assert.equal(began, 1, "the pass resumes when the read drains");
+  _softBlit = false; _softReadPending = true; begin([], 1);
+  assert.equal(began, 2, "hardware presentation keeps the per-frame car pass");
+});
+
 test("TLX scene MSAA: preset-driven on the desktop WebGL2 backend only, depth resolved", () => {
   // 2026-10-01: the shipped renderer had NO geometric AA — the scene target was
   // single-sample and the canvas MSAA only ever smoothed the FXAA quad. The
@@ -6327,7 +6345,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");
   assert.match(warm, /renderer\.setRenderTarget\(usePost \? post\.sceneTarget\(\) : softOutRT\(\)\)/,
     "the glass compiles under the scene pass's target, where it draws");
-  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileAsync\(m, camera, scene\)/,
+  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileWarmProbe\(_glassProbeGeo, gm, sx\)/,
     "both winding signs of the real material");
   assert.match(warm, /"uv", new THREE\.BufferAttribute/, "on createTexMesh's layout (position / normal / uv)");
   const glass = fnBody(code("js/render/three/tsl-fx.js"), "mirrorGlassMaterial");

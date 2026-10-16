@@ -379,6 +379,58 @@ test("the now-playing poll waits out a 429's Retry-After", async () => {
   assert.equal(polls, 1, "no poll inside the 120 s Retry-After window");
 });
 
+test("now-playing polling recovers when response headers arrive but JSON body stalls", async () => {
+  const intervals = [];
+  let polls = 0;
+  let stalledSignal;
+  let resolveStalled;
+  const stalledBody = new Promise((resolve) => { resolveStalled = resolve; });
+  const { SpotifyMusic, flush } = load((url, opts) => {
+    if (String(url).endsWith("/me/player")) {
+      polls++;
+      if (polls === 1) stalledSignal = opts.signal;
+      return Promise.resolve(polls === 1
+        ? { ok: true, status: 200, json: () => stalledBody }
+        : jsonResponse({ item: { name: "Recovered", artists: [] }, is_playing: true }));
+    }
+    return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, liveToken("live")]], intervals, globals: { AbortController } });
+  await SpotifyMusic.connect();
+  await settle();
+  assert.equal(polls, 1);
+  flush(); // fire the fake 15 s watchdog
+  await settle();
+  assert.equal(stalledSignal.aborted, true, "the timeout must release the stalled network body");
+  await intervals[0]();
+  await settle();
+  assert.equal(polls, 2, "a stalled body must not hold the poll's in-flight guard forever");
+  assert.equal(SpotifyMusic.status().track, "Recovered — ");
+  resolveStalled({ item: { name: "Obsolete", artists: [] }, is_playing: true });
+  await settle();
+  assert.equal(SpotifyMusic.status().track, "Recovered — ", "a late body cannot replace newer playback state");
+});
+
+test("a stalled now-playing body can reject after cancellation without an unhandled rejection", async () => {
+  let rejectBody;
+  let signal;
+  const body = new Promise((_, reject) => { rejectBody = reject; });
+  const { SpotifyMusic, flush } = load((url, opts) => {
+    if (String(url).endsWith("/me/player")) {
+      signal = opts.signal;
+      return Promise.resolve({ ok: true, status: 200, json: () => body });
+    }
+    return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, liveToken("live")]], globals: { AbortController } });
+  await SpotifyMusic.connect();
+  await settle();
+  flush();
+  await settle();
+  assert.equal(signal.aborted, true);
+  rejectBody(new Error("body aborted after timeout"));
+  await settle();
+  assert.equal(SpotifyMusic.status().state, "connected");
+});
+
 /** A fake GameAudio that records the music backend the module installs/removes. */
 function fakeAudio() {
   const a = { backend: null, sets: [] };
