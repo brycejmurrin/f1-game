@@ -35,7 +35,12 @@ function boot() {
     const e = {
       id, cls: new Set(), attrs: {},
       addEventListener: (t, f) => { (on[t] ||= []).push(f); }, removeEventListener() {},
-      fire(t, ev) { (on[t] || []).forEach((f) => f({ pointerId: 1, clientX: 0, clientY: 0, preventDefault() {}, ...ev })); },
+      fire(t, ev) {
+        const event = { pointerId: 1, clientX: 0, clientY: 0, preventDefault() { this.defaultPrevented = true; },
+          stopPropagation() { this.cancelBubble = true; }, ...ev };
+        (on[t] || []).forEach((f) => f(event));
+        return event;
+      },
       style: {}, dataset: {}, children: [],
       classList: {
         add(c) { e.cls.add(c); }, remove(c) { e.cls.delete(c); },
@@ -217,4 +222,88 @@ test("a MIRROR press on the grid does not survive clearDriveEdges (it would togg
   down("KeyM");
   assert.equal(Input.consumeMirror(), true, "a press in the running race is still consumed once");
   assert.equal(Input.consumeMirror(), false);
+});
+
+
+const tapActions = [
+  ["btn-boost", "consumeBoostToggle"], ["btn-ot", "consumeOvertake"],
+  ["btn-aero", "consumeAeroToggle"], ["shift-up", "consumeShiftUp"], ["shift-down", "consumeShiftDown"],
+];
+
+test("HUD tap actions accept semantic clicks and keep pointer presses immediate without firing twice", () => {
+  for (const [id, consume] of tapActions) {
+    const { Input, sb } = boot(), button = sb.document.getElementById(id);
+    button.fire("click", { detail: 0 });
+    assert.equal(Input[consume](), true, id + " activates through keyboard/assistive click");
+    for (const pointerType of ["touch", "mouse", "pen"]) {
+      button.fire("pointerdown", { pointerType, button: 0 });
+      assert.equal(Input[consume](), true, id + " answers on pointerdown");
+      button.fire("pointerup", { pointerType });
+      button.fire("click", { detail: 1, pointerType, button: 0 });
+      assert.equal(Input[consume](), false, id + " does not repeat on the pointer's click");
+    }
+    for (const pointerId of [11, 12]) {
+      button.fire("pointerdown", { pointerId, pointerType: "touch" });
+      assert.equal(Input[consume](), true, "each finger gets one immediate press");
+    }
+    for (const pointerId of [11, 12]) {
+      button.fire("click", { pointerId, detail: 1 });
+      assert.equal(Input[consume](), false, "neither finger's follow-up click repeats its press");
+    }
+    button.fire("pointerdown", { pointerType: "touch" });
+    assert.equal(Input[consume](), true);
+    // A drag may produce no click; it must not swallow the next AT activation.
+    button.fire("pointercancel", { pointerType: "touch" });
+    button.fire("click", { detail: 0 });
+    assert.equal(Input[consume](), true, "a pointerless activation survives a lost pointer click");
+  }
+});
+
+test("HUD tap actions honor native and announced disabled states for both activation paths", () => {
+  for (const [id, consume] of tapActions) {
+    const { Input, sb } = boot(), button = sb.document.getElementById(id);
+    for (const disabled of ["native", "aria"]) {
+      button.disabled = disabled === "native";
+      button.setAttribute("aria-disabled", disabled === "aria" ? "true" : "false");
+      button.fire("pointerdown", { pointerType: "touch" });
+      button.fire("click", { detail: 0 });
+      assert.equal(Input[consume](), false, id + " ignores " + disabled + " disabled activation");
+    }
+    button.removeAttribute("aria-disabled"); button.disabled = false;
+    button.fire("click", { detail: 0 });
+    assert.equal(Input[consume](), true, "reenabling restores semantic activation");
+  }
+});
+
+test("Enter and Space on a HUD tap button activate its click without also reaching BOOST", () => {
+  for (const code of ["Enter", "NumpadEnter", "Space"]) {
+    const { Input, sb, listeners } = boot(), button = sb.document.getElementById("shift-up");
+    Object.assign(button, { tagName: "BUTTON", matches: () => true, click: () => button.fire("click", { detail: 0 }) });
+    sb.document.activeElement = button;
+    const send = (type, extra) => {
+      const event = button.fire(type, { code, key: code === "Space" ? " " : "Enter", target: button, ...extra });
+      if (!event.cancelBubble) (listeners[type] || []).forEach((f) => f(event));
+      return event;
+    };
+    const down = send("keydown");
+    assert.equal(down.cancelBubble, true, code + " must not initiate a window driving binding");
+    assert.equal(down.defaultPrevented, true, "the explicit click replaces the UA default without duplication");
+    assert.equal(Input.consumeShiftUp(), true);
+    send("keydown", { repeat: true });
+    assert.equal(Input.consumeShiftUp(), false, "holding the key cannot repeat the tap action");
+    assert.ok(!send("keyup").cancelBubble, "releases still reach the window input bookkeeping");
+    assert.equal(Input.consumeBoostToggle(), false, "Space on SHIFT UP cannot toggle BOOST");
+  }
+});
+
+test("a driving key released after focus moves into a HUD tap button clears its held latch", () => {
+  const { Input, sb, listeners } = boot(), button = sb.document.getElementById("shift-up");
+  Input.setKeyBinding("throttle", 0, "Space");
+  const key = { code: "Space", key: " ", preventDefault() {}, target: { tagName: "BODY" } };
+  (listeners.keydown || []).forEach((f) => f(key));
+  assert.equal(Input.throttle(), true, "Space was held while the canvas owned keyboard input");
+  Object.assign(button, { tagName: "BUTTON", matches: () => true }); sb.document.activeElement = button;
+  const up = button.fire("keyup", { code: "Space", key: " ", target: button });
+  if (!up.cancelBubble) (listeners.keyup || []).forEach((f) => f(up));
+  assert.equal(Input.throttle(), false, "moving focus cannot strand a rebound driving key");
 });
