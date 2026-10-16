@@ -10,9 +10,9 @@ docs/TESTING.md §Merge train, §CI aggregator, §What runs on PRs versus nightl
   Keep about six or fewer ready PRs open at a time; batch small ones.
 - Own notes file per PR: `docs/notes/<topic>.md` (session log stays in the
   PR body — this file holds durable design evidence for the topic).
-- Sync once with `node tools/ci/sync-pr.mjs <branch>` then `--push` before
-  the final CI run (in addition to SYNC ONLY WHEN YOU MUST for conflicts /
-  tip reds). `tools/ci/behind-ship.mjs` warns when a PR head is >10 commits
+- Sync with `node tools/ci/sync-pr.mjs <branch>` only when GitHub reports a
+  conflict or a required tip check is red (AGENTS.md §Git branch & deploy:
+  clean-behind is not a reason, every re-sync buys a full PR run). `tools/ci/behind-ship.mjs` warns when a PR head is >10 commits
   behind ship; it never fails the job.
 - Sorted shared files (`tests/data/ratchets.json`, `tests/groups.json`): use
   the normalize command from the merge-hygiene PR (#484) when merged —
