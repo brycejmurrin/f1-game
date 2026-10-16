@@ -370,6 +370,17 @@ test("fitHud: --hud-fit-stamp is written once in steady state, and again after a
   assert.notEqual(after, stamp, "the stamp changes after a clash clears");
 });
 
+test("fitHud: a steady tick skips the stamp probe, but a clash the key cannot see voids the stamp within the 3 s backstop (#2240)", () => {
+  const h = bootFlipHarness();
+  for (let i = 0; i < 40; i++) h.tick();
+  assert.match(h.root.style.getPropertyValue("--hud-fit-stamp"), /^\d+$/);
+  const c = forceUnresolvableClash(h);   // geometry moves; no fit-key input changes
+  let voided = -1;
+  for (let i = 0; i < 70 && voided < 0; i++) { h.tick(); if (h.root.style.getPropertyValue("--hud-fit-stamp") === "") voided = i; }
+  assert.ok(voided >= 0 && voided <= 31, "stamp stayed clear over a painted clash for " + voided + " ticks");
+  assert.ok(c.reads() > 0);
+});
+
 /* READ BEFORE WRITE (round-3 5-perf F2). The instruments (speed, gear, --rpm)
  * are written every frame; the 10 Hz tick's fitHud reads layout. Painted
  * first, they left the tree dirty and the fit's first viewport / rect read
@@ -525,7 +536,10 @@ test("HUD tick: fit reads run before the frame's instrument writes, and the view
   // measures after REL / sector rows / announce land (tip: 2-3 per tick).
   assert.ok(worst <= 1,
     "a tick forced " + worst + " layouts: " + JSON.stringify(frames.filter((f) => f.forced > 1).slice(0, 2)));
-  assert.ok(frames.filter((f) => f.forced === 1).length >= 15, "the harness really crossed the 10 Hz throttle");
+  // #2240: a steady tick skips the post-write probe, so the forced layout is the 3 s backstop's, not every tick's.
+  const forcedTicks = frames.filter((f) => f.forced === 1).length;
+  assert.ok(forcedTicks <= 3, "steady ticks still force a layout each: " + forcedTicks + " of ~20");
+  assert.ok(frames.filter((f) => f.vpReads === 0).length === frames.length, "no viewport reads");
   assert.equal(frames.reduce((a, f) => a + f.vpReads, 0), 0, "innerWidth / innerHeight are not read per tick once cached");
 });
 
@@ -577,7 +591,7 @@ test("publishing a changed top-control zoom requests one subsequent full fit", (
     Object.assign(ctx, {
       document: { body: { classList: { contains: () => false } }, documentElement: ctx.root },
       _hudTop: {}, _hudBottom: {}, _fitStamped: false, _fitClearSeq: 0,
-      pickDocks() {}, els: {}, phonePaintedClash: () => false,
+      pickDocks() {}, els: {}, phonePaintedClash: () => false, radioPaintedKey: () => "", _stampKey: "", _stampWait: 0,
       hStyle(root, key, value) { styles.set(key, value); },
     });
     vm.runInContext(source.slice(stampStart, stampEnd), ctx);

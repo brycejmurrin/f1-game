@@ -162,7 +162,7 @@ test("TLX-02: a dead sun pass zeroes the lit shadow strength every frame", () =>
 });
 
 test("TLX-03: the DPR cap follows mobileTier, so GRAPHICS: HIGH on a phone gets full DPR", () => {
-  assert.match(TLX, /const DPR_CAP = mobileTier \? 1\.5 : 2;/);
+  assert.match(TLX, /let DPR_CAP = mobileTier \? 1\.5 : 2;/);
 });
 
 test("TLX-09: the pack DataArrayTexture drops its CPU copy after the first upload", () => {

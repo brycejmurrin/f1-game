@@ -96,3 +96,17 @@ test("monza: the long corners with a clear approach turn in from the outside and
     assert.ok(apex >= 4.0, `corner at s=${k.s0.toFixed(0)}: apex not inside (${apex.toFixed(2)} m)`);
   }
 });
+
+// #2545 — the lap's seam (node n-1 → 0) is no special place: every circuit's line crosses it with
+// a step the slope cap allows. jeddah's seam step (0.898 m on a 4 m node) is the steepest, the
+// middle of a smooth 0.7–1.1 m/node crossing, not a jump; mosport is next at 0.384 m.
+test("every circuit: the line's step across the lap seam is within SLOPE_MAX", () => {
+  const SLOPE_MAX = Tracks._vmContext.TrackLine.SLOPE_MAX;
+  const bad = [];
+  for (const def of Tracks.LIST) {
+    const t = Tracks.build(def), n = t.n, ds = t.total / n;
+    const seam = Math.abs(t.line[0] - t.line[n - 1]);
+    if (!(seam <= SLOPE_MAX * ds + 1e-6)) bad.push(`${def.id}: ${seam.toFixed(3)} m > ${(SLOPE_MAX * ds).toFixed(3)} m`);
+  }
+  assert.deepEqual(bad, []);
+});
