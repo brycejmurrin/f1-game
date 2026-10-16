@@ -82,7 +82,7 @@ const DataResults = (function () {
     "Pick it again in a moment — the free F1 API rate-limits hard.";
 
   function create({ el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
-                    invalidateOther, teamChip, fmtDateTime, NO_RESULT_MSG }) {
+                    invalidateOther, teamChip, fmtDateTime, NO_RESULT_MSG, onOutcome }) {
     let bodyGen = 0;
     let round = "all";        // "all" | 0 | 1 | 2 — which qualifying round is shown
 
@@ -91,7 +91,7 @@ const DataResults = (function () {
         const wrap = el("div", "dh-tabbody");
         const body = el("div", "dh-res-body");
         wrap.appendChild(buildPicker(function (meta) {
-          renderBody(meta, body);
+          renderBody(meta, body, wrap);
           invalidateOther("results");
         }));
         wrap.appendChild(body);
@@ -99,7 +99,7 @@ const DataResults = (function () {
           body.appendChild(emptyMsg(NO_RESULT_MSG));
           return wrap;
         }
-        renderBody(sel.meta, body);
+        renderBody(sel.meta, body, wrap);
         return wrap;
       });
     }
@@ -107,18 +107,28 @@ const DataResults = (function () {
     // Async and re-entrant: every pick in the picker lands here, so an
     // in-flight fetch for the session the player just moved off must not
     // paint over the newer one.
-    function renderBody(meta, body) {
+    function renderBody(meta, body, wrap) {
       const myGen = ++bodyGen;
+      const staleApi = typeof F1API.staleMark === "function" && typeof F1API.staleSince === "function" ? F1API : null;
+      const mark = staleApi ? staleApi.staleMark() : 0;
+      function publish(status, error) {
+        const dataAt = status === "ready" && staleApi ? staleApi.staleSince(mark) : null;
+        wrap.tabOutcome = { status, error: error || null, at: Date.now(), dataAt, offlineCopy: dataAt != null,
+          hasData: status === "ready" };
+        if (onOutcome) onOutcome(wrap);
+      }
       round = "all";           // a new session starts on its own overall order
       clear(body);
       if (!meta || meta.sessionKey == null) {
         body.appendChild(emptyMsg(NO_RESULT_MSG));
+        publish("empty");
         return;
       }
       body.appendChild(header(meta));
       const slot = el("div");
       slot.appendChild(spinner());
       body.appendChild(slot);
+      publish("loading");
 
       const key = meta.sessionKey;
       // The driver list is a nicety (names, teams, colours) — a session whose
@@ -129,7 +139,8 @@ const DataResults = (function () {
       ]).then(function (both) {
         if (myGen !== bodyGen) return;
         paint(meta, both[0] || [], both[1] || [], slot);
-      }, function () {
+        publish("ready");
+      }, function (err) {
         // NOT the empty-tab copy. "Nothing published yet" and "OpenF1 rate-limited
         // that request" look identical to a player, and only one of them is worth
         // pressing the tab again for — api.js resolves the unpublished case with
@@ -137,6 +148,7 @@ const DataResults = (function () {
         if (myGen !== bodyGen) return;
         clear(slot);
         slot.appendChild(emptyMsg(FETCH_FAIL_MSG));
+        publish("failed", err);
       });
     }
 
