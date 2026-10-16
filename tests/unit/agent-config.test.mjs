@@ -620,8 +620,10 @@ test("the always-on instruction surface stays inside its budget", () => {
     assert.equal(typeof description, "string", `${d.name}: description must be a YAML string`);
     descWords += description.split(/\s+/).filter(Boolean).length;
   }
-  assert.ok(descWords <= 1600,
-    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1600) — tighten one, or retire a skill`);
+  // Raised 1600 -> 1700 on 2026-10-16 (Bryce: "Raise the skill budget"): 40 skills left
+  // ~0 slack, so every skill edit traded routing recall (skill-hint-hook floor) for budget.
+  assert.ok(descWords <= 1700,
+    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1700) — tighten one, or retire a skill`);
 });
 
 // ── BYTE AND ROUTING BUDGETS (2026-10-14, docs/notes/AGENT-GUARDS-2026-10-14.md) ──
@@ -680,8 +682,9 @@ test("skill descriptions: a char budget, every arrow resolves, every skill has r
     assert.ok(exists(`tests/data/skill-routing/queries/${name}.json`),
       `${name} has no tests/data/skill-routing/queries/${name}.json (5 should-fire + 3 near-miss queries)`);
   }
-  // 11,986 chars on 2026-10-14, rounded up to the next 100. Trim one to add one.
-  assert.ok(chars <= 12000, `${skills.length} skill descriptions are ${chars} chars (budget 12,000)`);
+  // 11,986 chars on 2026-10-14, rounded up to the next 100. Raised to 12,800 on 2026-10-16
+  // (Bryce: "Raise the skill budget") for the same reason as the word budget. Trim one to add one.
+  assert.ok(chars <= 12800, `${skills.length} skill descriptions are ${chars} chars (budget 12,800)`);
   for (const f of fs.readdirSync(path.join(ROOT, "tests/data/skill-routing/queries"))) {
     const rows = JSON.parse(read(`tests/data/skill-routing/queries/${f}`));
     assert.ok(skills.includes(f.replace(/\.json$/, "")), `${f}: no such skill`);
@@ -832,6 +835,19 @@ test("bash-guard's `if:` filters parse, and every policed command shape still re
     assert.ok(reaches(cmd), `bash-guard must still run for: ${cmd}`);
   for (const cmd of ["ls -la", "cat README.md", "grep -n foo file", "head -5 x", "sed -n 1,5p x"])
     assert.ok(!reaches(cmd), `read-only command should skip bash-guard: ${cmd}`);
+});
+
+// #1984: a delegation prompt must not grant a write the track-surveyor edit hook denies.
+test("the survey-track delegation template owns exactly what the track-surveyor hook lets it write (#1984)", () => {
+  const tpl = fs.readFileSync(path.join(ROOT, ".claude/skills/survey-track/references/delegation.md"), "utf8");
+  const owned = tpl.split("\n").find((l) => l.startsWith("OWNED"));
+  assert.ok(owned, "template has an OWNED line");
+  assert.match(owned, /js\/circuits\/<id>\.js/);
+  assert.match(owned, /js\/circuits\/scenery\/<id>\.js/);
+  assert.doesNotMatch(owned, /docs\//, "docs/tracks/<id>.md is not writable by the surveyor");
+  assert.match(tpl.split("\n").find((l) => l.startsWith("FORBIDDEN")), /docs\/\*\*/);
+  const hook = fs.readFileSync(path.join(ROOT, ".claude/hooks/protect-files.sh"), "utf8");
+  assert.match(hook, /only js\/circuits\/<id>\.js, js\/circuits\/scenery\/<id>\.js, scratch\/ and\s+#\s+artifacts\//);
 });
 
 // Skill hygiene pins from the 2026-10-16 issue burn-down (#1693 #1688 #1687 #1700).

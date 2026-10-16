@@ -238,6 +238,7 @@ const Ghost = (function () {
 
   function record(t, s, x) {
     if (!rec) return;
+    if (!Number.isFinite(t) || !Number.isFinite(s) || !Number.isFinite(x)) return;   // a NaN frame would become the stored best
     if (rec.t.length && t - lastSampleT < 1 / HZ) return;
     if (rec.t.length >= MAX_SAMPLES || (rec.t.length && t - rec.t[0] > MAX_LAP_S)) { rec = null; return; }
     if (rec.s.length && s < rec.s[rec.s.length - 1]) return;
@@ -320,7 +321,9 @@ const Ghost = (function () {
     const done = rec;
     rec = null;
     if (lapTime >= bestTime()) return false;
-    best = { time: round(lapTime, 3), t: done.t, s: done.s, x: done.x };
+    const next = { time: round(lapTime, 3), t: done.t, s: done.s, x: done.x };
+    if (!valid(next)) return false;
+    best = next;
     if (meta && typeof meta === "object") best.meta = meta;
     if (storageId != null) scheduleSave(storageId, best);
     return true;

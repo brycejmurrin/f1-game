@@ -406,6 +406,7 @@ const FULL = [
   "js/career/custom-team.js",
   "js/ui/quali-sheet.js",
   "js/ui/onboard.js",
+  "js/physics/debris-draw.js",
   "js/physics/debris-world.js",
   "js/physics/incident-sim.js",
   "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)

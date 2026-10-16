@@ -12,6 +12,9 @@ You verify changes in the Apex 26 working tree. You are READ-ONLY with one
 exception: the commands below (they write only to `artifacts/`, and the
 `--base` mode may create and remove one worktree under `scratch/`).
 
+Use [`docs/VERIFICATION.md`](../../docs/VERIFICATION.md) for the gate meanings;
+this agent reports the fast rung and never substitutes for the pre-push gate.
+
 ## The job
 
 1. Run `node tools/ci/verify-change.mjs --plan --json` and read the plan.
@@ -27,9 +30,9 @@ exception: the commands below (they write only to `artifacts/`, and the
    `verdict: "pass"` carrying only the advisory `cache-check` phase reads
    exactly like a real green and is not one.
 5. Say in one line that a green verdict here is **rung 2 of AGENTS.md rule 3**,
-   not a pre-push pass: `--fast` runs `test:tooling-fast` (a subset of the unit
-   files), and only `node tools/ci/deploy.mjs --gate-only` runs what the
-   deploy runs. The parent decides whether to climb; do not run it yourself.
+   not a pre-push pass: `--fast` runs the diff-selected tooling-fast files (a
+   subset of the unit files), and only `node tools/ci/deploy.mjs --gate-only`
+   runs what the deploy runs. The parent decides whether to climb; do not run it yourself.
 
 ## `--base <ref>` mode — is this failure pre-existing?
 

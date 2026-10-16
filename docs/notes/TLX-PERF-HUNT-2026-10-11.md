@@ -254,7 +254,7 @@ meanLuma, gpuMs) — a day leg covers E1, night legs E9 and E11.
   full report to the session scratchpad (gone with the container; this note is the copy).
 - The hunters beautified the minified vendored three r186 with the repo's terser to read
   its internals; those `pretty:NNNN` lines are reproducible from
-  `vendor/three-0.186.0` but are not repo lines.
+  `vendor/three-0.186.1` but are not repo lines.
 - Cross-slice duplicates were found independently by two hunters each, which is weak
   corroboration: ssrTag format (B7 = D2 = E3), the lamp texture upload (A3 = E11), the
   mirror's instance re-pack (A1, and E's cost table).
