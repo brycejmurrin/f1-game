@@ -120,7 +120,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
-| **check/ratchets.mjs** | Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update`, `--json`, `--base <ref>` (names raises). | — |
+| **check/ratchets.mjs** | Size ratchets: ratchets.json + per-branch ratchets.d/ deltas. `--check`, `--update`, `--fold`, `--json`, `--base <ref>`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/skill-routing-eval.py** | Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none). | agent-config |
@@ -142,6 +142,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/bake-flyby.mjs** | Bakes a copied `window.FlybyShots = [...]` blob into js/camera/flyby-seq.js's DEFAULT shot list. | playwright-probe |
 | **gen/garage-defaults.mjs** | Apply an exported GARAGE file to the shipped defaults in `js/data/garage-defaults.js`; `--check` reports drift. | — |
 | **gen/gen-arch-table.mjs** | Generates the module index block of `docs/ARCHITECTURE.md` from the manifest + each file's header; `--check` drift. | check-changes |
+| **gen/gen-changelog.mjs** | Validates `docs/changelog.d` fragments (`--check`); `--fold` writes them into `CHANGELOG.md` under the build. | check-changes |
 | **gen/gen-circuit-meta.mjs** | Extracts circuit picker metadata into js/track/circuit-meta.js (LAZY_CIRCUIT hydrates). | check-changes |
 | **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
 | **gen/gen-ladder-figures.mjs** | Prints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing. | check-changes |
@@ -241,8 +242,9 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/coplanar-audit.cjs** | Z-fighting detector — same-facing coplanar faces (`dot ≥ 0.999`); `--gate` ratchets against `coplanar-baseline.json`. | scenery-dress |
 | **track/designer-code.mjs** | Headless designer share-code checker: decode APXT1/APXT2 via editor-vm, validate + insight summary; `--json`. | new-track |
 | **track/float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`. | survey-track |
+| **track/footprint-support.cjs** | Advisory full-footprint support checks for substantial box masses; exact vertical contacts, review shot jobs. | scenery-dress |
 | **track/graph-parity.cjs** | Scene-graph migration gate: builds every circuit twice (baseline ref vs tree) and diffs prop geometry vertex for vertex. | scenery-dress |
-| **track/ground-audit.cjs** | Buried slabs, unsupported prims, flat coplanar faces; `--all --gate`/`--update` ratchet `scenery-audit-baseline.json`. | scenery-dress |
+| **track/ground-audit.cjs** | Buried/unsupported/coplanar gates plus advisory partial-footprint warnings; `--why --json`, `--shots jobs.json`. | scenery-dress |
 | **track/import-circuit-path.mjs** | Projects a `bacinger/f1-circuits` GeoJSON feature into a circuit def's `path`; `--self-check` diffs committed traces. | new-track |
 | **track/line-audit.mjs** | Audits the baked racing line on real circuits: slope, clamp time, corner-time / lap-time gains, tighter corners. | agent-view |
 | **track/measure-props-over-road.mjs** | Prop geometry on/above the racing line for ONE track; JSON report, `--shots` writes PNGs to `artifacts/tmp/`. | scenery-dress |
@@ -313,6 +315,7 @@ The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign 
 | **lighting/campaign/tune.mjs** | lighting-campaign: candidate values, sensitivity classification, and the minimal per-condition tune profile. | lighting-tuner |
 | **lighting/lighting-tuner-sweep.mjs** | Does each LIGHTING TUNER slider change the image? Sharded, resumable, paired A→B→A' sampling per (condition, knob). | lighting-tuner |
 | **lighting/look-survey-sheet.py** | 4×5 tod×weather contact sheet from `artifacts/lighting/shots/<id>/` → `docs/look-survey/<id>_grid.png`; `--ready`. | mcp-probe |
+| **lighting/pit-canopy-evidence.mjs** | Bahrain pit night A/B: canopy lamps on vs patched off; PNGs + lightState under artifacts/pit-canopy-night/. | — |
 | **lighting/preset-validation.mjs** | Shared lighting snapshot/proposal validation: profile keys, knob bounds and slider grid; deterministic change receipts. | lighting-tuner |
 | **lighting/slider-effect-live.mjs** | The `--live` harness imported by `slider-effect.mjs`: chase+park recipes, restores the pre-push live value on exit. | lighting-tuner |
 | **lighting/slider-effect-view.py** | Visual filter for a slider A/B: `filter.png`, `heat.png`, `sheet.png`, MAD/p99/max stats. | lighting-tuner |
