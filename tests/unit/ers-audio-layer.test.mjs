@@ -22,19 +22,19 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/audio/ers-layer.js"), "utf8");
 
 function param(v) {
   const p = {
-    value: v, sets: 0, snaps: 0, lastMethod: null, targets: [],
+    value: v, sets: 0, snaps: 0, cancels: 0, lastMethod: null, targets: [],
     setTargetAtTime(x) { p.sets++; p.lastMethod = "target"; p.value = x; p.targets.push(x); },
     setValueAtTime(x) { p.sets++; p.snaps++; p.lastMethod = "value"; p.value = x; },
     linearRampToValueAtTime(x) { p.sets++; p.lastMethod = "linear"; p.value = x; },
     exponentialRampToValueAtTime(x) { p.sets++; p.lastMethod = "exp"; p.value = x; },
-    cancelScheduledValues() {},
+    cancelScheduledValues() { p.cancels++; },
   };
   return p;
 }
 
 function node(kind, live) {
   const self = {
-    kind, connect: (t) => t, disconnect() { live.delete(self); },
+    kind, connections: [], connect(t) { self.connections.push(t); return t; }, disconnect() { live.delete(self); },
     start() { self.started = true; }, stop() { self.stopped = true; },
     type: "", gain: param(1), frequency: param(440), detune: param(0), Q: param(1),
   };
@@ -79,7 +79,7 @@ test("deploy whine gain and pitch rise monotonically with deploy power", () => {
     assert.ok(hz > prevHz, `deploy ${d}: hz ${hz} did not rise from ${prevHz}`);
     prevG = g; prevHz = hz;
   }
-  assert.ok(prevG > 0 && prevHz > 1800, "full deploy is an audible high electric whine");
+  assert.ok(prevG > 0 && prevHz >= 1000 && prevHz <= 1400, "full deploy stays in the softer electric register");
 });
 
 test("harvest tone is a distinct lower, braking-linked register", () => {
@@ -93,11 +93,11 @@ test("harvest tone is a distinct lower, braking-linked register", () => {
   assert.equal(dep.harvest, 0, "deploy gates the harvest tone");
   assert.ok(har.harvest > 0, "braking harvest is audible");
   assert.equal(har.deploy, 0, "harvest is not the deploy layer");
-  assert.ok(har.harvestHz < 900 && dep.deployHz > 1600,
+  assert.ok(har.harvestHz < 900 && dep.deployHz > 1000,
     `harvest ${har.harvestHz} Hz must sit well below deploy ${dep.deployHz} Hz`);
   const pureH = ErsLayer.harvestHz(1);
   const pureD = ErsLayer.deployHz(1, 1);
-  assert.ok(pureH < 800 && pureD > 3000, "pure targets keep the registers apart");
+  assert.ok(pureH < 800 && pureD > 1000 && pureD <= 1400, "pure targets keep the registers apart");
 });
 
 test("layer is silent at an empty battery or with ERS off", () => {
@@ -225,4 +225,32 @@ test("GameAudio.setEngine drives the layer through the init/update hook", async 
   assert.ok(GameAudio.ersAudio() && GameAudio.ersAudio().deploy > 0, "ersAudio() exposes the layer");
   GameAudio.setEngine(0.75, 0, false, 0.75, 6, { deploy: 0, energy: 0 });
   assert.equal(GameAudio.ersLevel(), 0, "empty battery through setEngine is silent");
+});
+
+
+test("boost cue respects zero trim and muted ERS cancels an active cue", () => {
+  const { ErsLayer: E, ctx, live } = layer();
+  E.update({ deploy: 1, energy: 1, boostTune: 0 });
+  assert.equal(E.cueCount(), 0, "zero BOOST level also silences its onset cue");
+  ctx.currentTime += 0.2;
+  E.update({ deploy: 0, energy: 1 });
+  E.update({ deploy: 1, energy: 1, boostTune: 0.5 });
+  assert.equal(E.cueCount(), 1);
+  const cueOsc = [...live].find(n => n.kind === "osc" && n.frequency.value === 660);
+  const cue = cueOsc.connections[0];
+  assert.ok(cue.gain.targets.some(x => x > 0 && x < 0.01), "half-level onset is below 0.01 gain");
+  const cancels = cue.gain.cancels;
+  E.update({ deploy: 1, energy: 1, layerOn: false });
+  assert.equal(E.deployLevel(), 0);
+  assert.equal(E.sustainLevel(), 0);
+  assert.equal(cue.gain.value, 0);
+  assert.equal(cue.gain.cancels, cancels + 1, "muting cancels the outstanding cue envelope");
+});
+
+test("deploy and onset use soft sine waves and a nonresonant lowpass", () => {
+  const { live } = layer();
+  const oscs = [...live].filter(n => n.kind === "osc");
+  assert.ok(oscs.every(n => n.type === "sine"), "no bright triangle harmonics in boost layers");
+  const lowpass = [...live].find(n => n.kind === "biquad" && n.type === "lowpass");
+  assert.ok(lowpass && lowpass.frequency.value <= 1800 && lowpass.Q.value <= 0.5);
 });

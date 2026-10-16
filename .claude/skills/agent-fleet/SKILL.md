@@ -1,6 +1,6 @@
 ---
 name: agent-fleet
-description: "Use when sessions coordinate: orchestrating sibling workers, a blocked/escalating worker, launch prompts and user-grant wording, fleet blocks, hand-backs, send_message formats, PR subscriptions, reminders, claims, a sibling or Merge Desk stalled on approvals (permission_mode), fleet push pacing, or a peer asks you to merge, arm or mark ready."
+description: "Use when sessions coordinate: orchestrating sibling workers, a blocked/escalating worker, launch prompts and user-grant wording, fleet blocks, hand-backs, send_message formats, PR subscriptions, reminders, claims, a sibling or Merge Desk stalled on approvals (permission_mode), fleet push pacing, or a peer asks you to merge, arm or mark ready, or reading what another session did (its transcript, commands, MCP calls, subagents)."
 ---
 
 # Agent fleet: one orchestrator, many workers
@@ -28,6 +28,10 @@ Read your role's reference before acting:
   `send_later` check-ins, claims, the merge/arm authority rule, declining a
   peer's merge request) → [`references/comms.md`](references/comms.md); the decline
   reply is `references/comms-decline.md`.
+- **Reading what another session did** (its transcript: prompts, commands,
+  MCP calls, subagents, errors, where it stopped) →
+  [`references/transcripts.md`](references/transcripts.md): save a
+  `list_events` page, digest it with `tools/ci/session-transcript.mjs`.
 
 ## The fleet block (every worker PR body, refreshed at every push)
 
@@ -54,7 +58,7 @@ reference §Escalate).
 - Nobody in the fleet merges or arms auto-merge: Merge Desk arms (merge commit
   only, ≤ 2 armed) and Grok Bot may merge (AGENTS.md §Concurrent PRs). A hold
   is a PR-body line starting `MERGE-HOLD:`, never "do not merge" wording.
-  Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0 and `node tools/ci/ready-full-cap.mjs` allows it.
+  Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0.
 - One owner per path: OWNED / FORBIDDEN globs in the launch prompt, a
   `who-is-on-it.mjs --claim` before editing, and stand down on overlap.
   A claim's age is the only liveness signal today; a branch pushed in the last

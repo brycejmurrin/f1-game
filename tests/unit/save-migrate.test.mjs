@@ -116,6 +116,18 @@ test("a malformed season (number, string, array) is replaced, never thrown on â€
   }
 });
 
+test("a malformed driver identity is repaired so an existing slot remains recoverable", () => {
+  const SM = load();
+  const c = SM.migrateCareer({ v: 1, flavour: "driver", team: "haas", money: 1,
+    driver: { name: {}, code: { toString: null }, num: "99" } });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.driver)), { name: "Your Name", code: "YOU", num: 99 });
+  const partial = SM.migrateCareer({ v: 1, flavour: "driver", team: "haas", money: 1,
+    driver: { name: "Ada", code: "ADA", num: 7 } });
+  assert.deepEqual(JSON.parse(JSON.stringify(partial.driver)), { name: "Ada", code: "ADA", num: 7 });
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(JSON.stringify(c)))), JSON.stringify(c),
+    "driver repair is idempotent");
+});
+
 
 test("JSON exponent overflow cannot poison career money or contract arithmetic", () => {
   const SM = load();
