@@ -656,6 +656,18 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   git("checkout", "-q", "-b", "m2", "deploy"); git("merge", "-q", "--no-ff", "-m", "M2", "feature"); const M2 = git("rev-parse", "HEAD");
   assert.equal(git("rev-parse", `${M2}^{tree}`), git("rev-parse", `${D}^{tree}`), "fixture: M2 must share D's tree");
   assert.notEqual(git("rev-parse", `${M1}^{tree}`), git("rev-parse", `${B}^{tree}`), "fixture: M1 must not share B's tree");
+
+  // A side branch can change a gate input and then revert it before a
+  // tree-identical merge. The final tree still matches D, but D's earlier
+  // green run did not exercise that changed history and must not be reused.
+  git("checkout", "-q", "-b", "sensitive", D);
+  const gateInput = ["tools", "ci", "selection.mjs"].join("/");
+  fs.mkdirSync(path.dirname(path.join(dir, gateInput)), { recursive: true });
+  write(gateInput, "changed"); git("add", "."); git("commit", "-q", "-m", "change gate input");
+  fs.rmSync(path.join(dir, gateInput)); git("add", "-u"); git("commit", "-q", "-m", "revert gate input");
+  const S = git("rev-parse", "HEAD");
+  git("checkout", "-q", "-b", "m3", D); git("merge", "-q", "--no-ff", "-m", "M3", "sensitive"); const M3 = git("rev-parse", "HEAD");
+  assert.equal(git("rev-parse", `${M3}^{tree}`), git("rev-parse", `${D}^{tree}`), "fixture: M3 must share D's tree after a reverted gate-input change");
   void A;
 
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
@@ -703,6 +715,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
 
   assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
+  assert.equal(verdict(M3, { [D]: [run()] }).reuse, "false",
+    "a tree-identical merge after a workflow/selection change and revert must rerun the gate");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
   // ci.yml has no merge_group trigger (2026-10-14), so such a run is not one of its gates.
   assert.equal(verdict(M2, { [D]: [run({ event: "merge_group" })] }).reuse, "false", "a merge_group run is not a ci.yml gate any more");
