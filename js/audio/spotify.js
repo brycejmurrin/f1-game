@@ -876,12 +876,17 @@ window.SpotifyMusic = (function () {
     volPend = Math.max(0, Math.min(100, Math.round(pct)));
     if (volTimer !== null) return;
     const gen = sessionGen;
+    // Bind the device when the trailing-edge request is scheduled. The user can
+    // switch devices while the debounce window is open; sending this volume to
+    // the newly selected device would apply an old slider gesture to the wrong
+    // speaker.
+    const targetDevice = deviceId2();
     volTimer = setTimeout(() => {
       volTimer = null;
       const v = volPend; volPend = null;
       if (gen !== sessionGen || v === null) return;
       api("/me/player/volume?volume_percent=" + v +
-          (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
+          (targetDevice ? "&device_id=" + encodeURIComponent(targetDevice) : ""), { method: "PUT" });
     }, VOL_PUT_MS);
   }
   function setDeviceVolume(pct) {
