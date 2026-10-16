@@ -818,6 +818,49 @@ test("HIGHLIGHTS opens with the event's shot and preserves manual subject and ca
   }
 });
 
+test("HIGHLIGHTS scrub into a reel gap follows the next item's driver before its event (#2196)", () => {
+  const { replay, G, cars, drivers, options } = transportReplay();
+  const ccc = { code: "CCC" };
+  cars.push(ccc); drivers.push({ code: "CCC", num: 3, pos: 3, name: "Driver C", lapStart: [0] });
+  options.seats = new Map([[cars[0], drivers[0]], [cars[1], drivers[1]], [ccc, drivers[2]]]);
+  options.reel = true;
+  options.script.passes = [{ t: 100, by: 2, over: 1 }, { t: 300, by: 3, over: 2 }];
+  options.traces.cars = { 1: line(0, 50, 0, 0, 400), 2: line(0, 50, 0, 0, 400), 3: line(0, 50, 0, 0, 400) };
+  replay.start(options);
+  assert.equal(replay.status().follow, "BBB");
+  const cuts = replay.status().broadcast.cuts;
+  replay.seek(250);
+  assert.equal(replay.status().reelIdx, 1);
+  assert.equal(replay.status().follow, "CCC", "the scrub lands on the next item's driver");
+  assert.ok(replay.status().broadcast.cuts > cuts, "the scrub is a cut");
+  for (let i = 0; i < 56; i++) replay.tick(1);
+  assert.equal(replay.status().T, 306);
+  assert.equal(replay.status().follow, "CCC", "CCC's pass at 300 is on camera");
+  replay.stop();
+});
+
+test("HIGHLIGHTS NEXT onto a reel item lands on it, and the clock never runs back (#2196)", () => {
+  const { replay, drivers, options } = transportReplay();
+  drivers[0].pits = [2]; drivers[0].pitT = [106];
+  options.reel = true;
+  options.script.passes = [{ t: 100, by: 2, over: 1 }];
+  options.traces.cars = { 1: line(0, 50, 0, 0, 400), 2: line(0, 50, 0, 0, 400) };
+  replay.start(options);
+  assert.equal(replay.status().T, 92);
+  replay.eventStep(1);
+  assert.equal(replay.status().T, 98);
+  assert.equal(replay.status().reelIdx, 1, "NEXT lands reelIdx on the pit stop");
+  assert.equal(replay.status().follow, "AAA");
+  let last = replay.status().T;
+  for (let i = 0; i < 12; i++) {
+    replay.tick(1);
+    const T = replay.status().T;
+    assert.ok(T > last, "T runs forward: " + last + " -> " + T);
+    last = T;
+  }
+  replay.stop();
+});
+
 test("WATCH paused seek repaints the timing tower and race clock without advancing the director", () => {
   const element = () => ({ children: [], dataset: {}, style: {}, textContent: "", classList: { add() {}, remove() {}, toggle() {} },
     appendChild(n) { this.children.push(n); return n; }, setAttribute() {}, addEventListener() {}, removeEventListener() {}, querySelector() { return null; } });
