@@ -155,7 +155,7 @@ test("frozen route metadata owns titles, panels, doors and default hierarchy", (
     if (route.parent) assert.ok(api.routes[route.parent]);
     if (id === "audio") continue;
     nav.show(id);
-    assert.equal(dom.byId("dlg-settings").textContent, route.title);
+    assert.equal(dom.byId("dlg-settings").textContent, id === "home" ? route.title : "SETTINGS › " + route.title);
     if (route.door) assert.equal(typeof route.door().onclick, "function");
   }
 });
