@@ -755,7 +755,7 @@ test("--train reports the nightly rota, and reads its jobs rather than the rollu
     "nightlyHealth must name the jobs that actually FAILED, whatever the rollup says");
 });
 
-test("--train answers without Git planning or preflight, and names all three signals offline", () => {
+test("--train answers without Git planning or preflight, and names both signals offline", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-train-offline-"));
   const gitCalls = path.join(dir, "git-calls");
   try {
@@ -769,7 +769,8 @@ test("--train answers without Git planning or preflight, and names all three sig
     });
     assert.equal(r.status, 0, r.stderr);
     const out = r.stdout + r.stderr;
-    for (const label of ["train ci:", "train pages:", "train nightly:"]) {
+    // No "train ci:" row since 2026-10-16: the deploy branch's push starts pages.yml, the one train signal.
+    for (const label of ["train pages:", "train nightly:"]) {
       assert.ok(out.includes(label + " unknown"), `--train printed no offline "${label}" line:\n${out}`);
     }
     assert.equal(fs.existsSync(gitCalls), false, "advisory health must not invoke Git planning");
