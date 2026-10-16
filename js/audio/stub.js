@@ -131,6 +131,12 @@ var AudioPanel = {
         } else setSound(next);
       };
       els.soundbtn.onclick = stubClick;
+      // index.html's static label is SOUND ON; a saved SOUND OFF must show before the first gesture
+      // loads the real panel, or the button claims the opposite and its tap turns the sound ON.
+      if (G.soundOn === false) {
+        els.soundbtn.textContent = "♪ SOUND OFF";
+        els.soundbtn.setAttribute("aria-pressed", "false");
+      }
     }
     return { init: function () {}, _stub: true, setSound };
   },
