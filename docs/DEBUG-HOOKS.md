@@ -773,6 +773,17 @@ never sinks under the terrain (which would render the track's underside).
 ```js
 for (const a of [0,45,90,135,180]) { __apex.orbit(0.116, a, 15, 35); /* shot */ }
 ```
+**`opts.clear: true`** (also on `cinematic(f, opts)`, `roadside(…, opts)` and
+`view({s, side, clear})`) keeps a capture camera out of the scenery. Without it these
+hooks place the eye blind: `cinematic()` is blocked on 17 of 50 lap samples at Vegas
+and 29 of 50 at Singapore. With it, orbit and cinematic swing the azimuth up to ±90°,
+and roadside and view step in, then try the other side. Each try is accepted once the
+eye is outside every solid prop (`FlybySeq`) and the sightline to the target keeps
+`FlybySight.transmit` T ≥ 0.5. The result carries
+`clear: {T, tries, blocked?}`; when `blocked` is set, nothing cleared and the
+least-blocked try is used, so skip or flag that frame. For a "signature corner",
+take a curated turn from `info().turns`, not `corners()[n/3]`: `corners()` returns
+every curvature peak, kinks included.
 
 ### `dolly(f, fwd?, right?, up?, opts?) → {eye, target} | false`
 Track-relative free-cam placed by an **offset from the centreline** at

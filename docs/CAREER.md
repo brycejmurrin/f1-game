@@ -284,6 +284,12 @@ at once, so it is the only way a fully-researched garage converts into lap time.
 Three rungs against the factory's eight means the cap is the scarce one. Spending
 on either is genuinely giving up the other.
 
+If a regulation change lowers the cap below the current build, the career refits
+cheaper legal parts you already own until the build fits. It first takes the
+smallest single-category saving covering the excess, or the largest available
+saving when more than one change is needed. Research and credits are untouched;
+raising the cap later leaves the next fitting choice to you.
+
 > Both career guides quote the ladder. They previously described the cap as
 > fixed, because the rules shipped without a screen and `budgetLvl` sat at 0 for
 > the life of every career — the guide text and the button were required to land

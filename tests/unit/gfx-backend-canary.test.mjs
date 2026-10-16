@@ -850,6 +850,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
+    // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
+    // RESET must not leave diag() quoting a reason from before it.
+    "apex26.gfxFallbackWhy",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
 
@@ -2473,13 +2476,9 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   const post = code("js/render/three/tlx-post.js");
   assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
   assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
-  // ForceGL / WebGL2 path: readPixels must not run in the Promise executor —
-  // Appearance's MutationObserver → previewScene used to freeze 10–15 s on that
-  // turn under llvmpipe (2026-10-05). setTimeout(run, 0) yields one macrotask.
-  const capBody = fnBody(tlx, "capturePixels");
-  assert.match(capBody, /setTimeout\s*\(\s*run\s*,\s*0\s*\)/,
-    "WebGL capturePixels defers sync readPixels off the caller's turn");
-  assert.match(capBody, /gl\.readPixels/, "the deferred run still readPixels");
+  // WebGL2 readback timing/state/cleanup are exercised against the production
+  // capture method in renderer-soft-lifecycle. The old timer + client-memory
+  // readPixels pin only deferred a synchronous GPU stall to another turn.
   assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
   assert.match(fnBody(tlx, "softPresentState"), /\bon:\s*!!\s*_softBlit\b/,
     "softPresentState must be OWN so descriptor-copy does not keep GLX's");
@@ -4042,7 +4041,12 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
   assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
-  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, ""), /m\.geometry = null; m\.material = null;/,
+  const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
+  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
+    "warm probes dispose before clearing references, after pending compilation settles");
+  assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
+    "a retired probe releases when its last compiler settles");
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
@@ -5978,7 +5982,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
     Event: class { constructor(type) { this.type = type; } },
     location: { reload: () => events.push("reload") },
     BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
-    canvas: {}, _claimSkipped: skip, _createHung: false,   // start()'s closure state the sliced fallback reads
+    canvas: {}, _claimSkipped: skip, _createHung: false, pick: pref, why: "",   // start()'s closure state the sliced fallback reads
     backendPreference: () => pref,
     showGraphicsUnavailable: () => events.push("unavailable"),
     async loadBackendScripts(group) {
@@ -6344,7 +6348,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");
   assert.match(warm, /renderer\.setRenderTarget\(usePost \? post\.sceneTarget\(\) : softOutRT\(\)\)/,
     "the glass compiles under the scene pass's target, where it draws");
-  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileAsync\(m, camera, scene\)/,
+  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileWarmProbe\(_glassProbeGeo, gm, sx\)/,
     "both winding signs of the real material");
   assert.match(warm, /"uv", new THREE\.BufferAttribute/, "on createTexMesh's layout (position / normal / uv)");
   const glass = fnBody(code("js/render/three/tsl-fx.js"), "mirrorGlassMaterial");

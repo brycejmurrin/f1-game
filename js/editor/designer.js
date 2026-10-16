@@ -779,7 +779,9 @@ const TrackDesigner = (function () {
       return r;
     }
     design.id = r.id; design.originId = r.id;
-    saveDraft();   // persist the new library link even if autosave already ran
+    // The draft may already be on disk: a reload must edit this saved id,
+    // rather than add a duplicate through the old, now-replaced library link.
+    saveDraft();
     savedSnap = snapshot();
     message(r.durable ? "Saved to MY CIRCUITS" : "Saved — but storage is full, so it may not survive a reload", !r.durable);
     Log.info("track", "designer saved " + r.id + " (" + design.name + ", " + design.lengthM + " m)");
