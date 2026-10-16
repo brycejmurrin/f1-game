@@ -319,6 +319,14 @@ function buildResults(order, race) {
     card.append(heading, detail); els.resultsTable.appendChild(card);
   }
   if (badges && badges.length) els.resultsTable.appendChild(badgeCard(badges));
+  const incidents = G.coach && G.coach.insights && !watched ? G.coach.insights.settle() : [];
+  if (incidents.length) {
+    const card = document.createElement("div"); card.className = "res-personal"; card.id = "res-incidents";
+    const heading = document.createElement("strong"); heading.textContent = "INCIDENTS & PENALTIES";
+    const detail = document.createElement("span");
+    detail.textContent = incidents.slice(-8).map((e) => "LAP " + e.lap + " · " + e.text).join("  ·  ");
+    card.append(heading, detail); els.resultsTable.appendChild(card);
+  }
   const coaching = G.coach && G.coach.feedback && G.coach.feedback();
   if (coaching && coaching.enabled && coaching.latest) {
     const card = document.createElement("div"); card.className = "res-personal";

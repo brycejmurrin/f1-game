@@ -552,3 +552,17 @@ test('BACKMARKERS refuses when nothing ahead is actually slower', () => {
   assert.equal(f.api.startDrill('backmarkers'), false);
   assert.match(f.announcements.at(-1)[0], /NO SLOWER TRAFFIC/);
 });
+test('incident timeline: penalty, invalid lap and contact persist in order with reasons, and re-settling never duplicates', () => {
+  const { api, tick, saves } = fixture();
+  tick({ contactT: 1, penalty: 5 }); tick({ contactT: 0, incidentInvalidLap: true }, 2);
+  const rows = api.settle();
+  assert.deepEqual(Array.from(rows, r => r.kind), ['penalty', 'contact', 'invalid']);
+  assert.ok(rows.every((r, i) => !i || r.seq > rows[i - 1].seq && r.time >= rows[i - 1].time));
+  assert.match(rows[2].text, /Lap invalidated: .+/);
+  api.settle(); api.settle();
+  const stored = saves.get('incidentLog');
+  assert.equal(stored.sessions.length, 1);
+  assert.equal(stored.sessions[0].entries.length, 3);
+  api.reset(); tick({}); tick({ penalty: 10 }); api.settle();
+  assert.equal(saves.get('incidentLog').sessions.length, 2);
+});
