@@ -945,6 +945,87 @@
         }
       ],
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "compound-debug",
+      "task": "Check explicit invocation, canonical mirror, project precedence and attribution",
+      "fixture": "tests/unit/agent-config.test.mjs",
+      "pattern": "portable\\ compound\\-debug\\ keeps\\ the\\ explicit\\ F1\\ project\\ contract",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium for browser claims"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Target hardware for device or GPU claims"
+        }
+      ],
+      "evidenceScope": "Only the F1 integration metadata and provenance contract; excludes real routing and complete task behavior"
+    },
+    {
+      "skill": "compound-review",
+      "task": "Check explicit invocation, canonical mirror, project precedence and attribution",
+      "fixture": "tests/unit/agent-config.test.mjs",
+      "pattern": "portable\\ compound\\-review\\ keeps\\ the\\ explicit\\ F1\\ project\\ contract",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium for browser claims"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Target hardware for device or GPU claims"
+        }
+      ],
+      "evidenceScope": "Only the F1 integration metadata and provenance contract; excludes real routing and complete task behavior"
+    },
+    {
+      "skill": "compound-verify",
+      "task": "Check explicit invocation, canonical mirror, project precedence and attribution",
+      "fixture": "tests/unit/agent-config.test.mjs",
+      "pattern": "portable\\ compound\\-verify\\ keeps\\ the\\ explicit\\ F1\\ project\\ contract",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium for browser claims"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Target hardware for device or GPU claims"
+        }
+      ],
+      "evidenceScope": "Only the F1 integration metadata and provenance contract; excludes real routing and complete task behavior"
     }
   ]
 }

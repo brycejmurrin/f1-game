@@ -823,7 +823,7 @@ async function bakeEnvHdri(args) {
 
 // Minimal Radiance RGBE (.hdr) equirect sampler → solid-angle-weighted
 // upper/lower hemisphere means. No deps — sharp cannot decode HDR.
-function sampleRadianceHdr(buf) {
+export function sampleRadianceHdr(buf) {
   let off = 0;
   const readLine = () => {
     let s = "";
@@ -843,13 +843,22 @@ function sampleRadianceHdr(buf) {
   if (!(w > 0 && h > 0)) fail(`bad HDR resolution: ${res.join(" ")}`);
   const rgba = new Uint8Array(w * h * 4);
   for (let y = 0; y < h; y++) {
+    if (off + 4 > buf.length) throw new Error(`truncated HDR scanline ${y}`);
     const info = buf.subarray(off, off + 4); off += 4;
     const scanW = (info[2] << 8) | info[3];
     if (info[0] === 2 && info[1] === 2 && scanW === w) {
       for (let ch = 0; ch < 4; ch++) {
         let x = 0;
         while (x < w) {
+          if (off >= buf.length) throw new Error(`truncated HDR RLE packet on scanline ${y}`);
           const code = buf[off++];
+          // Every packet must advance x and stay inside this channel. A zero
+          // code or EOF previously spun forever; overruns crossed into rows.
+          if (code === 0) throw new Error(`invalid zero HDR RLE packet on scanline ${y}`);
+          const count = code > 128 ? code - 128 : code;
+          if (count > w - x) throw new Error(`HDR RLE packet overruns scanline ${y}`);
+          if (off + (code > 128 ? 1 : count) > buf.length)
+            throw new Error(`truncated HDR RLE payload on scanline ${y}`);
           if (code > 128) {
             const run = code - 128, val = buf[off++];
             for (let i = 0; i < run; i++) rgba[(y * w + x++) * 4 + ch] = val;
@@ -859,6 +868,7 @@ function sampleRadianceHdr(buf) {
         }
       }
     } else {
+      if (off + w * 4 - 4 > buf.length) throw new Error(`truncated HDR scanline ${y}`);
       rgba.set(info, y * w * 4);
       rgba.set(buf.subarray(off, off + w * 4 - 4), y * w * 4 + 4);
       off += w * 4 - 4;

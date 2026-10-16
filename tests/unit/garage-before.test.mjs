@@ -20,7 +20,7 @@ import {
   captureArgs, decideCapture, pickNearestPack, parseShotName, buildManifest,
   writeManifest, USAGE,
 } from "../../tools/shot/garage-before.mjs";
-import { USAGE as FETCH_USAGE, loadArtifactsOverride } from "../../tools/garage-angles-fetch.mjs";
+import { USAGE as FETCH_USAGE, loadArtifactsOverride, fetchPack } from "../../tools/garage-angles-fetch.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const YML = fs.readFileSync(path.join(ROOT, ".github/workflows", WORKFLOW_FILE), "utf8");
@@ -243,4 +243,42 @@ test("fetch --artifacts=@file with no matching SHA is the no-pack case", () => {
   assert.match(r.stderr + r.stdout, /no garage-before-<sha> pack/);
   assert.deepEqual(loadArtifactsOverride([`--artifacts=@${catalog}`])[0].id, 1);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+
+test("fetchPack downloads the repository artifact and extracts it without a live API", async () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const fixture = fs.mkdtempSync(path.join(ROOT, "scratch/garage-download-"));
+  const out = path.join(fixture, "out");
+  const priorPath = process.env.PATH;
+  const sha = "a".repeat(40);
+  try {
+    // Stub only external processes; exercise the real download URL construction,
+    // curl status handling, extraction arguments and temporary-file removal.
+    fs.writeFileSync(path.join(fixture, "curl"), `#!${process.execPath}
+import fs from "node:fs";
+const args = process.argv.slice(2);
+if (args.at(-1) !== "https://api.github.com/repos/brycejmurrin/f1-game/actions/artifacts/123/zip") process.exit(7);
+fs.writeFileSync(args[args.indexOf("-o") + 1], "fixture zip");
+process.stdout.write("200");
+`, { mode: 0o755 });
+    fs.writeFileSync(path.join(fixture, "unzip"), `#!${process.execPath}
+import fs from "node:fs"; import path from "node:path";
+const args = process.argv.slice(2);
+if (fs.readFileSync(args[2], "utf8") !== "fixture zip") process.exit(8);
+fs.writeFileSync(path.join(args[4], "manifest.json"), '{"fixture":true}');
+`, { mode: 0o755 });
+    process.env.PATH = fixture + path.delimiter + priorPath;
+    const result = await fetchPack({ sha, token: "fixture-token", out, artifacts: [
+      { name: artifactName(sha), id: 123, expired: false, created_at: "2026-10-01T00:00:00Z" },
+    ] });
+    assert.equal(result.error, undefined);
+    assert.equal(result.exact, true);
+    assert.equal(result.out, out);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8")), { fixture: true });
+    assert.equal(fs.existsSync(path.join(ROOT, "artifacts", `garage-before-${process.pid}.zip`)), false);
+  } finally {
+    if (priorPath === undefined) delete process.env.PATH; else process.env.PATH = priorPath;
+    fs.rmSync(fixture, { recursive: true, force: true });
+  }
 });

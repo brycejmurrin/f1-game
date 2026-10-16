@@ -43,13 +43,21 @@ const git = (...args) => {
  *  tooling-fast's `[tooling-fast] = run <s>`, or test-bg's `= bg exit N` trailer
  *  (the only line a run that died before its reporter's summary still has). */
 export function parseVerdict(text) {
-  let last = null;
+  let last = null, bgExit = null;
   for (const line of String(text).split("\n")) {
-    const m = line.match(/= run (passed|failed|timedout|interrupted)\b(.*)$/);
-    if (m) { last = `${m[1]}${m[2].trim() ? " " + m[2].trim() : ""}`; continue; }
+    const m = line.match(/^(?:\[(?:tooling-fast|\d{2}:\d{2}:\d{2})\] )?= run (passed|failed|timedout|interrupted)\b(.*)$/);
+    if (m) {
+      last = `${m[1]}${m[2].trim() ? " " + m[2].trim() : ""}`;
+      bgExit = null; // An appended re-run's summary supersedes earlier trailers.
+      continue;
+    }
     const b = line.match(/^= bg exit (\d+)\s*$/);
-    if (b && !last) last = b[1] === "0" ? "exited 0 (no reporter summary)" : `exited ${b[1]} (no reporter summary)`;
+    if (b) bgExit = b[1];
   }
+  // Compound groups can pass their first half and die in the second. Match
+  // test-bg's exit-code precedence rather than reporting that partial pass.
+  if (bgExit !== null && bgExit !== "0") return `failed (exit ${bgExit}${last ? `; last summary: ${last}` : "; no reporter summary"})`;
+  if (!last && bgExit !== null) return "exited 0 (no reporter summary)";
   return last || "no verdict yet (running, or died before its summary)";
 }
 

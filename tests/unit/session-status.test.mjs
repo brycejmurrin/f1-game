@@ -70,8 +70,19 @@ test("parseVerdict takes the LAST terminal line, never a heartbeat", () => {
 });
 
 test("parseVerdict names a run that died before its reporter's summary", () => {
-  assert.match(parseVerdict(". running 3/40 done, 0 failed\n= bg exit 137"), /exited 137 \(no reporter summary\)/);
+  assert.equal(parseVerdict(". running 3/40 done, 0 failed\n= bg exit 137"), "failed (exit 137; no reporter summary)");
   assert.match(parseVerdict(". running 3/40 done, 0 failed"), /no verdict yet/);
+});
+
+test("parseVerdict accepts reporter prefixes but never echoed summaries", () => {
+  assert.equal(parseVerdict("[09:12:34] = run passed (40/40 done, 0 failed)"), "passed (40/40 done, 0 failed)");
+  assert.match(parseVerdict("Error: expected = run passed\n[tooling-fast]   | = run passed"), /no verdict yet/);
+});
+
+test("parseVerdict respects the latest exit and a compound group's failed second half", () => {
+  assert.equal(parseVerdict("= bg exit 0\n= bg exit 137"), "failed (exit 137; no reporter summary)");
+  assert.equal(parseVerdict("= run passed (2 passed)\n= bg exit 137"), "failed (exit 137; last summary: passed (2 passed))");
+  assert.equal(parseVerdict("= run failed (1 failed)\n= bg exit 1\n= run passed (1 passed)\n= bg exit 0"), "passed (1 passed)");
 });
 
 test("toMarkdown flags unpushed commits, dirt and a live run", () => {
