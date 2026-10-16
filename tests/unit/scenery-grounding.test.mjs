@@ -159,10 +159,10 @@ test("baseline has no stale entries — a cap below the measured count is a lie"
 // embed), while leaving motorhome's own footprint/support guards in place.
 for (const guard of ["clear", "road", "unsupported"]) {
   test(`Jerez paddock seats account for anchor embed and retain ${guard} guard`, () => {
-    const { buildContext } = createRequire(import.meta.url)("../../tools/lib/track-build-vm.cjs");
+    const { buildContext, shipped } = createRequire(import.meta.url)("../../tools/lib/track-build-vm.cjs");
     const h = buildContext();
     const original = h.sandbox.TrackScenery.jerez;
-    const calls = [];
+    const calls = [], emitted = [];
     h.sandbox.TrackScenery.jerez = (api) => {
       const sl = (f) => (f + Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4) % 1;
       const seats = Array.from({ length: 8 }, (_, i) => {
@@ -183,11 +183,19 @@ for (const guard of ["clear", "road", "unsupported"]) {
         },
         motorhome(...args) {
           if (args[1] === 1 && args[2] === 27) calls.push(args[0]);
-          return api.motorhome(...args);
+          const start = h.prims.length;
+          const result = api.motorhome(...args);
+          emitted.push(h.prims.slice(start));
+          return result;
         },
       });
       assert.deepEqual(calls, guard === "clear" ? seats.map(({ k }) => k) : []);
     };
     h.Tracks.build(h.Tracks.LIST.find(({ id }) => id === "jerez"));
+    if (guard === "clear") {
+      assert.equal(emitted.length, 11, "eight main and three road-clear support motorhomes remain");
+      for (const prims of emitted)
+        assert.ok(shipped(prims, h.liveBufs).length > 0, "each restored motorhome emits geometry");
+    }
   });
 }

@@ -357,9 +357,12 @@
       kiosks(0.1400, -1, 54, 10, 13);
       for (let i = 0; i < 7; i++) {                         // support paddock
         const k = K(0.1480 + i * 0.0090);
-        if (!clear(k, -1, 72, 14)) continue;
-        if (!seatOk(k, -1, 72)) continue;
-        motorhome(k, -1, 72, 10, 4.2, 15,
+        // The first truck backs onto the folded terrace at gap 72;
+        // move it onto the open apron without deleting its geometry.
+        const gap = i === 0 ? 90 : 72;
+        if (!clear(k, -1, gap, 14)) continue;
+        if (!seatOk(k, -1, gap)) continue;
+        motorhome(k, -1, gap, 10, 4.2, 15,
           { wall: [0.84 + hash(i * 19) * 0.08, 0.84, 0.86] });
       }
       building(K(0.1620), -1, 84, 16, 6, 28,
