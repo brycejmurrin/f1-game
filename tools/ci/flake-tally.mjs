@@ -17,6 +17,7 @@
  *   node tools/ci/flake-tally.mjs --events all --days 7        # every ci.yml / pages.yml run of the week
  *   node tools/ci/flake-tally.mjs --events all --days 7 --propose   # + quarantine rows (JSON) for the repeat offenders
  *   node tools/ci/flake-tally.mjs --events all --days 7 --issue     # upsert the `Flaky tests (last 7 days)` issue
+ *   node tools/ci/flake-tally.mjs --base-red --hours 3 --issue      # open/refresh/close the `base-red` suspects issue
  *
  * DAILY (2026-10-16, the CI/CD review #2333, flaky-test question): the nightly
  * is one run a day; the fleet's PR runs and the Pages train are hundreds, and
@@ -61,6 +62,13 @@ export const ISSUE_TITLE = "Flaky tests (daily tally)";
 export const ISSUE_LABEL = "flaky";
 export const ISSUE_MARKER = "<!-- flake-tally: rewritten daily by .github/workflows/flake-tally.yml -->";
 export const ARTIFACT_PREFIX = "playwright-artifacts-";
+/** --base-red (2026-10-16 CI jobs review): a spec red on UNRELATED diffs within a short window is the base's, not a branch's. */
+export const BASE_RED_HOURS = 3;
+/** A first-try failure on this many distinct branches in the window (the deploy branch counts as one). */
+export const BASE_RED_BRANCHES = 3;
+export const BASE_RED_TITLE = "Base red suspects (auto)";
+export const BASE_RED_LABEL = "base-red";
+export const BASE_RED_MARKER = "<!-- flake-tally base-red: rewritten every 2 h by .github/workflows/flake-tally.yml -->";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const API = `https://api.github.com/repos/${REPO}`;
@@ -297,6 +305,55 @@ export function proposeRows(rows, { flakyRuns = PROPOSE_FLAKY_RUNS, failBranches
     .map((r) => ({ ...r, reason: r.flakyPasses >= flakyRuns
       ? `passed only on retry in ${r.flakyPasses} run(s)`
       : `failed first-try on ${r.branches.length} branches (${r.branches.slice(0, 4).join(", ")})` }));
+}
+
+/**
+ * Base-red suspects: a spec that failed first-try on BASE_RED_BRANCHES distinct
+ * branches, or on two branches one of which is the deploy branch (a train),
+ * inside the window. Unrelated diffs failing the same test is the signature of
+ * a red on the base (menu-keyboard data-esc-close, 2026-10-16: 7 PR runs and 3
+ * trains, about 1,000 job-min, triaged ten times). Retries that passed are the
+ * daily tally's business, not this one's. Advisory: a label and an issue.
+ * @param {TallyRow[]} rows
+ */
+export function baseRedRows(rows, { deployBranch = DEPLOY_BRANCH, branches = BASE_RED_BRANCHES } = {}) {
+  return (rows || []).filter((r) => {
+    const b = r.branches || [];
+    return r.fails > 0 && (b.length >= branches || (b.length >= 2 && b.includes(deployBranch)));
+  }).map((r) => ({ ...r, reason: `failed first-try on ${r.branches.length} branches${r.branches.includes(deployBranch) ? " including a train" : ""} (${r.branches.slice(0, 4).join(", ")})` }));
+}
+
+export function formatBaseRedBody(suspects, { runsExamined = 0, hours = BASE_RED_HOURS, now = new Date() } = {}) {
+  const lines = [BASE_RED_MARKER, "",
+    `Specs that failed first-try on unrelated branches in the last ${hours} h, read ${now.toISOString().slice(0, 16)}Z (${runsExamined} failed ci.yml / pages.yml runs). ` +
+    "Two or more branches including a train, or three or more branches, is a red on the base, not on any one diff: look at the deploy branch before fixing a PR.",
+    "", "| test | spec | fails | branches | last seen run id |", "|---|---|---|---|---|"];
+  for (const r of suspects.slice(0, 30)) {
+    lines.push(`| ${r.test.replace(/\|/g, "\\|")} | ${r.spec} | ${r.fails} | ${(r.branches || []).length} | ${r.lastSeenRunId} |`);
+  }
+  lines.push("", "Advisory only: this issue and its `base-red` label block nothing. It is rewritten every 2 h and closed when no spec qualifies. Daily detail: the `Flaky tests (daily tally)` issue.");
+  return lines.join("\n");
+}
+
+/**
+ * Keep ONE open `base-red` issue: refresh it while suspects exist, create it
+ * when the first appears, close it when the window is clean.
+ */
+export async function syncBaseRedIssue(suspects, body, { token } = {}) {
+  const list = await githubApi("GET", `issues?state=open&labels=${encodeURIComponent(BASE_RED_LABEL)}&per_page=50`, { token });
+  if (list.error) return { error: list.error };
+  const hit = (list.json || []).find((i) => !i.pull_request && String(i.body || "").startsWith(BASE_RED_MARKER));
+  if (suspects.length) {
+    if (hit) {
+      const r = await githubApi("PATCH", `issues/${hit.number}`, { token, body: JSON.stringify({ body, title: BASE_RED_TITLE }) });
+      return r.error ? { error: r.error } : { number: hit.number, updated: true };
+    }
+    const r = await githubApi("POST", "issues", { token, body: JSON.stringify({ title: BASE_RED_TITLE, body, labels: [BASE_RED_LABEL] }) });
+    return r.error ? { error: r.error } : { number: r.json?.number, created: true };
+  }
+  if (!hit) return { none: true };
+  const r = await githubApi("PATCH", `issues/${hit.number}`, { token, body: JSON.stringify({ state: "closed", state_reason: "completed", body }) });
+  return r.error ? { error: r.error } : { number: hit.number, closed: true };
 }
 
 /**
@@ -645,6 +702,7 @@ export async function collectRunEvents(run, {
 
 export const USAGE = `usage: node tools/ci/flake-tally.mjs [--runs N] [--branch <ref>] [--json] [--work-dir <dir>]
        node tools/ci/flake-tally.mjs --events all [--days N] [--propose] [--issue] [--json]
+       node tools/ci/flake-tally.mjs --base-red [--hours N] [--issue]
        node tools/ci/flake-tally.mjs --help
 
 Tally first-try failures and pass-on-retry flakes across the last N scheduled
@@ -657,7 +715,11 @@ to stdout and appends it to $GITHUB_STEP_SUMMARY when set.
 --propose      also print the repeat offenders as quarantine rows (JSON) in
                the ledger's current shape; nothing is written
 --issue        create or rewrite the open \`${ISSUE_LABEL}\`-labelled issue
-               "${ISSUE_TITLE}" with the table and the proposals`;
+               "${ISSUE_TITLE}" with the table and the proposals
+--base-red     (implies --events all) read the last --hours N (default ${BASE_RED_HOURS}) and name the specs
+               that failed first-try on ${BASE_RED_BRANCHES}+ branches, or on 2 incl. the deploy branch (a
+               red on the base, not on one diff); with --issue, open / refresh / close
+               the \`${BASE_RED_LABEL}\` issue "${BASE_RED_TITLE}"`;
 
 function parseArgs(argv) {
   const opt = (k, d) => {
@@ -671,10 +733,12 @@ function parseArgs(argv) {
     runs: Math.max(1, Number(opt("--runs", DEFAULT_RUNS)) || DEFAULT_RUNS),
     branch: opt("--branch", DEPLOY_BRANCH),
     json: argv.includes("--json"),
-    all: opt("--events", "schedule") === "all",
+    all: opt("--events", "schedule") === "all" || argv.includes("--base-red"),
     days: Math.max(1, Number(opt("--days", DEFAULT_DAYS)) || DEFAULT_DAYS),
     propose: argv.includes("--propose"),
     issue: argv.includes("--issue"),
+    baseRed: argv.includes("--base-red"),
+    hours: Math.max(1, Number(opt("--hours", BASE_RED_HOURS)) || BASE_RED_HOURS),
     workDir: opt("--work-dir", path.join(ROOT, "artifacts", "flake-tally")),
     help: argv.includes("--help") || argv.includes("-h"),
   };
@@ -686,7 +750,7 @@ export async function runFlakeTally(argv = process.argv.slice(2), { token } = {}
   const auth = token !== undefined ? token : githubToken();
   if (!auth) return { code: 3, text: NO_TOKEN_HINT };
 
-  const listed = args.all ? await listAllRuns({ days: args.days, token: auth })
+  const listed = args.all ? await listAllRuns({ days: args.baseRed ? args.hours / 24 : args.days, token: auth })
     : await listScheduledRuns({ n: args.runs, branch: args.branch, token: auth });
   if (listed.error) return { code: 3, text: listed.error };
   const runs = listed.runs || [];
@@ -703,6 +767,16 @@ export async function runFlakeTally(argv = process.argv.slice(2), { token } = {}
   }
 
   const rows = tallyEvents(all);
+  if (args.baseRed) {
+    const suspects = baseRedRows(rows);
+    const body = formatBaseRedBody(suspects, { runsExamined: runs.length, hours: args.hours });
+    const issue = args.issue ? await syncBaseRedIssue(suspects, body, { token: auth }) : null;
+    const text = (suspects.length ? `base-red suspects (${suspects.length}):\n` + suspects.map((s) => `- ${s.spec} › ${s.test} — ${s.reason}`).join("\n")
+      : `base-red: none in the last ${args.hours} h (${runs.length} failed runs read)`)
+      + (issue ? `\nissue: ${issue.error ? `ERROR ${issue.error}` : issue.none ? "none open, none needed" : `#${issue.number} ${issue.created ? "created" : issue.closed ? "closed" : "updated"}`}` : "") + "\n";
+    if (process.env.GITHUB_STEP_SUMMARY) { try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, text); } catch (_) { /* advisory */ } }
+    return { code: issue && issue.error ? 3 : 0, text, suspects, issue, runsExamined: runs.length, notes: runNotes };
+  }
   const proposals = args.propose || args.issue ? proposeRows(rows) : [];
   const quarantine = proposals.length ? quarantineRows(proposals, { schemaKeys: quarantineSchemaKeys() }) : [];
   let md = formatMarkdownTable(rows, { runsExamined: runs.length, days: args.all ? args.days : null });

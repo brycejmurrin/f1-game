@@ -215,26 +215,19 @@ const HudRelative = (function () {
   function fitRows() {
     if (!root || !built) return;
     fitSeen = fitKey(); fitAge = 0;
-    const b = doc && doc.body;
-    if (b && b.classList && b.classList.contains("desktop")) {
-      if (root.style && root.style.removeProperty) root.style.removeProperty("max-height");
-      return;
+    // Phone clearance is an output, never the next layout's input. Restore
+    // natural rows and CSS positioning before either pointer-kind path.
+    for (let i = 0; i < ROWS; i++) {
+      const hidden = !rows[i].car;
+      dropped[i] = false;
+      if (built[i].el.hidden !== hidden) built[i].el.hidden = hidden;
     }
+    if (root.style && root.style.removeProperty) {
+      root.style.removeProperty("left"); root.style.removeProperty("max-height");
+    }
+    const b = doc && doc.body;
+    if (b && b.classList && b.classList.contains("desktop")) return;
     if (root.getBoundingClientRect && doc.getElementById && root.style) {
-      // A forced phone-fit recheck can run without tick(). Rebuild the natural
-      // occupied-row height before removing our previous fit: rows hidden by
-      // that cap are an output, not the next pass's layout input.
-      for (let i = 0; i < ROWS; i++) {
-        const hidden = !rows[i].car;
-        dropped[i] = false;
-        if (built[i].el.hidden !== hidden) built[i].el.hidden = hidden;
-      }
-      // Re-derive from the CSS box every pass: left / max-height are only ever
-      // SET on a clash, so a clash that went away (STEERING back to BUTTONS, a
-      // lower HUD SIZE, a rotation) otherwise left the card offset and truncated
-      // until reload (a stale max-height also makes scrollHeight > clientHeight
-      // hide rows).
-      if (root.style.removeProperty) { root.style.removeProperty("left"); root.style.removeProperty("max-height"); }
       const rootEl = doc.documentElement;
       // The zoom the card paints at: var(--hud-z-top, var(--hud-scale))
       // (css/hud.css). fitHud REMOVES --hud-z-top whenever the cap fits, so

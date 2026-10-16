@@ -1713,7 +1713,13 @@ function makeCars() {
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
-    const factoryParts = Parts.resolveSetup((Career.inCareer() && Career.aiSetup && Career.aiSetup(team)) || Parts.getFactorySetup(team), team);
+    const worksParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
+    const aiSetup = Career.inCareer() && Career.aiSetup && Career.aiSetup(team);
+    const factoryParts = aiSetup ? Parts.resolveSetup(aiSetup, team) : worksParts;
+    // Aero and ERS already feed dedicated channels below. Credit only the other
+    // catalog gains against the current legal works build, without tdev or RNG.
+    const catalogPace = aiSetup ? buildPace(Parts.resolveSetup({ ...factoryParts.setup,
+      aero: worksParts.setup.aero, ers: worksParts.setup.ers }, team), worksParts) : 1;
     const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
@@ -1769,7 +1775,7 @@ function makeCars() {
         // development rides along in the same number the tier always contributed,
         // so the per-car update below is unchanged in shape. paceMult() is exactly
         // 1 outside career, making GP/TT bit-identical.
-        tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),
+        tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : isP ? 1 : catalogPace),
         // Tread class for gripMult(c); null on an AI car means "fits the right tyre" (wear off; a pit plan gets its set's tread in applyCompound).
         tread: (isP || mate) ? (resolvedParts.options.tyres.wetTread || 0) : null,
         // The fitted catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md

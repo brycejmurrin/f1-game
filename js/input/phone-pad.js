@@ -399,7 +399,12 @@ const PhonePad = (function () {
             say("Phone found — connecting…");
             const acc = await deps.acceptAnswer(transport, answer);
             if (phase !== "connecting") return;
-            if (!acc.ok) { accepted = false; phase = "waiting"; say(acc.message || "That answer could not be read.", true); return; }
+            if (!acc.ok) {
+              const msg = acc.message || "That answer could not be read.";
+              if (deps.usingPrivateRelay()) failed(msg);
+              else { accepted = false; phase = "waiting"; say(msg, true); }
+              return;
+            }
             active = link(transport, {
               hud: ui.hud || null,
               onOpen: () => {
@@ -438,9 +443,8 @@ const PhonePad = (function () {
           if (phase !== "waiting") return;
           if (got.ok) await roomOptions.onJoiner(null, got.payload);
           if (phase === "waiting") {
-            phase = "failed";
-            if (!got.ok) say(got.message || "Could not open a room — check the connection.", true);
-            dropRoom(); transport.close(); transport = null;
+            if (!got.ok) roomOptions.onFail(got);
+            else failed("Could not connect that phone — try a new code.");
           }
           return;
         }

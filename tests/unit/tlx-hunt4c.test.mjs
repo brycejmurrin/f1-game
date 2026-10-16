@@ -425,3 +425,22 @@ test("B-F3.1: tlx.js wiring — mirrorBegin's gate after the in-flight refusal, 
   assert.equal((TLX.match(/await warmMirrorStage\(usePost, useTag\);/g) || []).length, 2);
   assert.equal((TLX.match(/prepareMirrorTarget\(16, 8, true\)/g) || []).length, 1);
 });
+
+// F5: execute the real TSL factory and inspect CPU uniforms; no rendered-pixel claim.
+test("TLX ambient fill preserves zero and proportional positive multipliers", () => {
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, {
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+    ssrTag: false, envCube: null, matMaps: null, lampGrid: null,
+    sharedUniforms: true, maxLights: 16,
+  });
+  const sky = [0.3, 0.32, 0.36], ground = [0.2, 0.19, 0.18];
+  for (const multiplier of [undefined, null, 1, 0.5, 0.005, 0, 1]) {
+    const frame = { sunDir: [0, 1, 0], sunColor: [1, 1, 1], ambientSky: sky, ambientGround: ground };
+    if (multiplier !== undefined) frame.tune = { ambientMul: multiplier };
+    lit.updateFrame(frame);
+    const expected = multiplier == null ? 1 : multiplier;
+    assert.deepEqual(lit.uniforms.ambSky.value.toArray(), sky.map((v) => v * expected), `sky multiplier ${multiplier}`);
+    assert.deepEqual(lit.uniforms.ambGround.value.toArray(), ground.map((v) => v * expected), `ground multiplier ${multiplier}`);
+    assert.deepEqual(lit.uniforms.sunColor.value.toArray(), [1, 1, 1], "unscaled vector uniforms keep their default multiplier");
+  }
+});
