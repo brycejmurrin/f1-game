@@ -376,9 +376,10 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // one it pins, so the two files cannot drift apart.
   // BACKUP & RESTORE (#pm-open-files) became its own door when the settings
   // pages were consolidated — the unit list in ui-sheets-audit.test.mjs has it.
+  // #2423 moved DRIVING AIDS (#pm-advanced) up beside DRIVING.
   expect(settings.doorIds).toEqual([
-    "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files",
+    "pm-open-controls", "pm-open-driving", "pm-advanced", "pm-open-display",
+    "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files",
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);

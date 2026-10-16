@@ -348,7 +348,7 @@ for (const device of [
       // navigated to this same sheet.
       await press("#pm-settings");
       await press("#pm-open-driving");
-      await expect(page.locator("#dlg-settings")).toHaveText("DRIVING");
+      await expect(page.locator("#dlg-settings")).toHaveText("SETTINGS › DRIVING"); // #2423 breadcrumb
       await expect(page.locator("#pausemenu")).toBeHidden();
       for (const selector of ['#announce', '#lights', '.hud-top', '#minimap'])
         await expect(page.locator(selector)).toHaveCSS('visibility', 'hidden');
