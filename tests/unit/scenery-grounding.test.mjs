@@ -167,7 +167,8 @@ for (const guard of ["clear", "road", "unsupported"]) {
       const sl = (f) => (f + Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4) % 1;
       const seats = Array.from({ length: 8 }, (_, i) => {
         const k = api.K(sl(0.973 + i * 0.0068));
-        const a = api.anchor(k, 1, 27);
+        const gap = i === 7 ? 33 : 27;
+        const a = api.anchor(k, 1, gap);
         assert.equal(api.onTrack(a.c[0], a.c[2], 10), false);
         assert.ok(Math.abs(api.terrainYAt(a.c[0], a.c[2]) - a.c[1] - 0.3) < 1e-8);
         return { k, c: a.c };
@@ -182,7 +183,7 @@ for (const guard of ["clear", "road", "unsupported"]) {
           return guard === "unsupported" && isSeat(x, z) ? y + 1 : y;
         },
         motorhome(...args) {
-          if (args[1] === 1 && args[2] === 27) calls.push(args[0]);
+          if (args[1] === 1) calls.push(args[0]);
           const start = h.prims.length;
           const result = api.motorhome(...args);
           emitted.push(h.prims.slice(start));

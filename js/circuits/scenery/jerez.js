@@ -253,8 +253,10 @@
       };
       for (let i = 0; i < 8; i++) {                         // paddock motorhomes
         const kk = K(sl(0.9730 + i * 0.0068));
-        if (!seatOk(kk, 1, 27)) continue;
-        motorhome(kk, 1, 27, 11, 4.4, 17,
+        // The final pad crosses a grade fold; keep its base stripe above earth.
+        const gap = i === 7 ? 33 : 27;
+        if (!seatOk(kk, 1, gap)) continue;
+        motorhome(kk, 1, gap, 11, 4.4, 17,
           { wall: [0.86 + hash(i * 13) * 0.08, 0.86, 0.88] });
       }
       // Second paddock row removed: gap 34–40 floated / went unsupported on
@@ -356,10 +358,10 @@
       //   service blocks, flag masts, and the park that fills the rest.
       kiosks(0.1400, -1, 54, 10, 13);
       for (let i = 0; i < 7; i++) {                         // support paddock
-        const k = K(0.1480 + i * 0.0090);
+        const k = K(0.1480 + i * 0.0090 - (i === 0 ? 0.0055 : 0));
         // The first truck backs onto the folded terrace at gap 72;
-        // move it onto the open apron without deleting its geometry.
-        const gap = i === 0 ? 90 : 72;
+        // move it along and back onto the level apron so its base stays visible.
+        const gap = i === 0 ? 100 : 72;
         if (!clear(k, -1, gap, 14)) continue;
         if (!seatOk(k, -1, gap)) continue;
         motorhome(k, -1, gap, 10, 4.2, 15,
