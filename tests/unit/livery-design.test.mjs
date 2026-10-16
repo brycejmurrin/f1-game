@@ -173,6 +173,8 @@ function editorFixture() {
   vm.runInContext(sheet.slice(sheet.indexOf("  const pillRow ="), sheet.indexOf('  pillRow("FINISH"')), ctx);
   const pillRow = vm.runInContext("pillRow", ctx);
   // mini-dom omits sibling accessors and insertBefore's move semantics.
+  const appendChild = root.appendChild;
+  root.appendChild = (node) => { if (node.parentNode === root) node.remove(); return appendChild(node); };
   const insertBefore = root.insertBefore;
   root.insertBefore = (node, before) => { if (node.parentNode === root) node.remove(); return insertBefore(node, before); };
   const bodyRow = dom.document.createElement("label"); root.appendChild(bodyRow);
@@ -193,8 +195,8 @@ test("existing SPINE TOP controls drive undo, palettes and pattern adjustments w
   assert.equal(spineRow.querySelectorAll("button").length, 14, "thirteen additions share the existing SPINE TOP row");
   const rows = Array.from(root.children), width = root.querySelectorAll("input").find((input) => input.dataset.livField === "patternWidth");
   assert.ok(rows.indexOf(width.parentNode) > rows.indexOf(spineRow));
-  assert.ok(rows.indexOf(width.parentNode) < rows.indexOf(nextRow), "adjustments immediately follow SPINE TOP");
-  assert.equal(rows[rows.indexOf(bodyRow) - 1].querySelector('.cs-liv-ed-lbl').textContent, "PALETTE");
+  assert.ok(rows.indexOf(width.parentNode) < rows.indexOf(nextRow), "adjustments stay after SPINE TOP and before cover-side controls");
+  assert.equal(root.querySelectorAll("button").find((b) => b.textContent === "MIDNIGHT ELECTRIC").parentNode.parentNode.getAttribute("data-liv-section"), "COLOUR PALETTE");
   assert.equal(rows[rows.indexOf(nameRow) - 1].getAttribute("role"), "status");
   assert.equal(width.disabled, true, "legacy patterns retain their existing controls");
   click("CONTOUR LINES");
@@ -237,4 +239,18 @@ test("integrated adjustments disable only controls unused by the current spine d
   click("HONEYCOMB"); assert.equal(repeat.disabled, false);
   click("STRIPE"); assert.equal(repeat.disabled, true); assert.equal(left.disabled, true);
   assert.ok(repeat.parentNode.title.includes("SPINE TOP"));
+});
+
+
+test("surface sections and spine families preserve one button per choice and label their scope", () => {
+  const { root, spineRow } = editorFixture();
+  const headings = root.querySelectorAll('[role="heading"]').map((el) => el.textContent);
+  for (const title of ["BODY PAINT & BASE FINISH", "ENGINE COVER — SHAPE & PAINT", "SPINE TOP — ARTWORK & COLOURS", "WINGS", "TAIL FIN", "TEAM MARKS & NUMBERS", "COCKPIT & CAMERA", "REVIEW & SAVE"]) assert.ok(headings.includes(title), title);
+  assert.equal(spineRow.getAttribute("data-liv-section"), "SPINE TOP — ARTWORK & COLOURS");
+  assert.equal(spineRow.querySelector('[role="group"]').getAttribute("aria-label"), "SPINE TOP");
+  assert.deepEqual(spineRow.querySelectorAll(".cs-liv-ed-sec").map((el) => el.textContent), ["MARKS & IDENTITY", "FIXED GRAPHICS", "ADJUSTABLE PATTERNS"]);
+  const buttons = spineRow.querySelectorAll("button"), ids = buttons.map((b) => b.dataset.csPill);
+  assert.equal(ids.length, 14); assert.equal(new Set(ids).size, ids.length, "grouping moves original buttons without duplication");
+  const swatches = root.querySelectorAll('.cs-liv-swatch');
+  assert.equal(swatches.length, 9); assert.ok(swatches.every((swatch) => swatch.getAttribute("aria-hidden") === "true"));
 });

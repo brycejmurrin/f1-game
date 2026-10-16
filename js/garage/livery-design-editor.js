@@ -91,6 +91,14 @@ const GarageLiveryDesignEditor = (function () {
       [draft.c1, draft.c2, draft.patternTint] = p.colors; draft.patternSecond = p.colors[1];
       api.changed(); status.textContent = p.name + " applied to primary, accent and design colours. Other authored surface colours are kept.";
     }, paletteButtons);
+    Array.from(paletteButtons.children).forEach((b, i) => {
+      const colours = LiveryDesign.PALETTES[i].colors, swatch = document.createElement("span");
+      swatch.className = "cs-liv-swatch"; swatch.setAttribute("aria-hidden", "true");
+      swatch.style.width = "100%"; swatch.style.height = "6px"; swatch.style.flexBasis = "100%";
+      swatch.style.background = "linear-gradient(90deg," + colours[0] + " 0 33%," + colours[1] + " 33% 66%," + colours[2] + " 66% 100%)";
+      b.style.flexWrap = "wrap"; b.style.gap = "4px"; b.appendChild(swatch);
+      b.title = "Apply " + LiveryDesign.PALETTES[i].name + " to body primary, accent and adjustable-pattern colours";
+    });
     const actionRow = row("DESIGN"), actions = document.createElement("span"); actions.className = "cs-liv-ed-finish"; actionRow.appendChild(actions); insert(actionRow);
     const swap = button("SWAP COLOURS", () => {
       [draft.patternTint, draft.patternSecond] = [draft.patternSecond || draft.c1, draft.patternTint || draft.c2];
@@ -105,11 +113,57 @@ const GarageLiveryDesignEditor = (function () {
       reset.disabled = !LiveryDesign.PATTERNS.includes(draft.spineLogo);
       swap.disabled = !["gradient", "twoTone", "segments", "checker", "diamonds", "dots"].includes(draft.spineLogo);
     });
-    // Regional finishes live beside the colour they affect, using the same pill rows.
-    for (const [field, finish] of [["cover", "coverFinish"], ["wing", "wingFinish"], ["halo", "haloFinish"]]) {
-      const colour = root.querySelector('input[data-liv-field="' + field + '"]');
-      const pill = root.querySelector('[data-cs-pill="' + finish + ':inherit"]');
-      if (colour && pill) root.insertBefore(pill.closest(".cs-liv-ed-row"), colour.closest(".cs-liv-ed-row").nextSibling);
+    // Keep each setting and its paint beside the part it changes. Move the
+    // original nodes, so their handlers, dependency rules and keyboard state survive.
+    const fields = new Map();
+    for (const r of Array.from(root.children)) {
+      for (const c of r.querySelectorAll("input, button")) {
+        const key = c.dataset.livField || (c.dataset.csPill || "").split(":")[0] || (c.dataset.csFinish ? "finish" : "");
+        if (key) fields.set(key, r);
+      }
+      if (r.classList.contains("cs-liv-ed-sec")) r.remove();
+    }
+    function section(title, description, keys, extras = []) {
+      const heading = document.createElement("div"); heading.className = "cs-liv-ed-sec";
+      heading.setAttribute("role", "heading"); heading.setAttribute("aria-level", "3"); heading.textContent = title;
+      heading.title = description; root.appendChild(heading);
+      const note = document.createElement("p"); note.className = "cs-opt-desc"; note.textContent = description; root.appendChild(note);
+      for (const item of [...keys.map((key) => fields.get(key)), ...extras]) {
+        if (!item) continue;
+        item.setAttribute("data-liv-section", title); root.appendChild(item);
+      }
+    }
+    section("COLOUR PALETTE", "Changes body primary, accent and adjustable-pattern colours. Other painted surfaces keep their colours.", [], [palettes]);
+    section("BODY PAINT & BASE FINISH", "Main body, nose and sidepods. FINISH is the whole-car default; regional INHERIT buttons use it.",
+      ["finish", "c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod", "lower", "upper", "bodySplit"]);
+    section("ENGINE COVER — SHAPE & PAINT", "The raised cover behind the cockpit. Shape, vents, base colour and finish.",
+      ["cover", "coverFinish", "spineHeight", "coverVents"]);
+    section("SPINE TOP — ARTWORK & COLOURS", "Artwork along the top of the engine cover. Select one design; only the colour controls it uses are enabled.",
+      ["spineLogo", "patternTint", "patternSecond", "spineTint", "saddleTint", "sunTint", "bandTint2"]);
+    section("SPINE PATTERN — SIZE & PLACEMENT", "Adjustable patterns only. CROWN paints the top and tail; WRAP extends onto the selected cover sides.",
+      ["patternPlacement", "patternSide", ...Object.keys(LiveryDesign.RANGES)], [actionRow]);
+    section("COVER SIDES & TAIL LINK", "Side artwork and its fills. COVER BIND links top and side graphics; FIN HANDOFF controls the transition to the tail.",
+      ["spineSide", "sideTint", "plateTint", "coverBind", "finHandoff"]);
+    section("WINGS", "Front and rear wing paint. Carbon flaps keep their carbon material; WING FINISH applies to painted wing surfaces.",
+      ["wingCarbon", "wing", "rearWing", "wingFinish"]);
+    section("TAIL FIN", "The vertical fin behind the engine cover. Choose its shape, paint, graphic and badge.",
+      ["finShape", "fin", "finStyle", "finArt", "finBadge"]);
+    section("TEAM MARKS & NUMBERS", "Emblem colours, number lettering and sponsor names. These controls affect identity marks across the car.",
+      ["logo", "logo2", "logo3", "numFont", "sponsors"], [api.markNote]);
+    section("COCKPIT & CAMERA", "Halo paint and finish, plus the small T-cam housing above the driver.", ["halo", "haloFinish", "tcam"]);
+    section("REVIEW & SAVE", "Undo or compare your edits, then name and save this paint job.", [], [historyRow, status, api.nameRow, api.saveRow]);
+    // One SPINE TOP selection, divided by purpose rather than a wall of pills.
+    const group = api.spineRow.querySelector(".cs-liv-ed-finish"), choices = Array.from(group.querySelectorAll("button"));
+    const marks = ["logo", "none", "bigmark", "wordmark", "number"];
+    group.replaceChildren();
+    for (const [label, accepts] of [
+      ["MARKS & IDENTITY", (id) => marks.includes(id)],
+      ["FIXED GRAPHICS", (id) => !marks.includes(id) && !LiveryDesign.PATTERNS.includes(id)],
+      ["ADJUSTABLE PATTERNS", (id) => LiveryDesign.PATTERNS.includes(id)],
+    ]) {
+      const labelNode = document.createElement("span"); labelNode.className = "cs-liv-ed-sec";
+      labelNode.textContent = label; labelNode.style.flexBasis = "100%"; group.appendChild(labelNode);
+      for (const b of choices) if (accepts(b.dataset.csPill.split(":")[1])) group.appendChild(b);
     }
     sync();
     return Object.freeze({

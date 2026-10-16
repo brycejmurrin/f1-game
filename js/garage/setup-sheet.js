@@ -1142,6 +1142,7 @@ function buildLiveryCreator(container, team) {
     if (LIV_ROW_HINT[key]) { r.title = LIV_ROW_HINT[key]; r.setAttribute("aria-description", LIV_ROW_HINT[key]); }
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = label; r.appendChild(lb);
     const group = document.createElement("span"); group.className = "cs-liv-ed-finish";
+    group.setAttribute("role", "group"); group.setAttribute("aria-label", label);
     const btns = [];
     for (const f of values) {
       const b = document.createElement("button");
@@ -1235,7 +1236,7 @@ function buildLiveryCreator(container, team) {
 
   if (typeof GarageLiveryDesignEditor !== "undefined") designTools = GarageLiveryDesignEditor.attach(wrap, d, {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
-    pillRow, spineRow, bodyRow, nameRow,
+    pillRow, spineRow, bodyRow, nameRow, markNote, saveRow: btns,
   });
   container.appendChild(wrap);
   applyPreview();
