@@ -190,7 +190,7 @@ interface StudioRig {
 interface TestInput { steer: number; throttle: boolean; brake: boolean; }
 
 /** A scheduled weather transition — startWeatherArc(). */
-interface WeatherArc { from: string; to: string; t: number; dur: number; seq: unknown; }
+interface WeatherArc { from: string; to: string; t: number; dur: number; seq: unknown; cell?: { c0: number; h: number; v: number; life: number; total: number } | null; sectors?: Array<{ sector: number; wet: number; raining: boolean }> | null; where?: number[] | null; }
 
 /** An ACTIVE AERO activation zone, in arc metres. Owner: js/physics/aero-zones.js. */
 interface AeroZone { start: number; end: number; len: number; }
@@ -243,7 +243,6 @@ type QualiRow = Opaque;
 interface ScaleState { pct: number; stored: unknown; min: number; max: number; [key: string]: unknown; }
 
 /** What drawAeroFlaps() is handed in the garage: the resolved level and style. */
-interface FlapArgs { aLvl: number; style: string | null; }
 
 /** A resolved parts setup for one team — Parts.resolveSetup()/getTeamParts(). */
 type PartsSetup = Opaque;
@@ -375,6 +374,7 @@ interface GameCtx {
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
   readonly openDailyPicker: () => void;
+  readonly closeSettings: () => void;
   readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
@@ -567,7 +567,6 @@ interface GameCtx {
   readonly setupPan: (strafe: number, dolly: number) => void;
   readonly nudgeSetupCam: (dAz: number, dEl: number, zoom?: number) => void;
   readonly nudgeSetupZoom: (mul: number) => void;
-  readonly setupFlapArgs: () => FlapArgs;
   readonly setSetupAero: (on: boolean, opts?: { keepCam?: boolean }) => void;
   readonly setupPreviewXOn: boolean;
 
@@ -894,6 +893,7 @@ declare const Onboard: GameModuleFactory;
 declare const Director: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
+declare const RaceMessageHistory: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;
 declare const RivalAudio: GameModuleFactory;
 declare const CarSfx: GameModuleFactory;

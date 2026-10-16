@@ -6,6 +6,7 @@ import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs
 import { parseCaptureOptions, captureViewport, captureScreenshotOptions } from "./capture-options.mjs";
 
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
+export const WEATHERS = ["dry", "wet", "rain", "overcast", "fog"];
 
 export function flag(argv, name, fallback) {
   const i = argv.indexOf(name);
@@ -53,6 +54,8 @@ export function normalizeJob(raw, defaults = {}) {
   const dist = parseFloat(raw.dist ?? defaults.dist ?? 45);
   const side = parseInt(raw.side ?? defaults.side ?? 1, 10) || 1;
   const tod = String(raw.tod ?? defaults.tod ?? "day");
+  const weather = String(raw.weather ?? defaults.weather ?? "dry");
+  if (!WEATHERS.includes(weather)) throw new Error(`unknown weather "${weather}" — ${WEATHERS.join("|")}`);
   const showHud = !!(raw.hud ?? raw.showHud ?? defaults.showHud);
   const team = raw.team ?? defaults.team ?? null;
   const baseCapture = defaults.capture || parseCaptureOptions([]);
@@ -76,10 +79,13 @@ export function normalizeJob(raw, defaults = {}) {
   }
   const format = capture.type ? captureScreenshotOptions(capture) : imageFormatFor(out, { jpegFlag: jpegFlag || fmtHint.type === "jpeg" });
   return {
-    trackId, frac, cam, az, el, dist, side, tod, showHud, team, out, backend, capture, viewport,
+    trackId, frac, cam, az, el, dist, side, tod, weather, showHud, team, out, backend, capture, viewport,
     type: format.type,
     quality: format.type === "jpeg" ? capture.quality ?? format.quality ?? 85 : undefined,
     raster: !!(raw.raster ?? defaults.raster),
+    // orbit / cinematic / trackside re-site the eye out of scenery (__apex opts.clear, #2253); opt-in so
+    // existing shots and survey baselines keep their framing.
+    clear: !!(raw.clear ?? defaults.clear),
   };
 }
 
@@ -119,10 +125,12 @@ export function parseShotArgv(argv, ROOT) {
     dist: flag(argv, "--dist", "45"),
     side: flag(argv, "--side", "1"),
     tod: flag(argv, "--tod", "day"),
+    weather: flag(argv, "--weather", "dry"),
     showHud: has(argv, "--hud"),
     team: TEAM,
     jpeg,
     raster,
+    clear: has(argv, "--clear"),
   };
 
   if (batchPath) {
@@ -134,7 +142,7 @@ export function parseShotArgv(argv, ROOT) {
   const positionals = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) {
-      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster"
+      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster" && argv[i] !== "--clear"
         && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
       continue;
     }
@@ -158,7 +166,7 @@ export function groupJobsByTrack(jobs) {
   const order = [];
   const map = new Map();
   for (const [index, j] of jobs.entries()) {
-    const key = JSON.stringify([shotSessionKey(j), j.trackId, j.tod, j.capture?.isolated ? index : null]);
+    const key = JSON.stringify([shotSessionKey(j), j.trackId, j.tod, j.weather ?? "dry", j.capture?.isolated ? index : null]);
     if (!map.has(key)) {
       map.set(key, []);
       order.push(key);
@@ -170,10 +178,12 @@ export function groupJobsByTrack(jobs) {
 
 export const SHOT_USAGE = `usage: node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg]
        node tools/shot/shot.mjs --batch <jobs.json|jsonl> [--jpeg] [--raster] [--wait S]
-  One Chromium boot; --batch groups compatible track/team/tod/backend/viewport jobs.
+  One Chromium boot; --batch groups compatible track/team/tod/weather/backend/viewport jobs.
+  --tod day|dusk|dawn|night --weather dry|wet|rain|overcast|fog (batch fields tod/weather)
   --profile preview|comparison --width N --height N --dpr N --scope scene|page
   --gpu swiftshader|llvmpipe|hardware|lavapipe --browser auto|chromium|shell
   --backend three|webgl2|webgpu --trace[=path] --cache-assets --isolated --seed N
   cam: park | eye | orbit | cinematic | trackside.
+  --clear: orbit/cinematic/trackside re-site the eye out of scenery (batch field clear).
   --jpeg / .jpg → JPEG q85 (human review). --raster → __apex.render view only (no PNG).
   Default out: scratch/captures/playwright-probe/<track>-<frac%>-<cam>.png`;

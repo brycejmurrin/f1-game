@@ -6,7 +6,7 @@
 //
 // DELIBERATELY ON THE VIRGIN-PAGE FIXTURE. Shared helpers: tests/helpers/career-boot.js
 import { test, expect } from "@playwright/test";
-import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
+import { LANDSCAPE, RACE_BUILD_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 
 // Parallel so Playwright can schedule tests across workers. Default-mode
 // describes are ONE shard group (Pages 37420997285: career 1/5 ran ~101 tests
@@ -71,7 +71,7 @@ test.describe.parallel("Career — save", () => {
     await startCareer(page);
     const before = await page.evaluate(() => window.__apex.careerState());
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
     const after = await page.evaluate(() => window.__apex.careerState());
     expect(after.team).toBe(before.team);
     expect(after.money).toBe(before.money);
@@ -104,7 +104,7 @@ test.describe.parallel("Career — save", () => {
     const legacy = await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")));
     expect(legacy).toBeNull();
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career")))).toBeNull();
     expect(await page.evaluate(() => window.__apex.career().team)).toBe("williams");
   });
@@ -227,7 +227,7 @@ test.describe.parallel("Career — isolation", () => {
     expect(plain, "no mercedes car on the grid").not.toBeNull();
 
     await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
     await page.evaluate(() => {
       window.__apex.career({ teamId: "haas", seat: 1, seed: 7 });
       window.__apex.career().tdev.mercedes = 8;
@@ -323,6 +323,32 @@ test.describe.parallel("Career — hub", () => {
     await page.locator("#cr-go").click();
     await expect(page.locator("#cr-title")).toHaveText("CAREER 2026");
     await expect(page.locator("#cr-go")).toHaveText("GO RACING");
+  });
+
+  test("NEW CAREER number rejects truncated numeric input before saving", async ({ page }) => {
+    await boot(page);
+    await page.locator("#mb-career").click();
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
+    const fields = page.locator("#cr-right .cr-input");
+    await fields.nth(0).fill("Number Test");
+    await fields.nth(1).fill("NUM");
+    const number = page.locator('#cr-right input[type="number"]');
+    for (const value of ["1e2", "1.5", "100", "0", ""]) {
+      await number.fill(value);
+      await page.locator("#cr-go").click();
+      await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+      await expect(number).toHaveAttribute("aria-invalid", "true");
+      await expect(page.locator("#cr-right")).toContainText("Number must be 1–99");
+      expect(await page.evaluate(() => localStorage.getItem("apex26.career.driver.0"))).toBeNull();
+    }
+    // Scientific notation is accepted only as its complete, in-range integer.
+    await number.fill("1e1");
+    await page.locator("#cr-go").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER 2026");
+    const savedNumber = () => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career.driver.0")).driver.num);
+    expect(await savedNumber()).toBe(10);
+    await page.reload();
+    expect(await savedNumber()).toBe(10);
   });
 
   test("the hub reports balance, reputation and the round", async ({ page }) => {

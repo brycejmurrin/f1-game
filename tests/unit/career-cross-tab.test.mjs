@@ -40,6 +40,16 @@ function load(options = {}) {
         },
       }) };
       const transaction = { objectStore: () => ({
+        // Bounded mirror flush inventories existing rows in the readwrite
+        // transaction before applying its batch, just like actual IndexedDB.
+        getAll() {
+          const request = {};
+          queueMicrotask(() => {
+            request.result = mirrorRows.map((row) => ({ ...row }));
+            if (request.onsuccess) request.onsuccess();
+          });
+          return request;
+        },
         // B5 flush reads prev via get() before put — refuse older lsOk:true.
         get(k) {
           const request = {};
@@ -52,7 +62,9 @@ function load(options = {}) {
         },
         put() {}, delete() {},
       }) };
-      queueMicrotask(() => { if (transaction.oncomplete) transaction.oncomplete(); });
+      // Request success handlers run before transaction completion. Queue the
+      // completion after the requests synchronously issued by mirrorFlush.
+      queueMicrotask(() => queueMicrotask(() => { if (transaction.oncomplete) transaction.oncomplete(); }));
       return transaction;
     },
   };
@@ -408,4 +420,60 @@ test("title-menu season hydrate skips when a session entry is already open", () 
     "IndexedDB season restore must not mutate G.season during select/race-settings/loading");
   assert.match(title, /getElementById\("race-settings"\)/);
   assert.match(title, /getElementById\("loading"\)/);
+});
+
+for (const flavour of ["driver", "myteam"]) for (let i = 0; i < 3; i++) {
+  test(`future ${flavour}:${i} remains occupied and protected until explicit deletion`, () => {
+    const key = `apex26.career.${flavour}.${i}`;
+    const future = JSON.stringify({ v: 2 ** 32, flavour, money: 123, season: { config: { future: true } }, tdev: { haas: 15 } });
+    const disk = new Map([[key, future], ["apex26.careerSlot", JSON.stringify(`${flavour}:${i}`)]]);
+    const { Career } = load({ disk });
+    assert.equal(Career.load(), null);
+    assert.equal(Career.active(), false);
+    const info = Career.slots(flavour)[i];
+    assert.equal(info.used, true);
+    assert.equal(info.unsupported, true);
+    assert.notEqual(Career.firstFree(flavour), i);
+    assert.equal(Career.useSlot(flavour, i), null);
+    assert.equal(Career.start({ flavour, slot: i }), null);
+    Career.save();
+    assert.equal(disk.get(key), future);
+    assert.equal(Career.deleteSlot(flavour, i).ok, true);
+    assert.equal(Career.slots(flavour)[i].used, false);
+  });
+}
+
+// #2193: with the live slot's localStorage key missing (evicted / cleared) but the
+// IndexedDB mirror still holding it, the synchronous boot load() fell through to
+// another slot and DURABLY repointed careerSlot. The restore then skipped the
+// present pointer and the player landed in a different career for good.
+test("a missing live slot restored from the mirror stays the selected career (#2193)", async () => {
+  const disk = new Map();
+  const mine = save(6, 606), other = save(2, 202);
+  disk.set("apex26.careerSlot", JSON.stringify("driver:0"));
+  disk.set("apex26.career.driver.1", JSON.stringify(other));
+  const { Career, store } = load({
+    disk,
+    mirrorRows: [{ k: "apex26.career.driver.0", v: JSON.stringify(mine) }],
+  });
+  assert.equal(Career.load().money, 202, "boot plays the fallback slot while IndexedDB opens");
+  assert.equal(disk.get("apex26.careerSlot"), JSON.stringify("driver:0"), "the pointer is not rewritten before the restore");
+  await store.mirror.ready;
+  await new Promise((r) => setImmediate(r));
+  assert.equal(Career.slot().flavour, "driver");
+  assert.equal(Career.slot().i, 0, "the restored career is selected again");
+  assert.equal(Career.data().money, 606);
+  assert.equal(JSON.parse(disk.get("apex26.careerSlot")), "driver:0");
+});
+
+test("a fallback with nothing to restore persists the fallback pointer once the mirror settles (#2193)", async () => {
+  const disk = new Map();
+  disk.set("apex26.careerSlot", JSON.stringify("driver:0"));
+  disk.set("apex26.career.driver.1", JSON.stringify(save(2, 202)));
+  const { Career, store } = load({ disk, mirrorRows: [] });
+  assert.equal(Career.load().money, 202);
+  await store.mirror.ready;
+  await new Promise((r) => setImmediate(r));
+  assert.equal(JSON.parse(disk.get("apex26.careerSlot")), "driver:1", "no restore came: the fallback becomes the pointer");
+  assert.equal(Career.slot().i, 1);
 });

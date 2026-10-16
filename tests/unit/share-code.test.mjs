@@ -51,6 +51,7 @@ function harness(opts = {}) {
     Career: {
       data: () => opts.career || null,
       load: () => opts.career || null,
+      ...(opts.calendar ? { calendar: () => opts.calendar.map((id) => ({ id, name: id.toUpperCase() })) } : {}),
     },
     DailyChallenge: {
       prevDay: (day) => {
@@ -207,6 +208,49 @@ test("lastSession round-trips and continueHint prefers career then daily then se
     },
   });
   assert.equal(hintS.kind, "session");
+});
+
+// #2160: the career CONTINUE subtitle named Tracks.SEASON (the build's calendar), so a
+// save stamped with another calendar showed a different circuit and round count from
+// the career hub, which reads Career.calendar().
+test("career continueHint names the save's own calendar, not the build's Tracks.SEASON", () => {
+  const { ShareCode, store } = harness({
+    tracks: ["monza", "spa", "suzuka", "imola"],
+    calendar: ["imola", "suzuka", "baku"],
+    career: { year: 2026, season: { round: 1 }, team: "mercedes", flavour: "driver" },
+  });
+  const hint = ShareCode.continueHint({ store, daily: null });
+  assert.equal(hint.kind, "career");
+  assert.equal(hint.sub, "2026 · ROUND 2 · SUZUKA", "calendar()[round] and its own round count");
+  const last = harness({
+    tracks: ["monza", "spa", "suzuka", "imola"],
+    calendar: ["imola", "suzuka"],
+    career: { year: 2026, season: { round: 2 }, team: "mercedes", flavour: "driver" },
+  });
+  assert.equal(last.ShareCode.continueHint({ store: last.store, daily: null }).sub, "2026 · ROUND 2 · SUZUKA",
+    "a finished season clamps to calendar().length, not Tracks.SEASON.length");
+});
+
+// #2155: an unfinished YESTERDAY daily card staged TODAY's daily (title-menu dropped hint.day,
+// and every other path — share codes, the picker chip — deliberately replays only today).
+// The card is retired: CONTINUE never offers a past day it cannot open.
+test("continueHint never offers yesterday's daily", () => {
+  const day = new Date().toISOString().slice(0, 10);
+  const d = new Date(day + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() - 1);
+  const y = d.toISOString().slice(0, 10);
+  const h = harness({ career: null });
+  const daily = (streak) => ({
+    dayKey: () => day,
+    data: () => ({ days: { [y]: { best: null, laps: 3 } }, streak: { count: streak, last: y } }),
+    liveStreak: () => streak,
+    today: () => null,
+  });
+  const none = h.ShareCode.continueHint({ store: h.store, daily: daily(0) });
+  assert.equal(none, null, "no streak and no last session: no CONTINUE card");
+  const live = h.ShareCode.continueHint({ store: h.store, daily: daily(2) });
+  assert.equal(live.kind, "daily");
+  assert.equal(live.day, day, "the daily CONTINUE card is today's, which is what openDailyPicker() opens");
+  assert.doesNotMatch(live.sub, /YESTERDAY/);
 });
 
 // Round-3 hunt 6-F1: the livery branch did next.slice(0, 32) — a player with 40 custom
@@ -439,4 +483,31 @@ test("failed completion marker leaves durable pending recovery; failed Undo mark
   q.fail(() => false);
   store.retryFailed();
   assert.deepEqual(j(q.reload().store.get("shareUndo")), rec);
+});
+
+// #2191: the undo snapshot read store.get(), which falls back to GarageDefaults
+// (setup.mercedes, livery.* ship there). UNDO then wrote the shipped default as a
+// STORED value, pinning it so a later default change never reached the player.
+test("UNDO of a setup code on an empty store leaves the key absent, not pinned to the garage default (#2191)", () => {
+  const { ShareCode, sandbox } = harness();
+  const disk = new Map();
+  sandbox.localStorage = {
+    getItem: (k) => (disk.has(k) ? disk.get(k) : null),
+    setItem: (k, v) => disk.set(k, String(v)),
+    removeItem: (k) => disk.delete(k),
+  };
+  sandbox.Log = { warn() {}, info() {}, debug() {}, error() {}, enabled: () => false };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  for (const f of ["js/data/garage-defaults.js", "js/core/hash32.js", "js/core/mat4.js", "js/career/save-migrate.js", "js/core/store.js"]) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: f });
+  }
+  const store = vm.runInContext("GameStore.store", ctx);
+  assert.ok(store.get("setup.mercedes", null), "the shipped default is visible through get()");
+  assert.equal(store.getStored("setup.mercedes"), undefined);
+  const code = ShareCode.encode("setup", { team: "mercedes", tune: { arbF: 11, arbR: 11, rideF: 15, rideR: 40, brakeBias: 62 } }).code;
+  assert.equal(ShareCode.apply(ShareCode.decode(code), { store }).ok, true);
+  assert.equal(store.getStored("setup.mercedes").arbF, 11);
+  assert.equal(ShareCode.apply(ShareCode.decode("UNDO"), { store }).ok, true);
+  assert.equal(store.getStored("setup.mercedes"), undefined, "absent again, so the shipped default keeps following releases");
 });

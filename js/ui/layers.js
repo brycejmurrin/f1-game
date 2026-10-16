@@ -13,6 +13,8 @@ window.UiLayers = (function () {
      being closed would make the guard the thing under test. */
   const DEFS = [
     { id: "overlay", gate: false },
+    // Built on demand; owns focus and driving-key gating while pieces stay draggable.
+    { id: "hud-arrange-bar" },
     /* The rotate blocker: an opaque z-9000 fixed div shown MID-RACE (unique
        among these layers), self-gated by CSS media queries rather than the
        hidden attribute. gate: false is load-bearing three ways — Escape must
@@ -158,7 +160,11 @@ window.UiLayers = (function () {
     let best = null;
     let bestRank = -Infinity;
     let bestModal = false;
-    for (const el of document.querySelectorAll(ALL_SEL)) {
+    // Dynamic nested dialogs (telemetry) own focus, arrows and paging too.
+    // Keep the native selector separate for engines without :modal support.
+    let layers = Array.from(document.querySelectorAll(ALL_SEL));
+    try { layers = layers.concat(Array.from(document.querySelectorAll(":modal"))); } catch (_) { /* older engine */ }
+    for (const el of new Set(layers)) {
       const modal = isModal(el);
       // :modal is the platform top layer even when Chromium has dropped the
       // element's box (css-layers: hidden→showModal re-attach). Size is the

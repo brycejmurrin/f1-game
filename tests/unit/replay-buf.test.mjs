@@ -352,6 +352,23 @@ test("a red-flag re-grid (same clock, same cars) is a timeline break: two segmen
   assert.ok(Math.abs(api.at(100 + dt / 2).cars[0].px - 0.5) < 1e-4, "a fresh ring starts unbroken");
 });
 
+test("a timeline discard does not re-tag cars that were already retired (BUGS M19)", () => {
+  const R = boot();
+  const field = cars(2);
+  const api = R.create({ cars: field, netPlay: { active: () => false } });
+  api.reset(field);
+  for (let i = 0; i < R.HZ * 2; i++) api.sample(i / R.HZ, field);
+  field[1].retired = true;
+  api.sample(3, field);
+  assert.equal(api.lastTag().kind, "retirement");
+  api.sample(1, field);   // a rewind: discardTimeline() clears the history
+  api.sample(1.5, field);
+  assert.equal(api.lastTag(), null, "no fresh retirement for a car already out");
+  field[1].retired = false; api.sample(2, field);
+  field[1].retired = true; api.sample(2.5, field);
+  assert.equal(api.lastTag().kind, "retirement", "a real new retirement still tags");
+});
+
 test("one car's teleport (RECOVER / rescue) snaps without clearing; fast or stalled driving still blends", () => {
   // The heuristic is per car and render-only: a RECOVER after a crash must not
   // wipe the crash from the ring, and a frame-loop stall at speed must not read

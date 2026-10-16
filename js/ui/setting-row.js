@@ -127,7 +127,7 @@ window.SettingRow = (function () {
      old walk indexed the enabled-only list, where a disabled current value
      (the trailing CUSTOM sentinel of STEERING FEEL / DRIVING LINE / SOUND
      PROFILE) is -1, coerced to 0 — so › from CUSTOM skipped OFF and landed on
-     the second option. hud-layout.js's stepper walks the same way.
+     the second option.
      wrap:false (LAPS) stops at the ends instead of 3 ↔ FULL. */
   function step(p, dir, read, write) {
     const all = options(p.sel);

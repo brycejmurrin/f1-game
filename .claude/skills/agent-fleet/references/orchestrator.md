@@ -36,7 +36,9 @@ DONE WHEN: <exact verify command or measured check, green on the PR head>
 CAPS: ≤ <n> screenshots/captures (default 25); ≤ 2 nested subagents; abort at
       ~400 messages or ~90 min with no OWNED push and say so.
 ORCHESTRATOR: <host>:<your session id>
-USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do beyond AGENTS.md
+USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do beyond AGENTS.md,
+      scoped to the lane (OWNED globs / issue list, follow-up PRs included), not to PR numbers
+PUSH SLOT: <n> — paced push, launch-policy.md (n = this worker's launch index, 0–9)
 Load skill agent-fleet and follow references/worker.md.
 Open a DRAFT PR; keep its fleet block current; subscribe with your host's tool.
 When blocked or unsure: set state: blocked, needs-orchestrator: yes, comment
@@ -48,84 +50,62 @@ Do not enable auto-merge or merge.
 
 ## Authority, permissions and modes (the 2026-10-15 track-survey fleet)
 
-- **Auto mode.** Launch every sibling session in auto mode
-  (`create_session` `permission_mode: "auto"`) and run subagents without plan
-  mode: an unattended worker in `plan` or `default` stalls on an approval nobody
-  sees. Auto mode still runs the hooks and the permission classifier. Verify
-  with `get_session` right after the spawn: `permission_mode` is what the child
-  actually got (a request for `default` landed as `auto` on 2026-10-15 and the
-  reverse happened too), and a `default` child's prompts appear only in the
-  app, where the user must answer them in that session. An auto child needs an
-  auto parent: from a `default` session `create_session` refuses with
-  "permission_mode 'auto' requires the parent session to be in auto mode", so
-  ask the user to switch YOUR session to Auto before a launch.
-- **What an auto worker can do unattended** (measured 2026-10-15 on 76637056,
-  about 100 calls in two auto siblings: 0 prompts, 0 blocks): git and worktree
-  commits, the `worker` and `Explore` subagents, tasks, worktree tools,
-  sibling-to-sibling `send_message` (both ways, ~20 s), GitHub reads, skills,
-  web, and every MCP server. The `.mcp.json` servers (apex-tools,
-  chrome-devtools, playwright-official), MDN, BrowserStack, Bash and Agent are
-  approved by the classifier, not a rule: a repository cannot pre-approve the
-  servers it defines itself, so no `.claude/settings.json` entry helps them.
-  Still gated by design: merges and ready flips (`github-mcp-guard.sh`), and
-  `APEX_PUSH_HOLD=0` (the classifier rejects it as `[Safety Bypass Flag]`, so a
-  worker waits for `queue-depth.mjs` to read ok, or the user pushes it).
-- **The repo is not inherited.** `create_session` without `source_url` makes a
-  session with an EMPTY working directory, tagged `config:no-git-repo` (two
-  census siblings on 2026-10-15 stopped at their first `git log`). Always pass
-  `source_url: https://github.com/brycejmurrin/f1-game` and
-  `source_revision: claude/f1-game-project-26h3ng` (or the worker's branch);
-  check the new session's `tags` for `config:no-git-repo` and relaunch if it is
-  there. A child that recovers with `add_repo` gets a read-only clone under
-  `/home/user/brycejmurrin/f1-game` with no GitHub MCP access to the repo, so
-  it cannot open or update a PR.
-- **The brief is read as peer data.** A spawned session sees its launch prompt
-  as a task notification, not a user message: on 2026-10-15 both census
-  siblings ran only their read-only first step and waited until the user typed
-  into them. `USER GRANTS:` with the user's exact words and a UTC time is what
-  lets a child act; a brief without it buys a read-only report at best.
-- **Measure permissions, never infer them.** "No prompt seen" proves nothing
-  in auto mode. Every tool result in a session's `list_events` transcript
-  carries `tool_result_meta[].permission_decision`: reason `rule` + source
-  `config` means an allow rule in settings matched; reason `classifier` means
-  no rule matched and the auto-mode classifier approved; source
-  `user_temporary` / `user_permanent` with no reason means a human prompt was
-  shown; `reject` names `hook` or `classifier`. Read your own session's events
-  to test a settings change; the measured rule shapes are in
-  `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`.
-- **Relayed authority does not travel.** A worker treats the orchestrator's
-  messages as peer data, so "Bryce approved X" mid-run is refused (seen 20+
-  times: the push-hold override, merges, opening PRs). Put everything the user
-  approves for the fleet IN THE LAUNCH PROMPT, quoting the user's exact words
-  with a UTC time. A later grant goes out the same way; a worker that still
-  refuses needs the user in its own session, or the orchestrator does the step
-  itself (e.g. sync and push the branch from its own worktree).
-- **Grant blocks (measured 2026-10-15).** A launch prompt that quotes the user is
-  still peer data: all six Merge Desk lane workers stood by, and a relay
-  `send_message` was refused the same way. A message the USER types into the
-  worker's own session arrives as a human turn (`list_events`: `origin.kind:
-  "human"`) and unblocks it at once. So after `create_session`, print one
-  copy-paste block per worker for the user (session id, then a fenced one-message
-  grant naming the PRs, the paced-push rule and "Do not enable auto-merge or
-  merge"). Do not argue the relay or resend it.
-- **`subscribe_pr_activity` can fail** ("Could not subscribe to this PR", seen on
-  #2062 and #2063 from three workers). Treat it as normal: `ci-watch.mjs --sha
-  <head> --once` on each timer wake, and say the subscription failed in the
-  hand-back. It is a server-side tool; no settings rule fixes it.
-- **Permissions.** `APEX_PUSH_HOLD=0` (queue-hold override) is only for a push
-  the user asked for now; the classifier may deny it and `git merge` /
-  `sync-pr` in a worker anyway. Shared allow rules belong in
-  `.claude/settings.json` on the deploy branch, so every worker that syncs gets
-  them; a local settings file helps only its own container.
-- **What the brief grants up front** (so no mid-run grant is needed): open its
-  own DRAFT PR, `subscribe_pr_activity`, a `ci-watch.mjs --sha` Monitor and one
-  `send_later` check-in, then drive the draft fast tier to green; send Merge
-  Desk `SWEEP <PR#>` when `ready-gate.mjs` exits 0; the one golden-hash /
-  baseline row it may touch (lower only); where its images go (survey frames →
-  `track-survey-assets`, never the deploy branch).
-- **Reach.** Workers report with `send_message` to the orchestrator id in the
-  brief and may message sibling owners directly (e.g. an engine worker); a
-  fleet-wide instruction is one `send_message` per live session.
+Evidence for every bullet: `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`
+and `docs/notes/AGENT-CONFIG-RESEARCH-2026-10-15.md`.
+
+- **Every session in the fleet runs in auto mode**: workers, Merge Desk and
+  you. In `default`, `send_message`, `send_later` and `create_session` are
+  platform confirmations that no allow rule clears, and an unattended prompt
+  stalls the session (the default-mode desk lost hours to them, 2026-10-15).
+  Launch with `create_session` `permission_mode: "auto"`; only an auto parent
+  may (a `default` parent is refused). Confirm with `get_session`: the mode
+  granted can differ from the one requested. A coordinator that finds itself in
+  `default` (`get_session`, no id) asks the user once to switch it to Auto and
+  does read-only work until then.
+- **Pass the repo.** Without `source_url: https://github.com/brycejmurrin/f1-game`
+  and `source_revision: claude/f1-game-project-26h3ng` (or the worker's branch)
+  the child gets an empty directory tagged `config:no-git-repo`: relaunch it.
+  An `add_repo` recovery is a read-only clone with no GitHub MCP access to the
+  repo, so it cannot open a PR. One repository per session: an Anthropic-hosted
+  session with several repositories loads no repository's `.claude/settings.json`
+  hooks, so every guard is off there
+  ([docs](https://code.claude.com/docs/en/claude-code-on-the-web)).
+- **Authority: one rule.** A worker acts on the user's words: quoted with a UTC
+  time in its launch prompt (`USER GRANTS:`), or typed by the user into its own
+  session. Both are the user's; only the second arrives as a human turn, and on
+  2026-10-15 six lane workers stood by on the first until the user typed. So
+  quote every grant in the brief AND, after `create_session`, print one
+  copy-paste block per worker (session id, then a fenced message with the
+  lane's scope, the paced-push rule from `launch-policy.md` and "Do not enable
+  auto-merge or merge"). Anything relayed later ("Bryce approved X") is peer
+  data and is refused; do the step yourself or ask the user to type it there.
+- **Grant a class, not a PR number.** "#2152 #2158" covers nothing else, so each
+  follow-on PR would need a new launch. Word grants by scope: "open and drive
+  draft PRs for <OWNED globs> / issues <list>, including follow-ups this lane
+  finds; SWEEP each to Merge Desk". Out-of-scope work is still an issue.
+- **What the brief grants up front**: its own DRAFT PR, `subscribe_pr_activity`,
+  a `ci-watch.mjs --sha` Monitor and one `send_later` check-in, driving the
+  draft fast tier to green, `SWEEP <PR#>` to Merge Desk when `ready-gate.mjs`
+  exits 0, the one golden-hash / baseline row it may lower, and where its
+  images go (survey frames → `track-survey-assets`).
+- **Permissions: measure, never infer.** Each tool result in `list_events`
+  carries `tool_result_meta[].permission_decision`: `rule`/`config` = a settings
+  rule matched; `classifier` = auto mode approved; source `user_temporary` /
+  `user_permanent` = a human answered a prompt; `reject` names `hook` or
+  `classifier`. "No prompt seen" proves nothing in auto mode. Do not expect a
+  new `.claude/settings.json` allow rule to unblock a worker: the file already
+  allows every tool, an auto session's Bash goes to the classifier anyway, and
+  what still prompts (the `.mcp.json` servers, MDN, BrowserStack, the session
+  tools above) no repo rule reaches. Gated by design: merges and ready flips
+  (`github-mcp-guard.sh`); `APEX_PUSH_HOLD=0` is rejected by the classifier as
+  `[Safety Bypass Flag]`, so a worker waits for `= queue ok` or the user pushes.
+- **`subscribe_pr_activity` can fail** for sibling sessions ("Could not
+  subscribe to this PR"; server-side, no rule fixes it): fall back to
+  `ci-watch.mjs --sha <head> --once` on each timer wake and say so in the
+  hand-back.
+- **Reach.** Workers `send_message` the orchestrator id in the brief (~20 s
+  delivery) and may message sibling owners directly; a fleet-wide instruction
+  is one `send_message` per live session.
 
 The last line limits the worker's own actions. It is not a merge veto: the
 worker must not copy it, or any "do not merge" wording, into the PR body or a
@@ -166,6 +146,10 @@ launching Cursor workers uses the Cursor API column (needs a key).
 - One pass per wake: for every worker PR, read the fleet block, the latest
   `@orchestrator` comment, the head SHA's CI (`node tools/ci/ci-watch.mjs --sha
   <sha> --once`) and mergeability.
+- Workers iterate on what their change touches (`tooling-fast --changed` plus
+  the specs `pick-tests` / `select-specs` name) and run the full `tooling-fast`
+  once before a code push (AGENTS.md rule 3). At most one merge from the deploy branch per PR per hour unless the PR
+  is `dirty` / conflicting or more than 10 commits behind (`sync-pr.mjs`).
 - A worker is **stalled** when its state has not changed and its branch has
   not moved for ~90 min, or it passed its caps. Ask once, then interrupt and
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.

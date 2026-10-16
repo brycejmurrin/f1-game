@@ -54,9 +54,13 @@ function backendPreference() {
 // Title boot must not fetch three.webgpu (+ three.core) when requestAdapter()
 // is null: TLX would only forceWebGL inside that ~1.1 MB island, and GLX already
 // owns the WebGL2 path. Explicit apex26.gfxBackend=three still loads TLX.
+// The probe's verdict for the fallback reason (#2285): "" when an adapter
+// resolved, else why not. "slow" is not "absent": see the WGX pick below.
+let _adapterWhy = "", _adapterSlow = false;
 async function gpuAdapterAvailable() {
+  _adapterWhy = ""; _adapterSlow = false;
   try {
-    if (typeof navigator === "undefined" || !navigator.gpu || !navigator.gpu.requestAdapter) return false;
+    if (typeof navigator === "undefined" || !navigator.gpu || !navigator.gpu.requestAdapter) { _adapterWhy = "no navigator.gpu"; return false; }
     const adapterP = navigator.gpu.requestAdapter();
     // Cap the probe: a stuck requestAdapter() on broken WebGPU stacks delays
     // the entire title boot (unset default waits here before choosing GLX).
@@ -65,18 +69,22 @@ async function gpuAdapterAvailable() {
     // returns null, or the hang timer fires. Clear the timer if the adapter
     // settles first so a slow-but-real adapter is never raced out.
     // No setTimeout (some VM harnesses): await the adapter alone.
-    if (typeof setTimeout !== "function") return !!(await adapterP);
+    if (typeof setTimeout !== "function") { const a = !!(await adapterP); if (!a) _adapterWhy = "requestAdapter() returned null"; return a; }
     let timer = null;
     try {
+      const SLOW = {};
       const ad = await Promise.race([
         adapterP,
-        new Promise((resolve) => { timer = setTimeout(() => resolve(null), 4000); }),
+        new Promise((resolve) => { timer = setTimeout(() => resolve(SLOW), 4000); }),
       ]);
+      if (ad === SLOW) { _adapterSlow = true; _adapterWhy = "requestAdapter() gave no answer in 4 s"; return false; }
+      if (!ad) _adapterWhy = "requestAdapter() returned null";
       return !!ad;
     } finally {
       if (timer != null) clearTimeout(timer);
     }
-  } catch (_) {
+  } catch (e) {
+    _adapterWhy = "requestAdapter() threw: " + ((e && e.message) || e);
     return false;
   }
 }
@@ -89,10 +97,11 @@ async function gpuAdapterAvailable() {
 // treats the backend as unavailable and falls through to GLX. Logged once, where
 // it fires; a step that settles in time costs one cleared timer.
 // Software-GL CI runners (SwiftShader/llvmpipe on a starved host) can take
-// longer than 8 s to init TLX; a spec that MEASURES the TLX backend may RAISE the
-// cap (never lower it) with apex26.gfxBootStepMs, clamped to 60 s.
+// longer than 8 s to init TLX; Pages 38660546141 saw init finish just after
+// the old 8 s cap on a hot gate. Default 15 s; a spec that MEASURES TLX may
+// RAISE the cap (never lower it) with apex26.gfxBootStepMs, clamped to 60 s.
 const BOOT_STEP_MS = (() => {
-  let ms = 8000;
+  let ms = 15000;
   try { const v = Number(localStorage.getItem("apex26.gfxBootStepMs")); if (v > ms) ms = Math.min(v, 60000); } catch (_) { /* blocked storage: default cap */ }
   return ms;
 })();
@@ -120,6 +129,7 @@ async function start() {
 let gfx = null;
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 let _createHung = false;     // the backend's create() never answered: leave its canary armed
+let pref = "webgl2", pick = "", why = "";   // the resolved pick, the explicit one, and why it did not bind (#2285: never silent)
 try {
   // Refresh apex26.xrCaps before sync bootPick (ms). ApexXR is LAZY_XR and is only
   // fetched by XrBoot.mountUi, after this runs, so on a real boot it is undefined
@@ -133,13 +143,13 @@ try {
     try { await withTimeout(ApexXR.detect(), BOOT_STEP_MS, "XR capability probe"); } catch (_) { /* caps stay cached */ }
   }
   const stored = storedBackendPreference();
-  let pref = stored.pref;
+  pref = stored.pref; pick = stored.unset ? "" : stored.pref;
   // Unset default is THREE when a GPU adapter resolves; with no adapter, stay
   // on GLX so title never modulepreloads three.webgpu/core (~1.1 MB encoded).
   // Explicit three/webgpu picks are unchanged. The boot canary below still
   // protects stored THREE/WEBGPU picks after a jetsam.
   if (stored.unset && pref === "three") {
-    if (!(await gpuAdapterAvailable())) pref = "webgl2";
+    if (!(await gpuAdapterAvailable())) pref = "webgl2";   // the unset default, not a pick: no fallback reason
   }
   // Last load claimed the canvas then died — skip opt-in THIS tab only
   // (sessionStorage). Do not wipe the pick: Safari's navigator.gpu can be on
@@ -167,6 +177,7 @@ try {
   // THIS BOOT ONLY and leaves the pick alone; only a SECOND consecutive strike
   // retires it (bounding a genuinely broken device to two attempts, no reload loop).
   if (armed && !skipClaim) {
+    why = "boot canary: " + armed + " never presented a frame last load";
     pref = "webgl2";
     let strikes = 2;   // unreadable storage cannot count strikes: treat as final
     try { strikes = (+localStorage.getItem(STRIKE_KEY) || 0) + 1; } catch (_) { /* blocked storage */ }
@@ -192,9 +203,16 @@ try {
               : pref === "webgpu" ? BACKEND_FILES.webgpu : null;
   let optIn = !skipClaim && !!(group && group.length) &&
     (pref === "three" || pref === "webgpu");
+  if (skipClaim && (pref === "three" || pref === "webgpu")) why = "claim-fail skip: the last load claimed the canvas and died";
+  else if ((pref === "three" || pref === "webgpu") && !optIn) why = "no " + pref + " script group in the roster";
   // WGX with navigator.gpu but a null adapter used to fetch the webgpu roster
   // then refuse — skip the fetch when no adapter resolves.
-  if (optIn && pref === "webgpu" && !(await gpuAdapterAvailable())) optIn = false;
+  // A SLOW adapter is not an absent one: under load SwiftShader's requestAdapter()
+  // was measured at up to 3 s against the 4 s cap, and a miss bound GLX with no
+  // reason anywhere (#2285). WGX.create() asks again under BOOT_STEP_MS and records
+  // its own refusal, so only a null/throwing adapter skips the fetch.
+  if (optIn && pref === "webgpu" && !(await gpuAdapterAvailable()) && !_adapterSlow) { optIn = false; why = _adapterWhy; }
+  if (optIn && typeof Gfx === "undefined") why = "Gfx factory absent";
   if (optIn && typeof Gfx !== "undefined") {
     // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
     try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
@@ -211,6 +229,13 @@ try {
     // canary state untouched. A hung create() IS the device's (see _createHung).
     const made = fetched === TIMED_OUT ? null : await withTimeout(Gfx.create(canvas, { backend: pref }), BOOT_STEP_MS, "backend " + pref + " init");
     const backend = made === TIMED_OUT ? (_createHung = true, null) : made;
+    if (fetched === TIMED_OUT) why = "backend script fetch gave no answer in " + BOOT_STEP_MS / 1000 + " s";
+    else if (made === TIMED_OUT) why = "backend " + pref + " init gave no answer in " + BOOT_STEP_MS / 1000 + " s";
+    else if (!backend) {
+      let own = null;
+      try { own = localStorage.getItem(pref === "three" ? "apex26.gfxTlxFail" : "apex26.gfxWgxFail"); } catch (_) { /* blocked storage */ }
+      why = pref + " create() refused" + (own ? ": " + own : " without a reason") + (_adapterSlow ? " (" + _adapterWhy + ")" : "");
+    }
     if (backend) {
       // game.js and tracks.js take the backend by injection (the `gfx` handle
       // / Tracks.build's opts.gfx) and need no patch. The descriptor-copy
@@ -227,13 +252,13 @@ try {
         // The descriptor copy is the bind commit point. Clear any GLX latch
         // left by an earlier same-tab fallback even if a deferred backend
         // forgets to clear its own failure marker.
-        try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
+        try { sessionStorage.removeItem("apex26.gfxBound"); sessionStorage.removeItem("apex26.gfxFallbackWhy"); } catch (_) { /* blocked storage */ }
         try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no event surface */ }
         try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ }
       }
     }
   }
-} catch (_) { gfx = null; }
+} catch (e) { gfx = null; why = "boot threw: " + ((e && e.message) || e); }
 if (!gfx) {
   // Load GLX only when selected or needed after TLX/WGX refuses. A missing
   // script must not trigger the claim-failure reload loop while offline.
@@ -278,6 +303,13 @@ if (!gfx) {
   // alternate whose create() returned null. Publish what is actually drawing
   // so SETTINGS and metrics never keep labelling the stored THREE/WGX pick.
   try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label stays at the pick */ }
+  // A WGX/TLX pick that ends here says why — on the console and where
+  // __apex.diag().env.backendFallback reads it. An explicit WEBGL2 pick owes nothing.
+  if (why || pick === "three" || pick === "webgpu") {
+    const reason = why || "unknown";
+    try { Log.warn("gfx", "bound WebGL2 instead of " + (pick || "the default") + " — " + reason); } catch (_) { /* Log absent (VM harness): the session key still says it */ }
+    try { sessionStorage.setItem("apex26.gfxFallbackWhy", reason); } catch (_) { /* the warning still says it */ }
+  } else try { sessionStorage.removeItem("apex26.gfxFallbackWhy"); } catch (_) { /* blocked storage */ }
   try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window/event surface */ }
   // Live tab, create() refused. Keep the pick and disarm the canary so a
   // refresh retries instead of reverting to WEBGL2. Jetsam during create()

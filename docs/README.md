@@ -4,6 +4,8 @@ Start here. This page is a **reading order**, not a filing cabinet: the tables
 below say what to read and in what order, and the index at the bottom exists so
 nothing goes unfindable.
 
+Player-facing change notes live in [changelog.d/](changelog.d/).
+
 ## Read in this order
 
 **If you are an agent**, the path is `AGENTS.md` → `ARCHITECTURE.md` →
@@ -28,6 +30,7 @@ drives it.
 | Doc | Covers |
 |---|---|
 | [ui-experience-studio.md](ui-experience-studio.md) | Appearance profiles, real rendered Home scenes, WATCH controls, contextual pause, career/results and Photo Studio contracts with design research. |
+| [changelog.d/](changelog.d/README.md) | Per-PR changelog fragments (one file per PR, never edit `CHANGELOG.md`) and the fold that writes it. |
 | [FLOW.md](FLOW.md) | The session state machine, the routes into a start (which play the garage/flyby intro), and the finish presentation per mode. |
 | [USAGE-PATHS.md](USAGE-PATHS.md) | End-to-end player journeys: every title door, Garage forward/back, restart, qualifying, championship, TV finishes, WATCH, multiplayer, designer and recovery paths; a regression checklist with source evidence. |
 | [PHYSICS.md](PHYSICS.md) | The driving model and its tuning variables, combined slip, active aero / X-mode, the overtake gate, and the world-space rigid-body authority. **Two rules bind everywhere** — see `AGENTS.md` §Physics. |
@@ -38,6 +41,7 @@ drives it.
 | [LIGHTING.md](LIGHTING.md) | Light-record layout, shader uniforms, time-of-day branches, track lamps; every hand-tuned constant and how to A/B it; the per-track × time-of-day × weather presets. |
 | [TRACK-DESIGNER.md](TRACK-DESIGNER.md) | The player guide to the TRACK DESIGNER: the 60-second start, shaping and stamping corners, the start line, themes, CHECKS and FIX, save / race / share, and the touch / mouse / keyboard / gamepad cheat sheet. The long form of the designer's HOW TO tab. |
 | [UI-MAP.md](UI-MAP.md) | The title-to-race navigation web, mode-specific flows, Settings values, How to Play anchors, all 15 Garage tabs and pause actions, plus the source-backed inventory of `UiLayers`, major DOM IDs and CSS entrypoints. |
+| [UI-EXPLORER.md](UI-EXPLORER.md) | Browser exploration toolkit: player missions, navigation atlas, filmstrips, responsive/fault/accessibility probes, replay reduction and scene evidence in an offline HTML report. |
 | [COMPONENTS.md](COMPONENTS.md) | Every class family in `css/`, the file that owns it, which classes are defined in more than one file — plus the screen x viewport layout axes and what the layout probe measures. |
 | [CODE-STANDARDS.md](CODE-STANDARDS.md) | The JavaScript house style: module shape, naming, declarations, functions, duplication, and the comment policy — plus the frozen surfaces a style pass must never rename. |
 | [PLATFORM.md](PLATFORM.md) | iOS/Safari quirks, controller support, and what a static GitHub Pages host does and does not give you. |
@@ -53,7 +57,7 @@ drives it.
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (generated), the agent-facing JSON world view (`world`/`field`/`scene`/`rollout`), and the DevTools console recipes. `AGENTS.md` has the short list. |
 | [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 185 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |
-| [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit); written by `tools/lighting/look-survey-sheet.py`. |
+| [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit, committed on `track-survey-assets`, not here); written by `tools/lighting/look-survey-sheet.py`. |
 
 ## `notes/` — the dated ledgers
 
@@ -96,6 +100,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | [notes/CI-CAPACITY-2026-09-29.md](notes/CI-CAPACITY-2026-09-29.md) | The 20-concurrent-job jam of 2026-09-29 (200-290 jobs queued for 7 h): where PR runs spent their slots, why the selector over-sharded and excluded the circuit's own spec, what changed, what did not, and how to re-measure. |
 | [notes/CI-CLOG-SURVEY-2026-10-15.md](notes/CI-CLOG-SURVEY-2026-10-15.md) | The 2026-10-15 jam measured: 401 PR runs by 05:30 UTC, 73 % cancelled by sweeps under the owner's account and re-pushed, half the pushes base-merge syncs, 10-14 min queue waits on five serial plumbing hops. What changed: the plumbing jobs folded into `select`, needed-only node rows on drafts, the push hold and the run-cancel refusal enforced in the hooks; what is left to the owner (one required check, Docs guards off the required list, a Support ticket for the 40-job limit). |
 | [notes/CI-MERGE-BURST-2026-10-03.md](notes/CI-MERGE-BURST-2026-10-03.md) | A 30-merge burst held the site 30 PRs behind: one fast tier per merge clogged 40 slots and only-the-tip poking deployed nothing mid-burst. The fix: one shared no-cancel `ship-fast` group, a superseded green run pokes when no train is moving, and merge pacing; merge queue is not available on a personal-account repo. |
+| [notes/RATCHET-FRAGMENTS-2026-10-15.md](notes/RATCHET-FRAGMENTS-2026-10-15.md) | Why ratchets.json still fought after one-entry-per-line: two PRs growing ONE module wrote two absolutes on one line (#2231/#2242/#2254/#2289); per-branch delta fragments in `tests/data/ratchets.d/`, `--fold`, and the GitHub merge-driver citation (#2291). |
 | [notes/MERGE-HYGIENE-2026-09-29.md](notes/MERGE-HYGIENE-2026-09-29.md) | Concurrent-PR merge conflicts: measured hotspots (~60 ship merges), why `merge=union` is never for JSON, and the one-entry-per-line + sorted normalizer (`tools/check/merge-hygiene.mjs`). |
 | [notes/CI-RENDERING-PERFORMANCE.md](notes/CI-RENDERING-PERFORMANCE.md) | SwiftShader vs Lavapipe vs llvmpipe (measured canvas colours + wall-clock), WGX soft-present / `wgx-capture`, Cursor Cloud `mesa-vulkan-drivers` persist, why sharding is the wrong first speedup, and **§There IS a real GPU** — `macos-latest`. |
 | [notes/CEILING-HISTORY.md](notes/CEILING-HISTORY.md) | Why every size-ratchet number moved, 2026-08 → 2026-09-03; the live numbers are `tests/data/ratchets.json`. |

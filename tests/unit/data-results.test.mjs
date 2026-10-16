@@ -18,8 +18,52 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedDom } from "../helpers/seed-dom.mjs";
+import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+test("lap row key handler leaves descendant button activation to the browser", () => {
+  const source = fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8");
+  const line = source.split("\n").find((line) => line.includes('tr.addEventListener("keydown"'));
+  let handler, toggles = 0, prevented = 0;
+  const tr = { addEventListener(type, fn) { handler = fn; } };
+  vm.runInNewContext(line.trim(), { tr, toggle() { toggles++; } });
+  for (const key of ["Enter", " "]) {
+    handler({ key, target: {}, preventDefault() { prevented++; } });
+    assert.equal(toggles, 0); assert.equal(prevented, 0);
+  }
+  for (const key of ["Enter", " "]) handler({ key, target: tr, preventDefault() { prevented++; } });
+  assert.equal(toggles, 2); assert.equal(prevented, 2);
+});
+
+test("pit duel uses observed crossings and suppresses incomplete or lap-down timing", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx);
+  const api = vm.runInContext("DataRealRace", ctx);
+  const driver = (num, offset) => ({ num, code: "D" + num, laps: [10, 10, 10, 10, 10], lapStart: [0, 10, 20, 30, 40].map((t) => t + offset), lapsDone: 5, pits: [2], stints: [{ c: "SOFT", from: 1 }, { c: "HARD", from: 3 }] });
+  const script = { laps: 5, drivers: [driver(1, 2), driver(2, 0)], cautions: [{ from: 2, to: 2 }], rain: [false, false, true] };
+  script.drivers[0].lapStart[2] = 21;
+  let r = api.pitDuel(script, 1, 2, 2, 2);
+  assert.equal(r.available, true); assert.equal(r.gapBefore, 2); assert.equal(r.gapAfter, 1); assert.equal(r.change, -1);
+  assert.equal(r.caution, true); assert.equal(r.rain, true); assert.equal(r.startLap, 1);
+  script.drivers[0].laps[1] = null;
+  assert.equal(api.pitDuel(script, 1, 2, 2, 2).available, false);
+  script.drivers[0].laps[1] = 10; script.drivers[0].dnf = true;
+  assert.equal(api.pitDuel(script, 1, 2, 2, 2).available, false);
+  script.drivers[0].dnf = false; script.drivers[0].lapStart[1] = 30;
+  assert.match(api.pitDuel(script, 1, 2, 2, 2).reason, /lap-down/);
+});
+
+test("feed coverage records windows and gaps without implying retirement", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx);
+  const api = vm.runInContext("DataRealRace", ctx);
+  const script = { drivers: [{ num: 1, code: "A" }, { num: 2, code: "B", dnf: true }, { num: 3, code: "C", dns: true }] };
+  const rows = api.traceDetails(script, { cars: { 1: Float32Array.from([-2, 0, 0, 0, 1, 1, 6, 2, 2]) }, failed: [2] });
+  assert.equal(rows[0].start, -2); assert.equal(rows[0].end, 6); assert.equal(rows[0].count, 3);
+  assert.deepEqual(JSON.parse(JSON.stringify(rows[0].gaps)), [[0, 6]]); assert.equal(rows[0].retired, false);
+  assert.equal(rows[1].count, 0); assert.equal(rows[1].retry, true); assert.equal(rows[1].retired, true); assert.equal(rows[2].dns, true);
+});
 
 function loadModule(api) {
   const sb = { Math, Array, Object, Number, String, Boolean, isFinite, console, Promise, F1API: api };
@@ -320,11 +364,28 @@ test("retirements sort last and say why in the time column", async () => {
   assert.deepEqual(r[2].slice(4, 6), ["DNS", "—"]);
 });
 
-// OpenF1 answers a 200 with {detail:"No results found."} for a session that has
-// not published — api.js flattens that to []. It is the ORDINARY state for a
-// session that just finished, so it must read as "not yet", never as an error.
-test("an unpublished session shows the empty-tab copy, not an error", async () => {
-  const tree = await render({ sessionKey: 11361, name: "Race", type: "Race" }, []);
+// OpenF1 answers HTTP 404 {"detail":"No results found."} for a session that has
+// not published (measured 2026-10-15, session_result?session_key=11392, #2185).
+// The REAL transport resolves that as [] — the ORDINARY state for a session that
+// just finished, so it must read as "not yet", never as an error.
+function realApiOver404() {
+  const src = ["api-transport", "api"].map((n) => fs.readFileSync(path.join(ROOT, "js/data", n + ".js"), "utf8")).join("\n");
+  const ctx = vm.createContext({
+    fetch: async () => ({ ok: false, status: 404, headers: { get: () => null },
+      text: async () => '{"detail":"No results found."}' }),
+    AbortController, Date, setTimeout: (f) => setImmediate(f), clearTimeout() {},
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+  });
+  seedLog(ctx);
+  vm.runInContext(src + ";globalThis.__api=F1API", ctx);
+  return ctx.__api;
+}
+
+test("an unpublished session (OpenF1 404 'No results found.') shows the empty-tab copy, not an error", async () => {
+  const real = realApiOver404();
+  const meta = { sessionKey: 11392, name: "Qualifying", type: "Qualifying" };
+  const tree = await render(meta, null, DRIVERS, { sessionResult: (k) => real.sessionResult(k, 60e3) });
+  await new Promise((r) => setTimeout(r, 0));
   assert.equal(find(tree, (n) => hasCls(n, "dh-empty")).length, 1);
   assert.equal(find(tree, (n) => hasCls(n, "dh-empty"))[0].text, "NOTHING YET");
 });

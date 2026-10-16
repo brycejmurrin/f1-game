@@ -31,7 +31,9 @@
 // (`<script type="application/json" id="apex-lazy-v">`, never executed, so the
 // CSP's script hashes are untouched); ScriptLoader.url() and sw.js's install
 // stamp key on it and fall back to the build when it is absent (dev server,
-// committed shell). `--check --root` verifies it like the tags.
+// committed shell). A companion apex-lazy-integrity block carries complete
+// sha256-base64 SRI values, so a query-keyed response cannot execute newer bytes
+// after the generation check. `--check --root` verifies both blocks like tags.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
@@ -63,7 +65,7 @@ export const DEV_TOKEN = "dev";
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
 const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/;
 export const LAZY_V_ID = "apex-lazy-v";
-const LAZY_V_RE = new RegExp(`\\n?<script type="application/json" id="${LAZY_V_ID}">([\\s\\S]*?)</script>`);
+export const LAZY_INTEGRITY_ID = "apex-lazy-integrity";
 
 // Every file the page injects WITHOUT a tag, from the roster's own source.
 // js/workers/bitmap-decode-worker.js stays build-keyed: its client
@@ -72,36 +74,38 @@ const LAZY_V_RE = new RegExp(`\\n?<script type="application/json" id="${LAZY_V_I
 function lazyFiles() {
   const M = createRequire(import.meta.url)("../manifest.cjs");
   const lists = [...Object.values(M.DEFERRED || {}), M.LAZY_AGENT, M.LAZY_RACE, M.LAZY_RACE_SESSION, M.LAZY_AUDIO,
-    M.LAZY_DATA, M.LAZY_NET, M.LAZY_EDITOR, M.LAZY_XR, M.LAZY_CAM_EDITOR, M.LAZY_CAREER_UI, M.LAZY_CIRCUIT, M.LAZY_SCENERY,
+    M.LAZY_DATA, M.LAZY_NET, M.LAZY_EDITOR, M.LAZY_XR, M.LAZY_CAM_EDITOR, M.LAZY_CAREER_UI, M.LAZY_TRACK_BUILD, M.LAZY_CIRCUIT, M.LAZY_SCENERY,
     (M.LAZY_WORKER || []).filter((f) => f !== "js/workers/bitmap-decode-worker.js")];
   return [...new Set(lists.flat().filter((f) => typeof f === "string"))].sort();
 }
 // The map for the files this root actually holds (a fixture shell holds none).
-function lazyMap() {
+function lazyMap(integrity = false) {
   const out = {};
-  for (const rel of lazyFiles()) if (fs.existsSync(path.join(ROOT, rel))) out[rel] = digest(rel);
+  for (const rel of lazyFiles()) if (fs.existsSync(path.join(ROOT, rel))) out[rel] = integrity ? "sha256-" + digest(rel, "base64") : digest(rel);
   return out;
 }
-function readLazyMap(html) {
-  const m = html.match(LAZY_V_RE);
+function mapRe(id) { return new RegExp(`\n?<script type="application/json" id="${id}">([\\s\\S]*?)</script>`); }
+function readLazyMap(html, id = LAZY_V_ID) {
+  const m = html.match(mapRe(id));
   if (!m) return null;
   try { return JSON.parse(m[1]); } catch (_) { return {}; }
 }
-function writeLazyMap(html, map) {
-  const bare = html.replace(LAZY_V_RE, "");
+function writeLazyMap(html, map, id = LAZY_V_ID) {
+  const bare = html.replace(mapRe(id), "");
   if (!Object.keys(map).length) return bare;
-  const block = `<script type="application/json" id="${LAZY_V_ID}">${JSON.stringify(map)}</script>`;
+  const block = `<script type="application/json" id="${id}">${JSON.stringify(map)}</script>`;
   if (/<\/head>/i.test(bare)) return bare.replace(/<\/head>/i, `${block}\n</head>`);
   return bare.replace(META_RE, (meta) => `${meta}\n${block}`);
 }
 
-function digest(rel) {
+function digest(rel, encoding = "hex") {
   const target = path.resolve(ROOT, rel);
   const rootPrefix = ROOT.endsWith(path.sep) ? ROOT : ROOT + path.sep;
   if (!target.startsWith(rootPrefix) || !fs.statSync(target).isFile()) {
     throw new Error(`Invalid versioned asset path: ${rel}`);
   }
-  return createHash("sha256").update(fs.readFileSync(target)).digest("hex").slice(0, 12);
+  const hash = createHash("sha256").update(fs.readFileSync(target)).digest(encoding);
+  return encoding === "hex" ? hash.slice(0, 12) : hash;
 }
 
 function readState() {
@@ -134,14 +138,17 @@ function verdict() {
   // The lazy map: every lazy file the staged root holds, at its content hash.
   // The repo shell carries none (its loads fall back to ?v=<build>).
   const lazy = readLazyMap(html);
-  if (!STAGED && lazy) mismatches.push({ rel: LAZY_V_ID, actual: "present", expected: "absent from the repo shell" });
-  if (STAGED) {
-    const want = lazyMap();
-    for (const [rel, expected] of Object.entries(want)) {
-      const actual = lazy && lazy[rel];
-      if (actual !== expected) mismatches.push({ rel, actual: actual || null, expected, page: LAZY_V_ID });
+  for (const id of [LAZY_V_ID, LAZY_INTEGRITY_ID]) {
+    const map = readLazyMap(html, id);
+    if (!STAGED && map) mismatches.push({ rel: id, actual: "present", expected: "absent from the repo shell" });
+    if (STAGED) {
+      const want = lazyMap(id === LAZY_INTEGRITY_ID);
+      for (const [rel, expected] of Object.entries(want)) {
+        const actual = map && map[rel];
+        if (actual !== expected) mismatches.push({ rel, actual: actual || null, expected, page: id });
+      }
+      for (const rel of Object.keys(map || {})) if (!(rel in want)) mismatches.push({ rel, actual: map[rel], expected: null, page: id });
     }
-    for (const rel of Object.keys(lazy || {})) if (!(rel in want)) mismatches.push({ rel, actual: lazy[rel], expected: null, page: LAZY_V_ID });
   }
   const consistent = tags.length > 0 && mismatches.length === 0 &&
     Number.isInteger(build) && build > 0 && shellBuild === build;
@@ -189,6 +196,7 @@ function apply() {
   output = output.replace(META_RE, `$1${next}$3`);
   const lazy = lazyMap();
   output = writeLazyMap(output, lazy);
+  output = writeLazyMap(output, lazyMap(true), LAZY_INTEGRITY_ID);
   fs.writeFileSync(INDEX, output);
   fs.writeFileSync(VERSION, `{ "build": ${next} }\n`);
   return { applied: next, from: Math.max(...candidates), tagCount, lazyCount: Object.keys(lazy).length };

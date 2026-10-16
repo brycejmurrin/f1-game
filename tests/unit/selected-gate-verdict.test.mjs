@@ -1,4 +1,4 @@
-// selected-gate-verdict — cancel/red with clean junit is infra-retry, not a hard fail.
+// selected-gate-verdict — cancel/red stays red even with clean sibling junit.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -29,17 +29,17 @@ test("success and skipped plans pass", () => {
   assert.match(empty.reason, /empty plan is a pass/);
 });
 
-test("cancelled with clean junit is infra-retry (not a fail) — run 37493213168", () => {
+test("cancelled with clean junit requires a rerun", () => {
   const v = selectedGateVerdict({ ...base, selected: "cancelled", failedSpecs: [] });
-  assert.equal(v.ok, true);
-  assert.equal(v.infraRetry, true);
-  assert.match(v.reason, /infra-retry/);
+  assert.equal(v.ok, false);
+  assert.equal(v.infraRetry, false);
+  assert.match(v.reason, /re-run/);
 });
 
-test("failure with clean junit is infra-retry (setup/cap noise, no assertion red)", () => {
+test("failure with clean junit requires a rerun", () => {
   const v = selectedGateVerdict({ ...base, selected: "failure", failedSpecs: [] });
-  assert.equal(v.ok, true);
-  assert.equal(v.infraRetry, true);
+  assert.equal(v.ok, false);
+  assert.equal(v.infraRetry, false);
 });
 
 test("cancelled with junit failures stays a hard fail", () => {
@@ -70,13 +70,13 @@ test("guards or select red fails closed", () => {
   assert.equal(selectedGateVerdict({ ...base, select: "failure" }).ok, false);
 });
 
-test("CLI: cancelled + staged clean junit exits 0 with infra-retry notice", () => {
+test("CLI: cancelled + staged clean junit fails closed despite clean sibling junit", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sel-gate-"));
   const slot = path.join(dir, "test-results-1");
   fs.mkdirSync(slot);
   fs.writeFileSync(path.join(slot, "junit.xml"),
     `<?xml version="1.0"?><testsuites><testsuite><testcase classname="specs/ok.spec.js" name="a"/></testsuite></testsuites>`);
-  const out = execFileSync("node", ["tools/ci/selected-gate-verdict.mjs", "--junit-root", dir], {
+  assert.throws(() => execFileSync("node", ["tools/ci/selected-gate-verdict.mjs", "--junit-root", dir], {
     cwd: ROOT,
     encoding: "utf8",
     env: {
@@ -88,8 +88,8 @@ test("CLI: cancelled + staged clean junit exits 0 with infra-retry notice", () =
       CALLED: "false",
       DRAFT: "false",
     },
-  });
-  assert.match(out, /infra-retry/);
+  }), (e) => e.status === 1);
+
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -134,13 +134,13 @@ test("15-F2: a shard that reached the run step and left no junit is a red, not i
   }
 });
 
-test("15-F2: a shard that never reached the run step (checkout/install died) stays infra noise", () => {
+test("15-F2: a shard that never reached the run step (checkout/install died) fails closed", () => {
   const v = selectedGateVerdict({ ...base, selected: "failure", evidence: { started: ["a-1"], junit: ["a-1"] } });
-  assert.equal(v.ok, true);
-  assert.equal(v.infraRetry, true);
-  // b-2 died before the marker: not in `started`, so not in the red set.
+  assert.equal(v.ok, false);
+  assert.equal(v.infraRetry, false);
+  // b-2 died before its marker: available sibling evidence cannot clear it.
   const w = selectedGateVerdict({ ...base, selected: "cancelled", evidence: { started: [], junit: [] } });
-  assert.equal(w.ok, true);
+  assert.equal(w.ok, false);
 });
 
 test("15-F2: unreadable evidence or a failed artifact download cannot be read as clean", () => {

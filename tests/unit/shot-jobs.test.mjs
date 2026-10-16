@@ -63,6 +63,15 @@ test("parseShotArgv single + batch + raster", () => {
   assert.match(SHOT_USAGE, /--batch/);
 });
 
+test("--clear is opt-in: off by default, on from the flag or a batch field (#2253)", () => {
+  assert.equal(parseShotArgv(["monza", "0.1", "orbit"], ROOT).jobs[0].clear, false);
+  const flagged = parseShotArgv(["monza", "0.1", "--clear", "cinematic"], ROOT).jobs[0];
+  assert.equal(flagged.clear, true);
+  assert.equal(flagged.cam, "cinematic", "--clear takes no value, so the next positional is still the cam");
+  assert.equal(normalizeJob({ track: "vegas", cam: "orbit", clear: true }, { ROOT }).clear, true);
+  assert.match(SHOT_USAGE, /--clear/);
+});
+
 test("loadBatchFile accepts JSONL", () => {
   fs.mkdirSync(TMP, { recursive: true });
   const f = path.join(TMP, "jobs.jsonl");
@@ -131,4 +140,21 @@ test("per-job isolation is retained even when the batch otherwise reuses warm sc
   const job = normalizeJob({ track: "monza", isolated: true }, { ROOT });
   assert.equal(job.capture.isolated, true);
   assert.equal(groupJobsByTrack([job, job]).length, 2);
+});
+
+test("--weather parses, validates, and splits batch groups", () => {
+  const plan = parseShotArgv(["monaco", "0.47", "orbit", "--tod", "dusk", "--weather", "rain"], ROOT);
+  assert.equal(plan.jobs[0].weather, "rain");
+  assert.equal(plan.jobs[0].tod, "dusk");
+  assert.equal(plan.jobs[0].cam, "orbit");
+  assert.equal(parseShotArgv(["monza"], ROOT).jobs[0].weather, "dry");
+  assert.throws(() => parseShotArgv(["monza", "--weather", "snow"], ROOT), /unknown weather/);
+  assert.throws(() => normalizeJob({ weather: "hail" }, { ROOT }), /unknown weather/);
+  const jobs = [{ weather: "fog" }, { weather: "dry" }, { frac: 0.3, weather: "fog" }, { frac: 0.4 }]
+    .map((raw) => normalizeJob({ track: "monza", ...raw }, { ROOT }));
+  const groups = groupJobsByTrack(jobs);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map((g) => g.jobs.map((j) => j.weather)), [["fog", "fog"], ["dry", "dry"]]);
+  assert.equal(shotSessionKey(jobs[0]), shotSessionKey(jobs[1])); // weather changes in place, like tod
+  assert.match(SHOT_USAGE, /--weather dry\|wet\|rain\|overcast\|fog/);
 });

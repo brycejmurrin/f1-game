@@ -523,6 +523,7 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
   const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
   const fixture = JSON.parse(readFileSync(join(ROOT_C, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
   const script = Data.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
+  script.cautions = [{ from: 1, to: 1, level: 3, tFrom: 0, tTo: 8, cause: "WATCH REGRESSION" }];
   const line = (p, speed, x) => ({ t: [0, 2, 8], prog: [p, p + 2 * speed, p + 8 * speed], x: [x, x, x] });
   Real.launch(script, { seat: "STR", watch: true, traces: { frame: "track", cars: {
     63: line(100, 40, 0), 16: line(103, 20, 0), 18: line(400, 30, 12),
@@ -576,9 +577,8 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     const p = g.G.player, penalty = p.penalty;
     const field = watched.filter((c) => !c.retired);
     const Sporting = vm.runInContext("SportingRegs", g.ctx), control = Sporting.createPassWatch();
-    g.G.holdCaution(3, "WATCH REGRESSION");
-    g.step(1);   // held flags are published by the ordinary race-control update
-    assert.equal(g.G.cautionLevel(), 3);
+    g.step(1);   // the recorded safety car remains fixed at the paused replay clock
+    assert.equal(g.G.cautionLevel(), 3, "the recorded safety-car window owns WATCH flags");
     control.tick(p, field, 3, DT); g.step(1);   // establish STR ahead under the safety car
     p.prog = 500;   // a recorded overtake/seek discontinuity must never become a driving offence
     let charged = 0;
@@ -590,4 +590,47 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     assert.equal(charged, 10, "the real sporting watcher charges this same overtake to an ordinary driver");
     assert.equal(p.penalty, penalty, "WATCH must never accrue a simulated safety-car overtake penalty");
   } finally { g.G.quitToMenu(); }
+});
+
+// #2164: a VS FRIEND rival is POSED from its owner's packets, so the straight
+// rear-end path must treat it as immovable, exactly as orientedResponse does
+// (invMass 0). It used to split the impulse by the human:human masses, give the
+// local car half the change and write the other half onto the remote's speed —
+// which the next packet discards — leaving the pair closing ("welded" push).
+function netRearEnd(localBehind) {
+  const f = replayContactFixture(); f.replay.stop();
+  const solver = f.create(() => false);
+  const [local, remote] = f.G.cars;
+  f.G.netPlay = { owns: (c) => c === remote };
+  for (const c of [local, remote]) Object.assign(c, { human: true, yawVis: 0, x: 0, contactT: 0 });
+  const [rear, front] = localBehind ? [local, remote] : [remote, local];
+  Object.assign(rear, { prog: 100, s: 100, speed: 50 });
+  Object.assign(front, { prog: 104.6, s: 104.6, speed: 40 });
+  solver.resolveCollisions([], DT);   // binds track / netPlay for pairContact
+  const ct = solver.pairContact(local, remote);
+  assert.ok(ct && !ct.oriented && !ct.sideContact, "the scenario must take the straight rear-end path");
+  const remoteBefore = { speed: remote.speed, contactT: remote.contactT };
+  const localV0 = local.speed;
+  solver.resolveCollisions(f.G.cars, DT);
+  const e = vm.runInContext("AiDrive", f.ctx).bumpRestitution(10);
+  return { dv: local.speed - localV0, e, remote, remoteBefore };
+}
+
+test("a straight rear-end into a net-owned rival gives the local car the full (1+e)·relV", () => {
+  const { dv, e, remote, remoteBefore } = netRearEnd(true);
+  assert.ok(Math.abs(dv + (1 + e) * 10) < 1e-6, `local Δv ${dv.toFixed(3)} m/s, want ${(-(1 + e) * 10).toFixed(3)}`);
+  assert.equal(remote.speed, remoteBefore.speed, "the remote car's speed belongs to its owner");
+  assert.equal(remote.contactT, remoteBefore.contactT, "the remote car's contact flag belongs to its owner");
+});
+
+test("rear-ended by a net-owned rival, the local car is punted no further than the full correction", () => {
+  const { dv, e, remote, remoteBefore } = netRearEnd(false);
+  // The punt cap (AiDrive.humanPuntCap() = 8 at PACE 1) still bounds each
+  // relaxation pass; an immovable rear car keeps closing after the first, so
+  // the later passes top the local car up until the pair stops closing.
+  const capV = 8;
+  assert.ok(dv >= (1 + e) * capV - 1e-6 && dv <= (1 + e) * 10 + 1e-6,
+    `local Δv ${dv.toFixed(3)} m/s, want within [${((1 + e) * capV).toFixed(2)}, ${((1 + e) * 10).toFixed(2)}]`);
+  assert.equal(remote.speed, remoteBefore.speed);
+  assert.equal(remote.contactT, remoteBefore.contactT);
 });

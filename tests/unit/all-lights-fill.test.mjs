@@ -24,7 +24,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 
 test("tail-light selection reuses capacity through sorting, shrink and regrowth", () => {
   const source = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
-  const anchor = "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats };";
+  const anchor = "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release };";
   assert.ok(source.includes(anchor));
   const sampled = [];
   const ctx = vm.createContext({
@@ -34,7 +34,7 @@ test("tail-light selection reuses capacity through sorting, shrink and regrowth"
     Tracks: { sample(_t, s, out) { sampled.push(s); out.p[2] = s; } },
   });
   vm.runInContext(source.replace(anchor,
-    "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, selection: () => _tlSel.slice() };"), ctx);
+    "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, selection: () => _tlSel.slice() };"), ctx);
   const api = vm.runInContext("FrameLights", ctx);
   const track = { total: 5000 }, player = { s: 0, x: 0 };
   const cars = Array.from({ length: 22 }, (_,i) => ({ s: (21-i)*5, x: 0 }));
@@ -96,7 +96,7 @@ test("TAIL-LIGHT EMIT 0: tail-lights take no light slot but keep their halo", ()
 // instead of silently testing nothing.
 function loadFill() {
   const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
-  const anchor = "  return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats };";
+  const anchor = "  return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release };";
   assert.ok(src.includes(anchor), "frame-lights.js export list moved — update this loader");
   const patched = src.replace(anchor,
     "  return { setFrameLights, appendCarTailLights, _fillAllLights };");
@@ -253,4 +253,58 @@ test("frame.lampSetGen moves with the lamp set and its scale, never with the fli
   assert.notEqual(g1, g0, "a scale change moves it");
   track._lights = B;
   assert.notEqual(run([0.8, 0.8, 0.8]), g1, "a new lamp set moves it");
+});
+
+// Folded from frame-lights-tail-budget (#1965): the two cases the tests above do
+// not reach. The emit test above feeds appendCarTailLights a hand-made lamp list;
+// this one runs the REAL cull (setFrameLights) at the phone's 24-slot budget, so
+// the eviction is measured against what the cull actually produced.
+test("phone 24-slot budget: real setFrameLights cull + emit tails stay inside the shader cap", () => {
+  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  const ctx = vm.createContext({
+    performance: { now: () => 1000 },
+    Math, Float32Array, Uint32Array, Array, Object, Number,
+    Tracks: { sample(_t, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.r[0] = 1; out.r[1] = 0; out.r[2] = 0; } },
+    LightKnobs: { LT: {
+      lampWarmup: 0, lampFlicker: 0, lampCull: 40, lampBehindBias: 5.25, lampCullFade: 0.35, lampReach: 1,
+      tailRange: 160, tailLightMul: 1, brakeGlowMul: 1, tailLightEmit: 1, tailFade: 0,
+    } },
+    PerfGov: { tier: () => 0 },
+  });
+  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8") + "\n;globalThis.LightBudget = LightBudget;", ctx);
+  vm.runInContext("LightBudget.setSlots(24);", ctx);
+  vm.runInContext(src + "\n;globalThis.FrameLights = FrameLights;", ctx);
+  const FL = ctx.FrameLights;
+  const lamps = [];
+  for (let i = 0; i < 80; i++) lamps.push(0, 6, i * 8, 1.2, 0.95, 0.75, 35, 0, -1, 0, -1, 0, 0, 0, 1);
+  const track = { total: 8000, _lights: lamps };
+  const cars = Array.from({ length: 12 }, (_, i) => ({ s: (i + 1) * 4, x: 0, brakeHeat: 0 }));
+  const frame = { time: 0, perChunkLights: 0 };
+  FL.setFrameLights(frame, track, cars, [0, 1.2, 0], [0.85, 0.88, 1], [0, 0, 1], true);
+  FL.appendCarTailLights(frame, track, cars, { s: 0, x: 0 }, true);
+  const total = (frame.lights.length / 15) | 0;
+  assert.equal(total, 24, "budget is full: lamps evicted to make room for tails, never above 24");
+  assert.equal(frame.tailCount, 5, "five nearest rivals reserve tail records");
+  const start = (frame.tailStart | 0) * 15;
+  for (let j = 0; j < 5; j++) {
+    const o = start + j * 15, r = frame.lights[o + 3], g = frame.lights[o + 4], b = frame.lights[o + 5];
+    assert.ok(r > g && r > b, `tail ${j} is red-dominant: ${[r, g, b]}`);
+  }
+  assert.equal(frame.glowLights, frame.lights, "emit mode: halo list is the lit set");
+});
+
+test("lampCap with traffic never budgets above LightBudget.slots(), phone tier included", () => {
+  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  const anchor = "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release };";
+  assert.ok(src.includes(anchor), "frame-lights.js export list moved — update this loader");
+  const ctx = vm.createContext({
+    LightKnobs: { LT: { lampCull: 40 } },
+    PerfGov: { tier: () => 0 },
+    performance: { now: () => 0 },
+    LightBudget: { MAX: 48, MOBILE: 24, TAIL_RESERVE: 5, slots: () => 16 },
+  });
+  vm.runInContext(src.replace(anchor, "return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release, lampCap };"), ctx);
+  const api = vm.runInContext("FrameLights", ctx);
+  assert.equal(api.lampCap(10, false), 16, "TLX-lite: lampCull 40 clamped to the 16 live slots");
+  assert.equal(api.lampCap(10, true), 16, "phone tier still clamped by live slots, not MOBILE alone");
 });

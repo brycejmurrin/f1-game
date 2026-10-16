@@ -4,7 +4,17 @@
 // randomised design passes the WYSIWYG validator, SAVE appends it to
 // Tracks.LIST as a custom entry, RACE hands it to the ordinary picker flow,
 // __apex.race() builds and drives it, and a reload resolves the stored id.
-import { test, expect, BOOT_MS, TRACK_MS, clickLive } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, RACE_BUILD_MS, awaitTrackBuild, clickLive } from "../helpers/fixtures.js";
+
+/** __apex.race(id) on a loaded CI runner — stall-aware build wait, not TRACK_MS. */
+async function raceAndBuild(page, id) {
+  // Reload restores live rendering. These checks inspect registry/build state,
+  // so keep expensive software frames paused while the browser reads it.
+  await page.evaluate(() => window.__apex.headless(true));
+  await page.evaluate((tid) => window.__apex.race(tid), id);
+  await awaitTrackBuild(page);
+  await expect.poll(() => page.evaluate(() => window.__apex.info().track), { timeout: 15_000 }).toBe(id);
+}
 
 const LANDSCAPE = { width: 1180, height: 720 };
 
@@ -18,7 +28,7 @@ async function bootClean(page) {
     for (const k of Object.keys(localStorage)) if (k === "apex26.customTracks" || k === "apex26.customTrackDraft" || k === "apex26.customTrackDraftPrev" || k === "apex26.trackId" || k === "apex26.track") localStorage.removeItem(k);
   });
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+  await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
   await page.evaluate(() => window.__apex.headless(true));
 }
 
@@ -39,6 +49,41 @@ async function randomiseGreen(page, seed) {
 
 test.describe("Track designer", () => {
   test.use({ viewport: LANDSCAPE });
+
+  for (const viewport of [LANDSCAPE, { width: 390, height: 844 }]) {
+    test(`draft recovery and saved identity survive reload at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+      await page.getByRole("button", { name: "SAVE", exact: true }).click();
+      await page.evaluate(() => TrackDesigner.setTheme("alpine"));
+      await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.customTrackDraft") || "null")?.theme)).toBe("alpine");
+      await page.getByRole("button", { name: "SAVE", exact: true }).click();
+      const savedId = await page.evaluate(() => TrackDesigner.state().design.originId);
+      await page.reload();
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.headless(true));
+      await openDesigner(page);
+      expect(await page.evaluate(() => TrackDesigner.state().design.originId)).toBe(savedId);
+      await page.evaluate(() => { TrackDesigner.setTheme("oasis"); TrackDesigner.preview(); });
+      await page.getByRole("button", { name: "SAVE", exact: true }).click();
+      expect(await page.evaluate(() => CustomTracks.list().length)).toBe(1);
+      await page.evaluate(() => {
+        TrackDesigner.setName("Recover Me"); TrackDesigner.setTheme("alpine");
+        const other = CustomTracks.list()[0]; TrackDesigner.load(other, "library", other.id);
+        TrackDesigner.close();
+      });
+      await page.reload();
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.headless(true));
+      await openDesigner(page);
+      await page.getByRole("tab", { name: "MY CIRCUITS", exact: true }).click();
+      await page.getByRole("button", { name: "RECOVER PREVIOUS DRAFT", exact: true }).click();
+      expect(await page.evaluate(() => TrackDesigner.state().design.name)).toBe("RECOVER ME");
+      expect(await page.evaluate(() => TrackDesigner.state().design.theme)).toBe("alpine");
+      await expect(page.getByRole("tab", { name: "DESIGN", exact: true })).toHaveAttribute("aria-selected", "true");
+      await page.screenshot({ path: test.info().outputPath("recovered-draft.png") });
+    });
+  }
 
   test("library collection file imports atomically and preserves the open draft", async ({ page }) => {
     await bootClean(page);
@@ -143,8 +188,7 @@ test.describe("Track designer", () => {
     expect(picked.id).toMatch(/^custom-/);
 
     // The engine builds it like any shipped circuit, and the AI drives it.
-    await page.evaluate((id) => window.__apex.race(id), picked.id);
-    await page.waitForFunction((id) => window.__apex.info().track === id, picked.id, { polling: 100, timeout: TRACK_MS });
+    await raceAndBuild(page, picked.id);
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.total).toBeGreaterThanOrEqual(2500);
     expect(info.turns).toBeGreaterThanOrEqual(3);
@@ -179,8 +223,7 @@ test.describe("Track designer", () => {
     const def = await page.evaluate((id) => { const t = Tracks.LIST.find((x) => x.id === id); return t ? { night: t.night, terrainMat: t.terrainMat } : null; }, saved.id);
     expect(def).toEqual({ night: true, terrainMat: "SNOW" });
     await page.evaluate(() => TrackDesigner.close());
-    await page.evaluate((id) => window.__apex.race(id), saved.id);
-    await page.waitForFunction((id) => window.__apex.info().track === id, saved.id, { polling: 100, timeout: TRACK_MS });
+    await raceAndBuild(page, saved.id);
     expect((await page.evaluate(() => window.__apex.info())).total).toBeGreaterThanOrEqual(2500);
   });
 
@@ -276,7 +319,7 @@ test.describe("Track designer", () => {
     await page.evaluate(() => TrackDesigner.close());
     // Reload: CustomTracks syncs props into the def scenery closure.
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
     const stored = await page.evaluate((id) => {
       const it = CustomTracks.get(id);
       const t = Tracks.LIST.find((x) => x.id === id);
@@ -293,8 +336,7 @@ test.describe("Track designer", () => {
     expect(stored.side).toBe(-1);
     expect(stored.gap).toBe(20);
     expect(stored.look).toEqual({ time: "night", trees: "normal", crowd: "packed" });
-    await page.evaluate((id) => window.__apex.race(id), saved.id);
-    await page.waitForFunction((id) => window.__apex.info().track === id, saved.id, { polling: 100, timeout: TRACK_MS });
+    await raceAndBuild(page, saved.id);
     expect((await page.evaluate(() => window.__apex.info())).total).toBeGreaterThanOrEqual(2500);
   });
 
@@ -306,7 +348,7 @@ test.describe("Track designer", () => {
     expect(saved.ok).toBe(true);
     await page.evaluate((id) => { CustomTracks.select(id); }, saved.id);
     await page.reload();
-    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null && typeof CustomTracks !== "undefined", null, { polling: 100, timeout: RACE_BUILD_MS });
     const after = await page.evaluate((id) => ({
       listed: Tracks.LIST.some((t) => t.id === id && t.custom),
       customs: Tracks.LIST.filter((t) => t.custom).length,
@@ -331,8 +373,8 @@ test.describe("Track designer", () => {
     expect(url).toMatch(/#track=APXT1\./);
     // The link, cold: a fresh navigation carrying only the fragment.
     await page.goto(url);
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen(), null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: RACE_BUILD_MS });
+    await page.waitForFunction(() => typeof TrackDesigner !== "undefined" && TrackDesigner.isOpen(), null, { polling: 100, timeout: RACE_BUILD_MS });
     await page.waitForFunction(() => !TrackDesigner.state().pending, null, { polling: 100, timeout: 15_000 });
     const opened = await page.evaluate(() => ({ hash: location.hash, pts: TrackDesigner.state().design.pts, ok: TrackDesigner.state().ok }));
     expect(opened.hash).toBe("");
@@ -548,6 +590,7 @@ test.describe("Track designer", () => {
     const save = page.locator("#trackdesigner .td-foot button", { hasText: /^SAVE$/ });
     await expect(save).toBeDisabled();
     const fixAll = page.locator("#trackdesigner button", { hasText: /^FIX ALL$/ });
+    await page.locator('#trackdesigner [data-mode="test"]').click();
     await expect(fixAll).toBeVisible();
     await fixAll.click();
     await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
@@ -566,6 +609,7 @@ test.describe("Track designer", () => {
     await openDesigner(page);
     await randomiseGreen(page, 7);
     const pane = page.locator('#trackdesigner .td-pane[data-pane="design"]');
+    await page.locator('#trackdesigner [data-mode="draw"]').click();
     const tech = pane.locator("button", { hasText: /^TECHNICAL$/ });
     // The cards are the design pane's second .td-grid (START FROM's is the first, hidden).
     const grid = pane.locator(".td-grid").nth(1);
@@ -601,6 +645,7 @@ test.describe("Track designer", () => {
       return TrackDesigner.state().sel;
     });
     expect(sel).toBe(12);
+    await page.locator('#trackdesigner [data-mode="test"]').click();
     // Where the car should land: the node of the engine's own build nearest control 12.
     const want = await page.evaluate(() => {
       const st = TrackDesigner.state(), tr = TrackValidate.check(st.design).tr, p = st.design.pts[12];
@@ -616,7 +661,7 @@ test.describe("Track designer", () => {
       return true;
     });
     expect(pressed).toBe(true);
-    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: TRACK_MS });
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: RACE_BUILD_MS });
     const run = await page.evaluate(() => ({ info: window.__apex.info(), ph: window.__apex.physState(), open: TrackDesigner.isOpen(), id: TrackDesigner.state().design.originId }));
     expect(run.open).toBe(false);
     expect(run.info.timeTrial).toBe(true);
@@ -634,4 +679,58 @@ test.describe("Track designer", () => {
     expect(back.sel).toBe(12);
     expect(back.msg).toContain("Back from the test drive");
   });
+});
+
+test("designer workspaces author bridges and water on desktop and phone", async ({ page }, testInfo) => {
+  const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
+  await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+  for (const [size, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 390, height: 844 }]]) {
+    await page.setViewportSize(viewport);
+    const mode = (id) => page.locator('#trackdesigner [data-mode="' + id + '"]');
+    await mode("draw").click();
+    await expect(page.getByRole("button", { name: "RANDOMISE", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "REVERSE", exact: true })).toBeHidden();
+    await mode("edit").click();
+    await expect(page.getByRole("button", { name: "RANDOMISE", exact: true })).toBeHidden();
+    await expect(page.getByRole("button", { name: "REVERSE", exact: true })).toBeVisible();
+    await mode("elevation").click();
+    await page.getByRole("spinbutton", { name: "Selected point number", exact: true }).fill("11");
+    await page.getByRole("spinbutton", { name: "Selected point number", exact: true }).press("Enter");
+    const bridges = page.locator('#trackdesigner [data-role="bridges"]');
+    await bridges.locator('[data-role="add-bridge"]').click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.bridges.length)).toBe(1);
+    await expect(bridges.getByRole("button", { name: "Remove road bridge 1", exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(size + "-bridge.png") });
+    await bridges.getByRole("button", { name: "Remove road bridge 1", exact: true }).click();
+    await mode("scenery").click();
+    await page.locator('[data-scenery-section="objects"]').click();
+    await page.locator('[data-object-category="water"]').click();
+    for (const kind of ["water", "pond", "lake", "river"]) await expect(page.locator('[data-prop="' + kind + '"]')).toBeVisible();
+    await expect(page.locator('[data-prop="stand"]')).toBeHidden();
+    await page.locator('[data-prop="pond"]').click();
+    await page.getByRole("button", { name: "Place the selected prop at the selected control point", exact: true }).click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.props.filter((p) => p.kind === "pond").length)).toBe(size === "desktop" ? 1 : 2);
+    for (const role of ["prop-side", "prop-gap", "object-filters"]) {
+      const fits = await page.locator('[data-role="' + role + '"]').evaluate((row) => {
+        const outer = row.getBoundingClientRect();
+        return [...row.querySelectorAll("button,input")].every((control) => {
+          const r = control.getBoundingClientRect();
+          return r.left >= outer.left - 1 && r.right <= outer.right + 1;
+        });
+      });
+      expect(fits, role + " controls fit the sidebar at " + size).toBe(true);
+    }
+    const waterFootprints = await page.evaluate(() => {
+      const d = TrackDesigner.state().design, tr = TrackValidate.build(d).tr;
+      return DesignerSceneryPreview.plan(d, tr).ground.filter((p) => p.kind === "water").length;
+    });
+    expect(waterFootprints, "authored water reaches the map preview").toBeGreaterThan(0);
+    await page.screenshot({ path: testInfo.outputPath(size + "-water.png") });
+    await mode("test").click();
+    await expect(page.getByRole("textbox", { name: "Circuit name", exact: true })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Design checks", exact: true })).toBeVisible();
+    await expect(bridges).toBeHidden();
+    expect(await page.locator("#trackdesigner").evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+  }
+  expect(errors).toEqual([]);
 });

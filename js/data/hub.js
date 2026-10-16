@@ -301,7 +301,7 @@ const DataHub = (function () {
     for (const id in state) {
       const st = state[id];
       if (!st || st.status !== "failed") continue;
-      state[id] = st.node ? { node: st.node, at: st.at, status: "ready", error: null } : null;
+      state[id] = st.node ? { node: st.node, at: st.at, dataAt: st.dataAt, offlineCopy: st.offlineCopy, status: "ready", error: null } : null;
     }
     root.hidden = true;
     openFlag = false;
@@ -364,17 +364,18 @@ const DataHub = (function () {
       contentEl.appendChild(errorBlock(id, st.error, !!st.node));
       if (st.node) {
         contentEl.appendChild(st.node);
-        contentEl.appendChild(footnote(st.at));
+        contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
       }
       contentEl.scrollTop = 0;
       return;
     }
-    if (st && st.node && (Date.now() - st.at) < maxAge) {
+    // A node may say when it goes stale on its own (Schedule: the NEXT race ends).
+    if (st && st.node && (Date.now() - st.at) < maxAge && !(Date.now() >= st.node.nextFlipAt)) {
       // loadTab calls showTab to paint the fresh node; only log reuse on a later visit.
       if (Date.now() - st.at > 1000) Log.info("data", "tab " + id + " cached");
       clear(contentEl);
       contentEl.appendChild(st.node);
-      contentEl.appendChild(footnote(st.at));
+      contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
       contentEl.scrollTop = 0;
       return;
     }
@@ -387,13 +388,20 @@ const DataHub = (function () {
     Log.info("data", "tab " + id + " load");
     clear(contentEl);
     contentEl.appendChild(spinner());
+    const staleApi = typeof F1API !== "undefined" && F1API.staleSince ? F1API : null;   // absent in hand-made test stubs
+    const staleMark = staleApi ? staleApi.staleMark() : 0;
 
     tabDef(id).load().then(function (node) {
       if (gen[id] !== myGen) return;
       Log.info("data", "tab " + id + " done");
+      // A failed refetch that fell back to the API's stored copy: the footnote
+      // dates the copy, not this render (`at` still governs node reuse).
+      const staleAt = staleApi ? staleApi.staleSince(staleMark) : null;
       state[id] = {
         node: node,
         at: Date.now(),
+        dataAt: staleAt,
+        offlineCopy: staleAt != null,
         // Empty is a successful API answer and gets the normal freshness
         // window. Failed is recorded only in the rejection arm below.
         status: node && node.querySelector && node.querySelector(".dh-empty") ? "empty" : "ready",
@@ -411,14 +419,14 @@ const DataHub = (function () {
       // refresh failed rather than pretending there is nothing to show.
       const st = state[id];
       state[id] = st && st.node
-        ? { node: st.node, at: st.at, status: "failed", error: err }
+        ? { node: st.node, at: st.at, dataAt: st.dataAt, offlineCopy: st.offlineCopy, status: "failed", error: err }
         : { node: null, at: 0, status: "failed", error: err };
       if (openFlag && active === id) {
         clear(contentEl);
         contentEl.appendChild(errorBlock(id, err, !!(st && st.node)));
         if (st && st.node) {
           contentEl.appendChild(st.node);
-          contentEl.appendChild(footnote(st.at));
+          contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
         }
       }
       // Keep the failed state even without a stale node. Switching away and
@@ -480,13 +488,13 @@ const DataHub = (function () {
     return w;
   }
 
-  function footnote(at) {
+  function footnote(at, offlineCopy) {
     const mins = Math.floor((Date.now() - at) / MINUTE);
     let txt;
     if (mins < 1) txt = "updated just now";
     else if (mins < 60) txt = "updated " + mins + "m ago";
     else txt = "updated " + Math.floor(mins / 60) + "h " + (mins % 60) + "m ago";
-    if (navigator.onLine === false) txt += " · offline copy";
+    if (offlineCopy || navigator.onLine === false) txt += " · offline copy";
     return el("div", "dh-footnote", txt);
   }
 
@@ -514,6 +522,7 @@ const DataHub = (function () {
     return out;
   }
   const sel = { year: null, meetingKey: null, sessionKey: null, meta: null, selAt: 0, pinned: false };
+  let selectionGen = 0;           // explicit picker intent, shared across tab instances
   const SESSION_STALE_MS = 120 * 1000;
 
   function ensureSession(force) {
@@ -524,7 +533,7 @@ const DataHub = (function () {
     // pinned historic session (and the telemetry tab with it) with whatever
     // latestSession() returns. Only an explicit unpin (year/meeting change)
     // releases it.
-    if (have && sel.pinned) return Promise.resolve(sel.meta);
+    if (sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
     return F1API.latestSession(0).then(function (ses) {
       // A pick that landed while this was in flight is the newer, explicit choice.
@@ -573,6 +582,7 @@ const DataHub = (function () {
   // flight (TELEMETRY's COMPARE lanes) would be waited out first.
   function buildPicker(onPick, onChange) {
     let pickerGen = 0;
+    const initialSessionKey = sel.sessionKey;
     const box = el("div", "dh-picker");
     const yearRow = el("div", "dh-pick-years");
     apiYears().forEach(function (y) {
@@ -580,6 +590,7 @@ const DataHub = (function () {
       b.type = "button";
       b.addEventListener("click", function () {
         if (y === sel.year) return;
+        ++selectionGen;
         cancelRealRace();
         if (onChange) onChange();
         sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
@@ -610,6 +621,14 @@ const DataHub = (function () {
 
     let sesIndex = {};
     function ph(s, t) { setSelectOptions(s, [{ value: "", label: t }], ""); }
+    // An explicit empty year/meeting is still the player's selection. Clear
+    // the old session body and keep sibling tabs from reverting to latest.
+    function emptySelection(userChanged) {
+      if (!userChanged) return;
+      sel.meta = null; sel.sessionKey = null; sel.selAt = 0;
+      sel.pinned = true;
+      if (openFlag && box.isConnected !== false) onPick(null);
+    }
     // A pick made here and answered after the player left this tab must not
     // call onPick: its invalidateOther would bump the generation of the tab now
     // loading and leave it spinning forever. But `sel` already moved, so drop
@@ -624,6 +643,7 @@ const DataHub = (function () {
     }
 
     gpSel.addEventListener("change", function () {
+      ++selectionGen;
       cancelRealRace();
       if (onChange) onChange();
       sel.meetingKey = gpSel.value ? Number(gpSel.value) : null;
@@ -635,6 +655,7 @@ const DataHub = (function () {
       if (!sesSel.value) return;
       const m = sesIndex[sesSel.value];
       if (!m) return;
+      ++selectionGen;
       cancelRealRace();
       sel.sessionKey = m.sessionKey; sel.meta = m; sel.pinned = true;
       onPick(m);
@@ -661,10 +682,12 @@ const DataHub = (function () {
     }
 
     function loadGPs(userChanged) {
-      const myGen = ++pickerGen;
+      const myGen = ++pickerGen, mySelection = selectionGen;
       ph(gpSel, "loading…"); ph(sesSel, "—");
       F1API.meetings(sel.year).then(function (ms) {
-        if (myGen !== pickerGen || detached(userChanged)) return;
+        if (myGen !== pickerGen || mySelection !== selectionGen) return;
+        if (!ms.length) emptySelection(userChanged);
+        if (detached(userChanged)) return;
         if (!ms.length) { ph(gpSel, "no data"); return; }
         // The LATEST MEETING THAT HAS STARTED, not the year's last entry: the
         // current season lists every future round, and defaulting to December's
@@ -676,16 +699,18 @@ const DataHub = (function () {
         setSelectOptions(gpSel, meetingPickerOptions(ms), sel.meetingKey);
         loadSessions(userChanged);
       }, function () {
-        if (myGen !== pickerGen) return;
+        if (myGen !== pickerGen || mySelection !== selectionGen) return;
         ph(gpSel, "error");
       });
     }
 
     function loadSessions(userChanged) {
-      const myGen = ++pickerGen;
+      const myGen = ++pickerGen, mySelection = selectionGen;
       ph(sesSel, "loading…");
       F1API.sessionsForMeeting(sel.meetingKey).then(function (ss) {
-        if (myGen !== pickerGen || detached(userChanged)) return;
+        if (myGen !== pickerGen || mySelection !== selectionGen) return;
+        if (!ss.length) emptySelection(userChanged);
+        if (detached(userChanged)) return;
         sesIndex = {};
         ss.forEach(function (s) { sesIndex[s.sessionKey] = s; });
         if (!ss.length) { ph(sesSel, "no data"); return; }
@@ -697,9 +722,12 @@ const DataHub = (function () {
         setSelectOptions(sesSel, ss.map(function (s) {
           return { value: s.sessionKey, label: s.name || s.type || "Session" };
         }), sel.sessionKey);
-        if (userChanged) { sel.pinned = true; onPick(sel.meta); }
+        if (userChanged) sel.pinned = true;
+        // Another tab's detached picker may have filled shared metadata first;
+        // this view still started empty and needs its own initial body paint.
+        if (userChanged || (initialSessionKey === null && openFlag && box.isConnected !== false)) onPick(sel.meta);
       }, function () {
-        if (myGen !== pickerGen) return;
+        if (myGen !== pickerGen || mySelection !== selectionGen) return;
         ph(sesSel, "error");
       });
     }

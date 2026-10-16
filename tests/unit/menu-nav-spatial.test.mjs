@@ -40,6 +40,7 @@ function loadMenuNav({ document, layer, zoom } = {}) {
     window: null,
     document: document || { readyState: "loading", addEventListener() {} },
     Log: { info() {} },
+    getComputedStyle: (el) => ({ overflowY: el._overflowY || "auto", overflowX: "hidden" }),
   };
   ctx.window = ctx;
   ctx.window.UiLayers = { shown: () => true, top: () => layer || null };
@@ -60,6 +61,23 @@ function el(id, left, top, width, height, extra = {}) {
     ...extra,
   };
 }
+
+test("MenuNav leaves spatial-editor arrows to the control while retaining paging navigation", () => {
+  const { ownsArrows } = loadMenuNav();
+  const button = { tagName: "BUTTON", dataset: { arrows: "own" }, getAttribute: () => null };
+  for (const key of ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]) {
+    assert.equal(ownsArrows(button, key, { isTrusted: true }), true);
+    assert.equal(ownsArrows(button, key, { isTrusted: false }), false, 'D-pad can leave MOVE');
+  }
+  for (const key of ["Home", "End", "PageDown", "PageUp", "Tab"]) assert.equal(ownsArrows(button, key), false);
+  assert.equal(ownsArrows({ ...button, dataset: {} }, "ArrowRight"), false);
+  const select = { ...button, tagName: "SELECT" };
+  for (const key of ["ArrowUp", "ArrowDown"]) {
+    assert.equal(ownsArrows(select, key, { isTrusted: true }), true);
+    assert.equal(ownsArrows(select, key, { isTrusted: false }), false, 'D-pad can leave the selector');
+  }
+  assert.equal(ownsArrows(select, 'ArrowRight', { isTrusted: false }), true, 'pad-menu owns horizontal value stepping');
+});
 
 test("MenuNav leaves owned listbox option keys to the widget without exempting unrelated buttons or grids", () => {
   const { ownsArrows } = loadMenuNav();
@@ -310,3 +328,31 @@ test("step(): chip-row Left/Right stay in-group until an end, then fall through"
   assert.equal(step(a, -1, 0, list).id, "rail",
     "Left off the first chip falls through to the spatial sideways pass");
 });
+
+for (const className of ["dh-tpopup-body", "dh-telem-main", "dh-telem-side"]) {
+  test(`telemetry modal pages its ${className} region and contains wheel gestures at the edge`, () => {
+    const dom = makeDom({ readyState: "loading" });
+    const hub = dom.byId("datahub"), popup = dom.makeElement("dialog"), pane = dom.makeElement("div");
+    hub.appendChild(popup); popup.appendChild(pane); pane.className = className;
+    Object.defineProperty(pane, "clientHeight", { value: 200 }); pane.scrollHeight = 800;
+    const first = dom.makeElement("button"), last = dom.makeElement("button");
+    pane.append(first, last);
+    first._rect = { left: 0, top: 0, right: 100, bottom: 40, width: 100, height: 40 };
+    last._rect = { left: 0, top: 300, right: 100, bottom: 340, width: 100, height: 40 };
+    const close = dom.makeElement("button"); popup.appendChild(close);
+    const nav = loadMenuNav({ document: dom.document, layer: popup });
+    first.focus();
+    const key = { key: "PageDown", preventDefault() { this.defaultPrevented = true; } };
+    nav.onKeyDown(key);
+    assert.equal(pane.scrollTop, 180, "paging addresses the popup region");
+    assert.equal(key.defaultPrevented, true);
+    const end = { key: "End", preventDefault() {} }; nav.onKeyDown(end);
+    assert.equal(dom.document.activeElement, last, "End stays in the region, not the header or the hub");
+    pane.scrollTop = 600;
+    let redirects = 0;
+    popup.querySelectorAll = () => { redirects++; return []; };
+    nav.onWheel({ target: first, deltaY: 100, deltaMode: 0, preventDefault() {} });
+    assert.equal(redirects, 1, "edge wheel only checks horizontal strips; it must not seek another pane");
+    assert.equal(pane.scrollTop, 600);
+  });
+}

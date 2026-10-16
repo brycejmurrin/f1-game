@@ -27,7 +27,9 @@ python3 tools/lighting/look-survey-sheet.py --ready   # all circuits with shots
 ```
 
 Shots land in `artifacts/lighting/shots/<id>/` (gitignored).
-Sheets land here in `docs/look-survey/` (committed).
+Sheets are written to `docs/look-survey/` locally, but the PNGs are committed on the
+`track-survey-assets` branch, never the deploy branch (`tests/unit/committed-images.test.mjs`
+fails the commit). The links below are pinned to its commit `cb0cb2c3`.
 
 ## look-survey vs slider-effect
 
@@ -46,13 +48,15 @@ Full tool reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools for exploring slid
 
 | Circuit | Sheet |
 |---|---|
-| Abu Dhabi | [abudhabi_grid.png](abudhabi_grid.png) |
-| Baku | [baku_grid.png](baku_grid.png) |
-| Bahrain | [bahrain_grid.png](bahrain_grid.png) |
-| Jeddah | [jeddah_grid.png](jeddah_grid.png) |
-| Qatar | [qatar_grid.png](qatar_grid.png) |
-| Silverstone | [silverstone_grid.png](silverstone_grid.png) |
-| Singapore | [singapore_grid.png](singapore_grid.png) |
-| Spa | [spa_grid.png](spa_grid.png) |
-| Las Vegas | [vegas_grid.png](vegas_grid.png) |
-| Zandvoort | [zandvoort_grid.png](zandvoort_grid.png) |
+| Abu Dhabi | [abudhabi_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/abudhabi_grid.png?raw=1) |
+| Baku | [baku_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/baku_grid.png?raw=1) |
+| Bahrain | [bahrain_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/bahrain_grid.png?raw=1) |
+| Jeddah | [jeddah_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/jeddah_grid.png?raw=1) |
+| Qatar | [qatar_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/qatar_grid.png?raw=1) |
+| Silverstone | [silverstone_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/silverstone_grid.png?raw=1) |
+| Singapore | [singapore_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/singapore_grid.png?raw=1) |
+| Spa | [spa_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/spa_grid.png?raw=1) |
+| Las Vegas | [vegas_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/vegas_grid.png?raw=1) |
+| Zandvoort | [zandvoort_grid.png](https://github.com/brycejmurrin/f1-game/blob/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey/zandvoort_grid.png?raw=1) |
+
+All 25 sheets (including circuits not in the table): [docs/look-survey/ on track-survey-assets](https://github.com/brycejmurrin/f1-game/tree/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/docs/look-survey).

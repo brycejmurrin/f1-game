@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
+import { aliveRun } from "../ci/test-bg.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
@@ -225,7 +226,10 @@ function testBgStatus() {
     return { recorded: true, running: [], browserRunning: [], runs: [], error: "unreadable" };
   }
   const runs = Array.isArray(state.runs) ? state.runs : [];
-  const running = runs.filter((run) => alive(run.pid));
+  // Match test-bg's zombie and PID-reuse checks. kill(pid, 0) succeeds for
+  // an exited supervisor awaiting its parent's reap and used to block every
+  // browser tool after an otherwise completed run in containers.
+  const running = runs.filter((run) => aliveRun(run));
   // Missing metadata is treated as browser-active for old state files. New
   // test-bg records distinguish Node-only groups so they do not block a dry
   // browser-tool plan or make tooling-fast fail while testing this guard.
@@ -425,8 +429,10 @@ const CATALOG = [
         dist: { type: "number" },
         side: { type: "number" },
         hud: { type: "boolean" },
+        clear: { type: "boolean", description: "orbit/cinematic/trackside: re-site the eye out of scenery; the result reports clear {T, tries, blocked?}." },
         image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
         tod: { type: "string" },
+        weather: { type: "string", enum: ["dry", "wet", "rain", "overcast", "fog"], description: "Weather after tod (default dry)." },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -437,7 +443,7 @@ const CATALOG = [
     name: "apex_shot_survey",
     week: 7,
     kind: "browser",
-    description: "Browser (lock first) — multi-shot scenery survey via one track-session boot per circuit. Presets: quick (4), dual_lite (8), night_pass, lap, dual, inspect, scenery/full (12). Long or multi-track runs default to async (returns jobId; watch apex_job_status). Options: tracks[], resume, async, gl llvmpipe|swiftshader, progress/findings JSON. Skill: survey-track.",
+    description: "Browser (lock first) — multi-shot scenery survey via one track-session boot per circuit. Presets: quick (4), dual_lite (8), night_pass, lap, dual, inspect, scenery/full (12). Long or multi-track runs default to async (returns jobId; watch apex_job_status). Options: tracks[], resume, async, gl llvmpipe|swiftshader (llvmpipe is CI-only: needs /dev/dri, which cloud containers lack — use swiftshader locally), weather dry|wet|rain|overcast|fog, progress/findings JSON. Skill: survey-track.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -470,6 +476,7 @@ const CATALOG = [
               frac: { type: "number" },
               cam: { type: "string" },
               tod: { type: "string" },
+              weather: { type: "string", enum: ["dry", "wet", "rain", "overcast", "fog"] },
               az: { type: "number" },
               el: { type: "number" },
               dist: { type: "number" },
@@ -486,6 +493,7 @@ const CATALOG = [
         h: { type: "number" },
         side: { type: "number", enum: [-1, 1] },
         tod: { type: "string", enum: ["day", "dusk", "dawn", "night"] },
+        weather: { type: "string", enum: ["dry", "wet", "rain", "overcast", "fog"], description: "Weather for every shot (omit = leave as booted, dry)." },
         hud: { type: "boolean" },
         cols: { type: "integer", minimum: 0, maximum: 12, description: "Panel columns (0 = auto)." },
         sheetName: { type: "string", pattern: "^[A-Za-z0-9._-]{1,80}$" },
@@ -493,7 +501,7 @@ const CATALOG = [
         index: { type: "boolean", description: "Write index.html gallery (default true)." },
         resume: { type: "boolean", description: "Skip cells whose PNG already exists under out/." },
         async: { type: "boolean", description: "true=jobId via shot_survey; false=sync; default=job when estimate≥60s or multi-track." },
-        gl: { type: "string", enum: ["llvmpipe", "swiftshader"], description: "Software GL stack (default llvmpipe when Mesa dri present)." },
+        gl: { type: "string", enum: ["llvmpipe", "swiftshader"], description: "Software GL stack. llvmpipe needs /dev/dri (CI only); use swiftshader in a cloud container." },
         closeSession: { type: "boolean", description: "Free browser lock when done (default true; sync path)." },
         keepSession: { type: "boolean", description: "When true, leave session open (implies closeSession false)." },
         out: { type: "string", description: "Output dir under artifacts/ or scratch/." },
@@ -1569,7 +1577,9 @@ function buildArgv(name, args) {
       if (args.dist != null) argv.push("--dist", String(args.dist));
       if (args.side != null) argv.push("--side", String(args.side));
       if (args.tod) argv.push("--tod", String(args.tod));
+      if (args.weather) argv.push("--weather", String(args.weather));
       if (args.hud) argv.push("--hud");
+      if (args.clear) argv.push("--clear");
       return argv;
     }
     case "apex_agent": {

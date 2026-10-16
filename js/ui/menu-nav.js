@@ -31,7 +31,7 @@ window.MenuNav = (function () {
 
   // Scroll regions, same list ScrollFade watches — `.pane` first and by class,
   // because that is the design system's own name for "a scroll region".
-  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-panel,#track-detail";
+  const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,.dh-tpopup-body,.dh-telem-main,.dh-telem-side,#track-detail-panel,#track-detail";
 
   // `summary` is a real control: the fold headers on the DISPLAY / STEERING /
   // MUSIC settings pages open with Enter (native) or the pad's A (padActivate
@@ -434,6 +434,8 @@ window.MenuNav = (function () {
   }
   function ownsArrows(el, key, event) {
     if (!el) return false;
+    // Physical editor keys belong to the widget; synthetic D-pad keys still navigate.
+    if (el.dataset && el.dataset.arrows === "own" && DIRS[key] && (!event || event.isTrusted !== false)) return true;
     const t = el.tagName;
     // A focused <canvas> is a drawing surface that owns every key it is handed
     // (the TRACK DESIGNER nudges the selected control point with the arrows,
@@ -458,6 +460,9 @@ window.MenuNav = (function () {
       const ty = (el.type || "text").toLowerCase();
       if (ty === "checkbox" || ty === "radio" || ty === "button" ||
           ty === "submit" || ty === "reset") return false;
+      // Same reason as TEXTAREA: the pad's synthetic Left/Right moves no caret,
+      // so owning it left the field with a dead direction (#2161).
+      if ((key === "ArrowLeft" || key === "ArrowRight") && event && event.isTrusted === false) return false;
       return !!CARET_KEYS[key];
     }
     if (el.getAttribute && el.getAttribute("role") === "tab") return tabOwns(el, key);

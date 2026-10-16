@@ -5,6 +5,7 @@
 // Usage:
 //   node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg]
 //     [--az N] [--el N] [--dist N] [--side -1|1] [--hud] [--tod day|dusk|dawn|night]
+//     [--weather dry|wet|rain|overcast|fog]
 //     [--jpeg] [--raster] [--team <id>] [--wait <s>]
 //   node tools/shot/shot.mjs --batch jobs.json [--jpeg] [--raster]
 //
@@ -90,20 +91,23 @@ async function raceTrack(page, trackId, waitMs) {
 
 async function frameCamera(page, job) {
   return mutateCaptureScene(page,
-    ({ frac, cam, az, el, dist, side, tod, showHud }) => {
+    ({ frac, cam, az, el, dist, side, tod, weather, showHud, clear }) => {
       const a = window.__apex;
       a.headless(false);
       a.go();
       a.park(frac);
       a.freeze(true);
       if (a.setTimeOfDay && a.setTimeOfDay() !== tod) a.setTimeOfDay(tod);
+      // After the tod reload, so the reload cannot reset it; every job pins one (default dry).
+      if (a.weather && a.weather() !== weather) a.weather(weather);
       if (a.hud) a.hud(!!showHud);
 
+      let placed = null;
       if (cam === "eye") a.eyeAt(frac, 0, 2.5);
-      else if (cam === "orbit") a.orbit(frac, az, el, dist);
-      else if (cam === "cinematic") a.cinematic(frac, { dist, el });
+      else if (cam === "orbit") placed = a.orbit(frac, az, el, dist, 1.5, { clear });
+      else if (cam === "cinematic") placed = a.cinematic(frac, { dist, el, clear });
       else if (cam === "trackside")
-        a.view({ s: frac, side, dist, height: Math.max(3, el * 0.35), look: "in" });
+        placed = a.view({ s: frac, side, dist, height: Math.max(3, el * 0.35), look: "in", clear });
       else a.snapCam();
 
       a.step && a.step(1 / 60, 4);
@@ -122,6 +126,7 @@ async function frameCamera(page, job) {
         models: typeof Assets !== "undefined" && Assets.models ? Assets.models().length : 0,
         camState: cs,
         raster,
+        clear: placed && placed.clear ? placed.clear : null,
       };
     },
     job,
@@ -179,7 +184,7 @@ async function captureJob(page, job, waitMs, modelInfo, diagnostics) {
     ? "  ⚠ free-cam inactive (chase?)"
     : "";
   console.log(`wrote ${job.out} (${kb} KB, ${job.type}, pixel spread ${spread.toFixed(1)})${camWarn}`);
-  console.log(JSON.stringify({ modelsPrefetch: modelInfo, readiness, pixels, renderer, scope: pageScope ? "page" : "scene", frame: { camera: frame.camera, dbgCamActive: frame.dbgCamActive, models: frame.models } }, null, 2));
+  console.log(JSON.stringify({ modelsPrefetch: modelInfo, readiness, pixels, renderer, scope: pageScope ? "page" : "scene", frame: { camera: frame.camera, dbgCamActive: frame.dbgCamActive, models: frame.models, clear: frame.clear } }, null, 2));
 }
 
 let trace = null;

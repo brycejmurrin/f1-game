@@ -16,8 +16,8 @@
  *   FOREIGN-ARM  auto-merge armed with a method other than MERGE (squash, rebase)
  *   SYNC         mergeable_state dirty (merge conflict with the deploy branch)
  *   FIX          ci.yml failed on the head, or the Structural guards check failed
- *   ARM          ready, not armed, Structural guards passed, ci not failed, no
- *                MERGE-HOLD line, fewer than MAX_ARMED PRs armed
+ *   ARM          ready, not armed, Structural guards passed, ci succeeded with
+ *                full-tier job evidence, no MERGE-HOLD, fewer than MAX_ARMED armed
  *   READY        draft, ci green, Structural guards passed, Plan closed, a
  *                full-tier slot is free
  *   NONE         armed (MERGE) and healthy
@@ -103,9 +103,11 @@ export function decide(row, ctx = {}) {
   const gateOk = row.gate === "passed";
   if (!row.draft) {
     if (row.armed) return { action: "NONE", why: "armed (MERGE) and healthy" };
+    if (row.ci !== "success") return { action: "WAIT", why: `ready, ci ${row.ci}: the full tier is not green on the head` };
+    if (row.fullTier !== true) return { action: "WAIT", why: "ready, no successful full-tier job evidence on this CI run" };
     if (gateOk && row.hold) return { action: "WAIT", why: "ready and green, but the body carries MERGE-HOLD:" };
     if (gateOk && (ctx.armed ?? 0) >= MAX_ARMED) return { action: "WAIT", why: `ready and green, but ${MAX_ARMED} PRs are already armed` };
-    if (gateOk) return { action: "ARM", why: "ready, Structural guards passed, ci not failed" };
+    if (gateOk) return { action: "ARM", why: "ready, Structural guards passed, ci succeeded" };
     return { action: "WAIT", why: `ready, Structural guards ${row.gate}` };
   }
   if (row.ci === "queued" || row.ci === "in_progress") return { action: "WAIT", why: `draft, ci ${row.ci}` };
@@ -121,16 +123,25 @@ export function decide(row, ctx = {}) {
 /** Just the verb. */
 export const suggest = (row, ctx) => decide(row, ctx).action;
 
+/** Required full-tier jobs must all have run successfully in the selected run. */
+export function fullTierPassed(jobs = []) {
+  const required = ["CI", "Selected specs (verdict)", "Per-circuit geometry sweeps"];
+  const passed = (rows) => rows.length > 0 && rows.every((j) => j.conclusion === "success");
+  return required.every((name) => passed(jobs.filter((j) => j?.name === name)))
+    && passed(jobs.filter((j) => String(j?.name || "").startsWith("Smoke (page boots, __apex responds)")));
+}
+
 /**
  * Rows from collected facts. Pure: inject what the API returned.
- * @param {Array<{ pr: object, runs?: object[], jobs?: object[], checkRuns?: object[] }>} items
+ * @param {Array<{ pr: object, runs?: object[], jobs?: object[], jobsRunId?: number, checkRuns?: object[] }>} items
  *   pr = the pulls/{n} object (needs number, title, draft, head.sha/ref, auto_merge, mergeable_state)
- * @param {{ cap?: { cap:number, count:number, ok?:boolean } }} [opts]
+ * @param {{ cap?: { cap:number, count:number, ok?:boolean }, armed?: number }} [opts]
+ *   armed = repository-wide initial count, including siblings omitted from items.
  */
 export function evaluate(items, opts = {}) {
   const cap = opts.cap || { cap: MAX_LIVE, count: 0, ok: true };
   const ctx = { cap, room: Math.max(0, cap.cap - cap.count),
-    armed: (items || []).filter((it) => it.pr && it.pr.auto_merge).length };
+    armed: opts.armed ?? (items || []).filter((it) => it.pr && it.pr.auto_merge).length };
   const rows = [];
   for (const it of [...(items || [])].sort((a, b) => a.pr.number - b.pr.number)) {
     const pr = it.pr;
@@ -148,6 +159,7 @@ export function evaluate(items, opts = {}) {
       mergeMethod: pr.auto_merge?.merge_method ?? null,
       ci: ci.state,
       ciRunId: ci.runId,
+      fullTier: ci.state === "success" && it.jobsRunId === ci.runId && fullTierPassed(it.jobs),
       failing,
       gate: gate.state,
       gateEvidence: gate.evidence,
@@ -196,19 +208,18 @@ export function measure(opts = {}) {
   const capV = capMeasure({ request, cap: opts.cap });
   if (capV.error) return fail(capV.error);
 
-  let nums;
-  if (opts.only != null) {
-    nums = [opts.only];
-  } else {
-    nums = [];
-    for (let page = 1; page <= 5; page++) {
-      const r = request(`pulls?state=open&base=${encodeURIComponent(DEPLOY)}&per_page=100&page=${page}`);
-      if (r.error) return fail(r.error);
-      const batch = Array.isArray(r.json) ? r.json : [];
-      nums.push(...batch.map((p) => p.number));
-      if (batch.length < 100) break;
-    }
+  // --pr limits expensive detail/CI reads, not the repository-wide armed cap.
+  // The list includes auto_merge metadata; no sibling detail request is needed.
+  // https://docs.github.com/en/rest/pulls/pulls#list-pull-requests
+  const armedByPr = new Map();
+  for (let page = 1; page <= 5; page++) {
+    const r = request(`pulls?state=open&base=${encodeURIComponent(DEPLOY)}&per_page=100&page=${page}`);
+    if (r.error) return fail(r.error);
+    const batch = Array.isArray(r.json) ? r.json : [];
+    for (const pr of batch) armedByPr.set(pr.number, !!pr.auto_merge);
+    if (batch.length < 100) break;
   }
+  const nums = opts.only != null ? [opts.only] : [...armedByPr.keys()];
   const items = [];
   for (const n of nums) {
     const one = request(`pulls/${n}`);
@@ -219,6 +230,7 @@ export function measure(opts = {}) {
     }
     const sha = pr.head?.sha;
     if (!sha) return fail(`PR #${n}: no head sha`);
+    armedByPr.set(n, !!pr.auto_merge);   // refresh selected rows after discovery
     const runsR = request(`actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=20`);
     if (runsR.error) return fail(`PR #${n} runs: ${runsR.error}`);
     const runs = runsR.json?.workflow_runs || [];
@@ -226,14 +238,19 @@ export function measure(opts = {}) {
     if (checks.error) return fail(`PR #${n} check-runs: ${checks.error}`);
     let jobs = [];
     const ci = ciState(runs);
-    if ((ci.state === "failure" || ci.state === "cancelled") && ci.runId) {
-      const j = request(`actions/runs/${ci.runId}/jobs?per_page=100`);
-      if (j.error) return fail(`PR #${n} jobs: ${j.error}`);
-      jobs = j.json?.jobs || [];
+    if (ci.runId && (ci.state === "failure" || ci.state === "cancelled"
+        || (ci.state === "success" && !pr.draft && !pr.auto_merge))) {
+      for (let page = 1; ; page++) {
+        const j = request(`actions/runs/${ci.runId}/jobs?per_page=100&page=${page}`);
+        if (j.error) return fail(`PR #${n} jobs: ${j.error}`);
+        const batch = j.json?.jobs || [];
+        jobs.push(...batch);
+        if (batch.length < 100) break;
+      }
     }
-    items.push({ pr, runs, jobs, checkRuns: checks.json?.check_runs || [] });
+    items.push({ pr, runs, jobs, jobsRunId: ci.runId, checkRuns: checks.json?.check_runs || [] });
   }
-  const result = evaluate(items, { cap: capV });
+  const result = evaluate(items, { cap: capV, armed: [...armedByPr.values()].filter(Boolean).length });
   return { ok: true, ...result, capLine: capLine(capV) };
 }
 
