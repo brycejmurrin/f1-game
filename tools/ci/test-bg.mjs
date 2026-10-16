@@ -205,15 +205,54 @@ function status() {
   }
 }
 
-async function waitForRunning() {
+function waitDeadlineFromMin(waitTimeoutMin) {
+  return waitTimeoutMin > 0 ? Date.now() + waitTimeoutMin * 60_000 : Infinity;
+}
+
+/** Parse CLI flags shared by --wait and group starts. `--timeout` is minutes (AGENTS.md). */
+export function parseTestBgArgv(argv) {
+  let waitTimeoutMin = 0;
+  const groups = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--timeout") {
+      const v = argv[++i];
+      if (v == null || v.startsWith("-")) throw new Error("--timeout requires a value (minutes)");
+      waitTimeoutMin = Number(v);
+      if (!Number.isFinite(waitTimeoutMin) || waitTimeoutMin <= 0) throw new Error("--timeout requires a positive number of minutes");
+      continue;
+    }
+    const eq = /^--timeout=(\d+(?:\.\d+)?)$/.exec(a);
+    if (eq) {
+      waitTimeoutMin = Number(eq[1]);
+      if (!Number.isFinite(waitTimeoutMin) || waitTimeoutMin <= 0) throw new Error("--timeout requires a positive number of minutes");
+      continue;
+    }
+    if (a.startsWith("--")) continue;
+    groups.push(a);
+  }
+  return {
+    waitTimeoutMin,
+    groups,
+    force: argv.includes("--force"),
+    lastFailed: argv.includes("--last-failed"),
+    parallel: argv.includes("--parallel"),
+    keepGoing: argv.includes("--keep-going"),
+    sweep: argv.includes("--sweep"),
+  };
+}
+
+async function waitForRunning({ deadline, waitTimeoutMin = 0 } = {}) {
+  const dl = deadline ?? waitDeadlineFromMin(waitTimeoutMin);
+  const t0 = Date.now();
   // Re-read the registry every poll: a group another shell starts while this
   // waits is part of "everything still running" (it used to be read once).
   const running = () => readState().runs.filter((r) => alive(r));
-  const deadline = waitTimeoutMin > 0 ? Date.now() + waitTimeoutMin * 60_000 : Infinity;
   while (running().length) {
-    if (Date.now() > deadline) {
+    if (Date.now() > dl) {
       process.stderr.write("\r" + " ".repeat(80) + "\r");
-      say(`WAIT TIMEOUT after ${waitTimeoutMin} min — still running: ${running().map((r) => r.group).join(", ")} (left alive; --status later, --stop to end)`);
+      const mins = waitTimeoutMin > 0 ? waitTimeoutMin : Math.max(1, Math.round((Date.now() - t0) / 60_000));
+      say(`WAIT TIMEOUT after ${mins} min — still running: ${running().map((r) => r.group).join(", ")} (left alive; --status later, --stop to end)`);
       process.exitCode = 124;
       return;
     }
@@ -532,7 +571,9 @@ async function settleLoad(maxMs, pollMs = 15_000) {
 }
 
 /** Start each group, wait for it to finish, then start the next. */
-async function waitChain(groups, { force = false } = {}) {
+async function waitChain(groups, { force = false, waitTimeoutMin = 0 } = {}) {
+  const deadline = waitDeadlineFromMin(waitTimeoutMin);
+  const remainingMs = () => (deadline === Infinity ? CHAIN_SETTLE_MS : Math.max(0, deadline - Date.now()));
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
   if (unknown.length) {
@@ -548,14 +589,17 @@ async function waitChain(groups, { force = false } = {}) {
     // start, but in a chain the previous group's own teardown keeps the 1-min
     // average up, so group 2 was refused and every later group died with it.
     // Wait (bounded) for the load to settle; give up cleanly, naming the rest.
-    if (!force && !(await settleLoad(CHAIN_SETTLE_MS))) {
-      say(`chain stopped: loadavg ${os.loadavg()[0].toFixed(2)} still >= ${LOAD_LIMIT} after ${CHAIN_SETTLE_MS / 60000} min — not started: ${groups.slice(i).join(" ")}`);
+    if (!force) {
+      const settleCap = Math.min(CHAIN_SETTLE_MS, remainingMs());
+      if (settleCap <= 0 || !(await settleLoad(settleCap))) {
+      say(`chain stopped: loadavg ${os.loadavg()[0].toFixed(2)} still >= ${LOAD_LIMIT} — not started: ${groups.slice(i).join(" ")}`);
       process.exitCode = 3;
       return;
+      }
     }
     // Cap is 1 in sequential; force still allows starting when something else is live.
     start([g], { force, parallel: false });
-    await waitForRunning();
+    await waitForRunning({ deadline, waitTimeoutMin });
     const o = outcome(readState().runs.find((r) => r.group === g) || { pid: -1, log: "" });
     say(`── chain ${i + 1}/${groups.length} ${g}: ${o}`);
     if (!/^passed/.test(o)) {
@@ -571,12 +615,14 @@ async function waitChain(groups, { force = false } = {}) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 const argv = isMain ? process.argv.slice(2) : [];
-const force = argv.includes("--force");
-const lastFailed = argv.includes("--last-failed");
-const parallel = argv.includes("--parallel");
-const tIdx = argv.indexOf("--timeout");
-const waitTimeoutMin = tIdx >= 0 ? +argv[tIdx + 1] || 0 : 0;
-const groups = argv.filter((a, i) => !a.startsWith("--") && !(tIdx >= 0 && i === tIdx + 1));
+let parsed;
+if (isMain) {
+  try { parsed = parseTestBgArgv(argv); } catch (e) {
+    console.error(`[test-bg] ${e.message}`);
+    process.exit(2);
+  }
+}
+const { waitTimeoutMin, groups, force, lastFailed, parallel } = parsed || {};
 
 if (!isMain) { /* imported for outcomeOf (tests/unit/test-bg-outcome.test.mjs) */ }
 else if (argv.includes("--status")) status();
@@ -586,8 +632,8 @@ else if (argv.includes("--tail")) {
   const r = readState().runs.find((x) => x.group === g);
   console.log(r ? `tail -f ${path.relative(ROOT, r.log)}` : `no run recorded for group "${g}"`);
 } else if (argv.includes("--wait")) {
-  if (groups.length) await waitChain(groups, { force });
-  else await waitForRunning();
+  if (groups.length) await waitChain(groups, { force, waitTimeoutMin });
+  else await waitForRunning({ waitTimeoutMin });
 } else if (!groups.length) {
   console.error("usage: node tools/ci/test-bg.mjs <group> [group...] [--parallel] [--force] [--last-failed]");
   console.error("       node tools/ci/test-bg.mjs --wait [group...] [--keep-going] [--force]");
