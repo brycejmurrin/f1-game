@@ -1480,7 +1480,7 @@ test("the overtake car-ahead pre-reject is result-identical to the full wrap sca
     Collide.fillArcBuckets(cars, L, 34, (car) => car._snapProg);
     for (const c of cars) {
       const want = ref(c, cars, track);
-      const otW = OT_GAP * c.speed + 1;
+      const otW = OT_GAP * Math.max(0, c.speed) + 1;
       const raw = Collide.scanOtAhead(c, L, otW, skip);
       const got = { ahead: raw.ahead, gapAhead: raw.ahead && c.speed > 1 ? raw.gapAhead / c.speed : Infinity };
       const wantArmed = want.gapAhead < OT_GAP, gotArmed = got.gapAhead < OT_GAP;

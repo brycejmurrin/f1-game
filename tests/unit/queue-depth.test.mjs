@@ -162,7 +162,7 @@ test("#2182: pushStartsCi — only a ready PR or a draft labelled run-ci starts 
   assert.match(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).why, /#7 is a draft without run-ci/);
   assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [{ name: "run-ci" }] }])).ci, true);
   assert.equal(pushStartsCi("cursor/x", pulls([{ number: 8, draft: false, labels: [] }])).ci, true);
-  assert.equal(pushStartsCi("claude/f1-game-project-26h3ng", () => assert.fail("no lookup")).ci, true, "the deploy branch always runs ci.yml");
+  assert.equal(pushStartsCi("claude/f1-game-project-26h3ng", () => assert.fail("no lookup")).ci, true, "the deploy branch always starts a run (pages.yml, the train)");
   assert.equal(pushStartsCi("cursor/x", () => ({ error: "HTTP 502" })).ci, null, "a failed lookup is unknown");
   // the CLI's decision over every target
   const noPr = pulls([]);

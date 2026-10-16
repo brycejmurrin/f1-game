@@ -136,51 +136,25 @@ run-name: "${{ (github.event_name == 'pull_request' && github.event.action == 'l
 # conflicted only in meaning, and nothing was running the suite that would have
 # said so. That is exactly the silent class this gate exists for.
 #
-# It is not added yet for one reason: golden images are environment-sensitive,
-# and those six were generated in a dev container. If GitHub's runner renders
-# even slightly differently — a font fallback, a SwiftShader build — the gate
-# goes permanently red and blocks every deploy, which is the failure this
-# workflow already caused once by another route. Add it by first running it on a
-# PR as a non-blocking step and comparing, not by putting it straight into
-# `needs:`.
+# It is now blocking on scheduled and manual runs. The runner and dev container
+# were measured as portable; a mismatch must fail the verdict so stale UI
+# goldens cannot remain green indefinitely. It remains excluded from Pages calls
+# because the release train uses live browser checks rather than dev-captured PNGs.
 
 on:
-  push:
-    # THE DEPLOY BRANCH ONLY (2026-09-24, decision 1c). A `claude/<topic>`
-    # branch gets CI through its DRAFT PR (AGENTS.md rule 12 opens one after
-    # the first push): every branch push used to start a run that its own PR
-    # event cancelled seconds later (rule 8's dedupe), and 172 jobs queued
-    # against ~20 slots on 2026-09-23. A branch pushed with no PR starts no
-    # run — `ci-watch.mjs` says `= ci none`, and the fix is to open the PR.
-    branches:
-      - claude/f1-game-project-26h3ng
-    # EVERY branch, the deploy branch included (2026-09-10). pages.yml no
-    # longer runs on push — it is a release train (three ticks an hour) that
-    # calls this workflow for the FULL gate on the tip. A push to the deploy
-    # branch gets the FAST tier here instead: guards, node suites, the parts
-    # census, driving-model and the change-aware selection. Ship pushes share
-    # ONE group, `ship-fast`, with no cancel (2026-10-03, Bryce): the run in
-    # progress always finishes and only the NEWEST waiting push stays queued
-    # behind it, so a merge burst costs one fast tier at a time instead of one
-    # per merge (30 merges in 90 min queued ~750 jobs on 40 slots and held the
-    # site 30 PRs behind). The skipped middle commits are tested by the next
-    # run, which contains them. The train is a different group (pages.yml's unique
-    # concurrency_key) and is never cancelled by a later push. The browser
-    # smoke shards, the geometry sweeps and the renderer jobs are the train's
-    # (and ready PRs'). The tier is decided by ONE expression,
-    # repeated on the heavy jobs (smoke, ship-filter, sweeps):
-    #   inputs.concurrency_key == '' && (<deploy-branch push> || <draft PR>)
-    # (a Pages call always carries a concurrency_key, so it is never fast).
-    # ACTIONS MINUTES (2026-09-02): a docs / skills / rules-only commit ships
-    # nothing, so it buys no gate. The guard suite that checks those trees
-    # runs locally on every edit (test:tooling-fast); the deploy branch is
-    # gated by the train regardless of what the diff touched.
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".claude/**"
-      - ".cursor/**"
-      - ".codex/**"
+  # NO PUSH TRIGGER (2026-10-16, the CI/CD review #2333 finding 3). A topic
+  # branch gets CI through its PR (2026-09-24, decision 1c: every branch push
+  # used to start a run its own PR event cancelled seconds later). The deploy
+  # branch got a FAST tier here from 2026-09-10 to 2026-10-16 (guards, node
+  # suites, census, driving-model, selection in the no-cancel `ship-fast`
+  # group) whose green poked the Pages train; measured on 2026-10-15/16 it
+  # reached 38 % of merges (184 pushes, 112 replaced while pending, 70
+  # completed) and cost 5,587 job-minutes a day for verdicts the train
+  # repeated. pages.yml now runs on push itself and calls this workflow for
+  # the full gate (the `workflow_call` below, with `concurrency_key` set), so
+  # a merge's verdict is the train's `ci / …` rows: `ci-watch.mjs --sha
+  # <merge sha>` lists that run, or `= ci superseded` when a newer push
+  # replaced its pending train.
   pull_request:
     # A DRAFT PR with the `run-ci` label is the FAST tier too (the same
     # expression, below): guards, the selection plan, node suites, parts
@@ -324,10 +298,11 @@ permissions:
 # pull_request.head.ref, and a later synchronize/ready_for_review cancels the
 # older PR run on that same branch (cancel-in-progress true for pull_request).
 #
-# SHIP PUSHES: see the `ship-fast` note inside the block below (2026-10-03),
-# which superseded a per-sha group. The deploy path is unchanged: a Pages
-# caller supplies its run id (unique concurrency_key), so every deploy gate has
-# its own group and is cancelled only by pages.yml's own per-branch rule.
+# SHIP PUSHES start no run here since 2026-10-16 (pages.yml runs on push); the
+# `ship-fast` group that coalesced them (2026-10-03) is gone. The deploy path
+# is unchanged: a Pages caller supplies its run id (unique concurrency_key), so
+# every deploy gate has its own group and is cancelled only by pages.yml's own
+# per-branch rule.
 concurrency:
   # A dispatched run gets its own group: it shares the ref with every push,
   # and cancellation killed the first dispatched `ui` group 30 s in when the
@@ -341,17 +316,12 @@ concurrency:
   # is queued behind exactly that. Run 2758 (2026-09-08) ended `cancelled` at
   # 20 min with no job over its cap and nothing failing, which is the shape
   # this produces.
-  # A push to the DEPLOY branch (the fast tier) joins the shared `ship-fast`
-  # group with NO cancel (2026-10-03): a running fast tier always finishes
-  # (the old `ship-push` + cancel killed runs mid-way and hid their reds), and
-  # GitHub's one-pending-run-per-group rule keeps only the newest waiting push
-  # (https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
-  # Keying each push on github.sha ran one fast tier PER MERGE and clogged the
-  # queue in bursts (docs/notes/CI-MERGE-BURST-2026-10-03.md). Dispatch and
-  # schedule still get a unique run_id group. The run that is DEPLOYING is
-  # not in this group: pages.yml always passes a unique concurrency_key, and
-  # its own `pages-gate-*` group has cancel-in-progress false.
-  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && 'ship-fast') || github.event.pull_request.head.ref || github.ref_name }}
+  # Dispatch and schedule get a unique run_id group. The run that is
+  # DEPLOYING is not in this group: pages.yml always passes a unique
+  # concurrency_key, and its own `pages-gate-*` group has cancel-in-progress
+  # false. (The deploy branch's `ship-fast` push group, 2026-10-03 to
+  # 2026-10-16, is gone with the push trigger.)
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -501,7 +471,7 @@ jobs:
     # Name `Pure-node unit suites (<slice>)`: the six strings WERE the deploy
     # branch's required checks until 2026-10-15, when Bryce made `CI` the one
     # required check (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §4 C). They are
-    # still what pages-train.mjs, ready-gate.mjs and the tests read, so keep
+    # still what ready-gate.mjs and the tests read, so keep
     # them stable; a rename is a tool edit now, not a settings round. Do not
     # interpolate matrix.needed (or any other matrix key) into the name
     # (#454 a9a805839: the expected check never appeared).
@@ -520,7 +490,7 @@ jobs:
     # when none is needed the job skips here (2026-10-15: `CI` is the deploy
     # branch's one required check, so the six names no longer have to report
     # on a ready PR either). A deploy push and the train keep all six rows:
-    # pages-train.mjs's reuse check wants at least one expanded node row.
+    # the Pages reuse check wanted at least one expanded node row.
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
@@ -577,7 +547,7 @@ jobs:
         #   breakdown in the log); runner-minutes per push unchanged.
         # Matrix rows come from select's plan step / pick-unit-slices. On a
         # deploy push and the train every NODE_SLICE name is present (needed
-        # true|false) for pages-train.mjs's reuse check; a pull request lists
+        # true|false) for the Pages reuse check; a pull request lists
         # only the needed rows (2026-10-15: `CI` is the one required check —
         # until then a subset left vm-a1/vm-a2 unreported on #454, BLOCKED
         # with an otherwise green CI). Unneeded rows exit 0.
@@ -669,7 +639,7 @@ jobs:
           # `planned <script>` is the plan step's predicate (true on every
           # non-PR event); a skip prints SKIPPED <script> and the reason.
           # matrix.needed=false (deploy push / train rows): the name still
-          # reports for pages-train.mjs's reuse check, but no work runs for a
+          # reports for the Pages reuse check, but no work runs for a
           # slice this diff does not select.
           if [ "${{ steps.reuse.outputs.reuse }}" = "true" ]; then
             echo "SKIPPED slice ${{ matrix.slice }} — draft fast-tier already green on this head SHA"
@@ -862,7 +832,7 @@ jobs:
         id: filter
         if: steps.reuse.outputs.reuse != 'true'
         env:
-          BEFORE: ${{ inputs.before_sha != '' && inputs.before_sha || github.event.before }}
+          BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || (inputs.concurrency_key == '' && github.event.before) || '' }}
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           CALLED: ${{ inputs.concurrency_key != '' }}
@@ -908,7 +878,7 @@ jobs:
     name: Per-circuit geometry sweeps (${{ matrix.shard }}of4)
     runs-on: ubuntu-latest
     needs: [select]
-    # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
+    # Not in a draft PR's FAST tier; the train (a Pages call) runs it.
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) && (needs.select.outputs.geometry != 'false' || needs.select.outputs.geometry_targeted != '') }}
     # FOUR suite shards (2026-10-14). Pages train 38500310338 spent 1118 s in
     # the single-runner Geometry sweeps step (1218 s job) while every browser
@@ -1051,7 +1021,7 @@ jobs:
   smoke:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
-    # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
+    # Not in a draft PR's FAST tier; the train (a Pages call) runs it.
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
     # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
@@ -1502,14 +1472,15 @@ jobs:
     name: Renderer specs on a real GPU (macos-latest, Metal)
     needs: select
     # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
-    # comment forbids it, because this job is already outside the deploy gate
-    # (renderer-filter is skipped on the Pages call, so this is too). The
+    # comment forbids it, because the selector owns the path decision.
+    # Pages calls now run the filter against the live commit, so a release that
+    # changes renderer bytes also gets the Metal check before publication. The
     # "skipped reads as passed" hazard the sweeps avoid is about a job whose
     # verdict the deploy consumes; nothing consumes this one but the checks list.
     # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
     # ready PR whose filter said the diff touches the renderer. Never a
     # draft PR or a bare topic-branch push — see the filter's header.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!inputs.concurrency_key && needs.select.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (needs.select.outputs.renderer == 'true' && (inputs.concurrency_key != '' || github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is
@@ -1723,9 +1694,9 @@ jobs:
           # none": it always had one. Fail-safe is preserved, not weakened —
           # an unresolvable or unreachable base still runs everything.
           BEFORE: >-
-            ${{ inputs.before_sha != '' && inputs.before_sha
-                || (github.event_name == 'pull_request' && github.event.pull_request.base.sha
-                    || github.event.before) }}
+            ${{ inputs.concurrency_key != '' && inputs.before_sha
+                || (inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.base.sha
+                    || (inputs.concurrency_key == '' && github.event.before) || '') }}
           EVENT: ${{ github.event_name }}
           # A Pages call (the train) always carries a concurrency_key; its
           # before_sha is the LIVE commit, the exact base to diff against.
@@ -1915,7 +1886,7 @@ jobs:
           # empty tree), like the sweeps/parts/ship filters, never HEAD~1: a
           # one-commit slice of a tip carrying every unpublished commit.
           EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
-          PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
+          PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || (inputs.concurrency_key == '' && github.event.before) || '' }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           # The nightly lane (tools/ci/ci-resolve-before.sh): a day's union diff
@@ -2093,17 +2064,20 @@ jobs:
       # fail-safing every PR into the full fleet until 2026-09-22.
       - name: Does this diff touch the renderer?
         id: renderer
-        if: ${{ !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
+        if: ${{ inputs.concurrency_key != '' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft) }}
         env:
-          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || (github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before) }}
           EVENT: ${{ github.event_name }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
         run: |
           set -u
           run_all() { echo "renderer=true" >> "$GITHUB_OUTPUT"; echo "RUNNING RENDERER SPECS: $1"; exit 0; }
-          case "$EVENT" in
-            push|pull_request) ;;
-            *) run_all "event is '$EVENT', not a push/pull_request" ;;
-          esac
+          if [ "$CALLED" != true ]; then
+            case "$EVENT" in
+              push|pull_request) ;;
+              *) run_all "event is '$EVENT', not a push/pull_request" ;;
+            esac
+          fi
           # A PR diffs against the test commit's first parent (ci-pr-base.sh):
           # the event's base.sha lags one sync behind it.
           [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
@@ -2384,9 +2358,8 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # THE GOLDEN-MENU TRIAL. NON-BLOCKING BY CONSTRUCTION — do not add it to any
-  # `needs:`, and do not remove `continue-on-error` without the comparison this
-  # job exists to produce.
+  # THE GOLDEN-MENU CHECK. Blocking on scheduled/manual runs: a mismatch is
+  # evidence that the committed UI baseline is stale or the runner changed.
   #
   # The header above already names `test:baseline` as the group that arguably
   # belongs in the gate and is not in it, and gives the reason: the six goldens
@@ -2402,8 +2375,7 @@ jobs:
   # tolerance (title-phone-landscape 49,499 on the runner vs 49,516 here;
   # garage-phone-landscape 10,318 vs 10,319). Three of the six have simply not
   # been re-blessed since the UI moved, and they fail in a fresh container too.
-  # So the way in is: RE-BLESS the six, keep this job non-blocking for a few
-  # more PRs to confirm they hold, then gate on it as a DOM identity gate.
+  # Its actual/diff artifact remains available for diagnosis when it fails.
   #
   # IT IS NOT A RENDERER GATE AND CANNOT BECOME ONE. The spec calls
   # __apex.headless(true) and hides #game before it shoots, so a dead render
@@ -2556,7 +2528,6 @@ jobs:
     # dispatch answer without a runner slot on every push while 200-290 jobs
     # queue (docs/notes/CI-CAPACITY-2026-09-29.md).
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
-    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -2595,120 +2566,6 @@ jobs:
             echo "the IMAGES are the problem to solve before any routing change."
           fi
 
-  # POKE THE TRAIN (2026-09-10). pages.yml's cron is a backstop, not a clock:
-  # GitHub's scheduler on this repository runs HOURS late — ci.yml's own 03:17
-  # nightly was created between 07:54 and 08:18 on each of its last five days
-  # — so a green fast-tier run dispatches the train itself. A workflow_dispatch
-  # made with GITHUB_TOKEN is the documented exception to "events raised by the
-  # token start no runs". The train's own queue coalesces a burst of pokes:
-  # one gate running, one waiting, later pokes replace the waiting one; and
-  # its verdict job answers "nothing new" in one slot when a poke finds the
-  # tip already live.
-  poke-train:
-    name: Poke the release train
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: [guards, node-suites, sweeps-parts, driving-model, select, selected]
-    # Fast tier only (a deploy-branch push, never a Pages call), and only when
-    # every fast-tier job passed. A red fast tier pokes nothing; the cron
-    # backstop still gates the tip later and fails it visibly.
-    #
-    # A SKIPPED `selected` IS NOT ALWAYS A PASS (2026-09-22). It is skipped
-    # whenever the plan has no shards, and that happens two ways which are not
-    # alike:
-    #
-    #   * nothing this diff touches has a spec — a genuine pass, and the common
-    #     case for a docs or tooling change;
-    #   * every spec it DOES touch was unaffordable — dropped over budget, or
-    #     bigger than the whole 10-test cap.
-    #
-    # The second read as a pass, and it was the renderer's entire story: all six
-    # `test:gfx` specs declare 240-540 s against the gate's 180 s per-test cap,
-    # so a `js/render/` diff emptied the plan, skipped this job's dependency and
-    # poked the train with no backend having been booted by anything blocking.
-    # `dropped` separates them, and tests/specs/render-boot.spec.js is what makes
-    # the tightening safe rather than a permanent stall: a renderer diff now has
-    # an affordable spec to select, so the plan is no longer empty.
-    #
-    # And since 2026-10-04 a dropped spec blocks the poke even when `selected`
-    # ran: selected-verdict reds on it, and a poke must not outrun that red.
-    #
-    # Deliberately NOT gated on `reason`: an `infra` or `docs` plan can be
-    # honestly empty, and those are the diffs this branch takes all day.
-    #
-    # SKIPPED node-suites / driving-model ARE a pass when unit-plan said the
-    # slice was not needed (path-filtered). A skip for any other reason (cancelled
-    # parent, plan failure) is not a poke.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.select.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.select.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) && needs.select.outputs.dropped == '0') }}
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      # THE TIP POKES — AND SO DOES A SUPERSEDED GREEN RUN WHEN NO TRAIN IS
-      # MOVING (2026-10-03). Only-the-tip (2026-09-29) stopped a burst from
-      # dispatching 57 trains in 41 h (docs/notes/CI-CAPACITY-2026-09-29.md),
-      # but in a burst every run finished after the next merge landed, so
-      # NOTHING poked until the burst ended and the site sat 30 merges behind
-      # (docs/notes/CI-MERGE-BURST-2026-10-03.md). A dispatched train gates the
-      # branch TIP, so a poke from a superseded commit still ships everything
-      # merged so far; it is limited to "no pages.yml run is queued or running
-      # on this branch", which keeps it to one train at a time. Any doubt (API
-      # error, empty answer) pokes, as before.
-      # SINGLE-FLIGHT + TIP-CI GATE (2026-10-06). Never dual-dispatch Pages while
-      # a train is already queued/running. Never poke for a tip whose ship-fast
-      # CI FAILED. (Until 2026-10-14 a pending or cancelled tip blocked too —
-      # Pages run 37497278920 was dispatched for 85de0ac while tip CI
-      # 37496991170 was in_progress — but that live-locked merge bursts; see
-      # the tip-moved branch below.)
-      # cancel-in-progress stays false on pages.yml — we skip the poke instead
-      # of cancelling a live train.
-      - name: Is this commit still the tip, or is no train moving?
-        id: tip
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -u
-          TIP=$(gh api "repos/$GITHUB_REPOSITORY/branches/$GITHUB_REF_NAME" --jq .commit.sha 2>/dev/null || true)
-          # Runs not yet completed (queued, waiting, pending, requested, in_progress).
-          ACTIVE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs?branch=$GITHUB_REF_NAME&per_page=20" \
-            --jq '[.workflow_runs[] | select(.status != "completed")] | length' 2>/dev/null || true)
-          if [ -n "$ACTIVE" ] && [ "$ACTIVE" != "0" ]; then
-            echo "poke=false" >> "$GITHUB_OUTPUT"
-            echo "NOT POKING: $ACTIVE train run(s) already queued or running (single-flight)" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          if [ -z "$TIP" ] || [ "$TIP" = "$GITHUB_SHA" ]; then
-            # This run is the tip (or tip unreadable — poke as before on doubt).
-            echo "poke=true" >> "$GITHUB_OUTPUT"
-            echo "POKING tip ${GITHUB_SHA:0:7}: fast tier green and no train moving" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          # Tip moved: poke unless the tip's push CI concluded FAILURE (2026-10-14).
-          # Waiting for completed/success live-locked a merge burst: every green
-          # run found a newer tip still pending, that tip's run was then
-          # cancelled as a superseded pending run, and nothing poked from 13:44
-          # (ship runs 38582717249, 38584256448 "NOT POKING ... pending/none").
-          # The train gates the TIP itself, so a poke from a superseded green
-          # commit is safe; pages-reuse-verdict.sh stops a red tip at once.
-          TIP_CI=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=$GITHUB_REF_NAME&event=push&per_page=30" 2>/dev/null \
-            | jq -r --arg tip "$TIP" '[.workflow_runs[] | select(.head_sha == $tip)] | .[0] | "\(.status)|\(.conclusion // "")"' || true)
-          STATUS="${TIP_CI%%|*}"
-          CONC="${TIP_CI#*|}"
-          if [ "$STATUS" = "completed" ] && [ "$CONC" = "failure" ]; then
-            echo "poke=false" >> "$GITHUB_OUTPUT"
-            echo "NOT POKING: tip moved to $TIP and its ship-fast CI concluded failure" | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            echo "poke=true" >> "$GITHUB_OUTPUT"
-            echo "POKING from a superseded commit: tip $TIP ship-fast CI is ${STATUS:-unknown}/${CONC:-none} (not red) and no train is moving" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
-      - name: Dispatch pages.yml on this branch
-        if: steps.tip.outputs.poke == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
-          echo "Poked pages.yml on \`$GITHUB_REF_NAME\` for \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
-
   # ONE STABLE REQUIRED CHECK. A job skipped by its own `if:` reports
   # SUCCESS to branch protection; only a WORKFLOW skipped by a path, branch or
   # commit-message filter leaves its checks Pending and blocks the merge
@@ -2724,17 +2581,9 @@ jobs:
   # also carries smoke, the sweeps, renderer-macos and xr.
   # tools/ci/ci-verdict.mjs.
   #
-  # EVERY JOB BUT ONE: poke-train is not a verdict, it is the train's
-  # dispatcher (2026-10-14, Actions audit C2). It runs only on a deploy-branch
-  # push, needs the same verdict jobs this one reads, and acts on them; making
-  # CI wait for it put one more queue hop on the ship run's completion, and
-  # the train it just poked looks for this run as `completed` + `success`
-  # (pages-reuse-verdict.sh's fast_run) — a run is not completed until its
-  # last job is. ci-verdict.mjs is generic over NEEDS (it names no job but
-  # selected/selected-verdict/baseline-trial), so the row's absence changes
-  # nothing it decides. A failed poke still fails the RUN's conclusion, which
-  # ci-watch.mjs and base-green.sh read; it no longer fails the `CI` check,
-  # which on a deploy-branch push gates no merge.
+  # EVERY JOB (2026-10-16): poke-train, the train's dispatcher, is gone with
+  # the deploy-branch fast tier — pages.yml runs on push now (CI/CD review
+  # #2333 finding 3). draft-ci-skipped is the one job this does not need.
   ci-verdict:
     # A label-noise run (#2184, the `on:` note) skips every job, and a SKIPPED
     # job reports success: under the required name it would sit on the head
