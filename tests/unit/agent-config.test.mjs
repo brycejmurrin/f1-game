@@ -620,8 +620,10 @@ test("the always-on instruction surface stays inside its budget", () => {
     assert.equal(typeof description, "string", `${d.name}: description must be a YAML string`);
     descWords += description.split(/\s+/).filter(Boolean).length;
   }
-  assert.ok(descWords <= 1600,
-    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1600) — tighten one, or retire a skill`);
+  // Raised 1600 -> 1700 on 2026-10-16 (Bryce: "Raise the skill budget"): 40 skills left
+  // ~0 slack, so every skill edit traded routing recall (skill-hint-hook floor) for budget.
+  assert.ok(descWords <= 1700,
+    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1700) — tighten one, or retire a skill`);
 });
 
 // ── BYTE AND ROUTING BUDGETS (2026-10-14, docs/notes/AGENT-GUARDS-2026-10-14.md) ──
@@ -680,8 +682,9 @@ test("skill descriptions: a char budget, every arrow resolves, every skill has r
     assert.ok(exists(`tests/data/skill-routing/queries/${name}.json`),
       `${name} has no tests/data/skill-routing/queries/${name}.json (5 should-fire + 3 near-miss queries)`);
   }
-  // 11,986 chars on 2026-10-14, rounded up to the next 100. Trim one to add one.
-  assert.ok(chars <= 12000, `${skills.length} skill descriptions are ${chars} chars (budget 12,000)`);
+  // 11,986 chars on 2026-10-14, rounded up to the next 100. Raised to 12,800 on 2026-10-16
+  // (Bryce: "Raise the skill budget") for the same reason as the word budget. Trim one to add one.
+  assert.ok(chars <= 12800, `${skills.length} skill descriptions are ${chars} chars (budget 12,800)`);
   for (const f of fs.readdirSync(path.join(ROOT, "tests/data/skill-routing/queries"))) {
     const rows = JSON.parse(read(`tests/data/skill-routing/queries/${f}`));
     assert.ok(skills.includes(f.replace(/\.json$/, "")), `${f}: no such skill`);
