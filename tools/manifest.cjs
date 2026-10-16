@@ -124,6 +124,7 @@ const LAZY_SCENERY = CIRCUITS.map((id) => `${SCENERY_DIR}/${id}.js`);
 const FULL = [
   // Log must be first: every module below may log at evaluation time.
   "js/core/log.js",
+  "js/core/dev-flags.js",
   "js/core/mat4.js",
   "js/core/hash32.js",
   "js/core/clipboard.js",   // ApexClipboard: write/read + textarea fallback (call-time; early so panels/lobby can use it)
@@ -150,6 +151,7 @@ const FULL = [
   "js/render/shared/gltf.js",
   "js/render/shared/assets.js",
   "js/render/shared/driving-line.js",
+  "js/render/shared/puddles.js",   // Puddles: the ONE reference for the standing-water mask the three lit shaders mirror (tests/unit/puddles.test.mjs)
   "js/data/teams.js",
   "js/data/driver-ratings.js",
   // Legends sits with the other driver data and AHEAD of js/car/liveries.js,
@@ -172,6 +174,7 @@ const FULL = [
   "js/data/garage-defaults.js",
   "js/core/save-schema-registry.js",
   "js/core/store.js",
+  "js/career/restore-points.js",
   "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
@@ -261,6 +264,7 @@ const FULL = [
   "js/garage/pit-signs.js",
   "js/physics/body-attitude.js",
   "js/fx/particles.js",
+  "js/fx/droplets.js",         // Droplets: onboard lens/visor rain overlay (game.js ticks it at render)
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",
   "js/career/ai-dev.js",
@@ -287,6 +291,7 @@ const FULL = [
   "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
   "js/career/season-ui.js",
   "js/ui/flags.js",
+  "js/ui/save-health.js",
   "js/ui/select-screen.js",
   "js/ui/loading-screen.js",
   "js/ui/survey-hud.js",   // APEX_SURVEY_HUD=1: cockpit HUD fixture without race/scenery warm
@@ -305,6 +310,7 @@ const FULL = [
   "js/fx/skidmarks.js",
   "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/storm.js",          // Storm: the weather above rain — lightning schedule, SC timings, rain/spray scale (pure; before race-control)
+  "js/race/wind.js",           // Wind: per-race seeded wind + gusts on the race clock; head/tail drag, crosswind (game.js calls Wind.setLevel at eval)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
   "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
@@ -315,6 +321,7 @@ const FULL = [
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   // flying-start / start-lights / marshal-panels → LAZY_RACE_SESSION
+  "js/race/rain-cells.js",     // RainCells: pure localized-rain maths (a drifting shower over a window of the lap; WeatherArc reads it)
   "js/race/weather-arc.js",
   "js/race/forecast.js",       // Forecast: pure timed + uncertain forecast off a weather arc (engineer speaks it; Forecast.current())
   "js/camera/photo-kit.js",    // free-cam grids / DoF / bookmarks (before free-cam)
@@ -410,7 +417,7 @@ const FULL = [
 // Stylesheet <link> order in index.html.
 const CSS = [
   "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
-  "css/settings-controls.css", "css/dialog-platform.css", "css/tuner.css",
+  "css/settings-controls.css", "css/dialog-platform.css", "css/save-health.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
   "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
   "css/loading.css", "css/a11y-loading.css", "css/responsive.css",
@@ -444,7 +451,7 @@ const CSS_DEFERRED = [
   "css/career-experience.css", "css/garage-experience.css",
   "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css",
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
-  "css/dialog-platform.css", "css/select.css", "css/race-setup.css",
+  "css/dialog-platform.css", "css/save-health.css", "css/select.css", "css/race-setup.css",
 ];
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.
@@ -463,6 +470,7 @@ const SHELL_NOTES = {
 // itself uses ../js/... since it is served from /tools/).
 const CARVIEW = [
   "js/core/log.js",
+  "js/core/dev-flags.js",
   "js/core/mat4.js",
   "js/render/shared/glx-facade.js",
   "js/render/glx/shaders/glsl-chunks.js",
@@ -512,6 +520,7 @@ const CARVIEW = [
 // verification is per-id, so LIST order does not matter there).
 const TRACK_VM = [
   "js/core/log.js",
+  "js/core/dev-flags.js",
   // mat4.js is not matrix math for the VM's sake — it is the home of the shared
   // scalar helpers (M4.clamp/lerp/wrapDelta), which js/track/ binds at eval.
   // Leaving it out is how the track engine ended up with four private lerps.
@@ -555,6 +564,11 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  ["js/core/store.js", "js/career/restore-points.js"],
+  ["js/career/save-migrate.js", "js/career/restore-points.js"],
+  ["js/core/store.js", "js/ui/save-health.js"],
+  ["js/career/restore-points.js", "js/ui/save-health.js"],
+  ["js/ui/save-health.js", "js/ui/select-screen.js"],
   ["js/core/script-loader.js", "js/game.js"],
   ["js/core/lazy-bundles.js", "js/game.js"],
   ["js/core/wake-lock.js", "js/game.js"],
@@ -588,6 +602,7 @@ const HARD_EDGES = [
   // multiplayer stack left FULL: a HARD_EDGES pair must have BOTH ends in FULL
   // to be orderable by tag position.
   ["js/core/mat4.js", "js/render/shared/driving-line.js"],           // binds M4.clamp at eval
+  ["js/core/mat4.js", "js/render/shared/puddles.js"],                // binds M4.clamp at eval
   // Reads the stored palette / opacity into DrivingLine AT EVAL, so the first
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
@@ -620,6 +635,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/camera/photo-kit.js"],  // PhotoKit aliases M4.clamp at eval
   ["js/core/mat4.js", "js/camera/free-cam.js"],   // FreeCam aliases M4.clamp at eval
   ["js/roster.js", "js/game.js"],                          // game.js reads ApexRoster's rosters at eval
+  ["js/race/car-fields.js", "js/game.js"],                 // game.js wraps its pooled AI/scratch literals in CarFields.warmDoubles at eval
   ["js/core/mat4.js", "js/track/core/spline.js"],
   ["js/core/mat4.js", "js/track/core/line.js"],                    // TrackLine aliases M4.clamp/lerp at eval
   // ["js/core/mat4.js", "js/track/scenery/structures.js"] was here. structures.js
@@ -774,6 +790,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
+  ["js/race/wind.js", "js/game.js"],                     // game.js calls Wind.setLevel at eval
   ["js/core/mat4.js", "js/physics/grip-steer.js"],       // GripSteer binds M4.clamp/lerp at eval
   ["js/physics/grip-steer.js", "js/physics/player-forces.js"], // PlayerForces.step caps via GripSteer.forPlayer
   ["js/core/mat4.js", "js/physics/player-forces.js"],    // PlayerForces binds M4.clamp at eval
@@ -918,6 +935,7 @@ const LAZY_AUDIO = [
   "js/audio/music-lib.js",
   "js/audio/spotify.js",
   "js/audio/rivals.js",
+  "js/audio/crowd.js",
   "js/audio/car-sfx.js",
   "js/audio/voice-pack.js",
   "js/audio/radio-voice.js",
@@ -933,6 +951,7 @@ const LAZY_AUDIO_EDGES = [
   ["js/audio/tone-model.js", "js/audio/engine.js"],
   ["js/audio/ers-layer.js", "js/audio/engine.js"],
   ["js/audio/engine.js", "js/audio/music-lib.js"],
+  ["js/audio/engine.js", "js/audio/crowd.js"],
   ["js/audio/voice-pack.js", "js/audio/radio-voice.js"],
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],
   ["js/audio/announcer-recorded.js", "js/audio/announcer.js"],
@@ -1154,6 +1173,7 @@ const TRACK_WORKER_EXTRA = [
 // shared roll math, and the pad module. No game, no renderer, no store.
 const CONTROLLER = [
   "js/core/log.js",
+  "js/core/dev-flags.js",
   "js/core/hash32.js",      // NetHandshake.offerId: the answer names the offer it answers
   "js/net/bytes.js",
   "js/net/nostr.js",
