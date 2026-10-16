@@ -101,7 +101,7 @@ jobs:
           fi
 
       # `gh run download`, not actions/download-artifact: C1 SHA-pins every
-      # third-party action, and gh is already how poke-train talks to Actions.
+      # third-party action, and gh is already how the train talks to Actions.
       # No artifacts is the NORMAL case (a docs push runs no browser job), so it
       # exits the job cleanly rather than failing.
       - name: Fetch this run's junit artifacts

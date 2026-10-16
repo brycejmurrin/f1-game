@@ -274,8 +274,9 @@ export function pushTargets(text, current) {
 }
 
 /**
- * Does a push to `branch` start a CI run? ci.yml runs on push for the deploy
- * branch only and on pull_request otherwise; a draft without `run-ci` gets one
+ * Does a push to `branch` start a CI run? The deploy branch's push starts
+ * pages.yml (the train, which calls ci.yml); ci.yml runs on pull_request
+ * otherwise; a draft without `run-ci` gets one
  * 2-min `draft-ci-skipped` job. `ci` is null when the lookup failed.
  */
 export function pushStartsCi(branch, request = api) {
