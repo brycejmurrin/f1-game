@@ -1,3 +1,1 @@
-### Security
-
-- Validate saved private rendezvous URLs with the same HTTPS and loopback-only policy used by QR pairing.
+Fixed: Saved private rendezvous URLs now use the same HTTPS and loopback-only policy as QR pairing.
