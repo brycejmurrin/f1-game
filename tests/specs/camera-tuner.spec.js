@@ -308,6 +308,8 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   await expect(page.locator("#ct-profile")).toContainText("HOOD");
 
   // Picking another chip switches the live camera AND what the sliders edit.
+  // The camera chips live in the editor workspace's tools disclosure, which short screens keep closed.
+  await page.evaluate(() => { const d = document.querySelector("#camtune-inner details.ew-tools"); if (d) d.open = true; });
   await page.locator('#ct-modes .lt-tab[data-mode="drift"]').click();
   expect(await page.evaluate(() => __apex.camera().mode)).toBe("drift");
   await expect(page.locator("#ct-profile")).toContainText("DRIFT");

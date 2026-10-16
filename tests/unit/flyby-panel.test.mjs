@@ -583,6 +583,7 @@ function deferredTool(kind) {
   function element(id, hidden = false) {
     let value = hidden;
     return { id, style: {}, dataset: {}, disabled: false, isConnected: true,
+      closest: () => ids.get("pm-panel-display"),
       get hidden() { return value; },
       set hidden(next) {
         if (value === !!next) return;

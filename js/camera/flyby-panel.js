@@ -307,7 +307,8 @@ function createEditorOpener(G, buttonId, ensure, method) {
   }
   function open(fromUi) {
     cancel();
-    const settings = G.$("pmsettings"), display = G.$("pm-panel-display");
+    // The door lives on whichever Settings page hosts it (Visual Studio, formerly HUD & CAMERA).
+    const settings = G.$("pmsettings"), button = G.$(buttonId), display = button && button.closest('[id^="pm-panel-"]');
     const visible = () => !!(settings && !settings.hidden && display && !display.hidden);
     if (fromUi && !visible()) return Promise.resolve();
     if (fromUi && _pendingUiOpen) _pendingUiOpen.cancel();
