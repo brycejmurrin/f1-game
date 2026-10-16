@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: "Use for headless screenshots, evals, camera clips, CPU profiles, or car studio work; live canvas → mcp-probe; UI matrix → survey-ui-matrix; parts → garage-parts-livery."
+description: "Use when asked for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after or GLX-vs-TLX frames (backend-compare), flicker/shimmer/z-fighting clips (motion-capture), CPU profiles / flame charts / GC spikes, the CAR STUDIO (livery, sponsors, carview.html), or camera modes (cockpit/chase/orbit/roadside, camState/viewState, framing a corner, camera lag). Not the parts catalog (garage-parts-livery), UI-fit shots (survey-ui-matrix) or a live canvas (mcp-probe)."
 ---
 
 # Headless Playwright probing

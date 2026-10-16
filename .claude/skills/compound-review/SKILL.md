@@ -1,6 +1,6 @@
 ---
 name: compound-review
-description: Use when explicitly invoking compound-review.
+description: Use when invoking compound-review.
 disable-model-invocation: true
 ---
 ## F1 project integration
