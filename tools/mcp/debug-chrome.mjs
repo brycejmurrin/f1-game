@@ -15,10 +15,18 @@ export const PID_FILE = path.join(DIR, "pids.json");
 export const PROFILE = path.join(ROOT, "scratch/debug-chrome");
 export const SERVER_PORT = 3456;
 
+// headless=new --window-size is the OUTER window: 844x390 gave an 844x198 viewport. The viewport is
+// therefore set by a small holder process (Emulation.setDeviceMetricsOverride lives only as long as
+// the CDP session that set it) and verified through innerWidth x innerHeight.
+export const DEVICES = {
+  "phone-landscape": { width: 844, height: 390, deviceScaleFactor: 2, mobile: true, touch: true },
+  desktop: { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false, touch: false },
+};
 // The proven cloud-container flags (issue #2534). --webgpu only adds the WebGPU switch.
-export function chromeArgs({ port = 9222, url, webgpu = false } = {}) {
+export function chromeArgs({ port = 9222, url, webgpu = false, device = "phone-landscape" } = {}) {
+  const d = DEVICES[device] || DEVICES["phone-landscape"];
   return ["--headless=new", "--no-sandbox", `--remote-debugging-port=${port}`, "--remote-debugging-address=127.0.0.1",
-    `--user-data-dir=${PROFILE}`, "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--window-size=844,390",
+    `--user-data-dir=${PROFILE}`, "--use-angle=swiftshader", "--enable-unsafe-swiftshader", `--window-size=${d.width},${d.height}`,
     ...(webgpu ? ["--enable-unsafe-webgpu"] : []), url || `http://127.0.0.1:${SERVER_PORT}/`];
 }
 // Refuse beside a Playwright/test-bg run (one browser at a time) or a busy box.
@@ -50,6 +58,29 @@ export function stop({ kill = (pid, sig) => process.kill(pid, sig), read = cmdli
     return { stopped, skipped };
   })();
 }
+// One-shot CDP call on the first page target (read-only use: status/verification).
+async function pageSocket(port) {
+  const rows = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(3000) })).json();
+  const page = rows.find(t => t.type === "page");
+  if (!page) throw Error("no page target");
+  const ws = new WebSocket(page.webSocketDebuggerUrl);
+  await new Promise((res, rej) => { ws.onopen = res; ws.onerror = () => rej(Error("CDP socket error")); });
+  let id = 0; const pending = new Map();
+  ws.onmessage = e => { const m = JSON.parse(e.data); const p = pending.get(m.id); if (p) { pending.delete(m.id); m.error ? p.rej(Error(m.error.message)) : p.res(m.result); } };
+  const send = (method, params = {}) => new Promise((res, rej) => { const i = ++id; pending.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); setTimeout(() => rej(Error(method + " timed out")), 8000); });
+  return { send, ws };
+}
+export async function viewport(port) {
+  const { send, ws } = await pageSocket(port);
+  try { return (await send("Runtime.evaluate", { expression: 'innerWidth + "x" + innerHeight', returnByValue: true })).result.value; } finally { ws.close(); }
+}
+// The holder keeps its CDP session open so the override outlives this CLI.
+async function hold(port, device) {
+  const d = DEVICES[device]; const { send, ws } = await pageSocket(port);
+  await send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+  await send("Emulation.setTouchEmulationEnabled", { enabled: d.touch, maxTouchPoints: d.touch ? 5 : 0 });
+  await new Promise(res => { ws.onclose = res; });
+}
 async function endpointTargets(port) {
   try {
     const r = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(3000) });
@@ -69,12 +100,18 @@ export async function main(args = process.argv.slice(2)) {
     const p = readPids();
     if (!p) { console.log(JSON.stringify({ running: false })); return 0; }
     const live = p.procs.map(x => ({ ...x, alive: owns(x) }));
-    console.log(JSON.stringify({ running: live.some(x => x.alive), endpoint: `http://127.0.0.1:${p.port}`, procs: live, targets: await endpointTargets(p.port) }, null, 2));
+    const chrome = live.find(x => x.role === "chrome");
+    const targets = await endpointTargets(p.port);
+    const vp = Array.isArray(targets) && targets.length ? await viewport(p.port).catch(e => `unavailable: ${e.message}`) : null;
+    console.log(JSON.stringify({ running: live.some(x => x.alive), chromeAlive: !!chrome?.alive, cdpResponding: Array.isArray(targets), device: p.device,
+      viewport: vp, endpoint: `http://127.0.0.1:${p.port}`, procs: live, targets }, null, 2));
     return 0;
   }
+  if (cmd === "_hold") { await hold(Number(args[1]), args[2]); return 0; }
   if (cmd === "stop") { const r = await stop(); rmSync(PID_FILE, { force: true }); console.log(JSON.stringify(r, null, 2)); return 0; }
   if (cmd === "start") {
-    const port = Number(argOf(args, "--port", 9222)), url = argOf(args, "--url"), webgpu = args.includes("--webgpu");
+    const port = Number(argOf(args, "--port", 9222)), url = argOf(args, "--url"), webgpu = args.includes("--webgpu"), device = argOf(args, "--device", "phone-landscape");
+    if (!DEVICES[device]) throw Error(`--device must be ${Object.keys(DEVICES).join(" or ")}`);
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error("--port must be 1024-65535");
     if (url) { const u = new URL(url); if (!["127.0.0.1", "localhost"].includes(u.hostname)) throw Error("--url must be a local page"); }
     const existing = readPids();
@@ -86,19 +123,26 @@ export async function main(args = process.argv.slice(2)) {
     const serverUp = await fetch(`http://127.0.0.1:${SERVER_PORT}/`, { signal: AbortSignal.timeout(1500) }).then(() => true, () => false);
     if (!serverUp) procs.push({ role: "server", ...launch("python3", ["-m", "http.server", String(SERVER_PORT), "--bind", "127.0.0.1"], `http.server ${SERVER_PORT}`, "server.log") });
     const chrome = chromiumPath();
-    procs.push({ role: "chrome", ...launch(chrome, chromeArgs({ port, url, webgpu }), `--remote-debugging-port=${port}`, "chrome.log") });
-    writeFileSync(PID_FILE, JSON.stringify({ port, startedAt: new Date().toISOString(), procs }, null, 2) + "\n");
+    procs.push({ role: "chrome", ...launch(chrome, chromeArgs({ port, url, webgpu, device }), `--remote-debugging-port=${port}`, "chrome.log") });
+    writeFileSync(PID_FILE, JSON.stringify({ port, device, startedAt: new Date().toISOString(), procs }, null, 2) + "\n");
     for (let i = 0; i < 60; i++) {
       const t = await endpointTargets(port);
-      if (Array.isArray(t) && t.length) { console.log(JSON.stringify({ started: true, endpoint: `http://127.0.0.1:${port}`, serverReused: serverUp, targets: t, pidFile: path.relative(ROOT, PID_FILE) }, null, 2)); return 0; }
+      if (Array.isArray(t) && t.length) {
+        procs.push({ role: "holder", ...launch(process.execPath, [fileURLToPath(import.meta.url), "_hold", String(port), device], "debug-chrome.mjs _hold", "holder.log") });
+        writeFileSync(PID_FILE, JSON.stringify({ port, device, startedAt: new Date().toISOString(), procs }, null, 2) + "\n");
+        const want = `${DEVICES[device].width}x${DEVICES[device].height}`; let vp = null;
+        for (let j = 0; j < 20 && vp !== want; j++) { await new Promise(r => setTimeout(r, 500)); vp = await viewport(port).catch(() => null); }
+        console.log(JSON.stringify({ started: true, endpoint: `http://127.0.0.1:${port}`, device, viewport: vp, viewportOk: vp === want, serverReused: serverUp, targets: t, pidFile: path.relative(ROOT, PID_FILE) }, null, 2));
+        return vp === want ? 0 : 1;
+      }
       await new Promise(r => setTimeout(r, 500));
     }
     await stop(); rmSync(PID_FILE, { force: true });
     throw Error(`Chrome did not expose CDP on ${port} within 30 s (see artifacts/debug-chrome/chrome.log); stopped what it started`);
   }
   console.log(`debug-chrome — own a headless Chromium for the js-debugger (a CLI, not an MCP tool; the debugger never launches Chrome)
-  start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu]   static server (3456) + Chromium; refuses beside a test run or at loadavg >= 3
-  status                                                           endpoint, PIDs, page targets
+  start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop]   static server (3456) + Chromium; refuses beside a test run or at loadavg >= 3
+  status                                                           chromeAlive, viewport (innerWidth x innerHeight), PIDs, page targets
   stop                                                             kills exactly the PIDs in artifacts/debug-chrome/pids.json`);
   return cmd === "help" || cmd === "--help" ? 0 : 1;
 }

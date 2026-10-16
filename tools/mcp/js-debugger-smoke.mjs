@@ -191,6 +191,28 @@ try {
   const abandoning = await call("debugger_run", { expression: "1" });
   check("a new run abandons a hung one", () => assert.equal(abandoning.abandoned.length, 1));
   await until(s => s.operations.at(-1).status === "completed");
+  // T9: deadline passes, op stays tracked, the late result is recorded.
+  await call("debugger_run", { expression: "new Promise(r => setTimeout(() => r(7), 2500))", awaitPromise: true, timeoutMs: 1000 });
+  state = await until(s => s.operations.at(-1).timedOut);
+  state = await until(s => s.operations.at(-1).status === "completed");
+  check("timed-out run stays tracked and records its late result", () => { assert.equal(state.operations.at(-1).late, true); assert.equal(state.operations.at(-1).result.result.value, 7); });
+  // T10: a busy page is reported, and cancel (terminateExecution) frees it.
+  await call("debugger_run", { expression: "(() => { const t = Date.now(); while (Date.now() - t < 60000) {} })()" });
+  state = await until(s => s.pageUnresponsive === true);
+  await call("debugger_control", { action: "cancel" });
+  state = await call("debugger_state");
+  check("pageUnresponsive reported; cancel terminates the script", () => assert.equal(state.operations.at(-1).status, "cancelled"));
+  assert.equal(await page.evaluate(() => 1 + 1), 2);
+  // T7: worker targets are listed on request.
+  await page.evaluate(() => { window.w = new Worker(URL.createObjectURL(new Blob(["setInterval(() => {}, 1000)"]))); });
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const workers = await call("debugger_targets", { endpoint, targetType: "worker" });
+  check("worker targets listed with targetType", () => { assert.ok(workers.targets.length >= 1); assert.ok(workers.targets.every(t => t.type === "worker")); });
+  // T8: a run pending across a reload fails as aborted.
+  await call("debugger_run", { expression: "new Promise(() => {})", awaitPromise: true });
+  await page.reload();
+  state = await until(s => s.operations.at(-1).status === "aborted");
+  check("run across a reload is aborted, not pending", () => assert.match(state.operations.at(-1).error, /context destroyed/));
   await page.evaluate(() => new Promise(resolve => {
     const iframe = document.createElement("iframe"); iframe.onload = resolve;
     iframe.srcdoc = "<script>window.frameValue = 1; //# sourceURL=iframe-debugger-fixture.js<\/script>";
@@ -269,6 +291,8 @@ try {
   await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "native-smoke", version: "1" } });
   await call("debugger_attach", { endpoint, targetId: target.id });
   await page.close(); await until(s => !s.connected);
+  check("lost target reads detached: target gone", () => {});
+  assert.match((await call("debugger_state")).detached, /^target gone/);
   check("target closure clears session", () => {});
   const receipt = { passed: checks.length, checks, browserVersion: browser.version(), protocol: "MCP stdio + persistent HTTP shell wrapper + native CDP", gpuClaim: false };
   await writeFile(path.join(out, "smoke.json"), JSON.stringify(receipt, null, 2) + "\n");
