@@ -585,7 +585,7 @@ test("BROADCAST PiP in WATCH: two cars 8 m apart put the partner in the inset (l
   } finally { g.close(); }
 });
 
-function transportReplay(extra = {}) {
+function transportReplay(extra = {}, { completeSubject = false } = {}) {
   const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
     Log: { info() {}, warn() {}, debug() {} },
     CamModes: { CAM_MODES: ["cockpit", "side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) },
@@ -598,8 +598,9 @@ function transportReplay(extra = {}) {
     setCamMode: (m) => { G.camMode = m; } };
   const replay = vm.runInContext("RealReplay", ctx).create(G);
   const options = { script: { laps: 2, drivers, passes: [{ t: 12, lap: 1, by: 2, over: 1, pos: 1 }] },
-    traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, 10) } },
+    traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, completeSubject ? 30 : 10) } },
     seats: new Map([[cars[0], drivers[0]], [cars[1], drivers[1]]]), follow: "AAA", camera: "auto" };
+  if (completeSubject) assert.ok(options.traces.cars[2].t.at(-1) >= options.script.passes[0].t, "event navigation fixture includes BBB footage at its pass");
   replay.start(options);
   return { replay, G, cars, snaps, drivers, options, ctx };
 }
@@ -736,7 +737,7 @@ test("BROADCAST manual camera ownership keeps the on-air shot and AUTO baseline 
 });
 
 test("WATCH follow lock survives director holds and event navigation, AUTO releases it, and restart clears playback state", () => {
-  const { replay, G } = transportReplay();
+  const { replay, G } = transportReplay({}, { completeSubject: true });
   replay.setLocked(true);
   replay.tick(25);
   assert.equal(replay.status().follow, "AAA", "the selected driver stays locked beyond the old twenty-second hold");
@@ -755,7 +756,7 @@ test("WATCH follow lock survives director holds and event navigation, AUTO relea
 });
 
 test("WATCH paused event navigation paints the final subject and event shot in one camera snap", () => {
-  const { replay, G, cars } = transportReplay();
+  const { replay, G, cars } = transportReplay({}, { completeSubject: true });
   const frames = [];
   G.snapGameCam = (paint) => frames.push({ paint, car: G.player.code, prog: G.player.prog,
     camera: G.camMode, T: G.raceT });
@@ -769,7 +770,7 @@ test("WATCH paused event navigation paints the final subject and event shot in o
 });
 
 test("WATCH timeline changes reset commentary at the new clock and pose before snapping", () => {
-  const { replay, G, options } = transportReplay();
+  const { replay, G, options } = transportReplay({}, { completeSubject: true });
   const order = [];
   G.raceRadio = { resetTimeline: () => order.push(["radio", G.raceT, G.player.prog]) };
   G.snapGameCam = () => order.push(["snap", G.raceT, G.player.prog]);
