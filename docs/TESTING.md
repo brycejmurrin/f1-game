@@ -1270,6 +1270,7 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `setup-trial-session.test.mjs` | Fresh solo setup-trial restart ownership, actual starting conditions, configuration drift and asynchronous cancellation. |
 | `career-data-audio-improvements.test.mjs` | Slot-owned identity, shared contract preview/sign calculation, winter reports, DSQ vs retirement, timing confidence/provenance, stale music searches, upload diagnostics and bounded audition. |
 | `garage-followups.test.mjs` | Reversible tune experiment controls, aero bench and garage followup behavior; tooling-fast and garage-unit. |
 | `player-tools-backup.test.mjs` | Real SettingsExport and ControllerProfiles/SetupPresets: authored defaults, ALL/CHANGED profile round-trips, bounded controller maps, strict named-setup imports, malformed-file preservation, and the reload-based import contract. |

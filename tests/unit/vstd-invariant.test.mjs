@@ -44,6 +44,7 @@ import { speedLiteralViolations, stripNonCode, readFiles, violationKey } from ".
 // `code` is the line it lives on, so moving code around does not silently widen
 // the exemption: a threshold that migrates to a new line must be re-justified.
 const ALLOWED = [
+  {"file": "js/race/setup-trial-session.js", "expr": "Math.abs(c.speed) > 1", "code": "![\"count\", \"race\"].includes(G.state) || !Number.isFinite(c.speed) || Math.abs(c.speed) > 1 ||", "why": "absolute standstill verification for a fresh launch grid, matching the launch drill; this is motion tolerance in metres per second, not a fraction of racing speed"},
   // ── relative closing speed between two cars in contact ──
   // (Was: (dProg >= 0 ? b.speed - a.speed : …) > 0.5 — now uses hoisted
   // aSp/bSp on _ct, so the .speed-literal scanner no longer sees it. The
