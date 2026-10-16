@@ -3,6 +3,34 @@
 Lane `cursor/live-debug-editor-5b2e`. Debug Chrome 844x390 over CDP, SwiftShader, driven through the js-debugger MCP.
 Source SHA at start: deploy tip 43d845f3. Status: DONE for this lane. **No defect found in `js/editor/`; no code changed.** Everything below was measured live.
 
+## Verdict per area
+
+| area | verdict | evidence |
+|---|---|---|
+| 1 pathological layouts | clean | Area 1 table: every bad layout refused by `sanitize` or RED in `TrackValidate.check`; no NaN, no throw |
+| 2 racing a custom design | clean on one layout; seam class untested | 600 s, 21 AI cars, all gaps/laps finite, none retired; #2545 node-0 corner not probed |
+| 3 share codes / import | clean | 19/20 round-trips equal (the 20th correctly refused), truncation/garbage/bit-flip all give a reason, 12 hostile collections handled, no prototype pollution |
+| 4 undo/redo, autosave, delete-selected | clean | stack capped at 100, draft restored after reload, stale index heals to Bahrain |
+| 4 touch editing at 844x390 | NOT TESTED | see viewport gap below |
+| 5 caught-exception pauses | 1 pause, benign | table in Pauses triaged |
+
+Overall: no defect in `js/editor/`, no code changed.
+
+## Viewport gap
+
+The debug Chrome was launched with `--window-size=844,390` but `innerWidth x innerHeight` read 844x198 (headless window-size counts browser chrome). At 198 px tall the designer's main canvas was never laid out, so the touch result above is not evidence about a real phone. A follow-up should launch with `--window-size=844,520` or set the viewport over CDP (`Emulation.setDeviceMetricsOverride` 844x390 with touch), then read `innerHeight` before trusting any layout.
+
+## Tool problems (js-debugger MCP, recorded only; `tools/mcp/` untouched)
+
+- `debugger_attach` fails with `Missing argument: endpoint` when given only `targetId`; the endpoint must be passed again.
+- `debugger_evaluate` while not paused fails with `Missing argument: pauseToken`; use `debugger_run` then `debugger_state`.
+- `debugger_evaluate` rejects `frameIndex` (`Unknown argument`), so frame selection is not available through it.
+- `debugger_source` requires `scriptId` (not `url`) and rejects `endLine`; I fell back to reading the file with `sed`.
+- `debugger_exceptions` takes `state`, not `mode`.
+- `debugger_run` while paused answers `Use debugger_evaluate while paused`, and a `debugger_run` started before a pause stays `pending` until resume.
+- `debugger_state` returns the full results of the last ~10 operations on every call, so a long probe run re-sends old outputs each time; keep run results short.
+- `debugger_exceptions all` also pauses on caught exceptions raised by my own synthetic events (the setPointerCapture row), which is expected but needs `uncaught` before any longer run.
+
 ## Area 1 — pathological layouts (sanitize → TrackValidate.check)
 
 `CustomTracks.sanitize(raw, {loose:true})` then `TrackValidate.check`:
