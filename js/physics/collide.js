@@ -591,6 +591,11 @@ const Collide = (() => {
             const relV0 = sgn >= 0 ? bSp0 - aSp0 : aSp0 - bSp0;
             const e = AiDrive.bumpRestitution(relV0 > 0 ? relV0 : relV);
             const jImp = (1 + e) * relV / iSum;
+            // BY DESIGN (#2565): an AI striker into a parked human sheds ~all its
+            // closing speed in ONE tick (54 -> ~0 m/s) while the human gains only
+            // the capped punt below. Momentum is not conserved on purpose: the AI
+            // behind pays its whole share, the human is never launched. With the
+            // incident layer active a hard hit goes to Rapier instead.
             // The car in front takes the punt in full — that is the kick you feel
             // and see. A HUMAN in front is capped: an AI misjudging a braking zone
             // must not launch the player down the road (the cap is a closing speed,

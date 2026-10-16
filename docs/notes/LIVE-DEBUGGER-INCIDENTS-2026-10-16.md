@@ -35,6 +35,16 @@ Observed, not reproduced as a defect: in the Node VM harness the player's `colli
 starts as NaN (undefined minus dt) until `collideFx` sets it. The live `carAt` does not
 expose it, so unverified live; `game.js` (forbidden) initialises it for AI.
 
+### #2565 (by design, pinned) - AI striker into a parked player
+Orchestrator-forwarded. Node VM, AI at 54-57 m/s into a parked human on the Monza straight:
+striker 57.48 -> 0.27 m/s in ONE tick, human gains about 5 m/s, momentum not conserved.
+Cause is the rear-end block: invMass AI 1 / human 0.5, e 0.1, the human's forward punt
+capped (`humanPuntCap` 8), "the AI behind still pays its whole share" (ai-drive.js:301).
+Intentional anti-launch protection for the player, not an impulse bug; a comment at the
+site and a pin test (`collision-contact-vm.test.mjs`) now say so. The AI not braking for a
+stopped car is `ai-drive.js` (race lane). With debris on, F1 now routes this hit to the
+incident layer (Rapier, momentum conserving). Not live-verified in the browser.
+
 ## 2. Debris world
 
 Burst 40 at sev 90, then circuit switch (Monza->Spa), `reset()` and a visibilitychange.
