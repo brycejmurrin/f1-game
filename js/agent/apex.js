@@ -1931,6 +1931,12 @@ const api = {
     const ms = gfx.gpuMs ? gfx.gpuMs() : -1, b = gfx.backendState ? gfx.backendState() : null;
     return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null };
   },
+  // inspector(on?) — the opt-in three.js Inspector dev panel (js/perf/three-inspector.js), TLX only; default ON on localhost/file: (not under webdriver), OFF on the deployed site; ?inspector=0|1 overrides.
+  // inspector(true|false) toggles, inspector() reads { on, supported, reason, loading }. GPU timings need WebGPU
+  // timestamp-query; the WebGL2 path still gets CPU/Memory/Timeline/Viewer. While on, gpuTimer() reports off.
+  inspector: (on) => typeof ThreeInspector === "undefined"
+    ? { on: false, supported: false, reason: "three-inspector.js not loaded", loading: false }
+    : ThreeInspector.set(gfx, on),
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
   // tunable. With an object: merges valid entries (clamped to each slider's
@@ -3329,6 +3335,7 @@ const api = {
     return d;
   },
 };
+try { if (typeof ThreeInspector !== "undefined") ThreeInspector.boot(gfx); } catch (_) { /* dev tool: never blocks boot */ }
 lazyTrackEnsure(api);
 return api;
 }

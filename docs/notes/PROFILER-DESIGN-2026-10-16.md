@@ -85,4 +85,4 @@ Verdict path: dispatch `gpu-census.yml` on `macos-latest` and read its Verdict s
 ## Overlap
 
 Another session (`cursor/three-inspector-*`) is vendoring the three.js Inspector addon as an opt-in TLX dev panel and will add a
-`gpuTimer` interlock in `tlx.js` (both use `backend.trackTimestamp`). This PR does not touch `tlx.js`; link that PR here once it exists.
+`gpuTimer` interlock in `tlx.js` (both use `backend.trackTimestamp`). This PR does not touch `tlx.js`; see `docs/notes/THREE-INSPECTOR-2026-10-16.md` (landed on the deploy branch).
