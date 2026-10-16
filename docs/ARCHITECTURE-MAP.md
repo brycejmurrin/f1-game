@@ -103,8 +103,10 @@ never hand-edit those (see `AGENTS.md` rule 11).
 | Command | When |
 |---|---|
 | `npx serve -l 3456 .` | Local play |
-| `npm run test:tooling-fast` | Edit-loop unit/tooling gate (~2 min) |
-| `node tools/ci/verify-change.mjs` | Fast gate + planned browser groups |
+| `node tools/ci/verify-change.mjs --fast --json` | Diff-aware edit-loop gate; reports selected tooling files and critical-path budget |
+| `node tools/ci/tooling-fast.mjs --changed --jobs=3` | Diff-aware structural edit-loop runner |
+| `npm run test:tooling-fast` | Full structural floor before a code push |
+| `node tools/ci/verify-change.mjs` | Fast gate + planned browser groups (full pre-push/deploy gate remains authoritative) |
 | `node tools/track/verify-track.cjs <id>` | One circuit build check |
 | `node tools/ci/pick-tests.mjs` | Which browser GROUPS this diff needs |
 | `node tools/ci/deploy.mjs --gate-only` | Full pre-push gate (no push) |

@@ -54,7 +54,7 @@
 #
 # stdout is GITHUB_OUTPUT lines — reuse=, source=, run= — so the workflow
 # appends it directly; the reasoning goes to stderr. Needs a checkout deep
-# enough to see the parents (fetch-depth: 0) and GH_TOKEN with actions:read.
+# enough to see the parents (fetch-depth: 0) and an authenticated `gh` (GH_TOKEN with actions:read, or a `gh auth login` session; no token is read here).
 set -eu
 SHA="${1:?commit sha}"
 REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY}"
