@@ -421,6 +421,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/flyby-pose-inverse.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
   "tests/unit/flying-start.test.mjs",
+  "tests/unit/followup-platform.test.mjs",
+  "tests/unit/followup-update-check.test.mjs",
   "tests/unit/font-digits.test.mjs",
   // The weather FORECAST (js/race/forecast.js): timeline off the arc's own road lag (drift-guarded against
   // weather-arc.js), bounded seeded uncertainty, and the engineer's early / 2-lap / 1-lap / here / drying calls. VM, < 0.5 s.
