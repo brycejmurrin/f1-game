@@ -613,6 +613,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
   "tests/unit/lobby-codes.test.mjs",
   "tests/unit/lobed-trees.test.mjs",
+  // lockup-bench.mjs sweep (speed × pedal × brake bias × weather) pinned on
+  // Monza; VM pins dry/rain shapes for bias- and speed-dependent wheelLock.
+  "tests/unit/lockup-bench-vm.test.mjs",
   "tests/unit/log-namespaces.test.mjs",
   // LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.
   // VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.
