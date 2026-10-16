@@ -1,5 +1,5 @@
 /* SettingsNav — page stack for the pause/title Settings sheet.
-   Home opens controls, driving, display, appearance, assists, sound and backups.
+   Home opens controls, driving, driving aids, display, appearance, sound and backups.
    Lighting / camera tuners stay as their own docks. BACK pops.
    Decisions: docs/research/PAUSE-SETTINGS-IA.md.
    game.js still owns availability and all individual controls. */
@@ -12,7 +12,7 @@ const SettingsNav = (function () {
     display: "DISPLAY",
     appearance: "APPEARANCE",
     a11y: "ACCESSIBILITY",
-    advanced: "STEERING & ASSISTS",
+    advanced: "DRIVING AIDS",
     audio: "MUSIC & SOUND",
     files: "BACKUP & RESTORE",
   };
