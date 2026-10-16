@@ -25,8 +25,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { shotErrors } from "../gen/bake-flyby.mjs";
-import { aliveRun } from "../ci/test-bg.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
+import { aliveRun } from "../ci/test-bg.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
@@ -226,8 +226,9 @@ function testBgStatus() {
     return { recorded: true, running: [], browserRunning: [], runs: [], error: "unreadable" };
   }
   const runs = Array.isArray(state.runs) ? state.runs : [];
-  // Share the runner’s identity/state oracle: kill(pid, 0) also succeeds
-  // for finished zombie supervisors and recycled PIDs. Neither owns a browser.
+  // Match test-bg's zombie and PID-reuse checks. kill(pid, 0) succeeds for
+  // an exited supervisor awaiting its parent's reap and used to block every
+  // browser tool after an otherwise completed run in containers.
   const running = runs.filter((run) => aliveRun(run));
   // Missing metadata is treated as browser-active for old state files. New
   // test-bg records distinguish Node-only groups so they do not block a dry
@@ -428,6 +429,7 @@ const CATALOG = [
         dist: { type: "number" },
         side: { type: "number" },
         hud: { type: "boolean" },
+        clear: { type: "boolean", description: "orbit/cinematic/trackside: re-site the eye out of scenery; the result reports clear {T, tries, blocked?}." },
         image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
         tod: { type: "string" },
         weather: { type: "string", enum: ["dry", "wet", "rain", "overcast", "fog"], description: "Weather after tod (default dry)." },
@@ -1577,6 +1579,7 @@ function buildArgv(name, args) {
       if (args.tod) argv.push("--tod", String(args.tod));
       if (args.weather) argv.push("--weather", String(args.weather));
       if (args.hud) argv.push("--hud");
+      if (args.clear) argv.push("--clear");
       return argv;
     }
     case "apex_agent": {

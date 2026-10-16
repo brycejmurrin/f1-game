@@ -156,6 +156,22 @@ test("MenuNav: D-pad Down leaves a focused search field; the caret keys stay wit
   assert.equal(h.MenuNav.ownsArrows(search, "PageDown"), false, "the page keys page the pane, not the field");
 });
 
+// #2161: a pad reaches MenuNav as an UNTRUSTED synthetic ArrowLeft/Right, which has no
+// native caret default, so a text INPUT owning it made the direction dead.
+test("MenuNav: a synthetic pad Left/Right leaves a search field; a trusted one keeps the caret", () => {
+  const h = bootMenuNav();
+  const search = h.add("sel-track-search", { tag: "input", type: "search", x: 10, y: 10, w: 150 });
+  h.add("sel-clear", { x: 200, y: 10, w: 60 });
+  search.focus();
+  const keyboard = h.key("ArrowRight", true);
+  assert.equal(h.focused(), "sel-track-search", "a hardware keyboard moves the caret");
+  assert.equal(keyboard.defaultPrevented, false, "the browser keeps the trusted caret default");
+  const pad = h.key("ArrowRight", false);
+  assert.equal(h.focused(), "sel-clear", "the pad's Right walks to the control on the right");
+  assert.equal(pad.defaultPrevented, true);
+  assert.equal(h.MenuNav.ownsArrows(search, "Home", { isTrusted: false }), true, "Home/End stay with the field");
+});
+
 test("MenuNav: trusted arrows edit a textarea, while a synthetic pad arrow can leave it", () => {
   const h = bootMenuNav();
   const box = h.add("vs-answer-in", { tag: "textarea", y: 10 });
@@ -320,6 +336,26 @@ test("repeated keyboard Escape advances one dialog page at a time", () => {
     assert.equal(backs, i);
     assert.equal(event.defaultPrevented && event.stopped, true, "native cancel cannot also pop this page");
   }
+});
+
+test("TopModal non-dialog Tab wraps only the active layer's usable keyboard boundaries", () => {
+  const h = bootTopModal(["overlay", "hud-arrange-bar"]), bar = h.layer("hud-arrange-bar");
+  const first = h.add(bar, "first"), middle = h.add(bar, "middle"), last = h.add(bar, "last");
+  const hidden = h.add(bar, "hidden", { hidden: true }), disabled = h.add(bar, "disabled"), pointerOnly = h.add(bar, "pointer-only");
+  for (const n of [first, middle, last, hidden, disabled]) n.tabIndex = 0;
+  disabled.disabled = true; pointerOnly.tabIndex = -1;
+  h.TopModal.wireLayer(bar);
+  const tab = (extra = {}) => {
+    const e = { type: 'keydown', key: 'Tab', preventDefault() { this.defaultPrevented = true; }, ...extra };
+    bar.dispatchEvent(e); return e;
+  };
+  last.focus(); assert.equal(tab().defaultPrevented, true); assert.equal(h.focused(), 'first');
+  assert.equal(tab({ shiftKey: true }).defaultPrevented, true); assert.equal(h.focused(), 'last');
+  middle.focus(); assert.equal(tab().defaultPrevented, undefined); assert.equal(h.focused(), 'middle');
+  for (const extra of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { defaultPrevented: true }]) {
+    last.focus(); tab(extra); assert.equal(h.focused(), 'last');
+  }
+  bar.hidden = true; last.focus(); assert.equal(tab().defaultPrevented, undefined);
 });
 
 test("TopModal.onFocusIn pulls focus to the first SHOWN control, not the first in DOM order", () => {
@@ -510,6 +546,7 @@ test("every layer in the shell is a named region or dialog, and #announce is a l
   const SKIP = {
     overlay: "the title page itself — the document's main content, not a layer over it",
     "photo-controls": "a toolbar of labelled buttons over the free camera, not a screen",
+    "hud-arrange-bar": "a named toolbar built by HudArrange, covered by its editor tests",
     // Pre-race plate: role=status (not region/dialog); named via aria-label.
     loading: "status plate — announces once, not a navigable region",
   };
@@ -551,6 +588,11 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
   const NO_DOOR = { overlay: "the title has nothing to go back to", "rotate-device": "CSS-gated blocker; Escape falls through to pause" };
   assert.ok(loadLayerIds().includes("loading"), "#loading is in UiLayers.LAYER_IDS so Escape/anyOpen see it");
   for (const id of loadLayerIds()) {
+    if (id === "hud-arrange-bar") {
+      assert.match(read("js/ui/hud-arrange.js"), /setAttribute\("data-esc-close", "hud-arrange-done"\)/);
+      assert.match(read("js/ui/hud-arrange.js"), /mk\("DONE", "Done arranging the HUD", \(\) => setEditing\(false\), "hud-arrange-done"\)/);
+      continue;
+    }
     const tag = openTag(id);
     if (NO_DOOR[id]) { assert.doesNotMatch(tag, /data-esc/, `#${id} refuses no key and names no door`); continue; }
     const via = tag.match(/data-esc-close="([^"]+)"/);
@@ -627,6 +669,7 @@ test("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer that scr
   const SKIP = {
     "rotate-device": "CSS-gated, never toggled by `hidden`; two buttons, no scroll region, no selected state",
     "photo-controls": "no scroll region; its buttons are actions, none carries a selected class",
+    "hud-arrange-bar": "dynamic toolbar uses native overflow and select state, no selected-class chips",
     loading: "status plate — no scroll region, no selected chips",
   };
   for (const id of layers) {

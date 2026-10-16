@@ -1,6 +1,7 @@
 // pick-tests — the selector's contract (--json shape, --since ref handling).
 // test-groups.test.mjs covers the output vocabulary; this file guards upstream.
 import test from "node:test";
+import { load as loadRatchets } from "../../tools/check/ratchets.mjs";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -157,7 +158,7 @@ test("every manifest file matches at least one pick-tests rule", () => {
 // and `node tools/check/ratchets.mjs --update` is the one-command flow after a
 // legitimate move, the same as every other ratchet in the tree.
 test("no more manifest files are routed by the blanket rules alone than the ratchet allows", () => {
-  const ceiling = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/ratchets.json"), "utf8"))
+  const ceiling = loadRatchets()
     .files["tools/ci/pick-tests.mjs"].blanketOnlyRoutes;
   const live = blanketOnly();
   assert.ok(live.length <= ceiling,

@@ -12,7 +12,14 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { outcomeOf, outcome, aliveRun, procStart, procInfo } from "../../tools/ci/test-bg.mjs";
+import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv } from "../../tools/ci/test-bg.mjs";
+
+test("parseTestBgArgv reads --timeout and --timeout=N as minutes", () => {
+  assert.equal(parseTestBgArgv(["--wait", "--timeout", "45"]).waitTimeoutMin, 45);
+  assert.equal(parseTestBgArgv(["--wait", "--timeout=45"]).waitTimeoutMin, 45);
+  assert.throws(() => parseTestBgArgv(["--wait", "--timeout"]), /--timeout requires/);
+  assert.deepEqual(parseTestBgArgv(["--wait", "--timeout", "45", "smoke"]).groups, ["smoke"]);
+});
 
 test("a non-zero exit wins over an earlier passing summary", () => {
   const log = "[tooling-fast] = run passed (249 passed, 0 failed)\n…sweeps…\n# pass 3\n# fail 1\n= bg exit 1\n";
@@ -52,41 +59,23 @@ test("a recycled pid is not the run: liveness needs the recorded start time and 
 });
 
 
-test("proc stat zombie identity does not keep a completed background run alive", () => {
-  // Captured /proc/820854/stat: completed physics-core wrapper, PPID 1.
-  // Its matching start time and successful kill(0) previously left --wait/cap stuck.
-  const captured = "820854 (sh) Z 1 820854 820854 0 -1 4227340 304 3304017 0 0 0 0 19298 1983 20 0 1 0 7855793 0 0";
-  const read = (path, encoding) => {
-    assert.equal(path, "/proc/820854/stat"); assert.equal(encoding, "utf8"); return captured;
-  };
-  const info = procInfo(820854, read);
-  assert.deepEqual(info, { state: "Z", starttime: "7855793" });
-  const run = { pid: 820854, starttime: info.starttime, bootId: "same-boot" };
-  const deps = { kill() {}, start: () => info.starttime, state: () => info.state, boot: "same-boot" };
-  assert.equal(aliveRun(run, deps), false);
-  assert.equal(aliveRun({ pid: run.pid }, deps), false, "legacy records also reject zombies");
-  for (const state of ["X", "x"]) assert.equal(aliveRun(run, { ...deps, state: () => state }), false);
-  for (const state of ["S", "R", "D", "T", undefined]) {
-    assert.equal(aliveRun(run, { ...deps, state: () => state }), true, "live states and unavailable proc state retain identity checks");
-    assert.equal(aliveRun({ ...run, starttime: "other" }, { ...deps, state: () => state }), false);
-    assert.equal(aliveRun({ ...run, bootId: "other" }, { ...deps, state: () => state }), false);
-  }
-  assert.equal(procInfo(820854, () => { throw new Error("proc unavailable"); }), null);
-  const named = captured.replace("(sh)", "(wrapper (with) spaces)");
-  assert.deepEqual(procInfo(820854, () => named), info, "command parentheses do not shift stat fields");
-});
-
 test("a zombie supervisor is not a live run (#1921)", async () => {
   /* A finished wrapper whose parent has not reaped it stays in /proc as state
      Z: kill(pid, 0) succeeds and its start time still matches, so the run read
      as live — `--wait` hung to 124 and the one-group cap refused the next
      group although the log already ended `= bg exit 0`. Build a real zombie:
-     `sleep 0` exits under an exec'd parent that never waits on it. */
+     Wait until the parent has exec'd sleep before terminating its child: an
+     immediately exiting child can be reaped by sh before that exec. */
   const { spawn } = await import("node:child_process");
   const fs = await import("node:fs");
-  const parent = spawn("sh", ["-c", "sleep 0 & echo $!; exec sleep 30"], { stdio: ["ignore", "pipe", "ignore"] });
+  const parent = spawn("sh", ["-c", "sleep 30 & echo $!; exec sleep 30"], { stdio: ["ignore", "pipe", "ignore"] });
+  let pid;
   try {
-    const pid = Number(await new Promise((res) => parent.stdout.once("data", (b) => res(String(b).trim()))));
+    pid = Number(await new Promise((res) => parent.stdout.once("data", (b) => res(String(b).trim()))));
+    const parentExeced = () => { try { return fs.readFileSync(`/proc/${parent.pid}/comm`, "utf8").trim() === "sleep"; } catch (_) { return false; } };
+    for (let i = 0; i < 100 && !parentExeced(); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(parentExeced(), true, "the parent cannot reap children after exec");
+    process.kill(pid, "SIGKILL");
     const stateOf = () => { try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim()[0]; } catch (_) { return null; } };
     for (let i = 0; i < 100 && stateOf() !== "Z"; i++) await new Promise((r) => setTimeout(r, 20));
     assert.equal(stateOf(), "Z", "the fixture is a real zombie");
@@ -95,7 +84,10 @@ test("a zombie supervisor is not a live run (#1921)", async () => {
     assert.equal(aliveRun({ pid, starttime: st }), false, "a zombie with a matching start time is not live");
     assert.equal(aliveRun({ pid }), false, "nor is a legacy record");
     assert.notEqual(outcome({ pid, starttime: st, log: "/nonexistent/test-bg-zombie.log" }), "running");
-  } finally { parent.kill("SIGKILL"); }
+  } finally {
+    if (pid) { try { process.kill(pid, "SIGKILL"); } catch (_) { /* already gone */ } }
+    parent.kill("SIGKILL");
+  }
   // Injected: dead states refuse, every other state keeps the identity checks.
   const me = process.pid, st = procStart(me);
   for (const s of ["Z", "X", "x"]) assert.equal(aliveRun({ pid: me, starttime: st }, { state: () => s }), false, `state ${s}`);

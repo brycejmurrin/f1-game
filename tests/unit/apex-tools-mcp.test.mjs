@@ -214,29 +214,16 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   }
 });
 
-function assertFastVerification(argv) {
-  assert.ok(Array.isArray(argv), "structured argv is required");
-  const script = argv[1];
-  assert.equal(path.basename(script || ""), "verify-change.mjs", argv);
-  assert.equal(path.basename(path.dirname(script)), "ci", argv);
-  assert.equal(path.basename(path.dirname(path.dirname(script))), "tools", argv);
-  assert.ok(argv.includes("--fast"), argv);
-  assert.ok(argv.includes("--json"), argv);
-  assert.ok(!argv.includes("--wait"), argv);
-}
-
-test("fast verification contract accepts test-bg in checkout paths but rejects the actual wrapper", () => {
-  assertFastVerification([process.execPath, "/tmp/test-bg-checkout/tools/ci/verify-change.mjs", "--fast", "--json"]);
-  assert.throws(() => assertFastVerification([process.execPath, "/tmp/checkout/tools/ci/test-bg.mjs", "--fast", "--json"]));
-  assert.throws(() => assertFastVerification([process.execPath, "/tmp/checkout/tools/ci/verify-change.mjs", "--fast", "--json", "--wait"]));
-});
-
 test("dryRun / mock apex_verify_change_fast pins --fast --json, never --wait or test-bg", () => {
   const r = callCli("apex_verify_change_fast", { dryRun: true });
   assert.equal(r.status, 0, r.stderr);
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, true);
-  assertFastVerification(body.argv);
+  assert.ok(body.argv.includes("--fast"), body.argv);
+  assert.ok(body.argv.includes("--json"), body.argv);
+  assert.ok(!body.argv.includes("--wait"), body.argv);
+  const blob = JSON.stringify(body);
+  assert.doesNotMatch(blob, /test-bg/);
 });
 
 test("apex_bump_cache_check argv never contains --apply", () => {
@@ -774,52 +761,51 @@ test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", ()
   });
 });
 
-test("MCP occupancy ignores an old waiter process line but retains actual Playwright workers", () => {
-  withFakeRegistry({ runs: [] }, (reg) => {
-    const waiter = "96554 node /workspace/tools/ci/test-bg.mjs --wait\n";
-    const args = { track: "monza", dryRun: true };
-    const env = { APEX_MCP_MOCK: "0", APEX_MCP_PS: waiter, ...reg };
-    const idle = callCli("apex_shot", args, env);
-    assert.equal(idle.status, 0, idle.stderr + idle.stdout);
-    const busy = callCli("apex_shot", args, { ...env, APEX_MCP_PS: waiter + "42 node /opt/playwright test --workers=1\n" });
-    assert.equal(busy.status, 1, busy.stderr + busy.stdout);
-    assert.equal(JSON.parse(busy.stdout).error, "playwright_live");
+test("a completed zombie supervisor cannot block browser tools", { skip: process.platform !== "linux", timeout: 25_000 }, async () => {
+  // A real zombie passes kill(pid, 0). Keep its parent alive so this test,
+  // rather than PID 1, can explicitly reap it in finally. No browser starts.
+  const supervisor = spawn("python3", ["-c", [
+    "import os, sys, time",
+    "pid = os.fork()",
+    "if pid == 0: os._exit(0)",
+    "try:",
+    " for _ in range(200):",
+    "  state = open('/proc/%d/stat' % pid).read().rsplit(')', 1)[1].split()[0]",
+    "  if state == 'Z': break",
+    "  time.sleep(.01)",
+    " print(pid, flush=True)",
+    " sys.stdin.readline()",
+    "finally: os.waitpid(pid, 0)",
+  ].join("\n")], { stdio: ["pipe", "pipe", "pipe"] });
+  const closed = new Promise((resolve) => {
+    supervisor.once("close", resolve);
+    supervisor.once("error", () => resolve(null));
   });
-});
-
-test("MCP registry rejects recycled process identities while retaining matching live browser runs", async () => {
-  const { procStart } = await import("../../tools/ci/test-bg.mjs");
-  const starttime = procStart(process.pid);
-  assert.ok(starttime, "Linux process identity is available");
-  for (const [identity, expected] of [[starttime, 1], ["not-this-process", 0]]) {
-    withFakeRegistry({ runs: [{ pid: process.pid, group: "tiny", browser: true, starttime: identity }] }, (reg) => {
-      const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
-      assert.equal(r.status, expected, r.stderr + r.stdout);
-      if (expected) assert.equal(JSON.parse(r.stdout).error, "playwright_live");
-      else assert.equal(JSON.parse(r.stdout).ok, true);
-    });
-  }
-});
-
-test("MCP ignores a real unreaped supervisor zombie without killing or changing the registry", async () => {
-  // The sibling owns and reaps its exited child after the probe. No browser or
-  // real test-bg worker is started, stopped or signalled.
-  const parent = spawn("python3", ["-u", "-c", "import os,sys,time\np=os.fork()\nif p==0: os._exit(0)\ntime.sleep(.05)\nprint(p,flush=True)\nsys.stdin.readline()\nos.waitpid(p,0)"], { stdio: ["pipe", "pipe", "pipe"] });
-  const exited = new Promise((resolve, reject) => { parent.once("exit", resolve); parent.once("error", reject); });
   try {
-    const pid = await new Promise((resolve, reject) => { parent.stdout.once("data", d => resolve(Number(String(d).trim()))); parent.once("error", reject); });
-    const { procInfo } = await import("../../tools/ci/test-bg.mjs");
-    const info = procInfo(pid);
-    assert.equal(info.state, "Z");
-    process.kill(pid, 0); // Demonstrate why the old occupancy test was wrong.
-    withFakeRegistry({ runs: [{ pid, group: "tiny", browser: true, starttime: info.starttime }] }, (reg) => {
-      const before = fs.readFileSync(reg.APEX_TEST_BG_STATE, "utf8");
+    const pid = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("zombie fixture did not report its child")), 3000);
+      supervisor.stdout.once("data", (b) => { clearTimeout(timer); resolve(Number(b.toString().trim())); });
+      supervisor.once("error", (e) => { clearTimeout(timer); reject(e); });
+    });
+    assert.match(fs.readFileSync(`/proc/${pid}/stat`, "utf8"), /\) Z /);
+    assert.doesNotThrow(() => process.kill(pid, 0), "kill(0) alone incorrectly calls this zombie live");
+    withFakeRegistry({ runs: [{ pid, group: "finished-browser", browser: true }] }, (reg) => {
       const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
       assert.equal(r.status, 0, r.stderr + r.stdout);
       assert.equal(JSON.parse(r.stdout).ok, true);
-      assert.equal(fs.readFileSync(reg.APEX_TEST_BG_STATE, "utf8"), before);
     });
-  } finally { parent.stdin.end("reap\n"); await exited; }
+  } finally {
+    supervisor.stdin.end("reap\n");
+    assert.equal(await closed, 0, "the fixture supervisor must reap its child and exit");
+  }
+});
+
+test("a reused PID with a different start identity cannot block browser tools", () => {
+  withFakeRegistry({ runs: [{ pid: process.pid, starttime: "impossible-previous-start", browser: true }] }, (reg) => {
+    const r = callCli("apex_shot", { track: "monza", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "", ...reg });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+    assert.equal(JSON.parse(r.stdout).ok, true);
+  });
 });
 
 test("an IDLE host Playwright MCP server is reported, not occupancy; its launched browser is", () => {

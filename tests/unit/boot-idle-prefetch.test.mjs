@@ -178,7 +178,8 @@ test("renderer-boot caps requestAdapter and idle-preloads three vendor", () => {
   assert.match(boot, /Promise\.race\(\[\s*adapterP,/, "adapter probe is raced");
   // Hang cap must be seconds-scale: a 250 ms race loses to real CI adapters and
   // leaves unset backend undefined instead of "three" (render-boot / tlx-probes).
-  assert.match(boot, /setTimeout\(\(\) => resolve\(null\), 4000\)/, "4 s adapter hang cap");
+  // The cap resolves a SLOW marker, not null: a slow adapter is not an absent one (#2285).
+  assert.match(boot, /setTimeout\(\(\) => resolve\(SLOW\), 4000\)/, "4 s adapter hang cap");
   assert.match(boot, /clearTimeout\(timer\)/, "clear hang timer when adapter settles first");
   assert.match(boot, /typeof setTimeout !== "function"/, "VM harness without timers still awaits adapter");
   assert.match(boot, /requestIdleCallback\(kick, \{ timeout: 800 \}\)/,

@@ -138,6 +138,20 @@ test("the wrong tread outranks everything — it is the one that costs whole sec
   assert.match(line({ wrongTread: true, wet: false }), /BOX FOR SLICKS/);
 });
 
+test("a LOCAL SHOWER names its sector, and says whether the lap as a whole wants rubber for it (js/race/rain-cells.js)", () => {
+  assert.equal(line({ rainWhere: "2", wantTread: 0 }), "RAIN IN SECTOR 2 — REST OF THE LAP IS DRY, STAY OUT");
+  assert.equal(line({ rainWhere: "2 & 3", wantTread: 1 }), "RAIN IN SECTOR 2 & 3 — INTERS FOR THE LAP");
+  assert.equal(E.create({}).callFor(sense({ rainWhere: "1", rainInLaps: 2 }))[1], "where", "before the lap-count forecast");
+  assert.match(line({ rainWhere: "1", wrongTread: true, wet: true, wantTread: 1 }), /BOX FOR INTERS/, "the box call still comes first");
+});
+
+test("a strong GUST is a word below every pit line, said once per gusty spell", () => {
+  assert.match(line({ gust: 7, gustKmh: 46 }), /GUSTY OUT THERE — 46 KM\/H/);
+  assert.equal(E.create({}).callFor(sense({ gust: 7, gustKmh: 46 }))[1], "gust");
+  assert.match(line({ gust: 7, gustKmh: 46, wrongTread: true, wet: true }), /BOX FOR WETS/, "the tread still comes first");
+  assert.equal(line({ gust: null }), "", "no gust, no line");
+});
+
 test("ONE COMPOUND with five laps left is called after the tread and before everything else (FIA 2026 SR B6.3.6)", () => {
   assert.match(line({ oneCompound: true, cheapStop: true, wear: 1.5, lapsToStop: 0 }), /ONE COMPOUND ONLY .* DISQUALIFIED/);
   assert.match(line({ oneCompound: true, wrongTread: true, wet: true }), /BOX FOR WETS/, "the weather still comes first");
@@ -514,8 +528,9 @@ test("senseOf stays a fresh snapshot; update's scratch sense is the same state",
   const a = eng.senseOf(c), b = eng.senseOf(c);
   assert.notEqual(a, b, "a fresh object per call");
   assert.deepEqual(a, b);
-  // 28 + the forecast's six (fc, wantTread, heavyInLaps, easeInLaps, dryInLaps, hereAt — js/race/forecast.js).
-  assert.equal(Object.keys(a).length, 34, "every field the literal had");
+  // 28 + the forecast's six (fc, wantTread, heavyInLaps, easeInLaps, dryInLaps, hereAt — js/race/forecast.js)
+  // + rainWhere (a local shower's sectors — js/race/rain-cells.js) and the wind's two (gust, gustKmh — js/race/wind.js).
+  assert.equal(Object.keys(a).length, 37, "every field the literal had");
   c.local = true;
   assert.equal(eng.update(c, 1 / 60), eng.callFor(a)[0], "update says what callFor reads off the snapshot");
 });

@@ -220,6 +220,123 @@ test("conversion, write, URI lookup and share failures remain rejected promises"
   }
 });
 
+test("native Share cancellation is distinct from storage and other share failures", () => {
+  const { sandbox } = loadNative({ capacitor: true });
+  for (const error of [new Error("Share canceled"), new Error("Share cancelled"), { name: "AbortError" }]) {
+    assert.equal(sandbox.NativeDownload.isCancelled(error), true);
+  }
+  for (const error of [new Error("disk full"), new Error("Can't share while sharing is in progress"), null]) {
+    assert.equal(sandbox.NativeDownload.isCancelled(error), false);
+  }
+});
+
+test("career export awaits native I/O and never retries a failed or cancelled share through an anchor", async () => {
+  const source = readFileSync(join(ROOT, "js/career/career-backup.js"), "utf8");
+  for (const stage of ["write", "share", "cancel"]) {
+    const { sandbox, writes } = loadNative({ capacitor: true });
+    sandbox.Blob = Blob;
+    sandbox.document.createElement = () => { assert.fail("a native failure must not fall back to an anchor"); };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(source.replace(/^const\b/gm, "var"), ctx);
+    const error = new Error(stage === "cancel" ? "Share canceled" : stage + " failed");
+    let fail, attempts = 0, settled = false;
+    const held = new Promise((resolve, reject) => { fail = reject; });
+    const plugin = stage === "write" ? sandbox.Capacitor.Plugins.Filesystem : sandbox.Capacitor.Plugins.Share;
+    plugin[stage === "write" ? "writeFile" : "share"] = () => { attempts++; return held; };
+    const result = sandbox.CareerBackup.download("{}", "career.json");
+    const rejected = assert.rejects(result, (e) => e === error);
+    result.then(() => { settled = true; }, () => { settled = true; });
+    await new Promise(setImmediate);
+    assert.equal(settled, false);
+    assert.equal(attempts, 1);
+    fail(error);
+    await rejected;
+    await new Promise(setImmediate);
+    assert.equal(attempts, 1, "dismissal and failure are final outcomes, not a second share request");
+    assert.equal(writes.length, stage === "write" ? 0 : 1);
+  }
+});
+
+test("career export button never announces success for a cancelled or failed native backup", async () => {
+  const source = readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8");
+  const start = source.indexOf("exp.onclick = (ev)");
+  const handler = source.slice(start, source.indexOf("\n      };", start) + 9);
+  for (const outcome of ["success", "failure", "cancel"]) {
+    const { sandbox } = loadNative({ capacitor: true });
+    const notices = [], button = { disabled: false };
+    let resolve, reject, calls = 0;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    Object.assign(sandbox, { exp: button, G: { soundOn: false }, announce: (msg) => notices.push(msg),
+      CareerBackup: { exportAll: () => { calls++; return held; } } });
+    vm.runInContext("let armedDelete = '';\n" + handler, vm.createContext(sandbox));
+    const event = { stopPropagation() {} };
+    button.onclick(event); button.onclick(event);
+    assert.equal(calls, 1);
+    assert.equal(button.disabled, true);
+    assert.deepEqual(notices, []);
+    if (outcome === "success") resolve({ ok: true }); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await new Promise(setImmediate);
+    assert.equal(button.disabled, false);
+    assert.deepEqual(notices, [outcome === "success" ? "CAREER BACKUP SAVED" : outcome === "cancel" ? "EXPORT CANCELLED" : "EXPORT FAILED"]);
+  }
+});
+
+test("recovery export waits for native saving, guards duplicate taps, and reports failure or cancellation", async () => {
+  const source = readFileSync(join(ROOT, "js/ui/select-screen.js"), "utf8");
+  const handler = source.slice(source.indexOf("let recoveryExporting ="), source.indexOf('if ($("save-retry"))'));
+  for (const outcome of ["success", "write", "share", "cancel"]) {
+    const { sandbox } = loadNative({ capacitor: true });
+    const notices = [], button = { disabled: false };
+    Object.assign(sandbox, { Blob, $: () => button, G: { season: { round: 2 }, announce: (msg) => notices.push(msg) },
+      store: { broken: "quota" }, writeFailed: () => "quota" });
+    sandbox.document.createElement = () => { assert.fail("recovery export must use the awaited native path"); };
+    let resolve, reject, calls = 0;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const plugin = outcome === "write" ? sandbox.Capacitor.Plugins.Filesystem : sandbox.Capacitor.Plugins.Share;
+    plugin[outcome === "write" ? "writeFile" : "share"] = () => { calls++; return held; };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(handler + "\nvar runRecovery = exportRecovery;", ctx);
+    const pending = sandbox.runRecovery();
+    await new Promise(setImmediate);
+    assert.equal(button.disabled, true);
+    assert.deepEqual(notices, []);
+    await sandbox.runRecovery();
+    assert.equal(calls, 1);
+    if (outcome === "success") resolve({}); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await pending;
+    assert.equal(button.disabled, false);
+    assert.deepEqual(notices, [outcome === "success" ? "RECOVERY EXPORTED" : outcome === "cancel" ? "RECOVERY EXPORT CANCELLED" : "RECOVERY EXPORT FAILED"]);
+  }
+});
+
+test("ghost download reflects the awaited native result and re-enables its button after cancellation or failure", async () => {
+  const source = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  const start = source.indexOf("download.onclick = async");
+  const handler = source.slice(start, source.indexOf("\n    };", start) + 7);
+  for (const outcome of ["success", "write", "share", "cancel"]) {
+    const { sandbox } = loadNative({ capacitor: true });
+    const button = { textContent: "DOWNLOAD", disabled: false };
+    Object.assign(sandbox, { Blob, download: button, shareGhost: {}, shareOpts: {},
+      GhostShare: { fileExport: () => ({ ok: true, text: "{}", name: "lap.apexghost.json" }) } });
+    sandbox.document.createElement = () => { assert.fail("ghost download must await native saving"); };
+    let resolve, reject, calls = 0;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const plugin = outcome === "write" ? sandbox.Capacitor.Plugins.Filesystem : sandbox.Capacitor.Plugins.Share;
+    plugin[outcome === "write" ? "writeFile" : "share"] = () => { calls++; return held; };
+    vm.runInContext(handler, vm.createContext(sandbox));
+    const pending = button.onclick();
+    await new Promise(setImmediate);
+    assert.equal(button.textContent, "SAVING…");
+    assert.equal(button.disabled, true);
+    await button.onclick();
+    assert.equal(calls, 1);
+    if (outcome === "success") resolve({}); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await pending;
+    assert.equal(button.textContent, outcome === "success" ? "DOWNLOADED" : outcome === "cancel" ? "CANCELLED" : "DOWNLOAD FAILED");
+    assert.equal(button.disabled, false);
+  }
+});
+
 test("SettingsExport.download awaits the real native helper and surfaces write/share failures", async () => {
   const src = readFileSync(join(ROOT, "js/ui/settings-export.js"), "utf8");
   const download = src.slice(src.indexOf("async function download("), src.indexOf("function stamp()"));

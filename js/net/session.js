@@ -300,7 +300,15 @@ const NetSession = (function () {
       // The silence that ends this session. The lobby keeps the 6 s default;
       // NetPlay raises it for a race, where a silent rival is covered by the
       // local AI meanwhile (netplay.js RACE_GRACE_MS).
-      setTimeoutMs(ms) { if (Number.isFinite(ms) && ms > 0) cfg.timeoutMs = ms; return cfg.timeoutMs; },
+      // The transport's "disconnected" grace follows it, or the wire closes
+      // first and the longer grace can never take effect (#2195).
+      setTimeoutMs(ms) {
+        if (Number.isFinite(ms) && ms > 0) {
+          cfg.timeoutMs = ms;
+          if (typeof transport.setDisconnectGrace === "function") transport.setDisconnectGrace(ms);
+        }
+        return cfg.timeoutMs;
+      },
       lastHeard: () => lastHeardAt,
       close() {
         // Release whatever `alive` says: a path that flips `alive` first

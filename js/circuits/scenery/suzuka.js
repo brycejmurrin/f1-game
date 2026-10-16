@@ -50,7 +50,22 @@
           const offset = (extra === 160 ? 0 : extra === 310 ? 0.5 : 1) / count;
           const a = (i + offset + extra * 0.003) / count * 6.2832, h = hash(i * 11 + extra);
           const mx = cx + Math.cos(a) * ring, mz = cz + Math.sin(a) * ring;
-          mountain(mx, mz, pyMin, wMin + h * wVar, hMin + h * hVar, {
+          // Lift the base only where the terrain stands over the foot skirt
+          // (mountain() lays it at baseY-2, h*0.18 tall, top radius 0.42 w):
+          // two near-ring skirts sat 15.8 / 3.8 m under the ground at pyMin
+          // (ground-audit, #2210). Highest terrain over the skirt's top cap;
+          // the PEAK stays at pyMin + h, so the skyline does not change.
+          const mw = wMin + h * wVar, peak = pyMin + hMin + h * hVar;
+          let ty = -Infinity;
+          for (let j = 0; j < 17; j++) {
+            const rr = j === 0 ? 0 : (j > 8 ? 0.42 : 0.21) * mw, aj = j * 0.7854;
+            const y = terrainYAt(mx + Math.cos(aj) * rr, mz + Math.sin(aj) * rr);
+            if (y != null && y > ty) ty = y;
+          }
+          // skirt top = baseY - 2 + 0.18 (peak - baseY) >= ty, solved for baseY.
+          const baseY = Math.max(pyMin, (ty + 2.1 - 0.18 * peak) / 0.82), mh = peak - baseY;
+          if (mh < 6) continue;   // the ground already hides all but the tip
+          mountain(mx, mz, baseY, mw, mh, {
             seg, seed: i * 17 + extra, snowline: 1.1, rough,
             forest: [fc[0] + h * 0.06, fc[1] + h * 0.05, fc[2] + h * 0.05], rock: rc,
           });
