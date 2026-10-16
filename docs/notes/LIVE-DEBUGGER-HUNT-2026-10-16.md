@@ -8,6 +8,50 @@ Not re-reported: `docs/BUGS.md`, `DEFECT-LEDGER.md`, `BUG-HUNT*.md`, and the 7 f
 aiPlace prog / reset delete, lobby.js pollTimer, hub.js double open, real-race-tab forgetRaw memCache, tlx.js
 create-throw listener leak, game.js passHunger alloc).
 
+## Summary (orchestrator report format)
+
+Lane: core race loop (physics integrate, camera, race HUD, restart / circuit switch). PR #2548, branch
+`cursor/live-debugger-hunt-4c7e`.
+
+### Scope covered
+
+vegas, monaco, spa, singapore, monza, suzuka (TLX, 300–400 ticks each); GLX load on vegas, monaco, spa; circuit switch ×6
+and ×5, restart ×10 (monaco); finish → results → restart; tab hidden / visible; career save + `garageStep`; 150k-tick
+soak with 22 cars (monza); closed-loop player on monaco, spa, monza, suzuka (17k ticks); tracepoints at `game.js`
+5621 / 5686 / 5761 / 6271.
+
+### Findings
+
+| id | file:line | severity | verdict | debugger evidence | fix commit | test | issue |
+|---|---|---|---|---|---|---|---|
+| F1 | `js/physics/ai-drive.js` (no brake for a stopped car) + `js/physics/collide.js` (contact response) | medium | CONFIRMED-LIVE (synthetic: parked player) | tick trace, not a pause: car 13 54 m/s, no braking until 14 m, hit at 4.8 m gap, 52.81 → 5.09 m/s in one tick, player 5.1 m/s; neighbours cars 1 / 5 passed in other lanes | none (outside my files, > 20 lines) | none | #2565 |
+| X1 | `def.js:70` `realPoints` via `scene-live.js:60` | none | BY-DESIGN | only exception pause (`all`): `id "monaco"`, `path null`, caught at `scene-live.js:56-60`, once per garage-prebuild frame until the circuit hydrates | — | — | — |
+
+### Clean areas (do not re-hunt)
+
+No NaN / Infinity in `physState` or car fields; no `prog` regression within a lap and `prog ≈ (lap−1)·L + s`; no
+`NaN|Infinity|undefined` in `#hud-gap-ahead|behind`; `LoopHealth` 0 faults in every scenario; window + document
+listeners flat (9) and 0 live intervals after restart ×10 + switch ×5; tab hidden / visible resumes cleanly; GLX
+context + soft-present up with `?gfx=glx`; career save + `garageStep` clean; no swallowed error beyond X1 while pausing on
+`all` (the closed-loop pass ran on `uncaught` only).
+
+### Not run, and why
+
+Pit entry / stop and WATCH / replay (other lanes); DOM garage open / close (menu never on screen; career / garage lane);
+camera-jump and HUD-under-motion traps (headless freezes the camera; un-headless software GLX stalls CDP, no real GPU);
+hand-stepped `into` / `over` tick (replaced by tracepoints; ~5 KB per step); dedicated tyre / fuel / ERS breakpoints
+(generic non-finite scan only); `prog` trap as a conditional breakpoint (done in-page per tick instead).
+
+### js-debugger tool problems hit
+
+T1–T5 below (script cap hides `game.js`, remove+set leaves the old condition, state replays every past result,
+`debugger_run` refused while paused, detach / attach fail after a timed-out evaluate). Passed to #2534 by the orchestrator.
+
+### Next step
+
+A session with a real GPU (or a faster GL) for camera / HUD under motion and the DOM garage; F1 (#2565) goes to the
+incidents / racecraft owners.
+
 ## Setup
 
 - `python3 -m http.server 3456`; Chrome `--remote-debugging-port=9222 --user-data-dir=scratch/debug-chrome`, headless
