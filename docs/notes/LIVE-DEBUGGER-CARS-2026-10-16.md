@@ -73,6 +73,16 @@ is not reachable today. Replay determinism at lap end needs a live lap and was *
 specs cover it. A ghost for another circuit is refused by id (`hasGuest(trackId)`), and `validGhost` bounds `s` to three laps
 of the declared circuit length, so a shifted/reversed layout cannot index outside the trace.
 
+## Round 2 (short focused live runs, headless page, 22-car Bahrain grid)
+
+| id | area | verdict | evidence |
+|---|---|---|---|
+| R1 | field LOD, 600 ticks | CLEAN (CONFIRMED-LIVE) | `__apex.step` 600 ticks of the real 22-car field; camera orbit radius 10-430 m with the lens switching 60 deg <-> 18 deg every 150 ticks; `FieldLod.tier` per car with its own `_lodTier`: 13 200 car-frames, tiers [840, 2542, 9818], 0 NaN distances, 87 tier changes total, worst car 9 in 600 ticks (every one at a radius or lens change; no every-frame flip). Positions were approximated as (lateral x, prog) because `__apex.cars()` has no world position. A consistency probe using `parts(d2)` showed 2 921 "mismatches" that were my probe: `parts()` takes no fov (lens 1) while my `tier` used the swept fov. |
+| R2 | memory over team swaps | NOT MEASURED (GPU) / JS side CLEAN | `__apex.garageTeam` returns `garage_closed` without the garage UI open; `renderer.info` is unreachable. In-page JS heap over 10 rounds of all 11 factory builds is a sawtooth (2.4, 50.3, 47.0, 15.3, 37.4 MB over baseline, no GC forced), not monotonic; the node run (3 267 builds, flat 61 MB) is the stronger evidence. |
+| R3 | input-ghost replay drift | CLEAN (CONFIRMED-LIVE) | 600-step tape (seeded random steer/throttle/brake, partial pedals, 8-bit quantised), `reset(0.02, 55, 0, 4242)`: original `physState` s = 267.7161807241751, x = 7.593483937139032, speed 4.534561177369502; replay through `IG.atStep` identical to the last bit (dS = 0, dX = 0), two replays identical, and identical again after `flush()` + `setTrack()` reload from storage. |
+| R3b | input-ghost v3 gate | BY-DESIGN (see C3) | the same tape with `aero/overtake/shiftUp/shiftDown` flags made `finishLap` return false (flags > 3 select v3, which needs `context` + `initialState`); the game supplies both. Confirms C3 live: a silent drop, not reachable from `session-records.js`. |
+| R4 | ghost on a reversed/shifted circuit | CLEAN (CONFIRMED-LIVE) | `GhostShare.contextNotice` with `layout` "v1" vs "v1-rev": "Rival settings differ: circuit version."; cyclic, `{{`, null, `[1]` and `__proto__` contexts: "Rival settings are unavailable to compare." (no throw). A guest whose `s` starts at 5 300 m interpolates; `timeAt(5436)` = 4.533 s, `timeAt(0)` = 0, `timeAt(1e9)` = 9 (clamped). `GhostShare.at()` returns a pooled object (read it synchronously); my first probe read three results after the fact and saw the last value three times. |
+
 ## Debugger tool observations
 
 - `debugger_evaluate` while not paused returns "Missing argument: pauseToken"; use `debugger_run` for page-level evals.
@@ -81,7 +91,9 @@ of the declared circuit length, so a shifted/reversed layout cannot index outsid
   breakpoint plus a 0.4 fps SwiftShader page).
 - `debugger_state` replays every past operation result on each call, so the reply grows with the session.
 - `debugger_scripts` takes no filter argument and returns all ~270 scripts.
+- `debugger_state` keeps reporting the pre-navigation `about:blank` URL/title after `location.href=...`; evaluation runs in the real page.
+- Navigating a blank target and calling `headless(true)` before `race()` kept the page responsive (load < 1): a 600-tick step loop returned in seconds where the rendered page managed 0.4 fps.
 
 ## Next step
 
-Fast-tier CI, `ready-gate.mjs --pr 2564`, then `SWEEP 2564` to Merge Desk. The Not-run list needs a GPU runner.
+Fast-tier CI (run-ci label, run #38972529773), `ready-gate.mjs --pr 2564`, then mark ready and report CI-GREEN. Only GPU-side memory over team swaps remains unmeasured.
