@@ -54,9 +54,9 @@ const TrackDesigner = (function () {
       { id: "scenery", title: "Preview a theme and place scenery", mode: "scenery", steps: [
         "Open SCENERY → THEMES and choose a look; LIVE SCENERY updates the overhead map automatically.",
         "Open ATMOSPHERE to change time of day, trees and crowd; use OUTLINE when you want a clear editing map.",
-        "Open OBJECTS, choose an object, then tap a map point or enter its number; for a section, enter the start and end points.",
+        "Open OBJECTS and search or filter NATURE, TERRAIN, WATER or RACE VENUE. Choose an object, then tap a map point or enter its number; for a section, enter the start and end points.",
         "Choose LEFT, RIGHT or BOTH, set the roadside gap, then PLACE; the map updates and UNDO removes the placement.",
-      ], note: "The live overhead view simplifies terrain and small scenery. RACE or TIME TRIAL opens the full 3D circuit." },
+      ], note: "Mountains, hills, dunes and rocks decorate the ground; use ELEVATION to change the road. Landscape objects that overlap the road are hidden. RACE or TIME TRIAL opens the full 3D circuit." },
       { id: "draw", title: "Start a new loop", mode: "draw", steps: [
         "Use RANDOMISE, TRACK OF THE DAY or START FROM… for a starting circuit, or draw one closed loop on the map.",
         "Open EDIT to reshape points and corners. UNDO restores the previous circuit if you replace an unsaved design.",

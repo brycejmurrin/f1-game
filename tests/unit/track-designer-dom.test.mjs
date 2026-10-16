@@ -1843,7 +1843,7 @@ test("consumeTrackHash: an armed return reopens with sel/span (only for the same
   assert.ok(!Object.keys(b.data).some((k) => /return/i.test(k)), "no stored return key");
 });
 
-test("3 LOOK: a chip per theme (twenty-seven), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
+test("3 LOOK: a chip per theme (thirty), dual-colour swatches, the theme's blurb, and TIME OF DAY / TREES / CROWD rows that set design.look in one UNDO each", () => {
   const b = bootScreen();
   openGreen(b);
   b.D.setMode("scenery");
@@ -1853,11 +1853,11 @@ test("3 LOOK: a chip per theme (twenty-seven), dual-colour swatches, the theme's
     "tuscany", "coast", "savanna", "ardennes", "airfield", "canyon", "winter", "twilight",
     "jungle", "lakeside", "moorland", "metropolis"];
   const SLICE_I = ["shipyard", "saltflat", "vineyard", "stadium", "island"];
-  assert.equal(T.ORDER.length, 27);
+  assert.equal(T.ORDER.length, 30);
   // Spread out of the editor VM realm — deepEqual rejects cross-realm arrays.
   assert.deepEqual([...T.ORDER.slice(0, 20)], LEGACY_20, "legacy ORDER ids never reorder");
   assert.deepEqual([...T.ORDER.slice(20, 25)], SLICE_I, "slice I appends shipyard…island");
-  assert.deepEqual([...T.ORDER.slice(25)], ["blossom", "volcanic"], "new worlds append without shifting old share codes");
+  assert.deepEqual([...T.ORDER.slice(25, 27)], ["blossom", "volcanic"], "new worlds append without shifting old share codes");
   assert.equal(typeof T.swatchCss, "function", "swatchCss helper for LOOK tiles");
   // Every preset keeps a two-colour swatch pair; ORDER must not reorder.
   for (const id of T.ORDER) {
@@ -2020,7 +2020,7 @@ test("scenery discovery filters without changing the circuit; atmosphere presets
   assert.deepEqual(visible(), []);
   assert.match(by("role", "theme-results").textContent, /No themes found/);
   b.root.querySelector('[aria-label="Clear theme search and filters"]').click();
-  assert.equal(visible().length, 27);
+  assert.equal(visible().length, 30);
   assert.deepEqual(plain(b.D.state().design), before, "browsing never edits the circuit");
   assert.equal(b.D.state().undo, undo);
   by("preset", "golden").click();
@@ -2919,4 +2919,25 @@ test("share clipboard fallback opens the workspace containing its copy field", a
   assert.equal(b.root.dataset.pane, "design");
   assert.equal(field.parentNode.open, true, "fallback expands the copy field's disclosure");
   assert.equal(b.dom.document.activeElement, field);
+});
+
+
+test("terrain library search filters without editing; landscapes place, undo and save", () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  const by = (key, value) => walk(b.root).find((e) => e.dataset && e.dataset[key] === value);
+  const search = b.root.querySelector('[aria-label="Find a scenery object"]'), undo = b.D.state().undo;
+  by("objectCategory", "terrain").click();
+  assert.equal(by("prop", "snowpeak").hidden, false); assert.equal(by("prop", "pond").hidden, true);
+  search.value = "snowy"; b.dom.dispatch(search, { type: "input" });
+  assert.equal(by("prop", "snowpeak").hidden, false); assert.equal(by("prop", "mountain").hidden, true);
+  search.value = "no such scenery"; b.dom.dispatch(search, { type: "input" });
+  assert.match(by("role", "object-results").textContent, /No objects found/);
+  search.value = ""; b.dom.dispatch(search, { type: "input" });
+  assert.equal(b.D.state().undo, undo);
+  by("prop", "snowpeak").click(); b.D.selectRange(0); b.D.placeProp();
+  assert.equal(b.D.state().design.props[0].kind, "snowpeak");
+  const saved = b.D.save(); assert.equal(saved.ok, true); assert.equal(b.C.get(saved.id).props[0].kind, "snowpeak");
+  b.D.undo(); assert.equal(b.D.state().design.props, undefined);
+  for (const theme of ["fjord", "badlands", "redwood"]) { by("theme", theme).click(); assert.equal(b.D.state().design.theme, theme); }
+  b.D.close();
 });

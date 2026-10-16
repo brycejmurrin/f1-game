@@ -59,11 +59,35 @@ by itself guarantee a legal crossing. Decorative footbridges are not included.
 ## Place water
 
 Open **SCENERY → OBJECTS → WATER**. Choose **WATER** (the original large pond),
-**POND**, **LAKE** or **RIVER**, then choose the point/section, side and roadside
-gap and press **PLACE**. Each kind has its own size and colour. Up to four of
+**POND**, **LAKE**, **RIVER**, **LAGOON** or **CANAL**, then choose the point/section, side and roadside
+gap and press **PLACE**. Each kind has its own size and colour; lagoons are turquoise and canals are narrow strips. Up to four of
 each water kind fit within the shared sixteen-object circuit budget. Water
-uses the existing scenery surface; the river is a straight, world-axis-aligned
-strip. This palette does not carve riverbeds or create a freehand shoreline.
+uses the existing scenery surface; rivers and canals are straight, world-axis-aligned
+strips. This palette does not carve riverbeds or create a freehand shoreline.
+
+## Build a landscape
+
+Open **SCENERY → OBJECTS → TERRAIN** to place **MOUNTAIN**, **SNOW PEAK**,
+**GRASS HILL**, **SAND DUNE** or **ROCK OUTCROP**. Select a point, choose the
+side and roadside gap, then **PLACE**. Use **ALONG SECTION** for evenly spaced
+hills or rocks. Large landscapes need open space: terrain and water footprints
+that reach any part of the road are hidden in the preview and race. Move the
+object or increase its gap if it does not appear.
+
+These objects decorate the landscape. Use **ELEVATION** to raise the road or
+build a climb. Object sizes are fixed, and the shared sixteen-object budget
+still applies. Undo, editing placed objects, saving, and sharing work for every
+new kind.
+
+Search the object library by name or description. **NATURE** adds a **BLOSSOM
+GROVE**; **RACE VENUE** adds a **FERRIS WHEEL** and **COTTAGE**. Search combines
+with the chosen category, so choose **ALL** to search the whole library.
+
+The thirty themes include **NORDIC FJORD** (snowy mountains and cold blue water),
+**RED ROCK BADLANDS** (sandstone buttes and scrub), and **REDWOOD VALLEY**
+(tall evergreen belts and timber cottages). Themes set the overall scenery;
+placed objects add your own details, and **ATMOSPHERE** changes the time, trees
+and crowd independently.
 
 ## The 60-second start
 
