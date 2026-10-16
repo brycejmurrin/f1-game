@@ -361,10 +361,10 @@ const DataHub = (function () {
     const maxAge = MAX_AGE[id] || 60 * MINUTE;
     if (st && st.status === "failed") {
       clear(contentEl);
-      contentEl.appendChild(errorBlock(id, st.error, !!st.node));
+      contentEl.appendChild(errorBlock(id, st.error, !!st.node && st.hasData !== false));
       if (st.node) {
         contentEl.appendChild(st.node);
-        contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
+        if (st.hasData !== false) contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
       }
       contentEl.scrollTop = 0;
       return;
@@ -375,7 +375,7 @@ const DataHub = (function () {
       if (Date.now() - st.at > 1000) Log.info("data", "tab " + id + " cached");
       clear(contentEl);
       contentEl.appendChild(st.node);
-      contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
+      if (st.status !== "loading") contentEl.appendChild(footnote(st.dataAt || st.at, st.offlineCopy));
       contentEl.scrollTop = 0;
       return;
     }
@@ -405,7 +405,8 @@ const DataHub = (function () {
         // Empty is a successful API answer and gets the normal freshness
         // window. Failed is recorded only in the rejection arm below.
         status: node && node.querySelector && node.querySelector(".dh-empty") ? "empty" : "ready",
-        error: null
+        error: null,
+        ...(node && node.tabOutcome || {})
       };
       if (openFlag && active === id) showTab(id);
     }, function (err) {
@@ -741,7 +742,13 @@ const DataHub = (function () {
   // in one leaves all three describing the same session.
   const { loadResults } = DataResults.create({
     el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
-    invalidateOther, teamChip, fmtDateTime, NO_RESULT_MSG
+    invalidateOther, teamChip, fmtDateTime, NO_RESULT_MSG,
+    onOutcome(node) {
+      const st = state.results;
+      if (!st || st.node !== node) return;   // detached/closed/replaced picker
+      Object.assign(st, node.tabOutcome);
+      if (openFlag && active === "results") showTab("results");
+    }
   });
 
   const { loadLive, stopLiveAuto, disarmLiveAuto } = DataLive.create({

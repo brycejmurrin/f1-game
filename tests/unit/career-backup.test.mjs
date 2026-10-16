@@ -217,6 +217,12 @@ test("hostile payloads are rejected with a reason and change nothing", () => {
   const cases = [
     [{ format: "nope", slots: [] }, "wrong-format"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: { money: NaN } }] }, "nan-money"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { driver: { name: "A", code: { toString: null }, num: 99 } }) }] }, "driver-code"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { driver: { name: {}, code: "YOU", num: 99 } }) }] }, "driver-name"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { driver: { name: "A", code: "YOU", num: {} } }) }] }, "driver-num"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: [1, 2, 3] }] }, "slot-not-object"],
     // A driver career filed under a MY TEAM row (and the reverse) would load as
     // the wrong flavour in that slot set.
@@ -733,6 +739,25 @@ test("malformed history / offers / moves / roster rows import without crashing c
   h.Career.load();
   h.Career.engage(true);
   assert.doesNotThrow(() => h.Career.settleRound([{ team: { id: "haas" } }], { team: { id: "haas" } }));
+});
+
+test("career imports keep only catalog part IDs and fitted category options", () => {
+  const h = loadHarness();
+  h.ctx.Parts.CATALOG = [
+    { id: "engine", options: [{ id: "engine-stock" }, { id: "engine-race" }] },
+    { id: "tyres", options: [{ id: "tyres-soft" }] },
+  ];
+  const incoming = Object.assign(save(), {
+    owned: ["engine-race", "engine-race", "future-part", 7, "tyres-soft"],
+    fitted: { engine: "engine-race", tyres: "future-tyres", future: "engine-race", __proto__: { bad: true } },
+  });
+  const r = h.CareerBackup.apply({ format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 0, data: incoming },
+  ] }, { otherFlavourConfirmed: true });
+  assert.equal(r.ok, true);
+  const stored = JSON.parse(h.disk.get("apex26.career.driver.0"));
+  assert.deepEqual(stored.owned, ["engine-race", "tyres-soft"]);
+  assert.deepEqual(stored.fitted, { engine: "engine-race" });
 });
 
 /* ── MY TEAM identity (global garage keys a myteam save only points at) ── */
@@ -1594,15 +1619,81 @@ test("import keeps the Daily per-class bests keyed by a JSON records context (#2
   assert.match(line, / · 80\.000/, "the share line shows the restored lap");
   assert.doesNotMatch(line, /NO LAP/);
 
-  // Hostile or oversized class keys still drop; the 8-per-day cap holds.
+  // Hostile or oversized class keys still drop; excess valid classes reject.
   const classes = { constructor: { best: 1, laps: 1 }, prototype: { best: 1, laps: 1 }, ["x".repeat(4097)]: { best: 1, laps: 1 } };
   for (let i = 0; i < 12; i++) classes[JSON.stringify({ car: ["c" + i] })] = { best: 70 + i, laps: 1 };
   const c = loadHarness();
   c.Career.load();
   const env2 = JSON.parse(JSON.stringify(envelope));
   env2.daily = { days: { "2026-10-15": { best: 70, laps: 12, classes } } };
-  assert.equal(c.CareerBackup.apply(env2, { focusFlavour: "driver" }).ok, true);
-  const kept = Object.keys(JSON.parse(c.disk.get("apex26.daily.v1")).days["2026-10-15"].classes);
-  assert.equal(kept.length, 8);
-  assert.ok(kept.every((k) => k.startsWith("{")), "no constructor / prototype / oversized key");
+  const before = [...c.disk.entries()];
+  assert.equal(c.CareerBackup.apply(env2, { focusFlavour: "driver" }).reason, "daily-invalid");
+  assert.deepEqual([...c.disk.entries()], before, "over-limit history is refused without partial writes");
+});
+
+test("native Daily backup round-trips 61 days of eight full records contexts", async () => {
+  const a = loadHarness();
+  a.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 111 })));
+  a.Career.load();
+  vm.runInContext(src("js/race/daily-challenge.js"), a.ctx);
+  const daily = vm.runInContext("DailyChallenge", a.ctx).create({ store: a.store });
+  // SessionRecords contexts include the complete physics and car config.
+  const config = Object.fromEntries(Array.from({ length: 40 }, (_, i) => ["physics" + i, 0.84 + i]));
+  for (let day = 0; day < 61; day++) {
+    const date = new Date(Date.UTC(2026, 7, 17 + day)).toISOString().slice(0, 10);
+    daily.select(date, "open");
+    for (let bias = 0; bias < 8; bias++) {
+      daily.record(90 + bias, JSON.stringify({ car: ["mclaren"], config, brakeBias: (52 + bias * 0.5) / 100 }));
+    }
+  }
+  const exported = await a.CareerBackup.exportAll();
+  assert.equal(exported.ok, true);
+  const envelope = exported.envelope;
+  assert.ok(JSON.stringify(envelope.daily).length > 256 * 1024);
+  assert.equal(Object.keys(envelope.daily.days).length, 61);
+  const text = a.CareerBackup.serialize(envelope);
+  const b = loadHarness();
+  assert.equal(b.CareerBackup.apply(JSON.parse(text), { rawText: text }).ok, true);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.daily.v1")), envelope.daily);
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 111);
+});
+
+test("native export refuses over-limit Daily histories before downloading", async () => {
+  for (const manyDays of [false, true]) {
+    const h = loadHarness();
+    const days = {};
+    for (let day = 0; day < (manyDays ? 121 : 1); day++) {
+      const date = new Date(Date.UTC(2026, 0, 1 + day)).toISOString().slice(0, 10);
+      days[date] = { classes: Object.fromEntries(Array.from({ length: manyDays ? 1 : 9 }, (_, i) => [JSON.stringify({ bias: i }), { best: 90, laps: 1 }])) };
+    }
+    h.store.set("daily.v1", { days });
+    let downloads = 0;
+    h.ctx.document.createElement = () => { downloads++; return {}; };
+    assert.equal((await h.CareerBackup.exportAll()).reason, "daily-invalid");
+    assert.equal(downloads, 0);
+    const target = loadHarness();
+    const before = [...target.disk.entries()];
+    assert.equal(target.CareerBackup.apply(h.CareerBackup.build()).reason, "daily-invalid");
+    assert.deepEqual([...target.disk.entries()], before);
+  }
+});
+
+
+test("backup byte cap applies to UTF-8 strings and object imports before writes", () => {
+  const h = loadHarness();
+  const envelope = envWith({ note: "é".repeat(3 * 1024 * 1024) });
+  const text = JSON.stringify(envelope);
+  assert.ok(text.length < h.CareerBackup.MAX_BYTES);
+  for (const input of [envelope, text]) {
+    assert.equal(h.CareerBackup.validate(input).reason, "too-large");
+  }
+  assert.equal(h.CareerBackup.apply(envelope).reason, "too-large");
+  assert.equal(h.disk.size, 0);
+});
+
+test("in-memory unserialisable backups are refused before any write", () => {
+  const h = loadHarness(), envelope = envWith({});
+  envelope.cycle = envelope;
+  assert.equal(h.CareerBackup.apply(envelope).reason, "bad-json");
+  assert.equal(h.disk.size, 0);
 });

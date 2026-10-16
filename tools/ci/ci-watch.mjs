@@ -9,7 +9,8 @@
 // (or never: a `cancelled` run hid a FAILED one for five days) costs a cycle.
 // Waiting on a PR event alone is not enough either: webhooks arrive late or not
 // at all for success, and a docs-only push (paths-ignore) or a topic-branch push
-// with no PR (ci.yml runs on push for the deploy branch only) starts NO run,
+// with no PR (ci.yml runs on pull_request; the deploy branch's push starts
+// pages.yml) starts NO run,
 // which looks exactly like "still queued". So this polls the REST API and turns
 // state into events:
 //
@@ -39,8 +40,20 @@
 // run_in_background task when only the verdict matters. Exit: 0 green (or no
 // run started — a docs-only push), 1 red, 2 cancelled with no live sibling,
 // 3 no token / API unreachable, 4 superseded (a pending run replaced by a newer
-// push in the same concurrency group — ci.yml's `ship-fast` — before it ran a
-// step; re-arm on the `--sha` it names), 124 --timeout (default 120 min).
+// push in the same concurrency group — pages.yml's `pages-train-*` — before it
+// ran a step, or the PR merged / moved to a new head; re-arm on the `--sha` it
+// names), 5 hollow (a draft's skeleton ran, nothing was tested — not green),
+// 124 --timeout (default 120 min).
+//
+// FRICTION FIXES (#2384, agent friction plan WS2):
+//   --failures-only   a Monitor event only for a failed/cancelled job and the final `= ci …` line
+//   --wait            long-poll past a 30-min Monitor: timeout 12 h unless --timeout, exits on the final line
+//   --jobs            one line per job still queued/pending, with its wait age (replaces paging list_workflow_jobs)
+//   --state <file>    already-reported `<run>:<job>` keys; default artifacts/ci-watch/<sha7>.json (not under --once),
+//                     so a re-armed watch never replays a job or a cancelled run; `--state none` disables
+//   `= ci hollow (draft, n/m jobs skipped — add run-ci)` · `= ci superseded (merged | new head <sha>)` ·
+//   `= ci cancelled-external` (one run, every job cancelled within 60 s, no newer run) · the final line
+//   names the run(s): `run=#<id> <event> <tier>` · a 5xx is retried with backoff (1/2/4 s) before it is an error.
 //
 // Auth: GH_TOKEN or GITHUB_TOKEN, else `gh auth token` (Cloud boxes often have
 // gh logged in with no env token). Sent via curl's stdin config so it never
@@ -54,6 +67,7 @@
 // against your primary rate limit if a 304 response is returned" (authorized
 // requests only) — https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#use-conditional-requests
 // (read 2026-10-14; measured here: x-ratelimit-remaining unchanged across 304s).
+import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,6 +80,7 @@ export const DEPLOY = "claude/f1-game-project-26h3ng";
 export const PAGES_WORKFLOW = 295002043;   // pages.yml (AGENTS.md §Watching CI and Pages)
 export const DEFAULT_TIMEOUT_MIN = 120;     // no --timeout: CI (~15 min) + the gated Pages publish (median 23, p90 73 min)
 export const DEFAULT_INTERVAL_S = 60;       // seconds between polls; --interval overrides (min 10)
+export const WAIT_TIMEOUT_MIN = 720;        // --wait: one background task outlives the 30-min Monitor expiry
 export const FLOOR_GRACE_MIN = 5;           // minutes to wait for a run newer than the trigger floor
 const say = (...a) => console.log("[ci-watch]", ...a);
 
@@ -76,7 +91,20 @@ export const ETAG_CACHE_MAX = 256;
 /** GET `repos/<REPO>/<pathQs>` → { json } | { error }; `cached: true` when a 304
  *  reused the stored body. `etags` (a Map, or null to disable) is the per-URL
  *  ETag store, injectable for tests. */
-export function api(pathQs, { run = spawnSync, env = process.env, gh, etags = ETAGS } = {}) {
+export function api(pathQs, opts = {}) {
+  const { retries = RETRY_DELAYS_MS, sleepSync: nap = sleepSync } = opts;
+  for (let attempt = 0; ; attempt++) {
+    const r = apiOnce(pathQs, opts);
+    if (!/^HTTP 5\d\d$/.test(r.error || "") || attempt >= retries.length) return r;
+    nap(retries[attempt]);   // a 5xx is GitHub's, not ours: back off and ask again
+  }
+}
+/** Backoff before each retry of a 5xx (1 s, 2 s, 4 s), then the error stands.
+ *  https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api#handle-rate-limit-errors-appropriately */
+export const RETRY_DELAYS_MS = [1000, 2000, 4000];
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+function apiOnce(pathQs, { run = spawnSync, env = process.env, gh, etags = ETAGS } = {}) {
   const token = githubToken(gh !== undefined ? { env, gh } : { env });
   if (!token) return { error: NO_TOKEN_HINT };
   const url = `https://api.github.com/repos/${REPO}/${pathQs}`;
@@ -146,8 +174,8 @@ export function verdict(runs, jobsByRun) {
 
 /** A cancelled run that a NEWER run of the same workflow, branch and event
  *  replaced before it ran a single step: GitHub keeps one PENDING run per
- *  concurrency group, so a deploy-branch push waiting in ci.yml's shared
- *  `ship-fast` group is cancelled when the next push arrives. That is
+ *  concurrency group, so a deploy-branch push waiting in pages.yml's
+ *  `pages-train-*` group is cancelled when the next push arrives. That is
  *  superseded, not a timeout — but only when the run never started work (a
  *  run killed mid-way that happens to have a successor is still rule 8's
  *  "timeout until proven otherwise"). Returns the newer run or null. Pure. */
@@ -202,6 +230,83 @@ export function noneVerdict(pr, waitedMs, checkRuns = 0) {
   return waitedMs > 600_000 ? "late" : "wait";
 }
 
+/** The draft skeleton: ci.yml's one `Draft push (CI skipped — add run-ci label)` job
+ *  succeeds while every other job skips, so the run is `success` and tested
+ *  nothing. → { skipped, total } when that is ALL that ran, else null. Pure. */
+export function hollowDraft(jobs) {
+  const list = jobs || [];
+  const skeleton = list.filter((j) => /^Draft push \(CI skipped/.test(j.name || ""));
+  if (!skeleton.length) return null;
+  const rest = list.filter((j) => !skeleton.includes(j));
+  if (!rest.every((j) => j.conclusion === "skipped")) return null;
+  return { skipped: rest.length, total: list.length };
+}
+
+/** A lone run whose every job was cancelled within `withinMs` of starting, with
+ *  no newer run: someone or something outside the workflow cancelled it (a
+ *  person, the API, a lane) — not a timeout (a timeout runs for minutes) and
+ *  not the designed dedupe (that leaves a NEWER run). → seconds | null. Pure. */
+export function cancelledExternal(runs, jobsByRun, withinMs = 60_000) {
+  if (runs.length !== 1 || runs[0].conclusion !== "cancelled") return null;
+  const jobs = jobsByRun[runs[0].id] || [];
+  if (!jobs.length || !jobs.every((j) => j.conclusion === "cancelled" || j.conclusion === "skipped")) return null;
+  const took = Date.parse(runs[0].updated_at) - Date.parse(runs[0].run_started_at || runs[0].created_at);
+  return Number.isFinite(took) && took >= 0 && took <= withinMs ? Math.round(took / 1000) : null;
+}
+
+/** Is a still-unfinished `sha` obsolete? Its PR merged, or the PR's head moved
+ *  on. → { why: "merged" | "new head", pr, head? } | null. A PR whose
+ *  merge_commit_sha IS `sha` is the merge being watched, not a replacement.
+ *  https://docs.github.com/en/rest/commits/commits#list-pull-requests-associated-with-a-commit */
+export function supersededByPr(sha, request = api) {
+  const r = request(`commits/${encodeURIComponent(sha)}/pulls?per_page=100`);
+  if (r?.error || !Array.isArray(r?.json)) return null;
+  const prs = r.json.filter((p) => p && p.merge_commit_sha !== sha);
+  if (prs.some((p) => p.state === "open" && p.head?.sha === sha)) return null;
+  const merged = prs.find((p) => p.merged_at);
+  if (merged) return { why: "merged", pr: merged.number };
+  const moved = prs.find((p) => p.state === "open" && /^[0-9a-f]{40}$/.test(p.head?.sha || "") && p.head.sha !== sha);
+  return moved ? { why: "new head", pr: moved.number, head: moved.head.sha } : null;
+}
+
+/** Persisted "already reported" keys (`<run>:<job>`), so a re-armed watch does
+ *  not replay events the last one emitted. File-backed JSON array. */
+export function fileState(file, fsm) {
+  let keys = new Set();
+  try { keys = new Set(JSON.parse(fsm.readFileSync(file, "utf8"))); } catch { /* first run */ }
+  return {
+    has: (k) => keys.has(k),
+    add: (k) => {
+      keys.add(k);
+      try { fsm.mkdirSync(path.dirname(file), { recursive: true }); fsm.writeFileSync(file, JSON.stringify([...keys])); } catch { /* best effort */ }
+    },
+  };
+}
+
+/** `--jobs`: one line per job still waiting for a runner or a lane, with its wait age. */
+export function waitingJobs(sha, { since = null, request = api, now = Date.now, report = say } = {}) {
+  const r = request(`actions/runs?head_sha=${sha}&per_page=50`);
+  if (r?.error || !Array.isArray(r?.json?.workflow_runs)) { report(`= ci unknown — API: ${r?.error || "workflow runs lookup returned no run array"}`); return 3; }
+  const listed = r.json.workflow_runs.filter((x) => !labelNoiseRun(x));
+  const runs = latestPerWorkflow(since == null ? listed : listed.filter((x) => Date.parse(x.created_at) >= since)).filter((x) => x.status !== "completed");
+  let waiting = 0, running = 0;
+  const kinds = {};
+  for (const run of runs) {
+    const j = request(`actions/runs/${run.id}/jobs?per_page=100`);
+    if (j?.error || !Array.isArray(j?.json?.jobs)) { report(`= ci unknown — API: ${j?.error || `run #${run.id} jobs lookup returned no job array`}`); return 3; }
+    for (const job of j.json.jobs) {
+      if (job.status === "in_progress") { running++; continue; }
+      if (job.status === "completed") continue;
+      waiting++; kinds[job.status] = (kinds[job.status] || 0) + 1;
+      const age = Math.max(0, Math.round((now() - Date.parse(job.created_at || run.created_at)) / 60_000));
+      report(`${run.name} › ${job.name} — ${job.status} ${age}m (run #${run.id})`);
+    }
+  }
+  const by = Object.entries(kinds).map(([k, n]) => `${n} ${k}`).join(", ");
+  report(`= ci jobs ${waiting} waiting${by ? ` (${by})` : ""}, ${running} running sha=${sha.slice(0, 7)}`);
+  return 0;
+}
+
 export const wantsAnnotations = (job) => job.conclusion === "failure" || job.conclusion === "timed_out";
 
 function annotations(jobId) {
@@ -212,11 +317,12 @@ function annotations(jobId) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] [--once] [--timeout <min>] [--interval <s>] [--since <ISO>|none]
+exitIfHelp(argv, `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pages] [--once] [--failures-only] [--wait] [--jobs] [--state <file|none>] [--timeout <min>] [--interval <s>] [--since <ISO>|none]
   Polls every workflow run for a SHA (default HEAD) every 60 s, with ETag conditional GETs (a 304 is free):
   one [ci-watch] line per job, a red\'s failing step,
   then one \`= ci <verdict>\` line (passed | failed | cancelled | superseded | none). --pages adds the Pages train.
-  --once polls one time and exits. --since: runs created earlier never count (default: the open PR's last
+  --failures-only: only red/cancelled jobs and the final line. --wait: long poll (12 h default timeout). --jobs: list waiting legs and exit.
+  --state <file|none>: reported-job keys across re-arms. --once polls one time and exits. --since: runs created earlier never count (default: the open PR's last
   run-ci label / ready / reopen; none = no floor). Details: the header of this file and AGENTS.md §Watching CI and Pages.`);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 
@@ -301,9 +407,16 @@ export function triggerFloor(pr, request = api) {
   return { floor: null };
 }
 
-export async function watchSha(sha, { interval, deadline, once, since = null, grace = FLOOR_GRACE_MIN * 60_000, request = api, now = Date.now, wait = sleep, report = say }) {
+export async function watchSha(sha, { interval, deadline, once, since = null, grace = FLOOR_GRACE_MIN * 60_000, request = api, now = Date.now, wait = sleep, report: out = say,
+  failuresOnly = false, state = null, checkSuperseded = false, tier = "" }) {
   const seen = new Set(), announced = new Set();
   const start = now();
+  let lastSuperseded = -Infinity;
+  // --failures-only: a Monitor wakes the model only for a red job and the final line.
+  const report = out;
+  const note = (m) => { if (!failuresOnly) out(m); };
+  // The run(s) the verdict is about, on the final line: id, event, tier.
+  const via = (rs) => rs.length ? ` run=${rs.map((x) => `#${x.id} ${x.event}`).join(", ")}${tier ? ` ${tier}` : ""}` : "";
   const unknown = (message) => { report(`= ci unknown — API: ${message}`); return 3; };
   for (;;) {
     const r = request(`actions/runs?head_sha=${sha}&per_page=50`);
@@ -313,9 +426,9 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
     const fresh = since == null ? listed : listed.filter((x) => Date.parse(x.created_at) >= since);
     if (since != null && !fresh.length && listed.length) {
       const at = new Date(since).toISOString().replace(/\.000Z$/, "Z");
-      if (!announced.has("floor")) { announced.add("floor"); report(`ignoring ${listed.length} run(s) created before ${at} (the PR's last run-ci label / ready / reopen); waiting for the run it starts`); }
+      if (!announced.has("floor")) { announced.add("floor"); note(`ignoring ${listed.length} run(s) created before ${at} (the PR's last run-ci label / ready / reopen); waiting for the run it starts`); }
       if (once || now() - start > grace) {
-        report(`= ci none — no run for ${sha.slice(0, 7)} created after ${at} within ${Math.round(grace / 60000)} min; the ${listed.length} older run(s) do not cover it, so theirs is not the verdict (re-arm, or --since none to read them)`);
+        report(`= ci none — no run for ${sha.slice(0, 7)} created after ${at} within ${Math.round(grace / 60000)} min; the ${listed.length} older run(s) do not cover it, so theirs is not the verdict (re-arm, or --since none to read them; a label that started no run: dispatch ci.yml by hand)`);
         return 124;
       }
       await wait(interval);
@@ -324,11 +437,16 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
     const runs = latestPerWorkflow(fresh);
     const jobsByRun = {};
     for (const run of runs) {
-      if (!announced.has(run.id)) { announced.add(run.id); report(`${run.name} #${run.id} (${run.event}) ${run.status} ${run.html_url}`); }
+      if (!announced.has(run.id)) { announced.add(run.id); note(`${run.name} #${run.id} (${run.event}${tier ? `, ${tier}` : ""}) ${run.status} ${run.html_url}`); }
       const j = request(`actions/runs/${run.id}/jobs?per_page=100`);
       if (j?.error || !Array.isArray(j?.json?.jobs)) return unknown(j?.error || `run #${run.id} jobs lookup returned no job array`);
       jobsByRun[run.id] = j.json.jobs;
       for (const e of newJobEvents(jobsByRun[run.id], seen, run.name)) {
+        // A re-armed watch is a new process: the file state remembers what the last one said.
+        const key = `${run.id}.${run.run_attempt || 1}:${e.job.id}`;
+        if (state?.has(key)) continue;
+        state?.add(key);
+        if (failuresOnly && !e.bad) continue;
         report(e.line);
         // Annotations only for a job that FAILED: a cancelled job's annotation is
         // the draft/ready dedupe's "higher priority waiting request" (rule 8) — as a
@@ -337,7 +455,7 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
       }
     }
     const v = verdict(runs, jobsByRun);
-    // A cancelled run replaced while pending (ci.yml's `ship-fast` group) is
+    // A cancelled run replaced while pending (pages.yml's `pages-train-*` group) is
     // superseded, not a timeout: say so, and name the run that has the tree.
     if (v.state === "cancelled") {
       const cancelled = runs.filter((x) => x.conclusion === "cancelled");
@@ -349,9 +467,32 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
         newer.push([c, by]);
       }
       if (newer.length && newer.length === cancelled.length) {
-        for (const [c, by] of newer) report(`${c.name} #${c.id} was replaced while pending by #${by.id} (head ${String(by.head_sha).slice(0, 7)}, ${by.status}) ${by.html_url}`);
+        for (const [c, by] of newer) note(`${c.name} #${c.id} was replaced while pending by #${by.id} (head ${String(by.head_sha).slice(0, 7)}, ${by.status}) ${by.html_url}`);
         report(`= ci superseded ${v.line.replace(/^cancelled /, "").replace(/ — .*/, "")} — a newer ${newer[0][1].event} run in the same concurrency group replaced it before it started; watch it: --sha ${newer[0][1].head_sha} sha=${sha.slice(0, 7)}`);
         return 4;
+      }
+      const external = cancelledExternal(runs, jobsByRun);
+      if (external != null) {
+        report(`= ci cancelled-external — run #${runs[0].id} (${runs[0].event}): every job cancelled ${external}s after it started and no newer run exists on ${sha.slice(0, 7)}; someone or something cancelled it, not a timeout — re-dispatch ci.yml (or re-push)${via(runs)} sha=${sha.slice(0, 7)}`);
+        return 2;
+      }
+    }
+    // The commit's PR merged or moved on while this verdict was still open: waiting is pointless.
+    if (checkSuperseded && ["none", "running", "cancelled"].includes(v.state) && (once || now() - lastSuperseded >= 300_000)) {
+      lastSuperseded = now();
+      const by = supersededByPr(sha, request);
+      if (by) {
+        report(by.why === "merged"
+          ? `= ci superseded (merged) — PR #${by.pr} merged; this head's run is moot, read the merge commit's CI (--sha <merge sha> --pages) sha=${sha.slice(0, 7)}`
+          : `= ci superseded (new head ${by.head.slice(0, 7)}) — PR #${by.pr} moved on; watch it: --sha ${by.head} sha=${sha.slice(0, 7)}`);
+        return 4;
+      }
+    }
+    if (v.state === "passed") {
+      const hollow = hollowDraft(runs.flatMap((x) => jobsByRun[x.id] || []));
+      if (hollow) {
+        report(`= ci hollow (draft, ${hollow.skipped}/${hollow.total} jobs skipped — add run-ci) nothing ran but the draft skeleton${via(runs)} sha=${sha.slice(0, 7)}`);
+        return 5;
       }
     }
     // A commit ci.yml's paths-ignore skips (docs / *.md / .claude/) starts no
@@ -366,15 +507,15 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
       const nv = noneVerdict(pr, now() - start, checks);
       if (nv === "indexing" && !announced.has("indexing")) {
         announced.add("indexing");
-        report(`runs list is empty for ${sha.slice(0, 7)} but the commit has ${checks} check run(s): GitHub's run search is lagging — still waiting`);
+        note(`runs list is empty for ${sha.slice(0, 7)} but the commit has ${checks} check run(s): GitHub's run search is lagging — still waiting`);
       }
-      if (nv === "none") { report(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier)`); return 0; }
+      if (nv === "none") { report(`= ci none — no workflow run for ${sha.slice(0, 7)} after 3 min and no open PR carries it (docs/.md/.claude-only push, or a topic branch with no PR — ci.yml runs on the PR, draft = fast tier; the deploy branch's push starts pages.yml)`); return 0; }
       if (nv === "blocked") { report(`= ci blocked — PR #${pr.number} has merge conflicts, so GitHub starts no run for ${sha.slice(0, 7)}; merge the base (sync-pr.mjs) and push`); return 1; }
       if (nv === "late") { report(`= ci none-yet — PR #${pr.number} carries ${sha.slice(0, 7)} but no run started in 10 min (mergeable_state ${pr.mergeable_state || "unknown"}: "unknown" is GitHub still computing, "dirty" starts no run); re-arm, or check the Actions tab`); return 124; }
     }
     // `running` and `none` are NOT green: under --once a scripted `&& next`
     // used to proceed on a run still in flight (2026-09-24).
-    if (v.done || once) { report(`= ci ${v.line} sha=${sha.slice(0, 7)}`); return { passed: 0, failed: 1, cancelled: 2, running: 124, none: 124 }[v.state] ?? 0; }
+    if (v.done || once) { report(`= ci ${v.line} sha=${sha.slice(0, 7)}${via(runs)}`); return { passed: 0, failed: 1, cancelled: 2, running: 124, none: 124 }[v.state] ?? 0; }
     if (now() > deadline) { report(`= ci timeout — still ${v.line} sha=${sha.slice(0, 7)}; re-arm to keep watching`); return 124; }
     await wait(interval);
   }
@@ -426,10 +567,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   // No --timeout = DEFAULT_TIMEOUT_MIN, not forever: a `--pages` watch whose
   // train never contains the SHA (or a CI that never reports) used to poll
   // until the task was killed, and a killed task leaves no verdict line.
-  const tmin = +opt("--timeout", DEFAULT_TIMEOUT_MIN);
+  const tmin = +opt("--timeout", argv.includes("--wait") ? WAIT_TIMEOUT_MIN : DEFAULT_TIMEOUT_MIN);
   const deadline = Date.now() + (tmin > 0 ? tmin : DEFAULT_TIMEOUT_MIN) * 60_000;
   // #2259: the trigger floor — explicit --since, else the open PR's last trigger event.
-  let since = null;
+  let since = null, tier = "";
   const sinceArg = opt("--since", null);
   if (sinceArg === "none") since = null;
   else if (sinceArg != null) {
@@ -437,11 +578,16 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (!Number.isFinite(since)) { say(`= ci unknown — invalid --since ${JSON.stringify(sinceArg)} (an ISO time, or none)`); process.exit(3); }
   } else {
     const lookup = openPrFor(sha);
+    if (lookup.state === "found") tier = lookup.pr.draft ? "draft/fast tier" : "ready/full tier";
     const f = lookup.state === "found" ? triggerFloor(lookup.pr) : { floor: null, error: lookup.error };
     if (f.error) say(`trigger floor unavailable (${f.error}) — every run on the sha counts`);
     since = f.floor;
   }
-  let code = await watchSha(sha, { interval, deadline, once: argv.includes("--once"), since });
+  if (argv.includes("--jobs")) process.exit(waitingJobs(sha, { since }));
+  const once = argv.includes("--once");
+  const stateArg = opt("--state", null);
+  const state = once || stateArg === "none" ? null : fileState(path.resolve(ROOT, stateArg || `artifacts/ci-watch/${sha.slice(0, 7)}.json`), fs);
+  let code = await watchSha(sha, { interval, deadline, once, since, state, tier, checkSuperseded: true, failuresOnly: argv.includes("--failures-only") });
   if (code === 0 && argv.includes("--pages") && !argv.includes("--once")) code = await watchPages(sha, { interval, deadline });
   process.exit(code);
 }

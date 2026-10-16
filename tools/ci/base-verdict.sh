@@ -44,8 +44,8 @@ emit() {
 }
 
 runs="$(gh api "repos/$REPO/actions/runs?branch=$BRANCH&status=completed&per_page=50" 2>/dev/null)" || {
-  emit "base verdict unavailable: could not list ci.yml runs on $BRANCH" \
-       "Base verdict unavailable: could not list ci.yml runs on \`$BRANCH\`."
+  emit "base verdict unavailable: could not list ci.yml / pages.yml runs on $BRANCH" \
+       "Base verdict unavailable: could not list ci.yml / pages.yml runs on \`$BRANCH\`."
   exit 0
 }
 
@@ -57,8 +57,11 @@ candidates="$(printf '%s' "$runs" | node -e '
     let list = []; try { list = JSON.parse(s).workflow_runs || []; } catch (_) {}
     const self = process.env.GITHUB_RUN_ID || "";
     const head = process.env.HEAD_SHA || "";
+    // ci.yml OR pages.yml (2026-10-16): a deploy-branch push starts the
+    // train, whose ci rows are the gate. A cancelled run stays a candidate:
+    // a job killed at its cap reports cancelled with the failing job named.
     const rows = list.filter((r) => r.status === "completed"
-      && r.path === ".github/workflows/ci.yml"
+      && /\/(ci|pages)\.yml$/.test(String(r.path || ""))
       && String(r.id) !== self
       && r.head_sha && r.head_sha !== head);
     process.stdout.write(rows.map((r) => [r.head_sha, r.id, r.conclusion || "unknown"].join("\t")).join("\n"));
@@ -82,7 +85,7 @@ $candidates
 EOF
 
 if [ -z "$BASE_SHA" ]; then
-  emit "no completed ci.yml run on $BRANCH below $(echo "$HEAD_SHA" | cut -c1-7): this red, if any, has no base to compare against" \
+  emit "no completed ci.yml / pages.yml run on $BRANCH below $(echo "$HEAD_SHA" | cut -c1-7): this red, if any, has no base to compare against" \
        "No completed ci.yml run on \`$BRANCH\` below \`$(echo "$HEAD_SHA" | cut -c1-7)\` — nothing to compare this run against."
   exit 0
 fi
@@ -91,8 +94,8 @@ SHORT="$(echo "$BASE_SHA" | cut -c1-7)"
 RUN_URL="https://github.com/$REPO/actions/runs/$BASE_RUN"
 
 if [ "$BASE_CONC" = "success" ]; then
-  emit "base $SHORT was green — ci.yml run $BASE_RUN" \
-       "base \`$SHORT\` was **green** ([ci.yml run $BASE_RUN]($RUN_URL))."
+  emit "base $SHORT was green — run $BASE_RUN" \
+       "base \`$SHORT\` was **green** ([run $BASE_RUN]($RUN_URL))."
   exit 0
 fi
 
@@ -110,9 +113,9 @@ FAILED="$(printf '%s' "$jobs" | node -e '
 LABEL="red"
 [ "$BASE_CONC" = "failure" ] || LABEL="red ($BASE_CONC)"
 if [ -n "$FAILED" ]; then
-  emit "base $SHORT was $LABEL on: $FAILED — ci.yml run $BASE_RUN" \
-       "base \`$SHORT\` was **$LABEL on: $FAILED** ([ci.yml run $BASE_RUN]($RUN_URL))."
+  emit "base $SHORT was $LABEL on: $FAILED — run $BASE_RUN" \
+       "base \`$SHORT\` was **$LABEL on: $FAILED** ([run $BASE_RUN]($RUN_URL))."
 else
-  emit "base $SHORT was $LABEL, no failing job named — ci.yml run $BASE_RUN" \
-       "base \`$SHORT\` was **$LABEL**, with no failing job named ([ci.yml run $BASE_RUN]($RUN_URL))."
+  emit "base $SHORT was $LABEL, no failing job named — run $BASE_RUN" \
+       "base \`$SHORT\` was **$LABEL**, with no failing job named ([run $BASE_RUN]($RUN_URL))."
 fi

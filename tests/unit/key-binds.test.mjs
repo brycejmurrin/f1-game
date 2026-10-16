@@ -1132,6 +1132,29 @@ function menuRig() {
   return r;
 }
 
+test("a held D-pad direction re-arms immediately when a child menu layer opens", () => {
+  const r = menuRig();
+  const { Input, sb, dispatched, tick } = r;
+  const pad = rawPad();
+  let layer = { id: "parent", contains: () => true };
+  sb.MenuNav.activeLayer = () => layer;
+  sb.UiLayers.top = () => layer;
+  sb.navigator.getGamepads = () => [pad];
+  r.fire("gamepadconnected", { gamepad: pad });
+
+  setBtn(pad, 13, true);
+  tick();
+  assert.deepEqual(dispatched.map((e) => e.key), ["ArrowDown"], "the initial hold moves the parent layer");
+  dispatched.length = 0;
+
+  // Keep the D-pad held while A opens a nested sheet. The child must receive
+  // the held direction on its first poll instead of waiting for the parent's
+  // 450 ms repeat deadline.
+  layer = { id: "child", contains: () => true };
+  tick();
+  assert.deepEqual(dispatched.map((e) => e.key), ["ArrowDown"], "the child layer gets an immediate direction step");
+});
+
 test("I-01: a mapping-\"\" pad (wheel) resting at -1 on axes 1-3 does not walk the menu", () => {
   const { Input, sb, fire, dispatched, tick } = menuRig();
   const pad = rawPad({ mapping: "", id: "Logitech G29 Driving Force Racing Wheel", axes: [0, -1, -1, -1] });

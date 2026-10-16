@@ -152,6 +152,26 @@ test("CLASSICS filter refreshes the hero preview when the active circuit is hidd
   assert.equal(h.G.els.selPreviewName.textContent, "Imola", "preview follows the snapped classic");
 });
 
+for (const [filter, index, visible] of [["season", 0, ["0", "1"]], ["classic", 2, ["2"]], ["fav", 1, ["1"]]]) {
+  test(`explicit ${filter} filter leaves a selected custom circuit`, () => {
+    const h = boot({ trackFilter: "season", favTracks: ["spa"] });
+    h.LIST.push({ id: "custom-test", name: "Test Loop", country: "Test", custom: true });
+    h.G.trackIdx = 3;
+    h.menus.buildSelect();
+    assert.equal(h.G.trackIdx, 3, "passive designer entry preserves its custom selection");
+    assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["0", "1", "2", "3"], "custom is visible despite saved season filter");
+    h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === filter)
+      .onclick({ stopPropagation() {} });
+    assert.equal(h.G.trackIdx, index, "the explicit filter selects a matching circuit");
+    assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), visible);
+    const chip = h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === filter);
+    assert.equal(chip.getAttribute("aria-pressed"), "true");
+    assert.equal(h.G.els.selPreviewName.textContent, h.LIST[index].name);
+    assert.equal(JSON.parse(h.data.get("trackId")), h.LIST[index].id);
+    assert.equal(JSON.parse(h.data.get("trackFilter")), filter);
+  });
+}
+
 test("DRS zone labels name an S/F wrap with arrow markers", () => {
   const h = boot({}, {
     trackIdx: 0,
