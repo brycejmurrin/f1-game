@@ -133,11 +133,11 @@ const InputPadMenu = (function () {
       const ax = (pad.axes || []).map((v, i) => (ped(i) ? 0 : v));
       // CALIBRATE STICK lets a worn pad rest anywhere up to ±0.5 on the steer
       // axis; read raw, a rest past the dead zone auto-repeated one direction
-      // forever. Same sign convention as calibratePad (the offset is taken after
-      // steerInvert), so undo the invert, subtract, and put it back.
+      // forever. CalibratePad stores the offset after steerInvert, so keep the
+      // corrected axis in the same left/right convention as driving.
       const sx = axisMap.steer;
       if (Number.isInteger(sx) && sx >= 0 && sx < ax.length && !ped(sx)) {
-        ax[sx] = ((ax[sx] || 0) * axisMap.steerInvert - padRest()) * axisMap.steerInvert;
+        ax[sx] = (ax[sx] || 0) * axisMap.steerInvert - padRest();
       }
       const stick = (x, y) => {
         const mx = Math.abs(x) >= PAD_NAV_DEADZONE ? Math.abs(x) : 0;
