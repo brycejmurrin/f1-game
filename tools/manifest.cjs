@@ -238,6 +238,7 @@ const FULL = [
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
   "js/car/crest-paths.js",
   "js/car/livery-graphics.js",
+  "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/car/ghost-share.js",
@@ -523,6 +524,7 @@ const CARVIEW = [
   "js/car/liveries.js",
   "js/car/crest-paths.js",
   "js/car/livery-graphics.js",
+  "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/physics/consts.js",
   "js/car/car-mesh.js",
@@ -747,6 +749,7 @@ const HARD_EDGES = [
   // monogram because a tag moved is exactly the kind of quiet regression the
   // load-order guard exists to prevent.
   ["js/car/crest-paths.js", "js/car/liverytex.js"],
+  ["js/car/crest-draw.js", "js/car/liverytex.js"],   // liverytex destructures LiveryCrests.create(...) at eval
   ["js/core/store.js", "js/camera/offsets.js"],  // cam-tune destructures GameStore at eval
   ["js/core/store.js", "js/career/career.js"],    // career destructures GameStore at eval
   ["js/core/store.js", "js/career/season-cal.js"], // season-cal destructures GameStore at eval
