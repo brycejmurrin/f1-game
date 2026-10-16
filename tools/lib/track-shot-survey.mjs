@@ -3,6 +3,7 @@
 // @skill survey-track
 import fs from "node:fs";
 import path from "node:path";
+import { cameraControls, scenarioShots } from "./survey-scenarios.mjs";
 
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 const TODS = new Set(["day", "dusk", "dawn", "night"]);
@@ -102,6 +103,8 @@ export function normalizeSurveyTracks(args = {}, known = null) {
 
 /** Machine-readable plan for a survey run (no I/O). */
 export function buildTrackShotSurveyPlan(args = {}) {
+  if (!args.location && (args.angles || args.weathers || args.camera)) throw new Error("angles/weathers/camera require a named location");
+  if (args.location) args = { ...args, preset: "custom", shots: scenarioShots(args) };
   const label = normLabel(args.label ?? args.prefix ?? "survey");
   const presetKey = args.preset == null || args.preset === "" ? "scenery" : String(args.preset);
   const presetDef = presetKey === "custom" ? null : SURVEY_PRESETS[presetKey];
@@ -130,6 +133,8 @@ export function buildTrackShotSurveyPlan(args = {}) {
         h: s.h == null ? null : Number(s.h),
         side: s.side == null ? 1 : Number(s.side),
         hud: !!s.hud,
+        ...cameraControls(s),
+        ...(s.location ? { location: s.location, angle: s.angle, verification: s.verification } : {}),
       };
     });
     if (shots.length > MAX_SURVEY_SHOTS) throw new Error(`shots max ${MAX_SURVEY_SHOTS}`);
@@ -207,13 +212,15 @@ export function shotPngPath(outDir, name) {
 }
 
 /** Split planned shots into already-on-disk (resume) vs still needed. */
-export function filterResumeShots(outDir, shots, resume = false) {
+export function filterResumeShots(outDir, shots, resume = false, context = null) {
   if (!resume) return { pending: shots.slice(), resumed: [] };
   const pending = [];
   const resumed = [];
   for (const s of shots) {
-    const png = shotPngPath(outDir, s.name);
-    if (fs.existsSync(png)) resumed.push({ ...s, png, resumed: true });
+    const png = context?.extension ? path.join(outDir, `${s.name}.${context.extension}`) : shotPngPath(outDir, s.name);
+    let matches = !context;
+    if (context) { try { matches = JSON.parse(fs.readFileSync(png + ".capture.json", "utf8")).identity === context.identities[s.name]; } catch {} }
+    if (fs.existsSync(png) && matches) resumed.push({ ...s, png, resumed: true });
     else pending.push(s);
   }
   return { pending, resumed };

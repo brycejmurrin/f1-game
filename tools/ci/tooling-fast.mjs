@@ -159,6 +159,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // GL-aware capture / remote-group worker defaults (llvmpipe vs SwiftShader).
   "tests/unit/browser-workers.test.mjs",
   "tests/unit/build-client-drop.test.mjs",
+  "tests/unit/build-gallery.test.mjs",
   "tests/unit/cam-avoid.test.mjs",
   "tests/unit/cam-comfort.test.mjs",
   "tests/unit/cam-motion.test.mjs",

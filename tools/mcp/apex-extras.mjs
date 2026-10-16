@@ -180,7 +180,7 @@ export function createExtras(ctx) {
   /** The plan options shot-survey.mjs has no flag for; the async job carries them as --plan-json. */
   const pickPlanArgs = (a) => {
     const o = {};
-    for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName", "weather"]) if (a[k] != null) o[k] = a[k];
+    for (const k of ["cam", "cams", "az", "el", "dist", "h", "side", "hud", "shots", "cols", "sheetName", "weather", "location", "angles", "weathers", "camera"]) if (a[k] != null) o[k] = a[k];
     return o;
   };
   async function handleShotSurvey(args = {}) {
@@ -202,13 +202,13 @@ export function createExtras(ctx) {
     const wantIndex = args.index !== false;
     const resume = !!args.resume;
     const estimateMs = estimateSurveyMs(plan.shots.length, tracks.length);
-    const asJob = shouldSurveyAsync(args, plan, tracks.length);
+    const asJob = !!(args.location || args.profile || args.resume) || shouldSurveyAsync(args, plan, tracks.length);
 
     if (args.dryRun) {
       return toolResult({
         ok: true, dryRun: true, track: tracks[0], tracks, out: outRoot, ...plan,
         // Every option the real run reads, so a dry run shows what would happen (and a test can see an option is wired).
-        options: { panel: wantPanel, index: wantIndex, resume, gl: args.gl ?? null, async: args.async ?? null, closeSession: args.closeSession !== false && !args.keepSession, keepSession: !!args.keepSession },
+        options: { profile: args.profile || "comparison", seed: args.seed ?? 2391, panel: wantPanel, index: wantIndex, resume, gl: args.gl ?? null, async: args.async ?? null, closeSession: args.closeSession !== false && !args.keepSession, keepSession: !!args.keepSession },
         estimateMs, asyncDefault: asJob, resume,
         hint: asJob
           ? "Long/multi-track: omit async:false to get a jobId via shot_survey; watch apex_job_status."
@@ -238,6 +238,7 @@ export function createExtras(ctx) {
         count: args.count,
         fracs: args.fracs,
         planArgs: pickPlanArgs(args),
+        profile: args.profile, seed: args.seed,
       });
     }
 
@@ -271,7 +272,7 @@ export function createExtras(ctx) {
           let reply;
           try {
             reply = await sessSend({
-              shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
+              ...s, shot: s.name, frac: s.frac, cam: s.cam, az: s.az, el: s.el, dist: s.dist,
               h: s.h, side: s.side, tod: s.tod, weather: s.weather, hud: s.hud,
             }, 240000);
           } catch (e) {
@@ -369,7 +370,7 @@ export function createExtras(ctx) {
     }
     const cmd = {};
     if (op === "shot") {
-      Object.assign(cmd, { shot: args.name || true, frac: args.frac, cam: args.cam, az: args.az, el: args.el, dist: args.dist, h: args.h, side: args.side, tod: args.tod, hud: args.hud });
+      Object.assign(cmd, { shot: args.name || true, frac: args.frac, cam: args.cam, az: args.az, el: args.el, dist: args.dist, h: args.h, fov: args.fov, lat: args.lat, lookFrac: args.lookFrac, target: args.lookTarget, side: args.side, tod: args.tod, hud: args.hud });
     } else if (op === "eval") {
       if (typeof args.expr !== "string" || !args.expr) return refuse("bad_args", "eval needs expr", 'Pass {"op":"eval","expr":"a.corners()"}.');
       cmd.eval = args.expr;
@@ -434,6 +435,8 @@ export function createExtras(ctx) {
           "--preset", preset,
           "--label", label,
           "--out", out,
+          ...(a.profile ? ["--profile", String(a.profile)] : []),
+          ...(a.seed != null ? ["--seed", String(a.seed)] : []),
           ...(a.resume ? ["--resume"] : []),
           ...(a.panel === false ? ["--no-panel"] : []),
           ...(a.index === false ? ["--no-index"] : []),
