@@ -209,6 +209,26 @@ test.describe("Lighting tuner — pause lifecycle", () => {
     expect(await page.evaluate(() => document.getElementById("photo-controls").hidden)).toBe(true);
   });
 
+  // #2159: with phone insets the fly-cam bar ran 59px into the docked panel and
+  // a tap on FREE CAMERA landed on the bar (a Chromium calc mis-resolution of
+  // `--dock-px / --ui-scale`). The bar must end left of the panel.
+  test("fly-cam bar stays clear of the docked tuner panel with phone insets", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    const geo = await page.evaluate(async () => {
+      for (const [k, v] of [["--sal", "47px"], ["--sar", "47px"], ["--sab", "21px"]]) document.documentElement.style.setProperty(k, v);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const bar = document.getElementById("pc-bar").getBoundingClientRect();
+      const panel = document.getElementById("lighting-inner").getBoundingClientRect();
+      const t = document.getElementById("pc-toggle").getBoundingClientRect();
+      const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
+      return { barRight: bar.right, panelLeft: panel.left, hit: hit && hit.closest("#pc-toggle") ? "pc-toggle" : hit && hit.id };
+    });
+    expect(geo.barRight, JSON.stringify(geo)).toBeLessThan(geo.panelLeft);
+    expect(geo.hit).toBe("pc-toggle");
+  });
+
   // …and pressing it again walks the real route back out, one screen per press.
   test("Escape walks free cam -> tuner -> display -> settings -> pause -> racing", async ({ page }) => {
     await page.goto("/");

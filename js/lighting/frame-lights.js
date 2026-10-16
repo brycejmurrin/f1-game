@@ -587,6 +587,20 @@ const _S_MAIN = _rankState(), _S_VIEW = _rankState();
 const _last = { src: null, cap: 0, sr: 1, sg: 1, sb: 1, fl: null, tNow: 0, ranked: false };
 const _viewBuf = [];
 const _viewOut = { lights: null, tailStart: 0, tailCount: 0 };
+// TRACK SWITCH (#2180): every strong hold on a lamp SOURCE array, and the
+// per-lamp scratch sized to it, goes here — a day track never calls
+// setFrameLights again, so anything left kept the old track._lights (thousands
+// x 15 numbers) and its entry ramps reachable until the next lit world. The
+// track itself is already only weakly held (_lampTrackRef).
+function release() {
+  _last.src = null; _last.fl = null; _last.ranked = false;
+  _lsSrc = null; _lsLen = -1;
+  _alSrc = null; _alLen = -1; _alFl = null;
+  for (const S of [_S_MAIN, _S_VIEW]) {
+    S.rankSrc = null; S.entrySrc = null; S.heap.length = 0; S.buf.length = 0;
+    S.entryLvl = new Float32Array(0); S.entryStamp = new Uint32Array(0);
+  }
+}
 /** THE MIRROR'S LAMPS. frame.lights is ranked for the FORWARD camera, and that
  *  ranking pushes lamps behind it down the list (lampBehindBias) — exactly the
  *  lamps a rear-view mirror shows. On a phone's 24-slot budget or a dense street
@@ -617,7 +631,9 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // absent, the baked full set is used exactly as before.
   const src = srcSet || track._lights;
   // Empty set / not a lit session (caller usually gates, but count===0 is free).
-  if (!src || !src.length) { frame.lights = frame.lampLum = null; _S_MAIN.rankSrc = null; _last.ranked = false; return; }
+  if (!src || !src.length) { frame.lights = frame.lampLum = null; release(); return; }
+  const prevTrack = _lampTrackRef && _lampTrackRef.deref();
+  if (track !== prevTrack) release();   // a new world: no cache keyed on the old one's lamps (before the set key below)
   // frame.lampLum[i]: record i's max-channel level WITHOUT flicker (time-of-day
   // scale, warm-up and the cull fade kept). The lamp-shadow pick scores on it:
   // scored on the flickered level, two floods near equal range swapped the
@@ -658,7 +674,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // were off, so this frame is a fresh switch-on. Per-frame copy only — the
   // baked track records are never touched.
   const rt = Number.isFinite(frame.time) ? frame.time : null;
-  const prevTrack = _lampTrackRef && _lampTrackRef.deref();
   if (tNow - _lampLastT > 1.0) {
     const lit = rt === null || track !== prevTrack || !(rt - _lampLastRT <= 1.0);   // a new world, or render ran dark
     if (!_lampHid && lit) _lampWarmT0 = tNow;
@@ -709,6 +724,6 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   if (frame.perChunkLights > 0) _fillAllLights(frame, src, sr, sg, sb, fl, tNow);
 }
 
-  return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats };
+  return { setFrameLights, appendCarTailLights, glowFade, viewLights, rankStats, resetRankStats, release };
 })();
 Object.freeze(FrameLights);

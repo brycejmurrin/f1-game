@@ -74,6 +74,23 @@ const AgentView = (function () {
   // jump()+act()+frozen render — and the camera-anchored cockpit rig with it —
   // somewhere else entirely, with no error to show for it. It lives here rather
   // than in apex.js because agentview.js loads FIRST (ApexRoster.LAZY_AGENT).
+  // RACE ORDER: running cars by distance, the retired behind them (a plain prog
+  // sort ranked a parked DNF ahead of the field). The one copy, apex.js shares it.
+  function raceOrder(cars) {
+    const byProg = (a, b) => b.prog - a.prog;
+    return cars.filter((c) => !c.retired).sort(byProg)
+      .concat(cars.filter((c) => c.retired).sort(byProg));
+  }
+
+  // THE SLIP BUDGET for world(), obs() and physState() alike (#2172): the axFrac
+  // player-forces.js STORES (per-axle, mods.braking-scaled) — the weather-scaled
+  // axEstSm estimate only before the first tick — and the whole-car circle
+  // sqrt(1 − axFrac²). The driven axle's c.slipFactor is physState().drivenSlip.
+  function slipBudget(p, longGrip, gripMul) {
+    const axFrac = p.axFrac ?? Math.min(1, Math.abs(p.axEstSm ?? 0) / (longGrip * gripMul));
+    return { axFrac, slipFactor: Math.sqrt(Math.max(0, 1 - axFrac * axFrac)) };
+  }
+
   function syncRenderAnchors(cars) {
     const list = Array.isArray(cars) ? cars : [cars];
     for (let i = 0; i < list.length; i++) {
@@ -401,8 +418,9 @@ const AgentView = (function () {
       return out;
     }
 
-    // Fallback when a circuit has no curated turn list: local curvature maxima.
-    // Same rule __apex.corners() uses, kept in step deliberately.
+    // Fallback when a circuit has no curated turn list: maxima of the SMOOTHED
+    // curvature. NOT __apex.corners()' rule (raw curvature per node), so on a
+    // turns-less def the lists differ (pinned in agent-hooks-vm.test.mjs).
     function peakFracs(track) {
       const n = 400, out = [];
       let prev = 0, cur = Math.abs(smoothK(0));
@@ -619,11 +637,7 @@ const AgentView = (function () {
                     'call field({detail:"full"})');
       }
       const total = G.track.total;
-      // Running cars by distance, the retired classified behind them (as the
-      // game's own rank and world().ego.pos do) — not a plain prog sort.
-      const byProg = (a, b) => b.prog - a.prog;
-      const sorted = G.cars.filter((c) => !c.retired).sort(byProg)
-        .concat(G.cars.filter((c) => c.retired).sort(byProg));
+      const sorted = raceOrder(G.cars);
       const leader = sorted[0];
       const rows = sorted.map((c, i) => {
         const ahead = sorted[i - 1];
@@ -833,25 +847,11 @@ const AgentView = (function () {
       const wallR = Tracks.wallAt(G.track, p.s, 1);
       const wallL = -Tracks.wallAt(G.track, p.s, -1);
 
-      let headErr = Math.atan2(scr.t[0], scr.t[2]) - p.head;
-      while (headErr > Math.PI) headErr -= 2 * Math.PI;
-      while (headErr < -Math.PI) headErr += 2 * Math.PI;
+      const headErr = angDiff(Math.atan2(scr.t[0], scr.t[2]), p.head);
 
-      // Running cars by progress, then the retired ones (apex.js raceOrder): a retired player is
-      // classified behind the field, not "P0" (timing / field / obs read the same order).
-      const byProg = (a, b) => b.prog - a.prog;
-      const ranked = G.cars.filter((c) => !c.retired).sort(byProg)
-        .concat(G.cars.filter((c) => c.retired).sort(byProg));
-      const pos = ranked.findIndex((c) => c.isPlayer) + 1;
-
-      // The friction ellipse's longitudinal axis is weather-scaled, exactly as in
-      // js/game.js's own combined-slip block and in apex.js's two copies. Dividing
-      // by the dry LONG_GRIP alone reported a slip budget the physics never had —
-      // optimistic by ~28% in the rain, i.e. wrong in the direction that puts an
-      // agent reading world() into the barrier.
-      const axFrac = clamp(Math.abs(p.axEstSm || 0)
-                           / ((LONG_GRIP || 34) * (gripMult ? gripMult() : 1)), 0, 1);
-      const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+      // A retired player is classified behind the field, not "P0".
+      const pos = raceOrder(G.cars).findIndex((c) => c.isPlayer) + 1;
+      const { axFrac, slipFactor } = slipBudget(p, LONG_GRIP || 34, gripMult ? gripMult() : 1);
 
       const ego = {
         lap: p.lap, pos, of: G.cars.length,
@@ -2578,6 +2578,6 @@ const AgentView = (function () {
              API_VERSION, PHYSICS_VERSION };
   }
 
-  return { create, syncRenderAnchors };
+  return { create, syncRenderAnchors, raceOrder, slipBudget };
 })();
 Object.freeze(AgentView);

@@ -7,7 +7,8 @@
     python3 tools/lighting/look-survey-sheet.py --all
     python3 tools/lighting/look-survey-sheet.py --ready   # tracks with all 20 looks
 
-Writes docs/look-survey/<id>_grid.png (tracked). Source frames live in
+Writes docs/look-survey/<id>_grid.png; commit it on the track-survey-assets branch,
+never the deploy branch (tests/unit/committed-images.test.mjs). Source frames live in
 gitignored artifacts/lighting/shots/<id>/.
 """
 from __future__ import annotations

@@ -534,8 +534,8 @@ window.SpotifyMusic = (function () {
   // one forced refresh and one retry; a second 401 is the caller's to see.
   // (401 = "authorization has been refused for those credentials":
   // https://developer.spotify.com/documentation/web-api/concepts/api-calls)
-  function api(path, opts) { return apiWith(path, opts, null); }
-  function apiWith(path, opts, refused) {
+  function api(path, opts, requestController) { return apiWith(path, opts, null, requestController); }
+  function apiWith(path, opts, refused, requestController) {
     const gen = sessionGen;
     return validToken(refused).then((t) => {
       if (!t || gen !== sessionGen) return null;
@@ -545,7 +545,7 @@ window.SpotifyMusic = (function () {
         o.headers || {});
       // FETCH_TIMEOUT_MS cap — a hung /me/player request otherwise wedges the
       // poll's in-flight guard until the tab dies. Offline stays a quiet null.
-      const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const ac = requestController || (typeof AbortController !== "undefined" ? new AbortController() : null);
       if (ac) o.signal = ac.signal;
       const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
       // Logged once per failing streak: the player poll repeats this every few seconds offline.
@@ -554,7 +554,7 @@ window.SpotifyMusic = (function () {
         return null;
       }).then((r) => {
         if (timer) clearTimeout(timer);
-        if (r && r.status === 401 && !refused && gen === sessionGen) return apiWith(path, opts, t);
+        if (r && r.status === 401 && !refused && gen === sessionGen) return apiWith(path, opts, t, requestController);
         return r;
       });
     });
@@ -719,14 +719,26 @@ window.SpotifyMusic = (function () {
     pollBusy = true;
     const gen = sessionGen;
     const done = () => { if (gen === sessionGen) pollBusy = false; };
-    return api("/me/player").then((r) => {
+    const bodyController = typeof AbortController !== "undefined" ? new AbortController() : null;
+    return api("/me/player", null, bodyController).then((r) => {
       if (gen !== sessionGen) return;
       if (!r) return;
       if (r.status === 204) { track = null; paused = true; emit(); return; }   // nothing playing
       if (r.status === 429) { pollHoldUntil = Date.now() + retryAfterMs(r); return; }
       if (!r.ok) return;
-      return r.json().then((j) => {
-        if (gen !== sessionGen) return;
+      // fetch() can finish at the headers while the body never completes. The
+      // API fetch timer has already been cleared, so bound this read as well.
+      let bodyTimer;
+      return Promise.race([
+        r.json().then((j) => ({ j }), () => null),
+        new Promise((resolve) => { bodyTimer = setTimeout(() => {
+          if (bodyController) bodyController.abort();
+          resolve(null);
+        }, FETCH_TIMEOUT_MS); }),
+      ]).then((body) => {
+        clearTimeout(bodyTimer);
+        if (!body || gen !== sessionGen) return;
+        const j = body.j;
         const it = j && j.item;
         track = it ? (it.name + " — " + (it.artists || []).map((a) => a.name).join(", ")) : null;
         title = it ? it.name : "";

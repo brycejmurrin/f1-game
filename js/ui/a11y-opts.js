@@ -9,6 +9,8 @@
        on Data Hub compound chips, ISO country codes beside circuit flags in
        menus, and matching letter/shape cues on the race HUD (tyres, flags,
        sector splits).
+     * GAS / LOOK BACK — Hold / Toggle per action on keyboard and controller
+       (apex26.holdMode; on-screen GAS latch stays under CONTROLS › THROTTLE).
 
    Self-contained like AppearanceOpts: GameStore + SettingRow, no G façade.
    Panel body is runtime-built so shellNodes stays under its absorb. */
@@ -17,9 +19,11 @@ const A11yOpts = (function () {
 
   const K_FOCUS = "focusRing";     // apex26.focusRing — "standard" | "high"
   const K_CB = "cbCues";           // apex26.cbCues — "off" | "on"
+  const K_HOLD = "holdMode";       // apex26.holdMode — { throttle, lookBack } each "hold" | "toggle"
 
   const FOCUS = [["standard", "STANDARD"], ["high", "HIGH"]];
   const CB = [["off", "OFF"], ["on", "ON"]];
+  const HOLD = [["hold", "HOLD"], ["toggle", "TOGGLE"]];
   // REDUCE MOTION labels (values are TitleFx's stored tokens).
   const MOTION = [["auto", "AUTO"], ["reduce", "ON"], ["off", "OFF"]];
 
@@ -34,6 +38,13 @@ const A11yOpts = (function () {
 
   let focusRing = oneOf(store.get(K_FOCUS, "high"), FOCUS, "high");
   let cbCues = oneOf(store.get(K_CB, "off"), CB, "off");
+  let holdMode = (typeof InputBindings !== "undefined" && InputBindings.parseHoldMode)
+    ? InputBindings.parseHoldMode(store.get(K_HOLD, null))
+    : { throttle: "hold", lookBack: "hold" };
+
+  function applyHoldMode() {
+    if (typeof Input !== "undefined" && Input.setHoldMode) Input.setHoldMode(holdMode);
+  }
 
   function applyFocus() {
     const el = root();
@@ -47,7 +58,18 @@ const A11yOpts = (function () {
     if (cbCues === "on") el.dataset.cbCues = "on";
     else delete el.dataset.cbCues;
   }
-  function apply() { applyFocus(); applyCb(); }
+  function apply() { applyFocus(); applyCb(); applyHoldMode(); }
+
+  function setHoldAction(id, v) {
+    const mode = oneOf(v, HOLD, "hold");
+    if (id !== "throttle" && id !== "lookBack") return holdMode;
+    holdMode = Object.assign({}, holdMode, { [id]: mode });
+    store.set(K_HOLD, holdMode);
+    applyHoldMode();
+    const row = id === "throttle" ? "pm-hold-throttle" : "pm-hold-lookback";
+    if (typeof SettingRow !== "undefined" && SettingRow.paint) SettingRow.paint(row, mode);
+    return holdMode;
+  }
 
   function setFocus(v) {
     focusRing = oneOf(v, FOCUS, "high");
@@ -117,6 +139,20 @@ const A11yOpts = (function () {
     panel.appendChild(cb.row);
     panel.appendChild(help("pm-cbcues-help",
       "ON adds S/M/H/I/W letters on Data Hub tyre chips, country codes beside circuit flags, and the same compound letters plus flag and sector shape cues on the race HUD."));
+
+    const gas = SettingRow.build("pm-hold-throttle", "GAS (KEYBOARD / PAD)", HOLD);
+    const gasSel = gas.row.querySelector("select");
+    if (gasSel) gasSel.setAttribute("aria-describedby", "pm-hold-throttle-help");
+    panel.appendChild(gas.row);
+    panel.appendChild(help("pm-hold-throttle-help",
+      "HOLD keeps gas while the key or trigger is down. TOGGLE flips gas on each press (clears on pause, race end and rebinding). On-screen pedals use CONTROLS › THROTTLE."));
+
+    const lb = SettingRow.build("pm-hold-lookback", "LOOK BACK (KEYBOARD / PAD)", HOLD);
+    const lbSel = lb.row.querySelector("select");
+    if (lbSel) lbSel.setAttribute("aria-describedby", "pm-hold-lookback-help");
+    panel.appendChild(lb.row);
+    panel.appendChild(help("pm-hold-lookback-help",
+      "HOLD shows the mirror while the key or button is down. TOGGLE flips look-back on each press (clears on pause, race end and rebinding)."));
   }
 
   function wireRows() {
@@ -138,6 +174,12 @@ const A11yOpts = (function () {
     if (document.getElementById("pm-cbcues")) {
       SettingRow.wire("pm-cbcues", { values: CB, read: () => cbCues, write: (v) => setCb(v) });
     }
+    if (document.getElementById("pm-hold-throttle")) {
+      SettingRow.wire("pm-hold-throttle", { values: HOLD, read: () => holdMode.throttle, write: (v) => setHoldAction("throttle", v) });
+    }
+    if (document.getElementById("pm-hold-lookback")) {
+      SettingRow.wire("pm-hold-lookback", { values: HOLD, read: () => holdMode.lookBack, write: (v) => setHoldAction("lookBack", v) });
+    }
   }
 
   function initUI() {
@@ -152,11 +194,12 @@ const A11yOpts = (function () {
   }
 
   return Object.freeze({
-    K_FOCUS, K_CB, FOCUS, CB, MOTION,
+    K_FOCUS, K_CB, K_HOLD, FOCUS, CB, HOLD, MOTION,
     focusRing: () => focusRing,
     cbCues: () => cbCues,
+    holdMode: () => Object.assign({}, holdMode),
     cuesOn, compoundLetter,
-    setFocus, setCb, apply, applyFocus, applyCb,
+    setFocus, setCb, setHoldAction, apply, applyFocus, applyCb, applyHoldMode,
     initUI, wireRows, mountPanel,
   });
 })();

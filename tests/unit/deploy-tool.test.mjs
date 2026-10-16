@@ -715,7 +715,7 @@ test("--targeted prints the suites for a change list, and nothing for a game.js-
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   assert.match(yml, /node tools\/ci\/geometry-paths\.mjs --targeted "\$CHANGED_FILE"/,
     "ci.yml's sweeps filter must read the targeted table, not retype it");
-  assert.match(yml, /- name: Targeted sweeps \(the suites that read this diff, no fleet rebuild\)\n\s+if: steps\.filter\.outputs\.geometry != 'true' && steps\.filter\.outputs\.targeted != ''/,
+  assert.match(yml, /- name: Targeted sweeps \(the suites that read this diff, no fleet rebuild\)\n\s+if: needs\.select\.outputs\.geometry == 'false' && needs\.select\.outputs\.geometry_targeted != ''/,
     "the targeted step runs exactly when the fleet does not and a suite was named");
   assert.equal(notCovered(false, ["tests/unit/car-front-wing-width.test.mjs"])[1],
     "test:sweeps (nothing in this union can move geometry; the targeted sweeps that read it ran: car-front-wing-width.test.mjs)");

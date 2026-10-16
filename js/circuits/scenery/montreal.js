@@ -13,7 +13,7 @@
         ferrisWheel, tower, onTrack, forestEdge, cityFront,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, foundation,
         broadcastCompound, cameraTower, sponsorHoarding, circuitKit,
-        cross, norm, MAT, COL, frameAt } = api;
+        cross, norm, MAT, COL, frameAt, floodMast } = api;
 
       // ── strut(): thin cylinder between two world points (geodesic lattice) ────
       const strut = (a, c, rad, col, seg, target) => {
@@ -35,7 +35,7 @@
       const RIVER    = TEAL;                 // St. Lawrence — bright basin teal
       const RIVER2   = [TEAL[0] + 0.06, TEAL[1] + 0.08, TEAL[2] + 0.06]; // lighter near-shore
       const BASIN    = TEAL;                 // Olympic rowing lake (bright teal)
-      const GRASS    = [0.22, 0.43, 0.20];   // park green (muted, avoids neon under sun)
+      const GRASS    = [0.24, 0.49, 0.20];   // park green — within 2 % of def.pal.grass so lawn-patch edges stop reading as slabs
       const FOLIAGE  = [0.16, 0.34, 0.18];   // deep tree green (darker summer deciduous)
       const FOLIAGE2 = [0.20, 0.40, 0.20];   // lighter June foliage
       const HEDGE    = [0.16, 0.32, 0.17];   // clipped hedge green
@@ -146,7 +146,8 @@
 
       // Marshal posts spaced around the lap (orange-roofed bunkers + flag pole)
       for (const s of [0.18, 0.32, 0.47, 0.56, 0.68, 0.82, 0.94]) {   // 0.05: the Senna S post below
-        marshalPost(K(s), (Math.round(s * 100) % 2) ? 1 : -1, 8.5);
+        // 0.47 / 0.68 stand inside the 9 m hedge ribbons: stand them behind it instead (hedge x post clip)
+        marshalPost(K(s), (Math.round(s * 100) % 2) ? 1 : -1, (s === 0.47 || s === 0.68) ? 13 : 8.5);
       }
 
       grandstandEx(0.02,  1,  8, 120, null, null,
@@ -386,6 +387,7 @@
       });
       // Scattered bushes in the mid-island infield near the Casino approach
       for (let i = 0; i < 10; i++) {
+        if ((i % 2) && 0.37 + i * 0.012 >= 0.38) continue;   // right side: the 0.38-0.50 hedge owns it (bush x hedge clip)
         bush(K(0.37 + i * 0.012), (i % 2) ? 1 : -1, 10 + hash(i * 7) * 4,
           (i % 2) ? [0.20, 0.40, 0.18] : [0.24, 0.44, 0.20]);
       }
@@ -395,57 +397,8 @@
       });
       billboard(K(0.44), -1, 10, 12, 4, [0.20, 0.46, 0.42]);
 
-      {
-        const k = K(0.25);
-        const a = anchor(k, 1, 175);
-        const b = [a.r, a.u, a.t];
-        const PALE   = [0.82, 0.84, 0.88];   // Expo concrete / aluminium
-        const PALE2  = [0.88, 0.90, 0.93];   // brighter fin faces
-        const WIN    = [0.55, 0.68, 0.78];   // recessed glazing between fins
-        const TIERS = [
-          { H: 24, W: 48, D: 36, nfin: 9 },   // grade-level hall (original footprint)
-          { H: 17, W: 38, D: 28, nfin: 7 },   // first setback
-          { H: 11, W: 28, D: 20, nfin: 5 },   // crown
-        ];
-        out._mat = MAT.CONCRETE;
-        const PLINTH_TOP = 1.2 + 2.4 / 2;
-        let yBase = PLINTH_TOP;
-        for (const tier of TIERS) {
-          const cy = yBase + tier.H / 2;
-          addBox(out, vadd(a.c, a.u, cy), [tier.W, tier.H, tier.D], PALE, b);
-          // Recessed glass ribbon mid-façade (Expo curtain wall between fins)
-          addBox(out, vadd(vadd(a.c, a.u, yBase + tier.H * 0.42), a.r, -tier.W / 2 - 0.15),
-                 [0.4, tier.H * 0.55, tier.D * 0.88], WIN, b);
-          // Vertical aluminium fins wrapping the track-facing façade of this
-          // tier. Measured (float-audit): fins keyed to THIS tier's own box
-          // lose the support test on the +t half of the spread (only the
-          // -t half of every tier above the ground floor ever grounds, no
-          // matter how deep the fin is embedded in its tier box — isolated
-          // by forcing every ot negative, which alone took montreal's casino
-          // cluster to zero). Rather than chase that inside a tier that isn't
-          // the reliable reference, run every fin the full height from the
-          // PLINTH (proven grounded — direct terrain touch) up to its tier's
-          // usual top: same visual band per tier, but anchored on the one
-          // primitive the support chain never lost.
-          // Fins sit CLEAR of the tier façade. Centre at −W/2−1.2 with depth
-          // 2.4 put the inner face exactly on the tier face → flatCoplanar
-          // (12 pairs / 2.64 m² at 354×373). Pull them 0.4 m further out and
-          // thin the depth so the gap stays open.
-          const finTop = yBase + tier.H * 0.98;
-          const finH = finTop - PLINTH_TOP;
-          for (let i = 0; i < tier.nfin; i++) {
-            const ot = tier.nfin > 1 ? ((i / (tier.nfin - 1)) - 0.5) * (tier.D - 4) : 0;
-            addBox(out, vadd(vadd(vadd(a.c, a.u, PLINTH_TOP + finH / 2), a.r, -tier.W / 2 - 2.0), a.t, ot),
-                   [1.6, finH, 1.1], PALE2, b);
-          }
-          yBase += tier.H;
-        }
-        // Low podium plinth under the hall
-        addBox(out, vadd(a.c, a.u, 1.2), [TIERS[0].W + 8, 2.4, TIERS[0].D + 8], [0.76, 0.78, 0.82], b);
-        // Shallow roof cap / parapet atop the crown tier
-        addBox(out, vadd(a.c, a.u, yBase + 1.0), [TIERS[2].W + 2, 2.0, TIERS[2].D + 2], PALE2, b);
-        out._mat = 0;
-      }
+      // (the older 3-tier casino-like mass at 0.25 R 175 was removed: it competed with
+      // the required 4-tier montreal-casino at 0.274 R 95 and read as a second casino.)
 
       for (let i = 0; i < 13; i++) {
         farBank(K(0.27 + i * 0.015), -1, 185, 320, 220);
@@ -528,7 +481,7 @@
               const p = vadd(vadd(a0.c, a0.r, r * 11), a0.t, (c - 1.5) * 11);
               if (onTrack(p[0], p[2], 14)) continue;
               // Gravel walk under and around each parterre.
-              addBox(out, vadd(p, a0.u, 0.05), [10.4, 0.10, 10.4], GRAVEL, b);
+              addBox(out, vadd(p, a0.u, 0.22), [10.4, 0.44, 10.4], GRAVEL, b);
               // Clipped green edging, then the massed colour inside it.
               out._mat = MAT.FOLIAGE;
               addBox(out, vadd(p, a0.u, 0.35), [8.6, 0.60, 8.6], EDGE, b);
@@ -685,17 +638,18 @@
             return R * Math.sqrt(Math.max(0, 1 - t * t));
           };
           let yPrev = Y0;
-          stage._mat = MAT.METAL;
+          stage._mat = MAT.CONCRETE;   // matte skin: METAL glowed white at night
           for (let i = 1; i <= STK; i++) {
             const yTop = Y0 + ((HEIGHT - Y0) * i) / STK;
             const h = yTop - yPrev;
             const rb = rAt(yPrev), rt = rAt(yTop);
             addFrustum(stage, vadd(foot, a.u, (yPrev + yTop) / 2), Math.max(rb, 1.5),
-                       Math.max(rt, 1.0), h, yPrev < R * 0.45 ? DOME_D : DOME, 14, b);
+                       Math.max(rt, 1.0), h, yPrev < R * 0.45 ? DOME_D : DOME, 18, b);
             yPrev = yTop;
           }
-          addFrustum(stage, vadd(foot, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 14, b);
-          const LAT = [0.60, 0.62, 0.66];
+          addFrustum(stage, vadd(foot, a.u, R), R + 0.4, R + 0.4, 1.2, DOME_D, 18, b);
+          stage._mat = MAT.METAL;   // dark lattice only
+          const LAT = [0.40, 0.42, 0.46];   // darker lattice band so the dome reads as a geodesic frame, not a smooth ball
           const surf = (y, phi) => vadd(vadd(vadd(foot, a.u, y),
                        a.r, rAt(y) * Math.cos(phi)), a.t, rAt(y) * Math.sin(phi));
           const MER = 10, RN = 8, yTopMax = HEIGHT - 1.5;
@@ -705,7 +659,7 @@
             for (let j = 1; j <= RN; j++) {
               const y = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
               const cur = surf(y, phi);
-              strut(prev, cur, 0.28, LAT, 3, stage);
+              strut(prev, cur, 0.7, LAT, 3, stage);
               prev = cur;
             }
           }
@@ -714,7 +668,7 @@
             let prev = surf(y, 0);
             for (let m = 1; m <= MER; m++) {
               const cur = surf(y, m / MER * 6.2832);
-              strut(prev, cur, 0.24, LAT, 3, stage);
+              strut(prev, cur, 0.6, LAT, 3, stage);
               prev = cur;
             }
           }
@@ -722,7 +676,7 @@
             const y0 = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * j / RN;
             const y1 = Math.max(0.5, Y0 + 1) + (yTopMax - Math.max(0.5, Y0 + 1)) * (j + 1) / RN;
             for (let m = 0; m < MER; m++) {
-              strut(surf(y0, m / MER * 6.2832), surf(y1, (m + 1) / MER * 6.2832), 0.16, LAT, 3, stage);
+              strut(surf(y0, m / MER * 6.2832), surf(y1, (m + 1) / MER * 6.2832), 0.45, LAT, 3, stage);
             }
           }
           stage._mat = 0;
@@ -990,7 +944,8 @@
       // Finish/announcer tower anchors the long Olympic Basin straight.
       rowingTower("montreal-rowing-tower-finish", 0.625, 1, 48, 19);
       // Right verge: island parkland trees on the FAR bank beyond the basin
-      forestEdge(0.575, 0.65, 1, 38, {
+      // Split around the finish tower (0.625, 48 m): a belt tree grew through it.
+      for (const [s0, s1] of [[0.575, 0.609], [0.641, 0.65]]) forestEdge(s0, s1, 1, 38, {
         density: 0.70, hMin: 8, hMax: 14,
         col: FOLIAGE, col2: FOLIAGE2, pineFrac: 0.20
       });
@@ -1111,4 +1066,20 @@
         addBox(out, vadd(aw.c, aw.u, 1.8), [0.10, 0.60, 20], [0.88, 0.20, 0.18], [aw.r, aw.u, aw.t]);
       }
       billboard(K(0.96), -1, 12, 14, 4, [0.85, 0.30, 0.16]);
+      // NIGHT LIGHTING (survey defect 1): def lamp is "none" and the def's lighting
+      // exclusions (0.05-0.09, 0.55-0.59, pinned by montreal-foundation.spec) stay
+      // as they are, so the race lighting is these scenery-only masts, which also
+      // register point lights (catalunya / dijon idiom, #1930). Pit straight, Senna S,
+      // hairpin approach + apex, the Casino straight and the final chicane.
+      if (typeof floodMast === "function") {
+        for (const [s, side, gap] of [
+          [0.012, 1, 30], [0.034, 1, 34], [0.958, -1, 30], [0.975, -1, 32],
+          [0.058, 1, 18], [0.078, 1, 18], [0.070, -1, 20],
+          [0.545, -1, 16], [0.575, -1, 16], [0.612, -1, 18], [0.630, -1, 18],
+          [0.665, -1, 16], [0.700, -1, 16], [0.780, -1, 16], [0.820, -1, 16],
+          [0.700, 1, 16], [0.800, 1, 16], [0.860, 1, 16], [0.895, 1, 16],
+          [0.265, 1, 16], [0.350, 1, 16], [0.430, 1, 16],
+        ]) floodMast(K(s), side, gap, { h: 30, cool: true, pool: false, arms: 2 });
+      }
+
     };

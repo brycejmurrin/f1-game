@@ -918,6 +918,7 @@ test("host(): an unreadable answer goes back to waiting; a room that will not op
 });
 
 test("host(): a linked phone whose WIRE dies is hosted again on the SAME code; the phone's own goodbye is final (R3-PHONE-3)", async () => {
+  const logStart = Log.records().at(-1)?.id || 0;
   // A fresh loopback per hosting, as a fresh RTCPeerConnection per attempt.
   const pairs = [];
   let minted = 0;
@@ -933,6 +934,9 @@ test("host(): a linked phone whose WIRE dies is hosted again on the SAME code; t
   assert.equal(h.Input.remoteActive(), false, "the dead phone stops steering at once");
   assert.equal(h.ctl.state().phase, "waiting", "the room is open again, not lost");
   assert.equal(h.ctl.state().code, "ABC234"); assert.equal(minted, 1, "the SAME code: no new QR to scan");
+  const reconnectLogs = Log.records({ ns: "input", since: logStart });
+  assert.ok(reconnectLogs.some((r) => r.msg.includes("phone pad dropped")), "the default logger retains the reconnect diagnostic");
+  assert.ok(!JSON.stringify(reconnectLogs).includes(h.ctl.state().code), "exportable logs must not contain the live pairing code");
   assert.equal(pairs.length, 2, "on a fresh transport");
   assert.equal(h.ui.relinkN, 1); assert.equal(h.ui.lostN, 0, "the page is not told to re-pair");
   await h.room.onJoiner(null, "ANSWER-2"); await settle();

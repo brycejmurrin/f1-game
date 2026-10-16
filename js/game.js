@@ -1922,6 +1922,7 @@ function redFlagRestart() {
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   seedPlayerPose();
+  raceCtl.rewound();   // the leader re-runs its lap: a pending Overtake hold follows it (#2166)
   restartPending = true; replayBuf.breakTimeline();   // same clock, every car teleported: a scrub must not blend track position into the grid box
   setState("count", "red-flag-restart"); countT = 0; lightsLit = 0; startHold = 0;
   els.lights.hidden = false;
@@ -2224,7 +2225,7 @@ function _loadTrackBody(idx, def, built, builtPrevId) {
   // re-render gate, so a new track whose first snapped cell + sunDir happen to
   // match the old track's last values would keep the PREVIOUS track's shadow
   // silhouette until the camera moved a cell (~16 m).
-  shadowPass.reset();
+  shadowPass.reset(); FrameLights.release();   // a day track never re-enters setFrameLights: drop the old lamp set here
   // Buildings light up for the chosen SESSION time, not the track's default:
   // night/dusk/dawn (or a night-default track in "default") → lit windows. Props
   // are rebuilt when this flips so a day-default circuit raced at night gets a
@@ -3401,13 +3402,6 @@ const G = {
   setupPan: (...a) => setupCam.setupPan(...a),
   nudgeSetupCam: (...a) => setupCam.nudgeSetupCam(...a),
   nudgeSetupZoom: (mul) => setupCam.nudgeSetupCam(0, 0, mul),
-  // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
-  // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
-  // a null style tests a car nobody is driving.
-  setupFlapArgs: () => {
-    const aSt = teamDecalState(Teams.LIST[teamIdx], true);
-    return { aLvl: aSt.val, style: aSt.aero || null };
-  },
   setSetupAero: (on, opts) => setupCam.setSetupAero(on, opts),
   get setupPreviewXOn() { return setupCam.xOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
@@ -5869,7 +5863,8 @@ function updateCarLateral(c, dt, ranked, S) {
       if (freeRoom > 1.6) yieldPull = freeSide * AiDrive.letPassPull(aiT, !!track.street) * clamp(freeRoom / 2.4, 0, 1);
     }
     let defend = 0;
-    if (chaser && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
+    const caution = raceCtl.level >= 2;   // SC/VSC/red: no cover move either (the attack is gated above), #2175
+    if (chaser && !caution && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser._snapSpeed;
@@ -5879,7 +5874,7 @@ function updateCarLateral(c, dt, ranked, S) {
     }
     // One defensive move per straight (AiDrive.defendOnce); the side resets in
     // the braking zone, where defending is over anyway (holdLine below).
-    if (braking) { c.defendSide = 0; defend = 0; }   // NO MOVE UNDER BRAKING (FIA), the cover included
+    if (braking || caution) { c.defendSide = 0; defend = 0; }   // NO MOVE UNDER BRAKING (FIA), the cover included
     else { AiDrive.defendOnce(defend, c.defendSide || 0, _aiDefOnce); defend = _aiDefOnce.defend; c.defendSide = _aiDefOnce.side; }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side; when both sides are gone (a wall pile), pull TOWARD the
@@ -8121,7 +8116,8 @@ function render(dt) {
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
     // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
-    const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
+    const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c)
+      : (FieldLod.on && !c.isPlayer && _lod >= 2 ? carDraw.sharedRivalBodyMesh() : teamBodyMesh(c.team, c)));
     if (body) {
       gfx.draw(body, tmpMat, paint);
       if (_lod < 2) queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m
