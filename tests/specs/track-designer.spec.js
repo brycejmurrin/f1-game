@@ -119,6 +119,10 @@ test("workspace organization preserves controls and scroll across modes and libr
     await page.keyboard.press("Escape");
     await expect(root).toBeVisible();
     await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeHidden();
+    await root.locator('[data-role="file-menu"] > summary').click();
+    await root.dispatchEvent("cancel", { bubbles: true, cancelable: true });
+    await expect(root).toBeVisible();
+    await expect(root.getByRole("button", { name: "EXPORT", exact: true })).toBeHidden();
     await root.locator('[data-role="checks-summary"]').click();
     await expect(root).toHaveAttribute("data-pane", "design");
     await expect(root).toHaveAttribute("data-mode", "test");

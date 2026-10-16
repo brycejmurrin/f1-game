@@ -18,13 +18,16 @@ const DesignerWorkspace = (function () {
     const trigger = el("summary", "sel-chip", "SHARE & FILES");
     files.remove(); menu.append(trigger, files);
     const closeMenu = (e) => {
-      if (e.key === "Escape" && menu.open && !root.hidden) {
+      if ((e.key === "Escape" || e.type === "cancel") && menu.open && !root.hidden) {
         e.preventDefault(); e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         menu.open = false; trigger.focus();
+        return true;
       }
+      return false;
     };
     menu.addEventListener("keydown", closeMenu);
+    menu.addEventListener("cancel", closeMenu);
     if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("keydown", closeMenu, true);
     files.addEventListener("click", () => { menu.open = false; trigger.focus(); });
     const status = el("div", "td-chips"); status.dataset.role = "workspace-status";
@@ -56,7 +59,7 @@ const DesignerWorkspace = (function () {
       checks.textContent = "CHECKS · " + (verdict.red ? verdict.red + " TO FIX" : verdict.amber ? verdict.amber + " WARNINGS" : "READY TO RACE");
       checks.setAttribute("aria-label", "Review design checks: " + verdict.red + " errors, " + verdict.amber + " warnings");
     }
-    return { navigate, remember, refresh, review };
+    return { navigate, remember, refresh, review, closeMenu };
   }
   return { group, create };
 })();

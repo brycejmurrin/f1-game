@@ -1623,6 +1623,7 @@ const TrackDesigner = (function () {
     return true;
   }
   function onBack(ev) {
+    if (workspace && workspace.closeMenu(ev)) return;
     if (ev.type === "keydown" && (ev.key === "z" || ev.key === "Z") && (ev.ctrlKey || ev.metaKey)) {
       if (!openFlag) return;
       const t = ev.target;

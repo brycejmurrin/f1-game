@@ -103,6 +103,10 @@ test("workspace remembers each mode and tab, reveals stamp controls, and routes 
   menu.open = true;
   menu.dispatchEvent({ type: "keydown", key: "Escape" });
   assert.equal(menu.open, false); assert.equal(b.D.isOpen(), true, "Escape closes just the file menu");
+  menu.open = true;
+  menu.dispatchEvent({ type: "cancel" });
+  assert.equal(menu.open, false, "gamepad Back closes just the file menu too");
+  assert.equal(b.D.isOpen(), true);
 });
 
 test("workspace keeps validation failures reachable when save is blocked", () => {
