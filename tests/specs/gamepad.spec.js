@@ -200,16 +200,28 @@ test("on the title overlay the pad routes to menu-nav, never the driving latches
   expect(boost).toBe(false);
 });
 
-test("disconnecting the pad clears its state", async ({ page }) => {
-  await poll(page, { axisX: -1 }, () => Input.steer());
-  const r = await poll(page, { connected: false }, () => ({
-    steer: Input.steer(),
-    connected: Input.padConnected,
-    throttle: Input.throttle(),
+test("disconnecting a held driving pad clears controls and reconnects neutrally", async ({ page }) => {
+  await startRaceForPad(page);
+  await page.evaluate(() => window.__apex.headless(true));
+  const held = await poll(page, { axisX: -1, buttons: { 7: 1 } }, () => ({
+    steer: Input.steer(), throttle: Input.throttle(), level: Input.throttleLevel(),
   }));
-  expect(r.connected).toBe(false);
-  expect(Math.abs(r.steer)).toBeLessThan(0.001);
-  expect(r.throttle).toBe(false);
+  expect(held.steer).toBeLessThan(-0.9);
+  expect(held.throttle).toBe(true);
+  expect(held.level).toBeGreaterThan(0.9);
+  const cleared = await poll(page, { connected: false }, () => ({
+    connected: Input.padConnected, steer: Input.steer(), throttle: Input.throttle(),
+    throttleLevel: Input.throttleLevel(), brake: Input.braking(), brakeLevel: Input.brakeLevel(),
+  }));
+  expect(cleared).toEqual({ connected: false, steer: 0, throttle: false, throttleLevel: 0, brake: false, brakeLevel: 0 });
+  // Losing the last pad pauses a race. Reconnecting must not replay the old pedal.
+  const neutral = await poll(page, {}, () => ({ connected: Input.padConnected, steer: Input.steer(), throttle: Input.throttle() }));
+  expect(neutral).toEqual({ connected: true, steer: 0, throttle: false });
+  await expect(page.locator("#pausemenu")).toBeVisible();
+  await page.locator("#pm-resume").click();
+  const resumed = await poll(page, { axisX: 1, buttons: { 7: 0.75 } }, () => ({ steer: Input.steer(), throttle: Input.throttleLevel() }));
+  expect(resumed.steer).toBeGreaterThan(0.9);
+  expect(resumed.throttle).toBeGreaterThan(0.5);
 });
 
 test("a transient getGamepads() hole recovers WITHOUT a gamepadconnected event", async ({ page }) => {

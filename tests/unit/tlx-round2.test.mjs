@@ -180,7 +180,7 @@ test("TLX-09: the pack DataArrayTexture drops its CPU copy after the first uploa
 test("TLX-10: window.scene/camera/renderer/THREE only behind ?three-devtools=1", () => {
   const i = TLX.indexOf("window.scene = scene;");
   const guard = TLX.slice(TLX.lastIndexOf("try {", i), i);
-  assert.match(guard, /three-devtools=1/, "the assignment sits under the flag");
+  assert.match(guard, /DevFlags\.get\("three-devtools"\)/, "the assignment sits under DevFlags");
   assert.match(read("tests/specs/track-switch-memory.spec.js"), /goto\("\/\?three-devtools=1"\)/, "the spec that reads window.renderer sets it");
 });
 

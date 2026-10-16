@@ -1078,10 +1078,7 @@ const WGX = (function () {
     let presentW = 0, presentH = 0;
     let spatialUpscale = false;
     try {
-      const q = typeof location !== "undefined" && location.search &&
-        /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
-      const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
-      spatialUpscale = !!(q || ls);
+      spatialUpscale = typeof DevFlags !== "undefined" && !!DevFlags.get("upscale");
     } catch (_) { spatialUpscale = false; }
     let lastFrame = null;
 
@@ -3493,6 +3490,7 @@ const WGX = (function () {
         }
       }
       d[140] = _absShadowIdx;
+      d[141] = (T && T.puddles != null) ? T.puddles : 1.0;   // params10.y: PUDDLES knob (GLX uPuddles, TLX U.puddles)
       // pitLane (floats 144..147, off 576): the PAINTED pit lane — entry s,
       // window length, pit side, lap length. Mirrors GLX's uPitLane. A null
       // frame.pitLane writes a zero LENGTH, which is what roadMarkings tests,

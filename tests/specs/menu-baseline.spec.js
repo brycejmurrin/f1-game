@@ -114,20 +114,7 @@ for (const [shapeName, viewport] of SHAPES) {
         await page.evaluate(() => new Promise((resolve) => {
           requestAnimationFrame(() => requestAnimationFrame(resolve));
         }));
-        // Wait for IDENTITY chrome + Titillium before shooting.
-        // css/fonts-hud.css and select/carsetup are print→all (#1101).
-        // .bigbtn is italic 800 (css/tokens.css); the title-critical sheet
-        // already ships italic 700 (synth-bolds 800). A used-face gate on
-        // NORMAL 700 can pass from fonts-hud while doors still paint
-        // system-ui (wider min-content → 2×2 wrap, GARAGE clipped).
-        // getComputedStyle().fontFamily is the specified stack, not the
-        // used face. Flip print sheets to all, FontFace-load the three
-        // title faces, then measure italic 800 vs Arial.
-        await page.evaluate(() => {
-          for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
-            if (link.media === "print") link.media = "all";
-          }
-        });
+        // Wait for production stylesheet activation; never repair the page.
         await page.waitForFunction(() => {
           const need = ["fonts-hud.css", "select.css", "carsetup.css"];
           const links = [...document.querySelectorAll('link[rel="stylesheet"]')];
@@ -137,19 +124,12 @@ for (const [shapeName, viewport] of SHAPES) {
           });
         }, null, { polling: 100, timeout: BOOT_MS });
         await page.evaluate(async () => {
-          const specs = [
-            ["normal", "600", "titillium-web-latin-600-normal.woff2"],
-            ["italic", "700", "titillium-web-latin-700-italic.woff2"],
-            ["normal", "700", "titillium-web-latin-700-normal.woff2"],
-          ];
-          for (const [style, weight, file] of specs) {
-            const face = new FontFace(
-              "Titillium Web",
-              `url("assets/fonts/${file}")`,
-              { style, weight, display: "swap" },
-            );
-            document.fonts.add(await face.load());
-          }
+          await Promise.all([
+            document.fonts.load('italic 800 48px "Titillium Web"'),
+            document.fonts.load('600 16px "Titillium Web"'),
+            document.fonts.load('700 16px "Titillium Web"'),
+          ]);
+          await document.fonts.ready;
         });
         await page.waitForFunction(() => {
           if (!document.fonts) return true;
@@ -200,6 +180,36 @@ for (const [shapeName, viewport] of SHAPES) {
             return !!(tab && tab.getAttribute("aria-selected") === "true"
               && opts && /INSPECT ENGINE/i.test(opts.textContent || ""));
           }, null, { polling: 100, timeout: 15_000 });
+        }
+        // Preserve the natural page state with every title capture. CI
+        // 38833820199 differed in lower-door compositing and the sound glyph;
+        // stable screenshots alone cannot distinguish that from stale layout.
+        if (screenName === "title") {
+          const state = await page.evaluate(() => {
+            const props = ["mask-image", "mask-composite", "-webkit-mask-composite", "mask-mode", "mask-size",
+              "background", "opacity", "transform", "zoom", "filter", "isolation", "overflow", "font", "gap", "padding"];
+            const styles = (el, pseudo = null) => {
+              const cs = getComputedStyle(el, pseudo);
+              return Object.fromEntries(props.map((p) => [p, cs.getPropertyValue(p)]));
+            };
+            return {
+              userAgent: navigator.userAgent, devicePixelRatio,
+              viewport: { width: innerWidth, height: innerHeight },
+              fonts: [...document.fonts].map((f) => ({ family: f.family, style: f.style, weight: f.weight, status: f.status })),
+              elements: ["overlay", "menu-buttons", "menu-explore", "menu-secondary", "mb-watch", "mb-photo", "mb-data", "soundbtn"]
+                .map((id) => {
+                  const el = document.getElementById(id);
+                  if (!el) throw new Error(`menu-baseline: missing diagnostic target ${id}`);
+                  return { id, classes: el.className, rect: el.getBoundingClientRect().toJSON(),
+                    clientHeight: el.clientHeight, scrollHeight: el.scrollHeight, scrollTop: el.scrollTop,
+                    hovered: el.matches(":hover"), styles: styles(el), before: styles(el, "::before"), after: styles(el, "::after") };
+                }),
+            };
+          });
+          await test.info().attach("menu-capture-state", {
+            body: JSON.stringify({ browserVersion: page.context().browser().version(), ...state }, null, 2),
+            contentType: "application/json",
+          });
         }
         await expect(page).toHaveScreenshot(`${screenName}-${shapeName}.png`, {
           maxDiffPixelRatio: 0.01,

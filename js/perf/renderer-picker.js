@@ -214,7 +214,7 @@ const RENDERER_LS_KEYS = [
 // belongs in one of these two lists. applyBackend clears the session lane
 // too: switching backends must not inherit the previous path's hold/auto-GL
 // latches across the reload (RESET already wiped them; a pick did not).
-const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent"];
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent", "apex26.gfxFallbackWhy"];
 
 function clearRendererStorage() {
   const removed = [];

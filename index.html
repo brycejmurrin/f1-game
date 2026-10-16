@@ -114,6 +114,7 @@
 <link rel="stylesheet" href="css/settings.css?v=dev" media="print">
 <link rel="stylesheet" href="css/settings-controls.css?v=dev" media="print">
 <link rel="stylesheet" href="css/dialog-platform.css?v=dev" media="print">
+<link rel="stylesheet" href="css/save-health.css?v=dev" media="print">
 <link rel="stylesheet" href="css/tuner.css?v=dev" media="print">
 <link rel="stylesheet" href="css/title.css?v=dev">
 <link rel="stylesheet" href="css/menus.css?v=dev">
@@ -138,6 +139,7 @@
 <link rel="stylesheet" href="css/experience.css?v=dev" media="print">
 <link rel="stylesheet" href="css/editor.css?v=dev" media="print">
 <link rel="stylesheet" href="css/cockpit-preview.css?v=dev" media="print">
+<link rel="stylesheet" href="css/player-tools.css?v=dev" media="print">
 <script>(function(){var L=document.querySelectorAll('link[rel="stylesheet"][media="print"]');for(var i=0;i<L.length;i++)(function(l){function f(){l.media="all"}if(l.sheet)f();else l.addEventListener("load",f)})(L[i])})();</script>
 <!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
@@ -2464,13 +2466,15 @@
         </section>
         <section class="vs-col">
           <h3 class="vs-col-head"><span class="vs-num">2</span>The grid</h3>
-          <!-- One row per player. #vs-me stays a single fixed row because YOU
-               are always exactly one and always first. #vs-them is now a LIST
-               the lobby fills with a row per other player — it keeps its id so
-               that everything already reading "the other player's row" still
-               finds it, and reads the same with one child as it always did. -->
-          <div class="vs-driver" id="vs-me"></div>
-          <div class="vs-others" id="vs-them"></div>
+          <!-- Seat roster: one row per human in the room (you first), filled by
+               js/net/lobby.js from localProfile(), _peers and _ready. -->
+          <div class="vs-roster-wrap">
+            <div class="vs-roster-head">
+              <span>Players</span>
+              <span id="vs-player-count" class="vs-player-count" aria-live="polite">1/4</span>
+            </div>
+            <ul id="vs-roster" class="vs-roster vs-others" role="list"></ul>
+          </div>
           <button id="vs-edit-car" class="bigbtn minibtn">GARAGE</button>
           <!-- Host only, and only below the cap. Invites are SEQUENTIAL: this
                mints a fresh connection and a fresh code while everyone already
@@ -3474,6 +3478,7 @@
 
 <!-- @gen-shell:scripts -->
 <script defer crossorigin="anonymous" src="js/core/log.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/core/dev-flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/mat4.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/hash32.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/clipboard.js?v=dev"></script>
@@ -3500,6 +3505,7 @@
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/driving-line.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/puddles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/teams.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/legends.js?v=dev"></script>
@@ -3508,6 +3514,7 @@
 <script defer crossorigin="anonymous" src="js/data/garage-defaults.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/save-schema-registry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/career/restore-points.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-backup.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/title-fx.js?v=dev"></script>
@@ -3546,6 +3553,7 @@
 <script defer crossorigin="anonymous" src="js/input/pad-menu.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/haptics.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/hold-buttons.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/controller-profiles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/stub.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/circuit-lore.js?v=dev"></script>
@@ -3580,6 +3588,7 @@
 <script defer crossorigin="anonymous" src="js/garage/pit-signs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/body-attitude.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/particles.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/fx/droplets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/atmosphere.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/regulations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/ai-dev.js?v=dev"></script>
@@ -3605,6 +3614,7 @@
 <script defer crossorigin="anonymous" src="js/career/career-ui-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/save-health.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/loading-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/survey-hud.js?v=dev"></script>
@@ -3616,6 +3626,7 @@
 <script defer crossorigin="anonymous" src="js/ui/menu-nav.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/aria-state.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/setting-row.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/settings-search.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-tabs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/key-binds.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-export.js?v=dev"></script>
@@ -3623,6 +3634,7 @@
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/car-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/storm.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/wind.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/overtake-mode.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/pace-math.js?v=dev"></script>
@@ -3632,6 +3644,7 @@
 <script defer crossorigin="anonymous" src="js/ui/watch-transport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/rain-cells.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/forecast.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-kit.js?v=dev"></script>
@@ -3713,6 +3726,8 @@
 <script defer crossorigin="anonymous" src="js/render/shared/mirror-pass.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/platform-session.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/update-check.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/race-message-history.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/controller-profile-controls.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>
 <!-- /@gen-shell:scripts -->
 </body></html>

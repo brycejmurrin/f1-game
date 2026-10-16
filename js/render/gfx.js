@@ -51,6 +51,8 @@
  *   createTexMesh({pos,nrm,uv,idx})              textured mesh (decals).
  *   createChunkedMesh(data, cellSize)            frustum-cullable prop mesh.
  *   createTexture(src)                           2D texture from a canvas/image.
+ *     TLX accepts {disposeSource(src)} as a second argument to transfer source
+ *     cleanup on successful creation; without it the source remains borrowed.
  *   freeMesh(mesh) / freeChunkedMesh(mesh) / freeTexture(tex)
  *
  * FEATURE-DETECTED members — callers probe `typeof gfx.x === "function"` and

@@ -314,6 +314,8 @@ test("R5: apex26.tlxSkyCache512 is off by default, '1' = mobileTier only, 'all' 
 // the REAL tsl-lit material and three r186 on the fake GL, against the per-record draws it replaces.
 const R1 = TLX.slice(TLX.indexOf("      let _coOn = true;"), TLX.indexOf("      function ensureStream(slot, verts) {"));
 // The hunt-4 A-H1 usage knob the runs read (_coRun's ib.setUsage(_instUsage)), from tlx.js too.
+// The release helper _coDrop frees each run through (#2150), verbatim.
+const DROP = TLX.slice(TLX.indexOf("      const _dropQueue = [];"), TLX.indexOf("      // Caller frees are ownership boundaries"));
 const H1_USAGE = TLX.slice(TLX.indexOf("      let _instUsage = THREE.StreamDrawUsage;"), TLX.indexOf("      function _instColorAttr(imesh, cap) {"));
 async function r1Rig(t, ls = {}) {
   const fg = makeFakeGL();
@@ -344,6 +346,8 @@ async function r1Rig(t, ls = {}) {
       return cache.get(k);
     }
     function buildGeometry() { throw new Error("unused"); }
+    let _warmPending = null;
+    ${DROP}
     ${H1_USAGE}
     ${TLX.match(/const _dropQueue = \[\];/)[0]}
     let _warmPending = null;

@@ -551,7 +551,7 @@ struct FrameU {
   params8    : vec4<f32>,     // off 528  (lampFog, lampShadowOn, lampIdx, matTexMix)
   params9    : vec4<f32>,     // off 544  (ambContactDark, lampWallSpill, windowSunFlash, skyRimGlow)
   params10   : vec4<f32>,     // off 560  (chunkShadowIdx — ABSOLUTE index of the armed shadow
-                              //           lamp in the baked trackLights array, -1 unarmed; yzw pad)
+                              //           lamp in the baked trackLights array, -1 unarmed; y PUDDLES knob; zw pad)
   pitLane    : vec4<f32>,     // off 576  (entry s, window length, pit side, lap length) — the
                               //           PAINTED pit lane; length 0 = no lane (roadMarkings)
   pitBox     : vec4<f32>,     // off 592  (through, half length, 0, 0) — YOUR box in
@@ -1256,6 +1256,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // when SSR sheds (tier / LITE) or a march misses.
   var wet = 0.0;
   var wetSheen = 0.0;
+  var puddle = 0.0;   // read again by the env mirror below (Block 5b)
   // NOT on a car: this block is world-keyed (noise puddles, ripple cells, the
   // tarmac absorb) and slid across the moving body in rain — glsl-lit.js.
   if (wetness > 0.001 && !classifiedCar) {
@@ -1265,18 +1266,26 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let wmid = i32(vMatId + 0.5);
     let porous = select(0.0, 1.0, wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11);
     wet = wetness * upFace;
-    let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7));
+    // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
+    // reference; GLX glsl-lit.js constant for constant: two octaves of
+    // world-space surface noise (~7.7 m, ~3.4 m), fixed real locations.
+    let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7)) * 0.70 + svnoise(in.wpos.xz * 0.29 + vec2<f32>(11.3)) * 0.30;
     // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
-    // drains to the gutters (0.7 → 1.2), the low side of a banked turn holds
+    // drains to the gutters (0.75 → 1.25), the low side of a banked turn holds
     // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
     var pool = 1.0;
     if (vTrk.z > 0.5) {
       let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
       let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
       let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
-      pool = mix(0.7, 1.2, abs(lat)) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+      // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
+      pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
     }
-    let puddle = smoothstep(0.48, 0.88, pn * pool) * wet * (1.0 - porous);
+    // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows, so
+    // drying shrinks the pools to their deepest spots first. params10.y = PUDDLES.
+    let pg = clamp(smoothstep(0.6, 1.0, wetness) * F.params10.y, 0.0, 1.0);
+    let plo = 1.0 - 0.38 * pg;
+    puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace * (1.0 - porous);
     // RAIN RIPPLES — mirrors GLX LIT_FS (js/render/glx/shaders/glsl-lit.js)
     // constant for constant: two cell grids of impact rings as a normal tilt
     // on the pooled water; the GGX lobes and the sky reflection below read N.
@@ -1309,10 +1318,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let absorbRoad = clamp(1.0 - 0.58 * F.params6.x, 0.0, 1.0);
     let absorb = mix(absorbRoad, absorbRoad * 0.66, porous);
     albedo = albedo * mix(1.0, absorb, wet);
-    albedo = albedo * mix(1.0, 0.50, puddle);
+    albedo = albedo * mix(1.0, 0.40, puddle);   // standing water: darker than the sheet
     wetSheen = wet * (1.0 - porous);
     rough = mix(rough, 0.30, wetSheen);
-    rough = mix(rough, 0.06, puddle);
+    rough = mix(rough, 0.02, puddle);   // near-mirror inside the pool
     f0 = mix(f0, vec3<f32>(0.04), wetSheen * 0.6);    // thin water film dielectric
     a = rough * rough;
   }
@@ -1657,7 +1666,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // gradient reflected in the view ray — the plain-gloss fallback beside the post SSR
   // pass (and the only wet mirror when SSR is shed).
   var envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
-  envBlend = max(envBlend, wetSheen * 0.55);
+  envBlend = max(envBlend, max(wetSheen * 0.55, puddle * 0.90));   // PUDDLES: strong mirror even with SSR shed
   if (envBlend > 0.001) {
     let Rw = reflect(-V, N);
     let skyT = pow(max(Rw.y, 1e-4), 0.40);
@@ -1683,7 +1692,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     }
     let ef0 = F_Schlick(max(dot(N, V), 0.0), vec3<f32>(0.04), 1.0).x;
     let envFresnel = mix(ef0, ef0 * ef0, wetSheen * 0.35);
-    let envWet = envColor * (1.0 - wetSheen * 0.45);
+    let envWet = envColor * (1.0 - wetSheen * 0.45 * (1.0 - puddle * 0.5));   // a puddle keeps more sky
     let envAdd = envWet * envFresnel * envBlend * (1.0 - rough * 0.7) * (1.0 - metalness);
     let envM = max(max(envAdd.r, envAdd.g), envAdd.b);
     color = color + envAdd / (1.0 + envM);

@@ -859,6 +859,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
     "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
+    // Why this tab's WGX/TLX pick bound WebGL2 (renderer-boot.js, #2285); a
+    // RESET must not leave diag() quoting a reason from before it.
+    "apex26.gfxFallbackWhy",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
 
@@ -4051,8 +4054,13 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
   assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 2, "releaseGeometry and prunePool drop shared wrappers through the helper");
   assert.match(fnBody(tlxSrc, "flushDropped"), /dropWrapper\(entry\.mesh, entry\.ownedGeometry\)/, "flush retains ownership metadata");
-  assert.match(fnBody(tlxSrc, "_coDrop"), /dropWrapper\(b\.imesh, b\.imesh\.geometry\)/, "coalesced owned views use the same warm-aware lifecycle");
-  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, ""), /m\.geometry = null; m\.material = null;/,
+  assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh\)/, "coalesced owned views use the same warm-aware lifecycle");
+  const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
+  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
+    "warm probes dispose before clearing references, after pending compilation settles");
+  assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
+    "a retired probe releases when its last compiler settles");
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
@@ -4295,7 +4303,7 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
   // Combined-slip / wheelLock live in PlayerForces (carve-headroom A).
   const forces = read("js/physics/player-forces.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && axFracF > 0\.60/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), inside the REACHABLE front-axle budget: axFracF peaks at 0.638 dry / 0.887 rain (0.638 even at 62 % front bias), so a 0.92 gate can never fire and the flat-spot system behind it is dead code");
+  assert.match(forces, /c\.wheelLock = braking && c\.speed > 0 && afF > lockOn/, "a lock-up fires only rolling forwards (brake-held reverse is not a stop), on the brake-bias-scaled front fraction afF with a speed-aware onset from PhysicsConsts");
   // The planted wheels spin in the car-draw seam (js/car/car-draw.js), which reads WHEEL_R off PhysicsConsts.
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");
@@ -5988,7 +5996,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
     Event: class { constructor(type) { this.type = type; } },
     location: { reload: () => events.push("reload") },
     BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
-    canvas: {}, _claimSkipped: skip, _createHung: false, _initOwner: null,   // start()'s closure state the sliced fallback reads
+    canvas: {}, _claimSkipped: skip, _createHung: false, _initOwner: null, pick: pref, why: "",   // start()'s closure state the sliced fallback reads
     backendPreference: () => pref,
     showGraphicsUnavailable: () => events.push("unavailable"),
     async loadBackendScripts(group) {
@@ -6354,7 +6362,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");
   assert.match(warm, /renderer\.setRenderTarget\(usePost \? post\.sceneTarget\(\) : softOutRT\(\)\)/,
     "the glass compiles under the scene pass's target, where it draws");
-  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileAsync\(m, camera, scene\)/,
+  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileWarmProbe\(_glassProbeGeo, gm, sx\)/,
     "both winding signs of the real material");
   assert.match(warm, /"uv", new THREE\.BufferAttribute/, "on createTexMesh's layout (position / normal / uv)");
   const glass = fnBody(code("js/render/three/tsl-fx.js"), "mirrorGlassMaterial");

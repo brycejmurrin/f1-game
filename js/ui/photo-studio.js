@@ -70,7 +70,11 @@ function blobOf(canvas, type, quality) {
     catch (e) { reject(e); }
   });
 }
-function download(blob, name) {
+async function download(blob, name) {
+  if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+    await NativeDownload.saveBlob(blob, name);
+    return;
+  }
   const url = URL.createObjectURL(blob), a = document.createElement("a");
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -81,7 +85,7 @@ function create(G, deps) {
   if (!root) return null;
   const st = { open: false, source: "race", aspect: "wide", grid: "thirds", postcard: false, busy: false, closing: false, metadata: {}, back: null, snapshot: null, borrowed: null, generation: 0, subject: null };
   const E = {}, session = [];
-  let last = null, focus = null, libraryPaint = 0;
+  let last = null, focus = null, libraryPaint = 0, downloading = false;
   const mk = (tag, props, kids) => {
     const el = document.createElement(tag);
     if (props) for (const k in props) {
@@ -321,10 +325,12 @@ function create(G, deps) {
     finally { if (gen === st.generation) busy(false); }
   }
   async function exportPhoto() {
-    if (!st.open || !last || st.busy) return;
+    if (!st.open || !last || st.busy || downloading) return;
+    downloading = true;
     const gen = st.generation, name = filename(st.metadata.title || "photo"), canvas = last;
-    try { download(await blobOf(canvas), name); if (gen === st.generation) say("PNG download requested."); }
+    try { await download(await blobOf(canvas), name); if (gen === st.generation) say("PNG download requested."); }
     catch (e) { if (gen === st.generation) say("Download failed: " + text(e.message)); }
+    finally { downloading = false; }
   }
   async function savePhoto() {
     if (!st.open || !last || st.busy) return;
@@ -358,7 +364,14 @@ function create(G, deps) {
     if (!photos.length) { box.appendChild(mk("p", { className: "adv-help", textContent: "Capture a frame and save it here. Photos stay on this device." })); return; }
     for (const p of photos) {
       const row = mk("div", { className: "pane" }, [mk("img", { src: p.thumb, alt: p.title || "Saved photo" }), mk("span", { textContent: p.title || "Photo" }),
-        button("DOWNLOAD", () => download(p.blob, filename(p.title).replace(/\.png$/, ".jpg"))),
+        button("DOWNLOAD", async () => {
+          if (downloading) return;
+          downloading = true;
+          const gen = st.generation;
+          try { await download(p.blob, filename(p.title).replace(/\.png$/, ".jpg")); if (gen === st.generation) say("Photo download requested."); }
+          catch (e) { if (gen === st.generation) say("Download failed: " + text(e.message)); }
+          finally { downloading = false; }
+        }),
         button("MENU BACKGROUND", () => say(setBackground(p.thumb) ? "Personal menu background selected." : "Device storage is unavailable.")),
         button("DELETE", async () => { const i = session.findIndex((x) => x.id === p.id); if (i >= 0) session.splice(i, 1); else try { await library("delete", p.id); } catch (_) { say("Photo could not be deleted."); return; } paintLibrary(); }),
       ]);
