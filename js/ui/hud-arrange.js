@@ -76,6 +76,7 @@ const HudArrange = (() => {
     let selected = null;   // the id last touched; the toolbar's − / + / RESET act on it
     let raf = 0, reflow = 0, pending = null, context = null, opener = null;
     let shown = null;      // dialogs WE hid: { settings, pause }
+    let preview = null;    // title-screen HUD shell visibility, never saved as a preference
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
     let bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
     const hasEls = () => typeof HudElements !== "undefined" && HudElements && typeof HudElements.isOn === "function";
@@ -96,6 +97,7 @@ const HudArrange = (() => {
       bar.id = "hud-arrange-bar";
       bar.setAttribute("role", "toolbar");
       bar.setAttribute("aria-label", "Arrange HUD");
+      bar.setAttribute("data-esc-close", "hud-arrange-done");
       bar.style.cssText = "position:fixed;z-index:9999;" +
         "display:flex;flex-wrap:wrap;box-sizing:border-box;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;" +
         "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:var(--fs-micro,13px);width:max-content;max-width:calc(100vw - 24px - 2 * max(var(--sal,0px),var(--sar,0px)));max-height:calc(100svh - 24px - 2 * max(var(--sat,0px),var(--sab,0px)));overflow:auto;";
@@ -118,10 +120,13 @@ const HudArrange = (() => {
       picker = document.createElement("select");
       picker.id = "hud-arrange-element";
       picker.setAttribute("aria-label", "HUD element; use arrow keys on the Move button to position");
+      picker.setAttribute("data-arrows", "own");
       picker.style.cssText = "min-width:0;min-height:44px;max-width:100%;font:inherit;background:var(--bg,#111);color:inherit;";
       picker.onchange = () => { flush(); selected = picker.value; after(); };
       bar.appendChild(picker);
-      bar.appendChild(mk("MOVE", "Move selected element with arrow keys; Shift moves faster", () => {}, "hud-arrange-move"));
+      const move = mk("MOVE", "Move selected element with arrow keys; Shift moves faster", () => {}, "hud-arrange-move");
+      move.setAttribute("data-arrows", "own");
+      bar.appendChild(move);
       bar.appendChild(nameEl);
       bar.appendChild(hintEl);
       bar.appendChild(mk("−", "Smaller", () => size(-1), "hud-arrange-smaller"));
@@ -132,6 +137,7 @@ const HudArrange = (() => {
       const visibilityPick = document.createElement("select");
       visibilityPick.id = "hud-arrange-vis";
       visibilityPick.setAttribute("aria-label", "Selected element visibility");
+      visibilityPick.setAttribute("data-arrows", "own");
       visibilityPick.style.cssText = picker.style.cssText;
       visibilityRow.appendChild(visibilityPick);
       SettingRow.wire(visibilityRow, { values: [], read: () => HudLayout.visibility(selected)?.value || "", write: (value) => {
@@ -141,6 +147,7 @@ const HudArrange = (() => {
       bar.appendChild(mk("DONE", "Done arranging the HUD", () => setEditing(false), "hud-arrange-done"));
       bar.hidden = true;
       document.body.appendChild(bar);
+      if (typeof TopModal !== "undefined" && TopModal.wireLayer) TopModal.wireLayer(bar);
     }
     /* Prefer an edge, but use the middle when it covers less HUD content. */
     function placeBar(rects) {
@@ -348,6 +355,12 @@ const HudArrange = (() => {
       shown = { settings: !!settings && !settings.hidden, pause: !!pause && !pause.hidden };
       if (settings) settings.hidden = true;
       if (pause) pause.hidden = true;
+      const hud = $("hud"), title = $("overlay");
+      if (hud && hud.hidden) {
+        preview = { hud, title, titleHidden: title ? title.hidden : true };
+        if (title) title.hidden = true;
+        hud.hidden = false;
+      }
     }
     function restoreDialogs() {
       const settings = $("pmsettings"), pause = $("pausemenu"), was = shown;
@@ -393,6 +406,11 @@ const HudArrange = (() => {
         }
         if (hasEls() && HudElements.apply) HudElements.apply();   // the real hide list back
         conceal();
+        if (preview) {
+          preview.hud.hidden = true;
+          if (preview.title) preview.title.hidden = preview.titleHidden;
+          preview = null;
+        }
         if (restore === false) shown = null; else restoreDialogs();
         drag = null; pinch = null; pointers.clear();
         if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
@@ -506,7 +524,7 @@ const HudArrange = (() => {
       if (rotate) mo.observe(rotate, { attributes: true, attributeFilter: ["aria-hidden"] });
     }
     document.addEventListener("keydown", (e) => {
-      if (!editing) return;
+      if (!editing || e.defaultPrevented) return;
       const dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
       if (dirs[e.key] && selected && e.target && e.target.id === "hud-arrange-move") {
         e.preventDefault(); e.stopPropagation(); flush();

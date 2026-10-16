@@ -833,6 +833,55 @@ async function checkAdaptiveHudEditor(page, testInfo, sizes) {
   expect(errors).toEqual([]);
 }
 
+for (const shape of [
+  { name: "desktop", viewport: { width: 1280, height: 720 }, hasTouch: false },
+  { name: "touch", viewport: LANDSCAPE, hasTouch: true },
+]) test.describe("Title HUD editor — " + shape.name, () => {
+  test.use({ viewport: shape.viewport, hasTouch: shape.hasTouch });
+  test("previews race readouts, owns keyboard focus and restores the title on exit", async ({ page }, testInfo) => {
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+    await page.goto("/"); await expect(page).toHaveTitle(/Apex 26/); await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-settings").click();
+    await page.locator("#pm-open-display").click();
+    await page.locator("#pm-hud-details > summary").click();
+    await page.locator("#pm-hudmap-sel").selectOption("on");
+    for (const door of ["Escape", "DONE"]) {
+      const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
+      await page.locator("#pm-hud-arrange").click();
+      const bar = page.locator("#hud-arrange-bar");
+      await expect(bar).toBeVisible(); await expect(page.locator("#hud")).toBeVisible();
+      await expect(page.locator("#overlay")).toBeHidden();
+      for (const selector of [".hud-top", "#minimap", "#hud-limits", "#announce"]) await expect(page.locator(selector)).toBeVisible();
+      // The shared layer lifecycle remembers RESET when this toolbar reopens.
+      await expect(page.locator(door === "Escape" ? "#hud-arrange-element" : "#hud-arrange-reset")).toBeFocused();
+      expect(await page.evaluate(() => UiLayers.top()?.id)).toBe("hud-arrange-bar");
+      expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout"))).toBe(saved);
+      await page.locator("#hud-arrange-element").focus();
+      await page.keyboard.press("Shift+Tab"); await expect(page.locator("#hud-arrange-done")).toBeFocused();
+      await page.keyboard.press("Tab"); await expect(page.locator("#hud-arrange-element")).toBeFocused();
+      for (let i = 0; i < 12; i++) {
+        await page.keyboard.press("Tab");
+        expect(await bar.evaluate(el => el.contains(document.activeElement))).toBe(true);
+      }
+      await page.locator("#hud-arrange-element").selectOption("map");
+      const before = await page.evaluate(() => HudLayout.get("map").x);
+      await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
+      expect(await page.evaluate(() => HudLayout.get("map").x)).toBe(before + 1);
+      await expect(page.locator("#hud-arrange-move")).toBeFocused();
+      await page.locator("#hud-arrange-reset").click();
+      if (door === "Escape") await page.screenshot({ path: testInfo.outputPath("title-hud-" + shape.name + ".png") });
+      if (door === "Escape") await page.keyboard.press("Escape"); else await page.locator("#hud-arrange-done").click();
+      await expect(bar).toBeHidden(); await expect(page.locator("#hud")).toBeHidden();
+      await expect(page.locator("#overlay")).toBeVisible(); await expect(page.locator("#pmsettings")).toBeVisible();
+    }
+    await testInfo.attach("console-health", { body: JSON.stringify({ errors }), contentType: "application/json" });
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe("HUD — ARRANGE HUD on-screen editor", () => {
   // The on-screen editor for MOVE & SIZE (js/ui/hud-arrange.js). Landscape touch:
   // the player this exists for, and the shape where pieces meet the docks.

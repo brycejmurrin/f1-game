@@ -434,6 +434,8 @@ window.MenuNav = (function () {
   }
   function ownsArrows(el, key, event) {
     if (!el) return false;
+    // Physical editor keys belong to the widget; synthetic D-pad keys still navigate.
+    if (el.dataset && el.dataset.arrows === "own" && DIRS[key] && (!event || event.isTrusted !== false)) return true;
     const t = el.tagName;
     // A focused <canvas> is a drawing surface that owns every key it is handed
     // (the TRACK DESIGNER nudges the selected control point with the arrows,

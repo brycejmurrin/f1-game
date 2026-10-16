@@ -135,7 +135,7 @@ function editor(pieceId = "piece", options = {}) {
   const doc = { body, createElement: tag => new El(tag), activeElement: null,
     getElementById: id => ids.get(id), querySelector: sel => ids.get(sel.slice(1)), querySelectorAll: () => [],
     addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } };
-  for (const id of [pieceId, 'pmsettings', 'pausemenu', 'pm-hud-details', 'pm-hud-details-sum', 'rotate-device']) { const e = new El(); e.id = id; body.appendChild(e); }
+  for (const id of [pieceId, 'hud', 'overlay', 'pmsettings', 'pausemenu', 'pm-hud-details', 'pm-hud-details-sum', 'rotate-device']) { const e = new El(); e.id = id; body.appendChild(e); }
   ids.get('rotate-device').setAttribute('aria-hidden', 'true');
   const values = new Map();
   const key = (sn = set, pn = profile) => sn + ':' + pn;
@@ -210,6 +210,23 @@ test('editor: keyboard entry selects a readout, focuses the selector and moves w
   e.fire('keydown', { key: 'ArrowDown', shiftKey: true, target: e.ids.get('hud-arrange-move') });
   assert.equal(e.writes.at(-1).v.y, 5);
   e.fire('keydown', { key: 'Escape' }); assert.equal(e.api.isEditing(), false);
+});
+
+test('editor: title preview restores shell visibility on normal and interrupted exits without saving it', () => {
+  for (const titleHidden of [false, true]) for (const restore of [true, false]) {
+    const e = editor(); e.ids.get('hud').hidden = true; e.ids.get('overlay').hidden = titleHidden;
+    e.api.setEditing(true);
+    assert.equal(e.ids.get('hud').hidden, false); assert.equal(e.ids.get('overlay').hidden, true);
+    const bar = e.ids.get('hud-arrange-bar');
+    assert.equal(bar.getAttribute('role'), 'toolbar'); assert.equal(bar.getAttribute('aria-label'), 'Arrange HUD');
+    assert.equal(bar.getAttribute('data-esc-close'), 'hud-arrange-done');
+    e.api.setEditing(false, restore);
+    assert.equal(e.ids.get('hud').hidden, true); assert.equal(e.ids.get('overlay').hidden, titleHidden);
+    assert.equal(e.writes.length, 0);
+  }
+  const race = editor(); race.ids.get('overlay').hidden = true;
+  race.api.setEditing(true); race.api.setEditing(false);
+  assert.equal(race.ids.get('hud').hidden, false); assert.equal(race.ids.get('overlay').hidden, true);
 });
 
 test('editor: resizing preserves selection and pending movement, ends the old gesture and reflows once', () => {
