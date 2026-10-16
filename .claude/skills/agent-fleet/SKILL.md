@@ -54,7 +54,7 @@ reference §Escalate).
 - Nobody in the fleet merges or arms auto-merge: Merge Desk arms (merge commit
   only, ≤ 2 armed) and Grok Bot may merge (AGENTS.md §Concurrent PRs). A hold
   is a PR-body line starting `MERGE-HOLD:`, never "do not merge" wording.
-  Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0 and `node tools/ci/ready-full-cap.mjs` allows it.
+  Draft → ready only after `node tools/ci/ready-gate.mjs` exits 0.
 - One owner per path: OWNED / FORBIDDEN globs in the launch prompt, a
   `who-is-on-it.mjs --claim` before editing, and stand down on overlap.
   A claim's age is the only liveness signal today; a branch pushed in the last

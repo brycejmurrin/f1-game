@@ -42,12 +42,12 @@ test("suggest: ARM needs the gate; a pending or absent gate waits", () => {
   assert.equal(suggest({ ...base, gate: "none" }, ctx()), "WAIT");
 });
 
-test("suggest: READY — draft, green, gate passed, cap room", () => {
+test("suggest: READY — draft, green, gate passed; the cap is reported, never a WAIT (2026-10-16)", () => {
   const d = { ...base, draft: true };
   assert.equal(suggest(d, ctx(0)), "READY");
   assert.equal(suggest(d, ctx(2)), "READY");
-  assert.equal(suggest(d, ctx(3)), "WAIT", "cap full");
-  assert.equal(suggest(d, { room: 0 }), "WAIT");
+  assert.equal(suggest(d, ctx(3)), "READY", "a full cap no longer holds a green draft");
+  assert.equal(suggest(d, { room: 0 }), "READY");
   assert.equal(suggest(d, { room: 1 }), "READY");
 });
 
@@ -146,11 +146,11 @@ test("evaluate: sorts, derives ci/gate/failing jobs, and READY flips consume the
   ];
   const r = evaluate(items, { cap: { cap: 3, count: 2, ok: true } });
   assert.deepEqual(r.rows.map((x) => x.number), [3, 5, 7, 9]);
-  assert.deepEqual(r.rows.map((x) => x.suggest), ["READY", "FIX", "WAIT", "WAIT"], "one slot: the first draft takes it");
+  assert.deepEqual(r.rows.map((x) => x.suggest), ["READY", "FIX", "WAIT", "READY"], "every green draft is READY; the cap is only reported");
   assert.deepEqual(r.rows[1].failing, ["Smoke (2)"]);
   assert.equal(r.rows[1].gate, "failed");
   assert.equal(r.rows[1].mergeMethod, "merge");
-  assert.equal(r.cap.room, 1);
+  assert.equal(r.cap.room, 1, "the cap is still measured and reported");
 });
 
 test("render: header, one line per PR, a footer; empty board says so", () => {
@@ -307,9 +307,8 @@ test("ci-watch skill pins the authority, MERGE-commit-only and no-merge rules an
   assert.match(t, /MERGE-COMMIT-ONLY/);
   assert.match(t, /mergeMethod: "MERGE"/);
   assert.match(t, /Never merge/);
-  assert.match(t, /At most 3 flips per sweep/);
   assert.match(t, /ready-gate\.mjs/);
-  assert.match(t, /ready-full-cap\.mjs/);
+  assert.match(t, /No ready cap since\s+2026-10-16/, "the cap is retired; the skill says so instead of gating on it");
   assert.match(t, /## Routine prompt/);
   for (const s of SUGGESTIONS) assert.ok(t.includes(s), `ci-watch must route ${s}`);
   // pr-owner and session-comms folded into steward / agent-fleet references (2026-10-14).
@@ -334,7 +333,7 @@ test("steward ownership reference (ex pr-owner) pins the loop's gates and carrie
   assert.match(t, /sync-pr\.mjs/);
   assert.match(t, /remote-group\.mjs/);
   assert.match(t, /ready-gate\.mjs/);
-  assert.match(t, /ready-full-cap\.mjs/);
+  assert.doesNotMatch(t, /ready-full-cap\.mjs exit 0/, "no cap gate in the ready flow since 2026-10-16");
   assert.match(t, /Do not enable auto-merge or merge/);
   assert.match(t, /\.github\/pull_request_template\.md/);
 });
@@ -344,7 +343,7 @@ test("ci-watcher agent is read-only (no write or MCP tools) and listed in the ag
   assert.match(t, /^tools: Bash, Read, Grep, Glob$/m);
   assert.match(t, /^readonly: true$/m);
   assert.match(t, /pr-board\.mjs --json/);
-  assert.match(t, /ready-full-cap\.mjs/);
+  assert.match(t, /informational/, "the cap is reported, never a hold");
   assert.match(read(".claude/agents/README.md"), /\*\*ci-watcher\*\*/);
 });
 

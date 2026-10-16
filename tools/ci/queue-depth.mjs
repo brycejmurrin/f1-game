@@ -17,7 +17,9 @@
  *   node tools/ci/queue-depth.mjs --write /workspace/apex-status/queue-depth.json
  *   node tools/ci/queue-depth.mjs --push "git push -u origin cursor/x"   # skip when the push starts no CI
  *
- * HOLD (commit locally, do not push or launch) when ANY of:
+ * INFORMATIONAL since 2026-10-16 (CI/CD review #2333 finding 7): nothing refuses
+ * a push on this line any more — the pool ran at 39 of 40 slots all day and a
+ * held push only moves its wait. `hold` (exit 1) still reads when ANY of:
  *   Linux jobs in flight (queued + running) ≥ LINUX_HOLD (60; the account has 40 slots)
  *   queued jobs, any OS                     ≥ QUEUED_HOLD (10) — runner-queued only; a `pending`
  *                                             job waits in a CI concurrency lane and drives no hold

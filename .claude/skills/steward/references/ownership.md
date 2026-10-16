@@ -33,9 +33,8 @@ Already own the PR and a push went red: start at step 3, then 4
    `node tools/ci/tooling-fast.mjs --jobs=3 > artifacts/logs/tooling-fast.log 2>&1`
    as ONE background task (rule 4); the change-aware pick from `pick-tests`;
    `node tools/ci/deploy.mjs --gate-only > artifacts/logs/gate.log 2>&1`
-   (background, rule 4) before the push; `node tools/ci/queue-depth.mjs` says
-   `= queue hold` (queued + running JOBS vs the 40 Linux / 5 macOS slots):
-   commit locally only. Browser groups only as
+   (background, rule 4) before the push (`node tools/ci/queue-depth.mjs` shows the
+   Actions queue for information; nothing holds a push on it since 2026-10-16). Browser groups only as
    `node tools/ci/remote-group.mjs <group>` AFTER the push (rule 4 table), never a local group while Actions is healthy. Commit, then one push
    per green cycle. Never a force-push or rebase; catch up only when GitHub says
    CONFLICTING or a required check is red, with `node tools/ci/sync-pr.mjs
@@ -47,8 +46,7 @@ Already own the PR and a push went red: start at step 3, then 4
    run (name every unrun group and every flake), Next step. The body is the
    session log.
 7. **Ready flow** at tip-green: `node tools/ci/ready-gate.mjs --pr <n>` exit 0
-   AND `node tools/ci/ready-full-cap.mjs` exit 0 (cap full: wait, never
-   force). Then flip draft to ready only if your brief delegates it. Arming
+   (no ready cap since 2026-10-16). Then flip draft to ready only if your brief delegates it. Arming
    auto-merge and merging are NEVER yours unless the user designated this
    session; otherwise report DONE-ready and leave arming to Merge Desk
    (`ci-watch`; merge commit only). To hold the PR, add a body line starting
@@ -72,7 +70,7 @@ You own PR(s) <#n[, #m]> on branch <cursor/topic-hash> in brycejmurrin/f1-game.
 Follow AGENTS.md and .claude/skills/steward/references/ownership.md (it points to
 agent-fleet references/comms.md and steward). Goal: <one sentence, user's terms>.
 OWNED: <path globs>. FORBIDDEN: <path globs; shared-contract files>.
-Done when: current head green, ready-gate and ready-full-cap exit 0, PR body
+Done when: current head green, ready-gate exits 0, PR body
 refreshed, then DONE-ready reported to @parent.
 Delegated: <e.g. mark ready after the gate; NOT auto-merge, NOT merge>.
 Extra constraints: <caps, groups not to run, deadlines>.

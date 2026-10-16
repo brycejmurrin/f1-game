@@ -25,8 +25,8 @@ failure. (Dispatch/schedule use `run_id`; deploy-branch pushes share ONE
 no-cancel group, `ship-fast`, since 2026-10-03: the run in progress finishes and
 only the newest waiting push stays queued.) Before marking ready, run
 `node tools/ci/ready-gate.mjs` (exit 0 = Structural guards / tooling-fast green
-on the tip) **and** `node tools/ci/ready-full-cap.mjs` (exit 1 = wait — ≥3 ready
-PRs already hold full-tier CI; draft fast-tier is uncapped).
+on the tip). There is no ready cap since 2026-10-16: ci.yml's lanes bound the
+browser legs inside GitHub.
 
 The other two look identical from the conclusion alone:
 

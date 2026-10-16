@@ -18,14 +18,14 @@
  *   FIX          ci.yml failed on the head, or the Structural guards check failed
  *   ARM          ready, not armed, Structural guards passed, ci succeeded with
  *                full-tier job evidence, no MERGE-HOLD, fewer than MAX_ARMED armed
- *   READY        draft, ci green, Structural guards passed, Plan closed, a
- *                full-tier slot is free
+ *   READY        draft, ci green, Structural guards passed, Plan closed
  *   NONE         armed (MERGE) and healthy
- *   WAIT         anything else: ci running, gate pending/absent, cap full, a
+ *   WAIT         anything else: ci running, gate pending/absent, a
  *                MERGE-HOLD, MAX_ARMED already armed, Plan items open
- * The cap is ready-full-cap.mjs's own measure (MAX_LIVE = 3); each READY in one
- * sweep consumes a slot, so a board never suggests more flips than the cap has
- * room. Each ARM likewise counts toward MAX_ARMED (2 repo-wide, any method). The
+ * The cap (ready-full-cap.mjs, MAX_LIVE = 3) is REPORTED, never a WAIT: since
+ * 2026-10-16 (CI/CD review #2333 finding 7) GitHub's own `queue: max` lanes
+ * bound the browser legs, and the cap sat at 13/3 while 12 ready PRs were open.
+ * Each ARM counts toward MAX_ARMED (2 repo-wide, any method). The
  * PLAN column is ready-gate.mjs's planVerdict of the PR body: done/items, or "-"
  * for a body with no ## Plan checklist (AGENTS.md rule 12).
  *
@@ -116,8 +116,8 @@ export function decide(row, ctx = {}) {
   if (row.plan && row.plan.state === "open") {
     return { action: "WAIT", why: `draft is green but ${row.plan.open.length} Plan item(s) are open (ready-gate refuses)` };
   }
-  if (room < 1) return { action: "WAIT", why: "draft is green but the full-tier cap is full" };
-  return { action: "READY", why: "draft, ci green, Structural guards passed, a full-tier slot is free" };
+  // `room` is informational since 2026-10-16: the lanes in ci.yml bound the legs.
+  return { action: "READY", why: `draft, ci green, Structural guards passed${room < 1 ? " (full-tier cap reported full; lanes bound the legs)" : ""}` };
 }
 
 /** Just the verb. */
