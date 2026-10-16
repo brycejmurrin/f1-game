@@ -1,1 +1,0 @@
-1792109771	Bryce Murrin	PR2273 telemetry finish-gap integration and inherited test-bg-outcome fixture verified locally; queue-held publication/CI/merge monitoring; js/data/telemetry-player.js tests/unit/telemetry-trace.test.mjs tests/unit/delta-sign-colour.test.mjs tests/unit/test-bg-outcome.test.mjs CHANGELOG.md  [cursor/telemetry-delta-6f3a; session 8b18b263c2d1588d4cc2d5cf]
