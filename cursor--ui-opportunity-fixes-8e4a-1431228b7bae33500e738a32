@@ -1,0 +1,1 @@
+1792177491	Bryce Murrin	PR2517 user explicitly requested fix merge blocker now. Migrate ONLY own generated ratchet snapshot to official per-branch fragment using already-merged PR2495 generator, then official sync and validation. No shared ratchet tool edits.  [cursor/ui-opportunity-fixes-8e4a; session 1431228b7bae33500e738a32]
