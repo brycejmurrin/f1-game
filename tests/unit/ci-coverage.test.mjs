@@ -656,6 +656,18 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   git("checkout", "-q", "-b", "m2", "deploy"); git("merge", "-q", "--no-ff", "-m", "M2", "feature"); const M2 = git("rev-parse", "HEAD");
   assert.equal(git("rev-parse", `${M2}^{tree}`), git("rev-parse", `${D}^{tree}`), "fixture: M2 must share D's tree");
   assert.notEqual(git("rev-parse", `${M1}^{tree}`), git("rev-parse", `${B}^{tree}`), "fixture: M1 must not share B's tree");
+
+  // A side branch can change a gate input and then revert it before a
+  // tree-identical merge. The final tree still matches D, but D's earlier
+  // green run did not exercise that changed history and must not be reused.
+  git("checkout", "-q", "-b", "sensitive", D);
+  const gateInput = ["tools", "ci", "selection.mjs"].join("/");
+  fs.mkdirSync(path.dirname(path.join(dir, gateInput)), { recursive: true });
+  write(gateInput, "changed"); git("add", "."); git("commit", "-q", "-m", "change gate input");
+  fs.rmSync(path.join(dir, gateInput)); git("add", "-u"); git("commit", "-q", "-m", "revert gate input");
+  const S = git("rev-parse", "HEAD");
+  git("checkout", "-q", "-b", "m3", D); git("merge", "-q", "--no-ff", "-m", "M3", "sensitive"); const M3 = git("rev-parse", "HEAD");
+  assert.equal(git("rev-parse", `${M3}^{tree}`), git("rev-parse", `${D}^{tree}`), "fixture: M3 must share D's tree after a reverted gate-input change");
   void A;
 
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
@@ -703,6 +715,8 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
 
   assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
+  assert.equal(verdict(M3, { [D]: [run()] }).reuse, "false",
+    "a tree-identical merge after a workflow/selection change and revert must rerun the gate");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
   // ci.yml has no merge_group trigger (2026-10-14), so such a run is not one of its gates.
   assert.equal(verdict(M2, { [D]: [run({ event: "merge_group" })] }).reuse, "false", "a merge_group run is not a ci.yml gate any more");
@@ -1772,6 +1786,18 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
  * gate on the merged tree and the tip sat red. `selected-verdict` has one
  * fixed name, runs whatever `selected` did, and reads the pair the way
  * poke-train did. Pinned so it cannot quietly stop covering a case. */
+test("the two CI guard shards stop starting files after their first failure (--bail)", () => {
+  const parsed = parseYAML(ciWorkflow).jobs;
+  for (const [id, shard] of [["guards-a", "1/2"], ["guards-b", "2/2"]]) {
+    const step = parsed[id].steps.find((st) => /tooling-fast\.mjs/.test(st.run || ""));
+    assert.ok(step, `${id} runs tooling-fast`);
+    assert.match(step.run, new RegExp(`--shard=${shard.replace("/", "\\/")} --bail$`),
+      `${id} must pass --bail (2026-10-16 CI jobs review: red shards ran a mean 5.9 min past the first failure)`);
+  }
+  // The local edit loop keeps every failure visible.
+  assert.doesNotMatch(JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).scripts["test:tooling-fast"], /--bail/);
+});
+
 test("selected-verdict: one fixed-name check that always judges the change-aware gate", () => {
   const job = ciWorkflow.slice(ciWorkflow.indexOf("\n  selected-verdict:\n"), ciWorkflow.indexOf("\n  baseline-trial:\n"));
   assert.ok(job.length > 0, "the selected-verdict job is gone");

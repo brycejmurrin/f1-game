@@ -221,6 +221,39 @@ test("--changed fail-safes to the full list on infra paths", () => {
   assert.deepEqual(r.files, all);
 });
 
+test("--bail stops STARTING files after the first failure and says how many it skipped", async () => {
+  const dir = tmp();
+  try {
+    const mk = (n, body) => { const f = path.join(dir, `${n}.test.mjs`); fs.writeFileSync(f, `import test from "node:test"; import assert from "node:assert/strict"; import fs from "node:fs";\n${body}\n`); return f; };
+    const marker = path.join(dir, "third-ran");
+    const files = [
+      mk("a-fails", `test("a", () => assert.equal(1, 2));`),
+      mk("b-passes", `test("b", () => {});`),
+      mk("c-marks", `test("c", () => fs.writeFileSync(${JSON.stringify(marker)}, "x"));`),
+    ];
+    const logPath = path.join(dir, "suite.log");
+    const r = await runToolingFast(files, { jobs: 1, order: "list", bail: true, logPath, localTimingsPath: null });
+    assert.equal(r.ok, false);
+    assert.equal(r.failed, 1);
+    assert.equal(r.notStarted, 2, "the two files after the failure never started");
+    assert.equal(fs.existsSync(marker), false, "a file after the first failure must not run under --bail");
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.match(log, /bail: stopped starting files after the first failure; 2 of 3 file\(s\) not started/);
+    assert.match(log, /= run failed \(0 passed, 1 failed\)/, "the verdict line keeps its shape (test-bg and session-status anchor on it)");
+    // Without --bail the same list runs to the end.
+    const full = await runToolingFast(files, { jobs: 1, order: "list", logPath: path.join(dir, "full.log"), localTimingsPath: null });
+    assert.equal(full.notStarted, 0);
+    assert.equal(full.passed + full.failed, 3);
+    assert.equal(fs.existsSync(marker), true);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CLI: --bail is a first-class flag and defaults off", () => {
+  assert.equal(parseToolingFastArgv([]).bail, false);
+  assert.equal(parseToolingFastArgv(["--bail", "--shard=1/2"]).bail, true);
+  assert.match(TOOLING_FAST_USAGE, /--bail/);
+});
+
 test("CLI: --help and unknown flags never start the suite", () => {
   assert.match(TOOLING_FAST_USAGE, /--jobs=N/);
   assert.equal(parseToolingFastArgv(["--help"]).help, true);

@@ -42,9 +42,12 @@ test("LIGHT themes the shared sheet-foot away from the hard-coded dark gradient"
     "light foot must not keep the dark plate literal");
 });
 
-test("preset tiles wrap long labels and keep a visible selected ring", () => {
-  assert.match(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "overflow-wrap") || "",
-    /anywhere/, "BROADCAST / SUNLIGHT must wrap inside the tile");
+test("preset tiles keep names intact and keep a visible selected ring", () => {
+  assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "overflow-wrap"), "normal",
+    "single-word preset names must not split mid-word at large UI sizes");
+  assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "word-break"), "normal");
+  assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "hyphens"), "none");
+  assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "text-wrap"), "balance");
   assert.match(decl(studio, '#appearance-studio [data-as="preset-list"] strong', "font-size") || "",
     /em/, "preset labels scale from the button, not --fs-micro under Sunlight large text");
   assert.equal(decl(studio, '#appearance-studio [data-as="preset-list"] button', "overflow"), "hidden");

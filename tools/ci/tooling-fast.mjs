@@ -26,6 +26,7 @@
  *   node tools/ci/tooling-fast.mjs                  # full suite, serial
  *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
+ *   node tools/ci/tooling-fast.mjs --bail           # stop STARTING files after the first failure (CI guard shards)
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
  *   … --order=list                                   # list order, not longest-first
  *   … --record                                       # rewrite tests/data/tooling-fast-timings.json
@@ -118,6 +119,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // table nobody read. Node-side via verify-track.cjs, so it is cheap.
   "tests/unit/assert-audit.test.mjs",
   "tests/unit/assets-pack.test.mjs",
+  "tests/unit/audio-mix-improvements.test.mjs",
   // Round-2: MUSIC OFF never decodes the menu track (setMusic before setSound) and rows changed before the race bundle lands reach the store, not the stub.
   "tests/unit/audio-panel-boot.test.mjs",
   "tests/unit/audio-recovery.test.mjs",
@@ -137,6 +139,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/barrier-runoff-jumps.test.mjs",
   "tests/unit/base-green.test.mjs",
   "tests/unit/bash-guard-hardening.test.mjs",
+  "tests/unit/battle-earcon.test.mjs",
   "tests/unit/behind-ship.test.mjs",
   // BitmapDecode worker (js/workers/*): Blob to ImageBitmap off the page thread.
   "tests/unit/bitmap-decode-worker.test.mjs",
@@ -170,6 +173,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/camera-feel.test.mjs",
   "tests/unit/camera-ride.test.mjs",
+  "tests/unit/camera-tuner-a11y.test.mjs",
   "tests/unit/capture-tools-regressions.test.mjs",
   // ~22 s, the slowest entry here, and deliberately in THIS list rather than
   // test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit
@@ -1324,7 +1328,7 @@ export const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT
  * Run the structural suites one file at a time.
  * @param {string[]} [files]
  * @param {{ logPath?: string }} [opts]
- * @returns {{ ok: boolean, passed: number, failed: number, results: object[] }}
+ * @returns {{ ok: boolean, passed: number, failed: number, results: object[], notStarted: number }}
  */
 export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
   const jobs = Math.max(1, Number(opts.jobs) || 1);
@@ -1455,15 +1459,23 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   // FILE per process, which is what these suites are isolated at. Two files
   // sharing a fixed path or port would surface here, which is why this was
   // measured against a serial run rather than assumed equivalent.
+  // --bail (CI guard shards, 2026-10-16 CI jobs review): once any file has
+  // failed, no further file STARTS; the files already in flight finish, so the
+  // log still names every failure that was running. A red shard used to run a
+  // mean 5.9 min after its first failure. The verdict line is unchanged.
+  const bail = opts.bail === true;
   let next = 0;
   const worker = async () => {
     while (true) {
+      if (bail && failed > 0) return;
       const i = next++;
       if (i >= files.length) return;
       await runOne(files[i], i + 1);
     }
   };
   await Promise.all(Array.from({ length: Math.min(jobs, files.length) }, worker));
+  const notStarted = bail && failed > 0 ? Math.max(0, files.length - next) : 0;
+  if (notStarted) emit(`bail: stopped starting files after the first failure; ${notStarted} of ${files.length} file(s) not started`);
 
   const suiteDur = Date.now() - suiteStart;
   const ok = failed === 0;
@@ -1512,7 +1524,7 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     merge(TIMINGS_FILE, "Per-file tooling-fast durations (ms) for longest-first scheduling (tools/ci/tooling-fast.mjs). " +
       "Rewritten by `node tools/ci/tooling-fast.mjs --jobs=3 --record`; order hints only — a missing or stale entry never fails anything.");
   }
-  return { ok, passed, failed, results, logPath };
+  return { ok, passed, failed, results, logPath, notStarted };
 }
 
 export const DEFAULT_JOBS = 1;
@@ -1657,10 +1669,10 @@ export function selectToolingFastChanged(changed, opts = {}) {
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 export const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--changed] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--changed] [--bail] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
 
 /** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
@@ -1695,6 +1707,7 @@ export function parseToolingFastArgv(argv) {
     help: false,
     files: args.length ? args : null, // null = full TOOLING_FAST_FILES
     changed: argv.includes("--changed"),
+    bail: argv.includes("--bail"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
     order: val("order"),
     record: argv.includes("--record"),
@@ -1731,6 +1744,7 @@ if (isMain) {
   const files = applyFileShard(files0, parsed.shard);
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
+    bail: parsed.bail,
     order: parsed.order,
     record: parsed.record,
     testTimeoutMs: parsed.testTimeoutMs,

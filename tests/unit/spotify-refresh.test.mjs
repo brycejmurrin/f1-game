@@ -100,6 +100,12 @@ test("a retryable refresh failure preserves the long-lived Spotify session", asy
     "offline token refresh must not turn into a permanent sign-out");
 });
 
+test("album art hides a failed CDN image and does not resurrect it on refresh", () => {
+  assert.match(SRC, /dataset\.apexArtFailed/);
+  assert.match(SRC, /img\.onerror\s*=\s*next \? \(\) =>/);
+  assert.match(SRC, /img\.hidden = !art \|\| img\.dataset\.apexArtFailed === art/);
+});
+
 test("a delayed account check cannot overwrite a replacement Spotify session", async () => {
   let resolveAccount;
   const account = new Promise((resolve) => { resolveAccount = resolve; });

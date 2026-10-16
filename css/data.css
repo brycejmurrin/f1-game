@@ -903,6 +903,15 @@ body[data-width="narrow"] .dh-pick-select { max-width: none; width: 100%; }
 
 body[data-width="narrow"] .dh-tab { font-size: var(--fs-1); padding: calc(var(--gap) * 0.5) 10px; }
 
+/* Dashboard metric cells can shrink below a label's min-content width on
+   split-view phones. Let MAX SPEED / DISTANCE wrap inside their auto-fit cell
+   instead of spilling into the neighbouring metric. */
+body[data-width="narrow"] .dh-glabel {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
+
 /* Last Race: hide secondary columns before they can overflow. Driver, position,
    time/status, and points remain. Compact landscape is often still "wide" in
    --wide-at units, so density also drops TEAM. */
