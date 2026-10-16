@@ -113,11 +113,12 @@ test("CLI --cap 0 / unknown flag exit 2; --help exits 0", () => {
   assert.equal(runCli(["--nope"]).status, 2);
 });
 
-test("AGENTS.md Concurrent PRs documents the ready-full-cap Merge Desk check", () => {
+test("AGENTS.md Concurrent PRs says the ready cap is retired (2026-10-16) and keeps draft=fast / ready=full", () => {
   const agents = fs.readFileSync(path.join(ROOT, "AGENTS.md"), "utf8");
   const concurrent = agents.split("### Concurrent PRs")[1]?.split("### Watching")[0] || "";
-  assert.match(concurrent, /ready-full-cap\.mjs/,
-    "Merge Desk must name the cap helper before mark-ready");
+  assert.match(concurrent, /No desk cap on ready full-tier runs \(retired 2026-10-16\)/,
+    "the cap is retired: ci.yml's lanes bound the legs and the cap read 13/3 with 12 ready PRs open");
+  assert.doesNotMatch(concurrent, /ready-full-cap\.mjs/, "no gate names the cap helper");
   assert.match(concurrent, /full-tier/,
     "must keep the ready=full / draft=fast vocabulary");
   assert.match(concurrent, /draft.*fast|fast.*draft|uncapped/i,

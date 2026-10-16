@@ -170,6 +170,21 @@ const NetSnapshot = (function () {
   // is capped at MAX_LAG_MS (a stall is not a latency), and the margin keeps
   // the target behind the newest packet's arrival.
   const MAX_DELAY_MS = 400, MAX_LAG_MS = 400, LAG_MARGIN_MS = 20;
+  // Snapshot ticks are sent as uint32 milliseconds to keep the wire frame
+  // compact.  performance.now() eventually crosses that boundary (~49.7 d),
+  // while the interpolation target and arrival stamps remain full precision.
+  // Rebase a wire tick to the epoch nearest a local reference before doing
+  // ordering or clock-ahead checks.  Without this, the first post-wrap packet
+  // sorts behind the whole buffer and a rival freezes until the ring expires.
+  const TICK_MOD = 0x100000000;
+  function tickRaw(t) {
+    return ((t % TICK_MOD) + TICK_MOD) % TICK_MOD;
+  }
+  function tickNear(t, reference) {
+    const raw = tickRaw(t);
+    if (!Number.isFinite(reference)) return raw;
+    return raw + Math.round((reference - raw) / TICK_MOD) * TICK_MOD;
+  }
   function createInterp(opts) {
     opts = opts || {};
     const total = opts.total || 1;         // track length, for wrap-aware s
@@ -190,6 +205,12 @@ const NetSnapshot = (function () {
 
     function push(t, st, arrivalMs) {
       if (!Number.isFinite(t)) return false;
+      // Arrival is in the receiver's full local clock domain.  It is the best
+      // epoch anchor for a decoded uint32 tick; when absent, the newest sample
+      // keeps direct unit-test/loopback pushes in the same epoch.
+      const reference = Number.isFinite(arrivalMs) ? arrivalMs
+        : (samples.length ? samples[samples.length - 1].t : null);
+      t = tickNear(t, reference);
       if (Number.isFinite(arrivalMs) && t - arrivalMs > maxAheadMs) { dropped("tick ahead of clock"); return false; }
       if (opts.adaptive && Number.isFinite(arrivalMs) && (lastTick == null || t > lastTick)) {
         // LAG IS LATENCY, NOT ONLY JITTER. sample() aims at `now − delayMs` on
@@ -301,6 +322,9 @@ const NetSnapshot = (function () {
     // versioned) — fields never vanish mid-session, so no stale-key sweep.
     function at(target, out) {
       if (!samples.length) return null;
+      // Callers normally pass full performance.now(); loopback/tests may pass
+      // the modulo value.  Compare in the sample's epoch in either case.
+      target = tickNear(target, samples[samples.length - 1].t);
       const newest = samples[samples.length - 1];
       if (target >= newest.t) {
         // Observed deceleration, only while the wire says the brakes are on.
