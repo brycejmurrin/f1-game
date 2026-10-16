@@ -127,8 +127,8 @@ fine. To cover more at once, hand every spec to ONE process and raise
 `APEX_WORKERS`.
 
 **Orphans vs a second run.** Orphans from a killed run keep eating the box
-invisibly (`node tools/ci/test-bg.mjs --stop`, then `pkill -9 -f
-'tools/run-playwright'; pkill -9 -f pw-browsers`). But before concluding
+invisibly (`node tools/ci/test-bg.mjs --stop --sweep`, then kill any Chrome
+left by its LISTED pid from `ps -eo pid,pcpu,args`; `pkill -f` is hook-refused). But before concluding
 "orphans", check `ps -eo pid,etimes,args` for a LIVE `playwright test` — a
 second run you forgot is indistinguishable from orphans by process count.
 One specific orphan bites the NEXT run: a superseded/killed batch can strand

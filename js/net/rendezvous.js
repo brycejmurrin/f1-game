@@ -12,6 +12,21 @@ const NetRendezvous = (function () {
   const STORE_KEY = "apex26.rendezvous";
   let sessionUrl;   // QR pairing can select a relay for this document, never another tab/device
 
+  // A private relay is a room-code courier, so its URL is a security boundary:
+  // it receives opaque room ids and encrypted handshake payloads. Keep the
+  // persistent preference under the same policy as QR-provided URLs. In
+  // particular, do not let a stored query/hash or credentials change the
+  // request target, and only permit HTTP for local development.
+  function validRelayUrl(raw) {
+    try {
+      const u = new URL(String(raw));
+      const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+      if (u.username || u.password || u.search || u.hash ||
+          !(u.protocol === "https:" || (u.protocol === "http:" && loopback))) return null;
+      return u.href.replace(/\/+$/, "");
+    } catch (e) { return null; }
+  }
+
   const POLL_MS = 1200;             // how often to ask if the other side arrived
   // Guest join of a fake/missing code must fail in the lobby in ~8–15 s (same
   // product target as NetNostr.JOIN_TIMEOUT_MS). Not a worker mapping TTL.
@@ -26,17 +41,21 @@ const NetRendezvous = (function () {
     let raw = DEFAULT_URL;
     try { raw = (localStorage.getItem(STORE_KEY) || "").trim() || DEFAULT_URL; } catch (e) { /* storage blocked (private mode): use the default */ }
     if (!raw) return null;
-    // Trailing slash normalised here so callers never have to think about it.
-    return String(raw).replace(/\/+$/, "");
+    return validRelayUrl(raw);
   }
 
   const configured = () => true;
   const usingPrivateRelay = () => !!baseUrl();
 
   function setUrl(url) {
+    if (url) {
+      const normalized = validRelayUrl(url);
+      if (!normalized) return false;
+      try { localStorage.setItem(STORE_KEY, normalized); return configured(); }
+      catch (e) { return false; }
+    }
     try {
-      if (url) localStorage.setItem(STORE_KEY, String(url));
-      else localStorage.removeItem(STORE_KEY);
+      localStorage.removeItem(STORE_KEY);
       return configured();
     } catch (e) { return false; }
   }
@@ -46,14 +65,10 @@ const NetRendezvous = (function () {
   // null selects public signalling; undefined restores the saved preference.
   function setSessionUrl(url) {
     if (url == null) { sessionUrl = url === undefined ? undefined : null; return true; }
-    try {
-      const u = new URL(url);
-      const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
-      if (u.username || u.password || u.search || u.hash ||
-          !(u.protocol === "https:" || (u.protocol === "http:" && loopback))) return false;
-      sessionUrl = u.href.replace(/\/+$/, "");
-      return true;
-    } catch (e) { return false; }
+    const normalized = validRelayUrl(url);
+    if (!normalized) return false;
+    sessionUrl = normalized;
+    return true;
   }
 
   // REJECTION SAMPLING, not `byte % 31`: 256 is not a multiple of 31, so the

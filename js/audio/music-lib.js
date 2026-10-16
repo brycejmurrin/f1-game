@@ -42,6 +42,7 @@ window.MusicLib = (function () {
 
   let dbPromise = null;      // memoised open, so init() is safe to call twice
   let readyPromise = null;   // memoised init()
+  let wired = false;
   let usable = (() => { try { return typeof indexedDB !== "undefined" && !!indexedDB; } catch (e) { return false; } })();
   let cache = [];            // [{id, name, size, added}] — mirrors the store, for sync count()
   const urls = new Map();    // db id -> object URL. WE own these; remove() revokes.
@@ -227,6 +228,7 @@ window.MusicLib = (function () {
   }
 
   function init() {
+    if (document.readyState !== "loading") wire();
     if (readyPromise) return readyPromise.then(() => { syncPlaylist(); });
     Log.info("audio", "MusicLib.init");
     readyPromise = readAll().then((recs) => {
@@ -330,6 +332,8 @@ window.MusicLib = (function () {
   function list() { return init().then(() => cache.map((m) => ({ id: m.id, name: m.name, size: m.size, added: m.added }))); }
 
   function wire() {
+    if (wired) return;
+    wired = true;
     // Guard every id: specs and tools load partial DOM, and a missing element
     // must not stop the module from being importable.
     const addBtn = $("as-add"), file = $("as-file");
@@ -343,12 +347,12 @@ window.MusicLib = (function () {
         file.value = "";
       };
     }
-    init();
   }
 
-  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
-  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", wire, { once: true });
-  else wire();
+  // Lazy scripts can arrive after DOMContentLoaded but before window.load.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => { wire(); init(); }, { once: true });
+  } else init();
 
   return {
     init, list, add, remove, clear, refresh, render,

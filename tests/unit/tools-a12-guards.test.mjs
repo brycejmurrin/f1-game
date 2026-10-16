@@ -147,16 +147,10 @@ test("PA1 the Chromium cache key carries the runner image", () => {
   assert.ok(action.indexOf("id: img") < action.indexOf("id: pwcache"), "the image id is computed before the cache step reads it");
 });
 
-test("PG1 pages.yml passes fast_run through as fast_tier_run; the always-false ship_only/smoke_only plumbing is gone", () => {
+test("PG1 pages.yml passes no fast-tier run and no ship_only/smoke_only plumbing to the gate (2026-10-16)", () => {
   const wf = read(".github/workflows/pages.yml");
-  const line = wf.match(/fast_tier_run: \$\{\{ (.*) \}\}/)[1];
-  assert.equal(line, "needs.verdict.outputs.fast_run");
+  assert.doesNotMatch(wf, /fast_tier_run|fast_run/, "the deploy-branch fast tier is gone: the train runs the full gate");
   assert.doesNotMatch(wf, /ship_only|smoke_only/);
-  // EQUIVALENCE (2026-10-14): pages-reuse-verdict.sh printed `ship_only=false`
-  // on every path since 2026-10-07, and the expression this replaced
-  // (a && b || c with '' falsy) yields fast_run unchanged for that value.
-  const was = (shipOnly, fast) => ((shipOnly !== "true" && fast) || "");
-  for (const fast of ["", "7"]) assert.equal(was("false", fast), fast);
   const verdict = read("tools/ci/pages-reuse-verdict.sh");
-  assert.doesNotMatch(verdict, /ship_only=|SHIP_ONLY/, "the verdict emits no ship_only line any more");
+  assert.doesNotMatch(verdict, /ship_only=|SHIP_ONLY|fast_run=|FAST_RUN/, "the verdict emits reuse/source/run only");
 });

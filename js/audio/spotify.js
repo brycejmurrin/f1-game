@@ -44,6 +44,27 @@ window.SpotifyMusic = (function () {
   // guard, or a CONNECT press — until the tab dies. Same value as
   // F1API's FETCH_TIMEOUT_MS (js/data/api.js), which is not reachable from here.
   const FETCH_TIMEOUT_MS = 15000;
+  const responseControllers = new WeakMap();
+
+  // Fetch resolves when headers arrive; a server can then leave the response
+  // body pending forever. Every JSON consumer needs the same bound as the
+  // request itself, and the explicit race also settles deterministic test
+  // doubles whose json() does not reject when AbortController fires.
+  function readJson(r, ac) {
+    ac = ac || (r && responseControllers.get(r)) || null;
+    let timer = null;
+    const body = Promise.resolve().then(() => r.json()).catch(() => null);
+    const timeout = new Promise((resolve) => {
+      timer = setTimeout(() => {
+        if (ac) { try { ac.abort(); } catch (e) { /* abort may already be settled */ } }
+        resolve(null);
+      }, FETCH_TIMEOUT_MS);
+    });
+    return Promise.race([body, timeout]).then((value) => {
+      if (timer) clearTimeout(timer);
+      return value;
+    });
+  }
 
   // playlist-read-private / user-library-read are what let the panel OFFER
   // something to play. Without a chosen context, "play" on a freshly
@@ -261,8 +282,9 @@ window.SpotifyMusic = (function () {
     };
     if (ac) opts.signal = ac.signal;
     return fetch(TOKEN_URL, opts)
-      .then((r) => r.json().catch((e) => {
-        Log.debug("audio", "Spotify token response unreadable (HTTP " + r.status + "):", e && e.message);
+      .then((r) => readJson(r, ac).then((j) => {
+        if (j !== null) return j;
+        Log.debug("audio", "Spotify token response unreadable (HTTP " + r.status + ")");
         return { error: "bad_response" };
       }))
       .catch((e) => {
@@ -394,11 +416,22 @@ window.SpotifyMusic = (function () {
     sdkPromise = new Promise((res, rej) => {
       const prev = window.onSpotifyWebPlaybackSDKReady;
       let timer = null;
+      let settled = false;
+      let handler = null;
       const cleanup = function () {
         if (timer !== null) clearTimeout(timer);
         s.onerror = null;
+        // A timed-out/failed load must give the global hook back. Leaving our
+        // dead callback installed makes a later SDK load call an already
+        // settled promise and can clobber a handler installed by another
+        // owner between retries.
+        if (window.onSpotifyWebPlaybackSDKReady === handler) {
+          window.onSpotifyWebPlaybackSDKReady = prev;
+        }
       };
-      window.onSpotifyWebPlaybackSDKReady = function () {
+      handler = window.onSpotifyWebPlaybackSDKReady = function () {
+        if (settled) return;
+        settled = true;
         if (typeof prev === "function") { try { prev(); } catch (e) { /* a foreign SDK-ready handler must not block ours */ } }
         cleanup();
         res();
@@ -406,9 +439,15 @@ window.SpotifyMusic = (function () {
       const s = document.createElement("script");
       s.src = SDK_URL;
       s.async = true;
-      s.onerror = () => { cleanup(); rej(new Error("blocked")); };
+      s.onerror = () => {
+        if (settled) return;
+        settled = true; cleanup(); rej(new Error("blocked"));
+      };
+      timer = setTimeout(() => {
+        if (settled) return;
+        settled = true; cleanup(); rej(new Error("timeout"));
+      }, 20000);
       document.head.appendChild(s);
-      timer = setTimeout(() => { cleanup(); rej(new Error("timeout")); }, 20000);
     }).catch((err) => {
       sdkPromise = null;
       throw err;
@@ -549,7 +588,7 @@ window.SpotifyMusic = (function () {
       if (ac) o.signal = ac.signal;
       const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
       // Logged once per failing streak: the player poll repeats this every few seconds offline.
-      return fetch(API + path, o).then((r) => { apiFailing = false; return r; }, (e) => {
+      return fetch(API + path, o).then((r) => { apiFailing = false; if (r && ac) responseControllers.set(r, ac); return r; }, (e) => {
         if (!apiFailing) { apiFailing = true; Log.warn("audio", "Spotify API " + path.split("?")[0] + " failed:", e && (e.name + ": " + e.message)); }
         return null;
       }).then((r) => {
@@ -578,7 +617,7 @@ window.SpotifyMusic = (function () {
         return [];
       }
       if (!r.ok) return [];
-      return r.json().then((j) => (j.items || []).map((p) => ({ name: p.name, uri: p.uri })), () => []);
+      return readJson(r).then((j) => (j && j.items || []).map((p) => ({ name: p.name, uri: p.uri })), () => []);
     }).then((ls_) => {
       if (gen !== sessionGen) return [];
       lists = ls_ || []; render(); return lists;
@@ -595,7 +634,7 @@ window.SpotifyMusic = (function () {
     let body;
     if (ctx === "liked") {
       return api("/me/tracks?limit=50")
-        .then((r) => (r && r.ok ? r.json().catch((e) => { Log.warn("audio", "Spotify liked-songs response unreadable:", e && e.message); return null; }) : null)).then((j) => {
+        .then((r) => (r && r.ok ? readJson(r).then((j) => { if (j === null) Log.warn("audio", "Spotify liked-songs response unreadable"); return j; }) : null)).then((j) => {
         if (gen !== sessionGen) return;
         const uris = j && j.items ? j.items.map((i) => i.track && i.track.uri).filter(Boolean) : [];
         if (!uris.length) { releaseToBuiltIn("No liked songs found to play."); return; }
@@ -665,7 +704,7 @@ window.SpotifyMusic = (function () {
     return api("/me/player/devices").then((r) => {
       if (!r) return [];
       if (!r.ok) return [];
-      return r.json().then((j) => j.devices || [], () => []);
+      return readJson(r).then((j) => j && j.devices || [], () => []);
     });
   }
 
@@ -728,17 +767,8 @@ window.SpotifyMusic = (function () {
       if (!r.ok) return;
       // fetch() can finish at the headers while the body never completes. The
       // API fetch timer has already been cleared, so bound this read as well.
-      let bodyTimer;
-      return Promise.race([
-        r.json().then((j) => ({ j }), () => null),
-        new Promise((resolve) => { bodyTimer = setTimeout(() => {
-          if (bodyController) bodyController.abort();
-          resolve(null);
-        }, FETCH_TIMEOUT_MS); }),
-      ]).then((body) => {
-        clearTimeout(bodyTimer);
-        if (!body || gen !== sessionGen) return;
-        const j = body.j;
+      return readJson(r, bodyController).then((j) => {
+        if (j === null || gen !== sessionGen) return;
         const it = j && j.item;
         track = it ? (it.name + " — " + (it.artists || []).map((a) => a.name).join(", ")) : null;
         title = it ? it.name : "";
@@ -846,12 +876,17 @@ window.SpotifyMusic = (function () {
     volPend = Math.max(0, Math.min(100, Math.round(pct)));
     if (volTimer !== null) return;
     const gen = sessionGen;
+    // Bind the device when the trailing-edge request is scheduled. The user can
+    // switch devices while the debounce window is open; sending this volume to
+    // the newly selected device would apply an old slider gesture to the wrong
+    // speaker.
+    const targetDevice = deviceId2();
     volTimer = setTimeout(() => {
       volTimer = null;
       const v = volPend; volPend = null;
       if (gen !== sessionGen || v === null) return;
       api("/me/player/volume?volume_percent=" + v +
-          (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
+          (targetDevice ? "&device_id=" + encodeURIComponent(targetDevice) : ""), { method: "PUT" });
     }, VOL_PUT_MS);
   }
   function setDeviceVolume(pct) {
@@ -866,7 +901,8 @@ window.SpotifyMusic = (function () {
     if (!term) { results = []; render(); return Promise.resolve([]); }
     return api("/search?type=playlist&limit=10&q=" + encodeURIComponent(term)).then((r) => {
       if (!r || !r.ok) return [];
-      return r.json().then((j) => {
+      return readJson(r).then((j) => {
+        if (!j) return [];
         // Spotify has been known to return null entries in this array.
         const items = ((j.playlists && j.playlists.items) || []).filter(Boolean);
         return items.map((p) => ({ name: p.name, uri: p.uri,
@@ -1019,9 +1055,11 @@ window.SpotifyMusic = (function () {
   }
 
   function check() {
+    const gen = sessionGen;
     const d = debug();
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve({ ok: false, reason: "no-client-id" }); }
     return validToken().then((t) => {
+      if (gen !== sessionGen) return { ok: false, reason: "stale", debug: d };
       if (!t) {
         const retained = !!readToken();
         const msg = retained
@@ -1039,8 +1077,13 @@ window.SpotifyMusic = (function () {
       const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
       const done = () => { if (timer) clearTimeout(timer); };
       return fetch(API + "/me", o)
-        .then((r) => { done(); return r.json().then((j) => ({ code: r.status, j }), () => ({ code: r.status, j: {} })); })
+        .then((r) => { done(); return readJson(r, ac).then((j) => ({ code: r.status, j: j || {} })); })
         .then(({ code, j }) => {
+          if (gen !== sessionGen) return { ok: false, reason: "stale", debug: d };
+          if (!j || !Object.keys(j).length) {
+            setStatus("error", "Could not read Spotify's account response — offline, or blocked.");
+            return { ok: false, httpStatus: code, reason: "network", debug: debug() };
+          }
           const out = { ok: false, httpStatus: code, product: j.product || null,
             account: j.display_name || j.id || null, debug: debug() };
           if (code === 401) {
@@ -1074,6 +1117,7 @@ window.SpotifyMusic = (function () {
         })
         .catch((e) => {
           done();
+          if (gen !== sessionGen) return { ok: false, reason: "stale", debug: d };
           Log.warn("audio", "Spotify account check failed:", e && (e.name + ": " + e.message));
           setStatus("error", "Could not reach Spotify's API — offline, or blocked.");
           return { ok: false, reason: "network", debug: d };
@@ -1345,7 +1389,10 @@ window.SpotifyMusic = (function () {
     on("as-sp-disconnect", "click", () => { disconnect(); });
   }
 
+  let initialized = false;
   function init() {
+    if (initialized) return;
+    initialized = true;
     Log.info("audio", "SpotifyMusic.init");
     // Adopt the stored config FIRST, so the redirect handler and the first
     // render agree about whether the feature exists at all. Note we never
@@ -1358,8 +1405,8 @@ window.SpotifyMusic = (function () {
     try { handleRedirect(); } catch (e) { /* silent — MP3 music continues */ }
   }
 
-  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
-  if (document.readyState !== "complete") {
+  // Lazy scripts can arrive after DOMContentLoaded but before window.load.
+  if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   } else {
     init();
@@ -1370,7 +1417,7 @@ window.SpotifyMusic = (function () {
     connect, disconnect, status, onChange, debug, check,
     devices() {
       return api("/me/player/devices")
-        .then((r) => (r && r.ok ? r.json().catch((e) => { Log.warn("audio", "Spotify devices response unreadable:", e && e.message); return null; }) : { httpStatus: r && r.status }));
+        .then((r) => (r && r.ok ? readJson(r).then((j) => { if (j === null) Log.warn("audio", "Spotify devices response unreadable"); return j; }) : { httpStatus: r && r.status }));
     },
     lastPlayError() { return lastPlayError; },
     activate,
