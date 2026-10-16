@@ -1155,13 +1155,14 @@ jobs:
     # its retry now meets this cap first: the job reads `cancelled`, which
     # ci-verdict.mjs fails exactly like `failure` — red either way, never green.
     timeout-minutes: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && 120 || 20 }}
-    # ONE LANE PER SHARD INDEX on pull requests (2026-10-15; same rule as the
-    # selected legs): ready PRs' smoke shards run one at a time fleet-wide and
-    # wait FIFO without a runner; the train / nightly / dispatch keep a group
-    # of their own.
-    concurrency:
-      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('smoke-lane-{0}', matrix.shard) || format('smoke-run-{0}-{1}', github.run_id, matrix.shard) }}
-      queue: max
+    # NO JOB-LEVEL CONCURRENCY (2026-10-16, the 2026-10-16 CI/CD review
+    # note (#2333) finding 6). From 2026-10-15 to 10-16 every ready PR's single smoke shard
+    # shared ONE fleet-wide lane group, so a 2.6-minute job that
+    # never failed (0 of 452) waited p50 4.7 / p90 17.5 min behind other PRs'
+    # smoke and ended the critical path of 40 of 210 green ready runs. The
+    # selected legs keep their lanes (they are many per run); this is one job
+    # per run and the runner queue is the only wait it should pay. The
+    # workflow-level per-PR group still replaces a superseded run.
     # The ship filter is ONE job now, not one copy per shard. `needs:` alone does
     # not skip this job — it must still RUN and report, because pages.yml's
     # `deploy: needs: ci` reads the aggregate of the jobs that ran and a skipped
