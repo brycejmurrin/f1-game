@@ -58,6 +58,8 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
 
 - Repeated track and lighting warm-ups reuse their renderer probes and release them with their resources, avoiding retained warm-up meshes.
+- Fog races are thick but readable again: the track no longer fades to a white wall within ~150 m, and dawn/dusk fog no longer sits under a bright clear sky (#2256, #2257).
+- Qatar at night: the floodlit start straight no longer clips to pure white (#2260).
 
 - Restoring a backup keeps a completed sprint's progress even when the sprint awarded no points.
 - Friends who leave qualifying still join the race when the connection's outgoing queue is busy.
