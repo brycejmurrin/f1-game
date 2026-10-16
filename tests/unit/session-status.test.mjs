@@ -29,7 +29,7 @@ test("ciSummary: running beats failure beats success, newest run per workflow on
 
 test("livePrLines: head, draft/ready, mergeable_state, CI — each stamped as a snapshot", () => {
   const md = livePrLines({ at: AT, localHead: SHA, pr: { number: 7, draft: true, mergeable_state: "clean", head: { sha: SHA } }, ci: "running" }).join("\n");
-  assert.match(md, /PR #7 head\*\* `aaaaaaaaa` — draft/);
+  assert.match(md, /PR #7 head\*\* `a{40}` — draft/);
   assert.match(md, /mergeable_state `clean`/);
   assert.match(md, /CI.*running/);
   assert.equal((md.match(/snapshot read 2026-10-10T08:00:00Z/g) || []).length, 3);
