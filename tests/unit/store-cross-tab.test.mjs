@@ -721,7 +721,10 @@ test("automatic Career.load migration still adopts the newer refused mirror save
   const disk = new Map([[careerKey, savedCareer(100)]]);
   const h = loadCareerMirrored({ disk, seed: [[careerKey, savedCareer(200), false]] });
   h.Career.load();
-  assert.equal(h.Career.data().v, 1, "boot migration changes the stored bytes");
+  assert.equal(h.ctx.SaveMigrate.CAREER_V, 2, "planning choices have an explicit v2 migration");
+  assert.equal(h.Career.data().v, h.ctx.SaveMigrate.CAREER_V, "boot migration reaches the current schema");
+  assert.equal(h.Career.data().briefStake, null, "legacy brief remains Standard");
+  assert.deepEqual(Object.keys(h.Career.data().sponsorPicks), [], "legacy sponsor remains the original offer");
   await h.store.mirror.ready;
   await h.store.mirrorFlush();
   assert.equal(h.Career.data().money, 200);

@@ -633,3 +633,74 @@ test("browser SDK next, previous and volume handle asynchronous and synchronous 
   for (const k of Object.keys(player)) player[k] = () => { throw new Error("SDK failed synchronously"); };
   assert.doesNotThrow(() => vm.runInContext("BACKEND.skip(); prev(); BACKEND.setVolume(0.3);", ctx));
 });
+
+function soundtrackAudio() {
+  const ctx = vm.createContext({ Promise, Math });
+  vm.runInContext(readFileSync(join(ROOT, "js/audio/soundtrack.js"), "utf8"), ctx);
+  return ctx.GameAudioSoundtrack.create({ context: () => null, enabled: () => false });
+}
+
+test("the real soundtrack previous control delegates to Spotify's backend", async () => {
+  const audio = soundtrackAudio();
+  const seen = [];
+  const { SpotifyMusic } = load((url) => {
+    seen.push(String(url));
+    return Promise.resolve(jsonResponse({ devices: [{ id: "fake-device", is_active: true }], items: [] }));
+  }, { disk: [[TOKEN_KEY, liveToken("fake-old")]], globals: { GameAudio: audio } });
+  await SpotifyMusic.connect();
+  seen.length = 0;
+  audio.prevTrack();
+  await settle();
+  assert.equal(seen.filter((u) => u.endsWith("/previous?device_id=fake-device")).length, 1);
+});
+
+for (const action of ["disconnect", "replace-client", "clear-client"]) {
+  test(action + " pauses the owned remote transport before clearing credentials, with no late retry", async () => {
+    const audio = soundtrackAudio();
+    const seen = [];
+    let finishPause, pauseSignal;
+    const { SpotifyMusic, disk, flush } = load((url, opts) => {
+      seen.push([String(url), opts.headers.Authorization]);
+      if (String(url).includes("/pause")) {
+        pauseSignal = opts.signal;
+        return new Promise((resolve) => { finishPause = resolve; });
+      }
+      return Promise.resolve(jsonResponse({ devices: [{ id: "fake-old-device", is_active: true }], items: [] }));
+    }, { disk: [[TOKEN_KEY, liveToken("fake-old")]], globals: { GameAudio: audio, AbortController } });
+    await SpotifyMusic.connect();
+    seen.length = 0;
+    if (action === "disconnect") SpotifyMusic.disconnect();
+    else SpotifyMusic.setClientId(action === "replace-client" ? "fake-new-client" : "");
+    assert.equal(disk.has(TOKEN_KEY), false, "credential cleanup is synchronous");
+    assert.equal(audio.musicBackend(), null, "backend removal is synchronous");
+    assert.deepEqual(seen, [["https://api.spotify.com/v1/me/player/pause?device_id=fake-old-device", "Bearer fake-old"]],
+      "pause starts synchronously using only the outgoing token and device");
+    if (action === "clear-client") SpotifyMusic.setClientId("fake-new-client");
+    disk.set(TOKEN_KEY, liveToken("fake-new"));
+    await SpotifyMusic.connect();
+    flush();
+    await settle(); // let the replacement backend's own volume setup finish
+    const snapshot = seen.length;
+    assert.equal(pauseSignal.aborted, true, "outgoing pause is bounded by the request watchdog");
+    finishPause(jsonResponse({}, 401));
+    await settle();
+    assert.equal(seen.length, snapshot, "late 401 must not refresh, retry, or poll the new session");
+    assert.equal(JSON.parse(disk.get(TOKEN_KEY)).access_token, "fake-new");
+  });
+}
+
+test("disconnect does not pause Spotify when the local soundtrack already owns music", async () => {
+  const audio = soundtrackAudio();
+  const seen = [];
+  const { SpotifyMusic } = load((url) => {
+    seen.push(String(url));
+    return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, liveToken("fake")]], globals: { GameAudio: audio } });
+  await SpotifyMusic.connect();
+  SpotifyMusic.useAsMusic(false);
+  await settle();
+  seen.length = 0;
+  SpotifyMusic.disconnect();
+  await settle();
+  assert.deepEqual(seen, []);
+});

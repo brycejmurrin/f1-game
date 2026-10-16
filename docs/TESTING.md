@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 700+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 750+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1286,6 +1286,8 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `career-data-audio-improvements.test.mjs` | Career half of #1776's follow-ups: slot-owned MY TEAM identity, contract preview/sign agreement and staleness, winter report deltas (the audio and data halves are split into their own suites with their pieces). |
+| `garage-followups.test.mjs` | Reversible tune experiment controls, aero bench and garage followup behavior; tooling-fast and garage-unit. |
 | `settings-search.test.mjs` | Search return focus and scroll, cancelled lazy navigation, owner descriptors and option labels, external destinations and full-row layout. |
 | `followup-platform.test.mjs` | Native install guidance, desktop single-instance/crash recovery and bounded mobile file/share handling; tooling-fast, desktop-unit and mobile-unit. |
 | `followup-update-check.test.mjs` | Hung update fetch/body recovery, abort fallback and stale-result isolation; tooling-fast and lifecycle-unit. |
@@ -2079,6 +2081,7 @@ what it covers.
 | `test-bg-outcome.test.mjs` | guards `tools/ci/test-bg.mjs`'s `outcomeOf`, the verdict read out of a background run's log: a non-zero `= bg exit` wins over an earlier `= run passed` or `# fail 0` (a two-command group's red second half, or a Playwright half killed before its summary, used to read as passed and `--wait` exited 0); exit 0 keeps the richer summary, and the Playwright, TAP and plain-script formats still read |
 | `ci-watch.test.mjs` | guards `tools/ci/ci-watch.mjs`, the post-push CI/Pages watcher an agent arms instead of waiting (AGENTS.md rule 12). Pure parts pinned on fixtures: the NEWEST run per workflow wins, so the push run the PR run cancels on the same SHA (rule 8's designed dedupe) is never read as a red; a failed job is a red before its run ends while the watch keeps reporting; a run that concluded failure with no failed job (a setup error) is still a red; no run yet is not green; each finished job is exactly one event (Monitor turns every line into a message), skipped jobs are silent, and a red names its failing step and URL |
 | `pr-board.test.mjs` | guards `tools/ci/pr-board.mjs`, the read-only board a Claude-run CI Watch acts from (`.claude/skills/ci-watch`). Pins every `suggest()` branch and its precedence (FOREIGN-ARM, SYNC, FIX, ARM, READY, NONE, WAIT), READY flips consuming the `ready-full-cap` slots, ci state from the runs on the head sha (live beats finished, the cancelled draft sibling is dedupe), the table rendering, paging past 100 PRs, `--pr`, every API-error path, and that no request is ever anything but a bare curl GET |
+| `needs-sync.test.mjs` | guards `tools/ci/needs-sync.mjs`, the predicate `sync-pr.mjs` and `pr-board.mjs` run before any sync (AGENTS.md "sync only when you must"). Pins `decideSync` (up to date, conflict, stale-red only when the tip moved after the run, clean-behind = no), exit codes and the verdict line, and on a real temp repo that `git merge-tree` separates disjoint edits (no) from a same-line edit (conflict); an API failure degrades to a note, never a stale-red |
 | `ready-gate.test.mjs` | guards `tools/ci/ready-gate.mjs`, the draft→ready check (AGENTS.md §Concurrent PRs / rule 3): Structural guards success on the tip, or a local full-suite stamp after tooling-fast passed. Evidence #1111 (designer-canvas). Pure fixtures: aggregator success/fail/pending, A+B halves when the aggregator is skipped, local stamp SHA mismatch, and evaluate()'s CI-over-local precedence; `[~]` / `Deferred:` Plan items count as closed (#2397) |
 | `pr-body.test.mjs` | guards `tools/ci/pr-body.mjs` (#2387), the PR-body editor: pure transforms (tick with evidence, strike with why, defer `[~]`, move `**now:**`, add, Status block, fleet key) on a fixture body with a commented-out example list, proving a concurrent edit to another item survives; `main` re-reads the live body, PATCHes once, `--dry-run` writes nothing, labels go through POST; flag pairing and unknown-flag errors |
 | `handback.test.mjs` | guards `tools/ci/handback.mjs` and `tools/ci/post-merge.mjs` (#2397): hand-back prints exactly one `SWEEP <PR#>` plus one DONE line only when the head's `= ci` is passed and ready-gate (Plan included) exits 0, and lists the fleet block's `checkin=` triggers; post-merge reads `merge ok (2 parents)` vs `SQUASH`, runs `who-is-on-it --release` once |

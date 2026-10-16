@@ -192,6 +192,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/car-wing-foil.test.mjs",
   "tests/unit/career-ai-dev.test.mjs",
   "tests/unit/career-backup.test.mjs",
+  "tests/unit/career-data-audio-improvements.test.mjs",
   "tests/unit/career-experience.test.mjs",
   "tests/unit/career-hire-rating.test.mjs",
   "tests/unit/career-legends.test.mjs",
@@ -478,6 +479,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The pit crew (layout, board up as it rolls, never in the path) and GARAGE ANGLE's plan of the bay.
   "tests/unit/garage-crew.test.mjs",
   "tests/unit/garage-defaults.test.mjs",
+  "tests/unit/garage-followups.test.mjs",
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
   "tests/unit/garage-panel-side.test.mjs",
@@ -671,6 +673,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/mobile-sync-web.test.mjs",
   "tests/unit/model-pack-format.test.mjs",
   "tests/unit/move-tree.test.mjs",
+  // needs-sync: the sync predicate (conflict | stale-red | no) that sync-pr and pr-board run first.
+  "tests/unit/needs-sync.test.mjs",
   "tests/unit/net-audio-revs-vm.test.mjs",
   "tests/unit/night-washout-presets.test.mjs",
   "tests/unit/nightly-group.test.mjs",

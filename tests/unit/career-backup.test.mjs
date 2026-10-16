@@ -107,6 +107,7 @@ function loadHarness(options = {}) {
   vm.runInContext(src("js/career/career-backup.js"), ctx);
   // The MY TEAM identity is shape-gated by the GARAGE file's garageValue.
   if (options.settingsExport !== false) vm.runInContext(src("js/ui/settings-export.js"), ctx);
+  vm.runInContext(src("js/career/team-identity.js"), ctx);
   vm.runInContext(src("js/career/career.js"), ctx);
   vm.runInContext(src("js/career/season-cal.js"), ctx);
   return {
@@ -781,34 +782,25 @@ function deviceA() {
   return a;
 }
 
-test("a MY TEAM backup carries the team identity and restores it on an empty device", () => {
+test("MY TEAM backups carry per-slot identity and never replace the one-off GP identity", () => {
   const envelope = JSON.parse(JSON.stringify(deviceA().CareerBackup.build()));
-  assert.ok(envelope.myTeam, "MY TEAM backup carries no identity");
-  assert.equal(envelope.myTeam.customTeam.name, "Murrin GP");
-  assert.equal(envelope.myTeam.customLogo, LOGO);
-  assert.deepEqual(envelope.myTeam["livery.custom.custom"], MY_LIVERIES);
-  assert.equal(envelope.myTeam["livery.custom"], "u1");
-  assert.equal(envelope.format, "apex26-career-backup-v1", "format stays v1 (additive field)");
-
+  assert.equal(envelope.myTeam, undefined, "new exports do not carry global shared identity");
+  const identity = envelope.slots.find((r) => r.flavour === "myteam" && r.i === 0).data.myTeamIdentity;
+  assert.equal(identity.customTeam.name, "Murrin GP");
+  assert.equal(identity.customLogo, LOGO);
+  assert.deepEqual(identity["livery.custom.custom"], MY_LIVERIES);
+  assert.equal(identity["livery.custom"], "u1");
   const b = loadHarness();
-  const seen = [];
-  b.store.subscribe((c) => { if (c && c.foreign && c.restored) seen.push(c.key); });
+  b.store.set("customTeam", { name: "GP ONLY", drivers: [{ name: "G", code: "GPO" }] });
   const r = b.CareerBackup.apply(envelope, { focusFlavour: "myteam" });
   assert.equal(r.ok, true);
-  assert.equal(JSON.parse(b.disk.get("apex26.career.myteam.0")).money, 5150);
-  const team = JSON.parse(b.disk.get("apex26.customTeam"));
-  assert.equal(team.name, "Murrin GP");
-  assert.deepEqual(team.drivers.map((d) => d.code), ["BRY", "ALX"]);
-  assert.equal(JSON.parse(b.disk.get("apex26.customLogo")), LOGO);
-  assert.deepEqual(JSON.parse(b.disk.get("apex26.livery.custom.custom")), MY_LIVERIES);
-  assert.equal(JSON.parse(b.disk.get("apex26.livery.custom")), "u1");
-  assert.deepEqual([...r.identity].sort(), ["customLogo", "customTeam", "livery.custom", "livery.custom.custom"]);
-  assert.deepEqual([...seen].sort(), [...r.identity].sort(), "custom-team.js is not told to re-sync");
-
-  // includeExtras:false restores the slot but not the identity.
-  const c = loadHarness();
-  c.CareerBackup.apply(JSON.parse(JSON.stringify(envelope)), { focusFlavour: "myteam", includeExtras: false });
-  assert.equal(c.disk.has("apex26.customTeam"), false);
+  assert.equal(b.store.get("career.myteam.0").myTeamIdentity.customTeam.name, "Murrin GP");
+  assert.equal(b.store.get("customTeam").name, "GP ONLY");
+  assert.deepEqual([...r.identity], [], "no global keys written");
+  b.Career.engage(true);
+  assert.equal(b.Career.identityValue("customTeam", null).name, "Murrin GP");
+  b.Career.engage(false);
+  assert.equal(b.Career.identityValue("customTeam", b.store.get("customTeam")).name, "GP ONLY");
 });
 
 test("a driver-only or identity-less backup never erases a local MY TEAM identity", () => {
@@ -830,6 +822,7 @@ test("a driver-only or identity-less backup never erases a local MY TEAM identit
   // An older backup with a MY TEAM slot but no myTeam block stays valid.
   const older = deviceA().CareerBackup.build();
   delete older.myTeam;
+  for (const row of older.slots) if (row.data) delete row.data.myTeamIdentity;
   assert.equal(deviceA().CareerBackup.validate(JSON.parse(JSON.stringify(older))).ok, true);
 
   // A myTeam block riding a DRIVER-only import is not applied either.
@@ -852,7 +845,8 @@ test("a driver-only or identity-less backup never erases a local MY TEAM identit
   const p = loadHarness();
   seed(p);
   assert.equal(p.CareerBackup.apply(JSON.parse(JSON.stringify(partial)), { focusFlavour: "myteam" }).ok, true);
-  assert.equal(JSON.parse(p.disk.get("apex26.customTeam")).name, "Murrin GP");
+  assert.equal(JSON.parse(p.disk.get("apex26.customTeam")).name, "Local Racing");
+  assert.equal(p.store.get("career.myteam.0").myTeamIdentity.customTeam.name, "Murrin GP");
   assert.equal(JSON.parse(p.disk.get("apex26.customLogo")), LOGO);
   assert.deepEqual(JSON.parse(p.disk.get("apex26.livery.custom.custom")), MY_LIVERIES);
 });
@@ -1045,8 +1039,8 @@ test("backup preview follows mode/extras scope and explains shared identity with
   const second = h.CareerBackup.preview(envelope, { flavours: ["myteam"], includeProgressExtras: false });
   assert.equal(second.slots.length, 1);
   assert.equal(second.extras.length, 1);
-  assert.match(second.extras[0], /Shared MY TEAM identity: replace .* for all MY TEAM slots/);
-  assert.equal(h.CareerBackup.preview(envelope, { includeExtras: false }).extras.length, 0);
+  assert.match(second.extras[0], /MY TEAM identity: restore separately with each imported career/);
+  assert.equal(h.CareerBackup.preview(envelope, { includeExtras: false }).extras.length, 1, "slot-owned identity still accompanies the slot");
   assert.equal(JSON.stringify([...h.disk]), before);
 });
 
@@ -1091,18 +1085,19 @@ test("a rejected extra after slot restoration reports partial application", asyn
   assert.equal(ui.notices.at(-1), "RESTORE INCOMPLETE — SOME DATA APPLIED; KEEP YOUR BACKUP");
 });
 
-test("MY TEAM identity writes contribute to the restore durability outcome", () => {
+test("slot-owned MY TEAM identity contributes to slot restore durability", () => {
   const envelope = JSON.parse(JSON.stringify(deviceA().CareerBackup.build()));
   const h = loadHarness(), put = h.ctx.localStorage.setItem;
   h.ctx.localStorage.setItem = (k, v) => {
-    if (k === "apex26.customTeam") throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
+    if (k === "apex26.career.myteam.0") throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
     put(k, v);
   };
   const result = h.CareerBackup.apply(envelope, { focusFlavour: "myteam" });
   assert.equal(result.ok, true);
   assert.equal(result.durable, false);
-  assert.equal(result.issues[0].key, "customTeam");
-  assert.equal(h.store.get("customTeam").name, "Murrin GP");
+  assert.equal(result.issues[0].key, "career.myteam.0");
+  assert.equal(h.store.get("career.myteam.0").myTeamIdentity.customTeam.name, "Murrin GP");
+  assert.equal(h.disk.has("apex26.career.myteam.0"), false);
   assert.equal(h.disk.has("apex26.customTeam"), false);
 });
 
@@ -1153,7 +1148,8 @@ for (const focus of ["driver", "myteam"]) {
     assert.equal(h.store.get(`career.${other}.0`).money, other === "myteam" ? 5150 : 123);
     assert.equal(h.store.get("daily.v1").best, 20, "shared progress is not replayed either");
     assert.equal(h.store.get("records").laps, 2);
-    assert.equal(h.store.get("customTeam").name, "Murrin GP", "MY TEAM identity accompanies its own mode");
+    assert.equal(h.store.get("career.myteam.0").myTeamIdentity.customTeam.name, "Murrin GP", "identity accompanies only its career slot");
+    assert.equal(h.store.get("customTeam", null), null, "one-off GP appearance is not repainted");
   });
 }
 
@@ -1470,6 +1466,57 @@ test('portable recovery adapter reviews one chosen slot, restores offline, and l
   const result=h.CareerBackup.apply(adapted.envelope,{recovery:true,expectedRevisions:{'driver:2':h.CareerBackup.revisionOf('driver',2)},expectedSeasonRevision:h.store.keyRevision('season')});
   assert.equal(result.ok,true);assert.equal(result.durable,true);assert.equal(h.store.get('career.driver.2').money,123);assert.equal(h.store.get('season').round,2);assert.equal(h.store.get('careerSlot',null),selected);
 });
+test('active-career recovery aliases restore the career without replacing the standalone season', () => {
+  const source = loadHarness();
+  source.Career.start({ teamId: 'haas', seed: 42 });
+  const career = source.Career.data();
+  career.season.round = 1;
+  career.season.pts = { 'haas:0': 25 };
+  career.season.driverCodes = { 'haas:0': 'YOU' };
+  career.season.finishes = { 'haas:0': [1] };
+  career.season.roundPts = { 'haas:0': [25] };
+  career.season.startedRound = 1;
+  career.season.qualiOrder = [{ id: 'haas:0', t: 71.2, human: true }];
+  career.season.qualiTrack = 't1';
+  career.season.qualiMode = 'career:driver:0';
+  career.season.qualiSeat = 'haas:0|haas';
+  career.results = [{ r: 0, p: 1, pts: 25 }];
+  // select-screen's old exporter emitted the same live object in both fields.
+  const raw = { format: 'apex26-recovery-v1', career, season: career.season };
+  const original = JSON.stringify(raw);
+  const target = loadHarness();
+  target.store.set('season', { round: 0, pts: { 'haas:1': 18 } });
+  const standalone = target.disk.get('apex26.season');
+  const adapted = target.CareerBackup.recoveryEnvelope(JSON.stringify(raw), { flavour: 'driver', i: 2 });
+  assert.equal(adapted.ok, true);
+  assert.equal(Object.hasOwn(adapted.envelope, 'season'), false);
+  assert.equal(target.CareerBackup.apply(adapted.envelope, { recovery: true }).durable, true);
+  assert.equal(target.disk.get('apex26.season'), standalone);
+  target.Career.useSlot('driver', 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(target.Career.data().season)), JSON.parse(JSON.stringify(career.season)));
+  assert.deepEqual(JSON.parse(JSON.stringify(target.Career.data().results)), career.results);
+  assert.equal(JSON.stringify(raw), original);
+});
+
+test('recovery rejects lossy career calIds before restoring any career or standalone data', () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: 'haas', seed: 1 });
+  h.store.set('season', { round: 1, pts: { 'haas:0': 18 } });
+  for (const calIds of [['t0', 'removed', 't1'], ['t0', 't0'], [], 't0', [1], Array.from({ length: 65 }, (_, i) => 't' + i)]) {
+    const career = save({ season: { round: 2, calIds, pts: { 'haas:0': 43 } } });
+    career.results = [{ r: 0, p: 1, pts: 25 }, { r: 1, p: 2, pts: 18 }];
+    for (const season of [career.season, { round: 2, pts: { 'haas:0': 43 } }]) {
+      const raw = { format: 'apex26-recovery-v1', career, season };
+      const original = JSON.stringify(raw), disk = Array.from(h.disk.entries());
+      const result = h.CareerBackup.recoveryEnvelope(raw, { flavour: 'driver', i: 1 });
+      assert.equal(result.ok, false);
+      assert.equal(result.reason, 'unsupported-calendar');
+      assert.equal(JSON.stringify(raw), original);
+      assert.deepEqual(Array.from(h.disk.entries()), disk);
+    }
+  }
+});
+
 test('recovery future, unknown or lossy calendars and malformed files are refused without changing raw or disk',()=>{
   const h=loadHarness(),target={flavour:'driver',i:1};
   const cases=[{format:'apex26-recovery-v2',career:save()}, {format:'apex26-recovery-v1',career:save({v:999})}, {format:'apex26-recovery-v1',career:save({season:{round:1,config:{trackIds:['removed']}}})}, {format:'apex26-recovery-v1',season:{round:1,config:{trackIds:['t0','t0']}}}, {format:'apex26-recovery-v1',season:{round:-1}}, {format:'apex26-recovery-v1',season:{round:1,futureRules:{}}}, {format:'apex26-recovery-v1',career:save({flavour:'myteam'})}];
@@ -1727,4 +1774,28 @@ test("in-memory unserialisable backups are refused before any write", () => {
   envelope.cycle = envelope;
   assert.equal(h.CareerBackup.apply(envelope).reason, "bad-json");
   assert.equal(h.disk.size, 0);
+});
+
+for (const action of ["delete-arm", "delete-confirm", "close", "normal"]) test(`pending career backup read respects ${action} ownership`, async () => {
+  const h = bootBackupUi({ CareerBackup: {
+    MAX_BYTES: 10000, validate: () => ({ ok: true }), preview: () => ({ slots: [], extras: [] }),
+  } });
+  // Keep the existing card mounted while the file is reading: DELETE remains
+  // actionable, as in the browser. clickImport's older helper clears it first.
+  h.G.$("cr-left").querySelector('[data-cr-act="import"]').onclick({ stopPropagation() {} });
+  let resolve;
+  const pending = new Promise((done) => { resolve = done; });
+  const picker = h.dom.document.body.querySelector("input");
+  picker.files = [{ size: 100, name: "pending.json", text: () => pending }]; picker.onchange();
+  const clear = () => { h.G.$("cr-left").replaceChildren(); h.G.$("cr-right").replaceChildren(); };
+  const remove = () => {
+    const button = h.G.$("cr-left").querySelector(".cr-slot-del"); assert.ok(button);
+    clear(); button.onclick({ stopPropagation() {} });
+  };
+  if (action.startsWith("delete")) { remove(); if (action === "delete-confirm") remove(); }
+  if (action === "close") h.ui.close();
+  clear(); resolve(JSON.stringify({ format: "apex26-career-backup-v1" }));
+  await Promise.resolve(); await Promise.resolve();
+  const review = h.G.$("cr-left").querySelectorAll('[data-cr-act="import"]').some((button) => button.textContent === "IMPORT?");
+  assert.equal(review, action === "normal", "abandoned file must not recreate an import review");
 });

@@ -448,7 +448,7 @@ function applyTtlb(bag) {
 // holds career saves, lap records and OAuth tokens under the same namespace,
 // and nothing outside these five shapes is ever read.
 const GARAGE_FORMAT = "apex26-garage-v1";
-const GARAGE_PREFIXES = ["parts.", "livery.", "setup."];   // + ".custom." under livery
+const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets."];   // + ".custom." under livery
 const GARAGE_SINGLES = ["customTeam", "customLogo", "team", "driver"];
 const GARAGE_EXCLUDED = "career and season saves, lap records, ghosts, settings, tuners, control bindings, accounts";
 // A key is a garage key if it is one of the four singles or begins with a
@@ -607,6 +607,18 @@ function cleanLivery(l) {
 // the lot: the player's other work is not the file's fault.
 function garageValue(k, v) {
   if (v === undefined || v === null) return undefined;
+  if (k.indexOf("setupPresets.") === 0) {
+    if (typeof SetupPresets === "undefined" || typeof SetupTune === "undefined" || !isObj(v) || v.v !== 1
+        || !Array.isArray(v.items) || v.items.length > SetupPresets.MAX
+        || Object.keys(v).some((key) => key !== "v" && key !== "items")) return undefined;
+    if (v.items.some((row) => !isObj(row) || typeof row.name !== "string" || row.name.trim().length > 32
+        || !(row.trackId === null || typeof row.trackId === "string" && row.trackId.length <= 128) || !Number.isFinite(row.at)
+        || Object.keys(row).some((key) => !["id", "name", "tune", "trackId", "at"].includes(key))
+        || !isObj(row.tune) || Object.keys(row.tune).length !== SetupTune.FIELDS.length
+        || Object.keys(row.tune).some((field) => !SetupTune.FIELDS.includes(field)))) return undefined;
+    const clean = SetupPresets.normalize(v);
+    return clean.items.length === v.items.length ? clean : undefined;
+  }
   if (k.indexOf("livery.custom.") === 0) {
     if (!Array.isArray(v)) return undefined;
     return v.slice(0, GARAGE_LIVERIES_MAX).map(cleanLivery).filter(Boolean);

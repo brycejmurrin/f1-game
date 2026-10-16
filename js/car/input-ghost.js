@@ -491,11 +491,14 @@ const InputGhost = (function () {
     for (const [id, snap] of pending) {
       try {
         const store = loadStore();
-        store[id] = snap;
-        saveStore(store);
+        // A storage event may already have merged a faster foreign lap into
+        // the cache while this local snapshot waited for an idle slot.
+        const winner = betterGhost(store[id], snap);
+        if (winner) store[id] = winner;
+        const result = saveStore(store);
+        if (result.durable && pending.get(id) === snap) pending.delete(id);
       } catch { /* best effort */ }
     }
-    pending.clear();
   }
 
   return {

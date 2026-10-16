@@ -109,6 +109,7 @@ Log.info("game", "SetupCamera.create");
 const { $, gfx, clamp, getTeamParts } = G;
 const { resolveLivery, partsVisualKey, drawAeroFlaps, teamDecalState, carDecalNum,
         drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render } = deps;
+const surfaceOutline = typeof GarageSurfaceOutline !== "undefined" ? GarageSurfaceOutline.create(gfx) : null;
 
 const reducedMotion = () => {
   const mv = G.store.get("motion", null);
@@ -642,7 +643,7 @@ function endGarageRes() {
 // canvas, the sheet, the camera strip, or CSS zoom actually changes.
 const _covPr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
 const _covCr = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
-let _covKey = "", _covX = 0, _covY = 0;
+let _covKey = "", _covX = 0, _covY = 0, _covPanel = null, _covCanvas = null, _covCam = null;
 function _stampRect(out, r) {
   out.left = r.left; out.top = r.top; out.width = r.width; out.height = r.height;
   out.right = r.right; out.bottom = r.bottom;
@@ -709,8 +710,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     const key = canvasEl.clientWidth + "x" + canvasEl.clientHeight
       + "|" + panelEl.clientWidth + "x" + panelEl.clientHeight
       + "|" + (camOn ? cam.clientWidth + "x" + cam.clientHeight : "0")
-      + "|" + zP + "|" + zC + "|" + (home.active ? 1 : 0);
-    if (key !== _covKey) {
+      + "|" + zP + "|" + zC + "|" + (home.active ? 1 : 0)
+      + "|" + document.documentElement.getAttribute("data-look-garage-side");
+    if (key !== _covKey || panelEl !== _covPanel || canvasEl !== _covCanvas || cam !== _covCam) {
+      _covPanel = panelEl; _covCanvas = canvasEl; _covCam = cam;
       const pr = _stampRect(_covPr, (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect());
       const cr = _stampRect(_covCr, canvasEl.getBoundingClientRect());
       const camTop = () => camOn
@@ -839,6 +842,12 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const gSeat = garageSeat();
   drawCarDecals(team, arrivalCar, true,
     (gSeat && gSeat.num) || carDecalNum(team, null), false, true);
+  if (surfaceOutline && typeof GarageSurfaceInspection !== "undefined" && GarageSurfaceInspection.field()) {
+    // The injected getter uses the same body-mode decision as drawCarDecals.
+    // In particular a loaded GLB must borrow its legacy-anchor decal mesh.
+    const mesh = deps.previewDecalMesh ? deps.previewDecalMesh(team) : null;
+    if (mesh) surfaceOutline.draw(mesh, arrivalCar);
+  }
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
@@ -1019,6 +1028,20 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
     }, { passive: false });
   }
 }
+
+// Preset jumps are immediate even with reduced motion; the full camera snapshot
+// is restored on DONE, tab change or garage exit. No draft/material mutation.
+if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.bind({
+  capture: captureCamera, restore: restoreCamera, show: setSetupView,
+  highlight(field) {
+    if (!surfaceOutline) return false;
+    if (!field) { surfaceOutline.clear(); return false; }
+    if (!deps.previewDecalMesh) return false;
+    const team = Teams.LIST[G.teamIdx], seat = garageSeat();
+    return surfaceOutline.set(field, team, resolveLivery(team), (seat && seat.num) || carDecalNum(team, null));
+  },
+  eligible: () => !!$("carsetup") && !$("carsetup").hidden,
+});
 
 // The camera's own state, published for the G façade (js/game.js keeps the
 // spellings __apex.garageCam() and types/game-ctx.d.ts already name).

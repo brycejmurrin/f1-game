@@ -9,11 +9,24 @@ const CustomLiveries = (function () {
   function create(deps) {
     const { store } = deps;
 
-    function getLiveryId(teamId) { return store.get("livery." + teamId, "default"); }
-    function saveLiveryId(teamId, id) { store.set("livery." + teamId, id); }
+    function identityOwner(teamId) {
+      if (teamId !== "custom" || typeof Career === "undefined" || !Career.inCareer || !Career.inCareer()) return null;
+      return Career.data && Career.data() && Career.data().flavour === "myteam" ? Career : null;
+    }
+    function identityValue(teamId, key, fallback) {
+      const owner = identityOwner(teamId);
+      return owner ? owner.identityValue(key, fallback) : store.get(key, fallback);
+    }
+    function setIdentityValue(teamId, key, value) {
+      const owner = identityOwner(teamId);
+      // A refused slot write must never fall through into the global GP paint.
+      return owner ? owner.setIdentityValue(key, value) : store.set(key, value);
+    }
+    function getLiveryId(teamId) { return identityValue(teamId, "livery." + teamId, "default"); }
+    function saveLiveryId(teamId, id) { return setIdentityValue(teamId, "livery." + teamId, id); }
     // Player-created liveries, stored per team as [{id,name,c1,c2,stripe?}].
-    function getCustomLiveries(teamId) { return store.get("livery.custom." + teamId, []); }
-    function setCustomLiveries(teamId, arr) { store.set("livery.custom." + teamId, arr); }
+    function getCustomLiveries(teamId) { return identityValue(teamId, "livery.custom." + teamId, []); }
+    function setCustomLiveries(teamId, arr) { return setIdentityValue(teamId, "livery.custom." + teamId, arr); }
     // Full paint-job list for a team: catalog (default + specials + universal) + the
     // player's own creations.
     function getLiveries(team) { return Liveries.forTeam(team).concat(getCustomLiveries(team.id)); }
@@ -32,8 +45,9 @@ const CustomLiveries = (function () {
       // migratePaint folds the retired keys (ridge, airbox) and drops the retired
       // inks on the way in, so ONE list is still the only thing the atlas reads.
       if (livDraftOverride && livDraftOverride.teamId === team.id) return pickLivery(migrateLivery(livDraftOverride.liv));
+      const owner = identityOwner(team.id), identityRev = owner ? owner.identityRevision() : 0;
       const c = _livResolveCache.get(team.id);
-      if (c && c.rev === store.rev) return c.val;
+      if (c && c.rev === store.rev && c.identityRev === identityRev) return c.val;
       // A STORED ID THAT NO LONGER RESOLVES FALLS BACK TO THE TEAM'S OWN PAINT JOB.
       // list[0] is Liveries.forTeam's "default", carrying the team's whole livery
       // block; the bare `{ c1, c2 }` else-branch below dropped finShape/spineHeight/
@@ -42,7 +56,7 @@ const CustomLiveries = (function () {
       const list = getLiveries(team);
       const liv = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
       const val = liv ? pickLivery(migrateLivery(liv)) : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
-      _livResolveCache.set(team.id, { val, rev: store.rev });
+      _livResolveCache.set(team.id, { val, rev: store.rev, identityRev });
       return val;
     }
     // The resolved paint-job shape, from a catalog entry or the creator's draft.
