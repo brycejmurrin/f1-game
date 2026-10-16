@@ -33,14 +33,20 @@ function boot(opts = {}) {
     return ctx;
   }
   const fetched = [], decoded = [], mediaEls = [];
+  const aborts = [];
+  class TestAbortController {
+    constructor() { this.signal = {}; this.aborted = false; aborts.push(this); }
+    abort() { this.aborted = true; }
+  }
   const sb = { Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date: opts.Date || Date, Error, parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn(...a) { if (opts.log) console.log("  Log.warn:", a.join(" ")); }, debug() {}, error() {} },
     document: { addEventListener(type, fn) { listeners[type] = fn; }, hidden: !!opts.hidden }, addEventListener() {}, removeEventListener() {},
     setTimeout: (fn, ms) => { if (typeof fn === "function") return setTimeout(fn, ms || 0); return 0; },
     clearTimeout: (id) => { if (id) clearTimeout(id); },
     navigator: opts.userActivation ? { userActivation: opts.userActivation } : {},
+    AbortController: TestAbortController,
     AudioContext: function () { return createContext(); },
-    fetch: (url) => { fetched.push(url); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(/^blob:/.test(url) && opts.bytes || 8), { _url: url })) }); } };
+    fetch: (url, request) => { fetched.push(url); if (opts.fetch) return opts.fetch(url, request); const ab = new ArrayBuffer(8); ab.url = url; return Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(/^blob:/.test(url) && opts.bytes || 8), { _url: url })) }); } };
   if (opts.Audio) sb.Audio = opts.Audio;
   if (opts.perf) sb.performance = opts.perf;
   sb.window = sb;
@@ -58,7 +64,7 @@ function boot(opts = {}) {
   }
   return {
     A: vm.runInContext("GameAudio", v), started, fetched, decoded, mediaEls, nodes, resumes: () => resumes, contexts,
-    document: sb.document, listeners, blipFires, sandbox: sb,
+    document: sb.document, listeners, blipFires, sandbox: sb, aborts,
     fireDeviceChange: () => { if (deviceListeners.devicechange) deviceListeners.devicechange(); },
   };
 }
@@ -145,6 +151,36 @@ test("a context rebuild replaces cached noise and keeps the delayed sample fallb
   assert.equal(fresh.buffers.length, buffers + 1, "new-context upgrade also reuses its prepared noise");
   assert.equal(fresh.buffers[fresh.buffers.length - 1].duration, 2, "and the one new buffer is that loop window");
   assert.ok(started.filter((n) => n.kind === "src" && n.loop && fresh.buffers.includes(n.buffer)).every((n) => !oldBuffers.has(n.buffer)));
+});
+
+test("rebuilding an interrupted context aborts its pending engine sample fetch", async () => {
+  let clock = 1000;
+  const pending = boot({
+    clock: () => clock,
+    // Keep the request unresolved: the regression is that the old context's
+    // sample fetch used to survive and decode into the replacement context.
+    fetch: () => new Promise(() => {}),
+  });
+  pending.A.setMusicEnabled(false);
+  pending.A.init();
+  assert.equal(pending.aborts.length, 1, "engine load owns an abort controller");
+  pending.contexts[0].state = "interrupted";
+  pending.A.init();
+  clock += 1000;
+  pending.A.init();
+  assert.equal(pending.contexts.length, 2, "the stalled context was rebuilt");
+  assert.equal(pending.aborts[0].aborted, true, "the old sample request was cancelled");
+  assert.equal(pending.A.debug().usingSamples, false, "the replacement starts on synth until its own sample arrives");
+});
+
+test("skipping a still-loading soundtrack aborts the superseded fetch", async () => {
+  const pending = boot({ fetch: () => new Promise(() => {}) });
+  pending.A.setSfxEnabled(false);
+  pending.A.init();
+  pending.A.startMusic();
+  assert.ok(pending.aborts.length >= 1, "the soundtrack load owns an abort controller");
+  pending.A.skipTrack();
+  assert.ok(pending.aborts.some((controller) => controller.aborted), "the superseded soundtrack request was cancelled");
 });
 
 test("hiding resumes a track from its position; an explicit stop starts it fresh", async () => {

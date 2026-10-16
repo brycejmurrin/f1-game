@@ -15,6 +15,8 @@ var GameAudioSoundtrack = (function () {
     const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
     let _decodeTail = Promise.resolve();
     const _musicLoads = {};                  // url -> in-flight fetch+decode (see playIndex)
+    const _musicLoadControllers = {};        // url -> AbortController for an in-flight fetch
+    const MUSIC_FETCH_TIMEOUT_MS = 15000;
     const _bufKeys = [];                     // insertion order of cached urls (bound: MUSIC_CACHE)
     // Decoded PCM is ~90 MB per four-minute track at a 48 kHz context. Desktop
     // keeps the 2 most recent so a two-track playlist alternates without a
@@ -278,6 +280,14 @@ var GameAudioSoundtrack = (function () {
       musicSrc = null;
       musicOn = true;
       const token = ++musicToken;
+      // A new selection owns playback. Abort older network loads before they
+      // can retain their response bytes and queue another full PCM decode.
+      for (const pendingUrl in _musicLoadControllers) {
+        if (pendingUrl === url) continue;
+        try { _musicLoadControllers[pendingUrl].abort(); } catch (e) { /* already settled */ }
+        delete _musicLoadControllers[pendingUrl];
+        delete _musicLoads[pendingUrl];
+      }
       // Never wake a context the hide path suspended: onVisibility's show branch resumes it.
       if (host.context().state !== "running" && !document.hidden) { const p = host.context().resume(); if (p && p.catch) p.catch(host.resumeRejected("music")); }
       const isUser = !PLAYLIST[musicIndex].builtin;
@@ -301,7 +311,10 @@ var GameAudioSoundtrack = (function () {
       // MUSIC_CACHE eviction that only runs afterwards.
       if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); else musicLoadFailed(token); }, () => {}); return; }
       const ctx = host.context();
-      const _load = fetch(url)
+      const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ac ? setTimeout(() => ac.abort(), MUSIC_FETCH_TIMEOUT_MS) : null;
+      if (ac) _musicLoadControllers[url] = ac;
+      const _load = fetch(url, ac ? { signal: ac.signal } : undefined)
         .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
         .then((ab) => (isUser ? userDecodeGate(url, ab) : ab))
         .then((ab) => {
@@ -334,6 +347,10 @@ var GameAudioSoundtrack = (function () {
           Log.warn("audio", "music load/decode failed for " + url + ": " + ((err && err.message) || err));
           musicLoadFailed(token);
           return null;
+        })
+        .finally(() => {
+          if (timer) clearTimeout(timer);
+          if (ac && _musicLoadControllers[url] === ac) delete _musicLoadControllers[url];
         });
       _musicLoads[url] = _load;
       // Dropped on settle either way, so a later tap retries a failed load rather
@@ -482,6 +499,10 @@ var GameAudioSoundtrack = (function () {
     function stopInternal() {
       musicOn = false;
       musicToken++;                                // cancel any in-flight load
+      for (const url in _musicLoadControllers) {
+        try { _musicLoadControllers[url].abort(); } catch (e) { /* already settled */ }
+        delete _musicLoadControllers[url];
+      }
       // stop() and disconnect() get their OWN try each. Sharing one meant a throw
       // from stop() (stop-before-start is the documented case) skipped the
       // disconnect, stranding a BufferSource that keeps rendering AND pins its
@@ -530,6 +551,10 @@ var GameAudioSoundtrack = (function () {
       musicGain = null;
       for (const k in musicBuffers) delete musicBuffers[k];
       for (const k in _musicLoads) delete _musicLoads[k];
+      for (const url in _musicLoadControllers) {
+        try { _musicLoadControllers[url].abort(); } catch (e) { /* already settled */ }
+        delete _musicLoadControllers[url];
+      }
       _bufKeys.length = 0;
       musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
     }

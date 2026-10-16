@@ -253,6 +253,8 @@ var GameAudio = (function () {
   let cueT = 0, cueFired = 0, cueU = 0; // braking-cue: next blip due, blips emitted, live urgency
 
   let engBuf = null, samplesReady = false;
+  let engineLoadAbort = null;
+  const ENGINE_FETCH_TIMEOUT_MS = 15000;
   // engBuf is ONLY the loop window (loopWindow below); engLoop is its loop in
   // engBuf's own seconds, engWin where that window sat in the recording (debug).
   let engLoop = null, engWin = null;
@@ -484,11 +486,15 @@ var GameAudio = (function () {
 
   function loadEngineSamples() {
     if (!ctx || samplesReady) return;
+    const loadCtx = ctx;
+    const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ac ? setTimeout(() => ac.abort(), ENGINE_FETCH_TIMEOUT_MS) : null;
+    engineLoadAbort = ac;
     // A 404 body is an HTML page, and decodeAudioData on it rejects with an
     // opaque EncodingError; throw on !ok so the degrade path below logs WHY.
-    const grab = (url) => fetch(url)
+    const grab = (url) => fetch(url, ac ? { signal: ac.signal } : undefined)
       .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
-      .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
+      .then((ab) => new Promise((res, rej) => loadCtx.decodeAudioData(ab, res, rej)));
     // ONE sample. f1_rev.mp3 stays on disk and nothing loads it: the
     // rev-crossfade measures DARKER under load (see the note in the tick), and
     // an inaudible layer fetched inside the Promise.all that gates
@@ -496,13 +502,19 @@ var GameAudio = (function () {
     // to the oscillator fallback.
     grab(SFX_ENGINE)
       .then((e) => {
+        if (ctx !== loadCtx) return;
         enginePeriod = detectPeriod(e);   // on the full recording, as before
         const w = loopWindow(e);          // the scan runs here, never on a race frame
         engBuf = w.buf; engLoop = w.loop; engWin = w.win; samplesReady = true;
         Log.debug("audio", "engine sample decoded, period=" + enginePeriod + ", kept " + engLoop.end.toFixed(2) + " of " + e.duration.toFixed(2) + " s");
       })
       .catch((err) => {
+        if (ctx !== loadCtx) return;
         Log.warn("audio", "engine sample load/decode failed, using synth voice: " + ((err && err.message) || err));
+      })
+      .finally(() => {
+        if (timer) clearTimeout(timer);
+        if (engineLoadAbort === ac) engineLoadAbort = null;
       });
 
   }
@@ -709,6 +721,7 @@ var GameAudio = (function () {
     const wasTrack = soundtrack.lastTrack();
     const wasEngine = engineOn;
     if (soundtrack.isPlaying()) stopMusic();
+    if (engineLoadAbort) { try { engineLoadAbort.abort(); } catch (e) { /* already settled */ } engineLoadAbort = null; }
     engineOn = false;               // old nodes died with the old context
     // A TRY/CATCH CANNOT SWALLOW A REJECTION, and close() returns a Promise.
     // The "already closed" this catch was written for is exactly the case the
