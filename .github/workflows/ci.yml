@@ -2244,8 +2244,9 @@ jobs:
     # `queue: max`, so at most that many selected legs run at once across every
     # ready PR and the rest wait FIFO without holding a runner or being
     # cancelled (the workflow-level per-PR cancel still replaces a superseded
-    # run's queued legs). A run's own legs cycle through the lanes, so they
-    # never queue behind each other. The train, the nightly and a dispatch get
+    # run's queued legs). A run's own legs cycle through the lanes from a start
+    # rotated by run number (laneBase), so they never queue behind each other
+    # and runs spread over every lane. The train, the nightly and a dispatch get
     # a group of their own per leg (`run_id` + job index): a gate never waits
     # behind PR legs. `queue: max` cannot be combined with cancel-in-progress
     # in one block, and none is set here.

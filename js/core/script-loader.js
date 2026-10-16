@@ -20,6 +20,28 @@ function lazyVersions() {
   } catch (_) { /* a malformed map: build-keyed URLs */ }
   return _lazyV;
 }
+// Full SHA-256 SRI pins the response bytes even when Pages ignores an old
+// query key, or a deploy races the generation check. Never derive SRI from
+// the twelve-hex URL key: it is not a complete digest.
+let _lazyIntegrity;
+function integrity(src) {
+  if (_lazyIntegrity === undefined) {
+    _lazyIntegrity = null;
+    try {
+      const el = document.getElementById && document.getElementById("apex-lazy-integrity");
+      // Only the deployment metadata script defines a map. A preview or
+      // inert DOM may expose an unrelated element with this id.
+      if (el && el.tagName === "SCRIPT" && el.type === "application/json") {
+        _lazyIntegrity = {};
+        const map = JSON.parse(el.textContent);
+        if (map && typeof map === "object" && !Array.isArray(map)) _lazyIntegrity = map;
+      }
+    } catch (_) { /* a present but malformed block fails closed */ }
+  }
+  if (_lazyIntegrity === null) return null; // dev and older deployed shells
+  const value = Object.prototype.hasOwnProperty.call(_lazyIntegrity, src) ? _lazyIntegrity[src] : null;
+  return typeof value === "string" && /^sha256-[A-Za-z0-9+/]{43}=$/.test(value) ? value : false;
+}
 function url(src) {
   const m = lazyVersions();
   const h = m && Object.prototype.hasOwnProperty.call(m, src) ? m[src] : null;
@@ -50,7 +72,10 @@ function loadBackendScripts(files, edges, opts) {
       resolve(false);
       return;
     }
+    const sri = integrity(src);
+    if (sri === false) { resolve(false); return; }
     const el = document.createElement("script");
+    if (sri) el.integrity = sri;
     el.src = url(src);
     el.crossOrigin = "anonymous";
     // MARKED so index.html's broken-install repair (sweeps every SW cache and
