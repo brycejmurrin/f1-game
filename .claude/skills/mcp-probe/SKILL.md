@@ -78,6 +78,17 @@ live canvas; `mcp-cli.mjs probe --backend …` for batched renderer recipes;
 beside an active Playwright run. UI matrix → `tools/ui/layout-audit.mjs` (not the archived
 `ui-readable-survey-mcp.py`).
 
+**One tool, three spellings** (the tool is the same; only the prefix differs):
+
+| attached MCP (host tool) | `probe-mcp.py call …` | `cdmcp-cli.py call …` |
+|---|---|---|
+| `mcp__chrome-devtools__click` | `chrome_click` | `click` |
+| `mcp__chrome-devtools__navigate_page` | `chrome_navigate_page` | `navigate_page` |
+| `mcp__chrome-devtools__evaluate_script` | `chrome_evaluate_script` | `evaluate_script` |
+| `mcp__chrome-devtools__take_screenshot` | `chrome_take_screenshot` | `take_screenshot` |
+
+Rule: `probe-mcp` = `chrome_` + the cdmcp name (`tinyfish_` for the TinyFish half); a name that works in one and not the other is a prefix slip.
+
 ## Load on demand
 
 - Shot / lighting / camera comparison failures → read
