@@ -314,3 +314,18 @@ test("paced track completion abandons canceled and superseded worlds before adop
     if (freed.length) assert.equal(freed[0], built);
   }
 });
+
+test("custom-track production observer runs only once the committed entry still owns the generation", async () => {
+  const source = gameSource();
+  const observer = source.slice(source.indexOf("  if (!_customTrackStarts.has(request))"), source.indexOf("  request.catch", source.indexOf("  if (!_customTrackStarts.has(request))")));
+  const entry = vm.runInContext("SessionEntry", g.ctx).create();
+  let hooks = 0;
+  const ctx = vm.createContext({ sessionEntry: entry, _customTrackStarts: new WeakSet(), CustomTracks: { afterStart() { hooks++; } } });
+  vm.runInContext("this.observe = (request) => { " + observer + "\n };", ctx);
+  const good = entry.begin("race", "a", () => {}, () => undefined, () => true);
+  ctx.observe(good); ctx.observe(good); await good; await tick(); assert.equal(hooks, 1);
+  const no = entry.begin("race", "b", () => {}, () => false, () => true);
+  ctx.observe(no); await no; await tick(); assert.equal(hooks, 1);
+  const canceled = entry.begin("race", "c", () => {}, () => undefined, () => true);
+  entry.cancel(); ctx.observe(canceled); await canceled; await tick(); assert.equal(hooks, 1);
+});

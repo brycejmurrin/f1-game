@@ -59,6 +59,7 @@ const TrackDesignerProps = (function () {
   };
 
   /** Count placed props by kind (and total). */
+  const effectiveGap = (kind, gap) => has(kind) ? (kind === "gantry" ? 0 : Math.max(MIN_GAP[kind], gapOf(kind, gap))) : null;
   function counts(list) {
     const out = { total: 0 };
     for (const k of KINDS) out[k] = 0;
@@ -216,11 +217,11 @@ const TrackDesignerProps = (function () {
 
   function placeOne(api, sv, K, p, i) {
     const side = p.side || 1;
-    const gap = p.gap;
+    const gap = effectiveGap(p.kind, p.gap);
     const k = K(p.s);
     if (p.kind === "stand") {
       if (!api.grandstandEx) return false;
-      api.grandstandEx(p.s, side, Math.max(14, gap), 70, null, null, { tiers: 1, h: 11 });
+      api.grandstandEx(p.s, side, gap, 70, null, null, { tiers: 1, h: 11 });
       return true;
     }
     if (p.kind === "gantry") {
@@ -231,7 +232,7 @@ const TrackDesignerProps = (function () {
     if (p.kind === "trees") {
       if (!api.forestEdge) return false;
       const half = 0.01;
-      api.forestEdge(p.s - half, p.s + half, side, Math.max(20, gap), {
+      api.forestEdge(p.s - half, p.s + half, side, gap, {
         hMin: 9, hMax: 15, density: 0.35, pineFrac: 0.35,
         col: [0.18, 0.36, 0.16], col2: [0.24, 0.40, 0.18],
       });
@@ -248,25 +249,25 @@ const TrackDesignerProps = (function () {
     }
     if (p.kind === "flood") {
       if (!api.floodMast) return false;
-      api.floodMast(k, side, Math.max(18, gap), { h: 24, cool: true, pool: true });
+      api.floodMast(k, side, gap, { h: 24, cool: true, pool: true });
       return true;
     }
     if (p.kind === "billboard") {
       if (!api.billboard) return false;
       const col = BOARD_COLS[i % BOARD_COLS.length];
-      api.billboard(k, side, Math.max(6, gap), 10, 4.2, col);
+      api.billboard(k, side, gap, 10, 4.2, col);
       return true;
     }
     if (p.kind === "palms") {
       if (!api.palm) return false;
       const step = 12 / Math.max(1, sv.total || 5000);
-      for (const offset of [-1, 0, 1]) api.palm(K(p.s + offset * step), side, Math.max(MIN_GAP.palms, gap), 11, [0.18, 0.42, 0.20]);
+      for (const offset of [-1, 0, 1]) api.palm(K(p.s + offset * step), side, gap, 11, [0.18, 0.42, 0.20]);
       return true;
     }
     if (p.kind === "hedge") {
       if (!api.hedge) return false;
       const half = 24 / Math.max(1, sv.total || 5000);
-      api.hedge(p.s - half, p.s + half, side, Math.max(MIN_GAP.hedge, gap), 1.8, [0.22, 0.38, 0.18]);
+      api.hedge(p.s - half, p.s + half, side, gap, 1.8, [0.22, 0.38, 0.18]);
       return true;
     }
     if (p.kind === "pines" || p.kind === "bushes") {
@@ -274,7 +275,7 @@ const TrackDesignerProps = (function () {
       if (!emit) return false;
       const step = (pines ? 14 : 6) / Math.max(1, sv.total || 5000), radius = pines ? 1 : 2;
       for (let j = -radius; j <= radius; j++) {
-        const at = K(p.s + j * step), dist = Math.max(MIN_GAP[p.kind], gap);
+        const at = K(p.s + j * step), dist = gap;
         if (pines) emit(at, side, dist, 14, [0.16, 0.30, 0.20]);
         else emit(at, side, dist, [0.28, 0.42, 0.20]);
       }
@@ -283,7 +284,7 @@ const TrackDesignerProps = (function () {
     if (p.kind === "marshal" || p.kind === "camera") {
       const emit = p.kind === "marshal" ? api.marshalPost : api.cameraTower;
       if (!emit) return false;
-      emit(k, side, Math.max(MIN_GAP[p.kind], gap), p.kind === "marshal" ? { style: "hut" } : { h: 12, style: "scaffold" });
+      emit(k, side, gap, p.kind === "marshal" ? { style: "hut" } : { h: 12, style: "scaffold" });
       return true;
     }
     return false;
@@ -291,7 +292,7 @@ const TrackDesignerProps = (function () {
 
   return {
     KINDS, LABELS, CAPS, TOTAL, DEFAULT_GAP, MIN_GAP, DESCRIPTIONS,
-    has, sanitize, counts, canPlace, place, placeBatch, updateAt, removeAt, removeLast, pointFrac, dress,
+    has, effectiveGap, sanitize, counts, canPlace, place, placeBatch, updateAt, removeAt, removeLast, pointFrac, dress,
   };
 })();
 Object.freeze(TrackDesignerProps);
