@@ -549,13 +549,86 @@ test("the sample upgrade lets the synth fade play out instead of cutting it", as
   A.setMusicEnabled(false);
   A.init(); A.startEngine();                             // samples still decoding: the synth voice
   assert.equal(A.debug().usingSamples, false, "precondition: synth first");
+  const owner = A.enginePlaybackGeneration();
   await flush();
   const before = new Set(nodes);
   A.setEngine(0.6, 0, false, 0.6, 4, {});
   assert.equal(A.debug().usingSamples, true, "precondition: upgraded to the samples");
+  assert.equal(A.enginePlaybackGeneration(), owner, "synth-to-sample swap retains playback ownership");
   const cut = [...before].filter((n) => n.disc && n.kind !== "dest");
   assert.deepEqual(cut.map((n) => n.kind), [], "the fading synth chain is still connected right after the swap");
   await wait(520);
   assert.ok([...before].some((n) => n.disc), "and its own timer buries the chain once the fade is done");
   assert.equal(contexts.length, 1);
+});
+
+// Actual engine/soundtrack with only the audition's six-second clock controlled.
+function auditionOn(h) {
+  const timers = new Map(); let id = 0;
+  const ctx = vm.createContext({
+    setTimeout(fn, ms) { timers.set(++id, { fn, ms }); return id; },
+    clearTimeout(key) { timers.delete(key); },
+  });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/audio/race-mix-audition.js"), "utf8"), ctx);
+  const audition = vm.runInContext("RaceMixAudition", ctx);
+  const start = () => audition.start({ audio: h.A, soundOn: () => true,
+    store: { get: (key, fallback) => key === "radioVoice" ? false : fallback } });
+  const deadline = () => [...timers.values()].find((t) => t.ms === 6000).fn();
+  return { audition, timers, start, deadline };
+}
+
+test("audition cleanup cancels hidden resume intent in either listener order", async () => {
+  for (const engineFirst of [true, false]) {
+    const h = boot(), { A } = h; A.init();
+    const mix = auditionOn(h); assert.equal(mix.start(), true); await flush();
+    const engine = A.enginePlaybackGeneration(), music = A.musicPlaybackGeneration();
+    h.document.hidden = true;
+    if (engineFirst) {
+      h.listeners.visibilitychange();
+      assert.equal(A.enginePlaybackGeneration(), engine, "internal suspend preserves engine owner");
+      assert.equal(A.musicPlaybackGeneration(), music, "internal suspend preserves music owner");
+      mix.audition.stop();
+    } else { mix.audition.stop(); h.listeners.visibilitychange(); }
+    h.document.hidden = false; h.listeners.visibilitychange(); await flush();
+    assert.equal(A.debug().engineOn, false, "returning cannot resurrect the cancelled sample");
+    assert.equal(A.currentTrackId(), null);
+    assert.equal(mix.audition.active(), false); assert.equal(mix.timers.size, 0);
+  }
+});
+
+test("an uncancelled audition keeps its owner across hide/show and still stops", async () => {
+  const h = boot(), { A } = h; A.init();
+  const mix = auditionOn(h); assert.equal(mix.start(), true); await flush();
+  const engine = A.enginePlaybackGeneration(), music = A.musicPlaybackGeneration();
+  h.document.hidden = true; h.listeners.visibilitychange();
+  h.document.hidden = false; h.listeners.visibilitychange(); await flush();
+  assert.equal(A.debug().engineOn, true); assert.ok(A.currentTrackId());
+  assert.equal(A.enginePlaybackGeneration(), engine); assert.equal(A.musicPlaybackGeneration(), music);
+  mix.deadline(); assert.equal(A.debug().engineOn, false); assert.equal(A.currentTrackId(), null);
+  assert.equal(mix.timers.size, 0);
+});
+
+test("rebuilding an audition graph preserves its owner for Stop and deadline", async () => {
+  for (const finish of ["stop", "deadline"]) {
+    const h = boot({ userActivation: sticky }), { A } = h; A.init();
+    const mix = auditionOn(h); assert.equal(mix.start(), true); await flush();
+    const engine = A.enginePlaybackGeneration(), music = A.musicPlaybackGeneration();
+    h.fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 60); await flush();
+    assert.equal(h.contexts.length, 2); assert.equal(A.debug().engineOn, true);
+    assert.equal(A.enginePlaybackGeneration(), engine); assert.equal(A.musicPlaybackGeneration(), music);
+    if (finish === "stop") mix.audition.stop(); else mix.deadline();
+    assert.equal(A.debug().engineOn, false); assert.equal(A.currentTrackId(), null); assert.equal(mix.timers.size, 0);
+  }
+});
+
+test("later race and same-track manual playback survive audition cleanup after rebuild", async () => {
+  const h = boot({ userActivation: sticky }), { A } = h; A.init();
+  const mix = auditionOn(h); assert.equal(mix.start(), true); await flush();
+  h.fireDeviceChange(); await wait(DEVICE_REBUILD_DEBOUNCE_MS + 60); await flush();
+  const track = A.currentTrackId(); assert.ok(track);
+  A.startEngine(); A.playTrackId(track); await flush();
+  mix.audition.stop();
+  assert.equal(A.debug().engineOn, true, "explicit race start transfers ownership even on the existing graph");
+  assert.equal(A.currentTrackId(), track, "same-ID manual selection is a new owner");
+  assert.equal(mix.timers.size, 0); A.stopEngine(); A.stopMusic();
 });
