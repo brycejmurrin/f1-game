@@ -11,10 +11,10 @@ E = estimated. Per-day figures scale 40 h of history by 0.6, or one day of merge
 - [x] 0b — Selection audit: 160 merges replayed through today's selectors (§3)
 - [x] 0c — Catch history: 40 h, 2,097 runs, 284 failed jobs classified (§2)
 - [x] 0d — Literature and tool-doc research (§5)
-- [ ] **now:** Bryce's decisions D1–D3 (§6)
+- [x] Bryce's decisions (2026-10-16): D1 drop now, D2 both parts, D3 required check (§6)
 - [ ] P1 — Node tier: drop fail-safes no node script reads; thin the tooling-fast overlap on every run (§4 P1)
 - [ ] P2 — Base reds: mark inherited reds, regenerate global-consistency artifacts on the train (§4 P2)
-- [ ] P3 — Draft tier: no Pure-node unit suites (D1)
+- [ ] **now:** P3 — Draft tier: no Pure-node unit suites (D1) + P6 train trims (D2), one PR
 - [ ] P4 — Browser routing: `hud` group, `js/editor/`, CSS + unit pin (§4 P4)
 - [ ] P5 — Local tooling-fast receipt checked before CI spends a run (§4 P5)
 - [ ] P6 — Train: spec legs wait for guards; zero-catch legs move to the nightly (D2)
@@ -147,6 +147,20 @@ reuse" needs re-deriving before anything is built on it.
 - **D3 — Merge only on a completed full tier.** 20 % of merges landed without one; 3 of 4 train-first reds followed
   such a merge. Cost: no runner-minutes; a merge waits for one ready run. Mechanism: `ready-gate`/Merge Desk refuses,
   or `CI` becomes a required check in the ruleset (Bryce's setting). Recommendation: yes, through the ruleset.
+
+Answers (Bryce, 2026-10-16): **D1** — drop now (not after P1). **D2** — both parts. **D3** — required check.
+Implementation notes:
+- D1 + D2 land together (both edit the node-suites gate): node-suites skips every draft and the Pages call;
+  driving-model skips the Pages call. node-suites stops asking the ready_for_review reuse question (no draft run to reuse).
+- The Parts census stays on the train: its filter diffs live..tip (the PR runs see only their own diff, the
+  documented hole in ci.yml's `sweeps-parts` comment), it costs ≈ 1 job-min per train, and the geometry sweeps
+  share its step-level gating. Dropping it saves ≈ 60 job-min/day for that hole.
+- "Spec legs wait for guards" cannot be train-only: `needs:` is static, so `selected` would wait for guards on
+  ready PRs too (+≈ 8 min idle wall; also saves the legs of guard-red ready runs, ≈ 1,800 job-min/day E). Put back to
+  Bryce as a separate choice.
+- D3 is a ruleset setting (the token here cannot read or write branch protection): add `CI` as a required status
+  check in "Deploy Ruleset". ci.yml has no `pull_request` path filter, so `CI` always reports; a draft without run-ci
+  reports `CI draft (opted out)` instead, and drafts cannot merge anyway.
 
 ## 7. Not changing, with the reason
 - Ready-tier selected legs (10 REAL episodes in 40 h; each miss becomes a ≈ 1,600 job-min train-first incident).
