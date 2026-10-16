@@ -442,6 +442,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
 | `contact-geometry.js` | `ContactGeometry` | tag | Physical road boundaries and oriented boxes in the local road plane. |
 | `collide.js` | `Collide` | tag | Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket broadphase, the mass-weighted relaxation passes, the hard separation pass, the… |
+| `wall-end-face.js` | `WallEndFace` | tag | WALL END FACE: the one case the lateral wall clamp gets wrong. |
 | `wall-clamp.js` | `WallClamp` | tag | WALL CLAMP: per-side barrier / pit-wall / gantry limits, human slide-along + scrub, lane-side pit clamp, and the conditional road→world writeback when xPinned. |
 
 **`js/lighting/`**
@@ -530,6 +531,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
 | `gfx-debug-overlay.js` | `GfxDebug` | tag | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
+| `three-inspector.js` | `ThreeInspector` | tag | ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline / Viewer / Parameters / Console) on the TLX renderer. |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
 
 **`js/xr/`**
@@ -574,6 +576,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `wgx-shadow.js` | `WGXShadow` | DEFERRED:webgpu | WGX shadow subsystem (split out of js/render/webgpu/wgx.js). |
 | `wgx-chunked.js` | `WGXChunked` | DEFERRED:webgpu | WGX chunked-mesh subsystem (split out of js/render/webgpu/wgx.js). |
 | `wgx-post.js` | `WGXPost` | DEFERRED:webgpu | WGX post-processing subsystem (split out of js/render/webgpu/wgx.js). |
+| `wgx-roadlut.js` | `WGXRoadLut` | DEFERRED:webgpu | WGXRoadLut: the pure, device-free half of WGX's road LUT (the packed (s, lateral x, half-width) table) and the toF32 coercion it shares with the mesh packer. |
 | `wgx.js` | `WGX` | DEFERRED:webgpu | WebGPU renderer backend (WGX). |
 
 **`js/render/three/`**
@@ -595,6 +598,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
+| `agentview-corners.js` | `AgentCorners` | LAZY_AGENT | AgentCorners: the corner table of the agent view (buildCorners, roadShapeAt, peakFracs, corners, nextCorner, upcomingCorners). |
 | `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
 | `apex-net.js` | `ApexNet` | LAZY_AGENT | ApexNet: the netplay and VS FRIEND lobby hooks of the window.__apex API (net, netLoopback, netPeer*, netTick, lobby*). |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |

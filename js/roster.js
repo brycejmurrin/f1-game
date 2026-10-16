@@ -24,6 +24,7 @@
       "js/render/webgpu/wgx-shadow.js",
       "js/render/webgpu/wgx-chunked.js",
       "js/render/webgpu/wgx-post.js",
+      "js/render/webgpu/wgx-roadlut.js",
       "js/render/webgpu/wgx.js"
     ],
     "three": [
@@ -112,6 +113,10 @@
       "js/render/webgpu/wgx.js"
     ],
     [
+      "js/render/webgpu/wgx-roadlut.js",
+      "js/render/webgpu/wgx.js"
+    ],
+    [
       "js/render/three/tsl-chunks.js",
       "js/render/three/tsl-lit.js"
     ],
@@ -146,6 +151,7 @@
   ],
     LAZY_AGENT: [
     "js/agent/agentview-raster.js",
+    "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
     "js/agent/apex-net.js",
     "js/agent/apex.js"
@@ -158,6 +164,10 @@
     [
       "js/agent/apex-net.js",
       "js/agent/apex.js"
+    ],
+    [
+      "js/agent/agentview-corners.js",
+      "js/agent/agentview.js"
     ]
   ],
     LAZY_RACE: [

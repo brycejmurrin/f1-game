@@ -153,7 +153,7 @@
    and the bottom of the button clipped at max scroll. Extra tap+pad on
    the shared body also covers STEERING & ASSISTS (AIDS open under BACK). */
 #pm-panel-controls { padding-bottom: var(--tap); }
-#pm-settings-body { min-height: 0; padding-bottom: calc(var(--tap) + var(--pad)); }
+#pm-settings-body { padding-bottom: calc(var(--tap) + var(--pad)); }
 /* The dialog already hides overflow (dialog-platform.css). Nested groups
    must not become a second scroller — at 500x385 the pane AND the page
    both showed a bar, and the last fold sat under BACK. */

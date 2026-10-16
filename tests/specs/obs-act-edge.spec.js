@@ -14,7 +14,7 @@ async function loadRace(page, trackId = "monza") {
   await page.evaluate((id) => window.__apex.race(id), trackId);
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.jump(0.1, 40, 0));
-  await page.waitForTimeout(100);
+  await page.waitForFunction(() => { try { return window.__apex.obs() != null; } catch { return false; } }, null, { polling: 100, timeout: BOOT_MS });
 }
 
 // ── act() edge cases ──────────────────────────────────────────────────────────

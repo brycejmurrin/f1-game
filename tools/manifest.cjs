@@ -351,6 +351,7 @@ const FULL = [
   "js/perf/renderer-picker.js",
   "js/render/shared/compatibility-recovery.js",
   "js/perf/gfx-debug-overlay.js",
+  "js/perf/three-inspector.js",   // ThreeInspector: opt-in (?inspector=1) dev panel; lazy import() of vendor addons/inspector, never precached
   "js/ui/scale.js",
   "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",
@@ -412,6 +413,7 @@ const FULL = [
   "js/physics/incident-sim.js",
   "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)
   "js/physics/collide.js",   // car-car contact resolver (Collide.create(G, collideFx)), extracted from game.js
+  "js/physics/wall-end-face.js", // pit-edge / run-off end face: hold s, scrub, keep x (WallEndFace.apply), #1623
   "js/physics/wall-clamp.js", // barrier / pit / gantry hard clamp + human writeback (WallClamp.apply), carve-headroom B
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
@@ -832,6 +834,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
   ["js/core/mat4.js", "js/physics/wall-clamp.js"],       // WallClamp binds M4.clamp at eval
+  ["js/physics/wall-end-face.js", "js/physics/wall-clamp.js"],   // WallClamp calls WallEndFace.apply(…)
   ["js/physics/wall-clamp.js", "js/game.js"],            // updateCar calls WallClamp.apply(…)
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/physics/ai-band.js", "js/game.js"],          // updateCar calls AiBand for pace catch-up
@@ -877,6 +880,7 @@ const DEFERRED = {
     "js/render/webgpu/wgx-shadow.js",
     "js/render/webgpu/wgx-chunked.js",
     "js/render/webgpu/wgx-post.js",
+    "js/render/webgpu/wgx-roadlut.js",
     "js/render/webgpu/wgx.js",
   ],
   three: [
@@ -903,6 +907,7 @@ const DEFERRED = {
 // ~350 KB of parse + PWA memory. Fetch-miss still caches on first use.
 const LAZY_AGENT = [
   "js/agent/agentview-raster.js",
+  "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
   "js/agent/apex-net.js",
   "js/agent/apex.js",
@@ -910,6 +915,7 @@ const LAZY_AGENT = [
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
   ["js/agent/apex-net.js", "js/agent/apex.js"],   // ApexApi spreads ApexNet.hooks(...) when game.js calls ApexApi.create
+  ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
 // RACE PAYLOAD. Data a session needs only once a race resolves, never to paint
@@ -1258,6 +1264,7 @@ const DEFERRED_EDGES = [
   ["js/render/webgpu/wgx-shadow.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-chunked.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-post.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-roadlut.js", "js/render/webgpu/wgx.js"],   // wgx.js destructures WGXRoadLut at eval
   ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
   ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
@@ -1288,6 +1295,7 @@ const PATHS = {
   WGX_SHADOW: "js/render/webgpu/wgx-shadow.js",
   WGX_CHUNKED: "js/render/webgpu/wgx-chunked.js",
   WGX_POST: "js/render/webgpu/wgx-post.js",
+  WGX_ROADLUT: "js/render/webgpu/wgx-roadlut.js",
   WGX: "js/render/webgpu/wgx.js",
   INST_CELLS: "js/render/shared/inst-cells.js",
   GLTF: "js/render/shared/gltf.js",
