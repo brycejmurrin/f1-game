@@ -2059,7 +2059,7 @@ function seedPlayerPose() {
 // grid box. Same list apex.js reset() clears.
 function clearRacingScratch(c) {
   c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null;
-  c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.queueT = 0; c._qOf = null;
+  c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.queueT = 0; c._qOf = null; c.trailT = 0; c._trOf = null;
   c.calmUntil = 0; c.calm = 0; c.sbsT = 0; c.atkOn = c.atkWant = false; c.runT = 0; c._alPrev = null; c.paceF = 0;   // racecraft state (AiDrive startCalm / sbs / runExtra / repassLock / paceSample)
   // errCount is NOT cleared here — a red-flag re-grid is the SAME race, so the
   // mistakes counted before the flag stay on the car (as energy and tyreClass
@@ -5508,7 +5508,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       // Pass hunger lifts the tow on permanents when we have a pace edge on the
       // car ahead (AiDrive.towGain); streets and the player path stay base gain.
       const towH = AiDrive.passHunger({
-        street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0,
+        street: !!track.street, traits: aiT, vTop: vT, queueT: Math.max(c.queueT || 0, c.trailT || 0),
         blockerVmax: paceVmax(towCar), ourVmax: paceVmax(c), blockerPace: scriptPace(towCar), ourPace: scriptPace(c),
       });
       vmax *= 1 + AiDrive.towGain(!!track.street, towH) * c.towing;
@@ -5535,6 +5535,8 @@ function updateCarBrakePlan(c, dt, ranked, S) {
       !(blocker === c.passOf && Math.abs(c.x - blocker._snapX) >= 1.8);
     if (blocker && blockerGap < qWin) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
     c.queueT = AiDrive.queueTime(c.queueT, capBlocks && blocker === c._qOf && cautionLevel() < 2, dt); c._qOf = capBlocks ? blocker : null;   // held behind the SAME car (AiDrive.queuePress)
+    // TRAIL TIME (#2356): time spent within a second of the SAME car ahead — the 'following' the tactics instrument counts. The queue window is tighter (16-28 m), so a 20-45 m dirty-air train never built queueT and its +0.4 % pairs sat 170 s.
+    c.trailT = AiDrive.queueTime(c.trailT, !!blocker && blocker === c._trOf && blockerGap < Math.max(c.speed, 10) && cautionLevel() < 2, dt); c._trOf = blocker;
     if (capBlocks) {
       // Held behind a car SERVING A STOP (or queued for one), not by the ground
       // — the pit-lane rescue reads this. Only a lane car: a car welded to
@@ -5832,7 +5834,7 @@ function updateCarLateral(c, dt, ranked, S) {
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
-    const _passH = blocker ? AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: paceVmax(c), blockerPace: scriptPace(blocker), ourPace: scriptPace(c) }) : 1;
+    const _passH = blocker ? AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: Math.max(c.queueT || 0, c.trailT || 0), blockerVmax: paceVmax(blocker), ourVmax: paceVmax(c), blockerPace: scriptPace(blocker), ourPace: scriptPace(c) }) : 1;
     c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street, _passH) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
@@ -5963,7 +5965,7 @@ function updateCarLateral(c, dt, ranked, S) {
       _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
       // Cover concede (permanent, AI-AI): chaser pace edge → defender yields cover.
       _aiDefend.chaserVmax = paceVmax(chaser); _aiDefend.ourVmax = paceVmax(c);
-      _aiDefend.chaserQueueT = chaser.queueT || 0; _aiDefend.chaserPace = scriptPace(chaser); _aiDefend.ourPace = scriptPace(c); defend = AiDrive.defendPull(_aiDefend);
+      _aiDefend.chaserQueueT = Math.max(chaser.queueT || 0, chaser.trailT || 0); _aiDefend.chaserPace = scriptPace(chaser); _aiDefend.ourPace = scriptPace(c); defend = AiDrive.defendPull(_aiDefend);
     }
     // One defensive move per straight (AiDrive.defendOnce); the side resets in
     // the braking zone, where defending is over anyway (holdLine below).
