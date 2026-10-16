@@ -1,0 +1,1 @@
+Fixed car beams so both cross-section dimensions scale linearly with the requested thickness. Fixed front-wheel deflectors disappearing from race cars built with separate rotating wheels; the deflectors now stay on the stationary chassis in both full and split builds.
