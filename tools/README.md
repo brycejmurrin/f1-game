@@ -58,6 +58,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/proxy-fetch.mjs** | A `fetch` honouring HTTPS_PROXY (curl-backed when Node would bypass the agent proxy) for GitHub API callers in tools/. | — |
 | **lib/session-contracts.mjs** | Normalize hosted tool envelopes and diagnose session capability prerequisites without calling remote services. | check-changes |
 | **lib/solid-in-road.cjs** | Solid-in-road audit: `solidsInRoad(track, prims)` lists shipped prop/glass prims whose XZ hull stands on tarmac. | scenery-dress |
+| **lib/stuck-census.mjs** | Per-car AI stuck / rescue event tracker (pure; the VM loop lives in tools/check/ai-stuck.mjs). | ai-racecraft |
 | **lib/survey-scenarios.mjs** | Named survey locations, camera recipes and bounded reproducible scenario plans. | — |
 | **lib/track-build-vm.cjs** | The shared "run the REAL track build headless in a Node VM" harness the audits and VM tests load the engine through. | agent-view |
 | **lib/track-shot-survey.mjs** | Shot-survey plans: presets, resume filters, findings/progress JSON, HTML galleries (apex-extras / shot-survey). | survey-track |
@@ -113,12 +114,14 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-race.mjs** | One entry for the AI instruments: pace / field / tactics / line / human / ratings / band. | ai-racecraft |
 | **check/ai-ratings.mjs** | Pearson matrix and column stats over DriverRatings.BASE — the personality dial check. | ai-racecraft |
 | **check/ai-strategy-census.mjs** | The AI field's tyre strategy over a whole race with TYRE WEAR real: stop counts, stints, compounds, stop reasons. | ai-racecraft |
+| **check/ai-stuck.mjs** | AI stuck / rescue census: per-car stuckT episodes and rescue teleports over N seeds (VM, AI-only). | ai-racecraft |
 | **check/ai-tactics.mjs** | AI racecraft over N laps: intervals in s, stuck-behind-slower, attack conversion, swap-backs (+ --mode human). | ai-racecraft |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
 | **check/defend-duel.mjs** | Staged two-car duels on a straight: defendPull ON vs OFF, same cell both arms (`--track --fracs --gaps --dxs --pair`). | ai-racecraft |
+| **check/destructure-usage.mjs** | Fails when a file destructures a name its script-global provider does not export (a dropped name after a rebase). | slim-bloat |
 | **check/doctor.mjs** | Read-only YAML/refs/mirrors/browser/deps doctor; --json and optional --catalog FILE. No browser or network. | check-changes |
 | **check/dup-keys.mjs** | Scans js/ for a DUPLICATE key in one object literal — the merge hazard where two sessions add a field and later wins. | check-changes |
 | **check/episode-diff.mjs** | Names the per-car field that broke seeded replay: replays a seed N times in the VM, diffs cold vs warm. | — |

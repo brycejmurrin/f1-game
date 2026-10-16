@@ -71,9 +71,10 @@ node tools/check/ai-race.mjs tactics [--track monza] [--laps 8] [--runs 5] [--mo
 node tools/check/ai-race.mjs line    [--track monza]
 node tools/check/ai-race.mjs human   [--track monza] [--runs 3]   # vs a PLAYER, not itself
 node tools/check/ai-race.mjs ratings [--json]                     # Pearson / style zero-mean (no race)
+node tools/check/ai-race.mjs stuck   [--track monza] [--seconds 240] [--runs 3]    # per-car stuckT episodes + rescue teleports (not dwell)
 node tools/check/ai-race.mjs band    [--track monza] [--diff normal] [--seconds 90]  # catch-up rubber-band profile (forces aiPace=catchup)
 # Race subcommands take --wear off|light|real (default off: no pits/deg).
-# Direct: ai-pace/ai-field/ai-line/ai-human/ai-ratings/ai-band.mjs;
+# Direct: ai-pace/ai-field/ai-line/ai-human/ai-ratings/ai-band/ai-stuck.mjs;
 # tyre strategy over a race, wear real (default --track bahrain --laps 10):
 node tools/check/ai-strategy-census.mjs --track redbull --laps 10 [--json]
 ```

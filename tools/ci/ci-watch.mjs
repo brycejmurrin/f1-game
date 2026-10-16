@@ -303,7 +303,7 @@ export function waitingJobs(sha, { since = null, request = api, now = Date.now, 
     }
   }
   const by = Object.entries(kinds).map(([k, n]) => `${n} ${k}`).join(", ");
-  report(`= ci jobs ${waiting} waiting${by ? ` (${by})` : ""}, ${running} running sha=${sha.slice(0, 7)}`);
+  report(`= ci jobs ${waiting} waiting${by ? ` (${by})` : ""}, ${running} running sha=${sha}`);
   return 0;
 }
 
@@ -468,12 +468,12 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
       }
       if (newer.length && newer.length === cancelled.length) {
         for (const [c, by] of newer) note(`${c.name} #${c.id} was replaced while pending by #${by.id} (head ${String(by.head_sha).slice(0, 7)}, ${by.status}) ${by.html_url}`);
-        report(`= ci superseded ${v.line.replace(/^cancelled /, "").replace(/ — .*/, "")} — a newer ${newer[0][1].event} run in the same concurrency group replaced it before it started; watch it: --sha ${newer[0][1].head_sha} sha=${sha.slice(0, 7)}`);
+        report(`= ci superseded ${v.line.replace(/^cancelled /, "").replace(/ — .*/, "")} — a newer ${newer[0][1].event} run in the same concurrency group replaced it before it started; watch it: --sha ${newer[0][1].head_sha} sha=${sha}`);
         return 4;
       }
       const external = cancelledExternal(runs, jobsByRun);
       if (external != null) {
-        report(`= ci cancelled-external — run #${runs[0].id} (${runs[0].event}): every job cancelled ${external}s after it started and no newer run exists on ${sha.slice(0, 7)}; someone or something cancelled it, not a timeout — re-dispatch ci.yml (or re-push)${via(runs)} sha=${sha.slice(0, 7)}`);
+        report(`= ci cancelled-external — run #${runs[0].id} (${runs[0].event}): every job cancelled ${external}s after it started and no newer run exists on ${sha.slice(0, 7)}; someone or something cancelled it, not a timeout — re-dispatch ci.yml (or re-push)${via(runs)} sha=${sha}`);
         return 2;
       }
     }
@@ -483,15 +483,15 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
       const by = supersededByPr(sha, request);
       if (by) {
         report(by.why === "merged"
-          ? `= ci superseded (merged) — PR #${by.pr} merged; this head's run is moot, read the merge commit's CI (--sha <merge sha> --pages) sha=${sha.slice(0, 7)}`
-          : `= ci superseded (new head ${by.head.slice(0, 7)}) — PR #${by.pr} moved on; watch it: --sha ${by.head} sha=${sha.slice(0, 7)}`);
+          ? `= ci superseded (merged) — PR #${by.pr} merged; this head's run is moot, read the merge commit's CI (--sha <merge sha> --pages) sha=${sha}`
+          : `= ci superseded (new head ${by.head.slice(0, 7)}) — PR #${by.pr} moved on; watch it: --sha ${by.head} sha=${sha}`);
         return 4;
       }
     }
     if (v.state === "passed") {
       const hollow = hollowDraft(runs.flatMap((x) => jobsByRun[x.id] || []));
       if (hollow) {
-        report(`= ci hollow (draft, ${hollow.skipped}/${hollow.total} jobs skipped — add run-ci) nothing ran but the draft skeleton${via(runs)} sha=${sha.slice(0, 7)}`);
+        report(`= ci hollow (draft, ${hollow.skipped}/${hollow.total} jobs skipped — add run-ci) nothing ran but the draft skeleton${via(runs)} sha=${sha}`);
         return 5;
       }
     }
@@ -515,8 +515,8 @@ export async function watchSha(sha, { interval, deadline, once, since = null, gr
     }
     // `running` and `none` are NOT green: under --once a scripted `&& next`
     // used to proceed on a run still in flight (2026-09-24).
-    if (v.done || once) { report(`= ci ${v.line} sha=${sha.slice(0, 7)}${via(runs)}`); return { passed: 0, failed: 1, cancelled: 2, running: 124, none: 124 }[v.state] ?? 0; }
-    if (now() > deadline) { report(`= ci timeout — still ${v.line} sha=${sha.slice(0, 7)}; re-arm to keep watching`); return 124; }
+    if (v.done || once) { report(`= ci ${v.line} sha=${sha}${via(runs)}`); return { passed: 0, failed: 1, cancelled: 2, running: 124, none: 124 }[v.state] ?? 0; }
+    if (now() > deadline) { report(`= ci timeout — still ${v.line} sha=${sha}; re-arm to keep watching`); return 124; }
     await wait(interval);
   }
 }

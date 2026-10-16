@@ -23,6 +23,11 @@ const LiveryTex = (function () {
   // typeof guard is the standalone-harness fallback (full-size atlas), never a
   // path the shipped shell takes.
   const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.mobileTier;
+  // The DEVICE, not the tier: GRAPHICS: HIGH buys the player's car a bigger atlas,
+  // never 21 AI cars at desktop size on a phone (~33 MB, plan perf-memory M-10).
+  const IS_PHONE = typeof GLX !== "undefined" && !!GLX.isMobile;
+  // Which divisor family a build uses: the player follows the memory tier, an AI car the device.
+  function atlasMobile(isPlayer, tier, phone) { return isPlayer ? !!tier : !!(tier || phone); }
 
   // How much to shrink an atlas before upload. 1 = the authored 2048×2560.
   //
@@ -1871,14 +1876,15 @@ const LiveryTex = (function () {
   // Preview / AI / mobile author the canvas at the upload size.
   function buildAtlas(teamId, colors = {}, numberOverride, isPlayer, hiRes) {
     Log.info("car", "livery " + (teamId || "?"));
-    const div = atlasDiv(!!isPlayer, IS_MOBILE, !!hiRes);
+    const mobile = atlasMobile(!!isPlayer, IS_MOBILE, IS_PHONE);
+    const div = atlasDiv(!!isPlayer, mobile, !!hiRes);
     // ALWAYS the element, never an OffscreenCanvas — including the deferred hi-res paint that
     // car-draw.js hands to createImageBitmap() (C-P3). An ImageBitmap made from an OffscreenCanvas
     // stalled the WebGL upload on Chromium over Mesa llvmpipe (the car group's DAILY garage-out spec
     // hung at 180 s on every attempt, PR #1494 runs 38519977495 / 38521713487); the same bitmap path
     // from this element passes the whole group (run 38524153549), as does the element with the old
     // synchronous upload. The element's bitmap is the safe source on every adapter.
-    const canvas = IS_MOBILE ? scratchAtlas() : document.createElement("canvas");
+    const canvas = mobile ? scratchAtlas() : document.createElement("canvas");
     canvas.width = SIZE / div;
     canvas.height = SIZE_H / div;
     const ctx = canvas.getContext("2d");
@@ -2814,7 +2820,7 @@ const LiveryTex = (function () {
   // contrast/inkOn are exported for the GARAGE crest wall (js/garage/scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
-  return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
+  return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,

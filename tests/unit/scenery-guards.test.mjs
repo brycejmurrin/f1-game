@@ -308,3 +308,14 @@ test("tyreWall tecpro/airfence model keys carry the colours their bodies are dra
     assert.ok(stacks.every((x) => x.split("|").length === 4), `${id}: the body key names tyre AND cap`);
   }
 });
+
+test("abudhabi Yas hotel bridges are pale steel, not near-black (#2258)", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/circuits/scenery/abudhabi.js"), "utf8");
+  const rows = [...src.matchAll(/id: "(yas-hotel-bridge-[a-z]+)"[\s\S]*?col: \[([^\]]+)\]/g)];
+  assert.equal(rows.length, 2, "main + forward bridge rows");
+  for (const [, id, col] of rows) {
+    const rgb = col.split(",").map(Number);
+    const mean = (rgb[0] + rgb[1] + rgb[2]) / 3;
+    assert.ok(mean >= 0.4 && mean <= 0.65, `${id} albedo ${mean.toFixed(2)} should be pale steel (0.4-0.65)`);
+  }
+});

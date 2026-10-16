@@ -5955,7 +5955,7 @@ function updateCarLateral(c, dt, ranked, S) {
     }
     let defend = 0;
     const caution = raceCtl.level >= 2;   // SC/VSC/red: no cover move either (the attack is gated above), #2175
-    if (chaser && !caution && (!blocker || chaserGap < blockerGap) && !letPass) {   // mid-train too, when the attack behind is nearer than the car ahead
+    if (chaser && !caution && (!blocker || chaserGap < blockerGap) && !letPass && !c.passOf) {   // mid-train too, when the attack behind is nearer than the car ahead
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser._snapSpeed;

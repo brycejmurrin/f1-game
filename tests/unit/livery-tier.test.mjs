@@ -73,6 +73,20 @@ test("mobile keeps the same absolute upload sizes as the 1024-era policy", () =>
   assert.equal(LiveryTex.playerHiResDeferred(true), false, "mobile has no larger player upload to defer");
 });
 
+test("a phone on GRAPHICS: HIGH keeps AI cars at the phone size (M-10); the player follows the tier", () => {
+  // atlasMobile(isPlayer, tier, phone): the player follows the memory tier, an AI car the device.
+  assert.equal(LiveryTex.atlasMobile(false, false, true), true, "phone + HIGH: AI stays on the phone divisor");
+  assert.equal(LiveryTex.atlasMobile(true, false, true), false, "phone + HIGH: the player may take the desktop preview");
+  assert.equal(LiveryTex.atlasMobile(false, true, true), true);
+  assert.equal(LiveryTex.atlasMobile(true, true, true), true);
+  assert.equal(LiveryTex.atlasMobile(false, false, false), false, "desktop is unchanged");
+  assert.equal(LiveryTex.atlasMobile(true, false, false), false, "desktop is unchanged");
+  const ai = (m) => LiveryTex.atlasDiv(false, LiveryTex.atlasMobile(false, m.tier, m.phone));
+  const saved = atlasBytes(ai({ tier: false, phone: false })) - atlasBytes(ai({ tier: false, phone: true }));
+  assert.equal(saved, 1747620 - 436900, "each AI car sheds 1.25 MB");
+  assert.ok(21 * saved / 1048576 > 26, "21 AI cars shed ~26.2 MB of mip-inclusive atlas");
+});
+
 test("the desktop grid stays well under the old every-car-full figure", () => {
   // Steady-state after deferral: player hi-res + 21 AI at 512.
   const everyFull = 22 * atlasBytes(1);

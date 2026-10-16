@@ -42,7 +42,11 @@ export function parseArgs(argv) {
     if (name === "--timeout") timeoutMin = num(name, val);
     else if (name === "--poll") pollSec = num(name, val);
     else if (name === "--load-below") conds.push({ kind: "load", max: num(name, val) });
-    else if (name === "--pid-gone") conds.push({ kind: "pid", pid: num(name, val) });
+    else if (name === "--pid-gone") {
+      const pid = num(name, val);
+      if (!Number.isInteger(pid) || pid > 2147483647) throw new UsageError(`${name} needs a positive 32-bit integer PID, got ${JSON.stringify(val)}`);
+      conds.push({ kind: "pid", pid });
+    }
     else {
       if (!val || val.startsWith("-")) throw new UsageError(`${name} needs a path`);
       conds.push({ kind: "file", path: val });
@@ -74,7 +78,9 @@ export async function waitFor(conds, { timeoutMin, pollSec = 3, deps, sleep = (m
     const r = check(conds, deps);
     if (r.ok) return { code: 0, text: "= wait held" };
     if (now() >= deadline) return { code: 124, text: `= wait timeout after ${timeoutMin} min — still: ${r.pending.join("; ")}` };
-    await sleep(pollSec * 1000);
+    // A long poll must not extend the user's deadline. Node also turns timer
+    // delays above 2^31-1 into 1 ms, which would otherwise busy-poll.
+    await sleep(Math.min(pollSec * 1000, Math.max(0, deadline - now()), 2147483647));
   }
 }
 
