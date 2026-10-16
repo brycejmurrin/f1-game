@@ -163,6 +163,13 @@ const Collide = (() => {
   };
   // Born Double, values kept: a 0 literal is a Smi field, and the first fractional store split the map mid-race (PERF-HUNT-5).
   _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0.5; _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0;
+  // Forward reach (m) at which a slower car ahead is reported as the BLOCKER: the
+  // stop distance from the closing speed at HALF the physical braking (the AI does
+  // not brake at the limit) plus a margin. Below ~23 m/s closing this is < 34 m.
+  const _brakePlan = 0.5 * (PC.BRAKE || 22), _blockerMargin = 10, _blockerReachMax = 160;
+  function blockerReach(closing) {
+    return closing > 0 ? Math.min(_blockerReachMax, _blockerMargin + closing * closing / (2 * _brakePlan)) : 0;
+  }
   function _onTrafO(o) {
     const s = _traf, c = s.c;
     // A finisher coasting past the line is still a car on the road: it blocks,
@@ -173,7 +180,15 @@ const Collide = (() => {
     const ad = dprog < 0 ? -dprog : dprog, L = s.L, REJ = s.REJ;
     if (ad > REJ && ad < L - REJ) return;
     dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-    if (dprog < -s.BACK || dprog > 34) return;
+    if (dprog < -s.BACK) return;
+    if (dprog > 34) {
+      // BLOCKER ONLY, and only for a car we close on faster than we can stop
+      // inside the gap (#2565: a flat 34 m never reported a parked car to an AI
+      // at 50+ m/s). Tow, chaser, along and room stay at 34. At pack closing
+      // speeds blockerReach() < 34, so racing is unchanged.
+      if (dprog < s.blockerGap && dprog < blockerReach(c.speed - (o._snapSpeed || 0)) && Math.abs(o._snapX - c.x) < _blockerHalfW) { s.blocker = o; s.blockerGap = dprog; }
+      return;
+    }
     const dx = o._snapX - c.x;
     const adp = dprog < 0 ? -dprog : dprog;
     if (adp < 5.5) {
@@ -199,7 +214,9 @@ const Collide = (() => {
     s.blocker = null; s.blockerGap = Infinity; s.towCar = null; s.towGap = Infinity;
     s.chaser = null; s.chaserGap = Infinity;
     s.alongO = null; s.alongDx = 0; s.alongDprog = 0; s.alongAdx = Infinity;
-    forArcNear(c, L, REJ, _onTrafO, _liveProg);
+    const reach = Math.max(REJ, blockerReach(c.speed));
+    s.REJ = reach;
+    forArcNear(c, L, reach, _onTrafO, _liveProg);
     s.roomL = Math.max(0, s.roomL); s.roomR = Math.max(0, s.roomR);
     return s;
   }
