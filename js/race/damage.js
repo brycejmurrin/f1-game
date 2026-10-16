@@ -51,7 +51,10 @@ var Damage = (function () {
   const recs = new WeakMap();
 
   function blank() {
-    return { fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 0, hits: 0, cool: 0, onWall: false, served: false, spd: 0, yaw: 0 };
+    const r = { fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 0, hits: 0, cool: 0, onWall: false, served: false, spd: 0, yaw: 0 };
+    // Born Double, values kept: the 0s are Smi fields, and the first hit split every record's map (PERF-HUNT-5).
+    r.fwL = r.fwR = r.rw = r.floor = r.cool = r.spd = r.yaw = 0.5; r.fwL = r.fwR = r.rw = r.floor = r.cool = r.spd = r.yaw = 0;
+    return r;
   }
   function rec(c) {
     let r = recs.get(c);

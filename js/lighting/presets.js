@@ -4989,14 +4989,17 @@ window.LightPresets = {
     "wetDark": 1.18,
     "saturation": 0.94
   },
+  // #2260: poolEnergy 0.85 + ssrDryNight 0.12 on the 1.3-radius mast ring put the
+  // road at luma 0.82 (5.6 % clipped) — brighter than Monza midday (0.30). The pair
+  // below lands 0.56, no clipping; neither knob alone moved it (TLX probe).
   "qatar|night|dry":   {
     "tint": 0.06,
     "sunTemp": -0.08,
-    "poolEnergy": 0.85,
+    "poolEnergy": 0.6,
     "starBright": 1.6,
     "cityGlowWarm": -0.35,
     "fogTint": 0.06,
-    "ssrDryNight": 0.12,
+    "ssrDryNight": 0.05,
     "keyMul": 1,
     "lampFlicker": 0,
     "lampRadiusMul": 1.3,

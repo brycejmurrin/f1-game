@@ -498,3 +498,12 @@ test("destroy removes every input subscription and is idempotent", () => {
   h.dom.dispatch(h.canvas, { type: "keydown", key: "ArrowUp" });
   assert.equal(JSON.stringify(h.ev), before);
 });
+
+
+test("water preview footprints retain native world-axis alignment", () => {
+  const b = boot(), d = design(), tr = b.ctx.TrackValidate.check(d).tr;
+  const scene = b.ctx.DesignerSceneryPreview.plan({ ...d, theme: "lakeside" }, tr);
+  const water = scene.ground.filter((item) => item.kind === "water");
+  assert.ok(water.length > 0, "theme emits water for the orientation check");
+  assert.ok(water.every((item) => item.angle === 0), "waterSurface renders world-axis boxes, independently of the road normal");
+});

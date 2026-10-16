@@ -111,9 +111,9 @@ test.describe("the waiting room", () => {
     // opened rather than what they picked.
     await enterRoom(page, "host");
     await peerSays(page, EV.HELLO, { team: "ferrari", driver: 0 });
-    await expect(page.locator("#vs-them")).toContainText("FER", { timeout: 5000 });
+    await expect(page.locator("#vs-roster")).toContainText("FER", { timeout: 5000 });
     await peerSays(page, EV.HELLO, { team: "mclaren", driver: 1 });
-    await expect(page.locator("#vs-them")).toContainText("MCL", { timeout: 5000 });
+    await expect(page.locator("#vs-roster")).toContainText("MCL", { timeout: 5000 });
     expect(await page.evaluate(() => window.__apex.lobbyRoom().peer.team)).toBe("mclaren");
   });
 

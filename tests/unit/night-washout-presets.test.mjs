@@ -50,8 +50,12 @@ test("qatar and bahrain keep the shipped flood-mast ring night|dry trim", () => 
     const o = P[`${id}|night|dry`];
     assert.ok(o, `${id}|night|dry`);
     for (const [k, v] of Object.entries(MAST_RING_FIX)) {
-      assert.equal(o[k], v, `${id}|night|dry.${k}`);
+      // #2260: Qatar's ring + its own ssrDryNight read brighter than midday (road 0.82);
+      // its pools are trimmed to 0.6 with ssrDryNight 0.05. Bahrain keeps the ring trim.
+      const want = id === "qatar" && k === "poolEnergy" ? 0.6 : v;
+      assert.equal(o[k], want, `${id}|night|dry.${k}`);
     }
+    if (id === "qatar") assert.equal(o.ssrDryNight, 0.05, "qatar|night|dry.ssrDryNight (#2260)");
   }
 });
 

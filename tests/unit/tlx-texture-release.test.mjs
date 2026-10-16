@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { carDrawVm } from "../helpers/car-draw-vm.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
@@ -28,13 +29,96 @@ function slice(src, startMarker, endMarker, what) {
   return src.slice(a, b);
 }
 
-function liftRelease(fakeDocument) {
+function liftRelease(fakeDocument, Bitmap = class ImageBitmap {}) {
   const body = slice(TLX, "let _texStandIn = null;", "/** create(canvas, opts)", "releaseTexSource");
   // eslint-disable-next-line no-new-func
   return new Function("document", "ImageBitmap", `"use strict";${body};return { releaseTexSource, texStandIn };`)(
-    fakeDocument, class ImageBitmap {});
+    fakeDocument, Bitmap);
 }
 const fakeDoc = () => ({ createElement: (tag) => ({ tag, width: 300, height: 150 }) });
+
+class Bitmap {
+  constructor(src = { width: 64, height: 32 }) { this.width = src.width; this.height = src.height; this.closeCalls = 0; }
+  close() { this.closeCalls++; this.width = this.height = 0; }
+}
+
+function liftTextures({ mobileTier = false, initTexture = () => {} } = {}) {
+  const create = slice(TLX, "        createTexture(", "        // Upload a createTexture() handle NOW", "createTexture");
+  const free = slice(TLX, "        freeTexture(t) {", "        texCensus:", "freeTexture");
+  const { releaseTexSource } = liftRelease(fakeDoc(), Bitmap);
+  // The real backend methods, real vendored Texture/dispose dispatcher; only GPU upload is stubbed.
+  return new Function("THREE", "releaseTexSource", "mobileTier", "renderer", "fx",
+    `return ({${create}${free}});`)(THREE, releaseTexSource, mobileTier, { initTexture }, null);
+}
+
+test("an owned bitmap stays open through upload and closes once when its texture is freed", () => {
+  const gfx = liftTextures(), bitmap = new Bitmap();
+  const h = gfx.createTexture(bitmap, { disposeSource: (source) => source.close() }), tex = h.tex;
+  assert.equal(tex.image, bitmap);
+  tex.onUpdate(tex);
+  assert.equal(tex.image, bitmap, "three still needs the ImageBitmap identity for flipY");
+  assert.equal(bitmap.closeCalls, 0, "upload must not close a retained source");
+  gfx.freeTexture(h); gfx.freeTexture(h); tex.dispose();
+  assert.equal(bitmap.closeCalls, 1);
+  assert.equal(bitmap.width, 0);
+  assert.equal((tex._listeners?.dispose || []).length, 0, "the one-shot ownership listener is removed");
+});
+
+test("owned source disposal works before upload and after eager mobile upload", () => {
+  for (const mobileTier of [false, true]) {
+    let uploads = 0;
+    const bitmap = new Bitmap(), gfx = liftTextures({ mobileTier, initTexture: (tex) => {
+      uploads++; tex.onUpdate(tex); assert.equal(bitmap.closeCalls, 0);
+    } });
+    const h = gfx.createTexture(bitmap, { disposeSource: (source) => source.close() });
+    assert.equal(uploads, mobileTier ? 1 : 0);
+    h.tex.dispose(); gfx.freeTexture(h);
+    assert.equal(bitmap.closeCalls, 1);
+  }
+});
+
+test("borrowed bitmaps are not closed by texture disposal", () => {
+  const gfx = liftTextures(), bitmap = new Bitmap(), h = gfx.createTexture(bitmap);
+  h.tex.onUpdate(h.tex); gfx.freeTexture(h);
+  assert.equal(bitmap.closeCalls, 0);
+  assert.equal(bitmap.width, 64);
+});
+
+test("a throwing source disposer cannot stop GPU disposal listeners or run twice", () => {
+  let closes = 0, gpuDisposals = 0;
+  const gfx = liftTextures(), h = gfx.createTexture(new Bitmap(), { disposeSource: () => {
+    closes++; throw new Error("source already unavailable");
+  } });
+  h.tex.addEventListener("dispose", () => { gpuDisposals++; });
+  h.tex.dispose(); h.tex.dispose();
+  assert.equal(closes, 1);
+  assert.equal(gpuDisposals, 2, "other dispose listeners still execute");
+});
+
+test("CarDraw transfers its hi-res bitmap lifetime through TLX eviction and invalidation", async (t) => {
+  const r = carDrawVm(), gfx = liftTextures(), bitmaps = [], idle = [];
+  Object.assign(r.G.gfx, gfx, { backend: "three", drawDecal() {}, uploadTexture(h) { h.tex.onUpdate?.(h.tex); } });
+  r.ctx.LiveryTex = { IS_MOBILE: false, playerHiResDeferred: () => true,
+    buildAtlas: (_team, _livery, _num, _player, hi) => ({ width: hi ? 2048 : 1024, height: hi ? 2560 : 1280 }) };
+  r.ctx.requestIdleCallback = (fn) => { idle.push(fn); };
+  r.ctx.createImageBitmap = async (src) => { const b = new Bitmap(src); bitmaps.push(b); return b; };
+  for (let i = 0; i < 12; i++) {
+    r.carDraw.drawCarDecals({ id: "team" + i }, new Float32Array(16), true, 1, false, true);
+    while (idle.length) idle.shift()({ didTimeout: false, timeRemaining: () => 50 });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(bitmaps.at(-1).closeCalls, 0, "the current livery stays usable");
+    const tex = r.carDraw.getCarDecalTexture({ id: "team" + i }, 1, true).tex;
+    assert.equal(tex.image, bitmaps.at(-1), "anisotropy upgrades preserve the live bitmap identity");
+    assert.equal(tex.anisotropy, 8);
+  }
+  assert.equal(bitmaps.length, 12);
+  const afterLru = bitmaps.filter((b) => b.closeCalls === 0).length;
+  for (let i = 0; i < 12; i++) r.carDraw.invalidateDecalTextures("team" + i);
+  t.diagnostic(JSON.stringify({ created: bitmaps.length, openAfterLru: afterLru,
+    openAfterInvalidation: bitmaps.filter((b) => b.closeCalls === 0).length }));
+  assert.ok(afterLru <= 6, "evicted bitmap storage must be closed, not await GC");
+  assert.deepEqual(bitmaps.map((b) => b.closeCalls), Array(12).fill(1));
+});
 
 test("the source is swapped for a 1x1 stand-in without moving the texture version", () => {
   const { releaseTexSource } = liftRelease(fakeDoc());
@@ -82,7 +166,7 @@ test("no document (worker / harness): the source is kept rather than nulled", ()
 });
 
 test("createTexture wires the release hook, and uploads at creation on the mobile tier", () => {
-  const body = slice(TLX, "        createTexture(src) {", "        // Upload a createTexture() handle NOW", "createTexture");
+  const body = slice(TLX, "        createTexture(src, opts) {", "        // Upload a createTexture() handle NOW", "createTexture");
   assert.match(body, /t\.onUpdate = releaseTexSource;/);
   assert.ok(body.indexOf("t.onUpdate = releaseTexSource") < body.indexOf("t.needsUpdate = true"),
     "the hook must be set before the upload can run");

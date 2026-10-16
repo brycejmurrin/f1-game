@@ -9,7 +9,7 @@
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
+import { cssSpecs, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SPILL_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
   FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST, FAT_UI_MIN_PIECES,
@@ -1698,6 +1698,32 @@ test("helper imports and reexports propagate transitively with cycles", () => {
   const consumers = specsImporting(["tests/helpers/await-track-build.js"]);
   assert.ok(consumers.includes("tests/specs/props-over-road.spec.js"));
   assert.ok(consumers.length > 5, "fixtures reexport reaches indirect consumers");
+});
+
+test("CSS-only changes retain bounded relevant player layout coverage", () => {
+  assert.deepEqual(cssSpecs(["docs/README.md"]), []);
+  const menu = cssSpecs(["css/menus.css", "docs/README.md"]);
+  assert.ok(menu.includes("tests/specs/css-player-smoke.spec.js"));
+  assert.ok(menu.includes("tests/specs/menu-baseline.spec.js"));
+  assert.ok(!menu.includes("tests/specs/hud-layout.spec.js"));
+  for (const name of ["title", "fonts-hud", "components", "responsive", "dialogs", "dialog-platform", "overlays", "garage-experience"]) {
+    assert.ok(cssSpecs([`css/${name}.css`]).includes("tests/specs/menu-baseline.spec.js"),
+      `${name} changes the title/selector/garage identity`);
+  }
+  const hud = cssSpecs(["css/hud.css"]);
+  assert.deepEqual(hud, ["tests/specs/css-player-smoke.spec.js"]);
+  assert.ok(!hud.includes("tests/specs/menu-baseline.spec.js"));
+  assert.equal(menu.length, 2);
+  assert.equal(hud.length, 1);
+  for (const specs of [menu, hud, cssSpecs(["css/tokens.css"])]) {
+    const plan = fit(specs, DEFAULT_BUDGET_MIN);
+    assert.deepEqual(plan.skipped, [], "bounded CSS coverage fits existing shard pools");
+    assert.deepEqual(plan.overBudgetSpecs, []);
+    assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
+  }
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
+  assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
+  assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
 });
 
 test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {

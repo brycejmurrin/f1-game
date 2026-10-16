@@ -90,7 +90,8 @@ test("a car with no fitted set (wear off) grips on the tread the conditions call
   // favouring inters that cost the wear-off AI field ~6% grip on a wet road.
   const m = symbolSource("function gripMult(").match(/^function gripMult\(c\) \{ return (.+?); \}/m);
   assert.ok(m, "gripMult moved — re-point this test");
-  const gripMult = new Function("TyreModel", "raceWeather", "trackWetness", "c", `return ${m[1]};`);
+  // wxArc unset: no local shower, so the surface read falls back to trackWetness() (js/race/rain-cells.js).
+  const gripMult = new Function("TyreModel", "raceWeather", "trackWetness", "c", "wxArc", `return ${m[1]};`);
   for (const [wx, w] of [["wet", 0.5], ["rain", 1], ["dry", 0]]) {
     const got = gripMult(T, wx, () => w, {});
     const want = grip(T.treadFor(wx, w), w);

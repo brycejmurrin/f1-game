@@ -63,6 +63,15 @@ test("parseShotArgv single + batch + raster", () => {
   assert.match(SHOT_USAGE, /--batch/);
 });
 
+test("--clear is opt-in: off by default, on from the flag or a batch field (#2253)", () => {
+  assert.equal(parseShotArgv(["monza", "0.1", "orbit"], ROOT).jobs[0].clear, false);
+  const flagged = parseShotArgv(["monza", "0.1", "--clear", "cinematic"], ROOT).jobs[0];
+  assert.equal(flagged.clear, true);
+  assert.equal(flagged.cam, "cinematic", "--clear takes no value, so the next positional is still the cam");
+  assert.equal(normalizeJob({ track: "vegas", cam: "orbit", clear: true }, { ROOT }).clear, true);
+  assert.match(SHOT_USAGE, /--clear/);
+});
+
 test("loadBatchFile accepts JSONL", () => {
   fs.mkdirSync(TMP, { recursive: true });
   const f = path.join(TMP, "jobs.jsonl");

@@ -59,7 +59,7 @@ var PitLane = {
     approachV: () => 999, entryV: () => 999, exitV: () => 999,
     stopAnim: () => ({ lift: 0, off: 0, u: 0 }),
     inLane: () => false, held: () => false, roadOf: () => null, inWindow: () => false,
-    update: function () {}, think: function () {}, clearArm: function () {}, reset: function () {},
+    update: function () {}, think: function () {}, stepBegin: function () {}, stepEnd: function () {}, clearArm: function () {}, reset: function () {},
     planFor: () => null, planInfo: () => null, twoCompoundApplies: () => false,
     // RaceSettings paintPlan/wire reads these before ensureRaceSession (CI #1180).
     pinnedStops: () => null, setPinnedStops: function () {}, lossS: () => 0,

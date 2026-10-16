@@ -313,10 +313,14 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
     assert.equal(event.sent.length, 0, "dropped non-criticals must not hit the wire");
 
     const go = JSON.stringify({ t: "go", d: { track: "monza" } });
+    // A guest who pressed BACK during friend qualifying waits for this one-shot
+    // event before building the race; a later START cannot bring it out of the lobby.
+    const qgo = JSON.stringify({ t: "qgo", d: null });
     const start = JSON.stringify({ t: "start", d: { at: 1, hold: 0 } });
     const result = JSON.stringify({ t: "result", d: { order: [1] } });
     const bye = JSON.stringify({ t: "bye", d: null });
     assert.equal(ep.send(fresh.EVENT, go), true, "critical GO queues under pressure");
+    assert.equal(ep.send(fresh.EVENT, qgo), true, "qualifying's QGO must survive pressure too");
     assert.equal(ep.send(fresh.EVENT, start), true, "critical START queues under pressure");
     assert.equal(ep.send(fresh.EVENT, result), true, "critical RESULT queues under pressure");
     assert.equal(ep.send(fresh.EVENT, bye), true, "critical BYE queues under pressure");
@@ -332,8 +336,11 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
 
     event.bufferedAmount = 0;
     event.onbufferedamountlow();
-    assert.deepEqual(event.sent, [go, start, result, bye, quali, finLap, settings],
+    assert.deepEqual(event.sent, [go, qgo, start, result, bye, quali, finLap, settings],
       "critical EVENTs must flush in send order once bufferedAmount drains");
+    event.onbufferedamountlow();
+    assert.equal(event.sent.filter((m) => m === qgo).length, 1,
+      "another drain notification must not send QGO twice");
   } finally {
     delete global.RTCPeerConnection;
     delete global.localStorage;

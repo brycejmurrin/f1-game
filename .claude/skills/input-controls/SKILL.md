@@ -52,7 +52,7 @@ Settings UI: `js/ui/key-binds.js`, `js/ui/settings-export.js` sliders (`pm-*` id
 |---|---|
 | `drivingHelp` | ROAD_FOLLOW gain via `helpFromSlider` — stored default 1 = OFF (gain 0) |
 | `raceLine` (slider id `pm-line`) | pull to line / push wide; 0 = off. `G.raceLineAssist = raceLine / 5` |
-| `adaptiveButtons` | digital-steer rate half of SPEED STEER (keys + on-screen arrows). v1 = OFF, **unset default 5**; migrated since STEER_SCHEMA step 4. Not the stick / tilt / drag |
+| `adaptiveButtons` | digital-steer rate half of SPEED STEER (keys + on-screen arrows). v1 = OFF, **unset default 5**; migrated since STEER_SCHEMA step 4. The drag range follows the same mix when DRAG AT SPEED (`touchDragSpeed`, default 10) is above OFF. Not the stick or tilt |
 | `brakeCue` | pulse-rate brake warning. v1 = OFF, unset default 1. Never writes throttle/brake |
 | `gripSteer` (slider `pm-gripsteer`) | GRIP STEER: notch 1 = OFF; own-state steering cap at the front's peak slip, `js/physics/grip-steer.js`. Its maths and A/B are **tune-physics** |
 | `STEER_SCHEMA` | per-version migration ladder in `steer-tuning.js` — do not flatten to one gate |

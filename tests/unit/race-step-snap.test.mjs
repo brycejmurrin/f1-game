@@ -2,6 +2,7 @@
  * updateCar writes prog/x/speed before the next car's scan; a side-by-side
  * then looked like a pass in array order. Own c.prog/c.x/c.speed stay live.
  */
+import { createRequire } from "node:module";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -10,7 +11,6 @@ import { fileURLToPath } from "node:url";
 
 const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "js/game.js"), "utf8");
 const step = src.slice(src.indexOf("s._snapProg = s.prog"), src.indexOf("collide.resolveCollisions"));
-const body = src.slice(src.indexOf("function updateCar"), src.indexOf("function updateCar") + 1 || src.length);
 const upd = src.slice(src.indexOf("for (const c of cars) updateCar"), src.indexOf("collide.resolveCollisions"));
 
 test("the field step snapshots every car before updateCar", () => {
@@ -35,7 +35,6 @@ test("sibling prog, x and speed in the step are the snapshot", () => {
   assert.match(src, /towCar\._snapSpeed/);
   assert.match(src, /c\.passOf\._snapX/);
   assert.equal(upd.includes("updateCar"), true);
-  assert.equal(body.length > 0 || true, true);
 });
 
 test("a red-flag restart is a standing start in first, and the coast estimate matches the integrator", () => {
@@ -65,4 +64,42 @@ test("updateCar reads neighbours only through the snapshot", () => {
   assert.deepEqual(live, [], "live neighbour reads in updateCar: " + live.join(", "));
   assert.match(fn, /blocker\._snapSpeed/);
   assert.match(fn, /alongO\._snapX/);
+});
+
+const require = createRequire(import.meta.url);
+const { createGame } = require("../../tools/lib/game-vm.cjs");
+
+async function orderedPair(reverse, liveNeighbourSpeed = false) {
+  const g = await createGame({ track: "monza" });
+  try {
+    g.G.daily.stop();
+    g.apex.headless(true);
+    const pair = g.G.cars.filter(c => !c.isPlayer).slice(0, 2);
+    for (const [i, c] of pair.entries()) {
+      g.apex.aiPlace(g.G.cars.indexOf(c), 0.62 + i * 9 / g.G.track.total, i ? 40 : 44, 0);
+      c.lap = 1; c.prog = g.G.track.total + c.s;
+      // Negative control reproduces the old live-neighbour seam without
+      // changing production source: snapshot writes no longer freeze speed.
+      if (liveNeighbourSpeed) Object.defineProperty(c, "_snapSpeed", {
+        configurable: true, get() { return this.speed; }, set(_) {},
+      });
+    }
+    g.G.cars.splice(0, g.G.cars.length, ...(reverse ? pair.slice().reverse() : pair));
+    g.apex.go();
+    g.apex.step(1 / 60, 1);
+    return Array.from(pair, c => ({ name: c.name, speed: c.speed, x: c.x, prog: c.prog,
+      accSm: c.accSm }));
+  } finally { g.close(); }
+}
+
+test("two-car queue decision is invariant to update order by stable identity", async () => {
+  const forward = await orderedPair(false), reverse = await orderedPair(true);
+  assert.equal(forward.length, 2);
+  assert.notEqual(forward[0].name, forward[1].name);
+  assert.deepEqual(reverse, forward);
+});
+
+test("queue fixture detects the live-neighbour speed regression", async () => {
+  const forward = await orderedPair(false, true), reverse = await orderedPair(true, true);
+  assert.notDeepEqual(reverse, forward, "negative control must expose an update-order bias");
 });
