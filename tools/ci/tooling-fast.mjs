@@ -514,6 +514,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-resize-hysteresis.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/grip-steer.test.mjs",
+  "tests/unit/handback.test.mjs",
   "tests/unit/harness-display.test.mjs",
   "tests/unit/helmets.test.mjs",
   "tests/unit/home-world.test.mjs",
@@ -742,6 +743,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-tools-ui.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
   "tests/unit/pr-board.test.mjs",
+  // PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.
+  "tests/unit/pr-body.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
   // answers the question that actually bites, "does the pre-push gate RUN it" —
   // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
