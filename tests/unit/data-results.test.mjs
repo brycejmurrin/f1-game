@@ -388,6 +388,24 @@ test("retirements sort last and say why in the time column", async () => {
   assert.deepEqual(r[2].slice(4, 6), ["DNS", "—"]);
 });
 
+// 2024 Belgian GP (OpenF1 session 9574, #2100): Russell was disqualified but the
+// provider kept his completed duration, so the time cell hid the DSQ.
+test("a DSQ / DNS / DNF that keeps a duration still says why", async () => {
+  const tree = await render(
+    { sessionKey: 9574, name: "Race", type: "Race" },
+    [
+      { pos: 1, num: 16, laps: 44, points: 25, dnf: false, dns: false, dsq: false, duration: 4796.5, gap: 0 },
+      { pos: null, num: 63, laps: 44, points: 0, dnf: false, dns: false, dsq: true, duration: 4797.04, gap: null },
+      { pos: null, num: 1, laps: 20, points: 0, dnf: true, dns: false, dsq: false, duration: 2500, gap: null },
+      { pos: null, num: 2, laps: 0, points: 0, dnf: false, dns: true, dsq: false, duration: 99, gap: null }
+    ]
+  );
+  const r = rows(tree);
+  assert.equal(r[0][4], "1:19:56.500", "an ordinary finisher keeps its time");
+  assert.deepEqual(r.slice(1).map((x) => x[4]).sort(), ["DNF", "DNS", "DSQ"]);
+  assert.ok(r.slice(1).every((x) => x[5] === "—"), "no gap beside a status");
+});
+
 // OpenF1 answers HTTP 404 {"detail":"No results found."} for a session that has
 // not published (measured 2026-10-15, session_result?session_key=11392, #2185).
 // The REAL transport resolves that as [] — the ORDINARY state for a session that
