@@ -56,12 +56,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 - Repeated track and lighting warm-ups reuse their renderer probes and release them with their resources, avoiding retained warm-up meshes.
 
-- Restoring a backup keeps a completed sprint's progress even when the sprint awarded no points.
-- Friends who leave qualifying still join the race when the connection's outgoing queue is busy.
-- WATCH restores recorded flags and weather after seeking, and a paused red flag no longer restarts the race.
-- Saving an edited custom circuit preserves its replacement identity across reloads, including a full library.
-- HUD shift and toggle buttons respond to keyboard and assistive activation; inverted wheels navigate menus consistently with driving.
-
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
 - Startup preferences, shortcut entry, and delayed menu navigation behave correctly again (#1495)
