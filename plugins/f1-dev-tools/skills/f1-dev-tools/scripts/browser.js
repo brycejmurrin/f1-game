@@ -32,6 +32,37 @@
       reducedMotion: globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? null,
     });
   }
+  function diagnose() {
+    const a = api();
+    const sw = globalThis.navigator?.serviceWorker;
+    let controller = null;
+    try {
+      controller = sw?.controller ? {
+        scriptURL: sw.controller.scriptURL || null,
+        state: sw.controller.state || null,
+      } : null;
+    } catch (e) {
+      controller = { unavailable: String(e.message || e) };
+    }
+    let manifest;
+    try {
+      manifest = clone(a.agentHelp());
+    } catch (e) {
+      manifest = { unavailable: String(e.message || e) };
+    }
+    return clone({
+      schema: "f1-dev-diagnostic/v1",
+      capturedAt: new Date().toISOString(),
+      page: {
+        url: globalThis.location?.href || null,
+        visibility: globalThis.document?.visibilityState || null,
+        readyState: globalThis.document?.readyState || null,
+        controller,
+      },
+      manifest,
+      inspection: inspect(),
+    });
+  }
   function capture() {
     const a = api(), repro = a.repro();
     if (!repro.track || !repro.cars?.length) throw new Error("Enter a race before capturing a scene.");
@@ -177,5 +208,5 @@
       if (a.camera().mode !== originalMode) throw new Error("Unexpected camera mode change during preview.");
     }
   }
-  globalThis.F1Dev = Object.freeze({ inspect, capture, restore, trace, replayCheck, previewPreset });
+  globalThis.F1Dev = Object.freeze({ diagnose, inspect, capture, restore, trace, replayCheck, previewPreset });
 })();

@@ -20,6 +20,11 @@ test('real game API: capture/restore, raw preset inheritance, invalid inputs and
     const dev = g.ctx.F1Dev;
     const inspection = dev.inspect();
     assert.equal(inspection.info.track,'monza');
+    const diagnostic = dev.diagnose();
+    assert.equal(diagnostic.schema,'f1-dev-diagnostic/v1');
+    assert.equal(diagnostic.inspection.info.track,'monza');
+    assert.ok(diagnostic.manifest && typeof diagnostic.manifest === 'object');
+    assert.ok(['visible','hidden',null].includes(diagnostic.page.visibility));
     const originalDiag=g.apex.diag,originalTimer=g.apex.gpuTimer;
     g.apex.diag=()=>({env:{backend:'webgl2',backendState:{api:'webgl2'},renderScale:0.5},gl:{renderer:'ANGLE (Google, Vulkan SwiftShader Device)'},perf:{tier:4}});
     g.apex.gpuTimer=()=>({software:false});
