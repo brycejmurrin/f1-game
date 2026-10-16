@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chromeArgs, refusal, stop, owns, DEVICES } from "../../tools/mcp/debug-chrome.mjs";
+import { chromeArgs, refusal, stop, owns, DEVICES, headlessGamePlan } from "../../tools/mcp/debug-chrome.mjs";
 
 test("chromeArgs carries the proven flags, the loopback-only address and optional WebGPU", () => {
   const a = chromeArgs({});
@@ -39,4 +39,9 @@ test("--device picks the window and the emulated viewport (phone-landscape 844x3
   assert.ok(chromeArgs({ device: "desktop" }).includes("--window-size=1280,720"));
   const r = spawnSync(process.execPath, ["tools/mcp/debug-chrome.mjs", "start", "--device", "tablet"], { encoding: "utf8" });
   assert.equal(r.status, 1); assert.match(r.stderr, /--device must be/);
+});
+test("--headless-game plan: about:blank, then the game, wait for __apex, then headless(true)", () => {
+  const plan = headlessGamePlan("http://127.0.0.1:3456/");
+  assert.deepEqual(plan.map(x => Object.keys(x)[0]), ["navigate", "navigate", "waitFor", "evaluate"]);
+  assert.equal(plan[0].navigate, "about:blank"); assert.equal(plan[1].navigate, "http://127.0.0.1:3456/"); assert.equal(plan[3].evaluate, "__apex.headless(true)");
 });

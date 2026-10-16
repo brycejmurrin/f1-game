@@ -535,7 +535,6 @@ test("T11: a lost target reads detached: target gone; a deliberate detach does n
   const b = await attached(); await b.s.detach(); assert.equal(b.s.state().detached, undefined);
   const d = await attached(); d.c.emit("Inspector.detached", { reason: "target_closed" }); d.c.close();
   assert.equal(d.s.state().detached, "target gone: target_closed");
-  await d.s.attach("http://127.0.0.1:9222", "t").catch(() => {});
 });
 test("T2: debugger_state carries only the latest operation's result, however many ran (fixed in #2535)", async () => {
   const { s, c } = await attached(); c.reply = async () => ({ result: { type: "string", value: "x".repeat(3000) } });

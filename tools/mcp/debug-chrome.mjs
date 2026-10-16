@@ -74,6 +74,24 @@ export async function viewport(port) {
   const { send, ws } = await pageSocket(port);
   try { return (await send("Runtime.evaluate", { expression: 'innerWidth + "x" + innerHeight', returnByValue: true })).result.value; } finally { ws.close(); }
 }
+// --headless-game (field note, incidents lane): loading or reloading the game with drawing on pegs the
+// SwiftShader GPU process. Launch on about:blank, then navigate to the game, then __apex.headless(true)
+// the moment it is up (the game URL never renders with drawing on for long).
+export const headlessGamePlan = url => [{ navigate: "about:blank" }, { navigate: url },
+  { waitFor: 'document.readyState === "complete" && typeof window.__apex === "object"' }, { evaluate: "__apex.headless(true)" }];
+async function runPlan(port, plan) {
+  const { send, ws } = await pageSocket(port);
+  try {
+    for (const step of plan) {
+      if (step.navigate) { await send("Page.navigate", { url: step.navigate }); await new Promise(r => setTimeout(r, 700)); }
+      else if (step.waitFor) {
+        let ok = false;
+        for (let i = 0; i < 120 && !ok; i++) { ok = (await send("Runtime.evaluate", { expression: step.waitFor, returnByValue: true }).catch(() => ({}))).result?.value === true; if (!ok) await new Promise(r => setTimeout(r, 500)); }
+        if (!ok) throw Error("game did not finish loading within 60 s");
+      } else await send("Runtime.evaluate", { expression: step.evaluate, returnByValue: true });
+    }
+  } finally { ws.close(); }
+}
 // The holder keeps its CDP session open so the override outlives this CLI.
 async function hold(port, device) {
   const d = DEVICES[device]; const { send, ws } = await pageSocket(port);
@@ -110,7 +128,7 @@ export async function main(args = process.argv.slice(2)) {
   if (cmd === "_hold") { await hold(Number(args[1]), args[2]); return 0; }
   if (cmd === "stop") { const r = await stop(); rmSync(PID_FILE, { force: true }); console.log(JSON.stringify(r, null, 2)); return 0; }
   if (cmd === "start") {
-    const port = Number(argOf(args, "--port", 9222)), url = argOf(args, "--url"), webgpu = args.includes("--webgpu"), device = argOf(args, "--device", "phone-landscape");
+    const port = Number(argOf(args, "--port", 9222)), url = argOf(args, "--url"), webgpu = args.includes("--webgpu"), headlessGame = args.includes("--headless-game"), device = argOf(args, "--device", "phone-landscape");
     if (!DEVICES[device]) throw Error(`--device must be ${Object.keys(DEVICES).join(" or ")}`);
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw Error("--port must be 1024-65535");
     if (url) { const u = new URL(url); if (!["127.0.0.1", "localhost"].includes(u.hostname)) throw Error("--url must be a local page"); }
@@ -123,16 +141,18 @@ export async function main(args = process.argv.slice(2)) {
     const serverUp = await fetch(`http://127.0.0.1:${SERVER_PORT}/`, { signal: AbortSignal.timeout(1500) }).then(() => true, () => false);
     if (!serverUp) procs.push({ role: "server", ...launch("python3", ["-m", "http.server", String(SERVER_PORT), "--bind", "127.0.0.1"], `http.server ${SERVER_PORT}`, "server.log") });
     const chrome = chromiumPath();
-    procs.push({ role: "chrome", ...launch(chrome, chromeArgs({ port, url, webgpu, device }), `--remote-debugging-port=${port}`, "chrome.log") });
+    procs.push({ role: "chrome", ...launch(chrome, chromeArgs({ port, url: headlessGame ? "about:blank" : url, webgpu, device }), `--remote-debugging-port=${port}`, "chrome.log") });
     writeFileSync(PID_FILE, JSON.stringify({ port, device, startedAt: new Date().toISOString(), procs }, null, 2) + "\n");
     for (let i = 0; i < 60; i++) {
       const t = await endpointTargets(port);
       if (Array.isArray(t) && t.length) {
         procs.push({ role: "holder", ...launch(process.execPath, [fileURLToPath(import.meta.url), "_hold", String(port), device], "debug-chrome.mjs _hold", "holder.log") });
         writeFileSync(PID_FILE, JSON.stringify({ port, device, startedAt: new Date().toISOString(), procs }, null, 2) + "\n");
+        let headless = null;
+        if (headlessGame) { try { await runPlan(port, headlessGamePlan(url || `http://127.0.0.1:${SERVER_PORT}/`)); headless = true; } catch (e) { headless = `failed: ${e.message}`; } }
         const want = `${DEVICES[device].width}x${DEVICES[device].height}`; let vp = null;
         for (let j = 0; j < 20 && vp !== want; j++) { await new Promise(r => setTimeout(r, 500)); vp = await viewport(port).catch(() => null); }
-        console.log(JSON.stringify({ started: true, endpoint: `http://127.0.0.1:${port}`, device, viewport: vp, viewportOk: vp === want, serverReused: serverUp, targets: t, pidFile: path.relative(ROOT, PID_FILE) }, null, 2));
+        console.log(JSON.stringify({ started: true, ...(headlessGame ? { headlessGame: headless } : {}), endpoint: `http://127.0.0.1:${port}`, device, viewport: vp, viewportOk: vp === want, serverReused: serverUp, targets: t, pidFile: path.relative(ROOT, PID_FILE) }, null, 2));
         return vp === want ? 0 : 1;
       }
       await new Promise(r => setTimeout(r, 500));
@@ -141,7 +161,7 @@ export async function main(args = process.argv.slice(2)) {
     throw Error(`Chrome did not expose CDP on ${port} within 30 s (see artifacts/debug-chrome/chrome.log); stopped what it started`);
   }
   console.log(`debug-chrome — own a headless Chromium for the js-debugger (a CLI, not an MCP tool; the debugger never launches Chrome)
-  start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop]   static server (3456) + Chromium; refuses beside a test run or at loadavg >= 3
+  start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop] [--headless-game]   static server (3456) + Chromium; refuses beside a test run or at loadavg >= 3
   status                                                           chromeAlive, viewport (innerWidth x innerHeight), PIDs, page targets
   stop                                                             kills exactly the PIDs in artifacts/debug-chrome/pids.json`);
   return cmd === "help" || cmd === "--help" ? 0 : 1;

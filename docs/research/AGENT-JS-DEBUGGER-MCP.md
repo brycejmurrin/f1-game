@@ -260,7 +260,7 @@ were read for parameters):
 The debugger never launches Chrome. The parent can use a CLI (not an MCP tool):
 
 ```sh
-node tools/mcp/debug-chrome.mjs start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop]
+node tools/mcp/debug-chrome.mjs start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop] [--headless-game]
 node tools/mcp/debug-chrome.mjs status   # endpoint, PIDs, page targets
 node tools/mcp/debug-chrome.mjs stop     # kills exactly the PIDs it recorded
 ```
@@ -329,6 +329,11 @@ the escape hatch; it can leave game state half-updated, so reload after it.
 **Keep `headless(true)` for logic hunts.** Un-headless software GLX pegs the GPU process at about
 350% CPU and CDP stops answering, so every tool times out. `__apex.headless(true)` suppresses drawing,
 not simulation, and keeps the page responsive; only turn drawing on for a visual question.
+
+**Reloading the game.** Reloading mid-render pegs the SwiftShader GPU process (load average 17 seen).
+`debug-chrome start --headless-game` launches on `about:blank`, navigates to the game, then calls
+`__apex.headless(true)` as soon as `__apex` exists. To reload by hand, do the same sequence:
+`about:blank`, the game URL, `__apex.headless(true)`.
 
 **Emulation lifetime.** CDP emulation overrides end with the session that set them. The holder process
 keeps one session open for that reason; `stop` ends it with the browser.
