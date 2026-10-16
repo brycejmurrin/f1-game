@@ -284,8 +284,10 @@ const DataResults = (function () {
         const status = statusOf(r);
         const time = kind === "practice" ? fmtLap(r.duration) : fmtClock(r.duration);
         // A retirement has no duration: the status takes the TIME cell so
-        // the row still says WHY, and the gap column stays empty.
-        tr.appendChild(el("td", "dh-td-time", time || status || "—"));
+        // the row still says WHY, and the gap column stays empty. The status
+        // wins even when the provider kept a duration (a DSQ keeps the time
+        // the car completed), or the row reads as an ordinary finish.
+        tr.appendChild(el("td", "dh-td-time", status || time || "—"));
         // A lapped finisher has no duration but a "+1 LAP" label: the label
         // is the whole gap, so it must not wait on the time.
         const gap = typeof r.gap === "string" && r.gap && !status ? r.gap : (time && fmtGap(r.gap)) || "—";
