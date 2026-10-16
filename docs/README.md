@@ -231,3 +231,5 @@ For day-to-day workflows, see the **skills** in `.claude/skills/`
 - [Barrier run-off lateral teleports](plans/2026-09-30-barrier-runoff-teleports.md): open 2026-09-26 ledger defect — `wallAt`/`bar*` jumps ~7.9 m at tyre-stack termini; feather + end-face clamp plan with per-circuit probes.
 - [Carve headroom](plans/2026-09-30-carve-headroom.md): saturated size ratchets → extract player-forces / wall-clamp / grip / band / cam leftovers from `game.js` (helpers, not a megafunction split); lower ceilings only.
 - [Wetness and lighting](plans/2026-09-30-wetness-lighting.md): shared continuous track wetness (look=drive) then tod×weather preset grids for the twelve `"*"`-fallback circuits. A1–A3 and the twelve grids are on ship; remaining gaps and MIXED next steps: [notes/MIXED-DYNAMIC-WEATHER-SURVEY-2026-10-05.md](notes/MIXED-DYNAMIC-WEATHER-SURVEY-2026-10-05.md).
+
+Per-PR changelog entries live in `changelog.d/`.
