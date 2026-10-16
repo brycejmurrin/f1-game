@@ -63,3 +63,4 @@ const DesignerWorkspace = (function () {
   }
   return { group, create };
 })();
+Object.freeze(DesignerWorkspace);
