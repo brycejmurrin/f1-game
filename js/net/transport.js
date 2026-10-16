@@ -17,6 +17,9 @@ const NetTransport = (function () {
       onMessage(fn) { handlers.message.push(fn); return this; },
       onOpen(fn) { handlers.open.push(fn); return this; },
       onClose(fn) { handlers.close.push(fn); return this; },
+      // How long a transient "disconnected" may last before the wire closes.
+      // Only rtc has one; loopback never disconnects.
+      setDisconnectGrace(ms) { return ms; },
       _emit(kind, a, b, c) {
         // A throwing handler must not take down the transport or stop the
         // remaining handlers — a rendering bug upstream would otherwise read
@@ -93,6 +96,12 @@ const NetTransport = (function () {
         else held.push(m);
       }
       queue = held;
+      // A peer that closed with reliable messages still in flight closes
+      // here, once the last one of them has been handed over (see close()).
+      if (self._closing && !queue.some((m) => m.to === self)) {
+        self._closing = false; self.status = "closed";
+        self._emit("close", "peer");
+      }
       return n;
     }
 
@@ -105,9 +114,15 @@ const NetTransport = (function () {
       self.pump = (localNow) => deliverTo(self, localNow);
       self.close = function () {
         if (self.status === "closed") return;
-        self.status = peer.status = "closed";
-        queue = [];
-        self._emit("close", "local"); peer._emit("close", "peer");
+        self.status = "closed";
+        // The reliable channel delivers what was sent before a close (a
+        // RESULT then BYE in the same tick, #2199): the peer receives those
+        // and only then its close. Unreliable state and anything for us go.
+        queue = queue.filter((m) => m.to === peer && m.channel === EVENT && peer.status !== "closed");
+        self._emit("close", "local");
+        if (peer.status === "closed") return;
+        if (queue.length) { peer._closing = true; return; }
+        peer.status = "closed"; peer._emit("close", "peer");
       };
       self.stats = () => ({ dropped, delivered, queued: queue.length, wire: self._wire || 0 });
     }
@@ -151,40 +166,21 @@ const NetTransport = (function () {
   // candidates while STUN works, which is worse than shipping nothing,
   // because it looks like a relay exists and diagnosis chases the wrong thing.
   //
-  // That is why no static CREDENTIALS ship — what ships is a credentials URL
-  // (THE SHIPPED RELAY, next block). iceServers() MERGES every source it has:
+  // That is why no static CREDENTIALS ship — a credentials URL is only used
+  // when an operator explicitly configures one. iceServers() merges every source it has:
   //   apex26.turnApi — your own credentials URL (Metered-style: returns
   //     {iceServers|iceServers:[…]} or a bare array), fetched by prefetchIce()
-  //     when the lobby opens; when set it replaces the shipped URL, so a
-  //     player who configured one is never quietly moved onto another quota.
+  //     when the lobby opens.
   //   apex26.turn — a single static server you run yourself, listed first.
   //   Two free no-account relays, appended LAST so anything
   //   you configured still wins — but OFF unless opted into, and the
   //   free-relays block below says why that is not timidity.
-  // THE SHIPPED RELAY. A Metered free-tier credentials URL on the game owner's
-  // own account — the model the operator actually offers, rather than the
-  // embeddable credentials they retired. It returns a fresh iceServers array
-  // with EXPIRING credentials, so what is published here is a fetch URL and
-  // not a standing password.
-  //
-  // WHY THIS IS NEEDED AT ALL, from a real pair of devices ON ONE WI-FI: the
-  // only host candidate a browser now offers is mDNS-obfuscated
-  // (<uuid>.local), and if the router does client isolation or the OS declines
-  // local-network discovery, that name never resolves. The one remaining pair
-  // is srflx-to-srflx, which needs the router to hairpin its own public
-  // address back at itself, and many will not. Two phones on the same sofa
-  // then fail to connect while each holds a perfectly good address — which is
-  // exactly what "both sides found an address but the direct link was blocked"
-  // was reporting.
-  //
-  // THE KEY IS VISIBLE, and that is inherent rather than sloppy: any
-  // client-side TURN credential is readable in devtools, which is why Metered
-  // documents this exact fetch from the browser. The quota is 50 GB/month and
-  // the owner can rotate the key. Overridable by apex26.turnApi, so a fork
-  // points at its own account by setting one key.
-  const TURN_API =
-    "https://bmurrin-apex.metered.live/api/v1/turn/credentials"
-    + "?apiKey=410aca13505116873c708db45f86cd468871";
+  // No TURN credential ships in the client. A browser-visible API key is
+  // reusable by anyone who downloads the game and can exhaust the relay
+  // account's quota. Operators can still provide their own short-lived
+  // credentials endpoint through apex26.turnApi; the default is honest
+  // STUN-only operation until one is configured.
+  const TURN_API = "";
 
   // How long a credentials endpoint gets before we race without it. Short on
   // purpose: a relay improves the odds of connecting, and waiting for one is
@@ -204,9 +200,7 @@ const NetTransport = (function () {
   function prefetchIce() {
     const jobs = [derivedRelays()];
     let url = null;
-    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): use the shipped URL */ }
-    // Yours first, ours as the default — so a player who configured one is
-    // never quietly moved onto somebody else's quota.
+    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): stay STUN-only */ }
     if (!url) url = TURN_API;
     // Re-fetch when the previous answer is past ICE_CRED_TTL_MS (or never
     // landed). iceServers are fixed at RTCPeerConnection construction, so
@@ -456,9 +450,9 @@ const NetTransport = (function () {
     // sent once per change and never repeated. All are a handful per session, so
     // the queue stays small.
     const EVENT_CRITICAL = {
-      go: 1, start: 1, result: 1, bye: 1,
+      go: 1, qgo: 1, start: 1, result: 1, bye: 1,
       armed: 1, left: 1, caution: 1, model: 1,
-      quali: 1, lap: 1, settings: 1, hello: 1, ready: 1,
+      quali: 1, qabort: 1, lap: 1, settings: 1, hello: 1, ready: 1,
     };
     let inbox = [];
     let queuedState = 0;
@@ -598,7 +592,14 @@ const NetTransport = (function () {
     // its own; only "failed"/"closed" are final. Closing on the blip ended the
     // race for that peer. Give it a grace window instead — the session's own
     // heartbeat timeout still catches a real loss that never recovers.
-    const DISCONNECT_GRACE_MS = 5000;
+    // The lobby keeps 5 s; NetSession.setTimeoutMs forwards a race's longer
+    // grace here, or a 6–25 s outage the race promises to ride out closed the
+    // wire at 5 s and the rival never came back (#2195).
+    let disconnectGraceMs = 5000;
+    ep.setDisconnectGrace = function (ms) {
+      if (Number.isFinite(ms) && ms > 0) disconnectGraceMs = ms;
+      return disconnectGraceMs;
+    };
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
@@ -611,10 +612,10 @@ const NetTransport = (function () {
         discTimer = setTimeout(() => {
           discTimer = null;
           if (ep.status !== "closed" && pc.connectionState === "disconnected") {
-            Log.info("net", "connection closed (disconnected " + DISCONNECT_GRACE_MS + " ms)");
+            Log.info("net", "connection closed (disconnected " + disconnectGraceMs + " ms)");
             shutdown("disconnected");
           }
-        }, DISCONNECT_GRACE_MS);
+        }, disconnectGraceMs);
       }
     };
 

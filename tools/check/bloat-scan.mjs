@@ -10,6 +10,7 @@
  *   node tools/check/bloat-scan.mjs [--json] [path...]
  */
 import fs from "node:fs";
+import { load as loadRatchets } from "./ratchets.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,7 +35,7 @@ const linesOf = (rel) => {
 
 const CEILINGS = {};
 {
-  const data = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/ratchets.json"), "utf8"));
+  const data = loadRatchets() // ratchets.json + the per-branch ratchets.d fragments;
   for (const [file, metrics] of Object.entries(data.files)) if (metrics.lines) CEILINGS[file] = metrics.lines;
 }
 

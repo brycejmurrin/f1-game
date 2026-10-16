@@ -143,12 +143,12 @@ const RealReplay = (function () {
     for (const p of script.passes || []) if (p.t != null) out.push({ t: p.t, lap: p.lap, kind: "pass", num: p.by, over: p.over, pos: p.pos, text: code(p.by) + " PASSES " + code(p.over) + (p.pos ? " FOR P" + p.pos : "") });
     for (const d of script.drivers || []) {
       (d.pits || []).forEach((lap, i) => { const t = d.pitT && d.pitT[i]; if (t != null) { const c = compoundAfter(d, lap); out.push({ t, lap, kind: "pit", num: d.num, pos: d.pos, text: d.code + " PITS" + (c ? " · " + c : "") }); } });
-      if (d.dnf && !d.dns && d.outT != null) out.push({ t: d.outT, lap: (d.lapsDone | 0) + 1, kind: "out", num: d.num, text: d.code + " OUT" + (d.outWhere ? " · " + d.outWhere : "") });
+      if (d.dnf && !d.dns && !d.dsq && d.outT != null) out.push({ t: d.outT, lap: (d.lapsDone | 0) + 1, kind: "out", num: d.num, text: d.code + " OUT" + (d.outWhere ? " · " + d.outWhere : "") });
     }
     for (const w of script.cautions || []) {
       const cause = w.cause || (w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VIRTUAL SAFETY CAR");
       if (w.tFrom != null) out.push({ t: w.tFrom, lap: w.from, kind: "sc", num: null, level: w.level, text: cause });
-      if (w.tTo != null) out.push({ t: w.tTo, lap: w.to, kind: "green", num: null, text: cause + " IN THIS LAP" });
+      if (w.tEnding != null || w.tTo != null) out.push({ t: w.tEnding != null ? w.tEnding : w.tTo, lap: w.to, kind: "green", num: null, text: cause + " IN THIS LAP" });
     }
     if (script.fastest && script.fastest.t != null) out.push({ t: script.fastest.t, lap: script.fastest.lap, kind: "fastest", num: script.fastest.num, dur: script.fastest.dur, text: "FASTEST LAP · " + code(script.fastest.num) + " " + fmtLap(script.fastest.dur) });
     for (const r of script.radio || []) if (r.t != null) out.push({ t: r.t, lap: r.lap || 0, kind: "radio", num: r.num, url: r.url, text: "RADIO · " + code(r.num) });
@@ -238,7 +238,12 @@ const RealReplay = (function () {
       const duration = Math.max(0, ...traces.map((tr) => tr.end));
       // The script can outlast a partial positions download. Only offer moments
       // whose footage exists, before nearby-event suppression chooses the cuts.
-      const list = highlightsFor(script).filter((h) => h.t >= startT && h.t <= duration);
+      const list = highlightsFor(script).filter((h) => {
+        if (h.t < startT || h.t > duration) return false;
+        if (h.num == null) return true;
+        const tr = built.byNum.get(h.num);
+        return !!(tr && tr.n && h.t >= tr.t[0] && h.t <= tr.end);
+      });
       const events = reelFor(list), reel = o.reel && events.length ? events : null;
       let T = 0;
       const lead = (script.drivers || []).find((d) => d.pos === 1) || (script.drivers || [])[0];
@@ -246,7 +251,7 @@ const RealReplay = (function () {
       if (reel && reel.length) T = reel[0].t - LEAD_S;
       T = clamp(T, startT, duration);
       run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
-      run.startT = startT; run.duration = duration; run.events = events;
+      run.startT = startT; run.duration = duration; run.events = events; run.onTimeline = o.onTimeline;
       run.savedCamera = G.camMode;
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
       const auto = o.camera === "auto";   // the TV director cuts the shots (Broadcast)
@@ -254,6 +259,7 @@ const RealReplay = (function () {
       if (camera >= 0 && G.setCamMode) G.setCamMode(camera, { persist: false });
       // Pose before snapping: a mid-race start must frame the new position, not the grid.
       pose(true);
+      if (run.onTimeline) run.onTimeline(run.T);
       // Every car is a puppet — the seat too: the camera and HUD follow it, nobody drives it.
       let follow = null;
       for (const [c, f] of cars) if (f.tr && f.d && f.d.code === o.follow) follow = c;
@@ -330,7 +336,14 @@ const RealReplay = (function () {
     function seekTo(t, highlight) {
       if (!run || !Number.isFinite(t)) return;
       const T = clamp(t, run.startT, run.duration);
-      if (run.reel) { const i = run.reel.findIndex((h) => h.t + HOLD_S >= T); run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i; }
+      if (run.reel) {
+        // NEXT/PREV names its item: findIndex would land on an earlier one still in its hold, and its skip() rewinds.
+        const k = highlight ? run.reel.indexOf(highlight) : -1;
+        const i = k >= 0 ? k : run.reel.findIndex((h) => h.t + HOLD_S >= T);
+        run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i;
+        // A scrub keeps its clock but cuts to the item ahead, so its event is on camera (#2196).
+        if (!highlight && i >= 0) highlight = run.reel[i];
+      }
       reposition(T, highlight, true);
     }
     // Scrubbing and reel cuts cross the same timeline boundary. Release all
@@ -342,6 +355,7 @@ const RealReplay = (function () {
       stopRadioClip();
       pose(true);
       if (G.raceT != null) G.raceT = Math.max(0, run.T);
+      if (run.onTimeline) run.onTimeline(run.T);
       if (bc) bc.resetTiming();
       if (highlight) {
         const c = carOfNum(highlight.num);
@@ -524,16 +538,48 @@ const RealReplay = (function () {
           clip = GameAudio.radioMediaClip(h.url, { volume: vol });
         }
         if (!clip) {
-          if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
+          const engine = typeof GameAudio !== "undefined" ? GameAudio : null;
+          const generation = engine && engine.ctxGen ? engine.ctxGen() : null, owner = {};
           const a = new Audio(h.url);
           a.volume = Math.min(1, vol);
-          const off = () => { if (typeof GameAudio !== "undefined" && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false); };
-          a.onended = a.onerror = off;
+          let held = false, playing = false, disposed = false, ducked = true;
+          const current = () => !disposed && run && run.audio === clip && (!engine || !engine.ctxGen || engine.ctxGen() === generation);
+          const audible = () => G.soundOn && !a.muted && a.volume > 0 && !a.paused && !a.ended && (!G.radio || !G.radio.volume || G.radio.volume() > 0);
+          const release = () => {
+            if (held && current() && engine && engine.setVoiceFocusHold) engine.setVoiceFocusHold(false, owner);
+            held = false;
+          };
+          const syncFocus = () => {
+            if (!playing || !audible()) { release(); return; }
+            if (current() && !held && engine && engine.setVoiceFocusHold) { engine.setVoiceFocusHold(true, owner); held = true; }
+          };
+          const interrupted = () => { playing = false; release(); };
+          const unduck = () => { if (current() && ducked && engine && engine.setRadioDuck) engine.setRadioDuck(false); ducked = false; };
+          const off = () => {
+            interrupted();
+            unduck();
+            disposed = true;
+            for (const [event, fn] of Object.entries(listeners)) {
+              if (a.removeEventListener) a.removeEventListener(event, fn);
+              else if (a["on" + event] === fn) a["on" + event] = null;
+            }
+          };
+          // A play request or a stalled fetch is not proof of audible playback.
+          const listeners = {
+            playing: () => { playing = true; syncFocus(); },
+            waiting: interrupted, pause: interrupted, ended: off, error: off,
+            volumechange: syncFocus,
+          };
+          for (const [event, fn] of Object.entries(listeners)) {
+            if (a.addEventListener) a.addEventListener(event, fn);
+            else a["on" + event] = fn;
+          }
+          if (engine && engine.setRadioDuck) engine.setRadioDuck(true);
           clip = {
             get paused() { return a.paused; },
             get ended() { return a.ended; },
-            pause() { a.pause(); off(); },
-            play() { return a.play(); },
+            pause() { a.pause(); interrupted(); unduck(); },
+            play() { if (current() && !ducked && engine && engine.setRadioDuck) { engine.setRadioDuck(true); ducked = true; } const p = a.play(); if (p && p.catch) p.catch(off); return p; },
             stop() { a.pause(); off(); },
           };
         }
@@ -582,6 +628,7 @@ const RealReplay = (function () {
       if (run.paused) { for (const [c, f] of run.cars) if (f.tr && !c.retired) c.speed = 0; return; }
       if (G.state === "race") run.T += dt * run.speed;
       pose();
+      if (run.onTimeline) run.onTimeline(run.T);
       if (G.state !== "race") return;
       fire();
       if (bc) bc.tick(dt, bcState);

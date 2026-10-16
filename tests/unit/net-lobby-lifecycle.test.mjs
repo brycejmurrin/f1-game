@@ -13,27 +13,41 @@ const LOBBY_CODES = await readFile(new URL("../../js/net/lobby-codes.js", import
 const NETPLAY = await readFile(new URL("../../js/net/netplay.js", import.meta.url), "utf8");
 
 function deferred() {
-  let resolve;
-  const promise = new Promise((r) => { resolve = r; });
-  return { promise, resolve };
+  let resolve, reject;
+  const promise = new Promise((r, j) => { resolve = r; reject = j; });
+  return { promise, resolve, reject };
 }
 
 function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts,
                    rendezvous, href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
   const elements = new Map();
   const element = (id) => {
-    const el = { id, hidden: true, value: "", textContent: "", focus() {}, setAttribute(k, v) { this[k] = v; }, removeAttribute(k) { delete this[k]; } };
+    const kids = [];
+    const el = { id, hidden: true, value: "", textContent: "", focus() {},
+      setAttribute(k, v) { this[k] = v; }, removeAttribute(k) { delete this[k]; },
+      appendChild(n) {
+        if (n && !n.tagName && n.firstChild != null) {
+          while (n.firstChild) { const c = n.firstChild; n.removeChild(c); kids.push(c); }
+          return n;
+        }
+        kids.push(n); return n;
+      },
+      removeChild(n) { const i = kids.indexOf(n); if (i >= 0) kids.splice(i, 1); return n; },
+    };
+    Object.defineProperty(el, "firstChild", { get: () => kids[0] || null });
     elements.set(id, el);
     return el;
   };
   element("vsfriend");
   element("vs-pick");
+  element("vs-roster");
+  element("vs-player-count");
   const room = element("vs-room");
   const status = element("vs-status");
   status.classList = { toggle() {} };
   for (const id of ["vs-close", "vs-invite-more", "vs-host", "vs-join", "vs-make-answer", "vs-accept",
                     "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value",
-                    "vs-edit-car", "vs-ready"]) element(id);
+                    "vs-code-share", "vs-code-copy", "vs-edit-car", "vs-ready"]) element(id);
   const scan = element("vs-scan");
   const video = element("vs-scan-video");
   const listeners = new Map();
@@ -55,6 +69,26 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     addEventListener(type, fn) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(fn);
+    },
+    createElement(tag) {
+      const kids = [];
+      const el = { tagName: tag, className: "", textContent: "", title: "", hidden: false,
+        style: {}, dataset: {},
+        appendChild(n) { kids.push(n); return n; },
+        removeChild(n) { const i = kids.indexOf(n); if (i >= 0) kids.splice(i, 1); return n; },
+        setAttribute(k, v) { this[k] = v; if (k === "class") this.className = v; },
+        addEventListener() {},
+      };
+      Object.defineProperty(el, "firstChild", { get: () => kids[0] || null });
+      return el;
+    },
+    createDocumentFragment() {
+      const kids = [];
+      return {
+        appendChild(n) { kids.push(n); return n; },
+        removeChild(n) { const i = kids.indexOf(n); if (i >= 0) kids.splice(i, 1); return n; },
+        get firstChild() { return kids[0] || null; },
+      };
     },
   };
   const transports = [];
@@ -595,11 +629,14 @@ function fakeNetSession(made) {
     return s;
   };
 }
+function initialGuestSettings(extra = {}) {
+  return Object.assign({ track: 0, laps: 3, weather: "dry", tod: "day", quali: false, difficulty: "normal", revision: 0 }, extra);
+}
 const TWO_TEAMS = [
   { id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [{ name: "A1" }, { name: "A2" }] },
   { id: "beta", short: "BET", name: "Beta", color: [0, 0, 1], drivers: [{ name: "B1" }, { name: "B2" }] },
 ];
-async function connectedGuest({ teams = TWO_TEAMS, teamIdx = 0 } = {}) {
+async function connectedGuest({ teams = TWO_TEAMS, teamIdx = 0, receiveSettings = true } = {}) {
   const made = [];
   const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams,
     netSession: fakeNetSession(made), transportStatus: "open" });
@@ -608,6 +645,7 @@ async function connectedGuest({ teams = TWO_TEAMS, teamIdx = 0 } = {}) {
   h.lobby.watchForOpen();                     // the 250 ms poll sees "open" and binds the session
   for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
   assert.equal(made.length, 1, "the guest's session was bound");
+  if (receiveSettings) made[0].deliver("settings", initialGuestSettings());
   return { h, s: made[0], hellos: () => made[0].sent.filter((m) => m.t === "hello") };
 }
 
@@ -746,6 +784,15 @@ async function connectedHost(extra = {}) {
     scanFactory: () => { const s = { stops: 0, stop() { this.stops++; }, start: async () => ({ ok: true }) }; scanners.push(s); return s; },
     teams: TWO_TEAMS, netSession: fakeNetSession(made), transportStatus: "open",
   }, extra));
+  h.lobby.setTransportFactory(() => {
+    const closers = [];
+    const t = {
+      status: "open",
+      onClose(fn) { closers.push(fn); },
+      close() { for (const fn of closers) fn("local"); },
+    };
+    return t;
+  });
   h.lobby.wire();
   await h.lobby.host();
   h.lobby.watchForOpen();
@@ -901,7 +948,7 @@ test("READY is host-relayed with from, and guests key _ready by from||id", () =>
   // (their only peer connection is the host). Mirror the HELLO pattern.
   assert.match(SOURCE, /sess\.sendEvent\(NetPlay\.EV\.READY,\s*tagged\)/,
     "host must relay READY to every other guest");
-  assert.match(SOURCE, /ready:\s*!!\(d && d\.ready\),\s*from:\s*id/,
+  assert.match(SOURCE, /ready:\s*!!_ready\.get\(who\),\s*from:\s*id/,
     "relayed READY carries from like HELLO");
   assert.match(SOURCE, /const who = role === "host" \? id : \(\(d && d\.from != null\) \? d\.from : id\);/,
     "guests key _ready by from when present, else the connection id");
@@ -1020,11 +1067,11 @@ test("a guest applies dirty air and AI pace in memory, and rejects bad values", 
 });
 
 test("leaving the room gives the guest back its own rules", async () => {
-  const { h, s } = await connectedGuest();
+  const { h, s } = await connectedGuest({ receiveSettings: false });
   ruleGuestStubs(h);
   h.G.raceLaps = 3; h.G.difficulty = "normal"; h.G.seed = 77; h.G.raceRound = 1;
   try {
-    s.deliver("settings", { laps: 12, difficulty: "hard", seed: 4242, round: 9, dirtyAir: "off", aiPace: "catchup" });
+    s.deliver("settings", initialGuestSettings({ laps: 12, difficulty: "hard", seed: 4242, round: 9, dirtyAir: "off", aiPace: "catchup" }));
     s.deliver("settings", { laps: 15 });   // a second payload must not re-snapshot the host's values
     assert.equal(h.G.raceLaps, 15);
   } finally { h.lobby.cancel(); }
@@ -1142,6 +1189,7 @@ test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)
     made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
     made[0].deliver("hello", { from: "g2", rank: 2, team: "beta", driver: 1 });
     assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "the relayed guest is in the roster");
+    made[0].deliver("settings", initialGuestSettings({ quali: true })); h.lobby.setReady(true);
     made[0].deliver("go", {});
     assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
     assert.equal(closers.length, 1);
@@ -1298,8 +1346,56 @@ test("a connection shows its verification code, and only the HOST can remove tha
     const [id] = Object.keys(codes);
     assert.equal(h.lobby.removeGuest("nobody"), false, "an unknown id is a no-op");
     assert.equal(h.lobby.removeGuest(id), true, "the host removes the guest whose code differs");
-    assert.equal(closed, 1, "by closing that guest's transport");
+    assert.equal(closed, 0, "LEFT { evicted } goes out first: the close waits for the guest's ack");
+    assert.equal(h.lobby.removeGuest(id), true, "a second tap while waiting is a no-op");
+    await new Promise((r) => setTimeout(r, 1700));
+    assert.equal(closed, 1, "a silent guest is closed after the grace window");
     assert.equal(Object.keys(h.lobby.verifyCodes()).length, 0, "and its code goes with it");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest the host evicts sees a dedicated message, not 'host left'", async () => {
+  let guestTransport = null, closedByGuest = false;
+  const made = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  });
+  h.lobby.setTransportFactory(() => {
+    const closers = [];
+    const t = {
+      status: "open",
+      onClose(fn) { closers.push(fn); },
+      close() { closedByGuest = true; for (const fn of closers) fn(); },
+    };
+    guestTransport = t;
+    return t;
+  });
+  await h.lobby.join();
+  h.lobby.watchForOpen();
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  await new Promise((r) => setTimeout(r, 300));
+  try {
+    assert.equal(made.length, 1);
+    const EV = h.context.NetPlay.EV;
+    made[0].deliver(EV.LEFT, { evicted: true });
+    // No manual close: the guest closes its own end on LEFT { evicted } (the
+    // host's ack), and that close handler reads the eviction tag.
+    assert.equal(closedByGuest, true, "the guest closed its own end");
+    assert.match(h.status.textContent, /removed you from the room/i);
+    assert.doesNotMatch(h.status.textContent, /host left the room/i);
+  } finally { h.lobby.cancel(); }
+});
+
+test("host remove: evicting the last guest keeps the host in the waiting room", async () => {
+  const { h } = await connectedHost();
+  try {
+    assert.equal(h.lobby.removeGuest("g1"), true);
+    await new Promise((r) => setTimeout(r, 1700));   // no ack from the fake guest: the grace close
+    assert.equal(h.lobby.status().guests, 0);
+    assert.match(h.status.textContent, /removed/i);
+    assert.equal(h.elements.get("vs-room").hidden, false, "not sent back to the pick screen");
+    assert.equal((await h.lobby.inviteAnother()).ok, true, "the seat is free to invite again");
   } finally { h.lobby.cancel(); }
 });
 
@@ -1351,7 +1447,7 @@ function codeRoomHarness() {
     rendezvous: {
       usingPrivateRelay: () => false, makeCode: () => "ABC234",
       hostRoom: async (o) => {
-        const room = { code: o.code, onJoiner: o.onJoiner, stopped: 0, stop() { room.stopped++; }, rotate() {} };
+        const room = { code: o.code, onJoiner: o.onJoiner, onFail: o.onFail, stopped: 0, stop() { room.stopped++; }, rotate() {} };
         rooms.push(room);
         return { ok: true, stop: () => room.stop(), rotate: () => {} };
       },
@@ -1438,6 +1534,63 @@ test("the last guest leaving the ROOM seals the reopened code and restores every
     assert.equal(h.elements.get("vs-code-join").hidden, false, "ENTER A CODE is offered again");
     await new Promise((r) => setTimeout(r, 400));
     assert.equal(rooms.length, 2, "nothing reopens the room afterwards");
+  } finally { h.lobby.cancel(); }
+});
+
+test("INVITE ANOTHER stops the reopened code room, and CLOSE brings the same code back (#2197)", async () => {
+  // inviteAnother() invalidated the reopened room's generation without stopping
+  // it: the room kept reposting its offer while mintOffer/onJoiner returned
+  // early, so a friend typing the code the host was told was "still open" got
+  // nothing — and CLOSE then killed it for good.
+  const { h, rooms, ts, until, withGuest } = codeRoomHarness();
+  h.lobby.wire();
+  try {
+    await withGuest();
+    const pending = ts[ts.length - 1];
+    assert.equal((await h.lobby.inviteAnother()).ok, true);
+    assert.equal(rooms[1].stopped, 1, "INVITE ANOTHER must stop the room it would otherwise orphan");
+    assert.equal(pending.status, "closed", "…and drop its half-built transport");
+    h.click("vs-close");                               // back to the room, nothing new minted
+    await until(() => rooms.length === 3, "CLOSE reopened the room");
+    assert.equal(rooms[2].code, "ABC234", "…under the code the host was told is still open");
+    assert.equal(rooms[2].stopped, 0);
+    await rooms[2].onJoiner("g2", "answer-2");
+    assert.equal(rooms[2].stopped, 1, "a joiner's answer on the reopened room is acted on");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a room code that expires with nobody in it is taken down, with host copy (#2200)", async () => {
+  // onFail said nostr's GUEST line ("Check the six characters…") and left the
+  // dead code painted with SHARE/COPY live, so the host could hand it out.
+  const { h, rooms } = codeRoomHarness();
+  try {
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    assert.equal(h.elements.get("vs-code-share").disabled, false, "a live code is shareable");
+    rooms[0].onFail({ ok: false, error: "expired", message: "Nobody answered that code. Check the six characters, or ask your friend for a fresh one." });
+    assert.equal(h.elements.get("vs-code-share").disabled, true, "SHARE is off for a dead code");
+    assert.equal(h.elements.get("vs-code-copy").disabled, true, "…and COPY");
+    assert.equal(h.elements.get("vs-code-value").textContent, "", "the dead code is no longer shown");
+    assert.doesNotMatch(h.status.textContent, /six characters/, "not the guest's copy");
+    assert.match(h.status.textContent, /expired.*NEW CODE/i);
+  } finally { h.lobby.cancel(); }
+});
+
+test("the only guest leaving while INVITE ANOTHER's scanner runs stops the camera (#2200)", async () => {
+  const scanners = [];
+  const { h, made, closers } = closableHarness({
+    scanFactory: () => { const sc = { stops: 0, stop() { this.stops++; }, start: async () => ({ ok: true }) }; scanners.push(sc); return sc; },
+  });
+  try {
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(closers.length, 1, "the guest is connected");
+    await h.lobby.inviteAnother();
+    assert.equal((await h.lobby.scan("answer")).ok, true);
+    assert.equal(h.scan.hidden, false);
+    closers[0]("remote");                           // the only guest leaves → back to the pick
+    assert.equal(scanners[0].stops, 1, "the camera never outlives the step that opened it");
+    assert.equal(h.scan.hidden, true);
   } finally { h.lobby.cancel(); }
 });
 
@@ -1648,7 +1801,9 @@ test("room-code expiry while watching keeps expiry copy, not TURN; pure ICE stil
 
     // dropPending while waitForOpen is still armed: close the pending PC the
     // way onFail/teardown does. On tip, the next poll tick overwrites with TURN.
-    assert.equal(h.lobby.status().pending, true, "watcher still owns the pending transport");
+    // #2200: the failed join drops its own pending transport (and its PC).
+    assert.equal(h.lobby.status().pending, false, "a failed code join leaves no pending transport");
+    assert.equal(transport.status, "closed");
     transport.close();
     // Poll is 250 ms — wait past at least two ticks so waitForOpen can fire.
     await new Promise((r) => setTimeout(r, 700));
@@ -1734,6 +1889,7 @@ async function readyHostRoom() {
   made[0].deliver("hello", { team: "beta", driver: 0 });
   made[0].deliver("ready", { ready: true });
   h.lobby.setReady(true);
+  h.fixtureSession = made[0];
   return h;
 }
 const settle = async (h) => {
@@ -1782,6 +1938,9 @@ test("the host rewinds its sim stream before the race builds, as the guest's app
   h.G.startRace = async () => { writes.push("startRace"); return { ok: true }; };
   h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
   try {
+    h.lobby.roomChanged("rules");
+    const revision = h.fixtureSession.sent.filter((m) => m.t === "settings").at(-1).d.revision;
+    h.fixtureSession.deliver("ready", { ready: true, revision }); h.lobby.setReady(true);
     h.lobby.startFromRoom();
     await settle(h);
     const rewind = writes.indexOf(1234), build = writes.indexOf("startRace");
@@ -1887,10 +2046,57 @@ async function guestInQuali(extra = {}, sheetUp) {
   for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
   assert.equal(made.length, 1);
   made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+  made[0].deliver("settings", initialGuestSettings({ quali: true })); h.lobby.setReady(true);
   made[0].deliver("go", {});
   assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
   return ctx;
 }
+
+for (const outcome of ["success", "false", "canceled", "rejection"]) {
+  test(`a stale ${outcome} race build cannot consume or close a replacement room`, async () => {
+    const { h, made } = await guestInQuali();
+    const build = deferred(), calls = [];
+    h.G.startRace = () => build.promise;
+    h.G.quitToMenu = () => calls.push("quit");
+    h.G.netPlay = { start: () => { calls.push("start"); return { ok: true }; }, hostStart: () => calls.push("hostStart") };
+    const oldStart = h.G._qualiDone();
+    try {
+      h.lobby.cancel();
+      assert.equal(h.lobby.open(), true);
+      assert.equal((await h.lobby.host()).ok, true);
+      h.lobby.watchForOpen();
+      for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+      assert.equal(made.length, 2, "a new transport owns a new room session");
+      made[1].deliver("hello", { team: "beta", driver: 0 });
+      const before = JSON.parse(JSON.stringify(h.lobby.status()));
+      const text = h.status.textContent;
+      if (outcome === "rejection") build.reject(new Error("old scenery failed"));
+      else build.resolve(outcome === "success" ? { ok: true } : outcome === "false" ? false : { kind: "canceled" });
+      await oldStart;
+      assert.deepEqual(calls, [], "stale work must not start networking or quit the player's new screen");
+      assert.equal(h.elements.get("vsfriend").hidden, false, "replacement room remains visible");
+      assert.deepEqual(JSON.parse(JSON.stringify(h.lobby.status())), before, "replacement role, sessions and status survive");
+      assert.equal(h.status.textContent, text, "old rejection must not replace the new room's message");
+      assert.equal(made[1].sent.some((m) => m.t === "qgo"), false, "replacement peers never receive the old start");
+    } finally { build.resolve(false); await oldStart; h.lobby.cancel(); }
+  });
+}
+
+test("a peer leaving during the same race build still releases the empty room and qualifying gate", async () => {
+  const { h, closers } = await guestInQuali();
+  const build = deferred();
+  h.G.startRace = () => build.promise;
+  h.G.netPlay = { start() { assert.fail("no networking without a peer"); } };
+  const starting = h.G._qualiDone();
+  try {
+    closers[0]();
+    build.resolve({ ok: true });
+    await starting;
+    assert.equal(h.lobby.qualifying(), false, "a real departure still releases qualifying persistence");
+    assert.equal(h.lobby.status().guests, 0);
+    assert.equal(h.elements.get("vsfriend").hidden, true);
+  } finally { build.resolve(false); await starting; h.lobby.cancel(); }
+});
 
 test("a start that throws after the quali sheet cancels and quits instead of failing silently (bug-hunt H30)", async () => {
   const { h } = await guestInQuali();
@@ -2068,4 +2274,176 @@ test("codeHost never reveals a dead code when invite or publish fails", async ()
     assert.equal(publishFail.elements.get("vs-code-copy").disabled, true);
     assert.doesNotMatch(publishFail.status.textContent, /Waiting for them/i);
   } finally { publishFail.lobby.cancel(); }
+});
+
+
+for (const outcome of [false, { kind: "canceled" }]) {
+  test("failed guest start restores rules and releases session/pump: " + JSON.stringify(outcome), async () => {
+    const { h, s } = await connectedGuest();
+    let closes = 0, pumps = 0;
+    s.close = () => { closes++; }; s.pump = () => { pumps++; };
+    try {
+      s.deliver("settings", { laps: 7 }); h.lobby.setReady(true);
+      h.G.startRace = async () => outcome;
+      s.deliver("go", {});
+      await new Promise((r) => setImmediate(r));
+      assert.equal(h.lobby.status().guests, 0);
+      assert.equal(h.G.raceLaps, 3);
+      assert.equal(closes, 1);
+      const before = pumps;
+      await new Promise((r) => setTimeout(r, 60));
+      assert.equal(pumps, before, "lobby pump stopped");
+      h.lobby.cancel(); assert.equal(closes, 1, "cleanup is idempotent");
+      await h.lobby.join(); assert.equal(h.lobby.status().role, "guest", "fresh join is usable");
+    } finally { h.lobby.cancel(); }
+  });
+}
+
+test("guest readiness follows effective settings revision and identical replay preserves consent", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    s.deliver("settings", initialGuestSettings());
+    h.lobby.setReady(true);
+    s.deliver("settings", initialGuestSettings());
+    assert.equal(h.lobby.roomState().selfReady, true);
+    s.deliver("settings", { laps: 7, revision: 1 });
+    assert.equal(h.lobby.roomState().selfReady, false);
+    h.lobby.setReady(true);
+    assert.equal(s.sent.filter((m) => m.t === "ready").at(-1).d.revision, 1);
+    let starts = 0; h.G.startRace = async () => { starts++; return false; };
+    s.deliver("go", { revision: 0 });
+    assert.equal(starts, 0, "stale start revision is refused");
+    s.deliver("go", { revision: 1 });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(starts, 1);
+  } finally { h.lobby.cancel(); }
+});
+
+test("host settings edits invalidate every ready acknowledgment and stale READY cannot unlock START", async () => {
+  const { h, made } = await connectedHost();
+  const s = made[0];
+  try {
+    s.deliver("hello", { team: "beta", driver: 0 });
+    s.deliver("ready", { ready: true, revision: 0 }); h.lobby.setReady(true);
+    h.G.raceLaps = 7; h.lobby.roomChanged("rules");
+    const revision = s.sent.filter((m) => m.t === "settings").at(-1).d.revision;
+    assert.equal(revision, 1);
+    s.deliver("ready", { ready: true, revision: 0 }); h.lobby.setReady(true);
+    assert.equal(h.lobby.startFromRoom(), false);
+    s.deliver("ready", { ready: true, revision });
+    assert.equal(h.lobby.roomState().peerReady, true);
+    h.lobby.roomChanged("rules");
+    assert.equal(h.lobby.roomState().peerReady, true, "identical publish preserves guest consent");
+  } finally { h.lobby.cancel(); }
+});
+
+test("rejected settings block GO until valid settings are accepted and explicitly readied", async () => {
+  const { h, s } = await connectedGuest();
+  let starts = 0; h.G.startRace = async () => { starts++; return false; };
+  try {
+    s.deliver("settings", initialGuestSettings()); h.lobby.setReady(true);
+    s.deliver("settings", { laps: 0 }); s.deliver("go", {});
+    assert.equal(starts, 0); assert.equal(h.G.raceLaps, 3);
+    h.lobby.setReady(true); assert.equal(h.lobby.roomState().selfReady, false);
+    s.deliver("settings", { laps: 7, revision: 1 }); s.deliver("go", {});
+    assert.equal(starts, 0, "a partial snapshot cannot recover rejected settings");
+    s.deliver("settings", { track: 0, laps: 7, weather: "dry", tod: "day", quali: false, difficulty: "normal", revision: 1 }); s.deliver("go", { revision: 1 });
+    assert.equal(starts, 0);
+    h.lobby.setReady(true); s.deliver("go", { revision: 1 });
+    await new Promise((r) => setImmediate(r)); assert.equal(starts, 1);
+  } finally { h.lobby.cancel(); }
+});
+
+test("guest roster bursts settle to each peer's latest HELLO and READY without another event", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    for (const [from, team, driver] of [[undefined, "beta", 0], ["g2", "alpha", 1], ["g3", "beta", 1]]) {
+      for (let n = 0; n < 8; n++) {
+        s.deliver("hello", { from, team, driver, label: n });
+        s.deliver("ready", { from, ready: n !== 7 });
+      }
+    }
+    assert.equal(h.lobby.roomState().peers.length, 3, "host link does not share one aggregate window");
+    await new Promise((r) => setTimeout(r, 1050));
+    assert.ok(h.lobby.roomState().peers.every((p) => p.label === 7));
+    assert.equal(h.lobby.roomState().peerReady, false, "final not-ready flushes too");
+    for (const from of [undefined, "g2", "g3"]) s.deliver("ready", { from, ready: true });
+    assert.equal(h.lobby.roomState().peerReady, true);
+  } finally { h.lobby.cancel(); }
+});
+
+test("LEFT and cancel discard queued roster state", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    for (let n = 0; n < 8; n++) s.deliver("hello", { from: "g2", team: "beta", driver: 1 });
+    s.deliver("left", { from: "g2" });
+    await new Promise((r) => setTimeout(r, 1050));
+    assert.equal(h.lobby.roomState().peers.length, 0, "queued HELLO cannot resurrect a departed peer");
+  } finally { h.lobby.cancel(); }
+});
+
+
+test("delayed first full SETTINGS cannot inherit pre-snapshot READY", async () => {
+  const { h, s } = await connectedGuest({ receiveSettings: false });
+  let starts = 0; h.G.startRace = async () => { starts++; return false; };
+  try {
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().selfReady, false);
+    assert.match(h.status.textContent, /complete race settings before READY/);
+    s.deliver("go", { revision: 0 }); assert.equal(starts, 0);
+    s.deliver("settings", { laps: 77, revision: 0 }); h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().selfReady, false, "partial first settings do not enable readiness");
+    const snapshot = initialGuestSettings({ laps: 77, weather: "wet", tod: "night", difficulty: "hard" });
+    s.deliver("settings", snapshot);
+    assert.equal(h.G.raceLaps, 77); assert.equal(h.lobby.roomState().selfReady, false);
+    s.deliver("go", { revision: 0 }); s.deliver("go", {});
+    assert.equal(starts, 0, "first snapshot still needs explicit consent, even for legacy GO");
+    h.lobby.setReady(true); s.deliver("settings", snapshot);
+    assert.equal(h.lobby.roomState().selfReady, true, "identical first snapshot replay preserves fresh consent");
+    s.deliver("go", { revision: 0 }); await new Promise((r) => setImmediate(r));
+    assert.equal(starts, 1);
+  } finally { h.lobby.cancel(); }
+});
+
+test("revisionless initial settings keep legacy optional defaults but require an initial READY", async () => {
+  const { h, s } = await connectedGuest({ receiveSettings: false });
+  let starts = 0; h.G.startRace = async () => { starts++; return false; };
+  try {
+    h.G.seed = 123; h.G.raceRound = 4;
+    const snapshot = initialGuestSettings(); delete snapshot.revision;
+    s.deliver("settings", snapshot);
+    assert.equal(h.G.seed, 123); assert.equal(h.G.raceRound, 4);
+    s.deliver("go", {}); assert.equal(starts, 0);
+    h.lobby.setReady(true); s.deliver("go", {});
+    await new Promise((r) => setImmediate(r)); assert.equal(starts, 1);
+  } finally { h.lobby.cancel(); }
+});
+
+test("revisionless READY after a host edit explains the required client update", async () => {
+  const { h, made } = await connectedHost();
+  try {
+    const s = made[0]; s.deliver("hello", { team: "beta", driver: 0 });
+    s.deliver("ready", { ready: true }); h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().peerReady, true);
+    h.G.raceLaps = 7; h.lobby.roomChanged("rules");
+    s.deliver("ready", { ready: true });
+    assert.equal(h.lobby.roomState().peerReady, false);
+    assert.match(h.status.textContent, /needs to update or reload/);
+  } finally { h.lobby.cancel(); }
+});
+
+test("guest coalescing retains the last valid profile when the final HELLO is invalid", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    for (let n = 0; n < 8; n++) s.deliver("hello", { from: "g2", team: "beta", driver: 1, label: n });
+    for (const profile of [{ team: "evil", driver: 999 }, { team: "beta", driver: 99 }, { team: "beta", driver: "1" }]) {
+      s.deliver("hello", Object.assign({ from: "g2", label: "invalid-final" }, profile));
+    }
+    s.deliver("ready", { from: "g2", ready: true });
+    for (let n = 0; n < 7; n++) s.deliver("ready", { from: "g2", ready: true });
+    s.deliver("ready", { from: "g2", ready: "invalid-final" });
+    await new Promise((r) => setTimeout(r, 1050));
+    assert.equal(h.lobby.roomState().peers[0].label, 7);
+    assert.equal(h.lobby.roomState().peerReady, true, "invalid READY cannot replace the pending legitimate state");
+  } finally { h.lobby.cancel(); }
 });

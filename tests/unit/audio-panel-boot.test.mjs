@@ -12,18 +12,19 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
+import { seedStore } from "../helpers/seed-store.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 
-function boot({ soundOn, musicEnabled, raceRadio, data = {} }) {
+function boot({ soundOn, musicEnabled, raceRadio, data = {}, extra = {} }) {
   const dom = makeDom();
   const calls = [];
   const spied = { setMusicEnabled: (b) => calls.push("setMusicEnabled:" + b), startMusic: () => calls.push("startMusic"),
                   setEnabled: (b) => calls.push("setEnabled:" + b) };
   const GameAudio = new Proxy({}, {
-    get: (t, k) => (k in t ? t[k] : spied[k]) || ((v) => (typeof v === "number" ? v : undefined)),
+    get: (t, k) => k in t ? t[k] : (spied[k] || ((v) => (typeof v === "number" ? v : undefined))),
   });
   Object.assign(GameAudio, {
     musicSource: () => "all", setMusicSource: (v) => v, sourceCounts: () => ({ builtin: 0, user: 0 }),
@@ -40,6 +41,7 @@ function boot({ soundOn, musicEnabled, raceRadio, data = {} }) {
   const G = { $, els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "menu", raceRadio };
   const sb = { Math, JSON, Object, Array, String, Number, console, document: dom.document, window: null, GameAudio, SettingRow, G,
                ScrollFade: { refresh() {} } };
+  Object.assign(sb, extra);
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx); seedDom(ctx);
@@ -47,7 +49,7 @@ function boot({ soundOn, musicEnabled, raceRadio, data = {} }) {
   const panel = ctx.__audioPanel.create(G);
   calls.length = 0;
   panel.init();
-  return { calls, wired, data };
+  return { calls, wired, data, dom, G, GameAudio, panel };
 }
 
 test("init sets the music switch before setSound can start the menu track", () => {
@@ -88,3 +90,117 @@ test("with the real RaceRadio the module owns the write", () => {
   assert.deepEqual(calls, ["chat:key", "comm:off", "spot:true"]);
   assert.equal(data.radioChat, undefined);
 });
+
+
+test("battle samples stop when leaving audio, hiding its panel or closing the settings dialog", () => {
+  const observers = [], leave = []; let active = false, plays = 0;
+  const b = { ready: () => true, prepare: () => Promise.resolve(true),
+    play: () => { active = true; plays++; return true; }, stop: () => { active = false; } };
+  const r = boot({ soundOn: true, musicEnabled: false, data: { battleEarcon: true }, extra: {
+    BattleEarcon: { create: () => b }, SettingsNav: { onLeave: (fn) => leave.push(fn) },
+    MutationObserver: class { constructor(fn) { this.fn = fn; } observe(el) { observers.push({ el, fn: this.fn }); } },
+  } });
+  const sample = r.dom.byId("as-battle-ahead-closing"), panel = r.dom.byId("audioset"), settings = r.dom.byId("pmsettings");
+  assert.equal(r.wired.get("as-battle").read(), "on", "stored opt-in reads correctly");
+  for (const mode of ["leave", "panel-hidden", "settings-hidden", "close", "cancel", "mute", "off"]) {
+    panel.hidden = false; settings.hidden = false; r.G.soundOn = true; r.data.battleEarcon = true;
+    sample.onclick(); assert.equal(active, true, mode);
+    if (mode === "leave") leave[0]("audio");
+    if (mode === "panel-hidden") { panel.hidden = true; observers.find((o) => o.el === panel).fn(); }
+    if (mode === "settings-hidden") { settings.hidden = true; observers.find((o) => o.el === settings).fn(); }
+    if (mode === "close" || mode === "cancel") settings.dispatchEvent({ type: mode });
+    if (mode === "mute") r.G.els.soundbtn.onclick();
+    if (mode === "off") r.wired.get("as-battle").write("off");
+    assert.equal(active, false, mode);
+  }
+  assert.equal(plays, 7);
+});
+test("default-off and system-announcer speech suppress battle sample playback", () => {
+  let plays = 0;
+  const b = { ready: () => true, prepare: () => Promise.resolve(true), play: () => { plays++; return true; }, stop() {} };
+  const r = boot({ soundOn: true, musicEnabled: false, extra: { BattleEarcon: { create: () => b } } });
+  const sample = r.dom.byId("as-battle-ahead-closing");
+  assert.equal(r.wired.get("as-battle").read(), "off"); sample.onclick(); assert.equal(plays, 0);
+  r.data.battleEarcon = true; r.G.announcer = { speaking: () => true };
+  sample.onclick(); assert.equal(plays, 0, "system TEST speech owns the audio moment too");
+  r.G.announcer.speaking = () => false; sample.onclick(); assert.equal(plays, 1);
+});
+
+
+test("radio focus native choice persists through lazy stub replacement and reload without lifting master mute", () => {
+  const data = {}, r = boot({ soundOn: false, musicEnabled: false, data });
+  r.GameAudio._stub = true;
+  r.wired.get("as-focus").write("8");
+  assert.equal(data.radioFocusDb, 8); assert.equal(typeof data.radioFocusDb, "number");
+  assert.equal(r.wired.get("as-focus").read(), 8); assert.equal(r.G.soundOn, false);
+  let applied = 0;
+  r.GameAudio._stub = false;
+  r.GameAudio.setRadioFocusDb = (v) => { applied = [0, 4, 8, 12].includes(v) ? v : 0; return applied; };
+  r.GameAudio.getRadioFocusDb = () => applied;
+  r.panel.init(); assert.equal(applied, 8); assert.equal(r.wired.get("as-focus").read(), 8);
+  assert.equal(r.G.soundOn, false, "rehydration is not a sound-enable gesture");
+  const reload = boot({ soundOn: false, musicEnabled: false, data: { radioFocusDb: data.radioFocusDb } });
+  assert.equal(reload.wired.get("as-focus").read(), 8);
+  reload.wired.get("as-focus").write("9"); assert.equal(reload.data.radioFocusDb, 0);
+});
+
+for (const readyState of ["loading", "interactive", "complete"]) {
+  test(`lazy music controls initialize once with document ${readyState}`, async () => {
+    const listeners = new Map(), elements = new Map();
+    const inits = [];
+    let picks = 0, requests = 0;
+    for (const id of ["as-add", "as-file", "as-sp-save", "as-sp-id"]) {
+      elements.set(id, { value: "", bindings: 0, click() { picks++; },
+        addEventListener(type, fn) { this.bindings++; this[type] = fn; } });
+    }
+    const document = {
+      readyState,
+      getElementById: id => elements.get(id) || null,
+      addEventListener(type, fn, opts) {
+        const list = listeners.get(type) || [];
+        list.push({ fn, once: opts?.once }); listeners.set(type, list);
+      },
+    };
+    const emit = type => {
+      const list = listeners.get(type) || [];
+      listeners.set(type, list.filter(item => !item.once));
+      for (const { fn } of list) fn();
+    };
+    const context = vm.createContext({ document,
+      location: { origin: "https://game.test", pathname: "/", hostname: "game.test", search: "" },
+      localStorage: { getItem: () => null }, sessionStorage: { getItem: () => null },
+      fetch() { requests++; throw new Error("initialization must not contact Spotify"); },
+      setTimeout, clearTimeout, URL, URLSearchParams,
+    });
+    context.window = context;
+    seedLog(context); seedStore(context);
+    context.Log.info = (...args) => inits.push(args.join(" "));
+    vm.runInContext(read("js/audio/music-lib.js"), context);
+    vm.runInContext(read("js/audio/spotify.js"), context);
+    const add = elements.get("as-add"), file = elements.get("as-file");
+    const save = elements.get("as-sp-save");
+    if (readyState === "loading") {
+      assert.equal(add.onclick, undefined, "wait while DOM is being parsed");
+      assert.equal(save.bindings, 0);
+      document.readyState = "interactive";
+      emit("DOMContentLoaded");
+    }
+    await context.MusicLib.init();
+    assert.equal(typeof add.onclick, "function", "ADD is bound before window.load");
+    assert.equal(typeof file.onchange, "function", "file selection is bound before window.load");
+    assert.equal(save.bindings, 1, "Spotify settings bind without an account");
+    const firstAdd = add.onclick, firstChange = file.onchange;
+    add.onclick();
+    assert.equal(picks, 1, "ADD opens the file picker");
+    await context.MusicLib.init();
+    context.SpotifyMusic.openPanel(); context.SpotifyMusic.openPanel();
+    document.readyState = "complete";
+    emit("load"); emit("DOMContentLoaded");
+    await context.MusicLib.init();
+    assert.equal(add.onclick, firstAdd);
+    assert.equal(file.onchange, firstChange);
+    assert.equal(save.bindings, 1, "later load/settings opens do not duplicate listeners");
+    assert.equal(inits.filter(line => line.includes("SpotifyMusic.init")).length, 1);
+    assert.equal(requests, 0);
+  });
+}

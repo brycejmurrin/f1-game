@@ -1,4 +1,5 @@
 // @ts-check
+import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import { LANDSCAPE, BOOT_MS, boot, armRace, selectPartCategory, startCareer, goRacing } from "../helpers/career-boot.js";
 
@@ -22,6 +23,46 @@ test.describe.parallel("Career — the modes screen", () => {
     await expect(page.locator("#cr-right")).toContainText("MY TEAM");
     // Nothing to press in the foot: every action here is a card.
     await expect(page.locator("#cr-go")).toBeHidden();
+  });
+
+  test("Daily class merges still allow a native career backup download", async ({ page }, info) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.gfxBackend", "three");
+      localStorage.setItem("apex26.tlxForceGL", "1");
+    });
+    await boot(page);
+    await expect(page).toHaveTitle(/Apex 26/);
+    const errors = [];
+    page.on("pageerror", e => errors.push(e.message));
+    const expected = await page.evaluate(() => {
+      window.__apex.career({ teamId: "haas", seat: 1, seed: 7 });
+      const day = "2026-10-16", key = i => JSON.stringify({ bias: i });
+      const daily = DailyChallenge.create({ store: GameStore.store });
+      daily.select(day, "open");
+      for (let i = 0; i < 8; i++) daily.record(90 + i, key(i));
+      const envelope = CareerBackup.build();
+      envelope.daily = { days: { [day]: { best: 80, laps: 1,
+        classes: { [key(8)]: { best: 80, laps: 1 } } } } };
+      const result = CareerBackup.apply(envelope);
+      if (!result.ok) throw new Error("Daily merge refused: " + result.reason);
+      return GameStore.store.get("daily.v1");
+    });
+    await page.locator("#cr-back").click();
+    await page.locator("#mb-career").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER MODES");
+    const waiting = page.waitForEvent("download");
+    await page.locator('[data-cr-act="export"]').first().click();
+    const download = await waiting;
+    const path = info.outputPath("daily-career-backup.json");
+    await download.saveAs(path);
+    const saved = JSON.parse(await readFile(path, "utf8"));
+    expect(saved.slots).toHaveLength(6);
+    expect(saved.daily).toEqual(expected);
+    expect(Object.keys(saved.daily.days["2026-10-16"].classes)).toHaveLength(9);
+    const restored = await page.evaluate(saved => CareerBackup.apply(saved), saved);
+    expect(restored.ok).toBe(true);
+    expect(errors).toEqual([]);
+    await info.attach("Daily backup after class merge", { path, contentType: "application/json" });
   });
 
   test("an empty slot starts that mode, in that slot", async ({ page }) => {
@@ -433,20 +474,33 @@ test.describe.parallel("Career — the hire's contract", () => {
 
   test("re-signing takes their asking price and clears the block", async ({ page }) => {
     await boot(page);
-    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 }));
-    await goRacing(page);
-    const out = await page.evaluate(() => {
-      window.__apex.careerSim(24);
-      window.__apex.careerRollover();
-      const p = window.__apex.careerHire();
-      if (!p || p.kind !== "renew") return { skipped: true, kind: p && p.kind };
-      window.__apex.careerHire("renew");
-      return { ask: p.ask, salary: window.__apex.career().roster[0].salary,
-               pending: window.__apex.careerHire() };
+    const offer = await page.evaluate(() => {
+      window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 });
+      // Stage the contract boundary explicitly. Season simulation may poach
+      // this driver; that is a different flow, never a reason to pass renewal.
+      const hire = Career.data().roster[0];
+      hire.left = 0;
+      hire.pending = { kind: "renew", ask: hire.salary + Career.HIRE_MIN };
+      Career.save();
+      window.__apex.career(true);
+      return window.__apex.careerHire();
     });
-    if (out.skipped) { expect(out.kind).toBe("left"); return; }
-    expect(out.salary).toBe(out.ask);
-    expect(out.pending).toBeNull();
+    expect(offer.kind).toBe("renew");
+    await expect(page.locator("#cr-go")).toBeDisabled();
+    await expect(page.locator("#cr-rehire")).toBeVisible();
+    await page.locator("#cr-rehire").click();
+    const renewed = await page.evaluate(() => ({
+      salary: window.__apex.career().roster[0].salary, pending: window.__apex.careerHire(),
+    }));
+    expect(renewed.salary).toBe(offer.ask);
+    expect(renewed.pending).toBeNull();
+    await expect(page.locator("#cr-rehire")).toHaveCount(0);
+    await expect(page.locator("#cr-go")).toBeEnabled();
+    await boot(page); // a new page load must keep the accepted contract
+    await page.evaluate(() => window.__apex.career(true));
+    expect(await page.evaluate(() => window.__apex.career().roster[0].salary)).toBe(offer.ask);
+    expect(await page.evaluate(() => window.__apex.careerHire())).toBeNull();
+    await expect(page.locator("#cr-go")).toBeEnabled();
   });
 
   test("signing somebody else replaces the seat and its wage", async ({ page }) => {

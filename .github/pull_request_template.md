@@ -1,4 +1,4 @@
-CHANGELOG: add a player-facing entry under the current `build` in CHANGELOG.md, or write `no player-facing change`.
+CHANGELOG: add a fragment `docs/changelog.d/<slug>.md` (lines `Fixed: …`; never edit CHANGELOG.md), or write `no player-facing change`.
 
 ## Goal
 <!-- Written when the PR opens, before the work is done; edit only if the ask changes.
@@ -14,6 +14,7 @@ CHANGELOG: add a player-facing entry under the current `build` in CHANGELOG.md, 
        - [ ] todo — one verifiable step each; add work you discover as you go
        - [ ] **now:** the step in progress (exactly one), so a pickup knows where you stopped
        - [ ] ~~dropped~~ — strike it and say why; never delete an item
+       - [~] deferred — work moved to a follow-up issue (or start the text with `Deferred:`); counts as closed
      Tick an item only with its evidence; "should work" is a [ ]. Marking ready and
      merging are not Plan items: `ready-gate.mjs --pr <n>` refuses while one stays open. -->
 - [ ] **now:**

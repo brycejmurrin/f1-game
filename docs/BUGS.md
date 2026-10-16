@@ -309,7 +309,7 @@ hunt's; line numbers are as of that tip. L9/L12/L13/M36 (tooling) are fixed by t
 are held by the session that owns them. Rows marked fixed-in-#NNNN are in this session's open PRs; everything else below is **assigned to sibling sessions
 2026-10-09**, except the last line, which has no owner yet.
 
-- M19 replay — `clear()` zeroes `prevStatus`, so every retired/finished car re-tags as a fresh event after a timeline discard. `js/camera/replay-buf.js:81` · low
+- M19 replay — `clear()` zeroes `prevStatus`, so every retired/finished car re-tags as a fresh event after a timeline discard. `js/camera/replay-buf.js:81` · low · **fixed in #2222**
 - M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low · **fixed in #1289**
 - M21 net — `EVENT_CRITICAL` omits `quali`/`settings`; a lost QUALI on a backed-up reliable channel wrecks the grid. `js/net/transport.js:454,622` · low
 - M24 data hub — switching tabs does not abort the previous tab's OpenF1 requests. `js/data/hub.js:300`, `js/data/telemetry.js:357` · low-med · **fixed in #1284**

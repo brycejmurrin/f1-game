@@ -428,6 +428,63 @@ const CustomTracks = (function () {
     return { ok: true, added, skipped, durable: !!result.durable };
   }
 
+  // Prepared imports own private sanitized data. UI summaries are inspectable
+  // but cannot edit the eventual write. An exact library snapshot catches local
+  // and cross-tab changes without invalidating on unrelated settings writes.
+  const collectionPlans = new WeakMap();
+  const collectionRevision = () => JSON.stringify(store.get(KEY, null));
+  async function preflightCollection(raw, validate, options) {
+    const opt = options || {}, valid = () => !opt.valid || opt.valid();
+    const records = [], summary = { ok: false, added: 0, skipped: 0, records };
+    if (!raw || raw.format !== COLLECTION_FORMAT || raw.v !== 1 || !Array.isArray(raw.items)) return Object.assign(summary, { reason: "format" });
+    if (raw.items.length > LIMITS.items) return Object.assign(summary, { reason: "full" });
+    // Snapshot input too: a caller mutating its file object during a yielded
+    // preflight must not silently change what the review screen approves.
+    const incoming = JSON.parse(JSON.stringify(raw.items)), revision = collectionRevision();
+    const items = list(), known = new Map(items.map((it) => [it.id, it]));
+    const pause = opt.yieldTask || (() => new Promise((resolve) => setTimeout(resolve, 0)));
+    for (const [index, row] of incoming.entries()) {
+      if (!valid()) return Object.assign(summary, { reason: "canceled" });
+      await pause();
+      if (!valid()) return Object.assign(summary, { reason: "canceled" });
+      let it, reason = null;
+      try {
+        it = sanitize(row);
+        if (!it || loopLength(it.pts) > 14000 || (validate && !validate(it).ok)) reason = "invalid";
+        else TrackDef.fromRaw(toRaw(it));
+      } catch (_) { reason = "invalid"; }
+      const existing = it && known.get(it.id);
+      if (!reason && existing && canonical(existing) !== canonical(it)) reason = "collision";
+      const status = reason ? "error" : existing ? "duplicate" : "add";
+      records.push({ index, name: it ? it.name : sanitizeName(row && row.name), status, reason });
+      if (!reason) {
+        if (existing) summary.skipped++;
+        else { known.set(it.id, it); items.push(it); summary.added++; }
+      }
+      if (opt.onProgress) opt.onProgress({ done: index + 1, total: incoming.length, added: summary.added, skipped: summary.skipped, records: records.map((r) => Object.assign({}, r)) });
+    }
+    if (!valid()) return Object.assign(summary, { reason: "canceled" });
+    const bad = records.find((r) => r.status === "error");
+    if (bad) return Object.assign(summary, { reason: bad.reason, index: bad.index });
+    if (items.length > LIMITS.items) return Object.assign(summary, { reason: "full" });
+    if (revision !== collectionRevision()) return Object.assign(summary, { reason: "changed" });
+    summary.ok = true;
+    collectionPlans.set(summary, { items, revision, added: summary.added, skipped: summary.skipped });
+    return summary;
+  }
+  function cancelCollectionPreflight(plan) { if (plan) collectionPlans.delete(plan); }
+  function commitCollectionPreflight(plan) {
+    const prepared = collectionPlans.get(plan);
+    if (!prepared) return { ok: false, reason: "canceled" };
+    collectionPlans.delete(plan);   // one explicit approval can write at most once
+    if (prepared.revision !== collectionRevision()) return { ok: false, reason: "changed" };
+    if (!prepared.added) return { ok: true, added: 0, skipped: prepared.skipped, durable: true };
+    const selected = selectedId(), result = write(prepared.items);
+    if (!result || !result.ok) return { ok: false, reason: "write" };
+    if (sync() >= 0 && selected) reselect(selected);
+    return { ok: true, added: prepared.added, skipped: prepared.skipped, durable: !!result.durable };
+  }
+
   /** Make a custom circuit the current selection (what the picker click does). */
   function select(id) {
     const idx = Tracks.LIST.findIndex((t) => t.id === id);
@@ -525,9 +582,33 @@ const CustomTracks = (function () {
     // not looked up by id here: the shell gains it with the screen (PR4), and
     // the shell-id guard holds every literal lookup to an id that exists.
     const door = _hooks.door || null;
+    let doorGeneration = 0;
     if (door) door.onclick = () => {
       if (G.soundOn && typeof GameAudio !== "undefined") GameAudio.uiSelect();
-      ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open(); });
+      const generation = ++doorGeneration;
+      const layers = typeof UiLayers !== "undefined" ? UiLayers : null;
+      const owner = layers && layers.top ? layers.top() : null;
+      let cancelled = false;
+      // Loading is only preparation: another navigation owns the next screen.
+      // Remember an intervening click even if that screen closes before load.
+      const cancel = (event) => {
+        if (event.type === "keydown" ? event.key === "Escape" : event.target !== door && !(door.contains && door.contains(event.target))) cancelled = true;
+      };
+      const doc = typeof document !== "undefined" ? document : null;
+      if (doc && doc.addEventListener) {
+        doc.addEventListener("click", cancel, true);
+        doc.addEventListener("keydown", cancel, true);
+      }
+      return ensureEditor().then((ok) => {
+        if (!ok || cancelled || generation !== doorGeneration || typeof TrackDesigner === "undefined") return;
+        if (layers && ((layers.inRace && layers.inRace()) || (layers.top && layers.top() !== owner))) return;
+        TrackDesigner.open();
+      }).finally(() => {
+        if (doc && doc.removeEventListener) {
+          doc.removeEventListener("click", cancel, true);
+          doc.removeEventListener("keydown", cancel, true);
+        }
+      });
     };
     if (typeof window !== "undefined" && window.addEventListener) { consumeTrackHash(); window.addEventListener("hashchange", consumeTrackHash); }
     return { ensureEditor, consumeTrackHash };
@@ -535,6 +616,6 @@ const CustomTracks = (function () {
 
   sync();   // at EVAL: before game.js resolves the stored trackId
 
-  return { COLLECTION_FORMAT, exportCollection, importCollection, KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, KERB_STYLES, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, sanitizeKerbStyle, sanitizeBerms, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
+  return { COLLECTION_FORMAT, exportCollection, importCollection, preflightCollection, commitCollectionPreflight, cancelCollectionPreflight, KEY, DRAFT_KEY, DRAFT_PREV_KEY, LIMITS, KERB_STYLES, sanitize, sanitizeName, sanitizeCountry, sanitizeHeights, sanitizeKerbStyle, sanitizeBerms, idOf, canonical, toRaw, arcToIndexFrac, sync, list, get, upsert, remove, select, isCustom, draft, setDraft, draftPrev, setDraftPrev, ensureEditor, consumeTrackHash, create, armReturn, afterStart };
 })();
 Object.freeze(CustomTracks);

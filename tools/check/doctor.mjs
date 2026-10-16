@@ -155,7 +155,7 @@ export function diagnose({ root = ROOT, catalog, env = process.env, nodeVersion 
       : "No writable browser cache; set PLAYWRIGHT_BROWSERS_PATH", cache);
   for (const command of ["python3", "tmux"]) {
     const present = (env.PATH || "").split(path.delimiter).filter(Boolean).some((dir) => executableFile(path.join(dir, command)));
-    add(`runtime.${command}`, present ? "pass" : "warn", present ? `${command} is available` : `${command} is missing${command === "tmux" ? "; required by chrome-start/chrome-stop" : "; required by hooks and Python tools"}`);
+    add(`runtime.${command}`, present ? "pass" : "warn", present ? `${command} is available` : `${command} is missing${command === "tmux" ? "; persistent chrome-start/chrome-stop unavailable; attached chrome_* or per-call CLI still work" : "; required by hooks and Python tools"}`);
   }
   try {
     const tools = filesBelow(path.join(root, "tools"), /\.(?:mjs|cjs|js|py|sh)$/).map((file) => {

@@ -17,9 +17,9 @@ function runJson(...args) {
 
 test("SLICES / NODE_SLICES match the six-slice ci.yml matrix", () => {
   assert.deepEqual(SLICES, [
-    "guards", "vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow", "driving-model",
+    "guards", "vm-a1", "vm-a2", "vm-b1", "vm-b2", "page-a", "page-b", "slow", "driving-model",
   ]);
-  assert.deepEqual(NODE_SLICES, ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"]);
+  assert.deepEqual(NODE_SLICES, ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page-a", "page-b", "slow"]);
   const ci = fs.readFileSync(".github/workflows/ci.yml", "utf8");
   assert.match(ci, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.slices\) \}\}/);
 });
@@ -32,18 +32,18 @@ test("a scenery-only circuit file skips the physics-heavy slices", () => {
   assert.ok(sel.has("vm-a2"), "elevation twin shard 2");
   assert.ok(!sel.has("vm-b1"));
   assert.ok(!sel.has("vm-b2"));
-  assert.ok(!sel.has("page"));
+  assert.ok(!sel.has("page-a") && !sel.has("page-b"));
   assert.ok(!sel.has("slow"));
   const c = costs(r.slices);
   assert.ok(c.saved_sec > 0);
 });
 
-test("js/game.js keeps vm-b shards, page, slow and driving-model", () => {
+test("js/game.js keeps vm-b shards, page-a, page-b, slow and driving-model", () => {
   const r = pick(["js/game.js"]);
   const sel = new Set(r.slices.keys());
   assert.ok(sel.has("vm-b1"));
   assert.ok(sel.has("vm-b2"));
-  assert.ok(sel.has("page"));
+  assert.ok(sel.has("page-a") && sel.has("page-b"));
   assert.ok(sel.has("slow"));
   assert.ok(sel.has("driving-model"));
 });
@@ -133,7 +133,7 @@ test("--github-output writes any_node / driving / slices", () => {
   assert.match(text, /^any_node=true$/m);
   assert.match(text, /^driving=false$/m);
   // Without --needed-only (a deploy push / the train) every NODE_SLICE is
-  // listed so pages-train.mjs's reuse check sees expanded rows (and, until
+  // listed so the Pages reuse check saw expanded rows (and, until
   // 2026-10-15, so the six then-required names reported); scenery needs
   // only vm-a1/vm-a2 (needed=true), the rest needed=false.
   const slicesLine = text.split("\n").find((l) => l.startsWith("slices="));
@@ -145,7 +145,7 @@ test("--github-output writes any_node / driving / slices", () => {
     {
       "vm-a1": "true", "vm-a2": "true",
       "vm-b1": "false", "vm-b2": "false",
-      page: "false", slow: "false",
+      "page-a": "false", "page-b": "false", slow: "false",
     },
   );
 
@@ -170,7 +170,7 @@ test("an ADAPTED spec edit schedules the page slice; a plain spec edit does not 
   // vm-page runs the ADAPTED specs as themselves and select-specs counts them
   // VM-covered, so without `page` an edit to one ran nowhere on the PR.
   const adapted = new Set(pick(["tests/specs/logging.spec.js"]).slices.keys());
-  assert.ok(adapted.has("page") && adapted.has("guards"), [...adapted].join(","));
+  assert.ok(adapted.has("page-a") && adapted.has("page-b") && adapted.has("guards"), [...adapted].join(","));
   const plain = new Set(pick(["tests/specs/hud-mirror.spec.js"]).slices.keys());
   assert.deepEqual([...plain], ["guards"]);
 });
@@ -181,10 +181,10 @@ test("L9: the SOURCE an ADAPTED spec asserts schedules the page slice (2026-10-0
   const slices = (f) => new Set(pick([f]).slices.keys());
   for (const f of ["js/circuits/cota.js", "js/circuits/imola.js", "js/circuits/albert_park.js",
     "js/circuits/scenery/cota.js", "js/race/pit-lane.js", "js/race/race-control.js", "js/track/core/space.js"])
-    assert.ok(slices(f).has("page"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
+    assert.ok(slices(f).has("page-a") && slices(f).has("page-b"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
   // Circuits and scenery no ADAPTED spec reads keep the cheap plan.
-  assert.ok(!slices("js/circuits/dijon.js").has("page"));
-  assert.ok(!slices("js/circuits/scenery/monaco.js").has("page"));
+  assert.ok(!slices("js/circuits/dijon.js").has("page-a") && !slices("js/circuits/dijon.js").has("page-b"));
+  assert.ok(!slices("js/circuits/scenery/monaco.js").has("page-a") && !slices("js/circuits/scenery/monaco.js").has("page-b"));
 });
 
 test("15-F1: every other source an ADAPTED spec reads schedules the page slice (2026-10-10)", () => {
@@ -194,9 +194,9 @@ test("15-F1: every other source an ADAPTED spec reads schedules the page slice (
   const slices = (f) => new Set(pick([f]).slices.keys());
   for (const f of ["js/core/log.js", "js/track/core/spline.js", "js/track/core/pit.js", "js/track/core/line.js",
     "js/physics/tyre-model.js", "js/physics/player-forces.js", "js/physics/consts.js", "js/agent/agentview.js"])
-    assert.ok(slices(f).has("page"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
+    assert.ok(slices(f).has("page-a") && slices(f).has("page-b"), `${f} must schedule page: ${[...slices(f)].join(",")}`);
   // An unrelated engine file keeps the cheap plan.
-  assert.ok(!slices("js/track/core/mesh.js").has("page"));
+  assert.ok(!slices("js/track/core/mesh.js").has("page-a") && !slices("js/track/core/mesh.js").has("page-b"));
 });
 
 test("--needed-only (a pull request) lists only the needed rows; a deploy push keeps all six names", () => {
@@ -225,7 +225,7 @@ test("SLICE_SCRIPTS mirrors ci.yml's case arms script for script (2026-10-15)", 
   assert.ok(at > 0, "the step exists");
   const step = ci.slice(at).split(/\n      - name: /)[0];
   const arms = {};
-  const re = /^\s+(vm-a1|vm-a2|vm-b1|vm-b2|page|slow)\)\n([\s\S]*?)\n\s+;;/gm;
+  const re = /^\s+(vm-a1|vm-a2|vm-b1|vm-b2|page-a|page-b|slow)\)\n([\s\S]*?)\n\s+;;/gm;
   for (const m of step.matchAll(re)) {
     arms[m[1]] = [...m[2].matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((x) => x[1]).sort();
   }

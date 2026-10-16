@@ -398,6 +398,7 @@ const AUDIO_GLOBAL = {
   "js/audio/music-lib.js": () => window.MusicLib,
   "js/audio/spotify.js": () => window.SpotifyMusic,
   "js/audio/rivals.js": () => typeof RivalAudio !== "undefined" ? RivalAudio : undefined,
+  "js/audio/crowd.js": () => typeof CrowdAudio !== "undefined" ? CrowdAudio : undefined,
   "js/audio/car-sfx.js": () => typeof CarSfx !== "undefined" ? CarSfx : undefined,
   "js/audio/voice-pack.js": () => typeof VoicePack !== "undefined" ? VoicePack : undefined,
   "js/audio/radio-voice.js": () => typeof RadioVoice !== "undefined" ? RadioVoice : undefined,
@@ -473,6 +474,7 @@ function restoreOnEngine() {
     GameAudio.setEnabled(!!G.soundOn);
     GameAudio.setMusicVolume(store.get("volMusic"));
     GameAudio.setSfxVolume(store.get("volSfx"));
+    if (GameAudio.setRadioFocusDb) GameAudio.setRadioFocusDb(store.get("radioFocusDb", 0));
     const radio = G.radio;
     if (radio && radio.setVolume) radio.setVolume(store.get("volRadio", 0.8));
   } catch (e) { Log.warn("audio", "early level restore failed: " + (e && e.message)); }
@@ -535,6 +537,12 @@ function ensureAudio() {
       audioLoad = null;
       return false;
     }
+    // Crowd ambience (Radio r9): bind the live G façade without touching game.js.
+    try {
+      if (typeof CrowdAudio !== "undefined" && CrowdAudio && CrowdAudio.bind) {
+        CrowdAudio.bind(typeof deps.getContext === "function" ? deps.getContext() : null);
+      }
+    } catch (e) { Log.warn("audio", "CrowdAudio.bind failed: " + (e && e.message)); }
     audioHooked = true;
     return true;
   })();

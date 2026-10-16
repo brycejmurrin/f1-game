@@ -90,6 +90,31 @@ test('trace export attaches its anchor so the native document download listener 
   assert.equal(JSON.parse(await exported.text()).physics, 'test');
 });
 
+test('native trace export awaits sharing and reports failure without opening an anchor fallback', async () => {
+  for (const cancelled of [false, true]) {
+    const { ctx, nodes, announcements } = fixture();
+    let reject, saved, calls = 0;
+    const held = new Promise((resolve, fail) => { reject = fail; });
+    Object.assign(ctx, { Blob, NativeDownload: {
+      viable: () => true,
+      saveBlob: (blob, name) => { calls++; saved = { blob, name }; return calls === 1 ? held : Promise.resolve(); },
+      isCancelled: (e) => e.message === 'Share canceled',
+    } });
+    nodes.get('pm-driving-trace').onclick();
+    nodes.get('pm-driving-trace').onclick();
+    assert.equal(calls, 1, 'a second tap cannot open an overlapping native share request');
+    assert.equal(saved.name, 'apex26-driving-trace.json');
+    assert.equal(JSON.parse(await saved.blob.text()).physics, 'test');
+    assert.equal(announcements.length, 0);
+    reject(new Error(cancelled ? 'Share canceled' : 'disk full'));
+    await new Promise(setImmediate);
+    assert.equal(announcements.at(-1)[0], cancelled ? 'TRACE EXPORT CANCELLED' : 'TRACE EXPORT FAILED');
+    nodes.get('pm-driving-trace').onclick();
+    await new Promise(setImmediate);
+    assert.equal(calls, 2, 'the guard releases after cancellation or failure');
+  }
+});
+
 test('every real practice drill has readable help and canonical goal state survives a session reset', () => {
   const { coach, nodes, drills } = fixture({ realInsights: true });
   assert.equal(coach.practiceGoal(), 'free');

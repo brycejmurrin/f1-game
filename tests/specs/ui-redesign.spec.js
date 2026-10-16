@@ -377,8 +377,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // BACKUP & RESTORE (#pm-open-files) became its own door when the settings
   // pages were consolidated — the unit list in ui-sheets-audit.test.mjs has it.
   expect(settings.doorIds).toEqual([
-    "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files",
+    "pm-open-controls", "pm-open-driving", "pm-advanced", "pm-open-display",
+    "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files",
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
@@ -884,7 +884,10 @@ test("balanced control rows derive their shape from local room", async ({ page }
   await waitReady(page);
   const report = async (selector) => page.evaluate((sel) => {
     const host = document.querySelector(sel);
-    const children = [...host.children].filter((el) => !el.hidden && getComputedStyle(el).display !== "none");
+    // FIND A SETTING (SettingsSearch) heads the settings index as its own
+    // full-bleed row; it is not a door, so it never counts toward the balance.
+    const children = [...host.children].filter((el) => !el.hidden && getComputedStyle(el).display !== "none"
+      && !el.matches("[data-settings-search]"));
     const rows = [];
     for (const el of children) {
       const r = el.getBoundingClientRect();

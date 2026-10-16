@@ -26,6 +26,21 @@ if ((typeof DrivingCues !== "undefined") && DrivingCues.create) DrivingCues.crea
   else host.appendChild(row);
 })();
 
+// DRAG AT SPEED sits under TOUCH SENSITIVITY. Injected, like GRIP STEER, so
+// the shell node ceiling does not move. Notch 1 (OFF) is the shipped default.
+(function ensureTouchDragSpeedRow() {
+  if ($("pm-touchdragspeed")) return;
+  const sens = $("pm-touchrange");
+  const host = sens && sens.closest ? sens.closest(".adv-item") : null;
+  if (!host || !host.parentNode || typeof document === "undefined") return;
+  const item = document.createElement("div");
+  item.className = "adv-item";
+  item.innerHTML = '<label class="tune-row"><span class="tune-label">DRAG AT SPEED <b id="pm-touchdragspeed-v">OFF</b></span>'
+    + '<input id="pm-touchdragspeed" type="range" min="1" max="10" step="1" value="1" aria-label="Drag at speed"></label>'
+    + '<p class="adv-help">Widens the drag as you go faster, by the same fraction ADAPTIVE BUTTONS slows keys and arrows. The travel that is full lock at a standstill is less lock at speed. 1 is OFF, the fixed range (the default). 10 matches that assist in full. Low speed is unchanged.</p>';
+  host.parentNode.insertBefore(item, host.nextSibling);
+})();
+
 
 let hapRepaintWired = false;   // device capability repaint is wired once
 let trigHapWired = false;      // TRIGGER HAPTICS row paint + gamepadconnected
@@ -165,6 +180,12 @@ function touchRangeFromSlider(v) {
   return v <= 5 ? 0.24 + (0.12 - 0.24) * (v - 1) / 4
                 : 0.12 + (0.06 - 0.12) * (v - 5) / 5;
 }
+// DRAG AT SPEED -> how much of ADAPTIVE BUTTONS' speed shed the drag range
+// takes. Notch 1 is OFF (the fixed long-edge fraction, today's feel). Notch
+// 10 is the full digital ratio, so the same finger travel sheds lock exactly
+// as a held arrow sheds rate. Default 1: opt-in, so an existing player's drag
+// is unchanged at every speed. Every notch is exactly the static range at rest.
+function touchSpeedFromSlider(v) { return (v - 1) / 9; }   // 0..1, v1 = OFF, v10 = 1
 // DRAG SMOOTHING -> One-Euro min cutoff in Hz. 1 = OFF (bypasses the filter
 // outright, bit-identical to what shipped). Lower Hz = more smoothing, so the
 // slider runs the cutoff DOWN as it goes up.
@@ -223,9 +244,12 @@ const PRESETS = {
   // install reads CUSTOM the moment they disagree. The shipped profile is a
   // long, lazy rack (RATE 2) with little smoothing, more lock and a later speed
   // taper.
+  // brakeCue 1 is the shipped fallback in applySteerTuning(). Keep the
+  // STANDARD bundle aligned with that effective value: SAVE ALL materializes
+  // missing keys, and an explicit default must still read as STANDARD.
   standard: { tiltDeg: 8, steerSmooth: 3, steerRate: 2,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
-              adaptiveButtons: 5, brakeCue: 4, audioCues: 1, gripSteer: 1 },
+              adaptiveButtons: 5, brakeCue: 1, audioCues: 1, gripSteer: 1 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
               adaptiveButtons: 4, brakeCue: 4, audioCues: 1, gripSteer: 1 },
@@ -572,11 +596,16 @@ function applySteerTuning() {
      never seen them is a no-op by construction — the rule this file's schema
      ladder exists to enforce (changing a DEFAULT reaches a fresh install and
      nobody else; only a migration reaches a store that already has the key,
-     and none of these keys existed before, so no migration is owed). */
+     and none of these keys existed before, so no migration is owed).
+     DRAG AT SPEED follows the same rule: its default is notch 1 (OFF), the
+     fixed range every player already has, so an absent key reproduces today's
+     drag at every speed and no schema step is owed. Notch 10 opts in to
+     ADAPTIVE BUTTONS' shed in full. */
   const tiltCurve   = clamp(store.get("tiltCurve", 5), SLIDER_MIN, SLIDER_MAX);
   const touchCurve  = clamp(store.get("touchCurve", 5), SLIDER_MIN, SLIDER_MAX);
   const padCurve    = clamp(store.get("padCurve", 5), SLIDER_MIN, SLIDER_MAX);
   const touchRange  = clamp(store.get("touchRange", 5), SLIDER_MIN, SLIDER_MAX);
+  const touchDrag   = clamp(store.get("touchDragSpeed", 1), SLIDER_MIN, SLIDER_MAX);
   const dragSmooth  = clamp(store.get("dragSmooth", 1), SLIDER_MIN, SLIDER_MAX);
   const steerRate2  = clamp(store.get("digitalRate", 5), SLIDER_MIN, SLIDER_MAX);
   const analogSpd   = clamp(store.get("analogSpeedSteer", 1), SLIDER_MIN, SLIDER_MAX);
@@ -587,6 +616,7 @@ function applySteerTuning() {
   Input.setAnalogTrim("touch", curveTrimFromSlider(touchCurve));
   Input.setAnalogTrim("pad", curveTrimFromSlider(padCurve));
   Input.setTouchRange(touchRangeFromSlider(touchRange));
+  if (Input.setTouchSpeedMix) Input.setTouchSpeedMix(touchSpeedFromSlider(touchDrag));
   Input.setDragSmoothing(dragCutoffFromSlider(dragSmooth));
   Input.setKeyRampIn(steerRateFromSlider(steerRate2));
   Input.setAnalogSpeedMix(analogSpeedFromSlider(analogSpd));
@@ -635,6 +665,7 @@ function applySteerTuning() {
   paintRow("pm-touchcurve", touchCurve);
   paintRow("pm-padcurve", padCurve);
   paintRow("pm-touchrange", touchRange);
+  paintRow("pm-touchdragspeed", touchDrag, adaptLabel(touchDrag));
   paintRow("pm-dragsmooth", dragSmooth, dragSmoothLabel(dragSmooth));
   paintRow("pm-steerrate", steerRate2);
   paintRow("pm-analogspeed", analogSpd, adaptLabel(analogSpd));
@@ -769,6 +800,9 @@ wireTune("pm-tiltcurve", "tiltCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.se
 wireTune("pm-touchcurve", "touchCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("touch", curveTrimFromSlider(v)));
 wireTune("pm-padcurve", "padCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("pad", curveTrimFromSlider(v)));
 wireTune("pm-touchrange", "touchRange", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setTouchRange(touchRangeFromSlider(v)));
+wireTune("pm-touchdragspeed", "touchDragSpeed", 1, SLIDER_MIN, SLIDER_MAX, (v) => {
+  if (Input.setTouchSpeedMix) Input.setTouchSpeedMix(touchSpeedFromSlider(v));
+}, adaptLabel);
 wireTune("pm-dragsmooth", "dragSmooth", 1, SLIDER_MIN, SLIDER_MAX, (v) => Input.setDragSmoothing(dragCutoffFromSlider(v)), dragSmoothLabel);
 wireTune("pm-steerrate", "digitalRate", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setKeyRampIn(steerRateFromSlider(v)));
 wireTune("pm-analogspeed", "analogSpeedSteer", 1, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogSpeedMix(analogSpeedFromSlider(v)), adaptLabel);

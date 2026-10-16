@@ -25,7 +25,7 @@ const RaceControl = (function () {
       if (!c) continue;
       if (c.finished) { anyFinished = true; if (!c.retired) pend = Math.max(pend, (c.finishT || 0) + (c.penalty || 0)); }
       else if (!c.retired) running = true;
-      if (!c.human) continue;
+      if (!c.human && !c._nHuman) continue;
       anyHuman = true;
       if (!c.finished && !c.retired) allHumansDone = false;
     }
@@ -61,7 +61,8 @@ const RaceControl = (function () {
   function beginLineStep(cars) { lineCars = cars; lineEntries.length = 0; }
   function settleLine(e) {
     const { c, cross, time, target, cars } = e;
-    cross.flagged = target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars, time)));
+    // Temporary AI motion cannot declare a connected owner finished or raise the flag.
+    cross.flagged = !c._nFallback && target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars, time)));
     if (cross.flagged) { c.finished = true; c.finishT = time; }
   }
   function deferLine(c, cross, newS, callback) {
@@ -166,7 +167,7 @@ const RaceControl = (function () {
   // (stuck, rescued) is not classified either — it was paid P2 at half
   // distance. c.lap is the lap a car is ON, so a retirement completed lap - 1
   // and a runner completes lap at its flag. With no finisher (the only human
-  // retired) the leader on the road is the reference. Sets c.classified for
+  // retired) use the leader still running, or the non-DSQ retired leader if none remain. Sets c.classified for
   // every car (SeasonCal.award, career settlement, the sheet's NC); the
   // unclassified — runners, retirements and flagged finishers a lap or more
   // short alike (a finisher missing from `order` had finPos 0) — follow by
@@ -174,7 +175,7 @@ const RaceControl = (function () {
   function classify(cars, fin, run, out) {
     const lapsAt = (c) => (c.lap || 0) + (c.finished ? 0 : 1);
     const done = (c) => (c.retired ? (c.lap || 0) - 1 : lapsAt(c) - 1);
-    const ref = fin.length ? fin : run;
+    const ref = fin.length ? fin : run.length ? run : out.filter((c) => !c.dsq);
     const winDone = ref.length ? Math.max(...ref.map((c) => c.lap || 0)) - 1 : 0;
     const cut = Math.floor(0.9 * winDone);
     for (const c of cars) c.classified = !c.dsq && (winDone > 0 ? done(c) >= cut : !c.retired);
@@ -185,13 +186,14 @@ const RaceControl = (function () {
   }
 
   // A RACE THAT NEVER SAW THE FLAG (the only human retired, or the time cap):
-  // `{ laps, of }` — laps the leader completed of the scheduled distance — for
+  // `{ laps, of }` — laps the leader completed (non-DSQ if all retired) of the scheduled distance — for
   // the shortened-race points scale (SeasonCal.payTable); null once any car
   // took the chequered flag, which is a completed race whatever came after.
   function shortRun(cars, lapsTarget) {
     if (!(lapsTarget > 0) || !cars || cars.some((c) => c.finished && !c.retired)) return null;
     const live = cars.filter((c) => !c.retired);
-    return { laps: live.length ? Math.max(0, Math.max(...live.map((c) => c.lap || 0)) - 1) : 0, of: lapsTarget };
+    const ref = live.length ? live : cars.filter((c) => !c.dsq);
+    return { laps: ref.length ? Math.max(0, Math.max(...ref.map((c) => c.lap || 0)) - 1) : 0, of: lapsTarget };
   }
 
   const LABEL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];
@@ -229,6 +231,7 @@ const RaceControl = (function () {
     let queryT = 0;
     let capHoldT = 0;       // remaining re-arm suppression after a cap-forced drop
     let capHoldLevel = 0;   // the level that capped; escalations ABOVE it still fly
+    let replayOwned = false;   // recorded flags are pictures, not live race-control procedures
     let restartWanted = false;   // one-shot: the red procedure has run its course
     // OVERTAKE after a neutralisation (Art. B7.2.2c): disabled while the Safety
     // Car is out, re-enabled only once the field has crossed the Line after it
@@ -261,7 +264,7 @@ const RaceControl = (function () {
     let enabled = !(savedCaution === false || savedCaution === 0 || savedCaution === "0");
 
     function reset() {
-      caution = blank();
+      caution = blank(); replayOwned = false;
       held = 0; heldCause = "";
       scriptHeld = 0; scriptCause = ""; wxHeld = 0; stormSince = null; stormAtStart = false;
       queryT = 0;
@@ -347,11 +350,12 @@ const RaceControl = (function () {
       // player's OWN cones and shards (hz.total >= 6) raised a VSC whose
       // cautionV held them to 0.6 of vTop, and the CAUTIONS row is hidden there
       // so it could not be switched off. Same reset path as "not racing".
-      if (G.state !== "race" || G.timeTrial || G.session === "quali") {
-        if (caution.level !== 0 || capHoldT) reset();
+      if ((G.state !== "race" && !(replayOwned && G.state === "count")) || G.timeTrial || G.session === "quali") {
+        if (caution.level !== 0 || capHoldT || replayOwned) reset();
         lowGripNoted = false;
         return;
       }
+      if (replayOwned) return;   // WATCH owns the whole flag snapshot, including GREEN and RED
       // The LOW GRIP note, once a race, on every peer (it is read off the
       // shared weather, not the flag): the one place the player is told why the
       // Overtake button went dead in the wet. Retried until the banner takes it.
@@ -480,6 +484,7 @@ const RaceControl = (function () {
     const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
     function apply(d) {
       if (!d || typeof d !== "object") return false;
+      replayOwned = d.replay === true;   // an ordinary apply releases recorded ownership
       const prev = caution.level;
       caution.level = Math.max(0, Math.min(4, d.level | 0));
       caution.sector = Number.isInteger(d.sector) && d.sector >= -1 ? d.sector : -1;

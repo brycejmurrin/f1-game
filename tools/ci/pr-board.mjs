@@ -18,14 +18,14 @@
  *   FIX          ci.yml failed on the head, or the Structural guards check failed
  *   ARM          ready, not armed, Structural guards passed, ci succeeded with
  *                full-tier job evidence, no MERGE-HOLD, fewer than MAX_ARMED armed
- *   READY        draft, ci green, Structural guards passed, Plan closed, a
- *                full-tier slot is free
+ *   READY        draft, ci green, Structural guards passed, Plan closed
  *   NONE         armed (MERGE) and healthy
- *   WAIT         anything else: ci running, gate pending/absent, cap full, a
+ *   WAIT         anything else: ci running, gate pending/absent, a
  *                MERGE-HOLD, MAX_ARMED already armed, Plan items open
- * The cap is ready-full-cap.mjs's own measure (MAX_LIVE = 3); each READY in one
- * sweep consumes a slot, so a board never suggests more flips than the cap has
- * room. Each ARM likewise counts toward MAX_ARMED (2 repo-wide, any method). The
+ * The cap (ready-full-cap.mjs, MAX_LIVE = 3) is REPORTED, never a WAIT: since
+ * 2026-10-16 (CI/CD review #2333 finding 7) GitHub's own `queue: max` lanes
+ * bound the browser legs, and the cap sat at 13/3 while 12 ready PRs were open.
+ * Each ARM counts toward MAX_ARMED (2 repo-wide, any method). The
  * PLAN column is ready-gate.mjs's planVerdict of the PR body: done/items, or "-"
  * for a body with no ## Plan checklist (AGENTS.md rule 12).
  *
@@ -40,6 +40,7 @@ import { fileURLToPath } from "node:url";
 import { api, measure as capMeasure, reportLine as capLine, DEPLOY, MAX_LIVE } from "./ready-full-cap.mjs";
 import { guardsVerdict, planVerdict } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { needsSync, verdictLine } from "./needs-sync.mjs";
 
 export { DEPLOY, MAX_LIVE };
 /** At most this many PRs armed repo-wide (AGENTS.md §Concurrent PRs, Merge Desk's hard gate). */
@@ -116,8 +117,8 @@ export function decide(row, ctx = {}) {
   if (row.plan && row.plan.state === "open") {
     return { action: "WAIT", why: `draft is green but ${row.plan.open.length} Plan item(s) are open (ready-gate refuses)` };
   }
-  if (room < 1) return { action: "WAIT", why: "draft is green but the full-tier cap is full" };
-  return { action: "READY", why: "draft, ci green, Structural guards passed, a full-tier slot is free" };
+  // `room` is informational since 2026-10-16: the lanes in ci.yml bound the legs.
+  return { action: "READY", why: `draft, ci green, Structural guards passed${room < 1 ? " (full-tier cap reported full; lanes bound the legs)" : ""}` };
 }
 
 /** Just the verb. */
@@ -135,12 +136,13 @@ export function fullTierPassed(jobs = []) {
  * Rows from collected facts. Pure: inject what the API returned.
  * @param {Array<{ pr: object, runs?: object[], jobs?: object[], jobsRunId?: number, checkRuns?: object[] }>} items
  *   pr = the pulls/{n} object (needs number, title, draft, head.sha/ref, auto_merge, mergeable_state)
- * @param {{ cap?: { cap:number, count:number, ok?:boolean } }} [opts]
+ * @param {{ cap?: { cap:number, count:number, ok?:boolean }, armed?: number }} [opts]
+ *   armed = repository-wide initial count, including siblings omitted from items.
  */
 export function evaluate(items, opts = {}) {
   const cap = opts.cap || { cap: MAX_LIVE, count: 0, ok: true };
   const ctx = { cap, room: Math.max(0, cap.cap - cap.count),
-    armed: (items || []).filter((it) => it.pr && it.pr.auto_merge).length };
+    armed: opts.armed ?? (items || []).filter((it) => it.pr && it.pr.auto_merge).length };
   const rows = [];
   for (const it of [...(items || [])].sort((a, b) => a.pr.number - b.pr.number)) {
     const pr = it.pr;
@@ -207,19 +209,18 @@ export function measure(opts = {}) {
   const capV = capMeasure({ request, cap: opts.cap });
   if (capV.error) return fail(capV.error);
 
-  let nums;
-  if (opts.only != null) {
-    nums = [opts.only];
-  } else {
-    nums = [];
-    for (let page = 1; page <= 5; page++) {
-      const r = request(`pulls?state=open&base=${encodeURIComponent(DEPLOY)}&per_page=100&page=${page}`);
-      if (r.error) return fail(r.error);
-      const batch = Array.isArray(r.json) ? r.json : [];
-      nums.push(...batch.map((p) => p.number));
-      if (batch.length < 100) break;
-    }
+  // --pr limits expensive detail/CI reads, not the repository-wide armed cap.
+  // The list includes auto_merge metadata; no sibling detail request is needed.
+  // https://docs.github.com/en/rest/pulls/pulls#list-pull-requests
+  const armedByPr = new Map();
+  for (let page = 1; page <= 5; page++) {
+    const r = request(`pulls?state=open&base=${encodeURIComponent(DEPLOY)}&per_page=100&page=${page}`);
+    if (r.error) return fail(r.error);
+    const batch = Array.isArray(r.json) ? r.json : [];
+    for (const pr of batch) armedByPr.set(pr.number, !!pr.auto_merge);
+    if (batch.length < 100) break;
   }
+  const nums = opts.only != null ? [opts.only] : [...armedByPr.keys()];
   const items = [];
   for (const n of nums) {
     const one = request(`pulls/${n}`);
@@ -230,6 +231,7 @@ export function measure(opts = {}) {
     }
     const sha = pr.head?.sha;
     if (!sha) return fail(`PR #${n}: no head sha`);
+    armedByPr.set(n, !!pr.auto_merge);   // refresh selected rows after discovery
     const runsR = request(`actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=20`);
     if (runsR.error) return fail(`PR #${n} runs: ${runsR.error}`);
     const runs = runsR.json?.workflow_runs || [];
@@ -249,7 +251,7 @@ export function measure(opts = {}) {
     }
     items.push({ pr, runs, jobs, jobsRunId: ci.runId, checkRuns: checks.json?.check_runs || [] });
   }
-  const result = evaluate(items, { cap: capV });
+  const result = evaluate(items, { cap: capV, armed: [...armedByPr.values()].filter(Boolean).length });
   return { ok: true, ...result, capLine: capLine(capV) };
 }
 
@@ -274,7 +276,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
 and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
-GET requests only. Exit 0 printed, 2 bad args, 3 API/token.`);
+Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
+Exit 0 printed, 2 bad args, 3 API/token.`);
   const args = parseArgs(argv);
   if (args.error) {
     console.error(`pr-board: ${args.error}`);
@@ -285,6 +288,14 @@ GET requests only. Exit 0 printed, 2 bad args, 3 API/token.`);
     console.error(`pr-board: ${v.error}`);
     process.exit(v.badArgs ? 2 : 3);
   }
-  if (args.json) console.log(JSON.stringify({ rows: v.rows, cap: v.cap, line: v.capLine }, null, 2));
-  else console.log(render(v, { capLine: v.capLine }));
+  // needs-sync.mjs runs FIRST for every row the board would send to SYNC or FIX
+  // (a red may be stale, a "dirty" may be generated-file-only): one verdict line each.
+  const sync = {};
+  for (const r of v.rows) if (r.suggest === "SYNC" || r.suggest === "FIX") sync[r.number] = needsSync(r.branch);
+  const syncLine = (n) => (sync[n].ok ? `${verdictLine(sync[n])} (${sync[n].why})` : `= sync needed: unknown (${sync[n].error})`);
+  if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)), cap: v.cap, line: v.capLine }, null, 2));
+  else {
+    console.log(render(v, { capLine: v.capLine }));
+    for (const n of Object.keys(sync)) console.log(`#${n} ${syncLine(n)}`);
+  }
 }

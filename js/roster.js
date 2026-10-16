@@ -247,6 +247,7 @@
     LAZY_AUDIO: [
     "js/audio/signal.js",
     "js/audio/soundtrack.js",
+    "js/audio/race-mix-audition.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
@@ -254,8 +255,10 @@
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
     "js/audio/rivals.js",
+    "js/audio/crowd.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
+    "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
@@ -288,8 +291,20 @@
       "js/audio/music-lib.js"
     ],
     [
+      "js/audio/engine.js",
+      "js/audio/crowd.js"
+    ],
+    [
       "js/audio/voice-pack.js",
       "js/audio/radio-voice.js"
+    ],
+    [
+      "js/audio/battle-earcon.js",
+      "js/audio/radio-voice.js"
+    ],
+    [
+      "js/audio/battle-earcon.js",
+      "js/audio/panel.js"
     ],
     [
       "js/audio/radio-voice.js",
@@ -518,7 +533,9 @@
     "js/editor/elev-presets.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
+    "js/editor/followup-tools.js",
     "js/editor/scenery-panel.js",
+    "js/editor/bridge-panel.js",
     "js/editor/designer.js"
   ],
     LAZY_EDITOR_EDGES: [
@@ -549,6 +566,10 @@
     [
       "js/editor/shape.js",
       "js/editor/profile.js"
+    ],
+    [
+      "js/editor/followup-tools.js",
+      "js/editor/scenery-panel.js"
     ],
     [
       "js/editor/shape.js",
@@ -599,7 +620,15 @@
       "js/editor/designer.js"
     ],
     [
+      "js/editor/followup-tools.js",
+      "js/editor/designer.js"
+    ],
+    [
       "js/editor/scenery-panel.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/bridge-panel.js",
       "js/editor/designer.js"
     ]
   ],
@@ -718,6 +747,7 @@
   ],
     TRACK_VM: [
     "js/core/log.js",
+    "js/core/dev-flags.js",
     "js/core/mat4.js",
     "js/track/core/geom.js",
     "js/track/core/pit.js",

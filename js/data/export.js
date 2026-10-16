@@ -8,8 +8,8 @@ const DataExport = (function () {
 
     /* Runs in the browser (where OpenF1 is reachable) and downloads a JSON file.
        For each circuit of the chosen season it pulls ONE clean fast-lap location
-       trace. An OpenF1 lap STARTS at the start/finish line, so trace[0] is the
-       real S/F point — used offline to validate/correct each circuit's start
+       trace with timestamps covering both lap boundaries. The first fix is within
+       two feed intervals of the start/finish crossing, so it estimates S/F — used offline to validate/correct each circuit's start
        line (s=0 / startFrac) against the game's centreline. */
 
     function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -54,6 +54,21 @@ const DataExport = (function () {
                     return F1API.locationData(s.sessionKey, d.num, fl.dateStart, endISO);
                   }).then(function (loc) {
                     if (!loc || loc.length < 20) return false;
+                    const startMs = Date.parse(fl.dateStart), endMs = startMs + fl.lapDuration * 1000;
+                    loc = loc.filter(function (p) { return +p.date >= startMs && +p.date <= endMs; });
+                    if (loc.length < 20) return false;
+                    const cadence = [];
+                    for (let i = 1; i < loc.length; i++) {
+                      const dt = +loc[i].date - +loc[i - 1].date;
+                      if (!(dt > 0)) return false;
+                      cadence.push(dt);
+                    }
+                    cadence.sort(function (a, b) { return a - b; });
+                    const tick = cadence[Math.floor(cadence.length / 2)];
+                    // Use feed timestamps, independent of coordinate units or scale.
+                    if (+loc[0].date - startMs > tick * 2 ||
+                        endMs - +loc[loc.length - 1].date > tick * 2 ||
+                        cadence[cadence.length - 1] > tick * 8) return false;
                     const step = Math.max(1, Math.floor(loc.length / 240));
                     const trace = loc.filter(function (_, i) { return i % step === 0; })
                                      .map(function (p) { return [Math.round(p.x), Math.round(p.y)]; });
@@ -263,7 +278,11 @@ const DataExport = (function () {
         }).then(function () { running = false; gatherBtn.textContent = "Gather"; });
       });
 
-      function triggerDownload(blob, name) {
+      async function triggerDownload(blob, name) {
+        if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+          await NativeDownload.saveBlob(blob, name);
+          return;
+        }
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url; a.download = name;
@@ -288,9 +307,9 @@ const DataExport = (function () {
             });
           });
         });
-        chain.then(function () {
+        chain.then(async function () {
           const zip = makeZip(files);
-          triggerDownload(zip, "apex-startlines-" + result.year + ".zip");
+          await triggerDownload(zip, "apex-startlines-" + result.year + ".zip");
           log("Downloaded apex-startlines-" + result.year + ".zip — " + files.length +
               " file(s), " + Math.round(zip.size / 1024) + " KB");
         }).catch(function (e) {

@@ -42,8 +42,12 @@ window.MusicLib = (function () {
 
   let dbPromise = null;      // memoised open, so init() is safe to call twice
   let readyPromise = null;   // memoised init()
+  let addQueue = Promise.resolve(); // serialises imports, including separate file-picker events
+  let generation = 0;        // prevents an invalidated read from restoring a closed connection
+  let wired = false;
   let usable = (() => { try { return typeof indexedDB !== "undefined" && !!indexedDB; } catch (e) { return false; } })();
   let cache = [];            // [{id, name, size, added}] — mirrors the store, for sync count()
+  const health = new Map();
   const urls = new Map();    // db id -> object URL. WE own these; remove() revokes.
 
   const $ = (id) => document.getElementById(id);
@@ -64,7 +68,11 @@ window.MusicLib = (function () {
         }
         settled = true;
         if (timer !== null) clearTimeout(timer);
-        if (db) db.onversionchange = () => { try { db.close(); } catch (e) { /* another lifecycle path closed it first */ } };
+        if (db) db.onversionchange = () => {
+          try { db.close(); } catch (e) { /* another lifecycle path closed it first */ }
+          generation++; dbPromise = null; readyPromise = null; usable = false;
+          render();
+        };
         res(db || null);
       };
       try {
@@ -111,13 +119,13 @@ window.MusicLib = (function () {
   }
 
   function readAll() {
-    return openDb().then((db) => new Promise((res) => {
-      if (!db) { res([]); return; }
+    return openDb().then((db) => new Promise((res, rej) => {
+      if (!db) { rej(new Error("unavailable")); return; }
       let r;
       try { r = db.transaction(STORE, "readonly").objectStore(STORE).getAll(); }
-      catch (e) { res([]); return; }
+      catch (e) { rej(e); return; }
       r.onsuccess = () => res(r.result || []);
-      r.onerror = () => res([]);
+      r.onerror = () => rej(r.error || new Error("read failed"));
     }));
   }
 
@@ -140,6 +148,7 @@ window.MusicLib = (function () {
   }
 
   function dropUrl(id) {
+    health.delete(pid(id));
     const url = urls.get(id);
     if (!url) return;
     // A session of add/remove cycles leaks the whole blob per orphaned handle.
@@ -152,6 +161,16 @@ window.MusicLib = (function () {
       : (bytes / 1048576).toFixed(1) + " MB";
   }
 
+  function playbackStatus(id, status) {
+    if (typeof id !== "string" || !id.startsWith("user:") || !cache.some((m) => pid(m.id) === id)) return false;
+    if (status && status.state === "failed") health.set(id, { state: "failed", reason: String(status.reason || "Could not play this file.").slice(0, 180) });
+    else health.delete(id);
+    render(); return true;
+  }
+  function retry(id) {
+    if (!cache.some((m) => pid(m.id) === id)) return false;
+    health.delete(id); const result = call("playTrackId", id); render(); return result;
+  }
   function row(meta, playingId) {
     const el = document.createElement("div");
     el.className = "music-row";
@@ -176,8 +195,10 @@ window.MusicLib = (function () {
       b.onclick = () => { call("uiTick"); fn(); };
       return b;
     };
+    const failure = health.get(pid(meta.id));
+    if (failure) { size.textContent += " · Skipped: " + failure.reason; }
     el.append(name, size,
-      btn("music-play", "▶", "Play", () => { call("playTrackId", pid(meta.id)); refresh(); }),
+      btn("music-play", failure ? "RETRY" : "▶", failure ? "Retry" : "Play", () => { if (failure) retry(pid(meta.id)); else { call("playTrackId", pid(meta.id)); refresh(); } }),
       btn("music-del", "✕", "Remove", () => remove(meta.id)));
     return el;
   }
@@ -185,7 +206,7 @@ window.MusicLib = (function () {
   function libraryMsg() {
     if (!usable) return DEAD_MSG;
     if (!cache.length) return NO_TRACKS_MSG;
-    return cache.length + (cache.length === 1 ? " track" : " tracks") + " in your library.";
+    return cache.length + (cache.length === 1 ? " track" : " tracks") + " in your library." + (health.size ? " " + health.size + " skipped; retry the marked tracks." : "");
   }
 
   function render(msg) {
@@ -227,9 +248,13 @@ window.MusicLib = (function () {
   }
 
   function init() {
+    if (document.readyState !== "loading") wire();
     if (readyPromise) return readyPromise.then(() => { syncPlaylist(); });
     Log.info("audio", "MusicLib.init");
+    const started = generation;
     readyPromise = readAll().then((recs) => {
+      if (started !== generation) return;
+      usable = true;
       recs.sort((a, b) => (a.added || 0) - (b.added || 0));
       const entries = [];
       cache = recs.map((rec) => {
@@ -240,10 +265,11 @@ window.MusicLib = (function () {
       syncPlaylist();
       render();
     }).catch((e) => {
+      if (started !== generation) return;
       usable = false; cache = []; readyPromise = null; render();
       Log.warn("audio", "MusicLib.init failed: " + ((e && e.message) || e));
     });
-    readyPromise = readyPromise.then((v) => { if (!usable) readyPromise = null; return v; });
+    readyPromise = readyPromise.then((v) => { if (started === generation && !usable) readyPromise = null; return v; });
     return readyPromise;
   }
 
@@ -261,7 +287,7 @@ window.MusicLib = (function () {
 
   function add(files) {
     const list = files ? Array.prototype.slice.call(files) : [];
-    return init().then(() => {
+    const added = addQueue.then(() => init()).then(() => {
       const out = { added: 0, skipped: 0, errors: [] };
       if (!list.length) return out;
       if (!usable) { out.skipped = list.length; out.errors.push(DEAD_MSG); render(DEAD_MSG); return out; }
@@ -299,6 +325,9 @@ window.MusicLib = (function () {
         return out;
       });
     });
+    // A failed import must release the queue so the next selection can retry.
+    addQueue = added.catch(() => {});
+    return added;
   }
 
   function remove(id) {
@@ -330,6 +359,8 @@ window.MusicLib = (function () {
   function list() { return init().then(() => cache.map((m) => ({ id: m.id, name: m.name, size: m.size, added: m.added }))); }
 
   function wire() {
+    if (wired) return;
+    wired = true;
     // Guard every id: specs and tools load partial DOM, and a missing element
     // must not stop the module from being importable.
     const addBtn = $("as-add"), file = $("as-file");
@@ -343,15 +374,16 @@ window.MusicLib = (function () {
         file.value = "";
       };
     }
-    init();
   }
 
-  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
-  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", wire, { once: true });
-  else wire();
+  // Lazy scripts can arrive after DOMContentLoaded but before window.load.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => { wire(); init(); }, { once: true });
+  } else init();
 
   return {
-    init, list, add, remove, clear, refresh, render,
+    init, list, add, remove, clear, refresh, render, playbackStatus, retry,
+    health: (id) => health.has(id) ? Object.assign({}, health.get(id)) : null,
     count() { return cache.length; },
     available() { return usable; },
   };
