@@ -157,27 +157,37 @@ const AiDrive = (function () {
   const PASS_EDGE = 0.007;       // ~0.7 % of vTop — want / concede floor
   const PASS_EDGE_FULL = 0.012;  // ~1.2 % — full hunger (stuck pairs were 0.85–1.24 %)
   const CONCEDE_EDGE_FULL = 0.008; // defender cover fully yields by ≥0.8 % (Done-when)
-  function paceEdgeN(fasterV, slowerV, vTop, full) {
+  // The floor itself relaxes with queue time (#2356): the longest stuck pairs
+  // sat at +0.40–0.50 % (monza 15 seeds), under PASS_EDGE, so no knob above ever
+  // saw them. Past QUEUE_SLOW_T seconds in the same queue the floor falls
+  // linearly to PASS_EDGE_LOW over QUEUE_SLOW_SPAN s; queueT 0/undefined = PASS_EDGE.
+  const PASS_EDGE_LOW = 0.003;
+  const QUEUE_SLOW_T = 15, QUEUE_SLOW_SPAN = 30;
+  function edgeFloor(queueT) {
+    return PASS_EDGE - (PASS_EDGE - PASS_EDGE_LOW) * clamp(((queueT || 0) - QUEUE_SLOW_T) / QUEUE_SLOW_SPAN, 0, 1);
+  }
+  function paceEdgeN(fasterV, slowerV, vTop, full, queueT) {
     const ref = vTop > 0 ? vTop : 72;
     const edge = ((fasterV || 0) - (slowerV || 0)) / ref;
-    if (edge < PASS_EDGE) return 0;
+    const floor = edgeFloor(queueT);
+    if (edge < floor) return 0;
     const span = (full > PASS_EDGE ? full : PASS_EDGE_FULL) - PASS_EDGE;
-    return clamp((edge - PASS_EDGE) / span, 0, 1);
+    return clamp((edge - floor) / span, 0, 1);
   }
   // Pace edge from vmax (m/s, over vTop) and/or scripted pace (tierV×skill, a
   // unitless multiplier near 1 — its edge is the ratio, the same one ai-tactics
   // uses for stuck-longest). Take the larger so a compressed vmax still sees a
   // real field-pace gap.
-  function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop, full) {
-    const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop, full) : 0;
-    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP / slowerP, 1, 1, full) : 0;
+  function pairEdgeN(fasterV, slowerV, fasterP, slowerP, vTop, full, queueT) {
+    const a = (fasterV > 0 && slowerV > 0) ? paceEdgeN(fasterV, slowerV, vTop, full, queueT) : 0;
+    const b = (fasterP > 0 && slowerP > 0) ? paceEdgeN(fasterP / slowerP, 1, 1, full, queueT) : 0;
     return Math.max(a, b);
   }
   // 1..~2.2: stuck time behind a slower car → fire / latch / run / tow boost.
   // Needs pace fields (vmax and/or scripted pace), never live speed.
   function passHunger(ctx) {
     if (!ctx || ctx.street) return 1;
-    const edgeN = pairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop);
+    const edgeN = pairEdgeN(ctx.ourVmax, ctx.blockerVmax, ctx.ourPace, ctx.blockerPace, ctx.vTop, undefined, ctx.queueT);
     if (!edgeN) return 1;
     const stuckN = clamp((ctx.queueT || 0) / 12, 0, 1);
     const craft = lerp(0.75, 1.15, ctx.traits ? ctx.traits.craft : 0.75);
@@ -191,7 +201,7 @@ const AiDrive = (function () {
   function coverConcede(ctx) {
     if (!ctx || ctx.street) return 0;
     if (ctx.other && ctx.other.human) return 0;
-    const edgeN = pairEdgeN(ctx.chaserVmax, ctx.ourVmax, ctx.chaserPace, ctx.ourPace, ctx.vTop, CONCEDE_EDGE_FULL);
+    const edgeN = pairEdgeN(ctx.chaserVmax, ctx.ourVmax, ctx.chaserPace, ctx.ourPace, ctx.vTop, CONCEDE_EDGE_FULL, ctx.chaserQueueT);
     if (!edgeN) return 0;
     const t = ctx.traits || {};
     return edgeN * lerp(0.55, 1.0, t.awareness != null ? t.awareness : 0.75)
