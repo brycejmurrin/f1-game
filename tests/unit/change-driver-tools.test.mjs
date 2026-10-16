@@ -126,7 +126,18 @@ test("test-bg defaults to sequential (one concurrent group) unless --parallel", 
 test("verify-change --plan on a docs-only change selects no browser batches", () => {
   const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "docs/TESTING.md"]).out);
   assert.equal(plan.fast.toolingFast, true, "docs integrity is a real test");
+  assert.equal(plan.fast.toolingFastReason, "docs-only");
+  assert.equal(plan.fast.toolingFastFiles, 9, "docs-only edits should run the focused docs integrity set");
+  assert.ok(plan.fast.toolingFastEstimatedMs > 0, "the plan should expose a measured timing estimate");
   assert.deepEqual(plan.batches, [], "no browser minutes for a prose change");
+});
+
+test("verify-change --plan exposes a diff-sized tooling-fast budget", () => {
+  const source = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "js/ui/hud.js"]).out);
+  const unit = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "tests/unit/real-replay-vm.test.mjs"]).out);
+  assert.ok(source.fast.toolingFastFiles < 632, "source edits should not plan the full tooling-fast floor");
+  assert.ok(unit.fast.toolingFastFiles < source.fast.toolingFastFiles, "a direct unit edit should be narrower than its source pins");
+  assert.ok(source.fast.toolingFastEstimatedMs > unit.fast.toolingFastEstimatedMs);
 });
 
 test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", (t) => {
