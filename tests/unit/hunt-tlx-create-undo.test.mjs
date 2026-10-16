@@ -14,9 +14,9 @@ const create = SRC.slice(SRC.indexOf("async function create(canvas, opts)"), SRC
 test("create() registers an undo for every observer/listener it attaches", () => {
   assert.match(create, /const _createUndo = \[\];/);
   assert.match(create, /_createUndo\.push\(function \(\) \{ cssSizeCache\.dispose\(\); \}\);/, "the CSS-size ResizeObserver");
-  assert.match(create, /document\.addEventListener\("visibilitychange", onShown\);[\s\S]{0,200}?_createUndo\.push\([^;]*document\.removeEventListener\("visibilitychange", onShown\)/, "visibilitychange");
-  assert.match(create, /window\.addEventListener\("pageshow", onPageShow\);[\s\S]{0,200}?_createUndo\.push\([\s\S]{0,200}?window\.removeEventListener\("pageshow", onPageShow\)/, "pageshow");
-  assert.match(create, /canvas\.addEventListener\("webglcontextrestored", onRestored, false\);\s*\n\s*_createUndo\.push\([^;]*removeEventListener\("webglcontextrestored", onRestored, false\)/, "webglcontextrestored");
+  assert.match(create, /document\.addEventListener\("visibilitychange", onShown = [\s\S]{0,400}?_createUndo\.push\([^;]*document\.removeEventListener\("visibilitychange", onShown\)/, "visibilitychange");
+  assert.match(create, /window\.addEventListener\("pageshow", onPageShow = [\s\S]{0,400}?_createUndo\.push\([\s\S]{0,200}?window\.removeEventListener\("pageshow", onPageShow\)/, "pageshow");
+  assert.match(create, /canvas\.addEventListener\("webglcontextrestored", onRestored = function[\s\S]{0,900}?_createUndo\.push\([^;]*removeEventListener\("webglcontextrestored", onRestored, false\)/, "webglcontextrestored");
 });
 
 test("the create() catch runs the undo list before it hands the canvas to the fallback", () => {

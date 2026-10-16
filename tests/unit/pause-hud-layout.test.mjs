@@ -165,7 +165,7 @@ test("a context lost within 3 s of becoming visible is iOS's late-reported BACKG
     // pageshow fires on the FIRST load too; only a bfcache restore (persisted)
     // is a return. Unconditional, a real crash in the first 3 s after boot
     // was read as a background loss: uncounted reload, nothing latched.
-    assert.match(src, /addEventListener\("pageshow", function \(e\) \{ if \(e && e\.persisted\) _shownAt = _nowMs\(\); \}\)/, f + " tracks when the page came back from the bfcache");
+    assert.match(src, /addEventListener\("pageshow", (?:\w+ = )?function \(e\) \{ if \(e && e\.persisted\) _shownAt = _nowMs\(\); \}\)/, f + " tracks when the page came back from the bfcache");
     assert.doesNotMatch(src, /addEventListener\("pageshow", function \(\) \{ _shownAt/, f + " must not treat the initial load as a return");
     assert.match(src, /_nowMs\(\) - _shownAt < 3000/, f + " treats a loss inside that window as the background loss");
   }

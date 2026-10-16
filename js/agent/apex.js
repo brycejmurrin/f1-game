@@ -2730,7 +2730,7 @@ const api = {
     if (c.isPlayer) return false;
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
     c.s = c._prevS = wrapS(f01 * G.track.total);
-    c.prog = ((c.lap || 0) - 1) * G.track.total + c.s;   // the engine's (lap-1)*L + s (netplay.js:453)
+    c.prog = ((c.lap || 0) - 1) * G.track.total + c.s;   // the engine's (lap-1)*L + s (see NetPlay's prog rebuild)
     if (x     !== undefined) { c.x = x; c.xVis = x; }
     if (speed !== undefined) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;

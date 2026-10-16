@@ -488,7 +488,7 @@ const DataRealRace = (function () {
     try {
       for (const path of RAW_PATHS) {
         const url = OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey);
-        if (F1API.forget) F1API.forget(url);   // memory too: a body over 256K never reaches localStorage
+        if (typeof F1API !== "undefined" && F1API.forget) F1API.forget(url);   // memory too: a body over 256K never reaches localStorage
         else localStorage.removeItem(API_CACHE_PREFIX + url);
       }
     } catch (e) { /* no storage: nothing was cached */ }

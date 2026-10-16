@@ -941,10 +941,9 @@ const TLX = (function () {
       };
       const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
       try {
-        const onShown = function () { if (!document.hidden) _shownAt = _nowMs(); };
-        const onPageShow = function (e) { if (e && e.persisted) _shownAt = _nowMs(); };   // bfcache return only: the FIRST load fires pageshow too
-        document.addEventListener("visibilitychange", onShown);
-        window.addEventListener("pageshow", onPageShow);
+        let onShown = null, onPageShow = null;
+        document.addEventListener("visibilitychange", onShown = function () { if (!document.hidden) _shownAt = _nowMs(); });
+        window.addEventListener("pageshow", onPageShow = function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
         _createUndo.push(function () { document.removeEventListener("visibilitychange", onShown); window.removeEventListener("pageshow", onPageShow); });
       } catch (_) { /* no document events (harness) */ }
       renderer.onDeviceLost = function (info) {
@@ -1033,7 +1032,8 @@ const TLX = (function () {
         } catch (_) { /* visibility / picker / harness; budget uses _sessLostN when storage throws */ }
       };
       try {
-        const onRestored = function () {
+        let onRestored = null;
+        canvas.addEventListener("webglcontextrestored", onRestored = function () {
           // Same two-reload budget as the loss handler: an unguarded restore
           // reload looped on a device that loses the context every boot.
           // Storage failure must not skip the reload (GLX: dead canvas).
@@ -1041,8 +1041,7 @@ const TLX = (function () {
           try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
           if (n > 2) return;
           try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
-        };
-        canvas.addEventListener("webglcontextrestored", onRestored, false);
+        }, false);
         _createUndo.push(function () { canvas.removeEventListener("webglcontextrestored", onRestored, false); });
       } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
 
