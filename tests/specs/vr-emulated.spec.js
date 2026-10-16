@@ -191,22 +191,31 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
   expect((await startVr(page)).ok).toBe(true);
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
-  const mapped = await page.evaluate(async () => {
+  // Both phases share one immersive session. `menuOpen` is UiLayers.navOpen():
+  // the title screen counts, so the stick/trigger/A/B drive MENU navigation there
+  // and pedals stay zero. The driving mapping is asserted with the menu layer
+  // reported closed (what a race in progress reports).
+  const capture = (args) => page.evaluate(async ({ menuOpen, press }) => {
     const d = globalThis.__iwerDevice;
     const samples = [];
     const events = [];
     const prev = Input.remoteSample;
     const prevEv = Input.remoteEvent;
+    const prevNav = UiLayers.navOpen;
     Input.remoteSample = (s) => { samples.push(s); return prev ? prev.call(Input, s) : true; };
     Input.remoteEvent = (k) => { events.push(k); return prevEv ? prevEv.call(Input, k) : true; };
+    if (menuOpen === false) UiLayers.navOpen = () => false;
 
     d.controllers.right.updateButtonValue("trigger", 1);
     d.controllers.left.updateButtonValue("trigger", 0.8);
     d.controllers.left.updateAxes("thumbstick", 0.9, 0);
+    // Squeeze is NOT a look-back any more: it must never raise `held`.
     d.controllers.right.updateButtonValue("squeeze", 1);
-    // Rising edge A = recenter, B = pause
-    d.controllers.right.updateButtonValue("a-button", 1);
-    d.controllers.right.updateButtonValue("b-button", 1);
+    if (press) {
+      // Rising edge A = recenter, B = pause
+      d.controllers.right.updateButtonValue("a-button", 1);
+      d.controllers.right.updateButtonValue("b-button", 1);
+    }
 
     // Window rAF is suspended while immersive; drive the wait off the session.
     const s = XrSession.getSession();
@@ -223,13 +232,28 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
 
     Input.remoteSample = prev;
     Input.remoteEvent = prevEv;
+    UiLayers.navOpen = prevNav;
     return {
       samples: samples.slice(-5),
       events: events.slice(),
       presenting: XrSession.isPresenting(),
+      navOpen: !!prevNav(),
     };
-  });
+  }, args);
 
+  // Phase 1: the real title screen. A menu is open, so no pedal or steer command.
+  const inMenu = await capture({ menuOpen: undefined, press: false });
+  test.info().annotations.push({ type: "xr-input-menu", description: JSON.stringify(inMenu) });
+  expect(inMenu.presenting).toBe(true);
+  expect(inMenu.navOpen, "title screen counts as an open menu layer").toBe(true);
+  const menuLast = inMenu.samples[inMenu.samples.length - 1];
+  expect(menuLast, "expected remoteSample traffic").toBeTruthy();
+  expect(menuLast.thr).toBe(0);
+  expect(menuLast.brk).toBe(0);
+  expect(menuLast.held | 0).toBe(0);
+
+  // Phase 2: driving. Triggers, stick and the A/B edges map through.
+  const mapped = await capture({ menuOpen: false, press: true });
   test.info().annotations.push({ type: "xr-input", description: JSON.stringify(mapped) });
   expect(mapped.presenting).toBe(true);
   const last = mapped.samples[mapped.samples.length - 1];
@@ -241,7 +265,8 @@ test("controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/r
   // Left stick at +0.9, past XrRig's 0.12 dead zone: a finite rightward command.
   expect(last.roll).toBeUndefined();
   expect(last.steer).toBeGreaterThan(0.5);
-  expect(last.held | 0).toBe(1);
+  // Squeeze no longer injects a look-back (the seated anchor never turns).
+  expect(last.held | 0).toBe(0);
   expect(mapped.events).toContain("pause");
 
   await endVr(page);
