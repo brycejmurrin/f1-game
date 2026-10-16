@@ -974,8 +974,8 @@ function create(G) {
           const ti = Teams.LIST.findIndex((t) => t.id === teamId);
           if (ti >= 0) G.teamIdx = ti;
         },
-        openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
-        openDaily: () => { if (G.openDailyPicker) G.openDailyPicker(); },
+        openGarage: (from) => { if (G.openGarage) { if (G.closeSettings) G.closeSettings(); G.openGarage(from || "share"); } },
+        openDaily: () => { if (G.openDailyPicker) { if (G.closeSettings) G.closeSettings(); G.openDailyPicker(); } },
       });
       shareStatus.textContent = ShareCode.messageFor(started.n ? { ok: false } : applied);
     };

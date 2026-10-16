@@ -3213,6 +3213,7 @@ const G = {
   openCareer: (...a) => openCareer(...a),
   openCareerSlots: (...a) => openCareerSlots(...a),
   openDailyPicker: () => openTimeTrial(true),
+  closeSettings: () => closeSettings(),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   // The bare championship round in a season/career, else the per-session race
