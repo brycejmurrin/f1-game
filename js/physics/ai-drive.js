@@ -246,6 +246,18 @@ const AiDrive = (function () {
     return lvl;
   }
 
+  // HOW FAR AHEAD A BLOCKER IS LOOKED AT (#2565). The base queue window (16 m, or the
+  // follow gap + 6) has no closing-speed term: a PARKED car was first seen at ~10 m by
+  // an AI doing 42 m/s, when stopping needs ~30. Widen it to the distance the closing
+  // rate needs shed at 60 % of the brake, plus a margin. Never below `base`; a closing
+  // rate under 3 m/s (a train at pace, or any blocker we are not catching) returns it
+  // unchanged, so ordinary following distances do not move. `vScale` = vTop()/VMAX.
+  function queueReach(base, speed, blockerSpeed, brake, vScale) {
+    const vs = vScale > 0 ? vScale : 1, excess = (speed || 0) - (blockerSpeed || 0);
+    if (!(excess > 3 * vs) || !(brake > 0)) return base;
+    return Math.max(base, excess * excess / (2 * 0.6 * brake) + 6);
+  }
+
   // NO MOVING UNDER BRAKING (FIA driving standards: no change of direction by
   // the defending car once the deceleration phase has begun, except to follow
   // the racing line). The window is the chaser within about a second behind;
@@ -1721,7 +1733,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, sepClamp,
+    lateralScale, yawScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followTime, followGap, followBase, towGain, queueBrake, queueReach, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     passHunger, coverConcede, paceEdgeN, pairEdgeN, PASS_EDGE, PASS_EDGE_FULL, CONCEDE_EDGE_FULL,
