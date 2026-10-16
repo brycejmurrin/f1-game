@@ -1,1 +1,0 @@
-1792052180	t	#2101 WATCH browser zoom modifier guard; OWNED js/race/real-replay.js onKey modifier early-return and its existing VM test only. Separate follow-up, #2091 stays frozen. Delegated to root/camera_review, root owns browser/gates/publish.  [cursor/replay-zoom-modifiers-e47c; session 7568c85e2b9ad6cfcdefdee1]
