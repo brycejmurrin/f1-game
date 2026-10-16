@@ -1321,7 +1321,7 @@ test("the host's actual AI retirement reaches a guest, including one that binds 
   // Execute the game's real sender, not a reproduction of its local/host gate.
   vm.runInNewContext(symbolSource("function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
     car: host.cars[2], netPlay: hn, incidentSim: { release() {} }, track: host.track,
-    smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 },
+    smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 }, Collide: { WCAR: 2 },
     clamp: M4.clamp, worldFromTrack: (s, x) => ({ x, z: s }), IDLE_RPM: 4000,
     OvertakeMode: { reset() {} }, announce() {}, soundOn: false, pits: { clearArm() {} },   // retireCar clears a stale pit arm (bug-hunt 7.3)
   });

@@ -626,23 +626,74 @@ body:has(dialog[open]) #save-warning { display: none; }
 #vsfriend .vs-who { flex: 0 0 auto; opacity: 0.6; width: 3.2em; }
 #vsfriend .vs-car { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #vsfriend .vs-swatch { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 2px; }
-/* "choosing" and "READY" occupy the same slot, so the row does not jump width
-   when someone commits. */
-#vsfriend .vs-ready {
-  flex: 0 0 auto;
-  width: 5.2em;
-  text-align: right;
-  font-size: var(--fs-micro);
-  letter-spacing: var(--ls-3);
-  text-transform: uppercase;
-  opacity: 0.5;
-}
-#vsfriend .vs-ready.on { opacity: 1; color: #7CFC7C; }
 /* The 4-letter verification code (lobby.js verifyRow): read aloud and compared
    with the other screen, so it reads like the room code, not like a label. */
 #vsfriend .vs-driver [data-verify] { flex: 0 0 auto; font-weight: 700; letter-spacing: var(--ls-3); }
-#vsfriend .vs-driver [data-verify-remove] { flex: 0 0 auto; font-size: var(--fs-micro); }
 #vsfriend #vs-start[disabled] { opacity: 0.4; filter: saturate(0.3); }
+
+/* VS FRIEND waiting-room seat roster (scoped to #vsfriend). */
+#vsfriend .vs-roster-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  min-width: 0;
+}
+#vsfriend .vs-roster-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(var(--gap) * 2 / 3);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+#vsfriend .vs-player-count { font-weight: 700; opacity: 1; }
+#vsfriend .vs-roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  /* All four seats without scrolling: 4 rows + 3 gaps. Not `32 * --svhz`,
+     which is 32 % of the viewport (125 px at 844x390) and hid the guest row. */
+  max-height: calc(4 * var(--tap-paint) + var(--gap));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+#vsfriend .vs-roster-seat { margin: 0; }
+/* Landscape phone (~844×390): guest rows carry verify + Remove; keep one line,
+   each row exactly one compact tap target tall (the host's own row too). */
+#vsfriend .vs-roster .vs-driver {
+  flex-wrap: nowrap;
+  overflow: hidden;
+  min-height: var(--tap-paint);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+#vsfriend .vs-roster .vs-who { width: 2.6em; }
+#vsfriend .vs-roster .vs-driver [data-verify] { letter-spacing: var(--ls-2); }
+#vsfriend .vs-roster .vs-driver .vs-roster-remove {
+  flex: 0 0 auto;
+  font-size: var(--fs-micro);
+  margin-left: auto;
+  white-space: nowrap;
+  min-height: var(--tap-paint);
+  padding: 0 calc(var(--gap) * 2 / 3);
+  line-height: 1.2;
+}
+#vsfriend .vs-roster-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+}
+#vsfriend .vs-roster-dot.on {
+  background: #7CFC7C;
+  box-shadow: 0 0 0 2px rgba(124, 252, 124, 0.35);
+}
 
 /* ---- room codes ---- */
 /* The code is meant to be READ ALOUD across a room, so it is the biggest thing
@@ -1263,6 +1314,7 @@ body:has(dialog:modal) #update-chip { display: none; }
    needs an ellipsis. Sibling of `.res-pos` only, so TT best-lap `.res-pts`
    (no position cell) keeps its clock. */
 body[data-width="narrow"] #results-table > .res-row > .res-pos ~ .res-pts { display: none; }
+body[data-width="narrow"] #results-table > [data-results-part="ranking"] > .res-row > .res-pos ~ .res-pts { display: none; }
 /* TYRE STINT STRIP (js/physics/tyre-model.js stints(), drawn by results-sheet.js
    and only while TYRE WEAR is on). A PROPORTIONAL bar, not a row of chips: each
    segment's width is its share of the car's laps, so a glance down the column
@@ -1352,4 +1404,13 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 #ch-contents a[aria-current="true"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
+
+/* Results stint descriptions share the driver's column and stay inside it. */
+#results .res-name [data-stint-details] { max-width: 100%; font-size: var(--fs-micro); font-weight: normal; }
+#results .res-name [data-stint-details] > summary { cursor: pointer; min-height: var(--tap); align-content: center; }
+#results .res-name [data-stint-details] > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#results .res-name [data-stint-text] { white-space: normal; overflow-wrap: anywhere; }
+
+#results .res-name:has([data-stint-details]) { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
+
 } /* @layer components */

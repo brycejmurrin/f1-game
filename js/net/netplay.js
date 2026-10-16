@@ -332,6 +332,7 @@ const NetPlay = (function () {
     const PEER_LAPS_CAP = 64;
     let peerLaps = [];
     let peerResult = null;                // the host's classification, if sent
+    let resultCars = null;                // the G.cars it classifies (one array per race)
     const eventLog = [];                  // recent inbound events, for status()
 
     const _smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 8 };
@@ -806,7 +807,7 @@ const NetPlay = (function () {
         return { ok: false, error: "already_active", message: "A network race is already active." };
       }
       peerLaps = [];
-      peerResult = null;
+      peerResult = null; resultCars = G.cars;
       resultWaitFrom = null;
       if (!opts.transport && !opts.session) {
         Log.warn("net", "play start fail no_transport");
@@ -1294,6 +1295,11 @@ const NetPlay = (function () {
         (!holdUntil || nowMs() < holdUntil),
       peerLaps: () => peerLaps.slice(),
       peerResult: () => peerResult,
+      // The host's RESULT after the race's session ended (BYE, transport
+      // close): a host that quits as it publishes must not hand the guest its
+      // own, differing order (#2199). Only for the field it classifies — the
+      // next race builds a new G.cars — and never after this side quit.
+      lastResult: () => (!active && role === "guest" && lastReason !== "local" && G.cars === resultCars) ? peerResult : null,
       // updateCar() consults this: a car posed from the network must not also
       // be simulated locally, or the two fight every frame. A membership test
       // now rather than an identity one, the same shape incidentSim.owns has.

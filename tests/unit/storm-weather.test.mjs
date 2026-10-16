@@ -18,7 +18,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
-import { gameSource } from "../helpers/game-source.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
@@ -143,11 +143,11 @@ test("lightning: the schedule is a pure function of the seed and clock, and fram
   assert.equal(S.strikeIn(1234, 50, 10, 1, "storm"), null, "a clock that went back resyncs");
 });
 
-test("lightning never flashes under reduced motion (source guard on game.js's strike)", () => {
+test("lightning never flashes under reduced motion (source guard on renderLightingPrep strike)", () => {
   const { S } = bootArc();
   assert.equal(S.flashOk(true), false);
   assert.equal(S.flashOk(false), true);
-  const game = gameSource();
+  const game = symbolSource("function renderLightingPrep(dt, hasLivePlayerShadow)");
   assert.match(game, /Storm\.strikeIn\(simSeed\(\), _ltNextT, ltNow, LT\.lightning, raceWeather\)/, "strikes come from the seeded schedule");
   assert.match(game, /if \(Storm\.flashOk\(motionReduced\(\)\)\) _ltFlash = 1\.0;/, "the flash is gated on motionReduced()");
   assert.doesNotMatch(game, /_ltNextT = \(4 \+ Math\.random\(\)/, "no Math.random strike countdown left");

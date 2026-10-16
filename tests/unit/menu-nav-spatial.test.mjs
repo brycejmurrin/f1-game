@@ -62,6 +62,23 @@ function el(id, left, top, width, height, extra = {}) {
   };
 }
 
+test("MenuNav leaves spatial-editor arrows to the control while retaining paging navigation", () => {
+  const { ownsArrows } = loadMenuNav();
+  const button = { tagName: "BUTTON", dataset: { arrows: "own" }, getAttribute: () => null };
+  for (const key of ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]) {
+    assert.equal(ownsArrows(button, key, { isTrusted: true }), true);
+    assert.equal(ownsArrows(button, key, { isTrusted: false }), false, 'D-pad can leave MOVE');
+  }
+  for (const key of ["Home", "End", "PageDown", "PageUp", "Tab"]) assert.equal(ownsArrows(button, key), false);
+  assert.equal(ownsArrows({ ...button, dataset: {} }, "ArrowRight"), false);
+  const select = { ...button, tagName: "SELECT" };
+  for (const key of ["ArrowUp", "ArrowDown"]) {
+    assert.equal(ownsArrows(select, key, { isTrusted: true }), true);
+    assert.equal(ownsArrows(select, key, { isTrusted: false }), false, 'D-pad can leave the selector');
+  }
+  assert.equal(ownsArrows(select, 'ArrowRight', { isTrusted: false }), true, 'pad-menu owns horizontal value stepping');
+});
+
 test("MenuNav leaves owned listbox option keys to the widget without exempting unrelated buttons or grids", () => {
   const { ownsArrows } = loadMenuNav();
   const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];

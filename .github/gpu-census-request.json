@@ -1,1 +1,1 @@
-{"images": "macos-latest", "track": "montreal", "tod": "day", "clock": 12, "census_only": false, "force": "env", "ls": "", "leg": "capture-toolkit-4e8b"}
+{"images": "macos-latest", "track": "montreal", "tod": "day", "clock": 12, "census_only": false, "force": "env,chunked", "ls": "", "leg": "three-merged-index-9c71"}

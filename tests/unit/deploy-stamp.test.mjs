@@ -4,6 +4,8 @@
 // mechanism: the workflow carries the stamp step, a full-depth checkout (a
 // depth-1 clone counts 1), the verify-live job, and bump-cache honours --at /
 // --root on a staged copy without touching the repo's own shell.
+import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -76,5 +78,38 @@ test("bump-cache --apply --at N --root <dir> stamps a staged copy and leaves the
     assert.equal(fs.readFileSync(path.join(ROOT, "version.json"), "utf8"), before, "the repo's own placeholder is untouched");
     const check = spawnSync("node", ["tools/ci/bump-cache.mjs", "--check", "--root", dir], { cwd: ROOT, encoding: "utf8" });
     assert.equal(check.status, 0, "the staged copy is consistent after the stamp");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("staged lazy scripts carry full SHA-256 integrity, including track-build and phone bundles", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "lazy-integrity-"));
+  const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const files = [...new Set([...manifest.LAZY_TRACK_BUILD, ...manifest.LAZY_AUDIO, ...manifest.LAZY_NET])];
+  const run = (...args) => spawnSync(process.execPath, ["tools/ci/bump-cache.mjs", ...args, "--root", dir, "--json"], { cwd: ROOT, encoding: "utf8" });
+  try {
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.writeFileSync(path.join(dir, file), `// fixture ${file}\n`);
+    }
+    // Use an actual fixture path for the tagged asset too.
+    const tag = files[0];
+    fs.writeFileSync(path.join(dir, "index.html"), `<head><meta name="apex-build" content="1695"><script src="${tag}?v=dev"></script></head>`);
+    fs.writeFileSync(path.join(dir, "version.json"), '{"build":1695}');
+    const apply = run("--apply");
+    assert.equal(apply.status, 0, apply.stdout + apply.stderr);
+    const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    const map = JSON.parse(html.match(/id="apex-lazy-integrity">([^<]+)</)[1]);
+    assert.ok(map["js/input/phone-pad.js"]);
+    for (const file of files) assert.equal(map[file], "sha256-" + createHash("sha256").update(fs.readFileSync(path.join(dir, file))).digest("base64"));
+    assert.equal(run("--check").status, 0);
+    // SRI must catch changes beyond the old twelve-hex URL metadata too.
+    fs.writeFileSync(path.join(dir, tag), "// replaced deploy bytes");
+    const check = run("--check");
+    assert.equal(check.status, 1);
+    assert.ok(JSON.parse(check.stdout).assetMismatches.some(m => m.page === "apex-lazy-integrity" && m.rel === tag));
+    assert.equal(run("--apply").status, 0);
+    const restamped = fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    assert.equal((restamped.match(/id="apex-lazy-integrity"/g) || []).length, 1);
+    assert.equal(run("--check").status, 0);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

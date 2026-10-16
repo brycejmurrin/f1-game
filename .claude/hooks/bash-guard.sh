@@ -520,18 +520,20 @@ EOF
     echo "bash-guard probe: commit code paths=${C_PATHS:-}" >&2; exit 0
   fi
   # Size ratchets first (tools/check/ratchets.mjs --auto-raise): growth of up
-  # to 40 lines in a ratcheted file raises its ceiling and STAGES
-  # tests/data/ratchets.json, so the raise is in this commit's diff instead of
-  # a hand edit plus a second guard run. Bigger growth still blocks below.
+  # to 40 lines in a ratcheted file raises its ceiling and STAGES it — on a
+  # topic branch as a delta in tests/data/ratchets.d/<branch>.json (only this
+  # branch touches it, so two PRs growing one module never conflict, #2291),
+  # else tests/data/ratchets.json — so the raise is in this commit's diff
+  # instead of a hand edit plus a second guard run. Bigger growth still blocks.
   RLOG="$ROOT/artifacts/pre-commit-ratchets.log"
   if (cd "$ROOT" && node tools/check/ratchets.mjs --auto-raise >"$RLOG" 2>&1); then
     if grep -q '^RAISED\|^LOWERED' "$RLOG"; then
-      (cd "$ROOT" && git add tests/data/ratchets.json) || true
+      (cd "$ROOT" && git add -A -- tests/data/ratchets.json tests/data/ratchets.d) || true
       grep '^RAISED\|^LOWERED' "$RLOG" >&2
       # A pathspec commit (--only, git's default with paths) commits ONLY the
       # named paths, so the staged raise would be left behind.
-      if [ -n "$C_PATHS" ] && ! printf ' %s ' "$C_PATHS" | grep -q ' tests/data/ratchets.json \| tests/data/ \| tests/ \| \. '; then
-        echo "BLOCKED: the ratchet raise above is staged, but this pathspec commit carries only the paths it names. Add tests/data/ratchets.json to the command (or commit without a pathspec)." >&2
+      if [ -n "$C_PATHS" ] && ! printf ' %s ' "$C_PATHS" | grep -q ' tests/data/ratchets.json \| tests/data/ratchets.d\(/[^ ]*\)\? \| tests/data/ \| tests/ \| \. '; then
+        echo "BLOCKED: the ratchet raise above is staged, but this pathspec commit carries only the paths it names. Add tests/data/ratchets.d (and tests/data/ratchets.json) to the command (or commit without a pathspec)." >&2
         exit 2
       fi
     fi

@@ -1062,3 +1062,59 @@ test("non-finite inputs read as the neutral value, finite ones are untouched", (
   assert.equal(run({ accSm: NaN }), run({ accSm: 0 }));
   assert.ok(run({ consistency: 0.2 }) > run({ consistency: 0.9 }), "a ragged driver still wears more (finite path unchanged)");
 });
+
+// ── STORM is rain on the road, in every weather-keyed table ─────────────────
+// The tables had no "storm" row, so a fixed STORM race read DRY: 30 °C air, a
+// 48 °C track, wetness 0 and slicks (js/race/storm.js: "TyreModel owns the grip
+// and is not told about storms" — so TyreModel maps it itself).
+test("STORM reads rain's ambient and track temperature, fixed or under an arc", () => {
+  const at = (raceWeather, weatherArc = null) => {
+    const m = T.create({ lapsTarget: 25, track: { total: 5386, def: {} }, LAT_MAX: 22, aTop: () => 7, vTop: () => 60, raceWeather, weatherArc });
+    return [m.ambient(), m.trackTemp()];
+  };
+  assert.deepEqual(at("storm"), at("rain"), "fixed storm = fixed rain");
+  assert.notDeepEqual(at("storm"), at("dry"), "…and not the dry fallback it used to be");
+  for (const t of [0, 30, 60, 90]) {
+    assert.deepEqual(at("dry", { from: "dry", to: "storm", t, dur: 90 }), at("dry", { from: "dry", to: "rain", t, dur: 90 }), `dry→storm arc at ${t} s`);
+  }
+  assert.equal(T.wetness("storm", null), T.wetness("rain", null), "storm wetness = rain");
+  assert.equal(T.treadFor("storm"), T.treadFor("rain"), "storm tread = rain (full wets)");
+  assert.equal(T.asRain("storm"), "rain");
+});
+
+// ── AQUAPLANING ──────────────────────────────────────────────────────────────
+test("AQUAPLANING: exactly 1 below standing water, and the onset orders slick < inter < full wet", () => {
+  for (const w of [0, 0.25, 0.5, 0.72]) for (const tr of [0, 1, 2]) for (const v of [0, 40, 80, 120]) {
+    assert.equal(T.aquaplane(v, w, tr), 1, `wetness ${w} tread ${tr} at ${v} m/s`);
+  }
+  // The first speed the multiplier leaves 1, per tread, in full rain.
+  const onset = (tr) => { for (let v = 0; v < 150; v += 0.25) if (T.aquaplane(v, 1, tr) < 1) return v; return Infinity; };
+  const [s, i, f] = [onset(0), onset(1), onset(2)];
+  assert.ok(s < i && i < f, `onset slick ${s * 3.6} < inter ${i * 3.6} < full wet ${f * 3.6} km/h`);
+  assert.ok(s * 3.6 > 83, "a slick still holds past Horne's flooded-runway Vc (a race track's film is thinner)");
+  assert.ok(f * 3.6 > 260, "a full wet rarely aquaplanes: only near top speed");
+  // In (0, 1], monotone in speed, ramps rather than cliffs (no step bigger than 2 % per 1 m/s).
+  let prev = 1;
+  for (let v = 0; v < 120; v += 1) {
+    const m = T.aquaplane(v, 1, 0);
+    assert.ok(m > 0 && m <= 1 && m <= prev, `in (0,1] and non-increasing at ${v}`);
+    assert.ok(prev - m < 0.06, `no cliff at ${v} m/s (${prev} → ${m})`);
+    prev = m;
+  }
+  assert.ok(T.aquaplane(60, 1, 0) < T.aquaplane(60, 0.85, 0), "deeper water costs more");
+  assert.equal(T.aquaplane(-60, 1, 0), T.aquaplane(60, 1, 0), "speed is a magnitude");
+  assert.equal(T.aquaplane(NaN, 1, 0), 1, "a NaN speed costs nothing rather than poisoning grip");
+});
+
+test("AQUAPLANING: the AI's lift speed sits just past onset, ordered by tread, and never binds on a damp road", () => {
+  const sv = [0, 1, 2].map((tr) => T.aquaplaneSafeV(1, tr));
+  assert.ok(sv[0] < sv[1] && sv[1] < sv[2], sv.join(" < "));
+  for (let tr = 0; tr <= 2; tr++) {
+    assert.ok(sv[tr] > T.AQUA_ONSET[tr], "above the onset");
+    assert.ok(Math.abs(T.aquaplane(sv[tr], 1, tr) - 0.9) < 1e-9, "where the loss reaches 10 %");
+  }
+  assert.equal(T.aquaplaneSafeV(0.6, 0), Infinity, "inter-wet: no standing water, no lift");
+  const a = T.aquaInto({ tread: null }, 70, "rain", 1).mul;
+  assert.equal(a, T.aquaplane(70, 1, T.treadFor("rain", 1)), "an unfitted car reads the tread the conditions call for");
+  assert.equal(T.aquaInto({ tread: 0 }, 70, "rain", 1).mul, T.aquaplane(70, 1, 0), "a fitted set reads its own");
+});

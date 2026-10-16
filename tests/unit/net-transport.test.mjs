@@ -313,10 +313,14 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
     assert.equal(event.sent.length, 0, "dropped non-criticals must not hit the wire");
 
     const go = JSON.stringify({ t: "go", d: { track: "monza" } });
+    // A guest who pressed BACK during friend qualifying waits for this one-shot
+    // event before building the race; a later START cannot bring it out of the lobby.
+    const qgo = JSON.stringify({ t: "qgo", d: null });
     const start = JSON.stringify({ t: "start", d: { at: 1, hold: 0 } });
     const result = JSON.stringify({ t: "result", d: { order: [1] } });
     const bye = JSON.stringify({ t: "bye", d: null });
     assert.equal(ep.send(fresh.EVENT, go), true, "critical GO queues under pressure");
+    assert.equal(ep.send(fresh.EVENT, qgo), true, "qualifying's QGO must survive pressure too");
     assert.equal(ep.send(fresh.EVENT, start), true, "critical START queues under pressure");
     assert.equal(ep.send(fresh.EVENT, result), true, "critical RESULT queues under pressure");
     assert.equal(ep.send(fresh.EVENT, bye), true, "critical BYE queues under pressure");
@@ -324,8 +328,8 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
     const quali = JSON.stringify({ t: "quali", d: { driverId: "a", t: 71.2 } });
     const finLap = JSON.stringify({ t: "lap", d: { lap: 3, fin: 49.9 } });
     const settings = JSON.stringify({ t: "settings", d: { laps: 3 } });
-    const qgo = JSON.stringify({ t: "qgo", d: null }), qabort = JSON.stringify({ t: "qabort", d: null });
-    for (const m of [quali, finLap, settings, qgo, qabort]) assert.equal(ep.send(fresh.EVENT, m), true, "critical " + JSON.parse(m).t + " queues");
+    const qabort = JSON.stringify({ t: "qabort", d: null });
+    for (const m of [quali, finLap, settings, qabort]) assert.equal(ep.send(fresh.EVENT, m), true, "critical " + JSON.parse(m).t + " queues");
     assert.equal(event.sent.length, 0, "criticals wait for the buffer to drain");
 
     // Still backed up: another LAP must keep dropping (not jump the critical queue).
@@ -333,8 +337,11 @@ test("EVENT cap: non-critical drops above the outbound buffer; criticals arrive 
 
     event.bufferedAmount = 0;
     event.onbufferedamountlow();
-    assert.deepEqual(event.sent, [go, start, result, bye, quali, finLap, settings, qgo, qabort],
+    assert.deepEqual(event.sent, [go, qgo, start, result, bye, quali, finLap, settings, qabort],
       "critical EVENTs must flush in send order once bufferedAmount drains");
+    event.onbufferedamountlow();
+    assert.equal(event.sent.filter((m) => m === qgo).length, 1,
+      "another drain notification must not send QGO twice");
   } finally {
     delete global.RTCPeerConnection;
     delete global.localStorage;
@@ -749,6 +756,44 @@ test("a close inside the disconnect grace window reclaims its timer", () => {
     global.setTimeout = realSet; global.clearTimeout = realClear;
     h.done();
   }
+});
+
+// #2195: the race's 25 s silence grace never reached the wire — the rtc
+// endpoint closed 5 s into any "disconnected" spell, so a 6–25 s outage the
+// race promises to ride out ended the session for good.
+test("a race session's timeout sets the rtc disconnect grace: 6 s stays open, 26 s closes", () => {
+  const realSet = global.setTimeout, realClear = global.clearTimeout;
+  let now = 0;
+  const timers = new Map();
+  let nextId = 1;
+  global.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { at: now + ms, fn }); return id; };
+  global.clearTimeout = (id) => { timers.delete(id); };
+  const advance = (ms) => {
+    now += ms;
+    for (const [id, t] of [...timers]) if (t.at <= now) { timers.delete(id); t.fn(); }
+  };
+  const run = (holdMs, raceGrace) => {
+    const h = pcHarness();
+    try {
+      if (raceGrace) {
+        globalThis.NetTransport = NetTransport;
+        const NetSession = load("js/net/session.js", "NetSession");
+        const s = NetSession.create({ transport: h.ep });
+        s.setTimeoutMs(raceGrace);
+      }
+      h.ep.pc.connectionState = "disconnected";
+      h.ep.pc.onconnectionstatechange();
+      advance(holdMs);
+      return { status: h.ep.status, closed: h.pcClosed() };
+    } finally { timers.clear(); h.done(); }
+  };
+  try {
+    assert.equal(run(6000, 25000).status, "open", "a 6 s blip closed a race wire");
+    const long = run(26000, 25000);
+    assert.equal(long.status, "closed", "a 26 s outage must still close");
+    assert.equal(long.closed, 1);
+    assert.equal(run(6000, 0).status, "closed", "the lobby keeps its 5 s grace");
+  } finally { global.setTimeout = realSet; global.clearTimeout = realClear; }
 });
 
 test("rtc stamps message ARRIVAL and hands it to onMessage; loopback stays unstamped", () => {

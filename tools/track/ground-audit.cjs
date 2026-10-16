@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ground-audit.cjs — the SMALL-SCALE vertical checks float-audit is too coarse for.
-// @doc Buried slabs, unsupported prims, flat coplanar faces; `--all --gate`/`--update` ratchet `scenery-audit-baseline.json`.
+// @doc Buried/unsupported/coplanar gates plus advisory partial-footprint warnings; `--why --json`, `--shots jobs.json`.
 // @skill scenery-dress
 //
 // Three checks, one track build each, all ratcheted per circuit:
@@ -32,6 +32,9 @@
 //   --update  LOWER the baseline to the measured counts (never raises; a raise is
 //             a hand edit with a reason, as for every other ratchet here)
 //   --why     second deterministic pass naming each flagged prim's scenery line
+//   --shots FILE  write nearby review screenshot jobs (three views of the three
+//                 worst footprint warnings per circuit); run with shot.mjs --batch FILE
+// Footprint warnings are ADVISORY, separate from counts / baselines / exit status.
 
 "use strict";
 
@@ -39,6 +42,7 @@ const fs = require("fs");
 const path = require("path");
 const { buildContext, shipped, primKey, ROOT, RAW_FRAME } = require("../lib/track-build-vm.cjs");
 const coplanar = require("./coplanar-audit.cjs");
+const footprint = require("./footprint-support.cjs");
 
 const BASELINE = path.join(ROOT, "tests", "data", "scenery-audit-baseline.json");
 const CHECKS = ["buried", "unsupported", "flatCoplanar"];
@@ -54,7 +58,8 @@ const PROP_MESHES = ["props", "glass", "gate", "startline"];
 const ck = (ix, iz) => ix * 4000003 + iz;
 
 // Ground triangles of the named meshes on an XZ grid: the highest surface at a
-// point, the way Tracks.terrainY reads the terrain, extended to road and water.
+// point at/below the queried support level. A road deck is a surface, not solid
+// terrain extending downward: an unrelated upper deck cannot support a prop below.
 function surfaceOf(meshes, names) {
   const C = 8, grid = new Map(), T = [];
   for (const nm of names) {
@@ -76,7 +81,7 @@ function surfaceOf(meshes, names) {
         }
     }
   }
-  return (x, z) => {
+  return (x, z, maxY = Infinity) => {
     const arr = grid.get(ck(Math.floor(x / C), Math.floor(z / C)));
     if (!arr) return null;
     let best = null;
@@ -89,6 +94,7 @@ function surfaceOf(meshes, names) {
       const u = (d11 * d20 - d01 * d21) / den, v = (d00 * d21 - d01 * d20) / den;
       if (u < -0.01 || v < -0.01 || u + v > 1.01) continue;
       const y = T[b + 1] + u * (T[b + 7] - T[b + 1]) + v * (T[b + 4] - T[b + 1]);
+      if (y > maxY) continue;
       if (best === null || y > best) best = y;
     }
     return best;
@@ -117,8 +123,10 @@ function analyse(env, track, prims, opt) {
   const props = prims.filter((p) => propBuf.has(p.buf.pos));
   const terrainY = (x, z) => env.Tracks.terrainY(track, x, z);
   const other = surfaceOf(M, ["road", "water"]);
-  const groundY = (x, z) => {
-    const a = terrainY(x, z), b = other(x, z);
+  const groundY = (x, z, baseY = Infinity) => {
+    // Terrain is a solid height field (a buried base can be supported). Road
+    // and water are discrete surfaces and must be eligible at this base height.
+    const a = terrainY(x, z), b = other(x, z, baseY + footprint.CONTACT);
     return a === null ? b : b === null ? a : Math.max(a, b);
   };
 
@@ -187,13 +195,16 @@ function analyse(env, track, prims, opt) {
   const unsupported = [];
   props.forEach((p, i) => { if (!grounded[i]) unsupported.push({ p, gap: gapOf[i] }); });
 
+  const partial = opt.footprints === false ? { candidates: 0, unknownSamples: 0, findings: [] }
+    : footprint.analyseFootprints(props, groundY);
+
   // ---- flat coplanar ---------------------------------------------------------
   const flat = opt.coplanar === false ? null
     : coplanar.analyse(track, prims, Object.assign({}, coplanar.DEFAULTS, { horizontal: true, flat: true }));
 
   return {
     props: props.length,
-    buried, unsupported, flat,
+    buried, unsupported, flat, partial,
     counts: { buried: buried.length, unsupported: unsupported.length,
               flatCoplanar: flat ? flat.spots : 0 },
   };
@@ -207,6 +218,7 @@ function run(env, id, opt, sink) {
   const prims = shipped(env.prims.slice(from), env.liveBufs);
   if (sink) for (const p of prims) if (p.stack) sink.set(primKey(p), p.stack);
   const r = analyse(env, track, prims, opt || {});
+  r.partial.findings.forEach((f) => { f.report = footprint.diagnostic(track, id, f); });
   env.trim(from);
   env.release(track);
   return Object.assign({ id }, r);
@@ -249,9 +261,13 @@ function main() {
   const argv = process.argv.slice(2);
   const why = argv.includes("--why"), asJson = argv.includes("--json");
   const gate = argv.includes("--gate"), update = argv.includes("--update");
+  const shotsAt = argv.indexOf("--shots"), shotsPath = shotsAt < 0 ? null : argv[shotsAt + 1];
+  if (shotsAt >= 0 && (!shotsPath || shotsPath.startsWith("--"))) {
+    console.error("--shots requires an output JSON path"); process.exit(2);
+  }
   const env = buildContext();
   const ids = argv.includes("--all") ? require("../lib/circuit-scope.cjs").scope(env.Tracks.LIST.map((d) => d.id))   // APEX_CIRCUITS narrows --all
-    : argv.filter((a) => !a.startsWith("--"));
+    : argv.filter((a, i) => !a.startsWith("--") && !(shotsAt >= 0 && i === shotsAt + 1));
   if (!ids.length) { console.error("usage: ground-audit.cjs <id>... | --all [--gate|--update] [--why] [--json]"); process.exit(2); }
 
   const results = [];
@@ -260,7 +276,8 @@ function main() {
     const r = run(env, id);
     results.push(r);
     if (!asJson) console.log(`${id.padEnd(14)} props ${String(r.props).padStart(6)}  buried ${String(r.counts.buried).padStart(4)}` +
-      `  unsupported ${String(r.counts.unsupported).padStart(4)}  flatCoplanar ${String(r.counts.flatCoplanar).padStart(3)} spot(s)`);
+      `  unsupported ${String(r.counts.unsupported).padStart(4)}  flatCoplanar ${String(r.counts.flatCoplanar).padStart(3)} spot(s)` +
+      `  footprintSupport ${r.partial.findings.length} warning(s), ${r.partial.unknownSamples} unjudged sample(s)`);
   }
 
   if (why) {
@@ -268,6 +285,7 @@ function main() {
     for (const r of results) {
       for (const b of r.buried) want.add(primKey(b.p));
       for (const u of r.unsupported) want.add(primKey(u.p));
+      for (const f of r.partial.findings) want.add(primKey(f.p));
       for (const h of r.flat ? r.flat.hits : []) { want.add(primKey(h.a)); want.add(primKey(h.b)); }
     }
     const env2 = buildContext({ stackFor: want });
@@ -278,24 +296,35 @@ function main() {
     };
     for (const r of results) {
       const at = new Map();
-      run(env2, r.id, { coplanar: false }, at);
+      run(env2, r.id, { coplanar: false, footprints: false }, at);
       for (const b of r.buried) add(agg.buried, lineOf(at.get(primKey(b.p))), r.id, b.depth);
       for (const u of r.unsupported) add(agg.unsupported, lineOf(at.get(primKey(u.p))), r.id, u.gap);
+      for (const f of r.partial.findings) f.report.source = lineOf(at.get(primKey(f.p)));
       for (const h of r.flat ? r.flat.hits : []) {
         const a = lineOf(at.get(primKey(h.a))), b = lineOf(at.get(primKey(h.b)));
         add(agg.flatCoplanar, a < b ? `${a}  X  ${b}` : `${b}  X  ${a}`, r.id, h.area);
       }
     }
     const unit = { buried: "m deep", unsupported: "m gap", flatCoplanar: "m2" };
-    for (const c of CHECKS) {
+    for (const c of asJson ? [] : CHECKS) {
       console.log(`\n${c} — by source line (worst = max ${unit[c]}):`);
       for (const [k, e] of [...agg[c]].sort((a, b) => b[1].n - a[1].n).slice(0, 25))
         console.log(`  ${String(e.n).padStart(5)}  worst ${e.worst.toFixed(2).padStart(7)}  ${k}` +
           `\n         on: ${[...e.tracks].sort().slice(0, 8).join(" ")}${e.tracks.size > 8 ? ` +${e.tracks.size - 8} more` : ""}`);
     }
+    if (!asJson) for (const r of results) for (const f of r.partial.findings.slice(0, 10))
+      console.log(`  WARN ${r.id} ${f.report.kind} ${f.maxGap.toFixed(2)}m max gap, ` +
+        `${Math.round(f.unsupportedFraction * 100)}% samples open, frac ${f.report.frac.toFixed(6)} ${f.report.source}`);
   }
 
-  if (asJson) fs.writeSync(1, JSON.stringify(results.map((r) => ({ id: r.id, props: r.props, counts: r.counts })), null, 1) + "\n");
+  if (shotsPath) {
+    fs.mkdirSync(path.dirname(path.resolve(shotsPath)), { recursive: true });
+    const jobs = results.flatMap((r) => r.partial.findings.slice(0, 3).flatMap((f) => f.report.shots));
+    fs.writeFileSync(shotsPath, JSON.stringify({ jobs }, null, 2) + "\n");
+  }
+  if (asJson) fs.writeSync(1, JSON.stringify(results.map((r) => ({ id: r.id, props: r.props, counts: r.counts,
+    advisory: { candidates: r.partial.candidates, unknownSamples: r.partial.unknownSamples,
+      footprintSupport: r.partial.findings.map((f) => f.report) } })), null, 1) + "\n");
   else console.log(`\n${results.length} circuit(s) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 
   if (update) {
@@ -312,12 +341,12 @@ function main() {
       base[c] = Object.fromEntries(Object.entries(base[c]).filter(([, v]) => v > 0).sort((a, b) => a[0] < b[0] ? -1 : 1));
     }
     fs.writeFileSync(BASELINE, JSON.stringify(base, null, 2) + "\n");
-    console.log(`baseline: ${lowered} cap(s) lowered -> ${path.relative(ROOT, BASELINE)}`);
+    (asJson ? console.error : console.log)(`baseline: ${lowered} cap(s) lowered -> ${path.relative(ROOT, BASELINE)}`);
   }
   if (gate) {
     const over = overBaseline(results, readBaseline());
     if (over.length) { console.error("\nscenery audits grew:\n  " + over.join("\n  ")); process.exit(1); }
-    console.log(`✓ ${results.length} circuit(s) within ${path.relative(ROOT, BASELINE)}`);
+    (asJson ? console.error : console.log)(`✓ ${results.length} circuit(s) within ${path.relative(ROOT, BASELINE)}`);
   }
 }
 

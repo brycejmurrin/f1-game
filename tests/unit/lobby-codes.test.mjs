@@ -16,6 +16,7 @@ function boot(opts = {}) {
     console, Object, Array, String, Promise,
     navigator: opts.share ? { share: async () => {} } : {},
     NetHandshake: {
+      decodeCode: opts.decodeCode,
       inviteFromUrl: (raw) => {
         const m = String(raw).match(/[#&]vs=([^&\s]+)/);   // as js/net/handshake.js: a link ends at whitespace...
         return m ? m[1].replace(/[^A-Za-z0-9_-]+$/, "") : null;   // ...and a code never ends in punctuation
@@ -30,9 +31,65 @@ function boot(opts = {}) {
   };
   const ctx = vm.createContext(sb);
   seedClipboard(ctx);
+  if (opts.realHandshake) {
+    Object.assign(ctx, { TextEncoder, TextDecoder, Uint8Array, Blob, Response, atob, btoa,
+      CompressionStream: opts.compressed ? CompressionStream : undefined, DecompressionStream });
+    for (const file of ["bytes", "handshake"]) {
+      vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/" + file + ".js"), "utf8")
+        .replace(/^const\b/gm, "var"), ctx);
+    }
+  }
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "lobby-codes.js" });
-  return { LobbyCodes: vm.runInContext("LobbyCodes", ctx), draws };
+  return { LobbyCodes: vm.runInContext("LobbyCodes", ctx), handshake: ctx.NetHandshake, draws };
 }
+
+test("delivering a real invite preserves nonempty short final wrap fragments", async () => {
+  for (const compressed of [false, true]) {
+    const { LobbyCodes, handshake } = boot({ realHandshake: true, compressed });
+    const payload = { k: "offer", b: 1, s: "v=0\r\na=ice-ufrag:abcd\r\n", note: "wrapped invite regression" };
+    const code = await handshake.encodeCode(payload);
+    assert.ok(code.startsWith(compressed ? "APEX1.z." : "APEX1.p."));
+    const box = { value: "" };
+    const codes = LobbyCodes.create({ els: () => ({ inviteIn: box }),
+      makeAnswer: async (value) => handshake.decodeCode(value), acceptAnswer() {} });
+    for (const tail of [1, 2, 9, 19]) {
+      const wrapped = code.slice(0, -tail) + "\n" + code.slice(-tail);
+      assert.equal(code.slice(-tail).length, tail);
+      const decoded = await codes.deliver("invite", wrapped);
+      assert.equal(decoded.ok, true, `${code.slice(0, 7)} with a ${tail}-character tail decodes`);
+      assert.equal(JSON.stringify(decoded.payload), JSON.stringify(payload));
+    }
+    for (const text of [code + " thanks", code + "\nthanks", "APEX1." + code.split(".")[1] + ".\n"
+      + code.split(".")[2] + " now", code + "\nSent from my phone"]) {
+      assert.equal(await LobbyCodes.resolveCode(text), code, "valid complete codes keep prose outside");
+    }
+    const tail = code.slice(0, -2) + "\r\n" + code.slice(-2);
+    for (const text of [tail, "https://x.test/#vs=" + tail, "(" + tail + ").", tail + " thanks"]) {
+      assert.equal(await LobbyCodes.resolveCode(text), code, "short tails survive links, punctuation and prose");
+    }
+  }
+});
+
+test("an ambiguous delivery cannot write or negotiate after reset or a new operation", async () => {
+  for (const exit of ["reset", "operation", "new-delivery"]) {
+    let release, operation = 0, calls = 0;
+    const pending = new Promise((resolve) => { release = resolve; });
+    const { LobbyCodes } = boot({ decodeCode: async () => { await pending; return { ok: true }; } });
+    const box = { value: "" };
+    const codes = LobbyCodes.create({ els: () => ({ inviteIn: box }), $: () => null,
+      getOperation: () => operation, cancelledResult: () => ({ ok: false, error: "cancelled" }),
+      makeAnswer: () => { calls++; return { ok: true }; }, acceptAnswer() {} });
+    const reading = codes.deliver("invite", "APEX1.p." + "Q".repeat(60) + "\nfQ");
+    if (exit === "reset") codes.resetSteps();
+    if (exit === "operation") operation++;
+    if (exit === "new-delivery") await codes.deliver("invite", "APEX1.p.new");
+    const value = box.value, count = calls;
+    release();
+    assert.equal((await reading).error, "cancelled", exit);
+    assert.equal(box.value, value, exit + " retains the current input");
+    assert.equal(calls, count, exit + " cannot negotiate");
+  }
+});
 
 test("codeFrom trims and unwraps invite URLs", () => {
   const { LobbyCodes } = boot();
@@ -47,7 +104,7 @@ test("codeFrom lifts a code out of a message and re-joins one a mail client hard
   // and the MAKE ANSWER / ACCEPT buttons read the raw box, so a link that got
   // there without a paste event (keyboard clipboard chip) was "not a code".
   const { LobbyCodes } = boot();
-  const body = "Q".repeat(60) + "_-" + "z".repeat(58);
+  const body = "Q".repeat(100) + "_-" + "z".repeat(42) + "xy_7";
   const code = "APEX1.s." + body;
   assert.equal(LobbyCodes.codeFrom("here you go: " + code + " thanks!"), code, "prose on both sides");
   assert.equal(LobbyCodes.codeFrom(code + "\nSent from my iPhone"), code, "a signature after the code");
@@ -55,6 +112,7 @@ test("codeFrom lifts a code out of a message and re-joins one a mail client hard
   // A 76-column hard wrap: long fragments, then a short tail as the LAST token.
   const wrapped = code.slice(0, 76) + "\n" + code.slice(76, 152) + "\n" + code.slice(152);
   assert.ok(code.slice(152).length < 20, "the fixture's tail is short on purpose");
+  assert.ok(code.slice(152).length > 0, "the fixture's tail must not be empty");
   assert.equal(LobbyCodes.codeFrom(wrapped), code, "re-joined");
   assert.equal(LobbyCodes.codeFrom("code:\n" + wrapped), code, "wrapped, with a word before it");
   // Text with no code at all is handed on as-is for peekCode's verdict.
@@ -113,7 +171,7 @@ test("codeFrom lifts a BARE code out of brackets, quotes and a sentence's end", 
   // "(APEX1.\u2026)." or "\"APEX1.\u2026\"," started with a bracket, so it was never
   // found and the whole paste read as "not an invite code".
   const { LobbyCodes } = boot();
-  const code = "APEX1.s." + "Q".repeat(60) + "_-" + "z".repeat(58);
+  const code = "APEX1.s." + "Q".repeat(100) + "_-" + "z".repeat(42) + "xy_7";
   assert.equal(LobbyCodes.codeFrom("(" + code + ")."), code);
   assert.equal(LobbyCodes.codeFrom("Here: \"" + code + "\", thanks"), code);
   assert.equal(LobbyCodes.codeFrom("[" + code + "]"), code);
