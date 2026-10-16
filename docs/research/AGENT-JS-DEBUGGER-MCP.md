@@ -158,6 +158,21 @@ that depend on the page's event loop while it is paused.
    Check `cleanupErrors`; command acknowledgment and an observed resumed event
    are reported separately. Unexpected socket loss cannot guarantee a resume.
 
+### Lessons from real game sessions
+
+- Discover the exact loaded URL, including its query string; a script can use a
+  build suffix while another still uses `?v=dev`. Do not guess it from the file path.
+- Inspect the returned line **and column** after every step. Chrome may stop at
+  several executable positions on one line; one step need not finish that line.
+  Resolved breakpoint locations use the same one-based `line`/`column` fields.
+- Trigger an asynchronous action and its dependent probe in the same awaited
+  expression when order matters. The race countdown continues while an agent
+  prepares another command; `headless(true)` suppresses drawing, not simulation.
+- After reload, discover scripts again and obtain fresh pause/object handles.
+  Exact-URL breakpoints persist; script IDs and scoped handles do not.
+- Use real game functions with explicit synthetic inputs for branch inspection,
+  and label that evidence separately from a physical device or user interaction.
+
 ## Limits and ownership
 
 - Parent owns the one browser. Never run this beside a Playwright test group or

@@ -99,6 +99,8 @@ try {
   const src = await call("debugger_source", { scriptId: script.scriptId, startLine: 3, count: 3 });
   check("parsed scripts and one-based source excerpts", () => assert.match(src.source, /5:   answer = inner/));
   const bp = await call("debugger_breakpoint", { url: url + "/fixture.js", line: 5 });
+  assert.equal(bp.locations[0].line, 5);
+  assert.ok(bp.locations[0].column >= 1);
   await call("debugger_run", { expression: "window.finalResult = fixture()" });
   let state = await until(s => s.paused); const first = state.pause.token;
   check("breakpoint pauses pending evaluation", () => { assert.equal(state.pause.frames[0].line, 5); assert.equal(state.operations[0].status, "pending"); });

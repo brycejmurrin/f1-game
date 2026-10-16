@@ -70,6 +70,16 @@ test("URL breakpoint survives context clearing while scripts/frame handles expir
   assert.equal(s.pause, null); assert.equal(s.scripts.size, 0); assert.equal(s.breakpoints.size, 1);
   await assert.rejects(s.source("s1", 1, 10), /stale/);
 });
+test("resolved breakpoint coordinates use the same one-based units as source and paused frames", async () => {
+  const { s, c } = await attached();
+  c.reply = async () => ({ breakpointId: "bp1", locations: [{ scriptId: "s1", lineNumber: 3, columnNumber: 2 }, { scriptId: "s2", lineNumber: 0 }] });
+  const bp = await s.setBreakpoint(frame.url, 4, 3);
+  assert.deepEqual(bp.locations, [{ scriptId: "s1", line: 4, column: 3 }, { scriptId: "s2", line: 1, column: 1 }]);
+  paused(c);
+  assert.equal(bp.locations[0].line, s.pause.frames[0].line);
+  assert.equal(bp.locations[0].column, s.pause.frames[0].column);
+  assert.deepEqual(s.state().breakpoints[0].locations, bp.locations);
+});
 test("evaluation rejects side effects by default and reports JavaScript exceptions", async () => {
   const { s, c } = await attached(); paused(c); const token = s.pause.token;
   c.reply = async () => ({ result: { type: "undefined" }, exceptionDetails: { text: "side effect" } });
@@ -155,13 +165,24 @@ test("JSON-RPC protocol responds to initialize/list/ping, not notifications", as
   assert.equal((await handleRpc(s, request("missing"))).error.code, -32601);
   assert.equal((await handleRpc(s, [])).error.code, -32600);
 });
+test("tools/call allows omitted arguments but rejects explicit null and other non-objects before dispatch", async () => {
+  const s = new DebugSession(); let reads = 0;
+  s.state = () => { reads++; return { connected: false }; };
+  const request = args => ({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "debugger_state", ...args } });
+  assert.equal((await handleRpc(s, request({}))).result.structuredContent.connected, false);
+  for (const argumentsValue of [null, [], "", 0, false]) {
+    assert.equal((await handleRpc(s, request({ arguments: argumentsValue }))).error.code, -32602);
+  }
+  assert.equal(reads, 1, "invalid argument envelopes must not dispatch even a zero-argument tool");
+});
 test("real stdio subprocess discovery and malformed JSON recovery, no browser launch", async () => {
   const child = spawn(process.execPath, ["tools/mcp/js-debugger-mcp.mjs"], { cwd: new URL("../..", import.meta.url), stdio: ["pipe", "pipe", "pipe"] });
   let out = "", err = ""; child.stdout.on("data", b => { out += b; }); child.stderr.on("data", b => { err += b; });
-  child.stdin.end('bad json\n{"jsonrpc":"2.0","id":1,"method":"initialize"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n');
+  child.stdin.end('bad json\n{"jsonrpc":"2.0","id":1,"method":"initialize"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"debugger_state","arguments":null}}\n');
   const [code] = await once(child, "exit"); assert.equal(code, 0, err);
-  const rows = out.trim().split("\n").map(JSON.parse); assert.equal(rows.length, 3); assert.equal(rows[0].error.code, -32700);
+  const rows = out.trim().split("\n").map(JSON.parse); assert.equal(rows.length, 4); assert.equal(rows[0].error.code, -32700);
   assert.equal(rows.find(r => r.id === 2).result.tools.length, 13);
+  assert.equal(rows.find(r => r.id === 3).error.code, -32602);
 });
 test("project catalogs launch the separate debugger wrapper and discover its tools", async () => {
   const read = path => JSON.parse(readFileSync(new URL("../../" + path, import.meta.url), "utf8"));

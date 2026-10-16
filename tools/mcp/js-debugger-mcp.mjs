@@ -89,6 +89,8 @@ export async function handleRpc(session, msg) {
     instructions: "Local Chrome page debugger. ONE browser, parent-owned; attaches only, never launches. Use a dedicated debug profile. ONE-based source positions, ZERO-based frame index. Inspect pause.token after every control. debugger_run returns immediately; read operation status separately. Code evaluation can mutate the page. Detach before ending." });
   if (method === "ping") return result({});
   if (method === "tools/list") return result({ tools: TOOLS });
+  if (method === "tools/call" && Object.hasOwn(msg.params ?? {}, "arguments") &&
+      (!msg.params.arguments || typeof msg.params.arguments !== "object" || Array.isArray(msg.params.arguments))) return rpcError(id, -32602, "tools/call arguments must be an object");
   if (method === "tools/call") return result(await callTool(session, msg.params?.name, msg.params?.arguments ?? {}));
   return rpcError(id, -32601, "Method not found");
 }

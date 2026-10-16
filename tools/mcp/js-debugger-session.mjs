@@ -131,7 +131,8 @@ export class DebugSession {
     if (this.breakpoints.size >= 100) throw Error("Breakpoint limit100 reached; remove unused breakpoints");
     const r = await this.connected().send("Debugger.setBreakpointByUrl", { url, lineNumber: line - 1,
       columnNumber: column - 1, condition });
-    const bp = { id: r.breakpointId, url, line, column, locations: r.locations?.slice(0, 5) };
+    const bp = { id: r.breakpointId, url, line, column,
+      locations: (r.locations || []).slice(0, 5).map(p => ({ scriptId: p.scriptId, line: p.lineNumber + 1, column: (p.columnNumber ?? 0) + 1 })) };
     this.breakpoints.set(bp.id, bp); return bp;
   }
   async removeBreakpoint(id) {
