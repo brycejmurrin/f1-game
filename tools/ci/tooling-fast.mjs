@@ -1068,6 +1068,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // setTargetAtTime ramps, zero per-frame nodes. Fake-audio VM, < 1 s.
   "tests/unit/tyre-squeal-slip.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  "tests/unit/ui-explorer-core.test.mjs",
+  "tests/unit/ui-explorer-report.test.mjs",
+  "tests/unit/ui-explorer.test.mjs",
   // ui-fit r7: camera tuner rail-off portrait — #ct-previews placed in grid
   // row 3, one minmax column, #ct-close / #ct-prev-* --tap-paint floors
   // (#camtune-inner / #ct-* only; lighting untouched).
