@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchChromium, shutdown, startStaticServer, sleep } from "../lib/harness.mjs";
 import { chromiumArgsForBackend, installProbeInit, gotoGame } from "./probe-page.mjs";
-import { exitIfHelp } from "../lib/cli-args.mjs";
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const argv = process.argv.slice(2);
@@ -30,6 +30,7 @@ const flag = (n, d) => {
   const i = argv.indexOf(n);
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : d;
 };
+parseFlags(argv, ["--backend", "--prewarm", "--scene", "--runs", "--wait"]);
 const backend = flag("--backend", "three");
 const which = flag("--prewarm", "both");
 const scene = flag("--scene", null);

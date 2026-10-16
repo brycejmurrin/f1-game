@@ -21,6 +21,10 @@ import * as espree from "espree";
 import * as eslintScope from "eslint-scope";
 
 const [file, startS, endS, ...rest] = process.argv.slice(2);
+if (file === "--help" || file === "-h") {
+  console.log("usage: extract-module.mjs <file> <startLine> <endLine> [--mutable a,b] [--out f] [--g-out f]");
+  process.exit(0);
+}
 if (!file || !startS || !endS) {
   console.error("usage: extract-module.mjs <file> <startLine> <endLine> [--mutable a,b] [--out f] [--g-out f]");
   process.exit(1);
@@ -44,7 +48,12 @@ if (!block.trim()) { console.error("Requested range contains no source"); proces
 
 // A bare statement list parses fine as a program; expressions/object bodies
 // would need wrapping — caller passes whole functions/statements, so parse raw.
-const ast = espree.parse(block, { ecmaVersion: 2023, range: true });
+let ast;
+try { ast = espree.parse(block, { ecmaVersion: 2023, range: true }); }
+catch (e) {
+  console.error(`range ${start}-${end} of ${file} does not parse as a program (${e.message}); pass whole functions or statements`);
+  process.exit(1);
+}
 const shorthandAt = new Set();
 (function walk(n) {
   if (!n || typeof n.type !== "string") return;
