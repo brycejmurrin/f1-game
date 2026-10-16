@@ -869,3 +869,101 @@ test.describe("Broadcast map control clearance", () => {
     expect(custom.after).toEqual(custom.before);expect(custom.cx).toBe("");expect(custom.cy).toBe("");
   });
 });
+
+test("UI inspector verifies real scale bindings, persistence and CSS provenance", async ({ page }, testInfo) => {
+  const { installInspector, inspectPage, diffInspections } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  const errors = []; page.on("pageerror", e => errors.push(e.message));
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
+  const open = async () => {
+    await page.locator("#mb-settings").click(); await page.locator("#pm-open-appearance").click();
+    await installInspector(page);
+  };
+  await open();
+  const snapshot = () => page.evaluate(() => __apex.ui.inspect({ root: "#pmsettings" }));
+  const before = await snapshot();
+  const input = page.locator("#as-uiScale"); const old = Number(await input.inputValue());
+  await input.focus(); await page.keyboard.press(old < 200 ? "ArrowRight" : "ArrowLeft");
+  const value = Number(await input.inputValue()); expect(value).not.toBe(old);
+  await expect.poll(async () => (await snapshot()).controls.find(c => c.selector === "#as-uiScale")?.binding.runtime).toBeCloseTo(value, 5);
+  const after = await inspectPage(page, { root: "#pmsettings", styles: "#as-uiScale" });
+  const control = after.controls.find(c => c.selector === "#as-uiScale");
+  expect(control.role).toBe("slider"); expect(control.binding.status).toBe("matches");
+  expect(control.binding.saved.value).toBe(value);
+  expect(after.styles.rules.some(r => r.source?.includes("/css/") && r.line > 0)).toBe(true);
+  expect(after.accessibility).toContain("UI size");
+  expect(diffInspections(before, after).changed.some(c => c.selector === "#as-uiScale")).toBe(true);
+  // A DOM-only mutation is deliberately NOT a working setting: the inspector must reject it.
+  await input.evaluate(e => { e.value = Number(e.value) + (Number(e.value) < 200 ? 1 : -1); });
+  expect((await snapshot()).issues.some(i => i.kind === "binding-mismatch" && i.selector === "#as-uiScale")).toBe(true);
+  await page.reload(); await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => __apex.headless(true)); await open();
+  expect((await snapshot()).controls.find(c => c.selector === "#as-uiScale").binding.saved.value).toBe(value);
+  for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(viewport); const report = await snapshot();
+    expect(report.viewport.width).toBe(viewport.width); expect(report.controls.length).toBeGreaterThan(0);
+    expect(report.controls.find(c => c.selector === "#as-uiScale").binding.status).toBe("matches");
+  }
+  writeFileSync(testInfo.outputPath("ui-inspection.json"), JSON.stringify(after, null, 2));
+  expect(errors).toEqual([]);
+});
+
+test("UI inspector catches hit interception, inherited disability and axis-specific clipping", async ({ page }) => {
+  const { inspectUI, installInspector } = await import("../../tools/ui/explorer/inspector.mjs");
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.setContent(`<style>body{margin:0}#scroll{width:900px;height:80px;overflow-y:auto;overflow-x:hidden}#wide{margin-left:1100px}#cover{position:absolute;left:0;top:100px;width:180px;height:50px;background:red}</style>
+    <span id="one">Camera</span><span id="two"> height</span><input id="range" type="range" aria-labelledby="one two">
+    <fieldset disabled><button id="disabled">Disabled by fieldset</button></fieldset>
+    <button id="blocked" style="position:absolute;left:0;top:100px;width:180px;height:50px">Blocked</button><div id="cover"></div>
+    <div id="scroll"><button id="wide">Offscreen</button><div style="height:300px"></div></div>
+    <div style="width:100px;overflow:hidden"><div style="width:300px;margin-left:200px;overflow-x:auto"><button id="unreachable">Unreachable</button><div style="width:600px;height:1px"></div></div></div>
+    <button id="duplicate">First</button><button id="duplicate">Second</button>
+    <button aria-pressed="false">Whine</button>`);
+  await page.evaluate(() => { window.__apex = { info() { throw new Error("Inspector invoked a lazy game hook"); } }; });
+  await installInspector(page);
+  const before = await page.evaluate(inspectUI);
+  expect(before.controls.find(c => c.selector === "#range").name).toBe("Camera height");
+  expect(before.controls.find(c => c.selector === "#range").role).toBe("slider");
+  expect(before.controls.find(c => c.selector === "#disabled").disabled).toBe(true);
+  expect(before.issues.some(i => i.kind === "blocked" && i.selector === "#blocked")).toBe(true);
+  expect(before.issues.some(i => i.kind === "offscreen" && i.selector === "#wide")).toBe(true);
+  expect(before.issues.some(i => i.kind === "clipped" && i.selector === "#unreachable")).toBe(true);
+  for (const c of before.controls.filter(c => ["First", "Second"].includes(c.name))) expect(await page.locator(c.selector).count()).toBe(1);
+  const toggle = before.controls.find(c => c.name === "Whine");
+  expect(toggle.selector).toBeTruthy(); await page.locator(toggle.selector).click();
+  await page.locator(toggle.selector).evaluate(e => e.setAttribute("aria-pressed", "true"));
+  expect((await page.evaluate(inspectUI)).controls.find(c => c.selector === toggle.selector).pressed).toBe("true");
+});
+
+test("UI inspector maps camera and lighting tuner inputs without invoking game hooks", async ({ page }, testInfo) => {
+  test.setTimeout(180000);
+  const { SCREENS } = await import("../../tools/ui/menu-screens.mjs");
+  const { installInspector, inspectUI } = await import("../../tools/ui/explorer/inspector.mjs");
+  const { writeFileSync } = await import("node:fs");
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/"); await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => { __apex.agentHelp(); __apex.headless(true); });
+  await SCREENS.find(s => s.id === "cameratuner").open(page);
+  await installInspector(page);
+  const camera = await page.evaluate(inspectUI, { root: "#camtune" });
+  const knob = camera.controls.find(c => c.binding.kind === "camera-offset" && !c.disabled);
+  expect(knob).toBeTruthy(); expect(knob.binding.status).toBe("matches");
+  const input = page.locator(knob.selector); await input.focus();
+  await page.keyboard.press(Number(knob.value) < Number(knob.max) ? "ArrowRight" : "ArrowLeft");
+  const cameraAfter = await page.evaluate(inspectUI, { root: "#camtune" });
+  const moved = cameraAfter.controls.find(c => c.selector === knob.selector);
+  expect(moved.value).not.toBe(knob.value); expect(moved.binding.status).toBe("matches");
+  expect(moved.binding.saved.value).toBe(Number(moved.value));
+  await page.locator("#ct-close").click();
+  await SCREENS.find(s => s.id === "lightingtuner").open(page);
+  await expect(page.locator("#lt-in-keyMul")).toBeVisible();
+  await page.locator("#lt-in-keyMul").focus(); await page.keyboard.press("ArrowLeft");
+  const lighting = await page.evaluate(inspectUI, { root: "#lighting" });
+  const light = lighting.controls.find(c => c.selector === "#lt-in-keyMul");
+  expect(light.binding.status).toBe("matches"); expect(light.binding.runtime).toBe(Number(light.value));
+  expect(light.binding.saved.status).toBe("unmapped");
+  writeFileSync(testInfo.outputPath("tuner-inspection.json"), JSON.stringify({ camera: cameraAfter, lighting }, null, 2));
+});

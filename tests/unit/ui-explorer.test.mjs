@@ -60,7 +60,7 @@ test("fault profiles leave ordinary scripts alone, intercept assets and restore 
 test("DOM screening ignores controls inside closed folds but preserves real offscreen findings", () => {
   const rect = { x: 1100, y: 0, width: 20, height: 20, right: 1120, bottom: 20 };
   const summary = { contains: () => false };
-  const fold = { tagName: "DETAILS", open: false, querySelector: () => summary, parentElement: null };
+  const fold = { tagName: "DETAILS", open: false, querySelector: () => summary, parentElement: null, getBoundingClientRect: () => ({ x: 0, y: 0, right: 1000, bottom: 800 }) };
   const control = { id: "test-control", tagName: "BUTTON", textContent: "TEST", parentElement: fold, getAttribute: () => null,
     closest: () => null, getBoundingClientRect: () => rect };
   const root = { ...control, id: "overlay", parentElement: null };
@@ -84,4 +84,56 @@ test("scene diagnostics read the presented state and pause before any DOM/ARIA w
   calls.length = 0; a.scene = () => { throw new Error("diagnostics failed"); };
   assert.throws(() => vm.runInContext(`(${captureSceneDiagnostics.toString()})()`, ctx));
   assert.deepEqual(calls, ["pause"]);
+});
+
+test("inspector resolves multi-ID labels, native roles and pressed state", () => {
+  const attrs = { "aria-labelledby": "first second", "aria-pressed": "false" };
+  const rect = { x: 10, y: 10, width: 150, height: 44, right: 160, bottom: 54 };
+  const control = { id: "toggle", tagName: "BUTTON", textContent: "", parentElement: null, type: "button",
+    getAttribute: k => attrs[k] ?? null, closest: () => null, getBoundingClientRect: () => rect };
+  const document = { querySelectorAll: s => s.startsWith("button") ? [control] : [],
+    documentElement: { scrollWidth: 1000, dataset: {} }, activeElement: null,
+    getElementById: id => ({ first: { textContent: "Audio\n" }, second: { textContent: " layers" } })[id] };
+  const ctx = vm.createContext({ document, window: {}, innerWidth: 1000, innerHeight: 800, location: { href: "http://localhost/" }, CSS: { escape: s => s },
+    getComputedStyle: () => ({ display: "block", visibility: "visible", opacity: "1" }), matchMedia: () => ({ matches: false }) });
+  const inspect = () => JSON.parse(JSON.stringify(vm.runInContext(`(${inspectUI.toString()})()`, ctx)));
+  assert.equal(inspect().controls[0].name, "Audio layers");
+  assert.equal(inspect().controls[0].pressed, "false");
+  attrs["aria-pressed"] = "true";
+  assert.equal(inspect().controls[0].pressed, "true");
+  control.tagName = "INPUT"; control.type = "range"; control.value = "50";
+  assert.equal(inspect().controls[0].role, "slider");
+});
+
+test("semantic state keys distinguish constant-label toggle changes", async () => {
+  const { stateKey } = await import("../../tools/ui/explorer/core.mjs");
+  const a = { viewport: { width: 1000, height: 800 }, controls: [{ selector: "#audio", role: "button", name: "Whine", pressed: "false" }] };
+  const b = { ...a, controls: [{ ...a.controls[0], pressed: "true" }] };
+  assert.notEqual(stateKey(a), stateKey(b));
+});
+
+test("inspect CLI validates routes and selector budgets before browser acquisition", () => {
+  const opts = parseOptions(["inspect", "--screen", "settings", "--styles", "#pm-uiscale"]);
+  assert.equal(opts.command, "inspect"); assert.equal(opts.styles, "#pm-uiscale");
+  for (const args of [["inspect", "--screen", "missing"], ["inspect", "--styles", " "] , ["inspect", "--selector", "x".repeat(513)], ["missions", "--styles", "button"]]) assert.throws(() => parseOptions(args));
+});
+
+test("inspector diffs separate semantic changes from movement and include runtime bindings", async () => {
+  const { diffInspections } = await import("../../tools/ui/explorer/inspector.mjs");
+  const control = { selector: "#size", value: "100", box: { x: 0 }, binding: { runtime: 100 } };
+  const before = { controls: [control], focus: null, issues: [] };
+  const after = { ...before, controls: [{ ...control, box: { x: 12 } }] };
+  assert.deepEqual(diffInspections(before, after).changed, []);
+  assert.deepEqual(diffInspections(before, after).layout, ["#size"]);
+  after.controls[0].binding = { runtime: 101 };
+  assert.equal(diffInspections(before, after).changed.length, 1);
+});
+
+test("CSS inspection detaches its CDP session when the selector is ambiguous", async () => {
+  const { inspectPage } = await import("../../tools/ui/explorer/inspector.mjs");
+  let detached = false;
+  const cdp = { on() {}, async send(method) { return method === "DOM.getDocument" ? { root: { nodeId: 1 } } : method === "DOM.querySelectorAll" ? { nodeIds: [2, 3] } : {}; }, async detach() { detached = true; } };
+  const page = { evaluate: async () => ({}), locator: () => ({ ariaSnapshot: async () => "button" }), context: () => ({ newCDPSession: async () => cdp }) };
+  await assert.rejects(() => inspectPage(page, { styles: "button" }), /exactly one/);
+  assert.equal(detached, true);
 });

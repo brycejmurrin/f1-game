@@ -428,3 +428,40 @@ to the parent's existing local Chrome, never launches a browser, and must not
 drive a target during a Playwright group. Detach before ending the session.
 The complete [tool reference and debugging workflow](research/AGENT-JS-DEBUGGER-MCP.md)
 covers discovery, breakpoints, locals, stepping, exception pauses and cleanup.
+
+### Read-only UI inspector
+
+`node tools/ui/explorer.mjs inspect --screen settingsappearance --styles '#as-uiScale'`
+opens the existing catalog route in one isolated Chromium and writes
+`artifacts/ui-explorer/inspection.json` plus JSON stdout. Use `--selector` to scope
+controls and `--styles` for one element's browser-computed CSS and matched source
+rules. `--help` and `--list` remain browser-free. Catalog setup is not evidence
+that every door or control is actionable; use the explorer's validated `replay`
+scenarios for real interaction paths and Playwright traces.
+
+For an existing local Playwright page, import `installInspector`, `inspectPage`
+and `diffInspections` from `tools/ui/explorer/inspector.mjs`. After
+`await installInspector(page)`, `__apex.ui.inspect({root:'#pmsettings'})` is a
+read-only dev-page namespace. Reinstall after navigation. It is not shipped in
+the game or added to its production module roster. It does not call the general
+`__apex` getters, which may lazily load a circuit.
+
+Reports include role/name/value/pressed/selected/open, native disabled state,
+unique selectors, focus/focused dialog, range bounds, axis-specific scrolling, clipping
+and hit interception. Explicit adapters cover UI/HUD/button scale, opacity,
+appearance selects, camera offsets/comfort and live lighting inputs. `saved:null`
+means no override when storage is readable; `unavailable` and `unmapped` are not
+passes. Camera offsets do not prove rendered framing; lighting profile persistence
+and pixels remain unverified by this probe. Other controls explicitly stay unmapped.
+Move the actual control, compare DOM/live/saved values, then reload to verify durability.
+
+`diffInspections(before,after)` separates semantic/binding changes from geometry
+movement; replay action timings include these diffs. The DOM name/role screening
+is supplemented by Playwright's accessibility snapshot. CSS reports pair computed
+values with candidate declarations/source lines; they do not guess cascade winners.
+Known limits and truncation are recorded in JSON. No new browser controller,
+framework, hosted service, WebMCP dependency or settings mutation is required.
+
+API references: [Chrome CSS domain](https://chromedevtools.github.io/devtools-protocol/tot/CSS/),
+[Playwright accessibility snapshots](https://playwright.dev/docs/aria-snapshots),
+[Playwright traces](https://playwright.dev/docs/trace-viewer).
