@@ -1411,6 +1411,13 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
   }
 }
 
+@layer components {
+@media (max-width: 900px) and (max-height: 500px) {
+  :is(#lighting-inner, #camtune-inner) > .sheet-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :is(#lighting-inner, #camtune-inner) > .sheet-foot button { min-width: 0; white-space: normal; line-height: 1.1; }
+}
+}
+
 /* ---------- UI Fit r6: flyby editor compact tap floor (#flyby / #fb-* only) ----------
    Same root as r5/camera (#1530) and r6/lighting (#1740): compact flyby foot
    sat on --tap-min (RESET/COPY/DONE 80–156×36–38) and pose selects
@@ -1432,20 +1439,4 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
 /* GARAGE ANGLE's plan of the bay (js/garage/arrival.js angleMap): under the
    selector, the chosen eye lit. currentColor so it follows the panel's ink. */
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
-}
-
-/* Short phone landscape: the docked tuner foot has only a narrow rail column.
-   At normal scale the shared flex row still squeezes four camera actions into
-   unreadable cells, even though every button's box remains technically inside
-   the sheet. Two columns preserve the tap floor and let the labels wrap. */
-@media (max-width: 900px) and (max-height: 500px) {
-  :is(#lighting-inner, #camtune-inner) > .sheet-foot {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  :is(#lighting-inner, #camtune-inner) > .sheet-foot button {
-    min-width: 0;
-    white-space: normal;
-    line-height: 1.1;
-  }
 }

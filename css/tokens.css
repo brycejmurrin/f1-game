@@ -205,10 +205,6 @@
 /* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */
 
 :root {
-  /* Tell the browser which native-control palette matches the app.  Individual
-     sheets still override this for isolated surfaces, but the root declaration
-     keeps scrollbars, selects, range inputs, and date controls coherent during
-     first paint and when Appearance switches themes. */
   color-scheme: dark;
   --red: #e10600;
   /* Official F1 Carbon Black (~#15151E) cooled into a deeper stage black so
@@ -983,9 +979,7 @@ body:not(.desktop) {
 :root[data-menu-accent="lime"]   { --red: #b7e11b; }
 
 /* ---- APPEARANCE: light / system theme ----------------------------------
-   Dark stays the :root default. Light rewrites the surface ladder so every
-   consumer of --bg/--text/--panel/--plate* adapts without per-sheet edits.
-   SYSTEM copies light when prefers-color-scheme: light. */
+   Light rewrites the surface ladder; SYSTEM follows the OS preference. */
 :root[data-ui-theme="light"] {
   color-scheme: light;
   --bg: #f0f0f4;
@@ -1036,8 +1030,6 @@ body:not(.desktop) {
     --gold: #7a5600;
   }
 }
-/* SYSTEM in a dark environment must still advertise both palettes so native
-   controls can follow a later OS theme change without a repaint mismatch. */
 :root[data-ui-theme="system"] { color-scheme: dark light; }
 /* ---- APPEARANCE: text size + high contrast (js/ui/appearance-opts.js) ----
    TEXT SIZE re-states the --fs-* ladder, so every token consumer grows and the
