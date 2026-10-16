@@ -858,7 +858,7 @@ const NetLobby = (function () {
       return broadcast(NetPlay.EV.SETTINGS, Object.assign(snapshot, { revision: settingsRevision }));
     }
 
-    const WEATHER = new Set(["dry", "wet", "rain", "overcast", "fog"]);
+    const WEATHER = new Set(["dry", "wet", "rain", "overcast", "fog", "storm"]);
     const TIME_OF_DAY = new Set(["default", "dawn", "day", "dusk", "night"]);
     const DIFFICULTY = new Set(["easy", "normal", "hard"]);
     const GRID = new Set(["tier", "quali", "rev10", "revchamp", "random"]);   // game.js GRID_RULES
