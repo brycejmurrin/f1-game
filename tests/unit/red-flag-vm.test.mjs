@@ -15,13 +15,49 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/lib/game-vm.cjs");
+const { createGame, settle } = require("../../tools/lib/game-vm.cjs");
 
 let g;
 before(async () => { g = await createGame({ track: "monza" }); });
 after(() => { if (g) g.close(); });
 
 const SCR = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+
+test("red-flag restart keeps penalty reasons, permits a second false start, and a new race clears both", async () => {
+  // Own a fresh race so the restart regressions below retain their shared timeline.
+  const game = await createGame({ track: "monza" });
+  try {
+    const a = game.apex;
+    const onGrid = async () => {
+      const carsBefore = game.G.cars;
+      const race = a.race("monza", "day", "dry");
+      assert.ok(race, "race starts");
+      await settle(() => a.info().track === race.track && game.G.cars !== carsBefore, 4000);
+      await settle(() => a.info().state === "count", 30_000);
+    };
+    const falseStart = () => {
+      a.setInput({ steer: 0, throttle: true });
+      for (let i = 0; i < 600 && a.info().state !== "race"; i++) a.step(1 / 60, 1);
+      a.clearInput();
+      assert.equal(a.info().state, "race");
+    };
+    await onGrid();
+    const player = game.G.player;
+    falseStart();
+    const penalty = player.penalty, reason = player.penaltyWhy;
+    assert.ok(penalty >= 5); assert.ok(reason);
+    assert.equal(a.redFlag().state, "count");
+    assert.equal(player.penalty, penalty);
+    assert.equal(player.penaltyWhy, reason, "same-race sanction remains explainable");
+    assert.equal(player.jumpStartFined, false, "restart re-arms the false-start detector");
+    falseStart();
+    assert.ok(player.penalty >= penalty + 5);
+    assert.ok(player.penaltyWhy.startsWith(reason + "; "), "new sanction appends to the retained explanation");
+    await onGrid();
+    assert.equal(game.G.player.penalty, 0);
+    assert.equal(game.G.player.penaltyWhy, null);
+  } finally { game.close(); }
+});
 
 test("red flag: laps step back one, prog sits behind the line, the player faces down the road", () => {
   const a = g.apex, G = g.G;

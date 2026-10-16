@@ -9,11 +9,8 @@
  * needed job that failed or was cancelled fails the aggregator. Advisory jobs
  * (continue-on-error) never fail it.
  *
- * `selected` defers to `selected-verdict` when that job succeeded: a matrix
- * shard can report `cancelled` (job-cap kill after a clean pass — run
- * 37493213168) while selected-verdict marks infra-retry from clean junit.
- * Without the deferral, CI would stay red even after the gate's own verdict
- * passed. When selected-verdict failed, that row already fails the aggregator.
+ * Failed or cancelled selected jobs remain red even if sibling JUnit is clean.
+ * No successful verdict may substitute for execution of the planned tests.
  *
  * It also fails when it was handed nothing: NEEDS unset / empty / `{}` exits 2,
  * and a payload with no `success` at all (everything skipped) fails with exit 1.
@@ -24,19 +21,15 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ADVISORY = new Set(["baseline-trial"]);
-
-/** Jobs whose red/cancel is owned by another needed job when that owner is green. */
-export const DEFER_TO = Object.freeze({ selected: "selected-verdict" });
+export const ADVISORY = new Set();
 
 /**
  * @param {Record<string, { result?: string }>} needs
- * @param {{ advisory?: Iterable<string>, deferTo?: Record<string, string> }} [opts]
+ * @param {{ advisory?: Iterable<string> }} [opts]
  * @returns {{ ok: boolean, bad: string[], skipped: string[], passed: string[] }}
  */
 export function verdict(needs, opts = {}) {
   const advisory = new Set(opts.advisory || ADVISORY);
-  const deferTo = opts.deferTo || DEFER_TO;
   const bad = [];
   const skipped = [];
   const passed = [];
@@ -50,14 +43,6 @@ export function verdict(needs, opts = {}) {
   }
   for (const [name, row] of Object.entries(needs)) {
     const result = row && typeof row === "object" ? String(row.result || "") : "";
-    const owner = deferTo[name];
-    if (owner && needs[owner] && String(needs[owner].result || "") === "success"
-        && (result === "failure" || result === "cancelled")) {
-      // selected-verdict already judged the change-aware gate (incl. cancel +
-      // clean junit → infra-retry). Do not double-fail CI on the matrix rollup.
-      skipped.push(`${name}: deferred to ${owner} (${result})`);
-      continue;
-    }
     if (advisory.has(name)) {
       if (result === "success" || result === "skipped" || result === "failure") {
         skipped.push(`${name}: advisory (${result || "empty"})`);
@@ -77,9 +62,8 @@ export function verdict(needs, opts = {}) {
   }
   // Skipped-only is not green either: when every needed job was skipped (a
   // workflow whose gates all hung off one input) nothing was actually checked.
-  // (A named core set is deliberately NOT required: a train that reuses a
-  // fast tier (`fast_tier_run`) skips `guards`/`unit-plan` by design, and
-  // `poke-train` is not a row at all — ci.yml leaves it out of CI's needs.)
+  // (A named core set is deliberately NOT required: a called run may skip
+  // jobs by its inputs, and the jobs list is ci.yml's to shape.)
   if (bad.length === 0 && passed.length === 0) {
     bad.push("no needed job succeeded — every result was skipped or advisory, so nothing was verified");
   }

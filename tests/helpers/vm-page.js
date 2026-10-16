@@ -323,8 +323,8 @@ export class VmPage {
   url() { return "http://localhost:3456/"; }
   isClosed() { return this._handle == null; }
   async close() {
-    if (this._handle) { try { this._handle.close(); } catch (_) {} }
-    this._handle = null;
+    try { if (this._handle) this._handle.close(); }
+    finally { this._handle = null; }
   }
 }
 
@@ -333,6 +333,7 @@ export class VmPage {
 /** Playwright decides which fixtures to build by reading the destructuring
  *  pattern of the test body. So does this. */
 export function requestedFixtures(fn) {
+  if (fn.fixtureNames) return fn.fixtureNames;
   const src = String(fn);
   const m = /^[^(]*\(\s*\{([^}]*)\}/.exec(src);
   if (!m) return [];
@@ -393,13 +394,16 @@ export function makeVmTest(cfg = {}) {
   const { it: nodeIt, describe: nodeDescribe } = nodeTest();
   const suites = [{ use: {}, beforeEach: [], afterEach: [], timeout: 120_000 }];
   const top = () => suites[suites.length - 1];
-  const merged = (k) => suites.flatMap((s) => s[k]);
-  const options = () => Object.assign({}, ...suites.map((s) => s.use));
+  const scopeOf = (refs) => ({
+    options: Object.assign({}, ...refs.map((s) => s.use)),
+    beforeEach: refs.flatMap((s) => s.beforeEach),
+    afterEach: refs.slice().reverse().flatMap((s) => s.afterEach),
+  });
 
   let sharedPage = null;
 
-  async function runOne(fn, extraTimeout) {
-    const opts = options();
+  async function runOne(fn, extraTimeout, scope) {
+    const opts = scope.options;
     const state = { options: opts, _page: null };
     state.page = async () => {
       if (state._page) return state._page;
@@ -412,20 +416,29 @@ export function makeVmTest(cfg = {}) {
       }
       return state._page;
     };
-    const names = requestedFixtures(fn);
+    const names = [...new Set([fn, ...scope.beforeEach, ...scope.afterEach].flatMap(requestedFixtures))];
     const bag = {};
-    for (const n of names) {
-      const b = BUILDERS[n];
-      if (!b) throw new Error(`vm-page: no VM fixture named "${n}" — it exists only in the browser fixture set`);
-      bag[n] = await b(state);
-    }
+    const errors = [];
     try {
-      for (const h of merged("beforeEach")) await h(bag);
+      for (const n of names) {
+        const b = BUILDERS[n];
+        if (!b) throw new Error(`vm-page: no VM fixture named "${n}" — it exists only in the browser fixture set`);
+        bag[n] = await b(state);
+      }
+      for (const h of scope.beforeEach) await h(bag);
       await fn(bag, { timeout: extraTimeout, setTimeout() {} });
-    } finally {
-      for (const h of merged("afterEach")) { try { await h(bag); } catch (_) {} }
-      if (state._page && !cfg.shared) await state._page.close();
+    } catch (error) { errors.push(error); }
+    finally {
+      // Run every cleanup even after a rejection, and preserve its verdict.
+      for (const h of scope.afterEach) {
+        try { await h(bag); } catch (error) { errors.push(error); }
+      }
+      if (state._page && !cfg.shared) {
+        try { await state._page.close(); } catch (error) { errors.push(error); }
+      }
     }
+    if (errors.length === 1) throw errors[0];
+    if (errors.length > 1) throw new AggregateError(errors, "VM test and cleanup failed");
   }
 
   const declare = (mode) => (name, fnOrOpts, maybeFn) => {
@@ -436,7 +449,9 @@ export function makeVmTest(cfg = {}) {
     if (mode === "fixme") opts.skip = true;
     if (mode === "only") opts.only = true;
     if (mode === "fail") opts.todo = true;
-    nodeIt(name, opts, () => runOne(fn, timeout));
+    // describe() has popped by execution time: capture hooks and settings now.
+    const refs = suites.slice();
+    nodeIt(name, opts, () => runOne(fn, timeout, scopeOf(refs)));
   };
 
   const test = declare(null);
@@ -452,13 +467,18 @@ export function makeVmTest(cfg = {}) {
   test.beforeEach = (fn) => { top().beforeEach.push(fn); };
   test.afterEach = (fn) => { top().afterEach.push(fn); };
   test.beforeAll = (fn) => { top().beforeEach.push(onceWrap(fn)); };
-  test.afterAll = (_fn) => {};
+  test.afterAll = (fn) => {
+    const refs = suites.slice(), timeout = top().timeout;
+    nodeTest().after(() => runOne(fn, timeout, { options: scopeOf(refs).options, beforeEach: [], afterEach: [] }));
+  };
   test.expect = expect;
   test.extend = () => test;   // the VM fixture set is fixed; extend is a no-op
 
   function onceWrap(fn) {
     let ran = false;
-    return async (bag) => { if (ran) return; ran = true; await fn(bag); };
+    const wrapped = async (bag) => { if (ran) return; ran = true; await fn(bag); };
+    wrapped.fixtureNames = requestedFixtures(fn);
+    return wrapped;
   }
 
   function describe(name, body) {

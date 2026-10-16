@@ -3,7 +3,8 @@
 Binding on every orchestrator, desk or person writing a cloud launch prompt.
 
 - Cloud launch prompts must include `OWNED:` / `FORBIDDEN:` path globs, done-when, shot/test caps, and the exact line `Do not enable auto-merge or merge.` (it limits that worker's own actions; it is not a veto and never goes into a PR body — a hold is `MERGE-HOLD:`),
-  mark ready only after `ready-gate.mjs` exits 0, and respect `ready-full-cap.mjs`; stand down on overlap. The template in `references/orchestrator.md` carries every field.
+  mark ready only after `ready-gate.mjs` exits 0; stand down on overlap. The template in `references/orchestrator.md` carries every field.
+- **Hard lines** (full list and why: `orchestrator.md` §Hard lines): `permission_mode: "auto"`; `source_revision` = the deploy branch or a NAMED integration branch; model stated; who opens the PR and its base; the full deliverable checklist in the first brief. **Quota gate:** read `rate_limit_info` from `get_session` before each `create_session` and each Agent wave > 5, stop at `allowed_warning`, stagger launches ≥ 30 s and confirm each (#2380).
 - Model id `default` only for a cloud launch; never invent another. Own notes go to `docs/notes/<topic>.md`.
 - Lane mutex: garage CSS → UI Survey; `js/car/*` → Cars; scenery (`js/circuits/scenery/*`) → Tracks; `js/game.js` needs `who-is-on-it --claim` before an edit. Lighting: ≤ 1 concurrent lighting agent, OWNED=`js/lighting/**` only, no scenery PRs from that lane.
 - Review farm: ≤ 2 concurrent review agents unless the user overrides. ≤ 2 parallel nested subagents inside one cloud agent; more → separate agents with disjoint OWNED.
@@ -33,19 +34,11 @@ Binding on every orchestrator, desk or person writing a cloud launch prompt.
   tool); two agents must not take the same job.
 - Twin guard: `who-is-on-it.mjs` plus a title/PR scan; stand down when the same title, the same PR feature or an overlapping OWNED is already running.
 - Pin long Chromium/visual smoke to `apex-sha` or the PR's Pages preview; never bind a loop to the moving production github.io (tip-vs-Pages is Monitor-only).
-- Sync agents: sync with `sync-pr.mjs` only when GitHub reports CONFLICTING/DIRTY or a required tip check is red; a Finish/Update run syncs only if CONFLICTING; one Sync agent per PR (refuse duplicates);
+- Sync agents: sync with `sync-pr.mjs` only when GitHub reports CONFLICTING/DIRTY or a required tip check is red; a Finish/Update run syncs only if CONFLICTING; one Sync agent per PR (refuse duplicates); ONE conflict-only resync lane serves the queue: it takes only PRs `needs-sync.mjs` rates `conflict` or `stale-red`, never a clean-behind one;
   never Sync and merge in one run (`behind-ship.mjs` warns over 10 behind, never fails). No auto-update-branch bots.
   Abort or stop and report a Finish/Update run past ~120 messages or > 2 tip moves with no progress while clean-behind.
   Normalize a messy merge with `node tools/check/merge-hygiene.mjs --fix`, then `gen-test-groups.mjs`.
-- **Paced push.** `queue-depth.mjs` is read by every session, so a fleet that
-  waits on `= queue hold` pushes together when it flips: on 2026-10-15 ~30
-  sessions pushed in the minute it read ok and the gauge went to 206 / 178 and
-  270 / 259 Linux jobs in flight / queued (cap 40), until orchestrators handed
-  out slots by hand. Each brief therefore carries `PUSH SLOT: <n>` = launch
-  index mod 10 (a 30-lane fleet shares each slot three ways: three pushes a
-  minute instead of thirty). After `= queue ok`, wait `n` minutes, read the
-  gauge again, and push only if it still says ok; on hold, start over. A brief
-  without a slot: use the minute your session started, mod 10. A lane with
-  several PRs pushes at most 4 per slot. A gauge-side mechanism, if one lands,
-  replaces this rule.
+- **Paced push: retired 2026-10-16** (CI/CD review #2333 finding 7). The `PUSH SLOT` rule existed
+  because every session waited on the same `queue-depth.mjs` hold and pushed in the minute it
+  released; with no hold there is nothing to pace. Push when your own cycle is green.
 - Every worker hand-back reports its head SHA; on a token failure it stops and reports. Batch small tooling/doc fixes into ONE PR; tooling/docs/MCP/prompt-only PRs stay off merge-train auto-launch and per-PR resolve swarms.

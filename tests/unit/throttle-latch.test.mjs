@@ -25,7 +25,7 @@ const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\
 // Like digital-steer.test.mjs's boot, but the element stubs are KEPT BY ID and
 // record their listeners, because this test has to fire the pedal's own
 // pointerdown/pointerup rather than a window key event.
-function boot() {
+function boot(initOpts) {
   const listeners = {};
   const els = new Map();
   const clock = { t: 0 };
@@ -35,7 +35,12 @@ function boot() {
     const e = {
       id, cls: new Set(), attrs: {},
       addEventListener: (t, f) => { (on[t] ||= []).push(f); }, removeEventListener() {},
-      fire(t, ev) { (on[t] || []).forEach((f) => f({ pointerId: 1, clientX: 0, clientY: 0, preventDefault() {}, ...ev })); },
+      fire(t, ev) {
+        const event = { pointerId: 1, clientX: 0, clientY: 0, preventDefault() { this.defaultPrevented = true; },
+          stopPropagation() { this.cancelBubble = true; }, ...ev };
+        (on[t] || []).forEach((f) => f(event));
+        return event;
+      },
       style: {}, dataset: {}, children: [],
       classList: {
         add(c) { e.cls.add(c); }, remove(c) { e.cls.delete(c); },
@@ -69,12 +74,84 @@ function boot() {
   for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
-  Input.init(el());
+  Input.init(el(), initOpts);
   const pedal = el("btn-throttle");
   const tap = () => { pedal.fire("pointerdown"); pedal.fire("pointerup"); };
   const blur = () => (listeners.blur || []).forEach((f) => f({}));
-  return { Input, pedal, tap, blur, listeners, sb };
+  return { Input, pedal, tap, blur, listeners, sb, clock };
 }
+
+// Real Input + InputPadMenu; only the browser's pad snapshots and pause layer
+// are fake. RESUME closes that layer inside the same poll that activates it.
+function bootPad() {
+  const h = boot(), { Input, sb, listeners, clock } = h;
+  const menu = { open: false };
+  const resume = { id: "pm-resume", tagName: "BUTTON", matches: () => true,
+    click() { menu.open = false; sb.document.activeElement = null; } };
+  const layer = { id: "pausemenu", contains: (e) => e === resume };
+  sb.UiLayers = { anyOpen: () => menu.open, navOpen: () => menu.open,
+    inRace: () => true, top: () => menu.open ? layer : null };
+  sb.MenuNav = { activeLayer: () => menu.open ? layer : null, FOCUSABLE: "button" };
+  const pad = { index: 0, id: "Xbox Wireless Controller", mapping: "standard", connected: true,
+    axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+  sb.navigator.getGamepads = () => [pad];
+  (listeners.gamepadconnected || []).forEach((f) => f({ gamepad: pad }));
+  const poll = () => { clock.t += 16; Input.poll(); };
+  const button = (i, down) => { pad.buttons[i] = { pressed: down, value: down ? 1 : 0 }; };
+  poll();
+  return { ...h, pad, menu, poll, button,
+    pause() { menu.open = true; sb.document.activeElement = resume; poll(); } };
+}
+
+test("gamepad A on RESUME cannot arm GAS TOGGLE, including a confirm held into the resumed frame", () => {
+  for (const held of [false, true]) {
+    const { Input, menu, pause, poll, button } = bootPad();
+    Input.setHoldMode({ throttle: "toggle", lookBack: "toggle" });
+    pause(); button(0, true); poll();
+    assert.equal(menu.open, false, "the real pad menu activated RESUME");
+    assert.equal(Input.throttleLevel(), 0, "the menu owns the activation frame");
+    if (held) {
+      poll();
+      assert.equal(Input.throttleLevel(), 0, "held confirm has no fresh driving edge");
+    }
+    button(0, false); poll(); poll();
+    assert.equal(Input.throttle(), false, "released confirm cannot leave gas latched");
+    assert.equal(Input.throttleLevel(), 0, "later frames stay off");
+    button(0, true); poll();
+    assert.equal(Input.throttleLevel(), 1, "a fresh driving press still toggles gas on");
+  }
+});
+
+test("button and axis capture consume driving toggle edges even when their callback ends capture", () => {
+  for (const capture of ["button", "axis"]) {
+    const { Input, pad, poll, button } = bootPad();
+    Input.setHoldMode({ throttle: "toggle", lookBack: "toggle" });
+    let captured = false;
+    if (capture === "button") Input.padCapture(() => { captured = true; Input.padCapture(null); });
+    else Input.beginAxisCapture(() => { captured = true; });
+    button(7, true); button(11, true);
+    if (capture === "axis") pad.axes[0] = 0.6;
+    poll();
+    assert.equal(captured, true, capture + " capture received the input");
+    poll();
+    assert.equal(Input.throttleLevel(), 0, "a held captured press cannot become a gas toggle");
+    assert.equal(Input.lookingBack(), false, "capture also owns LOOK BACK");
+    button(7, false); button(11, false); poll();
+    assert.equal(Input.throttle(), false, "gas stays off after release");
+  }
+});
+
+test("gamepad driving toggles still latch on fresh presses and release on the second press", () => {
+  const { Input, poll, button } = bootPad();
+  Input.setHoldMode({ throttle: "toggle", lookBack: "toggle" });
+  for (const expected of [true, false]) {
+    button(7, true); button(11, true); poll(); poll();
+    button(7, false); button(11, false); poll();
+    assert.equal(Input.throttle(), expected);
+    assert.equal(Input.throttleLevel(), expected ? 1 : 0);
+    assert.equal(Input.lookingBack(), expected);
+  }
+});
 
 test("the on-screen pedal's menu gate is read once per poll(), not once per pedal read (PERF-HUNT-2 S5)", () => {
   const { Input, pedal, sb } = boot();
@@ -218,3 +295,122 @@ test("a MIRROR press on the grid does not survive clearDriveEdges (it would togg
   assert.equal(Input.consumeMirror(), true, "a press in the running race is still consumed once");
   assert.equal(Input.consumeMirror(), false);
 });
+
+
+const tapActions = [
+  ["btn-boost", "consumeBoostToggle"], ["btn-ot", "consumeOvertake"],
+  ["btn-aero", "consumeAeroToggle"], ["shift-up", "consumeShiftUp"], ["shift-down", "consumeShiftDown"],
+];
+
+test("HUD tap actions accept semantic clicks and keep pointer presses immediate without firing twice", () => {
+  for (const [id, consume] of tapActions) {
+    const { Input, sb } = boot(), button = sb.document.getElementById(id);
+    button.fire("click", { detail: 0 });
+    assert.equal(Input[consume](), true, id + " activates through keyboard/assistive click");
+    for (const pointerType of ["touch", "mouse", "pen"]) {
+      button.fire("pointerdown", { pointerType, button: 0 });
+      assert.equal(Input[consume](), true, id + " answers on pointerdown");
+      button.fire("pointerup", { pointerType });
+      button.fire("click", { detail: 1, pointerType, button: 0 });
+      assert.equal(Input[consume](), false, id + " does not repeat on the pointer's click");
+    }
+    for (const pointerId of [11, 12]) {
+      button.fire("pointerdown", { pointerId, pointerType: "touch" });
+      assert.equal(Input[consume](), true, "each finger gets one immediate press");
+    }
+    for (const pointerId of [11, 12]) {
+      button.fire("click", { pointerId, detail: 1 });
+      assert.equal(Input[consume](), false, "neither finger's follow-up click repeats its press");
+    }
+    button.fire("pointerdown", { pointerType: "touch" });
+    assert.equal(Input[consume](), true);
+    // A drag may produce no click; it must not swallow the next AT activation.
+    button.fire("pointercancel", { pointerType: "touch" });
+    button.fire("click", { detail: 0 });
+    assert.equal(Input[consume](), true, "a pointerless activation survives a lost pointer click");
+  }
+});
+
+test("HUD tap actions honor native and announced disabled states for both activation paths", () => {
+  for (const [id, consume] of tapActions) {
+    const { Input, sb } = boot(), button = sb.document.getElementById(id);
+    for (const disabled of ["native", "aria"]) {
+      button.disabled = disabled === "native";
+      button.setAttribute("aria-disabled", disabled === "aria" ? "true" : "false");
+      button.fire("pointerdown", { pointerType: "touch" });
+      button.fire("click", { detail: 0 });
+      assert.equal(Input[consume](), false, id + " ignores " + disabled + " disabled activation");
+    }
+    button.removeAttribute("aria-disabled"); button.disabled = false;
+    button.fire("click", { detail: 0 });
+    assert.equal(Input[consume](), true, "reenabling restores semantic activation");
+  }
+});
+
+test("Enter and Space on a HUD tap button activate its click without also reaching BOOST", () => {
+  for (const code of ["Enter", "NumpadEnter", "Space"]) {
+    const { Input, sb, listeners } = boot(), button = sb.document.getElementById("shift-up");
+    Object.assign(button, { tagName: "BUTTON", matches: () => true, click: () => button.fire("click", { detail: 0 }) });
+    sb.document.activeElement = button;
+    const send = (type, extra) => {
+      const event = button.fire(type, { code, key: code === "Space" ? " " : "Enter", target: button, ...extra });
+      if (!event.cancelBubble) (listeners[type] || []).forEach((f) => f(event));
+      return event;
+    };
+    const down = send("keydown");
+    assert.equal(down.cancelBubble, true, code + " must not initiate a window driving binding");
+    assert.equal(down.defaultPrevented, true, "the explicit click replaces the UA default without duplication");
+    assert.equal(Input.consumeShiftUp(), true);
+    send("keydown", { repeat: true });
+    assert.equal(Input.consumeShiftUp(), false, "holding the key cannot repeat the tap action");
+    assert.ok(!send("keyup").cancelBubble, "releases still reach the window input bookkeeping");
+    assert.equal(Input.consumeBoostToggle(), false, "Space on SHIFT UP cannot toggle BOOST");
+  }
+});
+
+test("a driving key released after focus moves into a HUD tap button clears its held latch", () => {
+  const { Input, sb, listeners } = boot(), button = sb.document.getElementById("shift-up");
+  Input.setKeyBinding("throttle", 0, "Space");
+  const key = { code: "Space", key: " ", preventDefault() {}, target: { tagName: "BODY" } };
+  (listeners.keydown || []).forEach((f) => f(key));
+  assert.equal(Input.throttle(), true, "Space was held while the canvas owned keyboard input");
+  Object.assign(button, { tagName: "BUTTON", matches: () => true }); sb.document.activeElement = button;
+  const up = button.fire("keyup", { code: "Space", key: " ", target: button });
+  if (!up.cancelBubble) (listeners.keyup || []).forEach((f) => f(up));
+  assert.equal(Input.throttle(), false, "moving focus cannot strand a rebound driving key");
+});
+
+for (const id of ["pausebtn", "btn-cam", "hud-restore"]) {
+  test(id + " leaves native activation keys to the button and preserves movement releases", () => {
+    const { Input, sb, listeners } = boot(), button = sb.document.getElementById(id);
+    let clicks = 0;
+    Object.assign(button, { tagName: "BUTTON", matches: (selector) => selector.split(", ").includes("#" + id),
+      click: () => { clicks++; } });
+    sb.document.activeElement = button;
+    const send = (code, down) => {
+      const event = button.fire(down ? "keydown" : "keyup", {
+        code, key: code === "Space" ? " " : code, repeat: false,
+        target: sb.document.activeElement || { tagName: "BODY" }
+      });
+      (listeners[down ? "keydown" : "keyup"] || []).forEach((f) => f(event));
+      return event;
+    };
+    for (const code of ["Space", "Enter", "NumpadEnter"]) {
+      assert.ok(!send(code, true).defaultPrevented, code + " keydown retains its native default");
+      assert.ok(!send(code, false).defaultPrevented, code + " keyup retains its native default");
+      assert.equal(Input.consumeBoostToggle(), false, "activation cannot also queue BOOST");
+    }
+    assert.equal(clicks, 0, "Input does not synthesize a duplicate click alongside the native default");
+    send("KeyW", true);
+    assert.equal(Input.throttle(), true, "movement still works while a HUD button has focus");
+    send("KeyW", false);
+    assert.equal(Input.throttle(), false);
+    Input.setKeyBinding("throttle", 0, "Space");
+    sb.document.activeElement = null;
+    send("Space", true);
+    assert.equal(Input.throttle(), true, "Space can hold a rebound driving action before focus moves");
+    sb.document.activeElement = button;
+    assert.ok(!send("Space", false).defaultPrevented);
+    assert.equal(Input.throttle(), false, "activation-key release clears the earlier driving latch");
+  });
+}

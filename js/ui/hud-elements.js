@@ -123,11 +123,50 @@ const HudElements = (function () {
   function isOn(id) { return state[id] !== "off"; }
 
   function set(id, on) {
-    if (!(id in state)) return isOn(id);
-    state[id] = on ? "on" : "off";
-    persist();
-    apply();
+    setMany([id], on);
     return isOn(id);
+  }
+
+  // A grouped piece (the timing tower) is one preference change, not five
+  // intermediate hide lists and storage notifications.
+  function setMany(ids, on) {
+    const value = on ? "on" : "off";
+    let valid = false;
+    for (const id of ids) {
+      if (id in state) { state[id] = value; valid = true; }
+    }
+    if (valid) { persist(); apply(); }
+    return valid;
+  }
+
+  let contextOf = () => ({}), navigate = null;
+  const MINIMAL_HIDDEN = new Set(["best", "energy", "ot", "aero", "bb", "sectors", "damage", "rel", "strat", "inputs"]);
+  const CAMERA_HIDDEN = new Set(["gear", "ot", "aero", "energy", "bb", "limits", "damage", "rel", "strat", "inputs"]);
+  /** Read-only availability. Enabled is a preference, not a promise that this
+   *  session/camera currently has a readout to paint. Never changes a toggle. */
+  function effective(id, supplied) {
+    const c = supplied || contextOf() || {}, body = typeof document !== "undefined" && document.body;
+    const has = (name) => !!(body && body.classList && body.classList.contains(name));
+    const profile = c.profile || profileOf();
+    const result = (status, text, page, target) => ({ status, text, page: page || null, target: target || null });
+    if (!isOn(id)) return result("off", "Off in your HUD preferences");
+    if (c.hudHidden || has("hud-hidden")) return result("hidden", "Hidden by Hide HUD");
+    if (c.watching || has("bc-on")) return result("hidden", "Hidden by the replay broadcast overlay");
+    if (profile === "minimal" && MINIMAL_HIDDEN.has(id)) return result("hidden", "Hidden by Minimal HUD style", "display", "pm-hudprofile-sel");
+    if ((c.broadcastCamera || has("hud-bcam")) && (CAMERA_HIDDEN.has(id) || (id === "sectors" && profile !== "broadcast"))) return result("hidden", "Hidden by the current broadcast camera");
+    if (id === "strat" && (c.timeTrial || c.practice || c.session === "quali")) return result("unavailable", "Strategy is available in races, not this session");
+    if ((id === "tyre" || id === "strat") && (c.tyreWear === false || (c.tyreWear == null && store && store.get("tyreWear", "real") === "off"))) return result("unavailable", "Requires tyre wear in Race Settings", "race-settings", "rs-tyres-sel");
+    if (c.hasPlayer === false || (c.state && c.state !== "race" && c.state !== "count")) return result("waiting", "Available during a live session");
+    if (id === "rel" && (c.timeTrial || c.carCount === 1)) return result("unavailable", "Relative needs other cars on track");
+    if (id === "damage" && c.damageVisible === false) return result("waiting", "Waiting for damage above the display threshold");
+    if (id === "limits" && c.limitsVisible === false) return result("waiting", "Waiting for a track-limits warning");
+    if (id === "delta" && c.deltaReady === false) return result("waiting", "Waiting for a reference lap");
+    return result("enabled", "Enabled when live data is available");
+  }
+  function configure(options) {
+    if (options && typeof options.context === "function") contextOf = options.context;
+    if (options && typeof options.navigate === "function") navigate = options.navigate;
+    syncChecks();
   }
 
   function syncChecks() {
@@ -138,6 +177,12 @@ const HudElements = (function () {
     for (let i = 0; i < boxes.length; i++) {
       const id = boxes[i].getAttribute("data-hud-el");
       boxes[i].checked = isOn(id);
+      const row = boxes[i].closest && boxes[i].closest("[data-hud-el-row]");
+      if (!row) continue;
+      const reason = effective(id), text = row.querySelector("[data-hud-reason]");
+      if (text && text.textContent !== reason.text) text.textContent = reason.text;
+      const link = row.querySelector("[data-hud-reason-link]");
+      if (link) { link.hidden = !(navigate && reason.page); link.onclick = () => { const live = effective(id); if (navigate && live.page) navigate(live.page, live.target); }; }
     }
   }
 
@@ -158,7 +203,7 @@ const HudElements = (function () {
     list.id = "pm-hud-elements-list";
     for (let i = 0; i < ELEMENTS.length; i++) {
       const id = ELEMENTS[i][0], label = ELEMENTS[i][1];
-      const row = document.createElement("label");
+      const row = document.createElement("div"), labelRow = document.createElement("label");
       row.setAttribute("data-hud-el-row", id);
       const box = document.createElement("input");
       box.type = "checkbox";
@@ -169,8 +214,13 @@ const HudElements = (function () {
       });
       const span = document.createElement("span");
       span.textContent = label;
-      row.appendChild(box);
-      row.appendChild(span);
+      const reason = document.createElement("small"); reason.setAttribute("data-hud-reason", ""); reason.id = "hud-reason-" + id;
+      box.setAttribute("aria-describedby", reason.id);
+      const link = document.createElement("button"); link.type = "button"; link.className = "sel-chip";
+      link.setAttribute("data-hud-reason-link", ""); link.textContent = "VIEW REQUIREMENT"; link.hidden = true;
+      link.setAttribute("aria-label", "View requirement for " + label);
+      labelRow.appendChild(box); labelRow.appendChild(span); row.appendChild(labelRow);
+      row.appendChild(reason); row.appendChild(link);
       list.appendChild(row);
     }
     wrap.appendChild(list);
@@ -205,7 +255,7 @@ const HudElements = (function () {
   // changes (SETTINGS › DISPLAY › HUD › STYLE, or a studio preset).
   if (store && store.subscribe) {
     store.subscribe((c) => {
-      if (c && (c.key === "hudProfile" || (Array.isArray(c.keys) && c.keys.indexOf("hudProfile") >= 0))) apply();
+      if (c && (c.clear || ["hudProfile", "hudElements", "tyreWear"].includes(c.key) || (Array.isArray(c.keys) && c.keys.some((k) => ["hudProfile", "hudElements", "tyreWear"].includes(k))))) apply();
     });
   }
 
@@ -215,7 +265,8 @@ const HudElements = (function () {
   }
 
   return {
-    K, ELEMENTS, isOn, set, apply, hiddenList, initUI, shippedOf, profileOf,
+    K, ELEMENTS, isOn, set, setMany, apply, hiddenList, initUI, shippedOf, profileOf,
+    effective, configure, refreshVisibility: syncChecks,
     state: () => Object.assign({}, state),
   };
 })();

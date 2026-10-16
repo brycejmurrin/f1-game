@@ -454,7 +454,8 @@ test("github-mcp-guard: merge commits only, asks before merge/arm and the draft�
     const d = decision(run(name, input));
     assert.equal(d?.hookEventName, "PreToolUse");
     assert.equal(d?.permissionDecision, "ask", `${name} ${JSON.stringify(input)}`);
-    assert.match(d.permissionDecisionReason, /ready-gate\.mjs[\s\S]*ready-full-cap\.mjs/);
+    assert.match(d.permissionDecisionReason, /ready-gate\.mjs/);
+    assert.doesNotMatch(d.permissionDecisionReason, /ready-full-cap/, "the ready cap was retired 2026-10-16");
     assert.equal(decision(run(name, input, { APEX_MERGE_DESK: "1" })), null, `Merge Desk passes ${name}`);
   }
   for (const input of [{ pullNumber: 1, body: "x" }, { pullNumber: 1, title: "t" }, { pullNumber: 1, draft: true }])
@@ -553,7 +554,7 @@ test("round 2 gh: squash/rebase denied, other merges / ready flips ask, Merge De
     assert.equal(decisionOf(r), "ask", `${c}: ${r.stdout}`);
     assert.equal(decisionOf(run(c, { APEX_MERGE_DESK: "1" })), null, `Merge Desk passes ${c}`);
   }
-  assert.match(run("gh pr merge 12").stdout, /ready-gate\.mjs[\s\S]*ready-full-cap\.mjs/, "the reason is github-mcp-guard's");
+  assert.match(run("gh pr merge 12").stdout, /ready-gate\.mjs/, "the reason is github-mcp-guard's");
   for (const c of pass) assert.equal(decisionOf(run(c)), null, `silent pass: ${c}`);
 });
 
@@ -746,75 +747,21 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   assert.ok(new RegExp(g.matcher).test("mcp__github__actions_run_trigger"), "the matcher must route actions_run_trigger through the guard");
 });
 
-// #2182: the hold refused handoff pushes that start no CI (a topic branch with
-// no PR, a draft without run-ci) while the queue was jammed, so a reclaimed
-// container could lose unpushed work. The fake gauge runs the REAL pushVerdict
-// with a faked PR lookup and holds otherwise.
-test("#2182: the push hold lets a push that starts no CI through; a ready PR or run-ci draft still holds", () => {
-  const repo = scratchRepo("hook-push-noci-");
+// The push hold (#2182, 2026-10-15) was retired on 2026-10-16 (CI/CD review
+// #2333 finding 7): a git push is never refused on the queue gauge.
+test("2026-10-16: a git push is not held on the queue gauge", () => {
+  const repo = scratchRepo("hook-push-nohold-");
   try {
-    repo.g("remote", "add", "origin", "https://github.com/brycejmurrin/f1-game.git");
-    repo.g("checkout", "-qb", "cursor/no-pr-1");
-    fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });
-    const real = pathToFileURL(path.join(ROOT, "tools/ci/queue-depth.mjs")).href;
-    fs.writeFileSync(path.join(repo.dir, "tools/ci/queue-depth.mjs"), `import { execSync } from "node:child_process";
-import { pushVerdict } from ${JSON.stringify(real)};
-const PRS = { "cursor/draft-1": [{ number: 1, draft: true, labels: [] }], "cursor/runci-1": [{ number: 2, draft: true, labels: [{ name: "run-ci" }] }],
-  "cursor/ready-1": [{ number: 3, draft: false, labels: [] }] };
-const req = (q) => ({ json: PRS[decodeURIComponent(q).match(/head=brycejmurrin:([^&]+)/)[1]] || [] });
-const i = process.argv.indexOf("--push");
-if (i >= 0) {
-  const p = pushVerdict(process.argv[i + 1], execSync("git branch --show-current", { encoding: "utf8" }).trim(), req);
-  if (p.skip) { console.log(p.line); process.exit(0); }
-}
-console.log("= queue hold (99 Linux jobs in flight / 40, 50 queued, 0 macOS / 5)"); process.exit(1);
-`);
-    const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_PUSH_HOLD: "" } });
-    for (const c of ["git push -u origin cursor/no-pr-1", "git push", "git push origin HEAD", "git push -u origin cursor/draft-1"]) {
-      const r = run(c);
-      assert.equal(r.status, 0, `starts no CI, must pass: ${c} (${r.stderr})`);
-      assert.match(r.stderr, /bash-guard: = queue skip — push starts no CI \((cursor\/no-pr-1: no open PR|cursor\/draft-1: PR #1 is a draft without run-ci)\)/, c);
-    }
-    for (const c of ["git push -u origin cursor/ready-1", "git push origin HEAD:cursor/runci-1", "git push --tags origin",
-      "git push origin cursor/no-pr-1 cursor/ready-1"]) {
-      const r = run(c);
-      assert.equal(r.status, 2, `starts CI or unknown, must hold: ${c} (${r.stderr})`);
-      assert.match(r.stderr, /BLOCKED: = queue hold/);
-    }
-  } finally { repo.rm(); }
-});
-
-test("2026-10-15: git push holds while queue-depth says hold; a silent gauge or APEX_PUSH_HOLD=0 lets it through", () => {
-  const repo = scratchRepo("hook-push-hold-");
-  try {
-    // The hold applies only in a checkout of this repository (the hook's other
-    // tests push from scratch repos with no origin and must stay unaffected).
     repo.g("remote", "add", "origin", "https://github.com/brycejmurrin/f1-game.git");
     repo.g("checkout", "-qb", "cursor/topic-1234");
     fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });
-    const gauge = (code, line) => fs.writeFileSync(path.join(repo.dir, "tools/ci/queue-depth.mjs"),
-      `console.log(${JSON.stringify(line)}); process.exit(${code});\n`);
-    const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_PUSH_HOLD: "", ...env } });
-    gauge(1, "= queue hold (53 Linux jobs in flight / 40, 12 queued, 0 macOS / 5)");
-    for (const c of ["git push -u origin cursor/topic-1234", "git push", "git -C . push origin HEAD", "bash -c 'git push origin HEAD'", "git fetch && git push origin HEAD"]) {
+    fs.writeFileSync(path.join(repo.dir, "tools/ci/queue-depth.mjs"), `console.log("= queue hold (99 Linux jobs in flight / 40, 50 queued, 0 macOS / 5)"); process.exit(1);\n`);
+    const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
+    for (const c of ["git push -u origin cursor/topic-1234", "git push", "git -C . push origin HEAD"]) {
       const r = run(c);
-      assert.equal(r.status, 2, `must hold: ${c} (${r.stderr})`);
-      assert.match(r.stderr, /BLOCKED: = queue hold \(53 Linux jobs in flight/);
-      assert.match(r.stderr, /APEX_PUSH_HOLD=0/, "the refusal names the override");
+      assert.equal(r.status, 0, `never held: ${c} (${r.stderr})`);
+      assert.doesNotMatch(r.stderr, /queue hold/);
     }
-    assert.equal(run("git push -u origin cursor/topic-1234", { APEX_PUSH_HOLD: "0" }).status, 0, "the env override");
-    assert.equal(run("APEX_PUSH_HOLD=0 git push -u origin cursor/topic-1234").status, 0, "the command override");
-    for (const c of ["git status", "echo 'git push'", "git log --oneline -1", "cat <<'EOT'\ngit push\nEOT"]) assert.equal(run(c).status, 0, `not a push: ${c}`);
-    gauge(0, "= queue ok (10 Linux jobs in flight / 40, 0 queued, 0 macOS / 5)");
-    assert.equal(run("git push -u origin cursor/topic-1234").status, 0, "an ok gauge lets the push through");
-    gauge(3, "= queue unknown — API: HTTP 401");
-    const r = run("git push -u origin cursor/topic-1234");
-    assert.equal(r.status, 0, "a gauge that cannot answer never holds");
-    assert.match(r.stderr, /queue-depth could not answer/);
-    // Not this repository: no gauge, no hold (the scratch repos above).
-    repo.g("remote", "set-url", "origin", "https://github.com/someone/else.git");
-    gauge(1, "= queue hold");
-    assert.equal(run("git push -u origin cursor/topic-1234").status, 0, "another origin is not held");
   } finally { repo.rm(); }
 });
 
@@ -911,5 +858,28 @@ test("bash-guard: survey images and reports commit on the docs-only path; a code
       assert.match(r.stderr, /probe: commit code/, `${rel} is not a survey asset`);
       repo.g("reset", "-q", rel); fs.rmSync(path.join(repo.dir, rel));
     }
+  } finally { repo.rm(); }
+});
+
+// PostToolUse stdout is debug-log only: "For most events, Claude Code writes stdout to
+// the debug log" — UserPromptSubmit/SessionStart are the exceptions
+// (https://code.claude.com/docs/en/hooks, Exit code 0). The advice must travel as
+// hookSpecificOutput.additionalContext or the model never reads it (#2228 research).
+test("post-edit.sh hands its advice to the model as PostToolUse additionalContext JSON, and stays silent with none", () => {
+  const repo = scratchRepo("hook-postedit-");
+  const run = (rel) => hook("post-edit.sh", { tool_name: "Write", hook_event_name: "PostToolUse",
+    tool_input: { file_path: path.join(repo.dir, rel) }, cwd: repo.dir }, { cwd: repo.dir });
+  try {
+    fs.mkdirSync(path.join(repo.dir, "js/core"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "function (\n");
+    let r = run("js/core/log.js");
+    assert.equal(r.status, 0, r.stderr);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.hookSpecificOutput.hookEventName, "PostToolUse");
+    assert.match(out.hookSpecificOutput.additionalContext, /\[post-edit\] js\/core\/log\.js does not parse/);
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "var ok = 1;\n");
+    r = run("js/core/log.js");
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), "", "no advice, no output");
   } finally { repo.rm(); }
 });

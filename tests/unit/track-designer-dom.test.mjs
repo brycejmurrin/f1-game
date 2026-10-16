@@ -11,9 +11,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -42,6 +43,43 @@ function bootScreen(stored = {}) {
   dom.byId("mb-race").click = () => clicks.push("mb-race");
   dom.byId("mb-tt").click = () => clicks.push("mb-tt");
   return Object.assign(vmx, { dom, G, clicks, D: ctx.TrackDesigner, DC: ctx.DesignerCanvas, root: dom.byId("trackdesigner") });
+}
+
+// The normal editor store keeps object references; SAVE mutating a cached draft
+// can therefore hide stale bytes on disk. Exercise the real store and reboot
+// from its serialized localStorage, with the autosave debounce driven by hand.
+function bootPersistedScreen(disk = new Map()) {
+  const b = bootScreen(), captured = b.ctx.GameStore.store;
+  let blocked = false, timerId = 0;
+  const timers = new Map();
+  b.ctx.setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; };
+  b.ctx.clearTimeout = (id) => timers.delete(id);
+  b.ctx.localStorage = {
+    get length() { return disk.size; },
+    key: (i) => [...disk.keys()][i] || null,
+    getItem: (k) => disk.get(k) ?? null,
+    setItem(k, v) {
+      if (blocked) { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; }
+      disk.set(k, String(v));
+    },
+    removeItem: (k) => disk.delete(k),
+  };
+  for (const f of ["js/career/save-migrate.js", "js/core/store.js"]) {
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), b.ctx, { filename: f });
+  }
+  const store = b.ctx.GameStore.store;
+  // CustomTracks captured its store at eval; retain that reference while using
+  // the real store's serialization, cache and durability results underneath.
+  for (const k of ["get", "set", "write", "rawDel"]) captured[k] = store[k].bind(store);
+  return Object.assign(b, {
+    disk,
+    blockWrites: (v) => { blocked = v; },
+    flushDraft() {
+      const draft = [...timers.values()].find((t) => t.ms === 600);
+      assert.ok(draft, "an edit scheduled the draft autosave");
+      draft.fn();
+    },
+  });
 }
 
 test("init() builds the rail before any design exists; open() randomises a green loop; close() hides", async () => {
@@ -392,6 +430,65 @@ test("open({design}), EDIT and IMPORT never drop unsaved work: UNDO brings it ba
   assert.equal(b2.D.state().design.theme, "harbour");
 });
 
+test("SAVE durably updates the draft library link even after autosave has finished", async () => {
+  const b = bootScreen();
+  // Match real GameStore's durable JSON boundary, rather than retaining aliases.
+  b.ctx.GameStore.store.set = (k, v) => { b.data[k] = plain(v); };
+  openGreen(b);
+  const a = b.D.save(); assert.equal(a.ok, true);
+  b.D.setTheme("alpine");
+  await new Promise(resolve => setTimeout(resolve, 650));
+  assert.equal(b.data.customTrackDraft.originId, a.id, "autosaved before SAVE");
+  const saved = b.D.save(); assert.equal(saved.ok, true);
+  assert.notEqual(saved.id, a.id);
+  const disk = plain(b.data); // reload without close(), which independently flushes
+  b.D.close();
+  const next = bootScreen(disk);
+  next.D.init(next.G, { custom: next.C, root: next.root }); next.D.open();
+  assert.equal(next.D.state().design.originId, saved.id);
+  next.D.setTheme("oasis");
+  assert.equal(next.D.save().ok, true);
+  assert.equal(next.C.list().length, 1, "save after reload replaces, never duplicates");
+  next.D.close();
+});
+
+test("MY CIRCUITS recovers the previous unsaved draft after a fresh-page reload", () => {
+  const b = bootScreen(); openGreen(b);
+  b.D.setTheme("alpine");
+  const mine = plain(b.D.state().design);
+  b.D.load(b.C.sanitize(design({ theme: "oasis" })), "replacement");
+  b.D.close();
+  const next = bootScreen(plain(b.data));
+  next.D.init(next.G, { custom: next.C, root: next.root }); next.D.open();
+  assert.equal(next.D.state().design.theme, "oasis");
+  next.D.showPane("library");
+  const recover = chipsIn(next.root, "RECOVER PREVIOUS DRAFT")[0];
+  assert.equal(recover.hidden, false, "recovery is reachable even with an empty library");
+  recover.click();
+  assert.deepEqual(plain(next.D.state().design.pts), mine.pts);
+  assert.equal(next.D.state().design.theme, "alpine");
+  assert.equal(next.C.draft().theme, "alpine", "recovery immediately persists");
+  assert.equal(next.D.undo(), true, "the current unsaved replacement is itself protected");
+  assert.equal(next.D.state().design.theme, "oasis");
+  next.D.close();
+});
+
+test("recovering after reload keeps a name-only edit to a saved circuit in undo", () => {
+  const b = bootScreen(); openGreen(b);
+  b.D.setName("Previous A"); b.D.setTheme("alpine");
+  b.D.load(b.C.sanitize(design({ theme: "oasis" })), "replacement"); b.D.preview();
+  assert.equal(b.D.save().ok, true);
+  b.D.setName("Unsaved B name"); b.D.close();
+  const next = bootScreen(plain(b.data));
+  next.D.init(next.G, { custom: next.C, root: next.root }); next.D.open();
+  next.D.showPane("library"); chipsIn(next.root, "RECOVER PREVIOUS DRAFT")[0].click();
+  assert.equal(next.D.state().design.name, "PREVIOUS A");
+  assert.equal(next.C.draftPrev().name, "UNSAVED B NAME", "also protected across another reload");
+  assert.equal(next.D.undo(), true);
+  assert.equal(next.D.state().design.name, "UNSAVED B NAME");
+  next.D.close();
+});
+
 test("UNDO inside one design keeps its name and library link (setName and SAVE sit outside the history)", () => {
   const b = bootScreen();
   b.D.init(b.G, { custom: b.C, root: b.root });
@@ -696,6 +793,8 @@ test("FIX chips: only on rows TrackFixes can repair; FIX commits one UNDO entry 
   b.dom.dispatch(chipsIn(fixable[0], "FIX")[0], ev);
   assert.equal(ev.propagationStopped, true, "the chip's click stops at the chip (the row would refocus the canvas)");
   assert.deepEqual(plain(seen), [{ code: "length", built: true }], "apply(design, issue, the current verdict)");
+  assert.equal(b.D.state().undo, u0, "preview does not commit");
+  chipsIn(b.root, "APPLY REPAIR")[0].click();
   assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry");
   assert.deepEqual(plain(b.D.state().design.pts), plain(green.pts));
   assert.equal(msgText(b), "Fixed: lap stretched to 3.2 km — UNDO to revert");
@@ -729,6 +828,8 @@ test("FIX ALL runs fixAll(design, TrackValidate.check) and commits once, naming 
   const u0 = b.D.state().undo, f0 = fits;
   chipsIn(b.root, "FIX ALL")[0].click();
   assert.deepEqual(calls, [true], "handed the validator's own check");
+  assert.equal(b.D.state().undo, u0, "preview does not commit");
+  chipsIn(b.root, "APPLY REPAIR")[0].click();
   assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry for the whole batch");
   assert.equal(b.D.state().sel, 0, "a start remedy selects the new point 0, as START HERE does");
   assert.equal(fits, f0 + 1, "a length remedy rescales the loop, so the view refits");
@@ -747,13 +848,28 @@ test("HOW TO: a third tab lists every HOWTO step, every input and the limits; th
   const tabs = walk(b.root).filter((e) => e.classList.contains("td-tab"));
   assert.deepEqual(tabs.map((t) => t.textContent), ["DESIGN", "MY CIRCUITS", "HOW TO"]);
   for (const t of tabs) assert.equal(t.getAttribute("role"), "tab");
+  assert.equal(b.root.querySelector('[role="tablist"]').getAttribute("aria-label"), "Track Designer workspace");
+  assert.deepEqual(tabs.map((t) => t.getAttribute("aria-controls")), ["td-pane-design", "td-pane-library", "td-pane-howto"]);
+  assert.deepEqual(tabs.map((t) => t.tabIndex), [0, -1, -1]);
   const [design, lib, how] = panes(b);
   assert.equal(how.dataset.pane, "howto"); assert.equal(how.getAttribute("role"), "tabpanel");
+  assert.deepEqual([design.getAttribute("aria-labelledby"), lib.getAttribute("aria-labelledby"), how.getAttribute("aria-labelledby")],
+    [tabs[0].id, tabs[1].id, tabs[2].id]);
   assert.equal(how.hidden, true);
   tabs[2].click();
   assert.deepEqual([design.hidden, lib.hidden, how.hidden], [true, true, false]);
   assert.deepEqual(tabs.map((t) => t.getAttribute("aria-selected")), ["false", "false", "true"]);
+  assert.deepEqual(tabs.map((t) => t.tabIndex), [-1, -1, 0]);
   assert.equal(b.root.dataset.pane, "howto", "phone layout can give the guide its own space");
+  tabs[2].focus();
+  const left = { type: "keydown", key: "ArrowLeft", preventDefault() {}, stopPropagation() {} };
+  b.dom.dispatch(tabs[2], left);
+  assert.equal(b.root.dataset.pane, "library", "ArrowLeft activates the previous designer tab");
+  assert.equal(b.dom.document.activeElement, tabs[1], "tab focus follows activation");
+  const home = { type: "keydown", key: "Home", preventDefault() {}, stopPropagation() {} };
+  b.dom.dispatch(tabs[1], home);
+  assert.equal(b.root.dataset.pane, "design", "Home activates the first designer tab");
+  assert.equal(b.dom.document.activeElement, tabs[0]);
   const H = b.D.HOWTO;
   const tasks = walk(how).filter(e => e.dataset.helpTask);
   assert.deepEqual(tasks.map(e => e.dataset.helpTask), ["selection", "height", "scenery"]);
@@ -873,11 +989,11 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   b.D.setTool("select");
   const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
   // MODE + numbered groups; ELEVATION / BANKING & KERBS / LOOK stay in the DOM (mode toggles visibility).
-  // #1039: 2 CORNERS stays in the rail so numbering never skips 1 → 3.
-  assert.deepEqual(labels().slice(0, 7), ["SELECT POINTS", "1 SHAPE", "2 CORNERS", "ELEVATION", "BANKING & KERBS", "SCENERY", "4 DETAILS"]);
-  assert.ok(labels().includes("5 CHECKS"));
-  const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "2 CORNERS");
-  assert.ok(shapeG && !shapeG.hidden, "2 CORNERS group stays visible under EDIT/SELECT");
+  // #1039: CORNERS stays in the rail so numbering never skips 1 → 3.
+  assert.deepEqual(labels().slice(0, 7), ["SELECT POINTS", "SHAPE", "CORNERS", "ELEVATION", "BANKING & KERBS", "SCENERY", "ROAD"]);
+  assert.ok(labels().includes("CHECKS"));
+  const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "CORNERS");
+  assert.ok(shapeG && !shapeG.hidden, "CORNERS group stays visible under EDIT/SELECT");
   assert.match(shapeG.querySelector(".td-hint").textContent, /^Pick STRAIGHT/);
   assert.deepEqual(chipsIn(b.root).filter((c) => c.dataset.mode).map((c) => c.dataset.mode), ["draw", "edit", "elevation", "scenery", "test"]);
   b.D.setMode("elevation");
@@ -886,15 +1002,15 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   b.D.setMode("edit");
   b.D.setTool("corner");
   const all = labels();
-  const cornerLabel = all.find((t) => t.startsWith("2 CORNERS ·"));
-  const m = cornerLabel && cornerLabel.match(/^2 CORNERS · CORNER R (\d+) m × 90° LEFT$/);
+  const cornerLabel = all.find((t) => t.startsWith("CORNERS ·"));
+  const m = cornerLabel && cornerLabel.match(/^CORNERS · CORNER R (\d+) m × 90° LEFT$/);
   assert.ok(m, cornerLabel || all.join("|"));
   chipsIn(b.root, "TURNS RIGHT")[0].click();
   const up = walk(b.root).find((e) => e.getAttribute && e.getAttribute("aria-label") === "RADIUS m up");
   up.click();
-  assert.equal(labels().find((t) => t.startsWith("2 CORNERS ·")), "2 CORNERS · CORNER R " + (+m[1] + 5) + " m × 90° RIGHT", "live from the steppers");
+  assert.equal(labels().find((t) => t.startsWith("CORNERS ·")), "CORNERS · CORNER R " + (+m[1] + 5) + " m × 90° RIGHT", "live from the steppers");
   b.D.setTool("straight");
-  assert.equal(labels().find((t) => t.startsWith("2 CORNERS ·")), "2 CORNERS · STRAIGHT 200 m");
+  assert.equal(labels().find((t) => t.startsWith("CORNERS ·")), "CORNERS · STRAIGHT 200 m");
   // css pins for the survey defects (horizontal rail scroll, equal tabs, My Circuits empty span).
   assert.match(css, /\.td-row \.sel-chip \{[^}]*min-height:\s*var\(--tap-paint\)/, "stepper ± keys floor at --tap-paint on touch");
   assert.match(css, /\.td-row \.sel-chip \{[^}]*min-width:\s*var\(--tap-paint\)/, "stepper ± keys width floor at --tap-paint on touch");
@@ -964,6 +1080,15 @@ test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that
   b.dom.dispatch(canvas, { type: "pointerdown", pointerId: 7, clientX: 5, clientY: 5 });
   b.dom.dispatch(canvas, { type: "pointercancel", pointerId: 7 });
   assert.equal(row.hidden, true, "the next press on the canvas hides it");
+  for (const mode of ["scenery", "elevation", "test", "draw"]) {
+    b.D.setMode("edit"); hooks.onContext(3, { x: 100, y: 100 });
+    const points = plain(b.D.state().design.pts);
+    b.D.setMode(mode);
+    assert.equal(row.hidden, true, "switch to " + mode + " dismisses point actions");
+    chipsIn(row, "DELETE")[0].click();
+    assert.deepEqual(plain(b.D.state().design.pts), points, "stale action cannot delete a point");
+  }
+  b.D.setMode("edit");
   hooks.onContext(3, { x: 100, y: 100 });
   b.D.close();
   assert.equal(row.hidden, true, "closing the screen hides it");
@@ -1001,12 +1126,12 @@ test("TURNS: one info row per corner; a row selects its span, prefills the tool 
   let now = b.D.state();
   assert.deepEqual([now.sel, now.span, now.tool], [c.i0, c.i1, c.fit.kind], "the row's span, the fitted tool");
   assert.ok(now.sel !== now.span && !(now.span > 0 && now.span < now.sel), "point 0 is never inside the span");
-  const label = walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^2 CORNERS/.test(e.textContent));
-  assert.equal(label.textContent, c.fit.kind === "corner" ? "2 CORNERS · CORNER R " + c.fit.R + " m × " + c.fit.deg + "° " + dir : "2 CORNERS · HAIRPIN R " + c.fit.R + " m " + dir);
+  const label = walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^CORNERS/.test(e.textContent));
+  assert.equal(label.textContent, c.fit.kind === "corner" ? "CORNERS · CORNER R " + c.fit.R + " m × " + c.fit.deg + "° " + dir : "CORNERS · HAIRPIN R " + c.fit.R + " m " + dir);
   assert.equal(now.design.pts.length, st.design.pts.length, "selecting changes nothing");
   assert.equal(now.undo, u0);
   const replace = chipsIn(b.root, "REPLACE THE SELECTED SPAN")[0];
-  assert.ok(replace, "2 CORNERS offers REPLACE THE SELECTED SPAN");
+  assert.ok(replace, "CORNERS offers REPLACE THE SELECTED SPAN");
   replace.click();
   const v = b.D.preview();
   assert.equal(v.red, 0, "the re-stamped turn is green: " + v.issues.map((i) => i.code + ":" + i.level).join(","));
@@ -1134,7 +1259,7 @@ test("SPIRAL m: a stepper for CORNER / HAIRPIN / CHICANE / S-BEND only, 0–80 i
   openGreen(b);
   const row = rowOf(b.root, "SPIRAL m");
   assert.ok(row, "the row exists");
-  assert.match(row.parentNode.children[0].textContent, /^2 CORNERS/, "inside 2 CORNERS");
+  assert.match(row.parentNode.children[0].textContent, /^CORNERS/, "inside CORNERS");
   for (const [tool] of b.D.TOOLS) {
     b.D.setTool(tool);
     const curved = ["corner", "hairpin", "chicane", "sbend"].includes(tool);
@@ -1145,8 +1270,8 @@ test("SPIRAL m: a stepper for CORNER / HAIRPIN / CHICANE / S-BEND only, 0–80 i
   assert.equal(val.textContent, "0");
   stepBy(row, 3); assert.equal(val.textContent, "15");
   stepBy(row, 30); assert.equal(val.textContent, "80", "clamps at 80");
-  const label = () => walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^2 CORNERS/.test(e.textContent)).textContent;
-  assert.match(label(), /^2 CORNERS · CORNER R \d+ m × \d+° (LEFT|RIGHT) · SPIRAL 80 m$/);
+  const label = () => walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^CORNERS/.test(e.textContent)).textContent;
+  assert.match(label(), /^CORNERS · CORNER R \d+ m × \d+° (LEFT|RIGHT) · SPIRAL 80 m$/);
   b.D.setTool("hairpin"); assert.equal(val.textContent, "80", "the value rides across the curved tools");
   stepBy(row, -30); assert.equal(val.textContent, "0", "clamps at 0");
   assert.doesNotMatch(label(), /SPIRAL/, "no spiral, no mention");
@@ -1154,7 +1279,7 @@ test("SPIRAL m: a stepper for CORNER / HAIRPIN / CHICANE / S-BEND only, 0–80 i
   // (The hairpin left R at 25: a 60° arc that short has no room for two spirals.)
   b.D.setTool("corner");
   stepBy(rowOf(b.root, "RADIUS m"), 7); stepBy(rowOf(b.root, "ANGLE °"), 6);
-  assert.match(label(), /^2 CORNERS · CORNER R 60 m × 90° /);
+  assert.match(label(), /^CORNERS · CORNER R 60 m × 90° /);
   const d0 = plain(b.D.state().design);
   assert.equal(b.D.applyStamp(3, 3), true);
   const flat = plain(b.D.state().design.pts);
@@ -1171,7 +1296,7 @@ test("SPAN WIDTH m: one hwZone on the span's control points, merged on repeat, c
   const d0 = openGreen(b);
   const row = rowOf(b.root, "SPAN WIDTH m"), val = row.children[2];
   const details = row.parentNode;
-  assert.ok(/^4 DETAILS/.test(details.children[0].textContent), "in 4 DETAILS");
+  assert.ok(/^ROAD/.test(details.children[0].textContent), "in 4 DETAILS");
   assert.equal(details.children[details.children.indexOf(rowOf(b.root, "HALF-WIDTH m")) + 1], row, "right under HALF-WIDTH");
   assert.equal(row.getAttribute("aria-disabled"), "true", "no span: disabled");
   assert.equal(row.children[1].getAttribute("aria-disabled"), "true");
@@ -1245,7 +1370,9 @@ test("BANK °: the SELECTED TURN banks its apex — {frac, angleDeg, widthM: the
   assert.ok(pick, "a SELECTED TURN block inside TURNS");
   assert.equal(pick.hidden, true, "hidden until a turn is selected");
   const row = rowOf(pick, "BANK °"), val = row.children[2];
+  b.D.setMode("elevation");
   list.children[1].click();
+  assert.equal(b.D.state().mode, "elevation", "selecting a turn keeps the banking workspace");
   assert.equal(pick.hidden, false);
   assert.equal(pick.children[0].textContent, "SELECTED TURN · T2");
   assert.equal(val.textContent, "FLAT");
@@ -1583,7 +1710,8 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(b.G.state, "race");
   assert.equal(b.G.player.s, sTest, "…onto the armed point, not the grid");
   assert.equal(b.G.player.speed, 0);
-  assert.match(read("js/game.js"), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
+  assert.match(gameSource(), /request\.outcome\.then\(\(r\) => \{ if \(r\.kind === "committed" && sessionEntry\.owns\(r\)\) CustomTracks\.afterStart\(\); \}/,
+    "game.js starts the custom-track handoff only for its owning committed session");
   // The way back: armed, so quitting reopens the designer on the same point.
   b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
   b.D.close();
@@ -2047,7 +2175,7 @@ test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev o
   // Stamp REPLACE THE SELECTED SPAN with CORNER.
   b.D.setTool("corner");
   const replace = chipsIn(b.root, "REPLACE THE SELECTED SPAN")[0];
-  assert.ok(replace, "2 CORNERS offers REPLACE for the group");
+  assert.ok(replace, "CORNERS offers REPLACE for the group");
   const pts0 = plain(b.D.state().design.pts);
   assert.equal(b.D.applyStamp(4, 8), true);
   assert.notDeepEqual(plain(b.D.state().design.pts), pts0, "REPLACE rewrites the span");
@@ -2069,6 +2197,23 @@ test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev o
   for (let i = 5; i <= 9; i++) assert.equal(hs[i], (i - 5) + 3, "point " + i);
   assert.equal(hs[0], 0, "outside the span stays flat");
   assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9], "span selection survives group elev");
+});
+
+test("POINT m range offsets stop the whole selection at either height bound", () => {
+  const b = bootHooked(); openGreen(b);
+  for (const sign of [1, -1]) {
+    const heights = b.D.state().design.heights.map(() => 0);
+    heights[3] = sign * 58; heights[4] = sign * 59;
+    b.D.setHeights(heights, 3); b.D.selectRange(3, 4);
+    assert.equal(b.D.setNodeHeight(3, sign * 60), true);
+    assert.deepEqual(plain(b.D.state().design.heights.slice(3, 5)), [sign * 59, sign * 60]);
+    const undoCount = b.D.state().undo;
+    assert.equal(b.D.setNodeHeight(3, sign * 60), false, "limit is a no-op, not a flattened hill");
+    assert.equal(b.D.state().undo, undoCount);
+    assert.equal(b.D.state().design.heights[2], 0);
+    b.D.undo(); assert.deepEqual(plain(b.D.state().design.heights), heights);
+  }
+  b.D.close();
 });
 
 // ── stale design state must not leak into a NEW loop ────────────────────────
@@ -2259,9 +2404,11 @@ test("save after undo and redo replaces the current library record without dupli
 
 test("MY CIRCUITS collection controls import atomically and leave the working draft intact", async () => {
   const b = bootScreen(); openGreen(b);
-  assert.deepEqual(walk(b.root).find((e) => e.dataset.role === "library-files").children.map((e) => e.textContent), ["EXPORT ALL", "IMPORT LIBRARY"]);
+  assert.deepEqual(walk(b.root).find((e) => e.dataset.role === "library-files").children.map((e) => e.textContent), ["RECOVER PREVIOUS DRAFT", "EXPORT ALL", "IMPORT LIBRARY"]);
   const draft = plain(b.D.state().design), envelope = { format: b.C.COLLECTION_FORMAT, v: 1, items: [draft] };
   assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify(envelope) }), true);
+  assert.match(msgText(b), /Nothing imported yet/); assert.equal(b.C.list().length, 0);
+  assert.equal(b.D.commitLibraryImport(), true);
   assert.match(msgText(b), /Imported 1 circuits/); assert.equal(b.C.list().length, 1);
   assert.deepEqual(plain(b.D.state().design), draft);
   b.ctx.Blob = Blob;
@@ -2271,13 +2418,15 @@ test("MY CIRCUITS collection controls import atomically and leave the working dr
   assert.equal(exported.name, "apex26-circuits.apextracks.json");
   assert.equal(exported.data.format, b.C.COLLECTION_FORMAT); assert.equal(exported.data.items.length, 1);
   assert.equal(await b.D.loadFrom(JSON.stringify(envelope)), true);
+  assert.equal(b.D.commitLibraryImport(), true);
   assert.match(msgText(b), /Imported 0 circuits.*1 duplicates/);
   assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify({ ...envelope, items: [draft, { pts: [] }] }) }), false);
   assert.match(msgText(b), /Circuit 2 failed validation.*Nothing imported/); assert.equal(b.C.list().length, 1);
   assert.equal(await b.D.importLibraryFile({ size: 2000000, text: async () => { throw new Error("must not read"); } }), false);
   assert.match(msgText(b), /too large/);
   b.ctx.GameStore.store.write = () => ({ ok: false, durable: false });
-  assert.equal(b.D.loadCollection({ ...envelope, items: [{ ...draft, seed: 17 }] }), false);
+  assert.equal(await b.D.loadCollection({ ...envelope, items: [{ ...draft, seed: 17 }] }), true);
+  assert.equal(b.D.commitLibraryImport(), false);
   assert.match(msgText(b), /Library storage write failed.*Nothing imported/);
   assert.equal(b.C.list().length, 1); assert.deepEqual(plain(b.D.state().design), draft);
   b.D.close();
@@ -2297,6 +2446,67 @@ test("first-save history keeps its library identity without linking another impo
   assert.equal(back.id, restored.id); assert.equal(b.C.list().length, 2);
   assert.equal(b.C.get(other.id).name, "OTHER DOCUMENT", "saving the restored document does not replace the imported one");
   assert.equal(b.C.get(restored.id).name, "MY UNSAVED LABEL");
+  b.D.close();
+});
+
+test("SAVE persists the current library identity across reload, even with 24 circuits", () => {
+  for (const count of [1, 24]) {
+    const b = bootPersistedScreen();
+    b.D.init(b.G, { custom: b.C, root: b.root });
+    b.D.open({ design: design() }); b.D.preview();
+    const first = b.D.save(); assert.equal(first.durable, true);
+    for (let i = 1; i < count; i++) assert.equal(b.C.upsert(design({ seed: 100 + i })).ok, true);
+    b.D.setWidth(7.5); b.D.preview(); b.flushDraft();
+    assert.equal(JSON.parse(b.disk.get("apex26.customTrackDraft")).originId, first.id);
+    const saved = b.D.save(); assert.equal(saved.durable, true); assert.notEqual(saved.id, first.id);
+    const draft = JSON.parse(b.disk.get("apex26.customTrackDraft"));
+    assert.equal(draft.id, saved.id); assert.equal(draft.originId, saved.id);
+    // Reload directly: CLOSE would itself rewrite the draft and mask the bug.
+    const restored = bootPersistedScreen(new Map(b.disk));
+    restored.D.init(restored.G, { custom: restored.C, root: restored.root });
+    restored.D.open(); restored.D.setWidth(8); restored.D.preview();
+    const edited = restored.D.save(); assert.equal(edited.ok, true, JSON.stringify(edited));
+    assert.equal(restored.C.list().length, count, "reload edits replace rather than duplicate");
+    assert.equal(restored.C.get(saved.id), null);
+    assert.equal(restored.C.get(edited.id).baseHW, 8);
+    b.D.close(); restored.D.close();
+  }
+});
+
+test("SAVE preserves its nondurable warning and retries the draft identity when storage recovers", () => {
+  const b = bootPersistedScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open({ design: design() }); b.D.preview();
+  const first = b.D.save(); assert.equal(first.durable, true);
+  b.D.setWidth(7.5); b.D.preview(); b.flushDraft();
+  const before = b.disk.get("apex26.customTrackDraft");
+  b.blockWrites(true);
+  const failedDisk = b.D.save();
+  assert.equal(failedDisk.ok, true); assert.equal(failedDisk.durable, false);
+  assert.match(msgText(b), /storage is full.*may not survive a reload/);
+  assert.equal(b.D.state().design.originId, failedDisk.id, "the session keeps its edited circuit");
+  assert.equal(b.disk.get("apex26.customTrackDraft"), before, "failed disk writes do not change persisted identity");
+  assert.equal(JSON.parse(b.disk.get("apex26.customTracks")).items[0].id, first.id);
+  b.blockWrites(false);
+  assert.equal(b.D.save().durable, true);
+  assert.equal(JSON.parse(b.disk.get("apex26.customTrackDraft")).originId, failedDisk.id);
+  assert.equal(JSON.parse(b.disk.get("apex26.customTracks")).items[0].id, failedDisk.id);
+  b.D.close();
+});
+
+test("a refused SAVE leaves the draft's persisted library identity unchanged", () => {
+  const b = bootPersistedScreen();
+  let refuse = false;
+  const custom = { ...b.C, upsert: (d, opts) => refuse ? { ok: false, reason: "write", id: "refused-id" } : b.C.upsert(d, opts) };
+  b.D.init(b.G, { custom, root: b.root });
+  b.D.open({ design: design() }); b.D.preview(); const first = b.D.save();
+  b.D.setWidth(7.5); b.D.preview(); b.flushDraft();
+  const before = b.disk.get("apex26.customTrackDraft");
+  refuse = true;
+  assert.equal(b.D.save().ok, false);
+  assert.equal(b.D.state().design.originId, first.id);
+  assert.equal(b.disk.get("apex26.customTrackDraft"), before);
+  assert.equal(b.C.list().length, 1); assert.ok(b.C.get(first.id));
   b.D.close();
 });
 
@@ -2439,4 +2649,220 @@ test("newer imports and manual edits supersede pending decodes", async () => {
   const edited = b.D.loadFrom("edited"); b.D.setName("MANUAL");
   completions.get("edited")({ ok: true, design: design({ name: "STALE" }) }); assert.equal(await edited, false);
   assert.equal(b.D.state().design.name, "MANUAL"); b.D.close();
+});
+
+
+const followupText = (node) => [node, ...walk(node)].map(e => e.textContent || "").join(" ");
+
+test("designer tabs link panels and use one tab stop with wrapping arrows, Home and End", () => {
+  const b = bootScreen(); openGreen(b);
+  const tabs = walk(b.root).filter(e => e.classList.contains("td-tab"));
+  for(const t of tabs) {
+    const panel = walk(b.root).find(e => e.id === t.getAttribute("aria-controls"));
+    assert.ok(panel); assert.equal(panel.getAttribute("aria-labelledby"), t.id);
+  }
+  assert.deepEqual(tabs.map(t => t.tabIndex), [0,-1,-1]);
+  const key = (t,k) => b.dom.dispatch(t,{type:"keydown",key:k,preventDefault(){}});
+  key(tabs[0],"ArrowLeft"); assert.equal(b.dom.document.activeElement,tabs[2]);
+  assert.deepEqual(tabs.map(t => t.tabIndex), [-1,-1,0]);
+  key(tabs[2],"Home"); assert.equal(b.dom.document.activeElement,tabs[0]);
+  key(tabs[0],"End"); assert.equal(b.dom.document.activeElement,tabs[2]);
+  key(tabs[2],"ArrowRight"); assert.equal(b.dom.document.activeElement,tabs[0]);
+  tabs[1].click(); assert.deepEqual(tabs.map(t => t.tabIndex), [-1,0,-1]);
+  b.D.close();
+});
+
+test("imported clearance and copy/move destination labels match effective placement", () => {
+  const b = bootScreen(), d = openGreen(b); d.props = [{kind:"stand",s:0.2,side:1,gap:0}]; b.D.load(d); b.D.setMode("scenery");
+  const list = walk(b.root).find(e=>e.dataset.role==="object-list"); assert.match(followupText(list),/14 m \(stored 0 m\)/);
+  b.root.querySelector('[aria-label="Edit placed stand 1"]').click();
+  const move = chipsIn(b.root,"MOVE · SELECT DESTINATION")[0], copy = chipsIn(b.root,"COPY · SELECT DESTINATION")[0];
+  assert.equal(move.disabled,true); assert.equal(copy.disabled,true); const u=b.D.state().undo;
+  assert.equal(b.D.copyPropAt(0),false); assert.equal(b.D.state().undo,u);
+  b.D.selectRange(3); assert.equal(move.textContent,"MOVE TO POINT 4"); assert.equal(copy.getAttribute("aria-label"),"COPY TO POINT 4");
+  assert.equal(move.disabled,false); assert.equal(copy.disabled,false); b.D.close();
+});
+
+test("recipe preview/cancel preserve history; whole mixed recipe applies and undoes once", () => {
+  const b = bootScreen(); const d = openGreen(b); b.D.setMode("scenery"); b.D.selectRange(3,8);
+  const u = b.D.state().undo; chipsIn(b.root,"PREVIEW MARSHAL + CAMERA")[0].click();
+  assert.equal(b.D.state().undo,u); assert.deepEqual(plain(b.D.state().design),d);
+  assert.match(followupText(walk(b.root).find(e=>e.dataset.role==="scenery-recipes")),/2 objects/);
+  chipsIn(b.root,"CANCEL RECIPE")[0].click(); assert.equal(b.D.state().undo,u);
+  chipsIn(b.root,"PREVIEW MARSHAL + CAMERA")[0].click(); chipsIn(b.root,"APPLY RECIPE")[0].click();
+  assert.deepEqual(plain(b.D.state().design.props.map(p=>p.kind)),["marshal","camera"]); assert.equal(b.D.state().undo,u+1);
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design),d);
+  b.D.selectRange(3,8); chipsIn(b.root,"PREVIEW HEDGE SECTION")[0].click(); chipsIn(b.root,"APPLY RECIPE")[0].click();
+  assert.equal(b.D.state().design.props.length,3); assert.equal(b.D.state().undo,u+1); b.D.undo(); b.D.close();
+});
+
+test("repair comparison cancels without edits and refuses a changed base before apply", () => {
+  const b=bootScreen(); let green;
+  b.ctx.TrackFixes={canFix:it=>it.code==="length",apply:d=>({design:{...d,pts:green.pts},msg:"length"}),fixAll:()=>null};
+  green=shortLoop(b); const d=plain(b.D.state().design),u=b.D.state().undo;
+  const preview=()=>chipsIn(b.root.querySelector('[aria-label="Design checks"]'),"FIX")[0].click();
+  preview(); const panel=walk(b.root).find(e=>e.dataset.role==="repair-preview");
+  assert.equal(panel.hidden,false); assert.match(followupText(panel),/CURRENT · BLOCKED/); assert.match(followupText(panel),/PROPOSED · PASS/);
+  chipsIn(b.root,"CANCEL REPAIR")[0].click(); assert.deepEqual(plain(b.D.state().design),d); assert.equal(b.D.state().undo,u);
+  preview(); b.D.setName("Changed"); chipsIn(b.root,"APPLY REPAIR")[0].click();
+  assert.equal(b.D.state().undo,u); assert.equal(b.D.state().design.name,"CHANGED"); assert.match(followupText(panel),/Design changed/); b.D.close();
+});
+
+test("Spa corner memory cards highlight three apexes and reveal labels without authoring edits", () => {
+  const b=bootScreen(); const d=openGreen(b),u=b.D.state().undo,sel=b.D.state().sel;
+  chipsIn(b.root,"SPA CORNER MEMORY")[0].click(); const panel=walk(b.root).find(e=>e.dataset.role==="corner-memory");
+  assert.equal(walk(panel).filter(e=>e.tagName==="CANVAS").length,3);
+  assert.match(followupText(panel),/T1/); chipsIn(panel,"HIDE LABEL")[0].click();
+  assert.match(followupText(panel),/Recall this turn/); chipsIn(panel,"REVEAL LABEL")[0].click(); assert.match(followupText(panel),/T1/);
+  assert.deepEqual(plain(b.D.state().design),d); assert.equal(b.D.state().undo,u); assert.equal(b.D.state().sel,sel); b.D.close();
+});
+
+
+test("CARD keeps its outline facts name link and native title on one pre-compression snapshot", async () => {
+  const b = bootScreen(); openGreen(b, 11);
+  const texts = [], canvases = []; recordingCanvas(b, texts, canvases);
+  const original = plain(b.D.state().design), encoded = b.ctx.TrackCodec.encode;
+  let release, started;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: (d) => { started = plain(d); return new Promise((resolve) => { release = async () => resolve(await encoded(d)); }); } };
+  const pending = b.D.cardCanvas();
+  b.D.setName("Changed after click"); b.D.setTheme("oasis"); b.D.preview();
+  assert.ok(release); await release(); const card = await pending;
+  assert.equal(card.title, original.name); assert.ok(texts.includes(original.name)); assert.ok(!texts.includes("CHANGED AFTER CLICK"));
+  assert.match(card.name, new RegExp(original.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")));
+  const decoded = await b.ctx.TrackCodec.decode(b.ctx.TrackCodec.fromHash(card.url.slice(card.url.indexOf("#"))));
+  assert.equal(decoded.design.name, original.name); assert.equal(decoded.design.theme, original.theme);
+  assert.deepEqual(started, original);
+  b.D.close();
+});
+
+test("library review is cancellable mid-preflight and on close, and stale approval never writes", async () => {
+  const b = bootScreen(); openGreen(b); const draft = plain(b.D.state().design);
+  const env = { format: b.C.COLLECTION_FORMAT, v: 1, items: [draft, { ...draft, seed: 19 }] };
+  const pending = b.D.loadCollection(env); b.D.cancelLibraryImport(true);
+  assert.equal(await pending, false); assert.equal(b.C.list().length, 0);
+  assert.equal(await b.D.loadCollection(env), true);
+  assert.equal(b.C.list().length, 0, "review makes no write");
+  b.C.upsert({ ...draft, seed: 21 });
+  assert.equal(b.D.commitLibraryImport(), false); assert.match(msgText(b), /changed.*Nothing imported/);
+  assert.equal(b.C.list().length, 1);
+  const closing = b.D.loadCollection(env); b.D.close();
+  assert.equal(await closing, false); assert.equal(b.C.list().length, 1);
+});
+
+
+test("native CARD share title remains captured when the design changes during PNG encoding", async () => {
+  const b = bootScreen(); openGreen(b); const name = b.D.state().design.name;
+  const create = b.dom.document.createElement; let finishPng;
+  b.dom.document.createElement = (tag) => {
+    const e = create(tag);
+    if (tag === "canvas") e.toBlob = (done) => { finishPng = () => done(new Blob(["PNG"], { type: "image/png" })); };
+    return e;
+  };
+  b.ctx.File = File; let shared;
+  b.ctx.navigator = { canShare: () => true, share: async (d) => { shared = d; } };
+  const pending = b.D.shareCard();
+  for (let i = 0; i < 40 && !finishPng; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(typeof finishPng, "function");
+  b.D.setName("Different after PNG"); finishPng();
+  assert.equal(await pending, true); assert.equal(shared.title, name);
+  assert.equal((await b.CD.decode(b.CD.fromHash(shared.text.slice(shared.text.indexOf("#"))))).design.name, name);
+  b.D.close();
+});
+
+
+test("close cancels pending single-file and decoded imports without blocking a new closed API load", async () => {
+  for (const path of ["file","decode"]) {
+    const b=bootScreen();b.D.init(b.G,{custom:b.C,root:b.root});b.D.open();b.D.load(design({name:"ORIGINAL"}));
+    let finish;const gate=new Promise(resolve=>{finish=resolve;});let pending;
+    if(path==="file")pending=b.D.importFile({size:100,text:()=>gate});
+    else {b.ctx.TrackCodec={...b.ctx.TrackCodec,decode:()=>gate};pending=b.D.loadFrom("held-code");}
+    b.D.close();const before=JSON.stringify(b.D.state().design),draft=JSON.stringify(b.C.draft());
+    finish(path==="file"?JSON.stringify({format:"apex26.track",v:1,design:design({name:"LATE"})}):{ok:true,design:design({name:"LATE"})});
+    assert.equal(await pending,false,path+" loses ownership on close");
+    assert.equal(JSON.stringify(b.D.state().design),before);assert.equal(JSON.stringify(b.C.draft()),draft);assert.equal(b.D.isOpen(),false);
+    assert.equal(await b.D.loadFrom(JSON.stringify({format:"apex26.track",v:1,design:design({name:"EXPLICIT CLOSED"})})),true,"a new intentional closed API import remains supported");
+    assert.equal(b.D.state().design.name,"EXPLICIT CLOSED");assert.equal(b.D.isOpen(),false);
+  }
+});
+
+test("mode workspaces show only their own controls and navigation never edits the circuit", () => {
+  const b = bootScreen(); openGreen(b);
+  const visible = (node) => { for (let n = node; n; n = n.parentNode) if (n.hidden) return false; return true; };
+  const button = (text) => chipsIn(b.root, text)[0];
+  const groups = {
+    draw: button("RANDOMISE").parentNode,
+    edit: button("REVERSE"),
+    elevation: walk(b.root).find((e) => e.dataset.role === "bridges"),
+    scenery: walk(b.root).find((e) => e.dataset.role === "scenery"),
+    test: b.root.querySelector('[aria-label="Design checks"]').parentNode,
+  };
+  const before = b.D.state();
+  for (const mode of ["draw", "edit", "elevation", "scenery", "test"]) {
+    b.D.setMode(mode);
+    for (const [owner, node] of Object.entries(groups)) assert.equal(visible(node), owner === mode, owner + " controls in " + mode);
+    assert.equal(chipsIn(b.root.querySelector(".td-rail"), "TEST HERE").some(visible), mode === "test");
+    assert.equal(visible(b.root.querySelector('[aria-label="Circuit name"]')), mode === "test");
+    assert.equal(visible(button("SELECT END")), false, "RANGE replaces the duplicate selection chip");
+    assert.equal(visible(button("UNDO")), true, "history stays shared");
+  }
+  assert.deepEqual(plain(b.D.state().design), plain(before.design));
+  assert.equal(b.D.state().undo, before.undo);
+});
+
+test("authored road bridge adds, refuses overlap/unsafe inputs, edits, undoes and survives save/share", async () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("elevation");
+  const panel = walk(b.root).find((e) => e.dataset.role === "bridges");
+  const add = walk(panel).find((e) => e.dataset.role === "add-bridge");
+  const length = panel.querySelector('[aria-label="Bridge total span · m"]');
+  const rise = panel.querySelector('[aria-label="Bridge rise · m"]');
+  const list = walk(panel).find((e) => e.dataset.role === "bridge-list");
+  const status = walk(panel).find((e) => e.dataset.role === "bridge-status");
+  assert.equal(add.disabled, true);
+  b.D.selectRange(10, -1);
+  assert.equal(add.disabled, false);
+  const before = b.D.state();
+  rise.value = "30"; add.click();
+  assert.match(status.textContent, /grade budget/);
+  assert.equal(b.D.state().undo, before.undo, "invalid bridge creates no history entry");
+  rise.value = "8"; add.click();
+  const added = b.D.state();
+  assert.equal(added.design.bridges.length, 1);
+  assert.equal(added.undo, before.undo + 1);
+  assert.equal(added.design.bridges[0].halfM, 160);
+  const v = b.D.preview();
+  const flat = b.V.build(Object.assign({}, added.design, { bridges: [] })).tr;
+  assert.ok(v.tr.py.some((y, i) => y > flat.py[i] + 1), "native track build raises the actual road");
+  add.click();
+  assert.match(status.textContent, /overlap/);
+  assert.equal(b.D.state().undo, added.undo);
+  list.children[0].querySelector('[aria-label="Edit road bridge 1"]').click();
+  length.value = "400"; rise.value = "9";
+  walk(panel).find((e) => e.dataset.role === "apply-bridge").click();
+  assert.equal(b.D.state().design.bridges[0].rise, 9);
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.bridges[0].rise, 8);
+  const stored = b.C.sanitize(b.D.state().design);
+  const code = await b.CD.encode(stored), decoded = await b.CD.decode(code);
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(plain(decoded.design.bridges), plain(stored.bridges));
+  const saved = b.C.upsert(stored);
+  assert.equal(saved.ok, true);
+  assert.deepEqual(plain(b.C.list()[0].bridges), plain(stored.bridges));
+  list.children[0].querySelector('[aria-label="Remove road bridge 1"]').click();
+  assert.equal(b.D.state().design.bridges.length, 0);
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.bridges.length, 1);
+  b.D.close(); b.D.open();
+  assert.equal(b.D.state().design.bridges.length, 1, "draft reopens with its bridge");
+});
+
+test("share clipboard fallback opens the workspace containing its copy field", async () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  b.ctx.ApexClipboard = { write: async () => false };
+  const url = await b.D.share();
+  assert.ok(url && url.includes("#track="));
+  assert.equal(b.D.state().mode, "test");
+  const field = b.root.querySelector('[aria-label="Share code or link"]');
+  assert.equal(field.value, url);
+  assert.equal(field.parentNode.hidden, false);
 });

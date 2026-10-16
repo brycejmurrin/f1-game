@@ -89,6 +89,7 @@ const Input = (function () {
   // held Start, so one press fired twice (pause, unpause).
   const padPrevByIndex = new Map();
   let padPrevKey = null;       // padKey of the pad padPrevButtons belongs to
+  let padSnapshotLost = false; // recovery must observe held buttons before accepting new edges
   let padDpadVal = 0;          // ramped d-pad steer, -1..1 (see padDpadSteer)
   let padDpadT = 0;            // last d-pad ramp timestamp, ms
   let padDpadSeq = 0, padDpadLeftSeq = 0, padDpadRightSeq = 0;
@@ -636,6 +637,7 @@ const Input = (function () {
     axisCaptureCb = typeof cb === "function" ? cb : null;
     axisCaptureRest = null;
     axisCaptureSkip = new Set((opts && opts.exclude) || []);
+    axisCaptureOwner = opts && opts.ownerKey || null;
     if (!axisCaptureCb) return;
     axisCaptureRest = snapshotRests(readPads(), new Map());
   }
@@ -646,6 +648,7 @@ const Input = (function () {
     for (let j = 0; j < pads.length; j++) {
       const p = pads[j];
       if (!p || !p.connected) continue;
+      if (axisCaptureOwner && padKey(p, j) !== axisCaptureOwner) continue;
       const rests = axisCaptureRest.get(padKey(p, j));
       if (!rests) { snapshotRests([p], axisCaptureRest); continue; }
       const axes = p.axes || [];
@@ -664,7 +667,16 @@ const Input = (function () {
     axisExt = { key: bestKey, axis: bestI, rest: bestRest, far: bestV, until: nowMs() + AXIS_EXT_MS };
     cb(bestI, Math.sign(bestV - bestRest) || 1, axisExt);
   }
-  function setPadAxisMap(saved) {
+  function setPadAxisMap(saved, ownerKey) {
+    let owner = null;
+    if (ownerKey != null) {
+      const pads = readPads();
+      owner = Array.prototype.find.call(pads, (p, i) => p && p.connected && padKey(p, i) === ownerKey);
+      if (!owner) return null;   // a disconnected wizard cannot change another device
+      const profiles = ensureDeviceProfiles();
+      if (profiles) profiles.activate(owner);
+    }
+    const previous = getPadAxisMap();
     padAxisMap = Object.assign({}, PAD_AXIS_DEF);
     if (saved && typeof saved === "object") {
       for (const k of ["steer", "throttle", "brake"]) {
@@ -680,6 +692,7 @@ const Input = (function () {
       // One axis cannot be both pedals: a combined axis reads brake AND throttle at rest.
       if (padAxisMap.brake != null && padAxisMap.brake === padAxisMap.throttle) padAxisMap.brake = padAxisMap.brakeRest = padAxisMap.brakeFar = null;
     }
+    if (owner) invalidateAxisRest(padIdOf(owner), previous);
     profileChanged();
     return getPadAxisMap();
   }
@@ -702,6 +715,23 @@ const Input = (function () {
       changed: () => { if (typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("apexcontrollerprofilechange")); },
     });
     return deviceProfiles;
+  }
+
+  // Rest belongs to the device AND its steering axis/sign. Profile resets and
+  // completed captures must not reuse an offset measured on a different axis.
+  function invalidateAxisRest(id, previous) {
+    if (previous.steer === padAxisMap.steer && previous.steerInvert === padAxisMap.steerInvert) return;
+    padRestMap.delete(id);
+    padRestLegacy = null; padRestOffset = 0;
+    if (typeof GameStore !== "undefined" && GameStore.store) GameStore.store.set("padRest", padRestStore());
+  }
+  function resetControllerProfile() {
+    const current = deviceProfiles && deviceProfiles.current();
+    if (!current) return false;
+    const previous = getPadAxisMap();
+    if (!deviceProfiles.reset()) return false;
+    invalidateAxisRest(current.id, previous);
+    return true;
   }
 
   function padAxesAreDefault() {
@@ -776,6 +806,7 @@ const Input = (function () {
     throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null };   // pedal travel ends, measured by the wizard
   let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
   let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
+  let axisCaptureOwner = null;   // after first wheel answer, ignore other physical devices
   let axisCaptureSkip = new Set(); // axes the wizard already assigned; capture ignores them
   let axisCaptureRest = null;    // resting snapshot taken when the wizard armed
   function readPadAxis(axes, i) {
@@ -929,6 +960,15 @@ const Input = (function () {
       kbSeen = true;
       noteInputSource("keyboard");
     }
+    // Native HUD buttons own their activation keys. Let the browser deliver
+    // their click once; releases still clear keys held before focus moved here.
+    const nativeHudActivation = tag === "BUTTON" && active && active.matches &&
+      active.matches("#btn-cam, #pausebtn, #hud-restore") &&
+      (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter");
+    if (nativeHudActivation) {
+      if (!down) { heldKeys.delete(e.code); syncHeldKeys(); }
+      return;
+    }
     /* COMMAND EATS THE KEY-UP, so Command going down is a release-all.
        On macOS the OS does not deliver key-up to an application while Command
        is held: press W, tap Cmd, let go of W, and NO keyup ever arrives. The
@@ -1046,15 +1086,34 @@ const Input = (function () {
   const TOUCH_RANGE_FRAC = 0.12;   // LONG-edge fractions of drag for full lock
   const TOUCH_DEAD_PX = 5;         // slop around the anchor: a tap is not a steer
   let touchRangeFrac = TOUCH_RANGE_FRAC;
+  // DRAG AT SPEED. 1 = the drag takes the whole ADAPTIVE BUTTONS shed
+  // (digitalRateIn / KEY_RAMP_IN). 0 is the fixed fraction every player has
+  // today, and the shipped default: the speed-sensitive range is OPT-IN
+  // (orchestrator decision 2026-10-15) so nobody's drag feel moves under them.
+  let touchSpeedMix = 0;
+  // Safety only. The digital rate may approach 0; a drag that approaches 0
+  // cannot turn the car. 5 % of static lock is the floor, and the default
+  // assist (mix 4/9) never reaches it.
+  const TOUCH_SPEED_FLOOR = 0.05;
+
+  function touchSpeedScale() {
+    if (touchSpeedMix <= 0 || adaptiveMix <= 0) return 1;
+    const ratio = digitalRateIn() / KEY_RAMP_IN;   // 1 at rest, sheds with speed
+    const scale = 1 - touchSpeedMix * (1 - ratio);
+    return scale < TOUCH_SPEED_FLOOR ? TOUCH_SPEED_FLOOR : scale;
+  }
 
   function touchRangePx() {
     // The LONG edge, not innerWidth. Off the short edge a 393x852 phone gets
     // 47px of drag for full lock against 101px landscape — the identical
     // gesture, twice as twitchy, because the phone turned. Landscape is
     // unchanged (its long edge IS innerWidth). PERF-FINDINGS 5a.
+    // Speed widens that range by 1/touchSpeedScale(), so the same finger
+    // travel is less lock. At rest the scale is 1 and the range is the
+    // static fraction, whatever the mixes.
     const win = typeof window !== "undefined" ? window : null;
     const long = Math.max((win && win.innerWidth) || 844, (win && win.innerHeight) || 390);
-    return Math.max(40, long * touchRangeFrac);
+    return Math.max(40, long * touchRangeFrac) / touchSpeedScale();
   }
 
   function touchCmd(rec) {
@@ -1138,23 +1197,57 @@ const Input = (function () {
       if (rec.seq > best) { best = rec.seq; touchSteer = touchCmd(rec); touchActive = true; }
     }
     if (!touchActive) touchSteer = 0;
+    updateDragAnchor();
   }
 
   function canvasTouchIsDriving() { return !menuOverlayOpen(); }
 
-  /* Show where the anchor is, briefly. Looked up lazily and cached: the element
-     is optional (a test harness page may not have it) and this runs on the
-     touch path, so it must never throw and never query per event. */
+  /* Drag-anchor ring + offset dot: optional DOM (#drag-anchor), cached lookups
+     only, transform/left/top updates on the touch path — must never throw. */
   let dragMark = undefined;
-  function showDragAnchor(x) {
-    if (steerMode !== "touch") return;
+  let dragDotEl = null;
+  const DRAG_DOT_CSS = "position:absolute;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;pointer-events:none;background:rgba(255,255,255,0.65);box-shadow:0 0 0 2px rgba(0,0,0,0.5)";
+  function dragMarkEl() {
     if (dragMark === undefined) dragMark = document.getElementById("drag-anchor") || null;
-    if (!dragMark) return;
-    dragMark.style.left = x + "px";
-    dragMark.classList.add("on");
+    return dragMark;
+  }
+  function dragDot(mark) {
+    if (dragDotEl && dragDotEl.parentNode === mark) return dragDotEl;
+    dragDotEl = null;
+    if (typeof mark.appendChild === "function" && typeof document.createElement === "function") {
+      dragDotEl = document.createElement("span");
+      dragDotEl.setAttribute("aria-hidden", "true");
+      if (dragDotEl.style) dragDotEl.style.cssText = DRAG_DOT_CSS;
+      mark.appendChild(dragDotEl);
+    }
+    return dragDotEl;
+  }
+  function steeringTouchRec() {
+    let best = -1, pick = null;
+    for (const rec of touches.values()) {
+      if (rec.seq > best) { best = rec.seq; pick = rec; }
+    }
+    return pick;
   }
   function hideDragAnchor() {
-    if (dragMark) dragMark.classList.remove("on");
+    const mark = dragMarkEl();
+    if (mark) mark.classList.remove("on");
+  }
+  function updateDragAnchor() {
+    if (steerMode !== "touch" || !canvasTouchIsDriving()) { hideDragAnchor(); return; }
+    const rec = steeringTouchRec();
+    if (!rec) { hideDragAnchor(); return; }
+    const mark = dragMarkEl();
+    if (!mark) return;
+    mark.style.left = rec.anchorX + "px";
+    mark.style.top = rec.anchorY + "px";
+    const dx = rec.x - rec.anchorX;
+    const adx = Math.abs(dx);
+    const range = touchRangePx();
+    const offPx = adx <= TOUCH_DEAD_PX ? 0 : Math.sign(dx) * Math.min(adx - TOUCH_DEAD_PX, range);
+    const dot = dragDot(mark);
+    if (dot && dot.style) dot.style.transform = "translateX(" + offPx + "px)";
+    mark.classList.add("on");
   }
 
   function onTouchStart(e) {
@@ -1162,8 +1255,9 @@ const Input = (function () {
     noteInputSource("touch");
     e.preventDefault();
     for (const t of e.changedTouches) {
-      touches.set(t.identifier, { anchorX: t.clientX, x: t.clientX, seq: ++touchSeq });
-      showDragAnchor(t.clientX);
+      touches.set(t.identifier, {
+        anchorX: t.clientX, anchorY: t.clientY, x: t.clientX, seq: ++touchSeq,
+      });
     }
     recomputeTouchSteer();
   }
@@ -1183,7 +1277,6 @@ const Input = (function () {
     for (const t of e.changedTouches) {
       touches.delete(t.identifier);
     }
-    if (!touches.size) hideDragAnchor();
     recomputeTouchSteer();
   }
 
@@ -1404,6 +1497,10 @@ const Input = (function () {
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
       padIsWheel = false;
+      // A missing browser snapshot is not a release. Reseed on recovery:
+      // even a button pressed during the gap needs
+      // a witnessed release before it can trigger an action.
+      if (padPrevKey !== null) padSnapshotLost = true;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padPrevKey = null;
       padPrevByIndex.clear();
@@ -1417,11 +1514,12 @@ const Input = (function () {
     // a fresh press (a boost, a shift, a camera cut). Reseed from the new
     // pad. Not on first connection: the press that woke a pad is a real one.
     const key = padKey(pad, Array.prototype.indexOf.call(pads, pad));
-    if (padPrevKey !== null && key !== padPrevKey) {
+    if (padSnapshotLost || (padPrevKey !== null && key !== padPrevKey)) {
       const nb = pad.buttons ? pad.buttons.length : 0;
       padPrevButtons.length = nb;
       for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
     }
+    padSnapshotLost = false;
     padPrevKey = key;
     const profiles = ensureDeviceProfiles();
     if (profiles) profiles.activate(pad);
@@ -1465,9 +1563,12 @@ const Input = (function () {
     const dpad = padDpadSteer(pad);
     padSteerAnalog = Math.abs(stick) > 0.001;
     padSteer = padSteerAnalog ? stick : dpad;
+    // Capture/menu presses still enter padPrevButtons below, but cannot arm a
+    // driving toggle — even if their callback closes that owner this poll.
+    const padOwnsDrive = !axisCaptureCb && !padCaptureCb && !(window.UiLayers && window.UiLayers.navOpen());
     // pedals: analog triggers, a wheel's pedal AXES, or the A/B face buttons.
     if (throttleIsToggle()) {
-      if (padActEdge(pad, "throttle")) padThrottleToggle = !padThrottleToggle;
+      if (padOwnsDrive && padActEdge(pad, "throttle")) padThrottleToggle = !padThrottleToggle;
       padThrottle = padThrottleToggle;
       padThrottleVal = padThrottleToggle ? 1 : 0;
     } else {
@@ -1538,7 +1639,7 @@ const Input = (function () {
         if (padActEdge(pad, "radio")) radioPressed = true;
         if (padActEdge(pad, "mirror")) mirrorPressed = true;
         if (lookBackIsToggle()) {
-          if (padActEdge(pad, "lookBack")) padLookBackToggle = !padLookBackToggle;
+          if (padOwnsDrive && padActEdge(pad, "lookBack")) padLookBackToggle = !padLookBackToggle;
           padLookBack = padLookBackToggle;
         } else padLookBack = padActVal(pad, "lookBack") > 0.5;
       }
@@ -1828,6 +1929,9 @@ const Input = (function () {
   function setTouchRange(frac) {
     if (typeof frac === "number" && isFinite(frac)) touchRangeFrac = clamp(frac, 0.06, 0.24);
   }
+  function setTouchSpeedMix(v) {
+    if (typeof v === "number" && isFinite(v)) touchSpeedMix = clamp(v, 0, 1);
+  }
   function setAnalogTrim(src, t) {
     if (!(src in analogTrim)) return;
     if (typeof t === "number" && isFinite(t)) analogTrim[src] = clamp(t, 0.4, 2.2);
@@ -2080,8 +2184,10 @@ const Input = (function () {
     // has no console, so this puts that answer ON SCREEN. Opt-in only:
     // ?inputdebug=1 in the URL, or localStorage apex26.inputDebug = "1".
     try {
-      const want = /[?&]inputdebug=1/.test(location.search) ||
-        localStorage.getItem("apex26.inputDebug") === "1";
+      const want = typeof DevFlags !== "undefined"
+        ? !!DevFlags.get("inputdebug")
+        : (/[?&]inputdebug=1/.test(location.search) ||
+          localStorage.getItem("apex26.inputDebug") === "1");
       if (want) {
         const d = document.createElement("div");
         d.id = "input-debug";
@@ -2265,6 +2371,8 @@ const Input = (function () {
       touchActive,
       touchRangePx: touchRangePx(),
       touchRangeFrac,
+      touchSpeedMix,
+      touchSpeedScale: touchSpeedScale(),
       dragMinCutoff,
       analogTrim: Object.assign({}, analogTrim),
       analogSpeedMix,
@@ -2334,6 +2442,7 @@ const Input = (function () {
     setTiltSmoothing,
     setTiltDeadzone,
     setTouchRange,
+    setTouchSpeedMix,
     setDragSmoothing,
     setAnalogTrim,
     setAnalogSpeedMix,
@@ -2360,7 +2469,7 @@ const Input = (function () {
     controllerProfile: () => deviceProfiles ? deviceProfiles.current() : null,
     getControllerProfiles: () => ensureDeviceProfiles() ? deviceProfiles.data() : { v: 1, devices: [] },
     setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
-    resetControllerProfile: () => deviceProfiles ? deviceProfiles.reset() : false,
+    resetControllerProfile,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, clearPadRest, padRestStore,
     touchControlsNeeded,
     pickPad,

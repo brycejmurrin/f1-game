@@ -312,35 +312,11 @@ if [ "${APEX_RUN_CANCEL_OK:-}" != 1 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_
   fi
 fi
 
-# --- the queue hold on git push (AGENTS.md rule 4) -------------------------------
-# Prose until 2026-10-15: "if queue-depth.mjs says hold, commit locally only".
-# Enforced here on every `git … push` in the command (the same shape the
-# fallback regex above reads; heredoc bodies and quoted text are not commands).
-# The gauge is skipped when it cannot answer (no token, API down: rc 3 — the
-# push proceeds with a note), in a checkout whose origin is not this repository
-# (the hook's own tests), under APEX_GUARD_PROBE, and with APEX_PUSH_HOLD=0 in
-# the environment or the command, which is the override for "the user asked
-# for this push now". A hold reads as exit 1 and the push is refused with the
-# gauge's own line; retry when `node tools/ci/queue-depth.mjs` says ok.
-# A push that starts NO CI is not held (#2182, 2026-10-15): the gauge gets the
-# command (`--push`), resolves every destination branch, and answers
-# `= queue skip …` (exit 0) when each has no open PR or a draft PR without
-# `run-ci` — a handoff push before a long wait (rule 12) must not be lost to a
-# jammed queue. An unresolvable target or a failed PR lookup measures as before.
-PUSH_RE="(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"
-if [ -z "${APEX_GUARD_PROBE:-}" ] && [ "${APEX_PUSH_HOLD:-}" != 0 ] && ! printf '%s' "$SCAN" | grep -Eq 'APEX_PUSH_HOLD=0' \
-   && printf '%s' "$SCAN" | grep -Eq "$PUSH_RE" \
-   && [ -f "$ROOT/tools/ci/queue-depth.mjs" ] \
-   && git -C "$ROOT" remote get-url origin 2>/dev/null | grep -q 'f1-game'; then
-  QLINE=$(cd "$ROOT" && timeout -k 5 "${APEX_QUEUE_TIMEOUT:-90}" node tools/ci/queue-depth.mjs --push "$SCAN" 2>/dev/null); QRC=$?
-  case "$QRC" in
-    0) case "$QLINE" in "= queue skip"*) echo "bash-guard: $QLINE" >&2 ;; esac ;;
-    1) echo "BLOCKED: ${QLINE:-= queue hold}" >&2
-       echo "AGENTS.md rule 4: a push now only adds queue wait for every session. Commit locally; push when 'node tools/ci/queue-depth.mjs' says ok (poll it, do not loop on pushes). APEX_PUSH_HOLD=0 git push … overrides when the user asked for this push now." >&2
-       exit 2 ;;
-    *) echo "bash-guard: queue-depth could not answer (rc $QRC: no token, API unreachable or timed out) — the push is not held." >&2 ;;
-  esac
-fi
+# No queue hold on git push (retired 2026-10-16, the CI/CD review #2333 finding 7).
+# The hold held pushes for hours on 2026-10-15 and then released ~30 sessions
+# in one minute; a held push runs later and costs the same slot-minutes, and
+# the pool ran at 39 of 40 slots all day regardless. queue-depth.mjs stays an
+# informational gauge.
 
 # --- guards before git commit ---------------------------------------------------
 # WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
@@ -520,18 +496,20 @@ EOF
     echo "bash-guard probe: commit code paths=${C_PATHS:-}" >&2; exit 0
   fi
   # Size ratchets first (tools/check/ratchets.mjs --auto-raise): growth of up
-  # to 40 lines in a ratcheted file raises its ceiling and STAGES
-  # tests/data/ratchets.json, so the raise is in this commit's diff instead of
-  # a hand edit plus a second guard run. Bigger growth still blocks below.
+  # to 40 lines in a ratcheted file raises its ceiling and STAGES it — on a
+  # topic branch as a delta in tests/data/ratchets.d/<branch>.json (only this
+  # branch touches it, so two PRs growing one module never conflict, #2291),
+  # else tests/data/ratchets.json — so the raise is in this commit's diff
+  # instead of a hand edit plus a second guard run. Bigger growth still blocks.
   RLOG="$ROOT/artifacts/pre-commit-ratchets.log"
   if (cd "$ROOT" && node tools/check/ratchets.mjs --auto-raise >"$RLOG" 2>&1); then
     if grep -q '^RAISED\|^LOWERED' "$RLOG"; then
-      (cd "$ROOT" && git add tests/data/ratchets.json) || true
+      (cd "$ROOT" && git add -A -- tests/data/ratchets.json tests/data/ratchets.d) || true
       grep '^RAISED\|^LOWERED' "$RLOG" >&2
       # A pathspec commit (--only, git's default with paths) commits ONLY the
       # named paths, so the staged raise would be left behind.
-      if [ -n "$C_PATHS" ] && ! printf ' %s ' "$C_PATHS" | grep -q ' tests/data/ratchets.json \| tests/data/ \| tests/ \| \. '; then
-        echo "BLOCKED: the ratchet raise above is staged, but this pathspec commit carries only the paths it names. Add tests/data/ratchets.json to the command (or commit without a pathspec)." >&2
+      if [ -n "$C_PATHS" ] && ! printf ' %s ' "$C_PATHS" | grep -q ' tests/data/ratchets.json \| tests/data/ratchets.d\(/[^ ]*\)\? \| tests/data/ \| tests/ \| \. '; then
+        echo "BLOCKED: the ratchet raise above is staged, but this pathspec commit carries only the paths it names. Add tests/data/ratchets.d (and tests/data/ratchets.json) to the command (or commit without a pathspec)." >&2
         exit 2
       fi
     fi

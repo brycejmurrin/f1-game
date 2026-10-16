@@ -771,6 +771,24 @@ test("carData drops rows with unparseable dates (same rule as locationData)", as
   assert.equal(loc.length, 2, "locationData already dropped the bad date");
 });
 
+test("telemetry and locations sort valid timestamps and keep the first valid duplicate", async () => {
+  const at = (s) => new Date(Date.parse("2026-07-26T14:00:00Z") + s * 1000).toISOString();
+  const rows = [{ date: at(2), speed: 72, x: 30, y: 40 }, { date: "bad", speed: 999, x: 1, y: 2 },
+    { date: at(0), speed: 36, x: 10, y: 20 }, { date: at(1), speed: 54, x: 20, y: 30 },
+    { date: at(1), speed: 999, x: 999, y: 999 }];
+  const context = vm.createContext({ fetch: async () => ({ ok: true, status: 200,
+    headers: { get: () => null }, json: async () => rows }), AbortController, Date, setTimeout, clearTimeout });
+  seedLog(context);
+  const api = vm.runInContext(apiSource + ";F1API", context);
+  const car = await api.carData(1, 44), loc = await api.locationData(1, 44);
+  assert.deepEqual(Array.from(car, (r) => r.t), [0, 1, 2]);
+  assert.deepEqual(Array.from(car, (r) => r.speed), [36, 54, 72]);
+  assert.deepEqual(Array.from(loc, (r) => r.x), [10, 20, 30]);
+  let distance = 0;
+  for (let i = 1; i < car.length; i++) distance += car[i].speed / 3.6 * (car[i].t - car[i - 1].t);
+  assert.equal(distance, 35, "integration advances along the sorted clock");
+});
+
 test("export gather waits 90 s when fastestLap returns HTTP 429", async () => {
   const exportSrc = await readFile(new URL("../../js/data/export.js", import.meta.url), "utf8");
   const sleeps = [];
@@ -796,7 +814,8 @@ test("export gather waits 90 s when fastestLap returns HTTP 429", async () => {
       },
       locationData: async () => {
         const pts = [];
-        for (let i = 0; i < 40; i++) pts.push({ x: i, y: i * 2, date: Date.parse("2026-07-26T14:00:00.000Z") + i * 100 });
+        // This successful candidate covers its declared 80 s lap, including both boundaries.
+        for (let i = 0; i < 40; i++) pts.push({ x: i, y: i * 2, date: Date.parse("2026-07-26T14:00:00.000Z") + i * 80000 / 39 });
         return pts;
       },
     },
@@ -869,7 +888,10 @@ test("export Download: the ZIP holds the JSON then one map per circuit, with CRC
       sessionsForMeeting: async () => [{ sessionKey: 9, name: "Qualifying" }],
       sessionDrivers: async () => [{ num: 16, code: "LEC" }],
       fastestLap: async () => ({ dateStart: "2026-07-26T14:00:00.000Z", lapDuration: 80 }),
-      locationData: async () => Array.from({ length: 40 }, (_, i) => ({ x: i, y: i * 2, date: 0 })),
+      // ZIP coverage needs complete candidate laps; epoch-zero dates are outside this lap.
+      locationData: async () => Array.from({ length: 40 }, (_, i) => ({
+        x: i, y: i * 2, date: Date.parse("2026-07-26T14:00:00.000Z") + i * 80000 / 39
+      })),
     },
   });
   vm.runInContext(exportSrc + ";globalThis.DataExport=DataExport", context);

@@ -3,14 +3,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { createHash } from "node:crypto";
+import { createHash, webcrypto } from "node:crypto";
 
-const fixtureCrypto = { subtle: { digest: async (_algorithm, bytes) => {
-  const hash = createHash("sha256").update(Buffer.from(bytes)).digest();
-  return hash.buffer.slice(hash.byteOffset, hash.byteOffset + hash.byteLength);
-} } };
-const packManifest = (clips, bytes) => ({ clips,
-  binarySha256: createHash("sha256").update(Buffer.alloc(bytes)).digest("hex") });
+const binaryIntegrity = bytes => ({ bytes, sha256: createHash("sha256").update(new Uint8Array(bytes)).digest("hex") });
 
 function fixture() {
   const ctx = vm.createContext({});
@@ -69,18 +64,18 @@ test("a failed still-there decode retains the initial heard side for clear", () 
 test("real VoicePack decode rejection restores the spotter's pending warning", async () => {
   const starts = [];
   const timers = new Map(); let timerId = 0;
-  const ctx = vm.createContext({ Promise, Map, Set, crypto: fixtureCrypto,
+  const ctx = vm.createContext({ Promise, Map, Set, crypto: webcrypto,
     setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); },
     Log: { info() {} },
     fetch: async (url) => ({ ok: true,
-      json: async () => packManifest({ "car left": [0, 1, 0.5], clear: [1, 1, 0.5] }, 2),
+      json: async () => ({ binary: binaryIntegrity(2), clips: { "car left": [0, 1, 0.5], clear: [1, 1, 0.5] } }),
       arrayBuffer: async () => new ArrayBuffer(2) }),
     GameAudio: { now: () => 0, decodeClip: () => Promise.reject(new Error("context lost")),
       radioVoice: (...args) => { starts.push(args); return { end: 1, stop() {} }; } },
   });
   for (const file of ["js/audio/voice-pack.js", "js/race/spotter.js"])
     vm.runInContext(fs.readFileSync(new URL(`../../${file}`, import.meta.url), "utf8"), ctx);
-  const pack = ctx.VoicePack.create({}); pack.ensure("george");
+  const pack = ctx.VoicePack.create({}); await pack.load("george");
   const drain = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
   await drain(); assert.equal(pack.ready("george"), true);
   const player = { s: 100, x: 0, speed: 50 }, rival = { s: 100, x: -2 };
@@ -128,17 +123,17 @@ for (const pending of ["still there", "side change", "initial warning"]) {
 test("real VoicePack drops stale still-there audio but retains the heard warning for clear", async () => {
   const starts = [], decoders = [];
   const timers = new Map(); let timerId = 0;
-  const ctx = vm.createContext({ Promise, Map, Set, crypto: fixtureCrypto,
+  const ctx = vm.createContext({ Promise, Map, Set, crypto: webcrypto,
     setTimeout(fn) { timers.set(++timerId, fn); return timerId; }, clearTimeout(id) { timers.delete(id); },
     Log: { info() {} }, fetch: async () => ({ ok: true,
-      json: async () => packManifest({ "car left": [0, 1, 0.5], "still there": [1, 1, 0.5], clear: [2, 1, 0.5] }, 3),
+      json: async () => ({ binary: binaryIntegrity(3), clips: { "car left": [0, 1, 0.5], "still there": [1, 1, 0.5], clear: [2, 1, 0.5] } }),
       arrayBuffer: async () => new ArrayBuffer(3) }),
     GameAudio: { now: () => 0, decodeClip: () => new Promise(resolve => decoders.push(resolve)),
       radioVoice: () => { starts.push(true); return { end: 1, stop() {} }; } },
   });
   for (const file of ["js/audio/voice-pack.js", "js/race/spotter.js"])
     vm.runInContext(fs.readFileSync(new URL(`../../${file}`, import.meta.url), "utf8"), ctx);
-  const pack = ctx.VoicePack.create({}); pack.ensure("george");
+  const pack = ctx.VoicePack.create({}); await pack.load("george");
   const drain = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
   await drain(); assert.equal(pack.ready("george"), true);
   const player = { s: 100, x: 0, speed: 50 }, rival = { s: 100, x: -2 };

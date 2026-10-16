@@ -144,8 +144,11 @@ const XrSession = (function () {
     if (_startPromise) return _startPromise;
     if (_session) return Promise.resolve(_session);
     const generation = ++_generation;
-    _startPromise = startSession(generation).finally(() => { _startPromise = null; });
-    return _startPromise;
+    const pending = startSession(generation).finally(() => {
+      if (_startPromise === pending) _startPromise = null;
+    });
+    _startPromise = pending;
+    return pending;
   }
 
   async function startSession(generation) {
@@ -185,6 +188,7 @@ const XrSession = (function () {
           session = await navigator.xr.requestSession(MODE, sessionInit(false));
           preferGpu = false;
         } catch (e2) {
+          if (generation !== _generation) return null;
           _lastError = e2;
           emit("error", { error: e2, phase: "requestSession-fallback" });
           return null;
@@ -233,6 +237,7 @@ const XrSession = (function () {
         _baseRefSpace = base;
       }
       catch (e) {
+        if (_session !== session || generation !== _generation) return null;
         _lastError = e;
         await end();
         emit("error", { error: e, phase: "referenceSpace" });
@@ -248,10 +253,11 @@ const XrSession = (function () {
         await b.attachSession(session, { backend: _backend, preferWebgpu: preferGpu });
         if (_session !== session || generation !== _generation) {
           // An async renderer attachment can finish after the end event.
-          if (typeof b.detachSession === "function") b.detachSession();
+          if (!_session && typeof b.detachSession === "function") b.detachSession();
           return null;
         }
       } catch (e) {
+        if (_session !== session || generation !== _generation) return null;
         _lastError = e;
         await end();
         emit("error", { error: e, phase: "attachSession" });
@@ -388,6 +394,7 @@ const XrSession = (function () {
 
   async function end() {
     ++_generation; // also cancels a pending requestSession/reference/attach.
+    _startPromise = null; // a canceled request must not absorb the player's next ENTER tap
     const s = _session;
     if (!s) return;
     onSessionEnd({ target: s });
@@ -398,6 +405,7 @@ const XrSession = (function () {
     const s = _session;
     if (!s || (event && event.target && event.target !== s)) return;
     ++_generation;
+    _startPromise = null;
     if (_xrRequest !== null) {
       try { s.cancelAnimationFrame(_xrRequest); } catch (_) { /* already ended */ }
       _xrRequest = null;

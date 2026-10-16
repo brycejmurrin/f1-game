@@ -12,6 +12,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
+import { seedStore } from "../helpers/seed-store.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -142,3 +143,64 @@ test("radio focus native choice persists through lazy stub replacement and reloa
   assert.equal(reload.wired.get("as-focus").read(), 8);
   reload.wired.get("as-focus").write("9"); assert.equal(reload.data.radioFocusDb, 0);
 });
+
+for (const readyState of ["loading", "interactive", "complete"]) {
+  test(`lazy music controls initialize once with document ${readyState}`, async () => {
+    const listeners = new Map(), elements = new Map();
+    const inits = [];
+    let picks = 0, requests = 0;
+    for (const id of ["as-add", "as-file", "as-sp-save", "as-sp-id"]) {
+      elements.set(id, { value: "", bindings: 0, click() { picks++; },
+        addEventListener(type, fn) { this.bindings++; this[type] = fn; } });
+    }
+    const document = {
+      readyState,
+      getElementById: id => elements.get(id) || null,
+      addEventListener(type, fn, opts) {
+        const list = listeners.get(type) || [];
+        list.push({ fn, once: opts?.once }); listeners.set(type, list);
+      },
+    };
+    const emit = type => {
+      const list = listeners.get(type) || [];
+      listeners.set(type, list.filter(item => !item.once));
+      for (const { fn } of list) fn();
+    };
+    const context = vm.createContext({ document,
+      location: { origin: "https://game.test", pathname: "/", hostname: "game.test", search: "" },
+      localStorage: { getItem: () => null }, sessionStorage: { getItem: () => null },
+      fetch() { requests++; throw new Error("initialization must not contact Spotify"); },
+      setTimeout, clearTimeout, URL, URLSearchParams,
+    });
+    context.window = context;
+    seedLog(context); seedStore(context);
+    context.Log.info = (...args) => inits.push(args.join(" "));
+    vm.runInContext(read("js/audio/music-lib.js"), context);
+    vm.runInContext(read("js/audio/spotify.js"), context);
+    const add = elements.get("as-add"), file = elements.get("as-file");
+    const save = elements.get("as-sp-save");
+    if (readyState === "loading") {
+      assert.equal(add.onclick, undefined, "wait while DOM is being parsed");
+      assert.equal(save.bindings, 0);
+      document.readyState = "interactive";
+      emit("DOMContentLoaded");
+    }
+    await context.MusicLib.init();
+    assert.equal(typeof add.onclick, "function", "ADD is bound before window.load");
+    assert.equal(typeof file.onchange, "function", "file selection is bound before window.load");
+    assert.equal(save.bindings, 1, "Spotify settings bind without an account");
+    const firstAdd = add.onclick, firstChange = file.onchange;
+    add.onclick();
+    assert.equal(picks, 1, "ADD opens the file picker");
+    await context.MusicLib.init();
+    context.SpotifyMusic.openPanel(); context.SpotifyMusic.openPanel();
+    document.readyState = "complete";
+    emit("load"); emit("DOMContentLoaded");
+    await context.MusicLib.init();
+    assert.equal(add.onclick, firstAdd);
+    assert.equal(file.onchange, firstChange);
+    assert.equal(save.bindings, 1, "later load/settings opens do not duplicate listeners");
+    assert.equal(inits.filter(line => line.includes("SpotifyMusic.init")).length, 1);
+    assert.equal(requests, 0);
+  });
+}

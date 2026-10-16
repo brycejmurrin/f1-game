@@ -18,12 +18,12 @@ const { createGame, settle: vmSettle } = require(path.join(ROOT, "tools/lib/game
 const { install: installFakeAudio } = require("./fake-audio-vm.cjs");
 const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b/gm, "var");
 
-function boot(document) {
+function boot(document, extras = {}) {
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Float32Array, Float64Array, Uint8Array,
     isFinite, parseFloat, parseInt,
     Log: { info() {}, debug() {}, warn() {}, enabled() { return false; } },
-    document,
+    document, ...extras,
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
@@ -116,6 +116,63 @@ test("beginScrub is a no-op when netPlay is active", () => {
   for (let i = 0; i < R.HZ * 4; i++) api.sample(i / R.HZ, field);
   assert.equal(api.sample(1, field), false, "sampling off under netplay");
   assert.equal(api.beginScrub(), false);
+});
+
+test("instant replay cuts the drone tether on entry, explicit seeks, LAST and exit, but eases playback", () => {
+  const ctx = vm.createContext({ Math, Float32Array, Float64Array, Uint8Array,
+    Log: { info() {} }, Tracks: {
+      sample(track, s, out) {
+        out.p[0] = 0; out.p[1] = 0; out.p[2] = s;
+        out.t[0] = 0; out.t[1] = 0; out.t[2] = 1;
+        out.r[0] = 1; out.r[1] = 0; out.r[2] = 0;
+      }, curvature: () => 0,
+    } });
+  for (const file of ["js/core/mat4.js", "js/camera/extra-rigs.js", "js/camera/replay-buf.js"])
+    vm.runInContext(src(file), ctx, { filename: file });
+  const { ExtraRigs, ReplayBuf: R } = vm.runInContext("({ExtraRigs, ReplayBuf})", ctx);
+  const c = { s: 0, x: 0, px: 0, py: 0, pz: 0, head: 0, speed: 60 };
+  const G = { cars: [c], track: { total: 10000 }, raceT: 10 };
+  const solve = (snap = false) => {
+    const eye = [], tgt = [];
+    ExtraRigs.solve("drone", G.track, c.s, c.x, c.speed, 0,
+      { dt: 1 / 60, carPos: [c.px, c.pz], carHead: c.head, snap }, eye, tgt);
+    return { eye, tgt };
+  };
+  let cuts = 0;
+  G.snapGameCam = () => { cuts++; ExtraRigs.reset("drone"); solve(true); };
+  const rb = R.create(G);
+  for (let i = 0; i <= 300; i++) { c.s = c.pz = i * 2; rb.sample(i / 30, G.cars); }
+  solve();   // seed the tether on the live car at z=600
+  assert.equal(rb.beginScrub(false), true);
+  assert.equal(c.pz, 300);
+  assert.equal(solve().eye[2], 289, "entry cuts to the replay's opening pose");
+  rb.apply(0);
+  assert.equal(solve().eye[2], -11, "explicit public apply clears the old world-space tether");
+  rb.tickScrub(1 / 60);
+  const moving = solve().eye[2];
+  assert.ok(moving > -11 && moving < c.pz - 11, "continuous playback still eases toward its moving ideal");
+  assert.equal(cuts, 2, "ordinary playback does not reset any camera histories");
+  rb.pushTag("contact", 8, 0);
+  rb.jumpLastTag();
+  assert.equal(solve().eye[2], 469, "LAST is an explicit timeline cut");
+  assert.equal(rb.endScrub(), true);
+  assert.equal(c.pz, 600);
+  assert.equal(solve().eye[2], 589, "exit restores the live timeline's tether");
+  assert.equal(cuts, 4);
+});
+
+test("replay seeks preserve photo and debug-camera ownership", () => {
+  for (const owner of [{ photoMode: true }, { dbgCam: { _resultsCam: true } }, { dbgCam: { director: true } }]) {
+    const R = boot(), field = cars(1);
+    let cuts = 0;
+    const G = { cars: field, ...owner, snapGameCam() { cuts++; } };
+    const api = R.create(G);
+    api.sample(0, field); field[0].s += 10; api.sample(1, field);
+    assert.equal(api.beginScrub(false), true);
+    api.apply(0); api.tickScrub(0.1); api.endScrub();
+    assert.equal(cuts, 0, "an owning camera retains its temporal state");
+    if (owner.dbgCam) assert.equal(G.dbgCam, owner.dbgCam);
+  }
 });
 
 test("injected pose ownership denies sampling, pause-card offering and scrub entry even with a populated ring", () => {
@@ -352,6 +409,23 @@ test("a red-flag re-grid (same clock, same cars) is a timeline break: two segmen
   assert.ok(Math.abs(api.at(100 + dt / 2).cars[0].px - 0.5) < 1e-4, "a fresh ring starts unbroken");
 });
 
+test("a timeline discard does not re-tag cars that were already retired (BUGS M19)", () => {
+  const R = boot();
+  const field = cars(2);
+  const api = R.create({ cars: field, netPlay: { active: () => false } });
+  api.reset(field);
+  for (let i = 0; i < R.HZ * 2; i++) api.sample(i / R.HZ, field);
+  field[1].retired = true;
+  api.sample(3, field);
+  assert.equal(api.lastTag().kind, "retirement");
+  api.sample(1, field);   // a rewind: discardTimeline() clears the history
+  api.sample(1.5, field);
+  assert.equal(api.lastTag(), null, "no fresh retirement for a car already out");
+  field[1].retired = false; api.sample(2, field);
+  field[1].retired = true; api.sample(2.5, field);
+  assert.equal(api.lastTag().kind, "retirement", "a real new retirement still tags");
+});
+
 test("one car's teleport (RECOVER / rescue) snaps without clearing; fast or stalled driving still blends", () => {
   // The heuristic is per car and render-only: a RECOVER after a crash must not
   // wipe the crash from the ring, and a frame-loop stall at speed must not read
@@ -564,4 +638,114 @@ test("css/dialogs.css gives #pm-replay-dock safe-area, wrapping and a viewport c
   assert.match(body, /max-width:\s*calc\(100vw - var\(--safe-l\) - var\(--safe-r\)\)/);
   assert.doesNotMatch(body, /#fff|rgba\(|monospace/, "tokens, not hard-coded colours or fonts");
   assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "js/camera/replay-buf.js"), "utf8"), /style\.cssText/);
+});
+
+for (const outcome of ["success", "error", "cancel"]) test("contact sheet restores scrub and camera on " + outcome, async () => {
+  let api, release, active = 0, maximum = 0; const times = [], resets = [];
+  const R = boot(undefined, { CamFeel: { resetFollow() { resets.push("follow"); }, resetFreeLook() {}, resetLatch() {} }, GameCams: { resetSmoothing() { resets.push("smooth"); } },
+    PhotoStudio: { async contactSheet(ts, seek, cancelled) {
+      for (const t of ts) { active++; maximum = Math.max(maximum, active); seek(t); times.push(t); api.tickScrub(1); active--; }
+      if (outcome === "cancel") { api.cancelContactSheet(); assert.equal(cancelled(), true); throw new Error("cancelled"); }
+      if (outcome === "error") throw new Error("readback failed"); return true;
+    } } });
+  const field = cars(1), G = { cars: field, player: field[0], paused: true, camMode: 3, dbgCam: { eye: [1, 2, 3] }, photoCam: { pos: [4, 5, 6], yaw: 1, pitch: 2, fov: 50 } };
+  api = R.create(G); api.reset(field);
+  for (let t = 0; t <= 4; t++) { field[0].px = t; api.sample(t, field); }
+  api.pushTag("spin", 2, 0); assert.equal(api.beginScrub(false), true); api.apply(3);
+  const prior = JSON.parse(JSON.stringify(api.status()));
+  assert.equal(await api.contactSheet(0), outcome === "success");
+  assert.deepEqual(times, [1, 2, 3]); assert.equal(maximum, 1);
+  assert.equal(api.status().scrubT, prior.scrubT); assert.equal(api.status().scrubPlaying, prior.scrubPlaying); assert.equal(api.status().scrubRate, prior.scrubRate);
+  assert.equal(G.paused, true); assert.equal(G.camMode, 3); assert.deepEqual(G.dbgCam.eye, [1, 2, 3]); assert.deepEqual(G.photoCam.pos, [4, 5, 6]);
+  assert.equal(field[0].px, 3); assert.equal(resets.filter((s) => s === "smooth").length, 4);
+});
+
+for (const change of ["mode", "debug identity", "debug pose", "photo pose", "follow", "scrub time", "photo session"]) test("pending contact sheet respects newer " + change + " ownership", async () => {
+  let resolve, check, lateSeek; const R = boot(undefined, { PhotoStudio: { contactSheet(_times, seek, cancelled) {
+    seek(1); check = cancelled; lateSeek = seek; return new Promise((r) => { resolve = r; });
+  } } });
+  const field = cars(2), G = { cars: field, player: field[0], paused: true, camMode: 3, dbgCam: { eye: [1, 2, 3], target: [4, 5, 6], fov: 60 }, photoMode: false,
+    photoCam: { pos: [4, 5, 6], yaw: 1, pitch: 2, fov: 50 } };
+  const api = R.create(G); api.reset(field);
+  for (let t = 0; t <= 4; t++) { field[0].px = t; api.sample(t, field); }
+  api.pushTag("spin", 2, 0); api.beginScrub(false); api.apply(3);
+  const pending = api.contactSheet(0);
+  if (change === "mode") G.camMode = 7;
+  if (change === "debug identity") G.dbgCam = { eye: [9, 9, 9] };
+  if (change === "debug pose") G.dbgCam.eye[0] = 9;
+  if (change === "photo pose") G.photoCam.pos[0] = 9;
+  if (change === "follow") G.player = field[1];
+  if (change === "scrub time") api.apply(4);
+  if (change === "photo session") G.photoMode = true;
+  const expected = JSON.stringify([G.camMode, G.dbgCam, G.photoCam, G.player, api.status().scrubT]);
+  assert.equal(check(), true); assert.throws(() => lateSeek(2), /ownership changed/);
+  resolve(true); assert.equal(await pending, false);
+  assert.equal(JSON.stringify([G.camMode, G.dbgCam, G.photoCam, G.player, api.status().scrubT]), expected, "finally preserves newer owner and scrub state");
+});
+
+test("obsolete contact sheet cannot clear a reopened scrub's new capture busy state", async () => {
+  const jobs = []; const R = boot(undefined, { PhotoStudio: { contactSheet(_times, seek, cancelled) {
+    seek(1); return new Promise((resolve) => jobs.push({ resolve, cancelled }));
+  } } });
+  const field = cars(1), G = { cars: field, player: field[0], paused: true, camMode: 3, dbgCam: null };
+  const api = R.create(G); api.reset(field);
+  for (let t = 0; t <= 4; t++) { field[0].px = t; api.sample(t, field); }
+  api.pushTag("spin", 2, 0); api.beginScrub(false); api.apply(3);
+  const old = api.contactSheet(0); api.endScrub(); assert.equal(jobs[0].cancelled(), true);
+  api.beginScrub(false); api.apply(3); const current = api.contactSheet(0);
+  assert.equal(jobs.length, 2, "invalidating old capture releases busy immediately");
+  jobs[0].resolve(true); assert.equal(await old, false);
+  assert.equal(await api.contactSheet(0), false, "old finally cannot unlock current pending capture");
+  assert.equal(jobs[1].cancelled(), false);
+  jobs[1].resolve(true); assert.equal(await current, true); assert.equal(api.status().scrubT, 3);
+});
+
+test("contact sheet allows photo renderer to rebuild an unchanged debug pose", async () => {
+  let resolve, cancelled; const R = boot(undefined, { PhotoStudio: { contactSheet(_ts, seek, check) { seek(1); cancelled = check; return new Promise((r) => { resolve = r; }); } } });
+  const field = cars(1), G = { cars: field, player: field[0], paused: true, camMode: 3, photoMode: true, dbgCam: { eye: [1, 2, 3], target: [4, 5, 6], fov: 60 }, photoCam: { pos: [1, 2, 3], yaw: 0, pitch: 0, fov: 60 } };
+  const api = R.create(G); api.reset(field); for (let t = 0; t <= 4; t++) api.sample(t, field);
+  api.pushTag("spin", 2, 0); api.beginScrub(false); api.apply(3);
+  const pending = api.contactSheet(0); G.dbgCam = { ...G.dbgCam, eye: G.dbgCam.eye.slice(), target: G.dbgCam.target.slice() };
+  assert.equal(cancelled(), false); resolve(true); assert.equal(await pending, true); assert.equal(api.status().scrubT, 3);
+});
+
+test("pending contact sheet respects same-open Studio session generation replacement", async () => {
+  let resolve, cancelled; const studio = { open: true, generation: 1 };
+  const R = boot(undefined, { PhotoStudio: { state: () => studio, contactSheet(_ts, seek, check) { seek(1); cancelled = check; return new Promise((r) => { resolve = r; }); } } });
+  const field = cars(1), G = { cars: field, player: field[0], paused: true, camMode: 3, dbgCam: null };
+  const api = R.create(G); api.reset(field); for (let t = 0; t <= 4; t++) api.sample(t, field);
+  api.pushTag("spin", 2, 0); api.beginScrub(false); api.apply(3);
+  const pending = api.contactSheet(0); studio.generation = 2;
+  assert.equal(cancelled(), true); resolve(true); assert.equal(await pending, false);
+  assert.equal(api.status().scrubT, 1, "new Studio session cannot be overwritten by old capture restore");
+});
+
+test("frame controls use adjacent recorded samples across gaps, discontinuities and a wrapped ring", () => {
+  let cuts = 0;
+  const R = boot(undefined, { GameCams: { resetSmoothing() { cuts++; } }, CamFeel: { resetFollow() {} } });
+  const field = cars(1), G = { cars: field, raceT: 30, paused: true, netPlay: { active: () => false } };
+  const api = R.create(G);
+  for (let i = 0; i < R.MAX_FRAMES + 10; i++) {
+    field[0].px = i;
+    if (i === R.MAX_FRAMES + 7) { api.breakTimeline(); field[0].px = 2000; }
+    api.sample(i * .05, field);
+  }
+  G.raceT = (R.MAX_FRAMES + 9) * .05;
+  const before = { ...field[0] };
+  assert.equal(api.beginScrub(false), true);
+  const w = api.window();
+  api.apply(w.t1);
+  assert.equal(api.stepFrame(1), false, "end is clamped; no fabricated future frame");
+  assert.equal(api.status().scrubPlaying, false);
+  assert.equal(api.stepFrame(-1), true);
+  assert.ok(Math.abs(api.status().scrubT - (w.t1 - .05)) < 1e-9);
+  api.apply((R.MAX_FRAMES + 6) * .05);
+  assert.equal(api.stepFrame(1), true);
+  assert.equal(field[0].px, 2000, "timeline break picks the exact recorded new pose");
+  api.apply(w.t0);
+  assert.equal(api.stepFrame(-1), false, "wrapped head is the beginning, not a modulo seek");
+  assert.equal(api.stepFrame(1), true);
+  assert.ok(cuts >= 3);
+  api.endScrub();
+  assert.deepEqual(field[0], before, "live pose and absent interpolation fields are restored exactly");
 });

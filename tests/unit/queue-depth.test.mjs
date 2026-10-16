@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   LINUX_SLOTS, LINUX_HOLD, MACOS_SLOTS, QUEUED_HOLD, MAX_RUNS, DEFAULT_OUT,
-  isMac, countJobs, evaluate, reportLine, measure, pushTargets, pushStartsCi, pushVerdict,
+  isMac, countJobs, evaluate, reportLine, measure, pushTargets, pushStartsCi, pushVerdict, waitForOk, HYSTERESIS_MS,
 } from "../../tools/ci/queue-depth.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -35,7 +35,7 @@ test("jobs split by runner label; completed and environment-waiting jobs hold no
     job("in_progress"), job("queued"), job("pending"), job("requested"), job("completed"), job("waiting"),
     job("in_progress", "macos-latest"), job("queued", "macos-14"), null,
   ]);
-  assert.deepEqual(c, { linux: { running: 1, queued: 3, oldestQueuedAt: null }, macos: { running: 1, queued: 1, oldestQueuedAt: null } });
+  assert.deepEqual(c, { linux: { running: 1, queued: 2, oldestQueuedAt: null }, macos: { running: 1, queued: 1, oldestQueuedAt: null }, laneWaiting: 1 });
 });
 
 test("ok under every threshold; the line names jobs in flight, queued and macOS", () => {
@@ -162,7 +162,7 @@ test("#2182: pushStartsCi — only a ready PR or a draft labelled run-ci starts 
   assert.match(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [] }])).why, /#7 is a draft without run-ci/);
   assert.equal(pushStartsCi("cursor/x", pulls([{ number: 7, draft: true, labels: [{ name: "run-ci" }] }])).ci, true);
   assert.equal(pushStartsCi("cursor/x", pulls([{ number: 8, draft: false, labels: [] }])).ci, true);
-  assert.equal(pushStartsCi("claude/f1-game-project-26h3ng", () => assert.fail("no lookup")).ci, true, "the deploy branch always runs ci.yml");
+  assert.equal(pushStartsCi("claude/f1-game-project-26h3ng", () => assert.fail("no lookup")).ci, true, "the deploy branch always starts a run (pages.yml, the train)");
   assert.equal(pushStartsCi("cursor/x", () => ({ error: "HTTP 502" })).ci, null, "a failed lookup is unknown");
   // the CLI's decision over every target
   const noPr = pulls([]);
@@ -216,9 +216,69 @@ test("#2266: running, queued and the oldest-queued age are reported; a starved q
   assert.match(reportLine(mac), /; 5 Linux running\)$/);
 });
 
-test("#2266: a run in status `waiting` is listed too (its pending jobs are queued work)", () => {
-  const f = fakeApi({ waiting: [{ id: 77, status: "waiting" }] }, () => many(3, "pending"));
+test("#2266: a run in status `waiting` is listed too (its queued jobs count)", () => {
+  const f = fakeApi({ waiting: [{ id: 77, status: "waiting" }] }, () => many(3, "queued"));
   const v = measure({ request: f.request });
   assert.ok(f.calls.includes("actions/runs?status=waiting&per_page=100&page=1"));
   assert.equal(v.queued, 3);
+});
+
+test("an old queued job with half the slots running is a released lane leg, not starvation", () => {
+  // 2026-10-15 23:27Z: one leg queued for seconds after 113 min `pending` read as 115 min starved, 36 running.
+  const now = Date.parse("2026-10-15T23:27:00Z");
+  const leg = { ...job("queued"), created_at: new Date(now - 115 * 60e3).toISOString() };
+  const v = evaluate(countJobs([...many(36, "in_progress"), leg]), { now });
+  assert.equal(v.verdict, "ok", v.reasons.join("|"));
+  assert.equal(v.linux.oldestQueuedMin, 115, "the age is still reported");
+});
+
+test("a `pending` job waits in a CI lane, not for a runner: counted apart, never a hold", () => {
+  // 2026-10-15 22:23Z: 30 lane-waiting legs since 20:42 read as starved runners while 7 of 40 ran.
+  const old = Date.parse("2026-10-15T20:42:00Z"), now = Date.parse("2026-10-15T22:23:00Z");
+  const lane = Array.from({ length: 30 }, () => ({ status: "pending", labels: ["ubuntu-latest"], created_at: new Date(old).toISOString() }));
+  const v = evaluate(countJobs([...lane, ...many(7, "in_progress")]), { now });
+  assert.equal(v.verdict, "ok");
+  assert.equal(v.queued, 0);
+  assert.equal(v.laneWaiting, 30);
+  assert.equal(v.linux.oldestQueuedMin, null, "a lane wait is not a runner wait");
+  assert.equal(reportLine(v), "= queue ok (7 Linux jobs in flight / 40, 0 queued, 0 macOS / 5; 7 Linux running, 30 waiting in CI lanes)");
+});
+
+// ── #2383: --wait, hysteresis and the trend ─────────────────────────────────
+const gauge = (inFlight, queued) => {
+  const v = evaluate(countJobs([...many(Math.max(0, inFlight - queued), "in_progress"), ...many(queued, "queued")]), { runsExamined: 1, runsLive: 1, now: 0 });
+  return { ...v, line: reportLine(v) };
+};
+const clock = () => { let t = 0; return { now: () => t, wait: async (ms) => { t += ms; } }; };
+
+test("--wait: holds until ok has held for 2 min, then exits 0 with the trend", async () => {
+  const c = clock(), seq = [gauge(134, 98), gauge(112, 60), gauge(30, 2), gauge(28, 1), gauge(25, 0), gauge(20, 0), gauge(18, 0), gauge(17, 0)];
+  const lines = [];
+  const w = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => seq.shift(), ...c, report: (l) => lines.push(l) });
+  assert.equal(w.code, 0);
+  assert.deepEqual(w.trend.inFlight, [134, 112, 30, 28, 25, 20, 18]);
+  assert.ok(lines[0].includes("hold") || lines[0].startsWith("= queue"), lines[0]);
+  assert.match(lines.at(-1), /^= queue ok .*trend in-flight 134→112→30→28→25→20→18, queued 98→60→2→1→0→0→0/);
+  assert.ok(lines.some((l) => l.startsWith("= queue settling")), "one ok poll is not a go");
+  assert.equal(HYSTERESIS_MS, 120000);
+});
+
+test("--wait: a hold between oks resets the 2 min clock", async () => {
+  const c = clock(), seq = [gauge(10, 0), gauge(10, 0), gauge(134, 98), gauge(10, 0), gauge(10, 0), gauge(10, 0), gauge(10, 0), gauge(10, 0)];
+  const w = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => seq.shift(), ...c });
+  assert.equal(w.code, 0);
+  assert.equal(w.trend.inFlight.length, 8, "the early oks did not count once the hold interrupted them");
+});
+
+test("--wait: 124 on timeout with the last trend; an API error retries, three in a row exit 3", async () => {
+  const c = clock();
+  const lines = [];
+  const w = await waitForOk({ minutes: 2, intervalS: 30, measureFn: () => gauge(134, 98), ...c, report: (l) => lines.push(l) });
+  assert.equal(w.code, 124);
+  assert.match(lines.at(-1), /^= queue timeout — still hold after 2 min; trend in-flight 134→134→134→134/);
+  const e = clock(); let n = 0;
+  const flaky = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => (++n <= 2 ? { error: "HTTP 502" } : gauge(5, 0)), ...e });
+  assert.equal(flaky.code, 0, "two errors then readings: keep polling");
+  const down = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => ({ error: "HTTP 502" }), ...clock() });
+  assert.equal(down.code, 3);
 });

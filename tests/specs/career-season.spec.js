@@ -273,6 +273,7 @@ test.describe.parallel("Career — the rollover", () => {
     // and pending offers outrank everything else in it.
     await page.locator("#cr-go").click();
     await page.locator("#co-body .co-offer").first().click();
+    await page.getByRole("button", { name: "SIGN CONTRACT" }).click();   // an offer opens its comparison first
     await goRacing(page);
     const key = keys[0];
     const onGrid = await page.evaluate(([teamId, seat]) => {
@@ -351,6 +352,7 @@ test.describe.parallel("Career — contracts", () => {
     expect(move, "a champion's season with seed 4242 draws a move offer").not.toBeNull();
 
     await page.locator("#co-body .co-offer").nth(move.i).click();
+    await page.getByRole("button", { name: "SIGN CONTRACT" }).click();   // an offer opens its comparison first
     const after = await page.evaluate(() => window.__apex.career());
     expect(after.team).not.toBe(move.team);
     expect(after.deal.team).toBe(after.team);
@@ -374,6 +376,7 @@ test.describe.parallel("Career — contracts", () => {
       return { team: c.team, owned: c.owned.length, i: c.offers.findIndex((o) => o.teamId === c.team) };
     });
     await page.locator("#co-body .co-offer").nth(before.i).click();
+    await page.getByRole("button", { name: "SIGN CONTRACT" }).click();   // an offer opens its comparison first
     const after = await page.evaluate(() => window.__apex.career());
     expect(after.team).toBe(before.team);
     expect(after.owned.length).toBe(before.owned);

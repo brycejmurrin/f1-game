@@ -108,8 +108,28 @@ docs/PHYSICS.md table.
 | 1 | **STORM** type: heavy rain, lightning, thunder, visibility; SC start / SC when an arc reaches storm | M | Friend rooms need the `lobby.js` one-liner (owned elsewhere); hidden in rooms until then |
 | 1 | **Forecast** with deterministic uncertainty plus engineer radio calls | M | Ubimet-style timed calls; no HUD widget yet (HUD core is contended) |
 | 2 | Rain that hits part of the lap (sector wetness) | L | A surface column in PHYSICS.md; tyre dilemmas |
-| 2 | Aquaplaning in standing water above a speed threshold | M | tyre-model.js owner |
-| 2 | Wind gusts and head/tail wind | M | top speed and braking; per-track direction |
+| 2 | Aquaplaning in standing water above a speed threshold | M | BUILT: `TyreModel.aquaplane` (see §Built) |
+| 2 | Wind gusts and head/tail wind | M | BUILT: `js/race/wind.js` (see §Built); no HUD/lobby wiring yet |
 | 3 | Puddle hotspots (baked mask), spray quality, visor droplets | M–L | three backends; phone variants |
 | 3 | Heat / cold track temperature and graining | M | tyre-model.js owner |
 | 3 | Radar / forecast HUD widget | S | once the HUD lane frees up |
+
+## Built (2026-10-14, branch `cursor/weather-aqua-wind-wip-9b1e`)
+
+- **Aquaplaning** — `TyreModel.aquaplane(speedStd, wetness, tread)`: exactly 1 at wetness ≤ 0.72 (no standing
+  water); above it a loss of `0.5 · depth · r²`, r the fraction of 70 km/h past a per-tread onset (std scale):
+  slick 140, inter 215, full wet 290 km/h. game.js multiplies it into `gmC` (player bicycle grip, both cars'
+  braking credit, AI steering grip). AI cars cap vmax and their accel ceiling at `aquaplaneSafeV` (10 % loss):
+  VM, Monza full rain, 150 s AI-only — inters max 259.6 → 246.3 km/h std, off-road car-steps 1208 → 1020;
+  slicks 258 → 171 km/h, 2502 → 1663; full wets unchanged (cap 321 km/h never binds); no retirements.
+- **Wind** — `js/race/wind.js`: seeded per (sim seed, circuit), weather-keyed mean (fog calm, storm gusty),
+  per-circuit exposure (Bahrain/Silverstone up, Monaco/Singapore down), hashed sin² gusts per 10 s window, on
+  the race clock. Effects off the car's own heading: top speed `× (1 − 0.15·head/VMAX)` (real ≈ ⅔, scaled down),
+  crosswind side force `½ρ·CyA·v·w/m` capped at 1 m/s². VM, Monza main straight at the top-speed plateau:
+  still 228.2 km/h, 30 km/h headwind −3.9, tailwind +3.9. Level `apex26.wind` = `"off"` is a true no-op
+  (fixtures and game-vm pin it, like `tyreWear`). The engineer says "GUSTY OUT THERE" once per gusty spell.
+- **Storm temperatures** — tyre-model.js reads a storm as rain everywhere (ambient 13 °C, track +1 °C, wetness 1,
+  full wets); a fixed storm used to read as dry 30 °C.
+- Not done: no WIND race-settings row or HUD readout, friend rooms do not carry the wind level (both peers default
+  to "real"; the wind itself is seed+clock deterministic), aquaplaning reads the lap-wide `trackWetness()` (sector
+  rain cells would make it local).

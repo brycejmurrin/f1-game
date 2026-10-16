@@ -556,3 +556,140 @@ test("a camera-editor retry after a partial load failure injects only the file t
   assert.deepEqual(attempts[2], [FAIL], "only the file that failed is asked for again");
   assert.deepEqual(redeclared, [], "no file was evaluated twice (no 'already declared' overlay)");
 });
+
+// Deferred real ScriptLoader delivery: exercise the public boot facades without
+// constructing either visual editor. Editor creation deliberately overwrites
+// its button handler, as the shipped editor modules do.
+function deferredTool(kind) {
+  const observers = new Set(), scripts = [], requested = [], opened = [], closed = [];
+  let delayedObserverDelivery = false, beforeCreate = null;
+  const delayedObservers = [];
+  class Observer {
+    constructor(callback) { this.callback = callback; this.targets = new Set(); this.records = []; observers.add(this); }
+    observe(target) { this.targets.add(target); }
+    disconnect() { this.targets.clear(); this.records = []; }
+    takeRecords() { return this.records.splice(0); }
+  }
+  function element(id, hidden = false) {
+    let value = hidden;
+    return { id, style: {}, dataset: {}, disabled: false, isConnected: true,
+      get hidden() { return value; },
+      set hidden(next) {
+        if (value === !!next) return;
+        const oldValue = value ? "" : null; value = !!next;
+        for (const observer of observers) if (observer.targets.has(this)) {
+          observer.records.push({ type: "attributes", attributeName: "hidden", target: this, oldValue });
+          const deliver = () => { const records = observer.takeRecords(); if (records.length) observer.callback(records); };
+          if (delayedObserverDelivery) delayedObservers.push(deliver); else queueMicrotask(deliver);
+        }
+      },
+    };
+  }
+  const ids = new Map(["pmsettings", "pm-panel-display", "pm-camtune", "pm-flyby"].map((id) => [id, element(id)]));
+  const G = { state: "race", paused: true, $: (id) => ids.get(id) || null,
+    els: { pmsettings: ids.get("pmsettings") }, store: { get: (_key, fallback) => fallback } };
+  const sb = { Log: { info() {}, warn() {}, debug() {} }, MutationObserver: Observer,
+    ApexRoster: { LAZY_CAM_EDITOR: ["js/camera/tuner-panel.js", "js/camera/flyby-editor.js"], LAZY_CAM_EDITOR_EDGES: [], DEFERRED_EDGES: [] } };
+  sb.window = sb;
+  sb.document = { getElementById: G.$, createElement: () => ({ dataset: {}, remove() {} }),
+    head: { appendChild(script) { scripts.push(script); requested.push(script.src.replace(/\?v=.*$/, "")); } } };
+  vm.createContext(sb);
+  for (const file of ["js/core/script-loader.js", "js/camera/flyby-panel.js", "js/camera/cam-tuner-boot.js"])
+    vm.runInContext(read(file).replace(/^const\b/gm, "var"), sb, { filename: file });
+  function install(name, buttonId, openName, closeName) {
+    sb[name] = { create() {
+      if (beforeCreate) { const run = beforeCreate; beforeCreate = null; run(); }
+      const open = () => opened.push(name);
+      ids.get(buttonId).onclick = open;
+      return { [openName]: open, [closeName]: () => closed.push(name), isOpen: () => false };
+    } };
+  }
+  const camera = sb.CamTunerPanel.create(G), flyby = sb.FlybyPanel.create(G);
+  const panel = kind === "camera" ? camera : flyby;
+  const button = ids.get(kind === "camera" ? "pm-camtune" : "pm-flyby");
+  const open = () => kind === "camera" ? panel.openCamTuner() : panel.openFlyby();
+  const close = () => kind === "camera" ? panel.closeCamTuner(false) : panel.closeFlyby(false);
+  async function settle() { for (let i = 0; i < 24; i++) await Promise.resolve(); }
+  async function deliver(fail = false) {
+    await settle();
+    for (const script of scripts.splice(0)) {
+      if (fail) { script.onerror(); continue; }
+      if (script.src.startsWith("js/camera/tuner-panel.js")) install("CamTunerEditor", "pm-camtune", "openCamTuner", "closeCamTuner");
+      else install("FlybyEditor", "pm-flyby", "openFlyby", "closeFlyby");
+      script.onload();
+    }
+    await settle();
+  }
+  function queueRouteChangeAtCreate(route) {
+    beforeCreate = () => {
+      delayedObserverDelivery = true;
+      ids.get(route).hidden = true; ids.get(route).hidden = false;
+    };
+  }
+  function flushObservers() { delayedObserverDelivery = false; for (const callback of delayedObservers.splice(0)) callback(); }
+  return { G, ids, button, open, close, settle, deliver, opened, closed, requested, queueRouteChangeAtCreate, flushObservers, delayedObservers };
+}
+
+for (const kind of ["camera", "flyby"]) {
+  test(`${kind} delayed UI open cannot survive close and resume`, async () => {
+    const h = deferredTool(kind); h.button.onclick(); h.close(); h.G.paused = false;
+    await h.deliver(); assert.equal(h.opened.length, 0);
+  });
+
+  for (const route of ["pmsettings", "pm-panel-display"]) test(`${kind} pending UI open is cancelled by ${route} hide and reopen`, async () => {
+    const h = deferredTool(kind); h.button.onclick();
+    // Same-task hide/reopen: checking only the final hidden value is insufficient.
+    h.ids.get(route).hidden = true; h.ids.get(route).hidden = false;
+    await h.deliver(); assert.equal(h.opened.length, 0);
+  });
+
+  test(`${kind} queued route records cancel fulfillment before observer delivery`, async () => {
+    const h = deferredTool(kind); h.button.onclick();
+    // The real editor is created inside ensure's resolution. A route changes
+    // there after loading, but observer delivery has not run when open fulfills.
+    h.queueRouteChangeAtCreate("pm-panel-display");
+    await h.deliver();
+    assert.equal(h.ids.get("pm-panel-display").hidden, false, "final visibility alone cannot detect leaving and returning");
+    assert.ok(h.delayedObservers.length > 0, "observer callbacks are still withheld at fulfillment");
+    assert.equal(h.opened.length, 0, "pending route records must invalidate the UI request immediately");
+    h.flushObservers(); await h.settle();
+    assert.equal(h.opened.length, 0, "later observer delivery must not revive a cancelled open");
+  });
+
+  test(`${kind} only the latest pending open owns the panel`, async () => {
+    const h = deferredTool(kind); h.button.onclick(); h.button.onclick();
+    await h.deliver(); assert.equal(h.opened.length, 1);
+  });
+
+  test(`${kind} cached UI opener keeps cancellation after editor handler replacement`, async () => {
+    const h = deferredTool(kind); h.button.onclick(); await h.deliver();
+    assert.equal(h.opened.length, 1); const requested = h.requested.length;
+    h.close(); h.button.onclick(); h.close(); await h.settle();
+    assert.equal(h.opened.length, 1, "cached editor's direct onclick must not bypass the facade");
+    h.button.onclick(); await h.settle();
+    assert.equal(h.opened.length, 2, "a later intentional cached UI open still works");
+    assert.equal(h.requested.length, requested, "successful bundle remains cached");
+  });
+
+  test(`${kind} explicit API opens outside Settings remain supported and cancellable`, async () => {
+    const h = deferredTool(kind); h.ids.get("pmsettings").hidden = true; h.ids.get("pm-panel-display").hidden = true;
+    h.G.state = "menu"; h.G.paused = false;
+    h.open(); h.close(); await h.deliver(); assert.equal(h.opened.length, 0);
+    await h.open(); assert.equal(h.opened.length, 1, "API intent does not require the Settings UI");
+  });
+
+  test(`${kind} failed delayed load can be retried`, async () => {
+    const h = deferredTool(kind); h.button.onclick(); await h.deliver(true);
+    assert.equal(h.opened.length, 0); h.button.onclick(); await h.deliver();
+    assert.equal(h.opened.length, 1);
+    assert.equal(h.requested.length, 4, "both failed files are retried once");
+  });
+}
+
+
+test("the latest delayed tuner UI door owns the shared editor load", async () => {
+  const h = deferredTool("camera");
+  h.ids.get("pm-camtune").onclick(); h.ids.get("pm-flyby").onclick();
+  await h.deliver();
+  assert.deepEqual(h.opened, ["FlybyEditor"], "the first tuner must not surface after another door owns the UI");
+});

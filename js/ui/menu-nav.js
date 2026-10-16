@@ -349,6 +349,23 @@ window.MenuNav = (function () {
       const hit = pickSideways(a, boxes, dx);
       if (hit) return hit.el;
     }
+    // Down off the LAST control of a scrolling pane, with nothing under it in its
+    // band: the controls below the pane (the foot's BACK) come before the wrap to
+    // the top, however far across they sit. Without this the pad reached BACK
+    // only when the band happened to be empty, which moved with every row added
+    // to the page (the DISPLAY walk).
+    if (dy > 0) {
+      const pane = from.closest && from.closest(SCROLLERS);
+      if (pane) {
+        let foot = null, footAlong = Infinity;
+        for (const el of list) {
+          if (el === from || pane.contains(el)) continue;
+          const along = centre(el).y - a.y;
+          if (along > 1 && along < footAlong) { foot = el; footAlong = along; }
+        }
+        if (foot) return foot;
+      }
+    }
     if (dy && edge) return edge;
     // No band, or a sideways end: DOM / reading order. Wrap so Left from the
     // first item and Right from the last are never a no-op — a pad D-pad press
@@ -434,6 +451,8 @@ window.MenuNav = (function () {
   }
   function ownsArrows(el, key, event) {
     if (!el) return false;
+    // Physical editor keys belong to the widget; synthetic D-pad keys still navigate.
+    if (el.dataset && el.dataset.arrows === "own" && DIRS[key] && (!event || event.isTrusted !== false)) return true;
     const t = el.tagName;
     // A focused <canvas> is a drawing surface that owns every key it is handed
     // (the TRACK DESIGNER nudges the selected control point with the arrows,
@@ -458,6 +477,9 @@ window.MenuNav = (function () {
       const ty = (el.type || "text").toLowerCase();
       if (ty === "checkbox" || ty === "radio" || ty === "button" ||
           ty === "submit" || ty === "reset") return false;
+      // Same reason as TEXTAREA: the pad's synthetic Left/Right moves no caret,
+      // so owning it left the field with a dead direction (#2161).
+      if ((key === "ArrowLeft" || key === "ArrowRight") && event && event.isTrusted === false) return false;
       return !!CARET_KEYS[key];
     }
     if (el.getAttribute && el.getAttribute("role") === "tab") return tabOwns(el, key);

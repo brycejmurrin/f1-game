@@ -40,6 +40,7 @@ const WatchTransport = (function () {
       stop();
       if (typeof document === "undefined" || !document.body) return;
       desc = replay.describe(); if (!desc) return;
+      desc = { ...desc, events: Array.isArray(desc.events) ? desc.events : [] };
       root = node("section"); root.className = "watch-transport";
       root.setAttribute("aria-label", "Race replay controls");
       const top = node("div", "controls");
@@ -64,14 +65,16 @@ const WatchTransport = (function () {
       const track = node("div", "track"), marks = node("div", "markers");
       marks.setAttribute("aria-hidden", "true");
       const state = replay.status(), duration = state ? state.duration : 0;
+      // WATCH and HIGHLIGHTS can open before lights-out (startT < 0): the timeline must reach that footage (#2202).
+      const t0 = Math.min(0, desc.startT || 0), span = duration - t0;
       // Markers are visual; named previous/next controls provide full-size targets.
       desc.events.forEach((e) => {
         const m = node("i"); m.dataset.kind = e.kind; m.title = "L" + e.lap + " · " + e.text;
-        m.style.left = (duration > 0 ? Math.min(100, Math.max(0, e.t / duration * 100)) : 0) + "%";
+        m.style.left = (span > 0 ? Math.min(100, Math.max(0, (e.t - t0) / span * 100)) : 0) + "%";
         marks.appendChild(m);
       });
       track.appendChild(marks);
-      const seek = node("input", "seek"); seek.type = "range"; seek.min = "0"; seek.max = String(duration); seek.step = "0.1";
+      const seek = node("input", "seek"); seek.type = "range"; seek.min = String(t0); seek.max = String(duration); seek.step = "0.1";
       seek.setAttribute("aria-label", "Race replay timeline");
       // A drag fires `input` far faster than the screen refreshes, and replay.seek() poses 22 cars and
       // renders synchronously: the clock text follows every event, the seek itself runs once per frame
@@ -86,6 +89,25 @@ const WatchTransport = (function () {
       seek.addEventListener("blur", () => { scrubbing = false; paint(); });
       track.appendChild(seek); timeline.appendChild(track); timeline.appendChild(node("span", "duration", clock(duration)));
       root.appendChild(timeline);
+      const chapters = node("details", "chapters");
+      chapters.appendChild(node("summary", null, "EVENT CHAPTERS"));
+      const events = desc.events.filter((e) => e && Number.isFinite(e.t));
+      chapters.hidden = events.length === 0;
+      function seekChapter(v) {
+        if (v === "") return;
+        const e = events[+v]; if (!e) return;
+        // A pending drag must not overwrite this deliberate chapter jump.
+        pendingSeek = null; scrubbing = false;
+        const lead = typeof RealReplay !== "undefined" ? RealReplay.LEAD_S : 8;
+        replay.seek(Math.max(0, e.t - lead));
+      }
+      select(chapters, "chapter", "RACE EVENT", [["", "Choose a race event"], ...events.map((e, i) =>
+        [String(i), "L" + e.lap + " · " + clock(e.t) + " · " + e.text])], (v) => {
+        refs["chapter-jump"].disabled = v === "" || !events[+v];
+        seekChapter(v);   // retain the choice so native ArrowDown advances to the next chapter
+      });
+      action(chapters, "chapter-jump", "Jump to selected race event", "JUMP TO EVENT", () => seekChapter(refs.chapter.value)).disabled = true;
+      root.appendChild(chapters);
       const caption = node("div", "caption");
       caption.appendChild(node("span", "name", desc.name));
       caption.appendChild(node("span", "event")); caption.appendChild(node("span", "director"));
@@ -106,7 +128,7 @@ const WatchTransport = (function () {
       // and painted the button in the pressed red while paused.
       setText(refs.play, s.paused ? "▶︎" : "❚❚");
       setAttr(refs.play, "aria-label", s.paused ? "Play replay" : "Pause replay");
-      if (!scrubbing) setVal(refs.seek, String(Math.max(0, s.T)));
+      if (!scrubbing) setVal(refs.seek, String(s.T));   // the clock text stays clamped at 0:00 before lights-out
       // The timeline's spoken value follows the clock only while a reader is not
       // sitting on it during playback: a focused range whose valuetext changes
       // every second is read every second. Paused, scrubbing or elsewhere: live.

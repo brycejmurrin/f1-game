@@ -24,17 +24,18 @@ const RIVALS_SRC = fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8"
 
 function param(v) {
   const p = {
-    value: v,
-    setTargetAtTime(x) { p.value = x; },
-    setValueAtTime(x) { p.value = x; },
-    linearRampToValueAtTime(x) { p.value = x; },
+    value: v, calls: [],
+    setTargetAtTime(x, t, tau) { p.calls.push(["target", x, t, tau]); p.value = x; },
+    setValueAtTime(x) { p.calls.push(["value", x]); p.value = x; },
+    linearRampToValueAtTime(x) { p.calls.push(["linear", x]); p.value = x; },
     exponentialRampToValueAtTime(x) { p.value = x; },
-    cancelScheduledValues() {},
+    cancelScheduledValues(t) { p.calls.push(["cancel", t]); },
   };
   return p;
 }
 
 function countingContext() {
+  const gains = [];
   const counts = { src: 0, gain: 0, panner: 0, biquad: 0 };
   function node(kind) {
     if (counts[kind] != null) counts[kind]++;
@@ -47,7 +48,7 @@ function countingContext() {
   }
   const ctx = {
     currentTime: 0, state: "running", sampleRate: 44100, destination: node("dest"),
-    createGain: () => node("gain"), createOscillator: () => node("osc"),
+    createGain: () => { const n = node("gain"); gains.push(n); return n; }, createOscillator: () => node("osc"),
     createBiquadFilter: () => node("biquad"), createBufferSource: () => node("src"),
     createAnalyser: () => node("analyser"),
     createWaveShaper: () => Object.assign(node("shaper"), { curve: null }),
@@ -68,11 +69,11 @@ function countingContext() {
     createMediaElementSource: () => node("media"),
     resume: () => Promise.resolve(), close() {},
   };
-  return { ctx, counts };
+  return { ctx, counts, gains };
 }
 
 function boot(listener) {
-  const { ctx, counts } = countingContext();
+  const { ctx, counts, gains } = countingContext();
   const held = [];
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Int32Array, Float64Array,
@@ -105,7 +106,7 @@ function boot(listener) {
   GameAudio.startEngine();
   // Arm the field the way the race loop does (setRivals).
   GameAudio.setRivals([]);
-  return { GameAudio, ctx, counts, vctx, held };
+  return { GameAudio, ctx, counts, vctx, held, gains };
 }
 
 test("fieldContact: a bump fires a voice and arms the pool (≤3)", () => {
@@ -221,4 +222,41 @@ test("collideFx gate: rival–rival forwards fieldContact; player branch keeps c
   assert.match(fx, /!a\.isPlayer && !b\.isPlayer/);
   assert.match(fx, /GameAudio\.collision\(impact, false, side\)/);
   assert.match(fx, /const side = Math\.abs\(lat\) > 0\.08/);
+});
+
+
+test("Rivals mute gates field squeal/scrape/bump but preserves player contact", () => {
+  const { GameAudio: A, ctx } = boot();
+  A.setLayer("rivals", false);
+  for (const kind of ["squeal", "scrape", "bump"]) assert.equal(A.fieldContact(kind, 1, 3, 1, 42), false);
+  const before = A.fieldContactState().fired;
+  A.collision(0.8, false, 0.5);
+  assert.equal(A.fieldContactState().fired, before + 1, "player contact remains audible");
+  A.setLayer("rivals", true);
+  assert.equal(A.fieldContact("squeal", 1, 3, 1, 42), true);
+  A.setTune({ rivals: 0 });
+  ctx.currentTime += 1;
+  assert.equal(A.fieldContact("scrape", 1, 3, 1, 42), false);
+  A.setTune({ rivals: 1 });
+  assert.equal(A.fieldContact("scrape", 1, 3, 1, 42), true);
+});
+
+
+test("muting rivals cancels their active envelope and leaves active player contact intact", () => {
+  for (const mute of [A => A.setLayer("rivals", false), A => A.setTune({ rivals: 0 })]) {
+    const { GameAudio: A, ctx, gains } = boot();
+    const before = gains.map(n => n.gain.calls.length);
+    assert.equal(A.fieldContact("squeal", 1, 3, 1, 42), true);
+    const field = gains.find((n, i) => n.gain.calls.length > before[i] && n.gain.calls.some(c => c[0] === "linear" && c[1] > 0));
+    assert.ok(field, "a field envelope is scheduled");
+    const mid = gains.map(n => n.gain.calls.length);
+    A.collision(0.8, false, 0.5);
+    const player = gains.find((n, i) => n !== field && n.gain.calls.length > mid[i] && n.gain.calls.some(c => c[0] === "linear" && c[1] > 0));
+    assert.ok(player, "a separate player envelope is scheduled");
+    const playerCalls = JSON.stringify(player.gain.calls);
+    ctx.currentTime += 0.005; mute(A);
+    assert.deepEqual(field.gain.calls.slice(-2), [["cancel", ctx.currentTime], ["target", 0, ctx.currentTime, 0.04]]);
+    assert.equal(JSON.stringify(player.gain.calls), playerCalls, "player automation is untouched");
+    assert.equal(A.fieldContact("scrape", 1, 3, 1, 43), false);
+  }
 });

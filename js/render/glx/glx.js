@@ -49,7 +49,7 @@ const GLXBackend = (function () {
   // private / quota). Without it, both the loss timer and the restore reload
   // bailed, leaving a restored context with _ctxLost still set — a silent
   // dead canvas. In-memory only, so a real new visit still gets two attempts.
-  let _sessLostN = 0;
+  let _sessLostN = 0; const _fallbackLossCount = () => { try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { return 0; } };
   // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
   // per present. Exists because the real-GPU gate read null here and passed
   // vacuously: docs/PERF-FINDINGS.md 2e.
@@ -702,7 +702,7 @@ const GLXBackend = (function () {
       // xrCompatible only when navigator.xr (task 20); omit otherwise (Safari/SwiftShader).
       ...(typeof navigator !== "undefined" && navigator.xr ? { xrCompatible: true } : {}),
     });
-    if (!gl) return false;
+    if (!gl) return false; try { setTimeout(function () { if (/^apex26\\.ctxLostReloads=\\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
     if (_softPresent) ensureSoftDisplay();
 
     // Parallel shader compile (Chrome 76+, Safari 14.1+; not Firefox): see link().
@@ -825,7 +825,7 @@ const GLXBackend = (function () {
         var _rk = "apex26.ctxLostReloads";
         _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
         sessionStorage.setItem(_rk, String(_n));
-      } catch (_) { _n = ++_sessLostN; }
+      } catch (_) { _n = Math.max(++_sessLostN, _fallbackLossCount() + 1); try { window.name = "apex26.ctxLostReloads=" + _n; } catch (_) { /* best effort */ } }
       if (_n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* No location (harness/worker): nothing to reload, the latches above still took effect for the next real boot. */ } }, 1200);
       else {
         if (typeof window.__apexReportError === "function") window.__apexReportError("gfx", new Error("The graphics device keeps getting lost (" + _n + " times) — reload to try again, or pick another RENDERER in settings."));
@@ -845,7 +845,7 @@ const GLXBackend = (function () {
     // webglcontextrestored (the loss handler also failed to arm its timer).
     canvas.addEventListener("webglcontextrestored", function () {
       var n = 0;
-      try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = _sessLostN; }
+      try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
       if (n > 2) return;
       try { location.reload(); } catch (e) { Log.warn("gfx", "GLX: context restored but reload failed:", e && e.message); }
     }, false);
@@ -986,7 +986,7 @@ const GLXBackend = (function () {
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uPitLane", "uPitBox", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uWind", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
-      "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
+      "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark", "uPuddles",
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uMatAlbedoTex", "uMatNormalTex", "uMatTexMix", "uMatTexScale[0]",
@@ -1091,10 +1091,7 @@ const GLXBackend = (function () {
   let presentW = 0, presentH = 0;
   let spatialUpscale = false;
   try {
-    const q = typeof location !== "undefined" && location.search &&
-      /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
-    const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
-    spatialUpscale = !!(q || ls);
+    spatialUpscale = typeof DevFlags !== "undefined" && !!DevFlags.get("upscale");
   } catch (_) { spatialUpscale = false; }
   function setSpatialUpscale(on) {
     spatialUpscale = !!on;
@@ -1882,6 +1879,7 @@ const GLXBackend = (function () {
     uf1(litU.uMistHeight,  _litUf, "mistHeight",  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
     uf1(litU.uShadowTintAmt, _litUf, "shadowTintAmt", T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
     uf1(litU.uWetDark,     _litUf, "wetDark",     T && T.wetDark     != null ? T.wetDark     : 1.0);
+    uf1(litU.uPuddles,     _litUf, "puddles",     T && T.puddles     != null ? T.puddles     : 1.0);   // PUDDLES (TUNE_DEFS def 1)
     // WIND knobs → LIT_VS uWind (foliage sway): xy = unit direction in world xz
     // from WIND DIRECTION (degrees), z = WIND speed scale. Defaults mirror
     // TUNE_DEFS (35°, 1.0); same vector as TLX U.wind.
