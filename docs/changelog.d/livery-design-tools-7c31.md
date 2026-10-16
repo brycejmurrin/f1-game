@@ -1,0 +1,3 @@
+New: thirteen adjustable spine designs: ribbon, broken chevrons, contour lines, honeycomb, segmented panels, gradient, two-tone sweep, checkers, diamonds, diagonal slashes, pinstripes, dots and lightning. Shape them with width, repetition, offset, taper and opacity controls, and wrap them onto either or both cover flanks.
+New: independent engine-cover, wing and halo finishes while keeping carbon surfaces intact and matching moving wing flaps to their selected finish.
+New: paint-surface selection, nine reusable colour palettes, design-colour swapping, undoable placement reset, complete visual-preset loading, bounded undo/redo and original-versus-edited comparison. Existing custom liveries remain editable and new settings travel with garage exports.

@@ -369,6 +369,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `liveries.js` | `Liveries` | tag | custom paint jobs (liveries). |
 | `custom-liveries.js` | `CustomLiveries` | tag | CustomLiveries: persist / resolve / live-draft paint jobs out of js/game.js. |
 | `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
+| `livery-design.js` | `LiveryDesign` | tag | Optional, bounded cover artwork. |
 | `livery-graphics.js` | `LiveryGraphics` | tag | cover crown/tail and fin graphic painters; create receives atlas drawing and paint-selection helpers. |
 | `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
@@ -471,6 +472,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `setup-trials.js` | `SetupTrials` | tag | Deliberate unscored launch comparisons. |
 | `setup-presets.js` | `SetupPresets` | tag | Named, bounded mechanical sheets. |
 | `setup-experiments.js` | `SetupExperiments` | tag | reversible garage setup experiments and the active-aero bench. |
+| `livery-design-editor.js` | `GarageLiveryDesignEditor` | tag | Livery editing tools. |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
 
 **`js/fx/`**

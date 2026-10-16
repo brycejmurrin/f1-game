@@ -1536,6 +1536,7 @@
         "tests/unit/livery-contrast.test.mjs",
         "tests/unit/livery-cover-graphics.test.mjs",
         "tests/unit/livery-decal-surfaces.test.mjs",
+        "tests/unit/livery-design.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
         "tests/unit/parts-locked-equivalent.test.mjs",
         "tests/unit/setup-trial-session.test.mjs",

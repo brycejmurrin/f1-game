@@ -237,6 +237,7 @@ const FULL = [
   "js/car/liveries.js",
   "js/car/custom-liveries.js",   // persist/resolve/live-draft (CustomLiveries.create({ store })), peeled from game.js
   "js/car/crest-paths.js",
+  "js/car/livery-design.js",
   "js/car/livery-graphics.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
@@ -295,6 +296,7 @@ const FULL = [
   "js/race/setup-trial-session.js", // fresh solo trial sessions through normal race entry
   "js/garage/setup-presets.js",
   "js/garage/setup-experiments.js", // reversible tune experiments and aero bench
+  "js/garage/livery-design-editor.js",
   "js/garage/setup-sheet.js",
   "js/career/experience.js",
   "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
@@ -522,6 +524,7 @@ const CARVIEW = [
   "js/car/car3d.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
+  "js/car/livery-design.js",
   "js/car/livery-graphics.js",
   "js/car/liverytex.js",
   "js/physics/consts.js",
@@ -602,6 +605,9 @@ const HARD_EDGES = [
   ["js/car/car-materials.js", "js/car/car3d.js"],
   ["js/car/car-geometry.js", "js/car/car-body-geom.js"],
   ["js/car/car-body-geom.js", "js/car/car3d.js"],
+  ["js/car/livery-design.js", "js/garage/livery-design-editor.js"],
+  ["js/garage/livery-design-editor.js", "js/garage/setup-sheet.js"],
+  ["js/car/livery-design.js", "js/car/liverytex.js"],
   ["js/car/livery-graphics.js", "js/car/liverytex.js"],
   ["js/input/bindings.js", "js/input/input.js"],
   ["js/input/pad-menu.js", "js/input/input.js"],

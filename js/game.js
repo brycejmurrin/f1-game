@@ -1457,7 +1457,7 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
-  const livery = resolveLivery(team), finish = livery.finish || null;
+  const livery = resolveLivery(team), finish = CarMaterials.finishOf(livery, "wingFinish");
   const surface = livery.wingCarbon === "carbon" ? "carbon" : "paint";
   const co = typeof CarDraw !== "undefined" ? CarDraw.coOpt(mat) : mat;   // A-H3 (hunt 4): opaque flaps join R1's coalesced runs on TLX; GLX/WGX and alpha < 1 get `mat` itself
   if (still || b === 0 || b === 1) {

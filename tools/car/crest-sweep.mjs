@@ -172,7 +172,7 @@ class RecCtx {
   }
   strokeText() {}
   drawImage() { this.imageUsed = true; this.imageOps.push({ shadow: this.st.shadow }); }
-  createLinearGradient() { const g = { addColorStop() {} }; return g; }
+  createLinearGradient() { return { stops: [], addColorStop(at, color) { this.stops.push([at, color]); } }; }
   createRadialGradient() { const g = { addColorStop() {} }; return g; }
   clearRect() {}
   getImageData() { return { data: new Uint8ClampedArray(4) }; }
@@ -318,7 +318,7 @@ export function loadCrests() {
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js",
-                   "js/car/crest-paths.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
+                   "js/car/crest-paths.js", "js/car/livery-design.js", "js/car/livery-graphics.js", "js/car/liverytex.js"])
     vm.runInContext(read(f), sandbox, { filename: f });
   // Every one of these files is `const X = (function(){...})()` at script level,
   // which is a LEXICAL binding — it never becomes a property of the vm's global

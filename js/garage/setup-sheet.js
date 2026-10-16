@@ -93,12 +93,15 @@ const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "lowe
                           "rearWing", "cover", "spineTint", "saddleTint",
                           "sideTint", "sunTint",
                           "bandTint2", "plateTint",
-                          "fin", "finArt", "logo", "logo2", "logo3"];
+                          "fin", "finArt", "logo", "logo2", "logo3", "patternTint", "patternSecond"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
                           coverVents: "none", spineHeight: "standard", spineSide: "none",
-                          coverBind: "independent", finHandoff: "match", bodySplit: "off" };
+                          coverBind: "independent", finHandoff: "match", bodySplit: "off",
+                          patternPlacement: "crown", patternSide: "both", patternWidth: "70", patternRepeat: "6",
+                          patternOffset: "0", patternTaper: "20", patternOpacity: "100",
+                          coverFinish: "inherit", wingFinish: "inherit", haloFinish: "inherit" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
 // does this change? Worse, two rows read as a pair and are not one — ACCENT is
@@ -135,6 +138,18 @@ const LIV_ROW_HINT = {
   logo: "TEAM LOGO — the dominant shape of the team mark everywhere it is drawn: crown, fin badge, SPINE SIDE logo/emblem/lockup, the WRAP design's flank bull, the livery tile, garage wall. The colour you pick is used as-is (no contrast override). Lettering (numbers, wordmarks) auto-contrasts; it is not this row.",
   logo2: "LOGO DETAIL — the mark's second shape (shield, disc, traced layer, or island), named per team. One-loop marks have no such row. The colour you pick is used as-is. Authored plates reach the flank logo/emblem too.",
   logo3: "OUTLINE — a rim around the mark only, in the colour you pick. Off by default.",
+  patternPlacement: "DESIGN AREA — new spine patterns cover the crown/tail or continue over the shoulders.",
+  patternSide: "WRAP SIDES — both cover flanks, or just the chosen side; crown remains painted.",
+  patternWidth: "DESIGN WIDTH — coverage across the crown and flank, as a percentage.",
+  patternRepeat: "REPEATS — density of repeated shapes or lines on the cover.",
+  patternOffset: "SIDE OFFSET — shift the new spine pattern across the cover.",
+  patternTaper: "TAIL TAPER — narrow the pattern toward the rear of the cover.",
+  patternOpacity: "OPACITY — transparency of the new spine artwork over its base paint.",
+  patternTint: "DESIGN COLOUR — ribbon, chevrons, contours, honeycomb, panels, gradient or sweep on the crown and selected cover flanks. Unset = ACCENT.",
+  patternSecond: "SECOND DESIGN COLOUR — gradients, two-tone sweeps, panels, checks, diamonds and dots. Unset = PRIMARY.",
+  coverFinish: "COVER FINISH — painted engine cover and airbox; INHERIT uses FINISH. Carbon and intake surfaces stay unchanged.",
+  wingFinish: "WING FINISH — painted front and rear wing assemblies, including moving flaps. Carbon stays carbon.",
+  haloFinish: "HALO FINISH — the painted halo; INHERIT uses FINISH.",
   finish: "FINISH — the paint surface: gloss, satin or chrome.",
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
@@ -927,6 +942,7 @@ function buildLiveryCreator(container, team) {
   // not a number; NUMBER FONT and the mark colours are always live (the nose
   // number and its crest head paint on every car), so they carry no dep.
   const deps = [];
+  let designTools = null;
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
   const finArtLive = () => needFin() && ((d.finStyle || "team") !== "none" || d.finBadge === "number" || d.finBadge === "code");
@@ -945,6 +961,7 @@ function buildLiveryCreator(container, team) {
     }
   };
   const applyPreview = (defer3d) => {
+    if (designTools) designTools.changed(defer3d);
     prev.style.background = "linear-gradient(120deg, " + d.c1 + " 0 56%, " + d.c2 + " 56% 100%)";
     prev.textContent = "";
     if (d.stripe) { const st = document.createElement("span"); st.className = "cs-liv-stripe"; st.style.background = d.stripe; prev.appendChild(st); }
@@ -967,7 +984,7 @@ function buildLiveryCreator(container, team) {
                     "wing", "rearWing", "cover",
                     ...(((typeof LiveryTex !== "undefined" && LiveryTex.FILL_SURFACES) || [])
                       .map((f) => f.key)),   // design fills, from the painters' own list
-                    "fin", "finArt", "logo", "logo2", "logo3", "halo"];
+                    "fin", "finArt", "logo", "logo2", "logo3", "halo", "patternTint", "patternSecond"];
   const paletteColours = () => {
     const seen = [];
     const add = (v) => {
@@ -1012,10 +1029,11 @@ function buildLiveryCreator(container, team) {
     if (LIV_ROW_HINT[key]) { r.title = LIV_ROW_HINT[key]; r.setAttribute("aria-description", LIV_ROW_HINT[key]); }
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = label; r.appendChild(lb);
     const inp = document.createElement("input"); inp.type = "color";
+    inp.dataset.livField = key; inp.setAttribute("aria-label", label);
     inp.value = /^#[0-9a-fA-F]{6}$/.test(d[key]) ? d[key] : "#000000";
     if (allowNone && !d[key]) inp.classList.add("cs-liv-off");
     inp.oninput = () => { d[key] = inp.value; inp.classList.remove("cs-liv-off"); applyPreview(true); };
-    inp.onchange = flushLivPreview;
+    inp.onchange = () => { applyPreview(); flushLivPreview(); };
     r.appendChild(inp);
     if (allowNone) {
       const off = document.createElement("button"); off.type = "button"; off.className = "cs-liv-ed-none"; off.textContent = "NONE";
@@ -1149,6 +1167,8 @@ function buildLiveryCreator(container, team) {
     return r;
   };
   pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
+  for (const [label, key] of [["COVER FINISH", "coverFinish"], ["WING FINISH", "wingFinish"], ["HALO FINISH", "haloFinish"]])
+    pillRow(label, key, ["inherit", "gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "inherit");
   pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
@@ -1181,7 +1201,9 @@ function buildLiveryCreator(container, team) {
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
   const name = document.createElement("input"); name.type = "text"; name.className = "cs-liv-ed-name";
   name.maxLength = 18; name.placeholder = "My Livery"; name.value = d.name;
-  name.oninput = () => { d.name = name.value; };
+  name.dataset.livField = "name";
+  name.oninput = () => { d.name = name.value; if (designTools) designTools.changed(true); };
+  name.onchange = () => { if (designTools) designTools.changed(false); };
   nameRow.appendChild(name);
   wrap.appendChild(nameRow);
 
@@ -1211,6 +1233,10 @@ function buildLiveryCreator(container, team) {
   btns.append(cancel, save);
   wrap.appendChild(btns);
 
+  if (typeof GarageLiveryDesignEditor !== "undefined") designTools = GarageLiveryDesignEditor.attach(wrap, d, {
+    changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
+    presets: () => getLiveries(team), fromLivery: livDraftFrom,
+  });
   container.appendChild(wrap);
   applyPreview();
   // Spine / logo edits need the crown in the car gap the sheet leaves — the
@@ -1226,7 +1252,8 @@ let _livPreviewKey = "";
 let _livPrevDraft = null;
 // These never land in Car3D.build. A drag still invalidates the decal atlas;
 // it must not also throw away the preview mesh (a full car rebuild on a phone).
-const MESH_FREE_DRAFT = { logo: 1, logo2: 1, logo3: 1, sponsors: 1, numFont: 1, finStyle: 1, finBadge: 1, name: 1 };
+const MESH_FREE_DRAFT = { logo: 1, logo2: 1, logo3: 1, sponsors: 1, numFont: 1, finStyle: 1, finBadge: 1, name: 1, patternTint: 1, patternSecond: 1, patternPlacement: 1, patternSide: 1,
+  patternWidth: 1, patternRepeat: 1, patternOffset: 1, patternTaper: 1, patternOpacity: 1 };
 function draftSkipsMesh(prev, next) {
   if (!prev) return false;
   const seen = Object.create(null);
