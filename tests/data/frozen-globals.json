@@ -68,6 +68,7 @@
     "GameAudioToneModel",
     "GameHud",
     "GameMetrics",
+    "GameResults",
     "GameStore",
     "GfxQuality",
     "Hash32",
