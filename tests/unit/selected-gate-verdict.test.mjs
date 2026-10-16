@@ -65,9 +65,22 @@ test("train call warns on dropped instead of failing", () => {
   assert.match(v.warn, /dropped 2/);
 });
 
-test("guards or select red fails closed", () => {
-  assert.equal(selectedGateVerdict({ ...base, guards: "failure" }).ok, false);
+test("a red select fails closed", () => {
   assert.equal(selectedGateVerdict({ ...base, select: "failure" }).ok, false);
+});
+
+test("a red guards is not repeated here, and never hides a spec failure (2026-10-16)", () => {
+  // The guards check and CI (ci-verdict needs guards) carry that red once.
+  const green = selectedGateVerdict({ ...base, guards: "failure" });
+  assert.equal(green.ok, true, "specs passed: this check says so, guards reports its own red");
+  assert.match(green.reason, /Structural guards failure: reported by that check, which keeps CI red/);
+  assert.equal(selectedGateVerdict({ ...base, guards: "cancelled" }).ok, true);
+  // ...but every spec-side red still wins while guards is red.
+  assert.equal(selectedGateVerdict({ ...base, guards: "failure", select: "failure" }).ok, false);
+  assert.equal(selectedGateVerdict({ ...base, guards: "failure", dropped: "2" }).ok, false);
+  assert.equal(selectedGateVerdict({ ...base, guards: "failure", selected: "failure", failedSpecs: ["tests/specs/smoke.spec.js"] }).ok, false);
+  assert.equal(selectedGateVerdict({ ...base, guards: "failure", selected: "failure",
+    evidence: { started: [], junit: [], downloadFailed: false } }).ok, false, "a failed matrix with no proof every leg ran stays red");
 });
 
 test("CLI: cancelled + staged clean junit fails closed despite clean sibling junit", () => {

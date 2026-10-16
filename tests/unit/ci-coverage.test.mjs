@@ -1786,6 +1786,18 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
  * gate on the merged tree and the tip sat red. `selected-verdict` has one
  * fixed name, runs whatever `selected` did, and reads the pair the way
  * poke-train did. Pinned so it cannot quietly stop covering a case. */
+test("the two CI guard shards stop starting files after their first failure (--bail)", () => {
+  const parsed = parseYAML(ciWorkflow).jobs;
+  for (const [id, shard] of [["guards-a", "1/2"], ["guards-b", "2/2"]]) {
+    const step = parsed[id].steps.find((st) => /tooling-fast\.mjs/.test(st.run || ""));
+    assert.ok(step, `${id} runs tooling-fast`);
+    assert.match(step.run, new RegExp(`--shard=${shard.replace("/", "\\/")} --bail$`),
+      `${id} must pass --bail (2026-10-16 CI jobs review: red shards ran a mean 5.9 min past the first failure)`);
+  }
+  // The local edit loop keeps every failure visible.
+  assert.doesNotMatch(JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).scripts["test:tooling-fast"], /--bail/);
+});
+
 test("selected-verdict: one fixed-name check that always judges the change-aware gate", () => {
   const job = ciWorkflow.slice(ciWorkflow.indexOf("\n  selected-verdict:\n"), ciWorkflow.indexOf("\n  baseline-trial:\n"));
   assert.ok(job.length > 0, "the selected-verdict job is gone");
