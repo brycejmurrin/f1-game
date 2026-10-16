@@ -598,3 +598,24 @@ test("retireCar clears the car's skid intensity so a parked car does not screech
   assert.equal(car.speed, 0);
   assert.equal(car.skidIntensity, 0, "a retired car is not slipping");
 });
+
+// ── waiting-room host remove (lobby-phase LEFT + fresh room code) ───────────
+const LOBBY_SRC = fs.readFileSync(path.join(ROOT, "js/net/lobby.js"), "utf8");
+
+test("host remove: each guest row exposes a host-only remove control", () => {
+  assert.match(LOBBY_SRC, /function hostRemoveRow/);
+  assert.match(LOBBY_SRC, /dataset\.rosterRemove = id/);
+  assert.match(LOBBY_SRC, /hostRemoveRow\(row, peerId\)/);
+});
+
+test("host remove: evict stays in the room, broadcasts lobby LEFT, and rotates the code", () => {
+  assert.match(LOBBY_SRC, /hostEvictingIds\.add\(id\)/);
+  assert.match(LOBBY_SRC, /t\._hostEvict = true/);
+  assert.match(LOBBY_SRC, /function rotateRoomAfterEvict/);
+  assert.match(LOBBY_SRC, /wasHostEvict && role === "host"/);
+  assert.match(LOBBY_SRC, /sess\.sendEvent\(NetPlay\.EV\.LEFT, \{ evicted: true \}\)/);
+  assert.match(LOBBY_SRC, /sess\.sendEvent\(NetPlay\.EV\.LEFT, \{ from: id \}\)/);
+  assert.match(LOBBY_SRC, /NetRendezvous\.makeCode/);
+  assert.match(LOBBY_SRC, /wasHostEvictGuest \? "The host removed you from the room\." : "The host left the room\."/);
+  assert.match(LOBBY_SRC, /t\._hostRemovedMe = true/);
+});
