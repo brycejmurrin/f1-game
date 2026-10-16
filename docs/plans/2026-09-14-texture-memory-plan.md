@@ -195,11 +195,11 @@ whether anyone notices.
 **Files:**
 - Modify: `docs/notes/PERF-FINDINGS.md`
 
-- [ ] Add the ATVR table above under "Recorded negative results", with the
+- [x] (landed in docs/notes/PERF-FINDINGS.md §4, #1636) Add the ATVR table above under "Recorded negative results", with the
       reasoning that ACMR alone is misleading because it is floored by
       verts/tris. The value of this entry is stopping the next session from
       spending a day on meshoptimizer.
-- [ ] Add the TLX colour rows from the 2026-09-14 bisect (control 45.6 / normal
+- [x] (landed in docs/notes/PERF-FINDINGS.md §4, #1636) Add the TLX colour rows from the 2026-09-14 bisect (control 45.6 / normal
       45.6 / colour 42.9 / both 42.8 / Float16BufferAttribute 39.1).
 
 ### Task 4: KTX2 / UASTC material arrays — DECISION FIRST, NOT PRE-APPROVED
