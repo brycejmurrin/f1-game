@@ -1,1 +1,0 @@
-1792106672	Bryce Murrin	PR #2305 HUD adaptability: shared safe-area/visual-viewport bounds in hud-layout.js and hud-arrange.js, retain editing context across usable resize; matching HUD tests and changelog only. No input/game/CSS/physics edits.  [cursor/hud-controls-simplify-6a2d; session ef0d9f085e18fd4b6433b76a]
