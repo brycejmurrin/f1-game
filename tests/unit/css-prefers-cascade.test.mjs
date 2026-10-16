@@ -161,3 +161,13 @@ test("the solid-surface remedies exist for sheet, hub card and dim scrim", () =>
   assert.equal(find("dialogs.css", ".screen.dim").length, 1);
   assert.equal(find("dialogs.css", "#pausemenu.screen.dim").length, 1);
 });
+
+test("the root color scheme follows the selected Appearance theme", () => {
+  const css = readFileSync(join(ROOT, "css/tokens.css"), "utf8");
+  assert.match(css, /:root\s*\{[^}]*\bcolor-scheme\s*:\s*dark\s*;/s,
+    "dark is the first-paint native-control palette");
+  assert.match(css, /:root\[data-ui-theme="light"\]\s*\{[^}]*\bcolor-scheme\s*:\s*light\s*;/s,
+    "explicit light Appearance must update native controls");
+  assert.match(css, /:root\[data-ui-theme="system"\]\s*\{\s*color-scheme\s*:\s*dark\s+light\s*;/s,
+    "SYSTEM must advertise both palettes so OS changes remain coherent");
+});
