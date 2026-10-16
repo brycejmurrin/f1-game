@@ -1216,8 +1216,31 @@ window.SpotifyMusic = (function () {
     const live = BACKEND.active();
     const img = el("sp-art");
     if (img) {
-      if (art && img.getAttribute("src") !== art) img.setAttribute("src", art);
-      img.hidden = !art;
+      const current = img.dataset.apexArt || "";
+      if (current !== (art || "")) {
+        const next = art || "";
+        img.dataset.apexArt = next;
+        img.dataset.apexArtFailed = "";
+        img.onerror = next ? () => {
+          // Album art URLs are short-lived CDN links. Hide a failed image and
+          // leave the panel's neutral swatch visible instead of showing a
+          // broken-image glyph. The token prevents a late failure from hiding
+          // newer artwork.
+          if (img.dataset.apexArt === next) {
+            img.dataset.apexArtFailed = next;
+            img.hidden = true;
+          }
+        } : null;
+        if (next) {
+          img.setAttribute("src", next);
+          img.hidden = false;
+        } else {
+          img.removeAttribute("src");
+          img.hidden = true;
+        }
+      } else {
+        img.hidden = !art || img.dataset.apexArtFailed === art;
+      }
     }
     txt("sp-title", title || (live ? "Nothing playing" : "Not connected"));
     txt("sp-artist", artist || "");

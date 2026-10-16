@@ -218,6 +218,7 @@ test("C1: the hub's NEXT RACE card names the circuit Career.trackIndex() will lo
   const named = card.querySelector(".cr-nr-name").textContent;
   assert.equal(named, raced(h));
   assert.equal(named, "monza");
+  assert.equal(card.querySelector("img").alt, "monza circuit", "next-race still identifies its circuit to assistive technology");
 });
 
 // ---- C2 ---------------------------------------------------------------------------------------
