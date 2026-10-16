@@ -371,6 +371,8 @@
     "tests/unit/flyby-pose-inverse.test.mjs",
     "tests/unit/flyby-shots.test.mjs",
     "tests/unit/flying-start.test.mjs",
+    "tests/unit/followup-platform.test.mjs",
+    "tests/unit/followup-update-check.test.mjs",
     "tests/unit/font-digits.test.mjs",
     "// The weather FORECAST (js/race/forecast.js): timeline off the arc's own road lag (drift-guarded against",
     "// weather-arc.js), bounded seeded uncertainty, and the engineer's early / 2-lap / 1-lap / here / drying calls. VM, < 0.5 s.",
@@ -462,6 +464,7 @@
     "tests/unit/glx-resize-hysteresis.test.mjs",
     "tests/unit/godray-keep-nearest.test.mjs",
     "tests/unit/grip-steer.test.mjs",
+    "tests/unit/handback.test.mjs",
     "tests/unit/harness-display.test.mjs",
     "tests/unit/helmets.test.mjs",
     "tests/unit/home-world.test.mjs",
@@ -688,6 +691,8 @@
     "tests/unit/player-tools-ui.test.mjs",
     "// CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.",
     "tests/unit/pr-board.test.mjs",
+    "// PR plumbing (#2387, #2397): pr-body.mjs transforms, handback.mjs, post-merge.mjs.",
+    "tests/unit/pr-body.test.mjs",
     "// test-coverage-audit answers \"is this file in SOME topical group\"; this one",
     "// answers the question that actually bites, \"does the pre-push gate RUN it\" —",
     "// two deploys (2026-09-02) and one (2026-09-18) went red on pins that no",
@@ -1075,6 +1080,7 @@
     "tests/unit/vm-page-lifecycle.test.mjs",
     "tests/unit/voice-pack.test.mjs",
     "tests/unit/vstd-invariant.test.mjs",
+    "tests/unit/wait-for.test.mjs",
     "tests/unit/wait-polling.test.mjs",
     "tests/unit/wall-clamp.test.mjs",
     "// The falling rain follows WETNESS through a weather arc: shown at 0.25, the",
@@ -1237,7 +1243,8 @@
         "tests/unit/desktop-pack-dry-run.test.mjs",
         "tests/unit/desktop-stage.test.mjs",
         "tests/unit/desktop-unpacked-bin.test.mjs",
-        "tests/unit/desktop-version.test.mjs"
+        "tests/unit/desktop-version.test.mjs",
+        "tests/unit/followup-platform.test.mjs"
       ],
       "kind": "node"
     },
@@ -1620,6 +1627,7 @@
       "files": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-panel-settings-ui.test.mjs",
+        "tests/unit/followup-update-check.test.mjs",
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "kind": "node"
@@ -1636,6 +1644,7 @@
     },
     "test:mobile-unit": {
       "files": [
+        "tests/unit/followup-platform.test.mjs",
         "tests/unit/mobile-config.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/mobile-sync-web.test.mjs"
@@ -1927,6 +1936,31 @@
         "tests/unit/adapted-specs.test.mjs"
       ],
       "kind": "node"
+    },
+    "test:vm-page-a": {
+      "cmd": "APEX_VM_PAGE_GROUP=a node --test tests/unit/adapted-specs.test.mjs",
+      "files": [
+        "tests/specs/albert-park-foundation.spec.js",
+        "tests/specs/autopilot.spec.js",
+        "tests/specs/logging.spec.js",
+        "tests/specs/projection.spec.js",
+        "tests/unit/adapted-specs.test.mjs"
+      ],
+      "kind": "command"
+    },
+    "test:vm-page-b": {
+      "cmd": "APEX_VM_PAGE_GROUP=b node --test tests/unit/adapted-specs.test.mjs",
+      "files": [
+        "tests/specs/agent-drive-bench.spec.js",
+        "tests/specs/cota-foundation.spec.js",
+        "tests/specs/imola-foundation.spec.js",
+        "tests/specs/parts-livery-contrast.spec.js",
+        "tests/specs/physics-fixes.spec.js",
+        "tests/specs/pit-lane.spec.js",
+        "tests/specs/race-control.spec.js",
+        "tests/unit/adapted-specs.test.mjs"
+      ],
+      "kind": "command"
     },
     "test:xr": {
       "files": [

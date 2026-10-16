@@ -17,6 +17,7 @@ const UpdateCheck = (function () {
   // spare a successful check, and counting a failed one against it hid an
   // update for ten minutes on exactly the flaky link that dropped the request.
   const FAIL_BACKOFF_MS = 30 * 1000;
+  const CHECK_WAIT_MS = 15000;
   // What the player reads when a lazy load was refused to avoid mixing builds.
   const REFUSED_CHIP = "UPDATE READY · RELOAD TO CONTINUE";
   const REFUSED_SAY = "UPDATE READY — RELOAD TO CONTINUE";
@@ -113,12 +114,21 @@ const UpdateCheck = (function () {
       if (inflight) return inflight;
       if (!force && t - lastCheck < THROTTLE_MS) return Promise.resolve(false);
       lastCheck = t;
-      inflight = Promise.resolve()
-        .then(() => doFetch("version.json?_=" + t, { cache: "no-store" }))
-        .then((r) => { if (!(r && r.ok)) throw new Error("version.json " + (r && r.status)); return r.json(); })
+      const abort = typeof AbortController === "function" ? new AbortController() : null;
+      let timer;
+      const deadline = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error("version.json timed out"));
+          try { if (abort) abort.abort(); } catch (_) { /* abort is best effort */ }
+        }, CHECK_WAIT_MS);
+      });
+      const read = Promise.resolve()
+        .then(() => doFetch("version.json?_=" + t, { cache: "no-store", ...(abort ? { signal: abort.signal } : {}) }))
+        .then((r) => { if (!(r && r.ok)) throw new Error("version.json " + (r && r.status)); return r.json(); });
+      inflight = Promise.race([read, deadline])
         .then((v) => markReady(v && v.build))
-        .catch(() => { lastCheck = t - THROTTLE_MS + FAIL_BACKOFF_MS; return false; })   // offline / deploy window: ask again soon
-        .finally(() => { inflight = null; });
+        .catch(() => { lastCheck = now() - THROTTLE_MS + FAIL_BACKOFF_MS; return false; })   // offline / deploy window: ask again soon
+        .finally(() => { clearTimeout(timer); inflight = null; });
       return inflight;
     }
 
