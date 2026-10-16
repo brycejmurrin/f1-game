@@ -147,7 +147,9 @@ process.exit(version ? (fixture.versionExit || 0) : (fixture.htmlExit || 0));
     fs.writeFileSync(path.join(dir, "sleep"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     const result = spawnSync("/bin/bash", ["--noprofile", "--norc", "-c", livePoll], {
       cwd: ROOT, encoding: "utf8", timeout: 15000,
-      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, FIXTURE_DIR: dir,
+      // TMPDIR pinned (#2354): the poll's `mktemp -d` honours it, and a caller (sync-pr's verify step) whose TMPDIR
+      // names a missing directory made `set -eu` exit before the first curl.
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, FIXTURE_DIR: dir, TMPDIR: dir,
         PAGE_URL: "https://fixture.invalid", GITHUB_RUN_ID: "123", BUILD: "4242", GITHUB_SHA: expectedSha },
     });
     assert.ok(fs.existsSync(path.join(dir, "count")), result.stdout + result.stderr);
@@ -156,6 +158,17 @@ process.exit(version ? (fixture.versionExit || 0) : (fixture.htmlExit || 0));
 }
 
 const goodLive = { version: '{"build":4242}', html: goodHtml };
+
+test("#2354: a caller TMPDIR that does not exist does not break the live poll", () => {
+  const saved = process.env.TMPDIR;
+  process.env.TMPDIR = path.join(ROOT, "scratch", "no-such-tmpdir");
+  try {
+    const result = pollFixture([goodLive]);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+  } finally {
+    if (saved === undefined) delete process.env.TMPDIR; else process.env.TMPDIR = saved;
+  }
+});
 test("live poll accepts the exact deployed SHA and numeric build", () => {
   const result = pollFixture([goodLive]);
   assert.equal(result.status, 0, result.stderr);
