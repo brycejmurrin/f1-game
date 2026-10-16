@@ -146,7 +146,6 @@ function analyse(env, track, prims, opt) {
   }
 
   // ---- unsupported: BFS from grounded prims over touching AABBs --------------
-  const grounded = new Uint8Array(props.length);
   const gapOf = new Float64Array(props.length);
   const hash = new Map(), big = [];
   props.forEach((p, i) => {
@@ -158,7 +157,7 @@ function analyse(env, track, prims, opt) {
         arr.push(i);
       }
   });
-  const queue = [];
+  const gapKnown = new Uint8Array(props.length);
   props.forEach((p, i) => {
     const s = faceSamples(p, false);
     let gap = Infinity;
@@ -167,33 +166,49 @@ function analyse(env, track, prims, opt) {
       if (g !== null && s[k + 1] - g < gap) gap = s[k + 1] - g;
     }
     gapOf[i] = gap;
-    // No ground reference at all (off the terrain skirt): not judged.
-    if (gap === Infinity || gap <= GAP) { grounded[i] = 1; queue.push(i); }
+    gapKnown[i] = gap === Infinity ? 0 : 1;
   });
   const touches = (a, b) =>
     a.minX - TOUCH <= b.maxX && b.minX - TOUCH <= a.maxX &&
     a.minZ - TOUCH <= b.maxZ && b.minZ - TOUCH <= a.maxZ &&
     a.minY - GAP <= b.maxY && b.minY - GAP <= a.maxY;
-  const visit = (q, j) => {
-    if (grounded[j] || !touches(q, props[j])) return;
-    grounded[j] = 1; queue.push(j);
-  };
-  for (let h = 0; h < queue.length; h++) {
-    const q = props[queue[h]];
-    if (q.maxX - q.minX > BIG || q.maxZ - q.minZ > BIG) {
-      // A landform: test every prim once (rare, a handful per circuit).
-      for (let j = 0; j < props.length; j++) visit(q, j);
-      continue;
-    }
-    for (let ix = Math.floor((q.minX - TOUCH) / HASH); ix <= Math.floor((q.maxX + TOUCH) / HASH); ix++)
-      for (let iz = Math.floor((q.minZ - TOUCH) / HASH); iz <= Math.floor((q.maxZ + TOUCH) / HASH); iz++) {
-        const arr = hash.get(ck(ix, iz));
-        if (arr) for (const j of arr) visit(q, j);
+  // Support propagation over touching AABBs from the seeded prims. `seedUnjudged`
+  // false = only prims with a measured ground reference seed (certified support);
+  // true = a prim with NO ground reference (off the terrain skirt, "not judged")
+  // also seeds, which is the legacy, ratcheted behaviour.
+  const propagate = (seedUnjudged) => {
+    const grounded = new Uint8Array(props.length), queue = [];
+    props.forEach((_p, i) => {
+      if (gapKnown[i] ? gapOf[i] <= GAP : seedUnjudged) { grounded[i] = 1; queue.push(i); }
+    });
+    const visit = (q, j) => {
+      if (grounded[j] || !touches(q, props[j])) return;
+      grounded[j] = 1; queue.push(j);
+    };
+    for (let h = 0; h < queue.length; h++) {
+      const q = props[queue[h]];
+      if (q.maxX - q.minX > BIG || q.maxZ - q.minZ > BIG) {
+        // A landform: test every prim once (rare, a handful per circuit).
+        for (let j = 0; j < props.length; j++) visit(q, j);
+        continue;
       }
-    for (const j of big) visit(q, j);
-  }
-  const unsupported = [];
-  props.forEach((p, i) => { if (!grounded[i]) unsupported.push({ p, gap: gapOf[i] }); });
+      for (let ix = Math.floor((q.minX - TOUCH) / HASH); ix <= Math.floor((q.maxX + TOUCH) / HASH); ix++)
+        for (let iz = Math.floor((q.minZ - TOUCH) / HASH); iz <= Math.floor((q.maxZ + TOUCH) / HASH); iz++) {
+          const arr = hash.get(ck(ix, iz));
+          if (arr) for (const j of arr) visit(q, j);
+        }
+      for (const j of big) visit(q, j);
+    }
+    return grounded;
+  };
+  const grounded = propagate(true), certified = propagate(false);
+  const unsupported = [], unknownSupport = [];
+  props.forEach((p, i) => {
+    if (!grounded[i]) unsupported.push({ p, gap: gapOf[i] });
+    // Judged, floating by the certified graph, rescued only through an unjudged prop (#1941):
+    // an advisory, not in the ratcheted count.
+    else if (gapKnown[i] && !certified[i]) unknownSupport.push({ p, gap: gapOf[i] });
+  });
 
   const partial = opt.footprints === false ? { candidates: 0, unknownSamples: 0, findings: [] }
     : footprint.analyseFootprints(props, groundY);
@@ -204,8 +219,8 @@ function analyse(env, track, prims, opt) {
 
   return {
     props: props.length,
-    buried, unsupported, flat, partial,
-    counts: { buried: buried.length, unsupported: unsupported.length,
+    buried, unsupported, unknownSupport, flat, partial,
+    counts: { buried: buried.length, unsupported: unsupported.length, unknownSupport: unknownSupport.length,
               flatCoplanar: flat ? flat.spots : 0 },
   };
 }
@@ -277,6 +292,7 @@ function main() {
     results.push(r);
     if (!asJson) console.log(`${id.padEnd(14)} props ${String(r.props).padStart(6)}  buried ${String(r.counts.buried).padStart(4)}` +
       `  unsupported ${String(r.counts.unsupported).padStart(4)}  flatCoplanar ${String(r.counts.flatCoplanar).padStart(3)} spot(s)` +
+      `  unknownSupport ${String(r.counts.unknownSupport).padStart(3)} (advisory)` +
       `  footprintSupport ${r.partial.findings.length} warning(s), ${r.partial.unknownSamples} unjudged sample(s)`);
   }
 
