@@ -32,17 +32,28 @@ physical-device, GPU or long-session claim follows.
 
 | # | Scenario | Result |
 |---|---|---|
-| I1 | Synthetic Gamepad: drift, inverted pedals, NaN axes, disconnect, two pads | pending |
-| I2 | Touch steer, deviceorientation tilt (rotated screen) | pending |
-| I3 | Keyboard leaks menu <-> race, rebind conflicts | pending |
+| I1 | Synthetic Gamepad: drift, NaN/Infinity axes, NaN button values, disconnect | clean. NaN/Infinity axes steer 0; a NaN trigger value gives throttle/brake 0 (no NaN leak); drift 0.1 under the 5 % dead zone steers 0.053 (rescaled, continuous); unplug zeroes steer/pedals; `RT .6` reads throttleLevel 0.545. Inverted pedals and two pads NOT run live (static pass clean) |
+| I2 | Touch steer, deviceorientation tilt (rotated screen) | **F1 found and fixed** (below); the rotated-screen math (`TiltRoll.rollDeg`) was only read, not driven live. Touch steer NOT run |
+| I3 | Keyboard leaks menu <-> race, rebind conflicts | NOT RUN |
 
 ## Caught-exception pauses
 
-pending
+NOT RUN: `debugger_exceptions all` was never enabled (the page was too slow after the T1 wedge to make pausing practical).
 
-## Fixes
+## Findings and fixes
 
-none yet.
+- **F1 (fixed) — a non-finite deviceorientation reading poisons the TILT filter for the session.**
+  `onOrient` only dropped `roll === null`; `TiltRoll.rollDeg(0, Infinity, ...)` returns NaN (`cos(Infinity)`),
+  which seeded the One-Euro state (`oePrev`) with NaN, so every later reading was NaN and `Input.steer()`
+  returned NaN to physics until a reload. Reachable only from a broken sensor/WebView (real `beta`/`gamma` are
+  finite or null), hence low severity. Fix: `!Number.isFinite(roll)` joins the null guard
+  (`js/input/input.js` `onOrient`, 3 lines). Test: `tests/unit/digital-steer.test.mjs` "one non-finite
+  orientation reading does not poison the TILT filter" — failed (`steer stayed NaN`) before, passes after.
+- Harness mistakes (not game defects): a `navigator.getGamepads` defined non-writable swallowed later plain
+  assignments (the pad read as unplugged); a boolean `Input.throttle()` hides the analog value — use
+  `throttleLevel()` / `brakeLevel()`.
+- **T4 — the debug Chrome on SwiftShader drove the box to loadavg 61** and timed out the commit hook; the
+  Chrome was shut down before committing. Commit with the debug Chrome stopped.
 
 ## Not run
 
