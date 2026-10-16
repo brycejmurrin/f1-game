@@ -83,3 +83,8 @@ node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wr
   [`references/sync-pr.md`](references/sync-pr.md)
 - Merging with / pushing to the deploy branch, union sweeps, baseline
   grow/shrink rules, Pages concurrency → [`references/deploy.md`](references/deploy.md)
+- Moving a browser spec onto the node gate (vm-portable check, `ADAPTED`/`TWINNED` entry, fidelity mutant,
+  lowering `twinDebt`) → [`references/vm-twin.md`](references/vm-twin.md)
+- Before fixing near a path: list the OPEN `docs/notes/DEFECT-LEDGER.md` entries that touch it without reading the
+  multi-thousand-line file: `rg -n -C2 '\bOPEN\b' docs/notes/DEFECT-LEDGER.md | rg -i -C2 '<path|symbol|test name>'` (drop the
+  second `rg` to list all ~20 OPEN lines). A hit is a known defect: read that entry before re-reporting or "fixing" it.

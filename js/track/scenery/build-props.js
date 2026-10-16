@@ -230,7 +230,9 @@ const TrackBuildProps = (function () {
     const G = track._gfx || (typeof GLX !== "undefined" ? GLX : null);
     const CITY_LOD = (G && G.mobileTier) ? 0.72 : 1;
     const lod = (nn, floor) => Math.max(floor, Math.round(nn * CITY_LOD));
-    const out = TrackModels.scratch();
+    // Props run ~70-290 verts per metre of lap (median ~130; 52-circuit sweep): start at 100/m so a
+    // typical build grows once, not seven times from 8192. Glass and water stay small.
+    const out = TrackModels.scratch(Math.round(track.total * 100));
     const glassBuf = TrackModels.scratch();
     const waterBuf = TrackModels.scratch();
     // Cells already emitted this build — overlapping waterBand/waterField calls
