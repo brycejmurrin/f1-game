@@ -1,19 +1,25 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "f1-dev-tools",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Reproduce, inspect, compare and validate Apex 26 camera and replay changes using the game's existing developer interface.",
-  "author": { "name": "F1 Game" },
+  "author": {
+    "name": "F1 Game"
+  },
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "F1 Dev Tools",
         "shortDescription": "Camera and replay workflows",
-        "longDescription": "Five development workflows for brycejmurrin/f1-game: scene reproduction, camera inspection, before/after comparisons, WATCH replay transition checks, and camera preset preview/export. Includes browser helpers and a report generator; uses the existing Apex and browser tooling in a game checkout.",
+        "longDescription": "Five development workflows for brycejmurrin/f1-game: scene reproduction, camera inspection, before/after comparisons, WATCH replay transition checks, and camera preset preview/export. Uses the repository's apex-tools, playwright-official and chrome-devtools MCP servers for deterministic game probes, live browser checks and performance inspection.",
         "developerName": "F1 Game",
         "category": "Developer Tools",
-        "capabilities": [],
-        "defaultPrompt": "Use F1 Dev Tools to reproduce and inspect a camera or replay problem in f1-game, then validate the change with matching render traces."
+        "capabilities": [
+          "apex-tools",
+          "playwright-official",
+          "chrome-devtools"
+        ],
+        "defaultPrompt": "Use the configured apex-tools MCP for game identity and diagnostics, then one browser MCP at a time: playwright-official for navigation/DOM/screenshots or chrome-devtools for live console/network/performance inspection. Reproduce and inspect the f1-game camera or replay problem, then validate the change with matching render traces."
       }
     }
   }
