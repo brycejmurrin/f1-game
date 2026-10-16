@@ -26,6 +26,8 @@ const READY_CAP_MS = 4000;
 // ── side-world state ────────────────────────────────────────────────────────
 let world = null;        // RAPIER.World
 let _worldTrack = null;  // track identity the trimesh was built for
+let _floorY = -Infinity; // kill plane for pooled bodies: lowest road vertex - FLOOR_MARGIN_M
+const FLOOR_MARGIN_M = 25;
 let _mirrors = [];       // one kinematicPositionBased body per car (cars[] order)
 let _worldGen = 0;       // bumped every buildWorld — the incident sim aborts a takeover if this changes under it
 // Incident-sim takeover (R2/R3/C1, js/physics/incident-sim.js): indices whose mirror
@@ -414,7 +416,11 @@ function buildWorld(track, cars) {
   _carForce = new Array(cars.length).fill(0);
   _spallCool = new Array(cars.length).fill(0);
   const geo = track.roadGeo;
+  _floorY = -Infinity;
   if (geo && geo.pos && geo.idx) {
+    let lo = Infinity;
+    for (let i = 1; i < geo.pos.length; i += 3) if (geo.pos[i] < lo) lo = geo.pos[i];
+    if (lo < Infinity) _floorY = lo - FLOOR_MARGIN_M;
     const roadBody = world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     world.createCollider(
       RAPIER.ColliderDesc.trimesh(
@@ -770,11 +776,14 @@ function _ageAndCullPool(pool, dt, px, pz, havePlayer, restLimit, farM) {
     if (!s.live) continue;
     const b = s.body;
     if (b.isSleeping()) { s.restT += dt; } else { s.restT = 0; }
-    let far = false;
+    // The world is the road ribbon alone: a shard thrown off it free-falls, never
+    // sleeps and is never "far" from a player standing above it, so it held a
+    // pool slot and kept the asleep-skip off. Below the floor it is gone.
+    const t = b.translation();
+    let far = t.y < _floorY;
     if (havePlayer) {
-      const t = b.translation();
       const dx = t.x - px, dz = t.z - pz;
-      far = dx * dx + dz * dz > far2;
+      far = far || dx * dx + dz * dz > far2;
     }
     if (s.restT > restLimit || far) { b.setEnabled(false); s.live = false; }
   }

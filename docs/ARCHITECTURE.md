@@ -7,7 +7,8 @@ source audits, sharp and typescript for tooling — never shipped). Four vendore
 libraries DO ship, under `vendor/`, each loaded only by the feature that needs
 it: three.js r186 (TLX backend), Rapier (`js/physics/debris-world.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
-static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
+static files (GitHub Pages). Every project runtime JS file under `js/` is an IIFE that
+assigns ONE global; vendored addons may use their upstream module format.
 
 > **New here?** Start with [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) (boot path,
 > layer map, where to edit). This file is the module **contract** — what each
