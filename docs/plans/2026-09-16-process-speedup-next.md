@@ -38,7 +38,7 @@ wake-lock 18.6 min, pit-signs / race-control 1–12 min).
   SwiftShader for one more cycle: it is the parity anchor for the VM twins,
   and a renderer swap under it should be a deliberate, separately measured
   change.
-- `tools/ci/select-budget.mjs` `MEASURED` (79.7 s/test, the budget's basis)
+- `tools/ci/select-budget.mjs` `MEASURED` (7.5 s/test p75, superseding the 79.7 s SwiftShader baseline; see `tests/data/spec-timings.json`)
   is a SwiftShader number: re-measure after two green runs and lower it, so
   the 15-minute budget admits more specs per shard.
 

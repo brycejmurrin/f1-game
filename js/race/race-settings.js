@@ -157,7 +157,7 @@ const RaceSettings = (function () {
     } = G;
     const {
       GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
-      qualiResults, openQuali, enableTilt, getSteerMode, buildStandings, raceIntro,
+      qualiResults, openQuali, enableTilt, getSteerMode, buildStandings, raceIntro, previewWxPlan,
     } = deps;
     const isTimeTrial = () => G.session === "tt";
     const isChampionship = () => G.flow === "season" || G.flow === "career";
@@ -210,6 +210,7 @@ const RaceSettings = (function () {
       SettingRow.disable("rs-weather", !!daily);
       $("rs-mixed").hidden = tt;
       SettingRow.paint("rs-mixed", G.raceChangeable ? "mixed" : "stable", RS_CONDITIONS);
+      paintForecast(tt);
       SettingRow.paint("rs-time", G.raceTimeOfDay, RS_TIME);
       SettingRow.disable("rs-time", !!daily);
       $("rs-diff").hidden = tt;
@@ -357,6 +358,30 @@ const RaceSettings = (function () {
       $("rs-plan-loss").textContent = (stops ? stops + (stops === 1 ? " STOP · BOX L" : " STOPS · BOX L") + plan.lapsAt.join(", L") : "NO STOP")
         + (pin === 0 && stops ? " · 2 DRY COMPOUNDS" : "")   // NO STOP pinned, the rule raised it (AiDrive.stintPlan)
         + " · PIT LOSS ≈ " + Math.round(pits.lossS()) + " s";
+    }
+
+    // FORECAST line under CONDITIONS (MIXED only): the plan the green will arm, read through
+    // previewWxPlan (deps) so staging laps/weather never caches it. Built at runtime (no shell node).
+    // Only once the selected circuit is the BUILT one: the plan's duration is capped by the built
+    // track's length, so a preview from another circuit's length could differ from the armed arc.
+    function paintForecast(tt) {
+      let el = $("rs-forecast");
+      if (!el) {
+        const host = $("rs-mixed");
+        if (!host || !host.parentNode) return;
+        el = document.createElement("p");
+        el.id = "rs-forecast"; el.className = "adv-help"; el.hidden = true; el.setAttribute("aria-live", "polite");
+        host.parentNode.insertBefore(el, host.nextSibling);
+      }
+      let text = "";
+      const def = Tracks.LIST[G.trackIdx];
+      if (!tt && G.raceChangeable && typeof Forecast !== "undefined" && previewWxPlan && G.track && def && G.track.def && G.track.def.id === def.id) {
+        const plan = previewWxPlan({ laps: G.raceLaps, from: G.raceWeather });
+        const f = plan && Forecast.compute({ plan, from: G.raceWeather, lapS: G.track.total / 45, seed: netRoom || !G.simSeed ? 0 : G.simSeed() });
+        if (f) text = "FORECAST: " + f.text;
+      }
+      el.textContent = text;
+      el.hidden = !text;
     }
 
     function wireRaceSettings() {

@@ -433,3 +433,77 @@ test("A-W1: off on a software adapter (unset knob), forced on by apex26.tlxDrawW
   assert.equal(off.calls.length, 0, "=0: no draw stage");
   assert.equal(off.W1.stages.drawn, null);
 });
+
+function cloudCacheHarness() {
+  const source = read("js/render/three/tsl-sky.js");
+  const block = source.slice(source.indexOf("    let cacheWarmPending"), source.indexOf("    derive();", source.indexOf("    let cacheWarmPending")));
+  let renderer;
+  const events = [], resources = Array.from({ length: 4 }, (_, i) => ({ texture: {}, dispose() {
+    assert.ok(!resources.slice(0, 2).includes(renderer.getRenderTarget()), "cache retirement must not destroy a bound cache target");
+    events.push("dispose" + i);
+  } }));
+  const C = { rts: resources.slice(0, 2), geo: resources[2], mat: resources[3], dead: false, filling: true, band: 0, N_BANDS: 4, front: 0, F: { y0: {}, y1: {} } };
+  const D = { cacheOn: { value: 1 } }, U = { cloud: { value: 1 } };
+  const context = vm.createContext({ C, D, U });
+  vm.runInContext(block + "\n;globalThis.api={cacheStep,cacheWarm,dispose};", context);
+  renderer = { target: "original", mrt: "mrt", autoClear: true,
+    getRenderTarget() { return this.target; }, getMRT() { return this.mrt; },
+    setRenderTarget(t) { this.target = t; events.push("target:" + (typeof t === "string" ? t : "cache")); },
+    setMRT(t) { this.mrt = t; events.push("mrt:" + t); },
+    render() { throw new Error("cache failed"); },
+  };
+  return { api: context.api, renderer, events, C, D };
+}
+
+test("failed cloud cache restores render state before retiring optional resources once", () => {
+  const h = cloudCacheHarness(); assert.throws(() => h.api.cacheStep(h.renderer), /cache failed/);
+  assert.equal(h.renderer.autoClear, true); assert.equal(h.D.cacheOn.value, 0);
+  assert.ok(h.events.indexOf("mrt:mrt") < h.events.indexOf("dispose0"));
+  h.api.dispose(); h.api.dispose(); h.api.cacheStep(h.renderer);
+  assert.equal(h.events.filter((e) => e.startsWith("dispose")).length, 4);
+});
+
+test("failed cloud cache defers retirement until an in-flight compile releases it", async () => {
+  const h = cloudCacheHarness(); let settle;
+  h.renderer.compileAsync = () => new Promise((r) => { settle = r; });
+  const pending = h.api.cacheWarm(h.renderer);
+  assert.throws(() => h.api.cacheStep(h.renderer), /cache failed/); h.api.dispose();
+  assert.equal(h.events.filter((e) => e.startsWith("dispose")).length, 0);
+  settle(); await pending;
+  assert.equal(h.events.filter((e) => e.startsWith("dispose")).length, 4);
+});
+
+
+test("cloud retirement still flushes after a rejected compile and individual dispose errors", async () => {
+  const h = cloudCacheHarness(); let reject;
+  h.renderer.compileAsync = () => new Promise((_, r) => { reject = r; });
+  h.C.rts[0].dispose = () => { h.events.push("dispose0"); throw new Error("already lost"); };
+  const pending = h.api.cacheWarm(h.renderer); const rejected = assert.rejects(pending, /compile rejected/);
+  h.api.dispose(); reject(new Error("compile rejected")); await rejected;
+  assert.equal(h.events.filter((e) => e.startsWith("dispose")).length, 4);
+  h.api.dispose(); assert.equal(h.events.filter((e) => e.startsWith("dispose")).length, 4);
+});
+
+
+for (const rejected of [false, true]) test(`cloud warm restores target and MRT before retirement (rejected=${rejected})`, async () => {
+  const h = cloudCacheHarness(); let finish;
+  h.renderer.compileAsync = () => new Promise((resolve, reject) => { finish = () => rejected ? reject(new Error("compile rejected")) : resolve(); });
+  const pending = h.api.cacheWarm(h.renderer);
+  const outcome = rejected ? assert.rejects(pending, /compile rejected/) : pending;
+  assert.equal(h.renderer.target, h.C.rts[1]); assert.equal(h.renderer.mrt, null);
+  h.api.dispose(); finish(); await outcome;
+  assert.equal(h.renderer.target, "original"); assert.equal(h.renderer.mrt, "mrt");
+  assert.ok(h.events.indexOf("target:original") < h.events.indexOf("dispose0"));
+  assert.ok(h.events.indexOf("mrt:mrt") < h.events.indexOf("dispose0"));
+  h.api.dispose(); assert.equal(h.events.filter((e) => e.startsWith("dispose")).length, 4);
+});
+
+test("stale cloud warm releases resources without overwriting a successor renderer target", async () => {
+  const h = cloudCacheHarness(); let finish;
+  h.renderer.compileAsync = () => new Promise((resolve) => { finish = resolve; });
+  const pending = h.api.cacheWarm(h.renderer); h.api.dispose();
+  h.renderer.setRenderTarget("successor"); h.renderer.setMRT("successor-mrt");
+  finish(); await pending;
+  assert.equal(h.renderer.target, "successor"); assert.equal(h.renderer.mrt, "successor-mrt");
+  assert.equal(h.events.filter((e) => e.startsWith("dispose")).length, 4);
+});

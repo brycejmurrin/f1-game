@@ -154,6 +154,10 @@ window.ScrollFade = (function () {
 
   function paintAll() {
     timer = 0;
+    // A tab or picker rebuild detaches its old subtree with no resize or
+    // screen flip, so settle() never runs; without this the observers keep
+    // every replaced pane alive for as long as the screen stays open (#2325).
+    pruneWatched();
     // Measure everything, THEN write everything: one layout for the whole batch
     // instead of one per region. Skip regions whose screen layer is [hidden] —
     // a mid-race resize would force layout over every menu pane still in the DOM.

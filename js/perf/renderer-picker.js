@@ -95,6 +95,27 @@ function paintRendererSummary(pref, liveFallback) {
       : "");
   sum.innerHTML = '<span data-fold="k">RENDERER</span><span data-fold="sep"> · </span><span data-fold="val">' +
     backendLabel(pref) + "</span>" + fallbackChip;
+  paintPostHealth(sum);
+}
+function paintPostHealth(summary) {
+  const details = summary && summary.parentElement;
+  if (!details || !document.createElement) return;
+  let row = document.getElementById("pm-post-health");
+  const health = typeof GLX !== "undefined" && typeof GLX.postHealth === "function" ? GLX.postHealth() : null;
+  if (!health || health.state === "healthy") { if (row) row.hidden = true; return; }
+  if (!row) {
+    row = document.createElement("div"); row.id = "pm-post-health";
+    row.setAttribute("role", "status"); details.appendChild(row);
+  }
+  row.hidden = false;
+  row.textContent = health.state === "recovering"
+    ? "Post-processing recovering (" + health.attempts + "/" + health.maxAttempts + ")"
+    : "Post-processing reduced: " + (health.reason || "Recovery unavailable");
+  if (health.state === "degraded" && health.retryable !== false && typeof GLX.retryPost === "function") {
+    const retry = document.createElement("button"); retry.type = "button"; retry.textContent = "RETRY POST-PROCESSING";
+    retry.addEventListener("click", () => { GLX.retryPost(); paintPostHealth(summary); });
+    row.appendChild(retry);
+  }
 }
 function markReloading(rb, next) {
   const msg = backendLabel(next) + " — RELOADING…";
@@ -125,12 +146,14 @@ const ARM_MS = 6000;
 function disarm(btn, repaint) {
   try {
     if (btn._apexArmT) { clearTimeout(btn._apexArmT); btn._apexArmT = 0; }
-    if (btn.dataset) delete btn.dataset.armed;
+    if (btn.dataset) { delete btn.dataset.armed; delete btn.dataset.armedFor; }
     try { btn.classList.remove("armed"); } catch (_) { /* option element */ }
   } catch (_) { /* dataset unavailable */ }
   if (typeof repaint === "function") { try { repaint(); } catch (_) { /* label stays until the next paint */ } }
 }
-function raceGuard(btn, armedText, repaint) {
+// `target`: the value being confirmed. A second tap on a DIFFERENT value re-asks about that one (H29)
+// instead of spending the first value's confirm.
+function raceGuard(btn, armedText, repaint, target) {
   try {
     if (typeof document === "undefined" || !document.body || !btn) return true;
     if (document.body.dataset.race !== "1") {
@@ -140,9 +163,11 @@ function raceGuard(btn, armedText, repaint) {
     }
     // Age as well as the timer: a throttled background tab can hold the
     // expiry back for minutes, and a tap that old is a fresh question.
-    const stale = !!btn.dataset.armed && (Date.now() - (btn._apexArmedAt || 0)) > ARM_MS;
+    const other = target !== undefined && btn.dataset.armedFor !== undefined && btn.dataset.armedFor !== String(target);
+    const stale = !!btn.dataset.armed && ((Date.now() - (btn._apexArmedAt || 0)) > ARM_MS || other);
     if (!btn.dataset.armed || stale) {
       btn.dataset.armed = "1";
+      if (target !== undefined) btn.dataset.armedFor = String(target);
       btn._apexArmedAt = Date.now();
       if (isSelect(btn) && btn.options) {
         const opts = btn.options;
@@ -156,7 +181,7 @@ function raceGuard(btn, armedText, repaint) {
       return false;
     }
     if (btn._apexArmT) { clearTimeout(btn._apexArmT); btn._apexArmT = 0; }
-    delete btn.dataset.armed;
+    delete btn.dataset.armed; delete btn.dataset.armedFor;
     try { btn.classList.remove("armed"); } catch (_) { /* option element */ }
   } catch (_) { /* dataset unavailable: proceed as before */ }
   return true;
@@ -317,7 +342,7 @@ function showUnavailable(opts) {
 }
 
 function applyBackend(next, rb) {
-  if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb))) return false;
+  if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb), next)) return false;
   Log.info("game", "RendererPicker.applyBackend " + next);
   uiSelect();
   if (!available(next)) {
@@ -395,7 +420,7 @@ function threePathLabel(v) {
 }
 function applyThreePath(next, opts) {
   if (readBackend() === "three" && !(opts && opts.noReload) &&
-      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-three-path") : null, "THREE PATH: END THIS RACE & RELOAD?", paintPresent)) return false;
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-three-path") : null, "THREE PATH: END THIS RACE & RELOAD?", paintPresent, next)) return false;
   // A blocked write is recorded in store.broken; the preference still paints from the in-memory read.
   if (next === "webgl2") GameStore.store.rawSet("apex26.tlxForceGL", "1");
   else if (next === "webgpu") GameStore.store.rawSet("apex26.tlxForceGL", "0");
@@ -429,7 +454,7 @@ function readEnvProbe() {
 function envProbeLabel(v) { return v === "on" ? "ON" : "OFF"; }
 function applyEnvProbe(next, opts) {
   if (readBackend() === "three" && !(opts && opts.noReload) &&
-      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-car-reflect") : null, "CAR REFLECTIONS: END THIS RACE & RELOAD?", paintPresent)) return false;
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-car-reflect") : null, "CAR REFLECTIONS: END THIS RACE & RELOAD?", paintPresent, next)) return false;
   if (next === "on") GameStore.store.rawSet("apex26.tlxEnvProbe", "1");
   else GameStore.store.rawDel("apex26.tlxEnvProbe");
   paintPresent();
@@ -472,7 +497,7 @@ function shotReloadLive() {
 }
 function applyShotMode(next, opts) {
   if (shotReloadLive() && !(opts && opts.noReload) &&
-      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null, "SCREENSHOTS: END THIS RACE & RELOAD?", paintPresent)) return false;
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null, "SCREENSHOTS: END THIS RACE & RELOAD?", paintPresent, next)) return false;
   // Drop inherited session latches, then write the new shot mode (which may
   // put apex26.wgxCapture back into sessionStorage for this tab).
   try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }

@@ -90,49 +90,59 @@ const Assets = (function () {
 
   // Break strip decode into short tasks: 17× createImageBitmap on a ~1.6 MB
   // pack strip was one contiguous main-thread hitch during the title idle
-  // Assets.load() kick. scheduler.yield when present; else a microtask / 0-ms
+  // Assets.load() kick. scheduler.yield when present; else a 0-ms
   // timer. VM unit harnesses often lack setTimeout — resolve immediately then.
+  // Microtasks drain before rendering; a timer supplies the fallback TASK.
+  // https://web.dev/articles/optimize-long-tasks
   function _yieldDecode() {
     try {
       if (typeof scheduler !== "undefined" && scheduler && typeof scheduler.yield === "function") {
         return scheduler.yield();
       }
     } catch (_) { /* fall through */ }
-    if (typeof queueMicrotask === "function") {
-      return new Promise((resolve) => { queueMicrotask(resolve); });
-    }
     if (typeof setTimeout === "function") {
       return new Promise((resolve) => { setTimeout(resolve, 0); });
     }
     return Promise.resolve();
   }
 
-  async function _decodeStrip(blob, size, present) {
+  const DECODE_CANCELED = Symbol("asset decode canceled");
+  async function _decodeStrip(blob, size, present, current) {
+    const check = () => { if (current && !current()) throw DECODE_CANCELED; };
     const out = new Array(MAT_LAYERS);
     try {
       let n = 0;
       for (let i = 0; i < MAT_LAYERS; i++) {
         if (!present[i]) continue;
+        check();
         if (n++) await _yieldDecode();
+        check();
         out[i] = await createImageBitmap(blob, 0, i * size, size, size, BITMAP_OPTS);
+        check();
       }
       return out;
-    } catch (_) {
+    } catch (error) {
+      _releaseStrip(out);
+      if (error === DECODE_CANCELED) throw error;
+      check();
       // The cropping overload of createImageBitmap has a patchy history on
       // Safari with a Blob source. Fall back to one full-strip decode and crop
       // each layer out of that ImageBitmap — the same overload on an already
       // decoded source, with the same options. NOT a 2D canvas: a canvas
       // backing store is premultiplied (and colour-managed) in every engine,
       // so a drawImage crop quantises or darkens every low-alpha layer.
-      _releaseStrip(out);
       const full = await createImageBitmap(blob, BITMAP_OPTS);
       const alt = new Array(MAT_LAYERS);
       try {
+        check();
         let n = 0;
         for (let i = 0; i < MAT_LAYERS; i++) {
           if (!present[i]) continue;
+          check();
           if (n++) await _yieldDecode();
+          check();
           alt[i] = await createImageBitmap(full, 0, i * size, size, size, BITMAP_OPTS);
+          check();
         }
         return alt;
       } catch (e) {
@@ -154,16 +164,13 @@ const Assets = (function () {
   // it back from an FBO — creating/losing a context per pack was a multi-
   // second SwiftShader stall (static audit 2026-10-05 #5).
   // `data` holds n pages of size*size*4; returns the indices it wrote.
-  let _scratchGl = null;   // { cv, gl, tex, fbo, size, view, page }
+  let _scratchGl = null;   // { cv, gl, tex, fbo, size }
   function _ensureScratchGl(size) {
-    const page = size * size * 4;
     if (_scratchGl && _scratchGl.gl && !_scratchGl.gl.isContextLost()) {
       if (_scratchGl.size !== size) {
         _scratchGl.cv.width = size;
         _scratchGl.cv.height = size;
         _scratchGl.size = size;
-        _scratchGl.page = page;
-        _scratchGl.view = null;
       }
       return _scratchGl;
     }
@@ -182,7 +189,7 @@ const Assets = (function () {
     const fbo = gl.createFramebuffer();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-    _scratchGl = { cv, gl, tex, fbo, size, page, view: null };
+    _scratchGl = { cv, gl, tex, fbo, size };
     return _scratchGl;
   }
   function readLayerBytes(size, images, n, data) {
@@ -203,15 +210,9 @@ const Assets = (function () {
     const scratch = _ensureScratchGl(size);
     if (!scratch) return done;
     const { gl, tex, fbo } = scratch;
-    // One reusable view onto `data` (rebuilt when the destination buffer or
-    // page size changes) — avoids a fresh Uint8Array wrapper per layer.
-    let view = scratch.view;
-    if (!view || view.buffer !== data.buffer || view.byteOffset !== data.byteOffset ||
-        scratch.page !== page) {
-      view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-      scratch.view = view;
-      scratch.page = page;
-    }
+    // One operation-local view, not one per layer. The session scratch context
+    // must not retain the destination buffer after upload/unload.
+    const view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
     for (const i of pending) {
@@ -283,13 +284,9 @@ const Assets = (function () {
     }
     if (!pending.length) return Promise.resolve(done);
     const { tex, fbo } = scratch;
-    let view = scratch.view;
-    if (!view || view.buffer !== data.buffer || view.byteOffset !== data.byteOffset ||
-        scratch.page !== page) {
-      view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-      scratch.view = view;
-      scratch.page = page;
-    }
+    // The pending operation owns this view until its fence settles. Concurrent
+    // readbacks each keep their own buffer; the shared context owns none.
+    const view = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
     // This context belongs only to Assets (_ensureScratchGl creates its own
     // canvas). Drain stale scratch errors before each transaction; GL failures
     // generally set flags instead of throwing, including allocation failures.
@@ -480,7 +477,7 @@ const Assets = (function () {
         variant.normal ? _fetchStrip(variant.normal, generation).catch(() => null) : null,
       ]);
       if (generation !== _loadGeneration || !albedoBlob) return false;
-      albedo = await _decodeStrip(albedoBlob, size, present);
+      albedo = await _decodeStrip(albedoBlob, size, present, () => generation === _loadGeneration);
       if (generation !== _loadGeneration) {
         _discardLoad(albedo, normal, albedoTex, normalTex);
         return false;
@@ -488,7 +485,7 @@ const Assets = (function () {
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) throw new Error("albedo-upload");
       if (normalBlob) {
-        try { normal = await _decodeStrip(normalBlob, size, present); }
+        try { normal = await _decodeStrip(normalBlob, size, present, () => generation === _loadGeneration); }
         catch (_) { normal = null; }   // undecodable normal strip: albedo alone
         if (generation !== _loadGeneration) {
           _discardLoad(albedo, normal, albedoTex, normalTex);

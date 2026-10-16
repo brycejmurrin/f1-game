@@ -95,7 +95,7 @@ export async function debuggerRequest(path, body, port = debuggerPort()) {
       headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "MCP-Protocol-Version": "2025-06-18" },
       body: body ? JSON.stringify(body) : undefined,
     });
-  } catch (e) { throw Error(`Debugger daemon unavailable or request timed out; start js-debugger-mcp.sh serve-http on port${port}. A timeout does not cancel execution. (${e.cause?.code || e.name})`); }
+  } catch (e) { throw Error(`Debugger daemon unavailable (nothing listening on 127.0.0.1:${port}) or request timed out; start js-debugger-mcp.sh serve-http on port ${port}. A timeout does not cancel execution. (${e.cause?.code || e.name})`); }
   const reader = response.body.getReader();
   let size = 0, chunks = [];
   try {
@@ -109,7 +109,7 @@ export async function debuggerRequest(path, body, port = debuggerPort()) {
     }
   } finally { reader.releaseLock(); }
   const result = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  if (!response.ok) throw Error(result.error?.message || `Debugger HTTP${response.status}`);
+  if (!response.ok) throw Error(result.error?.message || `Debugger HTTP ${response.status}`);
   if (result.error) throw Error(result.error.message);
   return result;
 }

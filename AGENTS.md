@@ -3,7 +3,7 @@
 Unofficial WebGL2 F1 fan game. No build step, no frameworks: pure IIFE modules loaded via `<script>` tags, static
 files on GitHub Pages.
 
-This file holds the rules every session needs and nothing else. Evidence lives in `docs/` (start at `docs/README.md`),
+This file holds the rules every session needs and nothing else. Evidence lives in `docs/` (start at `docs/README.md`, then `docs/VERIFICATION.md`),
 workflows in `.claude/skills/`, enforced rules in `.claude/hooks/`, renderer rules in `.claude/rules/` (they load with
 their files). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
 
@@ -12,7 +12,7 @@ their files). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
 npx serve -l 3456 .                   # serve locally (or: python3 -m http.server 3456)
 node tools/ci/pick-tests.mjs          # 1. which GROUPS does this change need? (the table below; select-specs.mjs: per-SPEC)
 #                                       2. make ALL edits, then verify ONCE (rule 2); a new test file = a tests/groups.json group + a TESTING.md §5 row + `npm run gen`
-node tools/ci/tooling-fast.mjs --jobs=3   # 3. edit-loop check, a SUBSET (rule 3): ~2 min idle; `npm run test:tooling-fast` is --jobs=1, ~9 min
+node tools/ci/tooling-fast.mjs --changed --jobs=3   # 3. diff-aware edit-loop check; `npm run test:tooling-fast` is the full floor before a code push
 node tools/ci/test-bg.mjs <group>     # 4. ONE browser group, in the background → artifacts/logs/<group>.log (rule 5)
 node tools/ci/test-bg.mjs --wait --timeout 45   # 5. the waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
 node tools/ci/deploy.mjs --gate-only  # 6. before a push: the only check that runs what the deploy runs
@@ -112,8 +112,7 @@ tables: `docs/ARCHITECTURE.md`.
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules — pay for every added line. The commit hook
   absorbs ≤ 40 lines of growth (the raise lands in your diff as `tests/data/ratchets.d/<branch>.json`, a conflict-free
-  delta); more blocks until you extract or raise it with a reason (`tools/check/ratchets.mjs --update`; also lowers). A deliberate TREE-metric raise (cssClasses…)
-  is `--update --fragment --reason="…"`: a delta too, `ratchets.json` untouched.
+  delta); more blocks until you extract or raise it with a reason (`tools/check/ratchets.mjs --update`; also lowers).
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log` (`js/core/log.js`), never bare `console.*`.
 - Coordinates: +Y up, metres, radians, arc `s`, lateral `x` +right; +k = LEFT turn (measured). Never flip a curvature
   sign without a rendered lap.
@@ -153,7 +152,7 @@ wrapped as `apex_*`. Routes: live canvas → skill `mcp-probe`; pre-push or depl
 code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps → skill `ci-watch` + `tools/ci/pr-board.mjs`
 (agent `ci-watcher` returns the board; agent `merge-desk` runs the desk); owning PRs → skill `steward`; messaging, claims and authority between sessions
 → skill `agent-fleet` (spawning siblings: `source_url`, auto mode, the user's quoted grant; `send_message` first lines; measured
-allow-rule shapes in `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`); failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`; a scoped change handed to a subagent you message mid-task → agent `worker`; source debugging → skill `js-debugger` (separate parent-owned MCP `debugger_*`; [Agent JS debugger](docs/research/AGENT-JS-DEBUGGER-MCP.md)).
+allow-rule shapes in `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`); failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`; a scoped change handed to a subagent you message mid-task → agent `worker`.
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence. Bulk or post-deploy web reading goes to agent `deploy-research`.
 

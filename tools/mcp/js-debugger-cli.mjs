@@ -42,7 +42,8 @@ use one mode/controller for a browser target. The wrapper never installs an MCP 
     print(result); return 0;
   }
   if (command === "call") {
-    if (!TOOLS.some(t => t.name === args[1])) throw Error("Unknown debugger tool; use list-tools");
+    if (!args[1]) throw Error("call needs a tool name: call <tool> '<JSON object>'; use list-tools");
+    if (!TOOLS.some(t => t.name === args[1])) throw Error(`Unknown debugger tool ${args[1]}; use list-tools`);
     const a = JSON.parse(args[2] || "{}");
     const result = await debuggerRequest("/mcp", { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: args[1], arguments: a } });
     print(result.result.structuredContent); return result.result.isError ? 1 : 0;

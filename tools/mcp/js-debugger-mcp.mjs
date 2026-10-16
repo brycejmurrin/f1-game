@@ -19,7 +19,7 @@ export const TOOLS = [
   def("debugger_state", "Read current pause/stack/scopes and nonblocking operation results. A command acknowledgment is not a pause verdict.", {}, [], true),
   def("debugger_scripts", "List parsed scripts, at most 200. Narrow by URL substring.", { filter: { type: "string", maxLength: 1000 } }, [], true),
   def("debugger_source", "Read a bounded script source excerpt. Lines and columns in this MCP are ONE-based.",
-    { scriptId: str("Script id from debugger_scripts or a stack frame"), startLine: integer("First line"), count: integer("Line count, max200", 1, 200) }, ["scriptId"], true),
+    { scriptId: str("Script id from debugger_scripts or a stack frame"), startLine: integer("First line"), count: integer("Line count, max 200", 1, 200) }, ["scriptId"], true),
   def("debugger_breakpoint", "Set a URL breakpoint, optionally conditional. ONE-based line/column; URL breakpoints survive reload. Conditions execute JavaScript.",
     { url: str("Exact script URL, including query if present"), line: integer("Source line"), column: integer("Source column"), condition: { type: "string", maxLength: 4000 } }, ["url", "line"]),
   def("debugger_remove_breakpoint", "Remove a breakpoint created by this debugger session.", { id: str("Breakpoint id") }, ["id"]),
@@ -27,11 +27,11 @@ export const TOOLS = [
     { action: { type: "string", enum: ["pause", "resume", "over", "into", "out"] }, pauseToken: token }, ["action"]),
   def("debugger_exceptions", "Configure pause-on-exceptions for this session: none, uncaught or all.", { state: { type: "string", enum: ["none", "uncaught", "all"] } }, ["state"]),
   def("debugger_evaluate", "Evaluate in a paused stack frame. Side effects rejected by default; explicit allowSideEffects permits mutation. Exceptions are tool errors.",
-    { pauseToken: token, frame: integer("Zero-based frame index (first10 frames retained)", 0, 9), expression, allowSideEffects: { type: "boolean" } }, ["pauseToken", "expression"]),
+    { pauseToken: token, frame: integer("Zero-based frame index (first 10 frames retained)", 0, 9), expression, allowSideEffects: { type: "boolean" } }, ["pauseToken", "expression"]),
   def("debugger_properties", "Read own property descriptors without invoking getters. Object must belong to the current pause.",
     { pauseToken: token, objectId: str("Scope/evaluation/property objectId"), offset: integer("Property offset", 0), limit: integer("Page size", 1, 100) }, ["pauseToken", "objectId"], true),
   def("debugger_run", "Execute potentially mutating JS while running. Returns immediately with operationId so a breakpoint cannot block resume. Read result via debugger_state. A timeout does not cancel execution.",
-    { expression, awaitPromise: { type: "boolean", description: "Wait for a returned Promise in the background operation (defaultfalse)" } }, ["expression"]),
+    { expression, awaitPromise: { type: "boolean", description: "Wait for a returned Promise in the background operation (default false)" } }, ["expression"]),
 ];
 
 function validate(tool, args) {
@@ -55,7 +55,7 @@ export async function callTool(session, name, args = {}) {
     const a = args;
     const routes = {
       debugger_targets: () => session.listTargets(a.endpoint), debugger_attach: () => session.attach(a.endpoint, a.targetId),
-      debugger_detach: () => session.detach(), debugger_state: () => session.state(), debugger_scripts: () => session.scriptsList(a.filter),
+      debugger_detach: () => session.detach(), debugger_state: () => session.state(true), debugger_scripts: () => session.scriptsList(a.filter),
       debugger_source: () => session.source(a.scriptId, a.startLine ?? 1, a.count ?? 40),
       debugger_breakpoint: () => session.setBreakpoint(a.url, a.line, a.column, a.condition),
       debugger_remove_breakpoint: () => session.removeBreakpoint(a.id), debugger_control: () => session.control(a.action, a.pauseToken),

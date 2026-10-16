@@ -74,6 +74,15 @@ half (BROWSER-ONLY, parent): bare `wgx-validate.mjs` prepends
 - `tests/unit/backend-surface-parity.test.mjs` +
   `docs/research/WEBGPU-PARITY.md` — Gfx façade × 3 backends.
 
+**WebGPU smoke in one line** (no browser pixels needed, prints which renderer answered):
+`node tools/shot/apex-eval.mjs monza "a.diag({download:false}).env" --backend webgpu`.
+
+**`garage-frame.mjs` reports `all_dark` on this box.** `garage-interior.mjs` fails a frame with reason `all_dark`
+when more than 98 % of the sampled pixels are black, the shape of a cleared canvas readback. Under software
+WebGPU (no GPU, SwiftShader) that is the capture path, not a garage regression: try
+`--backend webgl2`, or judge the garage by `__apex` hooks, and do not "fix" the gate (it exists so a black frame
+cannot pass as ok; `tests/unit/garage-interior-gate.test.mjs`).
+
 `tools/shot/apex-eval.mjs <track> <expr> --backend webgpu` pins WGX (pass it whenever the
 expr names `WGX`/`GLX`; the default is TLX). Or, through the chrome MCP:
 

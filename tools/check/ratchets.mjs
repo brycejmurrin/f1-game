@@ -3,7 +3,7 @@
 // Full description: Size ratchets from `tests/data/ratchets.json` plus the per-branch delta fragments in `tests/data/ratchets.d/`: `--check` (default), `--update` snaps ceilings down, `--fold` sums the fragments in, `--json`, `--base <ref>` names raises.
 //
 //   node tools/check/ratchets.mjs            # check: every metric <= its ceiling, no ceiling far above its value
-//   node tools/check/ratchets.mjs --update   # rewrite ratchets.json with the current values (after an extraction,
+//   node tools/check/ratchets.mjs --update [--absolute]   # snap ceilings to the current values: ratchets.json on the deploy branch, a ratchets.d delta on a topic branch (after an extraction,
 //                                      #   or on a merged tree — the deploy-merge rule)
 //   node tools/check/ratchets.mjs --fold     # sum tests/data/ratchets.d/*.json into ratchets.json, delete them
 //   node tools/check/ratchets.mjs --auto-raise[=40]   # the commit hook's form: on a topic branch it writes
@@ -289,6 +289,21 @@ export async function update(data = load(), { dryRun = false, lowerOnly = false 
   return rows;
 }
 
+/** `--update` as the CLI runs it (#2449 P2). The deploy branch and a detached
+ *  HEAD snap absolutes as before. A topic branch writes its own fragment
+ *  instead: "ratchets re-snapped once" rewrote the same ratchets.json lines on
+ *  every open PR (28 of 71 conflicted syncs on 2026-10-16 after ratchets.d
+ *  landed), and a delta is a file only this branch touches. Lowering is the
+ *  same delta with a negative sign; `--absolute` (deploy.mjs's merge cure, which reads ratchets.json) and
+ *  `--fold` are the explicit absolute snaps. */
+export async function updateCli({ dryRun = false, lowerOnly = false, absolute = false, branch } = {}) {
+  const name = absolute ? null : fragmentName(branch === undefined ? currentBranch() : branch);
+  if (!name || dryRun) return { rows: await update(load(), { dryRun, lowerOnly }), fragment: null };
+  const rows = await measure(load());
+  await writeFragment(name, updateReceipt(rows, { lowerOnly }).changes);
+  return { rows, fragment: `${FRAG_REL}/${name}` };
+}
+
 /** `--update --fragment` (#2337): snap to the measured values, but as this branch's
  *  fragment (a delta) instead of absolutes in ratchets.json, so a deliberate raise
  *  of a tree-wide metric (cssClasses, rawColor …) conflicts with no other PR. The
@@ -542,7 +557,7 @@ async function main() {
     const reason = (argv.find((x) => x.startsWith("--reason=")) || "").slice("--reason=".length).trim();
     if (asFragment && (dryRun || lowerOnly)) { console.error("--fragment goes with --update only"); process.exitCode = 2; return; }
     if (asFragment && !reason) { console.error('--fragment raises a ceiling deliberately: pass --reason="<why>" and repeat it in the commit message'); process.exitCode = 2; return; }
-    const rows = asFragment ? await updateFragment(load()) : await update(load(), { dryRun, lowerOnly });
+    const { rows, fragment } = asFragment ? { rows: await updateFragment(load()), fragment: null } : await updateCli({ dryRun, lowerOnly, absolute: argv.includes("--absolute") });
     if (asFragment) console.log(`ratchets --update --fragment: wrote this branch's delta to tests/data/ratchets.d/ (ratchets.json untouched); reason: ${reason}`);
     const receipt = updateReceipt(rows, { lowerOnly });
     if (argv.includes("--json")) console.log(JSON.stringify({ ok: receipt.missing.length === 0, dryRun, lowerOnly, ...receipt }, null, 2));
@@ -550,6 +565,7 @@ async function main() {
       for (const r of receipt.changes) console.log(`${dryRun ? "WOULD " : ""}${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`);
       for (const r of receipt.skippedRaises) console.log(`SKIP RAISE ${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`);
       for (const r of receipt.missing) console.error(`MISSING ${r.file}`);
+      if (fragment && receipt.changes.length) console.log(`ratchets --update: topic branch, so the change is a delta in ${fragment}, not an edit of ratchets.json (add it to your commit; \`--fold\` snaps absolutes)`);
     }
     process.exitCode = receipt.missing.length ? 1 : 0;
     return;
