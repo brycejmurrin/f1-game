@@ -1,1 +1,0 @@
-1792035076	Claude	CI cleanup: update-branch guard + prepare skips hooks on Actions (spec-timings red); PR waits for queue <15  [cursor/update-branch-guard-5a1c; session 938bc3ee368284c74a4e48ab]

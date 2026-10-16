@@ -1,1 +1,0 @@
-1792032891	Claude	ci-rerun.mjs (stale-head re-run guard) + gfx knob-ab.mjs (visual A/B above noise) — new files tools/ci/ci-rerun.mjs tools/gfx/knob-ab.mjs + tests  [cursor/ci-guard-tools-7e3a; session 4622d51cd27791ff5c360c23]
