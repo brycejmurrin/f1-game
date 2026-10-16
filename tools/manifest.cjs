@@ -898,11 +898,13 @@ const DEFERRED = {
 // ~350 KB of parse + PWA memory. Fetch-miss still caches on first use.
 const LAZY_AGENT = [
   "js/agent/agentview-raster.js",
+  "js/agent/agentview-corners.js",
   "js/agent/agentview.js",
   "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
+  ["js/agent/agentview-corners.js", "js/agent/agentview.js"],
 ];
 
 // RACE PAYLOAD. Data a session needs only once a race resolves, never to paint

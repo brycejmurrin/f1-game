@@ -146,12 +146,17 @@
   ],
     LAZY_AGENT: [
     "js/agent/agentview-raster.js",
+    "js/agent/agentview-corners.js",
     "js/agent/agentview.js",
     "js/agent/apex.js"
   ],
     LAZY_EDGES: [
     [
       "js/agent/agentview-raster.js",
+      "js/agent/agentview.js"
+    ],
+    [
+      "js/agent/agentview-corners.js",
       "js/agent/agentview.js"
     ]
   ],
