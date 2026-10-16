@@ -1218,7 +1218,7 @@ var PitLane = (function () {
         // read it, and the commit/abort state machine never advances.
         // tests/unit/pit-lane-vm.test.mjs ("a commitment is made on the ENTRY
         // ROAD…") catches it in one assertion.
-        if (st !== "none") { c.pitState = "none"; c.pitT = 0; if (c.local) { c.pitArmed = false; c.pitCommitted = false; } }
+        if (st !== "none") { c.pitState = "none"; c.pitT = 0; if (c.local) { arm(c, false); c.pitCommitted = false; } }
         // THE ENTRY ROAD, before the entry line: where a LOCAL car commits —
         // holding the lane's tarmac arms the stop, and the limiter waits for
         // the line — and where it can still change its mind, by holding the
@@ -1232,7 +1232,7 @@ var PitLane = (function () {
             Tracks.sample(G.track, c.s, _smp);
             c.pitAbortT = inLaneLat(c, _smp.hw || 0, zz.side) ? 0 : (c.pitAbortT || 0) + dt;
             if (c.pitAbortT >= ABORT_S) {
-              c.pitAbortT = 0; c.pitCommitted = false; c.pitArmed = false;
+              c.pitAbortT = 0; c.pitCommitted = false; arm(c, false);
               if (G.announce) G.announce("PIT ENTRY ABORTED", 1.4, "race");
             }
           }
@@ -1637,6 +1637,9 @@ var PitLane = (function () {
       const plan = c.pitPlan, zz = z();
       if (!plan || !zz || !G.tyres || !c.tyre || typeof AiDrive === "undefined") return false;
       const ai = !c.human;
+      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      // The weather call owns a tread change; do not price a stint on the wrong set.
+      if (!ai && (c.tyre.tread || 0) !== wantTread) return false;
       if (ai && (c.pitArmed || (c.pitState && c.pitState !== "none") || (c.tyre.tread || 0) > 0
           || TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness()) > 0
           || (G.tyres.lapsOn ? G.tyres.lapsOn(c) : 0) < 2
@@ -1669,11 +1672,43 @@ var PitLane = (function () {
       if (onSet >= 1 && spent > 0) plan.loadK = clamp(nominal * spent / (onSet * fuelMul), 0.6, 2.5);
       const loadK = plan.loadK || 1;
       const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget) / loadK;
+      // Wet advice follows the fitted set's measured life, then the actual
+      // next wet set. The dry planner cannot represent either wet class.
+      const wetCls = c.tyre.tread > 0 ? TyreModel.classForTread(c.tyre.tread) : null;
+      let wetRel = null;
+      if (!ai && wetCls) {
+        const next = nextFor(c) || c.tyre;
+        const fresh = Math.max(1, G.tyres.planLaps(next.life, G.lapsTarget) / loadK);
+        let left = lapsLeft, at = 0;
+        let life = G.tyres.lapsLeft ? G.tyres.lapsLeft(c) : null;
+        if (life == null) life = nominal / loadK * (1 - Math.min(1, spent));
+        wetRel = { seq: [wetCls], lapsAt: [], stops: 0 };
+        while (life < left) {
+          const stint = Math.max(1, Math.floor(life));
+          at += stint; left -= stint;
+          wetRel.lapsAt.push(at); wetRel.seq.push(TyreModel.classForTread(next.tread));
+          wetRel.stops++;
+          // Integrate the falling fuel load across each replacement stint.
+          // fresh is the zero-fuel budget: n laps consume n*(a-b*n).
+          const n = Math.max(1, G.lapsTarget), k = AiDrive.STRAT.FUEL_WEAR;
+          const a = 1 + k * clamp(1 - (lap - 1 + at) / n, 0, 1), b = k / (2 * n);
+          life = fresh >= left * (a - b * left) ? left : 2 * fresh / (a + Math.sqrt(a * a - 4 * b * fresh));
+        }
+        // Keep a requested extra stop where there is room; a pin cannot make
+        // a worn wet set last longer, so safety may require more than the pin.
+        const pinned = plan.pin == null ? 0 : Math.max(0, plan.pin - done);
+        while (wetRel.stops < pinned && wetRel.stops < lapsLeft - 1) {
+          const edges = [0].concat(wetRel.lapsAt, [lapsLeft]);
+          let split = 0;
+          for (let i = 1; i < edges.length - 1; i++) if (edges[i + 1] - edges[i] > edges[split + 1] - edges[split]) split = i;
+          wetRel.lapsAt.splice(split, 0, Math.floor((edges[split] + edges[split + 1]) / 2));
+          wetRel.seq.push(TyreModel.classForTread(next.tread)); wetRel.stops++;
+        }
+      }
       // `start` must be one of the planner's THREE classes — the alphabet
       // stintPlan sequences in — and a catalog set's letter IS its class. A
-      // wet set on the car leaves it unpinned (the planner picks), and its life
-      // with it: firstLife is only meaningful for the class it pins.
-      const cls = c.tyre.tread > 0 ? null : classOfCode(c.tyre.code);
+      // wet set uses wetRel above; firstLife belongs to the dry planner.
+      const cls = wetCls || classOfCode(c.tyre.code);
       const firstLife = cls ? Math.max(1, nominal / loadK * (1 - spent)) : undefined;
       const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;
       // WHAT WAS RUN, not what was planned: the stint log. `used` was the plan's
@@ -1683,16 +1718,17 @@ var PitLane = (function () {
       const log = Array.isArray(c.tyreLog) ? c.tyreLog : [];
       const used = log.slice(0, -1).map((e) => classOfCode(e && e.code)).filter(Boolean);
       const owes = typeof SportingRegs === "undefined" || SportingRegs.compoundShort(log);
-      const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || AiDrive.STRAT.PIT_LOSS_FALLBACK, roll: ai && plan.roll != null ? plan.roll : 0.5,
+      const rel = wetRel || AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || AiDrive.STRAT.PIT_LOSS_FALLBACK, roll: ai && plan.roll != null ? plan.roll : 0.5,
                                       start: cls || undefined, firstLife, stops,
                                       twoCompound: twoCompoundRule(G.lapsTarget) && owes, used });
       if (!rel) return false;
       const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;
       // A re-cut is for a real surprise: two laps for the player and an alert
       // AI wall, three for the rest.
-      const minMove = !ai ? 2 : AiDrive.strategyTemper(c).react >= AiDrive.STRAT.TEMPER.REACT_MIN ? 2 : 3;
-      if (newNext != null && oldNext != null && Math.abs(newNext - oldNext) < minMove) return false;
-      if (newNext == null && oldNext == null) return false;
+      const minMove = wetRel ? 1 : !ai ? 2 : AiDrive.strategyTemper(c).react >= AiDrive.STRAT.TEMPER.REACT_MIN ? 2 : 3;
+      const sameTread = plan.seq[done] === cls && (!wetRel || plan.stops === done + rel.stops);
+      if (sameTread && newNext != null && oldNext != null && Math.abs(newNext - oldNext) < minMove) return false;
+      if (sameTread && newNext == null && oldNext == null) return false;
       plan.seq = plan.seq.slice(0, done).concat(cls ? [cls] : plan.seq.slice(done, done + 1)).concat(rel.seq.slice(1));
       // THE STOPS MADE, where they were made: the log's fit laps, not the plan's.
       // An early stop left lapsAt naming a lap that never happened, and the

@@ -608,7 +608,7 @@ test("private room traffic never reveals the high-entropy token or a usable encr
 });
 
 test("private tokens fail closed without cryptographic randomness", () => {
-  const sandbox = vm.createContext({ TextEncoder, crypto: {}, localStorage: { getItem: () => "https://private.test" } });
+  const sandbox = vm.createContext({ TextEncoder, URL, crypto: {}, localStorage: { getItem: () => "https://private.test" } });
   const rv = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8") + ";NetRendezvous", sandbox);
   assert.equal(rv.makeCode(), null, "Math.random is never a private-token fallback");
 });
@@ -649,6 +649,20 @@ test("QR relay configuration is validated and scoped to the controller document"
     NetRendezvous.setSessionUrl(undefined);
     assert.equal(NetRendezvous.baseUrl(), "https://saved-worker.test");
   } finally { NetRendezvous.setSessionUrl(undefined); NetRendezvous.setUrl(null); }
+});
+
+test("persistent relay configuration uses the same secure URL policy", () => {
+  NetRendezvous.setUrl("https://saved-worker.test/base/");
+  try {
+    assert.equal(NetRendezvous.baseUrl(), "https://saved-worker.test/base");
+    for (const invalid of ["http://untrusted.test", "javascript:alert(1)", "https://user:pw@worker.test",
+      "https://worker.test?secret=x", "https://worker.test#x", "/relative"]) {
+      assert.equal(NetRendezvous.setUrl(invalid), false, invalid);
+      assert.equal(NetRendezvous.baseUrl(), "https://saved-worker.test/base", "invalid input must not replace the saved relay");
+    }
+    assert.equal(NetRendezvous.setUrl("http://127.0.0.1:3456/private/"), true);
+    assert.equal(NetRendezvous.baseUrl(), "http://127.0.0.1:3456/private");
+  } finally { NetRendezvous.setUrl(null); }
 });
 
 // ── room-code join honesty: fail a missing code in ~8–15 s, not 120 s ────────

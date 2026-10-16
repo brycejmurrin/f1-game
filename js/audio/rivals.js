@@ -30,7 +30,7 @@ var RivalAudio = (() => {
   const REF = 6;                 // metres inside which a pass-by is at full level
   const SPEED_OF_SOUND = 343;
   const PAN_MAX = 0.85;
-  const GAIN_PEAK = 0.22;
+  const GAIN_PEAK = 0.07;
   const BEHIND = 0.78;
   const ROLLOFF = 1.15;
 
@@ -63,7 +63,7 @@ var RivalAudio = (() => {
     return buf;
   }
   const slots = Array.from({ length: SLOTS },
-    () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, dist: 0, voice: "", slot: 0, car: null }));
+    () => ({ lat: 0, arc: 0, wx: null, wz: null, rev: 0, approach: 0, relativeSpeed: 0, dist: 0, voice: "", slot: 0, car: null }));
   const _wScratch = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0] };
   function worldXZ(track, s, x) {
     if (!track || s == null || typeof Tracks === "undefined" || !Tracks.sample) return null;
@@ -79,7 +79,7 @@ var RivalAudio = (() => {
   // order) and stash dest on the stub as _pendingAttach; we consume it below.
   const pending = (typeof RivalAudio !== "undefined" && RivalAudio._pendingAttach) || null;
   const voiced = new Array(SLOTS).fill(false);
-  let actx = null, voices = null;
+  let actx = null, voices = null, mix = 1;
 
   function attach(ctx, bus) {
     if (!ctx) return;
@@ -95,7 +95,8 @@ var RivalAudio = (() => {
       src.loop = true;
       const filt = ctx.createBiquadFilter();
       filt.type = "lowpass";
-      if (filt.frequency) filt.frequency.value = 4000;
+      if (filt.frequency) filt.frequency.value = 2400;
+      if (filt.Q) filt.Q.value = 0.5;
       const g = ctx.createGain();
       if (g.gain) g.gain.value = 0;
       const p = ctx.createStereoPanner();
@@ -105,7 +106,7 @@ var RivalAudio = (() => {
       g.connect(p);
       if (dest) p.connect(dest);
       try { src.start(0); } catch (e) { /* already started */ }
-      voices.push({ src, filt, gain: g, pan: p, dist: 0, key: -1 });
+      voices.push({ src, filt, gain: g, pan: p, dist: 0, key: -1, level: 0 });
     }
   }
 
@@ -120,11 +121,14 @@ var RivalAudio = (() => {
       voiced[sl] = true;
       const v = voices[sl];
       const dist = r.dist != null ? +r.dist : Math.hypot(+r.lat || 0, +r.arc || 0);
-      aimParam(v.gain.gain, passByGain(dist, r.arc), t, 0.10);
+      // A car holding station is not a continuous full-volume fly-by.
+      const motion = 0.12 + 0.88 * Math.min(1, r.relativeSpeed / 45);
+      v.level = passByGain(dist, r.arc) * motion;
+      aimParam(v.gain.gain, v.level * mix, t, 0.10);
       aimParam(v.src.playbackRate, passByDoppler(r.approach), t, 0.08);
       aimParam(v.pan.pan, passByPan(r.lat, r.arc), t, 0.06);
-      const cut = Math.max(700, Math.min(12000,
-        12000 * Math.pow(REF / Math.max(dist, REF), 0.35)));
+      const cut = Math.max(700, Math.min(2400,
+        2400 * Math.pow(REF / Math.max(dist, REF), 0.35)));
       aimParam(v.filt.frequency, cut, t, 0.12);
       v.dist = dist;
       v.key = r.key;
@@ -132,6 +136,7 @@ var RivalAudio = (() => {
     for (let i = 0; i < voices.length; i++) {
       if (voiced[i]) continue;
       aimParam(voices[i].gain.gain, 0, t, 0.12);
+      voices[i].level = 0;
       voices[i].dist = 0;
       voices[i].key = -1;
     }
@@ -146,9 +151,17 @@ var RivalAudio = (() => {
     for (let i = 0; i < voices.length; i++) {
       const v = voices[i];
       aimParam(v.gain.gain, 0, at, 0.06);
+      v.level = 0;
       v.dist = 0;
       v.key = -1;
     }
+  }
+
+  // Called by the Settings layer/trim paths, including while the race is paused.
+  function setMix(value) {
+    mix = Math.max(0, Math.min(4, +value || 0));
+    if (!voices || !actx) return;
+    for (const v of voices) aimParam(v.gain.gain, v.level * mix, actx.currentTime || 0, 0.04);
   }
 
   function detach() {
@@ -209,7 +222,7 @@ var RivalAudio = (() => {
         while (at > 0 && slots[at - 1].dist > dist) {
           const prev = slots[at - 1], cur = slots[at];
           cur.lat = prev.lat; cur.arc = prev.arc; cur.wx = prev.wx; cur.wz = prev.wz; cur.rev = prev.rev;
-          cur.approach = prev.approach; cur.dist = prev.dist; cur.voice = prev.voice; cur.car = prev.car;
+          cur.relativeSpeed = prev.relativeSpeed; cur.approach = prev.approach; cur.dist = prev.dist; cur.voice = prev.voice; cur.car = prev.car;
           cur.net = prev.net; cur.key = prev.key;
           at--;
         }
@@ -230,6 +243,7 @@ var RivalAudio = (() => {
         // (arc 0) is neither closing nor opening. The full Δv with a sign flip at
         // arc 0 stepped the pitch by ~300 cents across 0.2 m of arc as a car
         // came past. Lateral speed is not tracked (track-frame x is a position).
+        slot.relativeSpeed = Math.abs((c.speed || 0) - (player.speed || 0));
         slot.approach = -(arc / Math.max(dist, 1e-3)) * ((c.speed || 0) - (player.speed || 0));
         // Net-owned rivals get heavier pitch smoothing in engine.js; solo AI stays snappy.
         const np = G.netPlay;
@@ -308,8 +322,8 @@ var RivalAudio = (() => {
   }
 
   if (pending && pending.ctx) {
-    try { attach(pending.ctx, pending.dest); } catch (e) { /* stub dest already gone */ }
+    try { if (pending.mix != null) setMix(pending.mix); attach(pending.ctx, pending.dest); } catch (e) { /* stub dest already gone */ }
   }
 
-  return { create, attach, detach, silence, sprayAhead, passByGain, passByDoppler, passByPan, passByVoices, SLOTS };
+  return { create, attach, detach, silence, setMix, sprayAhead, passByGain, passByDoppler, passByPan, passByVoices, SLOTS };
 })();

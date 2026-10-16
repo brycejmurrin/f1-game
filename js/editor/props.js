@@ -240,7 +240,7 @@ const TrackDesignerProps = (function () {
     if (WATER[p.kind]) {
       if (!api.waterSurface) return false;
       const water = WATER[p.kind], clearance = Math.max(MIN_GAP[p.kind], gap), id = "custom-prop-" + p.kind + "-" + i;
-      if (p.kind !== "water" && waterOverlapsRoad(api.track, k, side, clearance, water.size)) {
+      if (waterOverlapsRoad(api.track, k, side, clearance, water.size)) {
         if (api.modelDiagnostics && api.modelDiagnostics.suppressed) api.modelDiagnostics.suppressed.push({ id, reason: "water footprint overlaps road" });
         return false;
       }

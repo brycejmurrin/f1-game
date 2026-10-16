@@ -98,6 +98,17 @@ test("STANDARD is the shipped car: it equals the store fallbacks exactly", () =>
   }
 });
 
+test("materialized shipped brake cue keeps STANDARD after an ALL restore", () => {
+  // SAVE ALL writes the effective fallback for an unset key. brakeCue is 1 on
+  // boot, so that explicit value must not turn the otherwise untouched bundle
+  // into CUSTOM on the reload that follows an import.
+  const { disk, apply } = bootTuning();
+  disk.preset = "standard";
+  disk.brakeCue = 1;
+  apply();
+  assert.equal(disk.preset, "standard");
+});
+
 test("the ladder is monotonic on what it differentiates: LOCK and the speed taper", () => {
   // easy -> assist -> normal is one calm rack that opens up; SIM is the single
   // step that also quickens the rack. If a retune breaks the ordering, the FEEL
@@ -251,7 +262,7 @@ test("refreshPresetButtons reconciles a stale preset chip against live values", 
   disk.raceLine = 0;
   disk.steerRate = 2; disk.steerExpo = 6; disk.steerLock = 7; disk.steerSpeed = 7;
   disk.tiltDeg = 8; disk.steerSmooth = 3; disk.adaptiveButtons = 5;
-  disk.brakeCue = 4; disk.audioCues = 1; disk.gripSteer = 1;
+  disk.brakeCue = 1; disk.audioCues = 1; disk.gripSteer = 1;
   apply();
   assert.equal(disk.preset, "standard",
     "values match STANDARD — chip follows the values, not the stale ROOKIE name");

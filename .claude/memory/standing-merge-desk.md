@@ -17,3 +17,5 @@ Bryce asked on 2026-10-15 for "a merge desk agent" and agents that "constantly w
 **Why:** a desk inside a working session dies when that session is archived (Bryce bulk-archived workers twice that morning); a standing session plus the hourly wake was the attempt to survive that.
 
 **How to apply:** send SWEEP to the Sonnet desk session; don't archive `[Merge Desk]` sessions while PRs are open (unpushed worker commits are lost). If the desk is gone, ask Bryce, then relaunch it from merge-desk.md (Sonnet, auto) with his grants quoted and re-point the hourly task. Never merge or arm without the Merge Desk designation. See [[pr-auto-merge]] and [[merge-fast-verify-on-ci]].
+
+**Stale check 2026-10-16:** `get_session session_01WQY3pk88sN7o9MCxyAYoWr` returns "the requested resource was not found" — that desk is gone. Before sending SWEEP, find the current `[Merge Desk]` session with `list_sessions` (or ask Bryce); do not message this id.

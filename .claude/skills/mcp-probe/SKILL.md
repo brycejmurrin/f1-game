@@ -70,6 +70,7 @@ vs playwright-official).
    Never call `getCurrentTexture()` on software adapters. Commands and traps:
    `references/recipes.md` § Probing a specific renderer.
 5. Long fetch/search → `deploy-research` subagent, not the parent context.
+6. **Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at; for more than 3 shots use `apex_shot_survey` / `apex_track op survey`. A request over 32 MB kills the session and `/compact` with it.
 
 **Chrome-client pick one:** attached `chrome_*` / `probe-mcp.py chrome-start` for
 live canvas; `mcp-cli.mjs probe --backend …` for batched renderer recipes;

@@ -345,3 +345,16 @@ test("sanitizeCustom keeps only real finShape / numFont / finish ids", () => {
   const good = run({ finShape: M.Car3D.FIN_SHAPE_IDS[0], numFont: M.LiveryTex.NUM_FONT_IDS[0], finish: "gloss" });
   assert.deepEqual(Object.keys(good).sort(), ["finShape", "finish", "numFont"], "real ids pass");
 });
+
+test("carbon moving flap color overrides hidden wing paint and paint returns when toggled back", () => {
+  const ctx = vm.createContext({ Log: { info() {} } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/car-materials.js"), "utf8"), ctx);
+  vm.runInContext(LIVERIES_SRC, ctx);
+  const Custom = vm.runInContext(CUSTOM_LIV_SRC + ";CustomLiveries", ctx);
+  const liv = Custom.create({ store: { rev: 0, get: (_, fallback) => fallback, set() {} } });
+  const team = { id: "test", color: [0, 0, 1], color2: [1, 0, 0] };
+  liv.livDraftOverride = { teamId: "test", liv: { c1: [0,0,1], c2: [1,0,0], wing: [1,0,0], wingCarbon: "carbon" } };
+  assert.deepEqual(Array.from(liv.wingColorOf(team)), [.055, .056, .062]);
+  liv.livDraftOverride = { teamId: "test", liv: { c1: [0,0,1], c2: [1,0,0], wing: [1,0,0], wingCarbon: "paint" } };
+  assert.deepEqual(Array.from(liv.wingColorOf(team)), [1, 0, 0]);
+});
