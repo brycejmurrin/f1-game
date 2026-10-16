@@ -6,15 +6,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  DEPLOY, MAX_LIVE, MAX_ARMED, SUGGESTIONS, hasMergeHold, ciState, decide, suggest, evaluate, render, measure,
+  fullTierPassed, DEPLOY, MAX_LIVE, MAX_ARMED, SUGGESTIONS, hasMergeHold, ciState, decide, suggest, evaluate, render, measure,
 } from "../../tools/ci/pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SHA = (n) => String(n).padStart(40, "a");
 
 const base = {
-  draft: false, armed: false, mergeMethod: null, mergeableState: "clean", ci: "success", gate: "passed",
+  draft: false, armed: false, mergeMethod: null, mergeableState: "clean", ci: "success", gate: "passed", fullTier: true,
 };
+const fullJobs = () => ["CI", "Selected specs (verdict)", "Per-circuit geometry sweeps", "Smoke (page boots, __apex responds)"].map((name) => ({ name, conclusion: "success" }));
 const ctx = (count = 0) => ({ cap: { cap: 3, count } });
 
 test("defaults come from ready-full-cap", () => {
@@ -23,10 +24,17 @@ test("defaults come from ready-full-cap", () => {
   assert.deepEqual([...SUGGESTIONS].sort(), ["ARM", "FIX", "FOREIGN-ARM", "NONE", "READY", "SYNC", "WAIT"]);
 });
 
-test("suggest: ARM — ready, not armed, gate passed, ci not failed (running is fine)", () => {
+test("suggest: ARM — ready, not armed, gate passed, overall CI succeeded", () => {
   assert.equal(suggest({ ...base }, ctx()), "ARM");
-  assert.equal(suggest({ ...base, ci: "in_progress" }, ctx()), "ARM");
-  assert.equal(suggest({ ...base, ci: "queued", mergeableState: "blocked" }, ctx()), "ARM");
+});
+
+test("suggest: ready PR waits for overall CI success even after guards pass", () => {
+  for (const ci of ["in_progress", "queued", "none", "cancelled"]) {
+    const row = { ...base, ci, mergeableState: "blocked" };
+    assert.equal(suggest(row, ctx()), "WAIT", ci);
+    assert.match(decide(row, ctx()).why, /full tier is not green/);
+  }
+  assert.equal(suggest({ ...base, ci: "failure" }, ctx()), "FIX");
 });
 
 test("suggest: ARM needs the gate; a pending or absent gate waits", () => {
@@ -138,7 +146,7 @@ test("evaluate: sorts, derives ci/gate/failing jobs, and READY flips consume the
   ];
   const r = evaluate(items, { cap: { cap: 3, count: 2, ok: true } });
   assert.deepEqual(r.rows.map((x) => x.number), [3, 5, 7, 9]);
-  assert.deepEqual(r.rows.map((x) => x.suggest), ["READY", "FIX", "ARM", "WAIT"], "one slot: the first draft takes it");
+  assert.deepEqual(r.rows.map((x) => x.suggest), ["READY", "FIX", "WAIT", "WAIT"], "one slot: the first draft takes it");
   assert.deepEqual(r.rows[1].failing, ["Smoke (2)"]);
   assert.equal(r.rows[1].gate, "failed");
   assert.equal(r.rows[1].mergeMethod, "merge");
@@ -150,7 +158,7 @@ test("render: header, one line per PR, a footer; empty board says so", () => {
   const out = render(r, { capLine: "ready-full-cap: 0/3" });
   const lines = out.split("\n");
   assert.match(lines[0], /^PR\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+SUGGEST$/);
-  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+aaaaaaa\s+clean\s+-\s+none\s+-\s+passed\s+-\s+ARM$/);
+  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+aaaaaaa\s+clean\s+-\s+none\s+-\s+passed\s+-\s+WAIT$/);
   assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\); ready-full-cap: 0\/3$/);
   const empty = render(evaluate([], { cap: { cap: 3, count: 0 } }));
   assert.match(empty, /no open PRs into claude\/f1-game-project-26h3ng/);
@@ -174,7 +182,7 @@ function fakeApi({ prs, runsBySha = {}, checksBySha = {}, jobsByRun = {}, fail =
     if (qs.startsWith("actions/workflows/ci.yml/runs?event=pull_request")) return { json: { workflow_runs: [] } };
     if ((m = /^actions\/workflows\/ci\.yml\/runs\?head_sha=([0-9a-f]+)/.exec(qs))) return { json: { workflow_runs: runsBySha[m[1]] || [] } };
     if ((m = /^commits\/([0-9a-f]+)\/check-runs/.exec(qs))) return { json: { check_runs: checksBySha[m[1]] || [] } };
-    if ((m = /^actions\/runs\/(\d+)\/jobs/.exec(qs))) return { json: { jobs: jobsByRun[m[1]] || [] } };
+    if ((m = /^actions\/runs\/(\d+)\/jobs/.exec(qs))) return { json: { jobs: (jobsByRun[m[1]] || []).slice((Number(/&page=(\d+)/.exec(qs)?.[1] || 1) - 1) * 100, Number(/&page=(\d+)/.exec(qs)?.[1] || 1) * 100) } };
     return { error: `unexpected ${qs}` };
   };
   return { request, calls };
@@ -199,7 +207,7 @@ test("measure: failing jobs come from the failed run; --pr reads one PR but stil
     checksBySha: { [SHA(1)]: guard("failure"), [SHA(2)]: guard() },
   });
   const all = measure({ request });
-  assert.deepEqual(all.rows.map((r) => [r.number, r.suggest]), [[1, "FOREIGN-ARM"], [2, "ARM"]]);
+  assert.deepEqual(all.rows.map((r) => [r.number, r.suggest]), [[1, "FOREIGN-ARM"], [2, "WAIT"]]);
   assert.deepEqual(all.rows[0].failing, ["page"]);
   assert.match(all.capLine, /ready-full-cap:/);
   calls.length = 0;
@@ -343,10 +351,10 @@ test("ci-watcher agent is read-only (no write or MCP tools) and listed in the ag
 test("evaluate + render: PLAN is done/items from the body, HOLD is flagged, a sweep never arms past MAX_ARMED", () => {
   const body = "## Plan\n- [x] a — sha\n- [ ] **now:** b\n- [ ] ~~c~~ — dropped\n";
   const items = [
-    { pr: prObj(1, { auto_merge: { merge_method: "merge" } }), runs: [], checkRuns: guard() },
-    { pr: prObj(2, { body }), runs: [], checkRuns: guard() },
-    { pr: prObj(3, { body: "MERGE-HOLD: Bryce\n" }), runs: [], checkRuns: guard() },
-    { pr: prObj(4), runs: [], checkRuns: guard() },
+    { pr: prObj(1, { auto_merge: { merge_method: "merge" } }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
+    { pr: prObj(2, { body }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
+    { pr: prObj(3, { body: "MERGE-HOLD: Bryce\n" }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
+    { pr: prObj(4), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
   ];
   const r = evaluate(items, { cap: { cap: 3, count: 0 } });
   assert.deepEqual(r.rows.map((x) => x.suggest), ["NONE", "ARM", "WAIT", "WAIT"], "1 armed + 1 ARM = MAX_ARMED; the hold waits");
@@ -361,4 +369,31 @@ test("#2184: a newer label-noise run (all jobs skipped, success) does not turn a
   const noise = { id: 2, path: ".github/workflows/ci.yml", status: "completed", conclusion: "success", display_title: "CI ignored: label bug" };
   assert.deepEqual(ciState([noise, real]), { state: "failure", runId: 1 });
   assert.deepEqual(ciState([noise]), { state: "none", runId: null });
+});
+
+
+test("full-tier evidence rejects missing, skipped and fast-only jobs", () => {
+  assert.equal(fullTierPassed(fullJobs()), true);
+  assert.equal(fullTierPassed(), false);
+  assert.equal(fullTierPassed([{}]), false);
+  assert.equal(fullTierPassed([...fullJobs(), { name: "CI", conclusion: "failure" }]), false);
+  for (const name of fullJobs().map((j) => j.name)) {
+    assert.equal(fullTierPassed(fullJobs().filter((j) => j.name !== name)), false);
+    assert.equal(fullTierPassed(fullJobs().map((j) => j.name === name ? { ...j, conclusion: "skipped" } : j)), false);
+  }
+  assert.equal(suggest({ ...base, fullTier: false }, ctx()), "WAIT");
+  assert.equal(suggest({ ...base, fullTier: undefined }, ctx()), "WAIT");
+  assert.equal(suggest({ ...base, draft: true, fullTier: false }, ctx()), "READY");
+});
+
+test("measure paginates successful ready run jobs and ties evidence to that exact run", () => {
+  const jobs = [...Array.from({ length: 100 }, (_, i) => ({ name: `extra-${i}`, conclusion: "success" })), ...fullJobs()];
+  const { request, calls } = fakeApi({ prs: [prObj(1)], runsBySha: { [SHA(1)]: [{ id: 77, status: "completed", conclusion: "success" }] }, checksBySha: { [SHA(1)]: guard() }, jobsByRun: { 77: jobs } });
+  const v = measure({ request });
+  assert.equal(v.rows[0].fullTier, true);
+  assert.equal(v.rows[0].suggest, "ARM");
+  assert.ok(calls.includes("actions/runs/77/jobs?per_page=100&page=2"));
+  const item = { pr: prObj(1), runs: [{ id: 77, status: "completed", conclusion: "success" }], checkRuns: guard(), jobs: fullJobs() };
+  assert.equal(evaluate([{ ...item, jobsRunId: 76 }]).rows[0].fullTier, false);
+  assert.equal(evaluate([{ ...item, jobsRunId: 77 }]).rows[0].fullTier, true);
 });
