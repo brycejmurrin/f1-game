@@ -1523,6 +1523,7 @@ what it covers.
 | `over-road-scan.test.mjs` | The shared over-road triangle scan: only a neighbour under the triangle can alias-clear it (grade-independent), and crossover decks are skipped by mesh provenance, never by intrusion size |
 | `lobed-trees.test.mjs` | Opt-in crown recipes: desktop/mobile geometry budgets, canonical/fused normals and sway, atomic primitive rejection and planting reservation fallback |
 | `terrain-falloff.test.mjs` | Optional terrain descent: unchanged road shelf/rails, pit flattening, smooth floor joins, invalid-option fallback and actual banked near-road vertices |
+| `terrain-y.test.mjs` | `Tracks.terrainY`: a real 1 m gap stays a gap at any scale, shared edges and cracks stay covered, exact maximum grid edges and non-cell-aligned extents answer |
 | `circuit-corner-anchors.test.mjs` | FIA 2025 physical Imola/Hungaroring corner topology and Imola's measured timing offsets on the built centreline |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 114-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
