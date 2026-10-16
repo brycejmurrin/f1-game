@@ -5,8 +5,12 @@
   {
     id: "jeddah",
     reverse: false, // real-world CW/CCW direction
-    // Known-wrong corner placement (START-LINES: no usable source). Deliberately untouched.
-    startFrac: 0.9625,
+    // Start line on the main straight (issue #2201): 0.086 measured with
+    // tools/track/startline-probe.cjs (straight; first apex ~208 m, real grid-to-T1 ~220 m).
+    // The old 0.9625 sat on the T27 bend. Dressing, bankZones, elevations and
+    // dressingExclusions below stay in the OLD (scenery) frame via sceneryStartFrac.
+    startFrac: 0.086,
+    sceneryStartFrac: 0.9625,
     name: "JEDDAH",
     gp: "Saudi Arabian GP",
     country: "Saudi Arabia",
