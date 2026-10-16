@@ -146,6 +146,10 @@ launching Cursor workers uses the Cursor API column (needs a key).
 - One pass per wake: for every worker PR, read the fleet block, the latest
   `@orchestrator` comment, the head SHA's CI (`node tools/ci/ci-watch.mjs --sha
   <sha> --once`) and mergeability.
+- Workers iterate on what their change touches (`tooling-fast --changed` plus
+  the specs `pick-tests` / `select-specs` name) and run the full `tooling-fast`
+  once before a code push (AGENTS.md rule 3). At most one merge from the deploy branch per PR per hour unless the PR
+  is `dirty` / conflicting or more than 10 commits behind (`sync-pr.mjs`).
 - A worker is **stalled** when its state has not changed and its branch has
   not moved for ~90 min, or it passed its caps. Ask once, then interrupt and
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.
