@@ -2214,7 +2214,7 @@ const AgentView = (function () {
         read: {
           telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
           timing: "timing() sectorState() lapHistory() fieldState()",
-          rendering: "camState() viewState() lightState() gpuTimer() lightTune()",
+          rendering: "camState() viewState() lightState() gpuTimer() lightTune() perf({on,reset,measure})",
           geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()",
           catalog: "tracks() teams() info()",
         },

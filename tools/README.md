@@ -218,6 +218,16 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
 | **shot/track-session.mjs** | Persistent track session (`--serve`): boot once, then JSON-line shot/eval/track/sheet/diff ops in seconds each. | survey-track |
 
+### `tools/perf/`
+
+The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and the A/B delta against a git ref.
+
+| Tool | Does | Paired skill |
+|---|---|---|
+| **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
+| **perf/profile.mjs** | One profiler CLI (spans \| cpu \| hitch \| trace) with --repeat noise floor and --base <ref> A/B delta table. | playwright-probe |
+| **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
+
 ### `tools/gfx/`
 
 Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.

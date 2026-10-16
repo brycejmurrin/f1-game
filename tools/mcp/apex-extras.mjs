@@ -451,7 +451,8 @@ export function createExtras(ctx) {
       // JSON caller can set, so apex_job_start never runs a caller-chosen argv.
       case "hud_shot":
       case "hud_survey":
-      case "hud_mock": {
+      case "hud_mock":
+      case "profile": {   // apex_profile routes here the same way: the server pins the argv
         const argv = a[HUD_JOB_ARGV];
         if (!Array.isArray(argv) || !argv.length) {
           throw Object.assign(new Error(kind), {
@@ -906,6 +907,6 @@ export function createExtras(ctx) {
   };
 }
 
-export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
+export const JOB_KINDS = ["survey_track", "shot_survey", "hud_shot", "hud_survey", "hud_mock", "profile", "ui_gallery", "ui_matrix", "flicker_gate", "frame_fleet", "parts_sweep", "livery_contrast", "verify_all", "float_all", "graph_parity_all", "verify_change_fast"];
 /** Key apex-tools-mcp uses to hand apex_job_start a pinned HUD argv; unreachable from JSON. */
 export const HUD_JOB_ARGV = Symbol("apex.hudJobArgv");

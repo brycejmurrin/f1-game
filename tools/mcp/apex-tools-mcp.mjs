@@ -818,6 +818,40 @@ const CATALOG = [
     },
   },
   {
+    name: "apex_profile",
+    kind: "browser",
+    description: "Browser (lock first) — per-subsystem frame budget: p50/p95/p99/max ms for frame, input, physics, ai, collide, camera, render, hud over a deterministic scenario (tools/perf/profile.mjs --mode spans). repeat N reports the median and spread; base:<git ref> runs the same scenario on an ephemeral worktree and returns a delta table where a delta inside the spread is 'noise'. Minutes on SwiftShader, so by default a background job (jobId; poll apex_job_status); async:false blocks. Returns a compact table plus the artifact path (artifacts/profiles/*.json) for apex_profile_query, never a raw profile. SwiftShader: CPU JS cost is meaningful, GPU/fill is not. Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        track: { type: "string", description: "Circuit id (default vegas)." },
+        mode: { type: "string", enum: ["spans", "cpu", "hitch", "trace"], description: "Default spans." },
+        frames: { type: "integer", minimum: 10, maximum: 600, description: "Measured rAF frames (default 120)." },
+        repeat: { type: "integer", minimum: 1, maximum: 7, description: "Fresh pages; median + spread (default 1 = every verdict 'unproven')." },
+        base: { type: "string", description: "Git ref to A/B against (spans mode); e.g. origin/claude/f1-game-project-26h3ng." },
+        async: { type: "boolean", description: "Default true = background job (jobId); false = block (host may time out)." },
+        dryRun: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "apex_profile_query",
+    kind: "tree",
+    description: "Tree — summarise or compare saved profiler artifacts under artifacts/ or scratch/ (tools/perf/query.mjs): a spans JSON → table; a .cpuprofile → top-N self/total with fn / file regex filters; two spans JSONs (file + compare) → A/B delta. Never returns a raw profile. Skill: playwright-probe.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        file: { type: "string", description: "artifacts/profiles/<name>.json or .cpuprofile (also scratch/profiles/)." },
+        compare: { type: "string", description: "A second spans JSON: file is the base, compare the head." },
+        top: { type: "integer", minimum: 1, maximum: 100 },
+        fn: { type: "string", description: "Function-name regex filter (cpuprofile)." },
+        fileFilter: { type: "string", description: "Source-file regex filter (cpuprofile)." },
+        dryRun: { type: "boolean" },
+      },
+      required: ["file"],
+    },
+  },
+  {
     name: "apex_job_start",
     week: 7,
     kind: "tree",
@@ -1511,6 +1545,25 @@ function buildArgv(name, args) {
       return hudSurveyArgv(args);
     case "apex_hud_mock":
       return hudMockArgv(args);
+    case "apex_profile": {
+      const argv = [...nodeTool("perf/profile.mjs"), String(args.track || "vegas"), "--mode", String(args.mode || "spans")];
+      if (args.frames != null) argv.push("--frames", String(args.frames));
+      if (args.repeat != null) argv.push("--repeat", String(args.repeat));
+      if (args.base) {
+        const base = String(args.base);
+        if (!/^[A-Za-z0-9._\/~^@-]+$/.test(base) || base.startsWith("-")) throw Object.assign(new Error("base"), { refuse: refuse("bad_args", "base must be a git ref, not a flag", 'e.g. {"base":"origin/main"}.') });
+        argv.push("--base", base);
+      }
+      return argv;
+    }
+    case "apex_profile_query": {
+      const argv = [...nodeTool("perf/query.mjs"), assertSafeOut(String(args.file))];
+      if (args.compare) argv.push(assertSafeOut(String(args.compare)));
+      if (args.top != null) argv.push("--top", String(args.top));
+      if (args.fn) argv.push("--fn", String(args.fn));
+      if (args.fileFilter) argv.push("--file", String(args.fileFilter));
+      return argv;
+    }
     case "apex_doctor":
       return [...nodeTool("check/doctor.mjs"), "--tree", "--json"];
     case "apex_frame_report":
@@ -1931,6 +1984,7 @@ function sessionsInfo() {
 /** How long one browser call may run. 180 s fits a boot plus one query (apex_agent commands took 100-130 s, measured), but
  *  `atmosphere` with weather / tod rebuilds and re-settles the scene: 269 s measured (2026-10-10), so the flat cap killed a working call. */
 export function browserTimeoutMs(name, args = {}) {
+  if (name === "apex_profile") return 900000;
   if (name === "apex_agent" && (args.weather != null || args.tod != null)) return 420000;
   return 180000;
 }
@@ -2369,6 +2423,13 @@ function dispatch(name, args = {}, { signal = null } = {}) {
   const hud = name === "apex_hud_shot" || name === "apex_hud_survey" || name === "apex_hud_mock";
   if (mockMode()) return name === "apex_hud_mock" ? hudMockMock(argv) : hud ? hudMock(name, argv, args) : mockSuccess(name, argv, env);
 
+  if (name === "apex_profile" && args.async !== false) {
+    const r = extras().handlers.apex_job_start({ kind: "profile", [HUD_JOB_ARGV]: argv });
+    const body = JSON.parse(r.content[0].text);
+    if (body.ok === false) return r;
+    return toolResult({ ...body, routed: "apex_job_start profile", artifact: `artifacts/profiles/${args.track || "vegas"}-spans${args.base ? "-ab" : ""}.json`,
+      hint: "Background: apex_job_status {jobId}; the log tail is the table. Then apex_profile_query {file: artifact}. async:false blocks." });
+  }
   if (hud && args.async !== false) {
     // Host MCP calls die at ~60–120 s; a cell is ~2 min and the quick matrix
     // ~10 min. Default to a background job (pinned argv above) unless async:false.

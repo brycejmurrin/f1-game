@@ -252,7 +252,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-two tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -283,6 +283,7 @@ the tool when the 3D frame behind the HUD matters.
 29 → 30 on 2026-10-10 for `apex_catalog` (built-in): every valid id the other tools
 accept (tracks, cams, tods, shot presets, HUD devices/cams, job kinds, UI screens
 and viewports) in one read, sourced from the tools' own schemas so it cannot drift.
+30 → 32 on 2026-10-16 for `apex_profile` (`perf/profile.mjs`: per-subsystem frame spans, `--repeat`, `--base <ref>` A/B; a background job like the HUD tools) and `apex_profile_query` (`perf/query.mjs`: summarise or compare saved profile artifacts, tree kind).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -317,6 +318,8 @@ and viewports) in one read, sourced from the tools' own schemas so it cannot dri
 | `apex_hud_shot` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 | `apex_hud_survey` | `shot/hud-survey.mjs` | browser | survey-ui-matrix |
 | `apex_hud_mock` | `shot/hud-mock.mjs` | browser | survey-ui-matrix |
+| `apex_profile` | `perf/profile.mjs` | browser | playwright-probe |
+| `apex_profile_query` | `perf/query.mjs` | tree | playwright-probe |
 
 Pins the wrap always applies (you cannot override them):
 
