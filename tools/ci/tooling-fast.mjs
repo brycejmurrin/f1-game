@@ -1120,6 +1120,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
+  "tests/unit/wait-for.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/wall-clamp.test.mjs",
   // The falling rain follows WETNESS through a weather arc: shown at 0.25, the
