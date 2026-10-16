@@ -585,7 +585,12 @@ const TyreModel = (function () {
   // means the one that actually wins there.
   // Module scope, not an arrow built inside wetness(): gripMult() reads wetness for every car, several
   // times a step, and the closure was a fresh allocation each time (PERF-HUNT-2 S10).
-  function wetValue(w) { return w === "rain" ? 1 : w === "wet" ? 0.5 : 0; }
+  // STORM IS RAIN ON THE ROAD (js/race/storm.js asRain): standing water is
+  // standing water, so every weather-keyed table here reads a storm as rain —
+  // wetness, tread, ambient and track temperature. The tables had no "storm"
+  // row, so a fixed STORM race read as DRY: wetness 0, slicks, 30 °C air.
+  function asRain(w) { return w === "storm" ? "rain" : w; }
+  function wetValue(w) { return w === "rain" || w === "storm" ? 1 : w === "wet" ? 0.5 : 0; }
   function wetness(weather, arc) {
     if (!arc) return wetValue(weather);
     const f = clamp(arc.t / Math.max(1, arc.dur), 0, 1);
@@ -598,9 +603,64 @@ const TyreModel = (function () {
   }
   function treadFor(weather, wetness) {
     if (Number.isFinite(wetness)) return wetness >= 0.72 ? 2 : wetness >= 0.25 ? 1 : 0;
-    return weather === "rain" ? 2 : weather === "wet" ? 1 : 0;
+    return weather === "rain" || weather === "storm" ? 2 : weather === "wet" ? 1 : 0;
   }
   function classForTread(tread) { return tread === 2 ? "wet" : tread === 1 ? "inter" : null; }
+
+  // ── AQUAPLANING ───────────────────────────────────────────────────────────
+  // Above a speed, a tyre in STANDING water rides up on a water wedge and the
+  // contact patch goes — grip that WET_GRIP (a wet-road table, speed-blind)
+  // never takes. NASA's Horne puts total dynamic hydroplaning of a smooth
+  // tyre at Vc ≈ 9·√p knots (p in psi): ≈ 83–99 km/h at 25–35 psi
+  // (https://ntrs.nasa.gov/api/citations/19690011094/downloads/19690011094.pdf);
+  // tread delays it by draining the wedge, more so the more it can move —
+  // Pirelli: an intermediate clears ~35–40 L/s at speed, a full wet about twice
+  // that (https://www.pirelli.com/global/en-ww/race/when-it-s-time-to-change-from-slick-to-wet-tyres-in-formula-1).
+  // So the ONSET is per tread: a slick goes early, an inter much later, a full
+  // wet only near top speed. Horne's figure is for fully flooded pavement; a
+  // race track's film is thinner and an F1 slick is wide and fast-rotating, so
+  // the slick onset sits above it (an F1 slick in heavy rain is undriveable at
+  // straight-line speed, not at 90 km/h). Numbers: docs/notes/WEATHER-ROADMAP-2026-10-14.md.
+  //
+  // ONLY IN STANDING WATER: below AQUA_WET (treadFor's full-wet threshold,
+  // where the road is "rain") the multiplier is exactly 1, so a dry or damp
+  // race — and the characterization baseline — is untouched to the bit. Depth
+  // ramps from AQUA_WET to 1. Speeds are on the STANDARD scale (vStd), so the
+  // onset rides OVERALL SPEED like every other speed threshold.
+  //
+  // NOT A CLIFF: loss = AQUA_LOSS · depth · r², r the fraction of AQUA_RAMP
+  // past onset — zero slope at onset, the full loss AQUA_RAMP above it.
+  const AQUA_WET = 0.72;                           // wetness where standing water starts (treadFor's full-wet line)
+  const AQUA_ONSET = Object.freeze([140 / 3.6, 215 / 3.6, 290 / 3.6]);   // m/s std: slick / inter / full wet
+  const AQUA_RAMP = 70 / 3.6;                      // m/s std from onset to the full loss
+  const AQUA_LOSS = 0.5;                           // grip fraction lost at full depth, full ramp: floor 0.5
+  const AQUA_AI = 0.1;                             // the loss an AI driver will accept before it lifts (aquaplaneSafeV)
+  function aquaDepth(wetness) { return clamp((fin(wetness, 0) - AQUA_WET) / (1 - AQUA_WET), 0, 1); }
+  function aquaTread(tread) { return Number.isInteger(tread) && tread >= 0 && tread <= 2 ? tread : 0; }
+  /** Grip multiplier in (0, 1] for a tyre at `speedStd` (m/s, vStd scale) on a road at `wetness`. */
+  function aquaplane(speedStd, wetness, tread) {
+    const d = aquaDepth(wetness);
+    if (!(d > 0)) return 1;
+    const r = clamp((Math.abs(fin(speedStd, 0)) - AQUA_ONSET[aquaTread(tread)]) / AQUA_RAMP, 0, 1);
+    return 1 - AQUA_LOSS * d * r * r;
+  }
+  /** The std speed above which aquaplaning costs more than AQUA_AI — where an
+   *  AI driver lifts. Infinity when the water is never that deep. */
+  function aquaplaneSafeV(wetness, tread) {
+    const full = AQUA_LOSS * aquaDepth(wetness);
+    if (!(full > AQUA_AI)) return Infinity;
+    return AQUA_ONSET[aquaTread(tread)] + AQUA_RAMP * Math.sqrt(AQUA_AI / full);
+  }
+  // game.js's per-car read, pooled (it runs for every car every step): the
+  // tread resolves exactly as its gripMult(c) does — a fitted set's own, else
+  // the tread the conditions call for.
+  const _aq = { mul: 1, safeV: Infinity };
+  function aquaInto(c, speedStd, weather, wetness) {
+    const tread = c && c.tread != null ? c.tread : treadFor(weather, wetness);
+    _aq.mul = aquaplane(speedStd, wetness, tread);
+    _aq.safeV = aquaplaneSafeV(wetness, tread);
+    return _aq;
+  }
   // The catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md §6):
   // one axis, not a compound axis multiplied by an upgrade tier. The single
   // letter the HUD shows is derived from life rather than from the row's name,
@@ -758,8 +818,8 @@ const TyreModel = (function () {
      *  runs it moves WITH the arc, as the road's wetness does (TyreModel
      *  wetness): read off raceWeather alone it jumped 30 -> 13 C on the tick
      *  the weather flipped, minutes before the road was wet. */
-    function tAmb(w) { const t = T_AMBIENT[w]; return t == null ? T_AMBIENT.dry : t; }
-    function tTrackDelta(w) { const d = T_TRACK_DELTA[w]; return d == null ? T_TRACK_DELTA.dry : d; }
+    function tAmb(w) { const t = T_AMBIENT[asRain(w)]; return t == null ? T_AMBIENT.dry : t; }
+    function tTrackDelta(w) { const d = T_TRACK_DELTA[asRain(w)]; return d == null ? T_TRACK_DELTA.dry : d; }
     // The *At forms take the façade's values as arguments: update() runs for every car every step and G is a
     // dictionary-mode object (a hash probe + getter call per read), so it reads each value once and hands
     // them down — ambient was read twice per car through trackTemp() (PERF-HUNT-2 S4/S7). Same arithmetic.
@@ -977,6 +1037,7 @@ const TyreModel = (function () {
     HEAT_K, HEAT_ROLL, HEAT_SLIP, SINK_TRACK, SEVERITY_DEFAULT: 1.0,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
     classRecord, optionRecord, applyCompound, startRecord, AI_CLASS, codeForLife, treadFor, classForTread, wetness, weatherGrip,
+    aquaplane, aquaplaneSafeV, aquaInto, AQUA_WET, AQUA_ONSET, AQUA_RAMP, AQUA_LOSS, asRain,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,
   };

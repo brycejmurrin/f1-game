@@ -6,10 +6,11 @@ import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-async function startPortraitRace(page) {
+async function startPortraitRace(page, { headless = false } = {}) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  if (headless) await page.evaluate(() => window.__apex.headless(true));
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.go());
@@ -53,13 +54,55 @@ test("portrait blocker explains rotation lock and opens controls safely", async 
 
 test("a gamepad routes to the blocker's buttons, not the car", async ({ page }) => {
   test.setTimeout(300_000);
-  // navOpen() is what js/input/input.js branches on: false meant d-pad/A were
-  // spent on boost/shift BEHIND the opaque blocker and a pad-only player had
-  // no reachable way to press OPEN CONTROLS or EXIT RACE.
-  await startPortraitRace(page);
-  const nav = await page.evaluate(() =>
-    window.UiLayers.navOpen() && (window.UiLayers.top() || {}).id);
-  expect(nav).toBe("rotate-device");
+  await startPortraitRace(page, { headless: true });
+  await page.evaluate(() => {
+    const buttons = Array.from({ length: 17 }, () => ({ pressed: false, value: 0, touched: false }));
+    const pad = { id: "Portrait recovery pad", index: 0, connected: true,
+      mapping: "standard", axes: [0, 0, 0, 0], buttons };
+    navigator.getGamepads = () => [pad, null, null, null];
+    window.__portraitPad = pad;
+    window.dispatchEvent(new Event("gamepadconnected"));
+    Input.reset();
+    Input.poll();
+  });
+  const press = async (button) => {
+    const driving = await page.evaluate((button) => {
+      const pad = window.__portraitPad;
+      for (const b of pad.buttons) { b.pressed = false; b.value = 0; b.touched = false; }
+      Input.poll(); // release the previous edge before pressing again
+      Object.assign(pad.buttons[button], { pressed: true, value: 1, touched: true });
+      Input.poll();
+      const state = { throttle: Input.throttle(), brake: Input.braking(), steer: Input.steer(),
+        boost: Input.consumeBoostToggle(), overtake: Input.consumeOvertake(),
+        shiftUp: Input.consumeShiftUp(), shiftDown: Input.consumeShiftDown() };
+      Object.assign(pad.buttons[button], { pressed: false, value: 0, touched: false });
+      Input.poll();
+      return state;
+    }, button);
+    expect(driving).toEqual({ throttle: false, brake: false, steer: 0,
+      boost: false, overtake: false, shiftUp: false, shiftDown: false });
+  };
+  const blocker = page.locator("#rotate-device");
+  await expect(page.locator("#rotate-controls")).toBeFocused();
+  await press(0); // A opens the focused recovery control
+  await expect(blocker).toBeHidden();
+  await expect(page.locator("#howtoplay")).toBeVisible();
+  await expect(page.locator("#htp-close")).toBeFocused();
+  await press(1); // B returns through the modal's real cancel/back path
+  await expect(page.locator("#howtoplay")).toBeHidden();
+  await expect(blocker).toBeVisible();
+  await expect(page.locator("#rotate-controls")).toBeFocused();
+  await press(2); // X must not leak a boost edge behind the blocker
+  await press(5); // RB navigates right while keeping the car's shift latch clear
+  await expect(page.locator("#rotate-exit")).toBeFocused();
+  await press(12); // D-pad up returns to OPEN CONTROLS
+  await expect(page.locator("#rotate-controls")).toBeFocused();
+  await press(13); // D-pad down must actually move to EXIT RACE
+  await expect(page.locator("#rotate-exit")).toBeFocused();
+  await press(0);
+  await expect(blocker).toBeHidden();
+  await expect(page.locator("#overlay")).toBeVisible();
+  await expect(page.locator("body")).not.toHaveClass(/in-race/);
 });
 
 test("portrait blocker can exit the race", async ({ page }) => {

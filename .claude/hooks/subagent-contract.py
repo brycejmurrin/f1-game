@@ -119,13 +119,38 @@ def check(name, msg):
     return None
 
 
+def handback_once(d):
+    """True the first time this agent_id's hand-back is denied. A PreToolUse
+    call has no stop_hook_active, so a stamp under artifacts/ keeps it to one
+    deny per subagent (never a loop)."""
+    import os
+    aid = re.sub(r"[^A-Za-z0-9_.-]", "_", str(d.get("agent_id") or ""))
+    if not aid:
+        return False
+    stamp = os.path.join(str(d.get("cwd") or os.getcwd()), "artifacts", "subagent-contract", aid)
+    if os.path.exists(stamp):
+        return False
+    os.makedirs(os.path.dirname(stamp), exist_ok=True)
+    open(stamp, "w").close()
+    return True
+
+
 def main():
     try:
         d = json.loads(sys.stdin.read() or "null")
         if not isinstance(d, dict) or d.get("stop_hook_active") is True:
             return
         name = str(d.get("agent_type") or "").rsplit(":", 1)[-1]
-        msg = d.get("last_assistant_message")
+        # SubagentHandback (auto mode, v2.1.271+): the report is the tool's
+        # message input; last_assistant_message is only closing text then
+        # (https://code.claude.com/docs/en/hooks §SubagentStop, #2228 research).
+        handback = d.get("hook_event_name") == "PreToolUse"
+        if handback:
+            if d.get("tool_name") != "SubagentHandback":
+                return
+            msg = (d.get("tool_input") or {}).get("message")
+        else:
+            msg = d.get("last_assistant_message")
         if name not in C or not isinstance(msg, str) or not msg.strip():
             return
         why = check(name, msg)
@@ -133,7 +158,11 @@ def main():
             reason = ("Report contract (" + name + "): " + why + " Re-emit your whole final report in the "
                       "contract shape now; do not start new work. (Advisory hook .claude/hooks/subagent-contract.py; "
                       "it will not block a second time.)")
-            sys.stdout.write(json.dumps({"decision": "block", "reason": reason}))
+            if not handback:
+                sys.stdout.write(json.dumps({"decision": "block", "reason": reason}))
+            elif handback_once(d):
+                sys.stdout.write(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                 "permissionDecision": "deny", "permissionDecisionReason": reason}}))
     except Exception:
         return  # fail open
 

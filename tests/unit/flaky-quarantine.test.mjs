@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 import { loadQuarantine, flakyVerdict, armed, QUARANTINE } from "../helpers/flaky-policy.mjs";
 import { shards, fit } from "../../tools/ci/select-specs.mjs";
 
@@ -23,13 +24,40 @@ test("every quarantine row names a spec that exists and carries since/owner/why"
     assert.match(row.since || "", /^\d{4}-\d{2}-\d{2}$/, `${row.spec}: since must be an ISO date`);
     assert.ok((row.owner || "").length >= 8, `${row.spec}: owner names who fixes it`);
     assert.ok((row.why || "").length >= 40, `${row.spec}: why must say what was measured`);
+    assert.ok(row.title.includes(" › "), "quarantine identifies the exact suite and test");
+    assert.match(row.expires, /^\d{4}-\d{2}-\d{2}$/);
     assert.ok(!seen.has(row.spec), `${row.spec}: listed twice`);
     seen.add(row.spec);
   }
 });
 
+test("every exact quarantine title is collected by the real browser runner", () => {
+  // --list starts no browser. It expands dynamic titles and applies the real
+  // project/manifest filters; a substring in source proves neither.
+  const listed = JSON.parse(execFileSync(process.execPath, [
+    path.join(ROOT, "node_modules/@playwright/test/cli.js"), "test",
+    ...FILE.quarantine.map((r) => r.spec), "--list", "--reporter=json",
+  ], { cwd: ROOT, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024 }));
+  assert.deepEqual(listed.errors, []);
+  const collected = [];
+  function visit(suites, parents = []) {
+    for (const suite of suites) {
+      const titles = [...parents, suite.title];
+      for (const spec of suite.specs || []) {
+        collected.push({ file: spec.file, title: [...titles.slice(1), spec.title].join(" › ") });
+      }
+      visit(suite.suites || [], titles);
+    }
+  }
+  visit(listed.suites);
+  for (const row of FILE.quarantine) {
+    assert.equal(collected.filter((t) => "tests/" + t.file === row.spec && t.title === row.title).length, 1,
+      `${row.spec}: ${row.title} must identify exactly one runnable test`);
+  }
+});
+
 test("the loader returns the quarantined spec paths, and an empty set for a missing file", () => {
-  const q = loadQuarantine();
+  const q = loadQuarantine(QUARANTINE, new Date("2026-10-16T00:00:00Z"));
   for (const row of FILE.quarantine) assert.ok(q.has(row.spec));
   assert.equal(q.size, FILE.quarantine.length);
   assert.equal(loadQuarantine(path.join(ROOT, "scratch", "no-such-quarantine.json")).size, 0);
@@ -38,6 +66,7 @@ test("the loader returns the quarantined spec paths, and an empty set for a miss
 test("verdict: a quarantined flake is reported, an unlisted one blocks, none means pass", () => {
   // Fixture keys, not repo paths: the verdict is plain set membership on key().spec.
   const q = new Set(["fixture/known.spec.js"]);
+  q.policies = [{spec: "fixture/known.spec.js", title: "wobbles"}];
   const known = { spec: "fixture/known.spec.js", title: "wobbles" };
   const fresh = { spec: "fixture/new.spec.js", title: "also wobbles" };
   assert.deepEqual(flakyVerdict([], q), { blocking: [], quarantined: [], fail: false });
@@ -166,4 +195,52 @@ test("the selected gate honours the quarantine: its specs get a leg of their own
   assert.ok(from > 0 && run.length > 0, "the selected job's run step is gone");
   assert.match(run, /APEX_FAIL_ON_FLAKY: 1/);
   assert.match(run, /--retries=\$\{\{ matrix\.retries \|\| 0 \}\}/);
+});
+
+test("real quarantine matches exact TLX title only and expires after review deadline", () => {
+  const row = FILE.quarantine[0];
+  assert.equal(row.owner, "brycejmurrin");
+  assert.match(row.evidence, /^https:\/\/github.com\/brycejmurrin\/f1-game\/actions\/runs\/\d+$/);
+  assert.ok(row.review.length > 40);
+  assert.ok(row.expires > row.since);
+  const active = loadQuarantine(QUARANTINE, new Date(row.expires + "T12:00:00Z"));
+  const known = {spec: row.spec, title: row.title};
+  assert.equal(flakyVerdict([known], active).fail, false);
+  for (const title of ["GLX renders the mirror pass", row.title + " new regression", "HUD rear-view mirror › TLX › TLX renders the mirror pass"]) {
+    assert.equal(flakyVerdict([{spec: row.spec, title}], active).fail, true, title);
+  }
+  const after = new Date(row.expires + "T00:00:00Z"); after.setUTCDate(after.getUTCDate() + 1);
+  assert.equal(flakyVerdict([known], loadQuarantine(QUARANTINE, after)).fail, true);
+ });
+
+test("phone title quarantine cannot waive sibling goldens and expires after one week", () => {
+  const row = FILE.quarantine.find((r) => r.spec === "tests/specs/menu-baseline.spec.js");
+  assert.equal(row.title, "menu identity — phone-landscape › title looks like itself");
+  assert.equal(row.owner, "brycejmurrin");
+  assert.equal(row.expires, "2026-10-23");
+  const q = loadQuarantine(QUARANTINE, new Date("2026-10-16T00:00:00Z"));
+  assert.equal(flakyVerdict([{ spec: row.spec, title: row.title }], q).fail, false);
+  for (const shape of ["phone-landscape", "desktop"]) {
+    for (const screen of ["title", "select", "garage"]) {
+      const title = `menu identity — ${shape} › ${screen} looks like itself`;
+      assert.equal(flakyVerdict([{ spec: row.spec, title }], q).fail, title !== row.title, title);
+    }
+  }
+  const expired = loadQuarantine(QUARANTINE, new Date("2026-10-24T00:00:00Z"));
+  assert.equal(flakyVerdict([{ spec: row.spec, title: row.title }], expired).fail, true);
+});
+
+test("invalid quarantine identity or review metadata cannot waive a failure", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "quarantine-policy-"));
+  const file = path.join(dir, "ledger.json");
+  const row = FILE.quarantine[0];
+  try {
+    for (const key of ["title", "owner", "review", "evidence", "expires"]) {
+      const invalid = {...row}; delete invalid[key];
+      fs.writeFileSync(file, JSON.stringify({quarantine: [invalid]}));
+      const q = loadQuarantine(file, new Date("2026-10-15T00:00:00Z"));
+      assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], q).fail, true, key);
+    }
+    assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], new Set([row.spec])).fail, true, "spec membership alone cannot waive a test");
+  } finally { fs.rmSync(dir, {recursive: true, force: true}); }
 });

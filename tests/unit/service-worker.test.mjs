@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, webcrypto } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
@@ -1220,6 +1220,61 @@ test("offline, voice json and bin fall back to the cached pair", async () => {
   assert.equal(await (await b.responsePromise).text(), "old-bytes");
 });
 
+test("a voice rebake during an active worker lifetime cannot play a mixed cached pair", async () => {
+  const oldBin = "OLD!!", newBin = "NEW!!";
+  const manifest = (bin) => JSON.stringify({ clips: { hello: [0, 5, 1] }, binary: {
+    bytes: Buffer.byteLength(bin), sha256: createHash("sha256").update(bin).digest("hex"),
+  } });
+  let deployed = 321, binaryFault = true, offline = false;
+  const brokenBin = deferred();
+  const ordinary = installFetch();
+  const h = createHarness({ fetchImpl: async (request) => {
+    if (offline) throw new TypeError("offline");
+    const url = new URL(typeof request === "string" ? request : request.url, ORIGIN);
+    if (url.pathname.endsWith("version.json")) return new Response(JSON.stringify({ build: deployed }));
+    if (url.pathname.endsWith("/george.json")) return new Response(manifest(deployed === 321 ? oldBin : newBin));
+    if (url.pathname.endsWith("/george.bin")) return deployed === 321 ? new Response(oldBin) : binaryFault ? brokenBin.promise : new Response(newBin);
+    return ordinary(request);
+  } });
+  await h.lifecycleEvent("install").done();
+  await h.lifecycleEvent("activate").done();
+  // Warm both files through the real fetch handler in generation 321.
+  for (const ext of ["json", "bin"]) {
+    const event = h.fetchEvent(new Request(`${ORIGIN}/assets/voice/george.${ext}`));
+    await event.responsePromise;
+    await Promise.all(event.lifetimes);
+  }
+  deployed = 322;  // old worker remains active while the replacement installs
+  const ctx = vm.createContext({ crypto: webcrypto, setTimeout, clearTimeout,
+    setInterval: () => 1, clearInterval() {}, Log: { info() {} },
+    fetch: async (url) => {
+      const event = h.fetchEvent(new Request(new URL(url, ORIGIN)));
+      const response = await event.responsePromise;
+      if (url.endsWith(".json")) {
+        // JSON arrived from the new deployment; the sibling binary fails.
+        brokenBin.reject(new TypeError("connection lost"));
+      }
+      await Promise.all(event.lifetimes);
+      return response;
+    },
+  });
+  vm.runInContext(await readFile(new URL("../../js/ui/update-check.js", import.meta.url), "utf8"), ctx);
+  vm.runInContext("globalThis.updates = UpdateCheck.create({ booted:321 }); updates.markReady(322); globalThis.blocked = UpdateCheck.blocksLazyLoad();", ctx);
+  assert.equal(ctx.blocked, true, "the script-loader guard does not own voice fetches");
+  vm.runInContext(await readFile(new URL("../../js/audio/voice-pack.js", import.meta.url), "utf8"), ctx);
+  const pack = ctx.VoicePack.create({});
+  assert.equal(await pack.load("george"), false, "fresh index + old same-sized binary is rejected by digest");
+  assert.equal(pack.ready("george"), false);
+  assert.equal(pack.plan("george", "hello"), null);
+  const cache = h.stores.get("apex26-321");
+  assert.equal(await cache.get(`${ORIGIN}/assets/voice/george.json`).clone().text(), manifest(newBin));
+  assert.equal(await cache.get(`${ORIGIN}/assets/voice/george.bin`).clone().text(), oldBin);
+  binaryFault = false;
+  assert.equal(await ctx.VoicePack.create({}).load("george"), true, "a coherent fresh pair recovers");
+  offline = true;
+  assert.equal(await ctx.VoicePack.create({}).load("george"), true, "a coherent cached pair remains playable offline");
+});
+
 test("a slow voice fetch loses the race to cache, and its late answer is still cached", async () => {
   let release;
   const late = new Promise((r) => { release = r; });
@@ -1474,4 +1529,73 @@ test("navigation returns the network shell before generation lookup and consumes
   version.resolve(new Response('{"build":321}'));
   await done;
   assert.equal(await h.stores.get("apex26-321").get(`${ORIGIN}/race`).text(), shell);
+});
+
+// Secondary documents share navigation caching, but never the game's shell.
+for (const page of ["controller.html", "bench.html", "cockpit-view.html"]) {
+  for (const query of ["?code=ROOM", "?b=321", "?b=322"]) {
+    test(`offline ${page}${query} restores its own cached document`, async () => {
+      const h = settledShellHarness({ online: false, fetchImpl: () => Promise.reject(new TypeError("offline")) });
+      h.stores.get("apex26-321").set(`${ORIGIN}/${page}`, new Response(`own ${page}`));
+      const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/${page}${query}` });
+      assert.equal(await (await nav.responsePromise).text(), `own ${page}`);
+    });
+    test(`offline uncached ${page}${query} never serves the game shell`, async () => {
+      const h = settledShellHarness({ online: false, fetchImpl: () => Promise.reject(new TypeError("offline")) });
+      const nav = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/${page}${query}` });
+      assert.equal((await nav.responsePromise).status, 0);
+    });
+  }
+}
+
+for (const failure of ["503", "quota", "interrupted"]) {
+  test(`career UI ${failure} aborts update and preserves offline prior generation`, async () => {
+    let offline = false;
+    const ordinary = lazyShellFetch({ "js/career/career-ui.js": "bbbbbbbbbbbb" });
+    const h = createHarness({
+      fetchImpl: (request) => {
+        if (offline) return Promise.reject(new TypeError("offline"));
+        if (requestKey(request).includes("/js/career/career-ui.js")) {
+          if (failure === "503") return Promise.resolve(new Response("unavailable", { status: 503 }));
+          if (failure === "interrupted") return Promise.reject(new TypeError("connection interrupted"));
+        }
+        return ordinary(request);
+      },
+      putImpl: (_name, request) => {
+        if (failure === "quota" && requestKey(request).includes("/js/career/career-ui.js")) {
+          throw new DOMException("full", "QuotaExceededError");
+        }
+      },
+    });
+    h.stores.set("apex26-321", new Map([
+      [`${ORIGIN}/`, new Response("old shell")],
+      [`${ORIGIN}/index.html`, new Response("old shell")],
+      [`${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa`, new Response("old career")],
+      [`${ORIGIN}/__apex_install_complete__`, new Response("complete")],
+      [`${ORIGIN}/__apex_install_settled__`, new Response("settled")],
+    ]));
+    await assert.rejects(h.lifecycleEvent("install").done());
+    assert.equal(h.skipped, 0);
+    assert.deepEqual(h.deleted, []);
+    assert.equal(h.stores.get("apex26-322").has(`${ORIGIN}/__apex_install_complete__`), false);
+    offline = true;
+    // A rejected installing worker never controls clients; the previous worker
+    // continues serving the retained generation, including after a restart.
+    const active = createHarness({ fetchImpl: () => Promise.reject(new TypeError("offline")) });
+    for (const [name, store] of h.stores) active.stores.set(name, store);
+    const nav = active.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+    assert.equal(await (await nav.responsePromise).text(), "old shell");
+    const lazy = active.fetchEvent({ method: "GET", url: `${ORIGIN}/js/career/career-ui.js?v=aaaaaaaaaaaa` });
+    assert.equal(await (await lazy.responsePromise).text(), "old career");
+  });
+}
+
+test("career UI is required under its content-hash key before a successful update retires old caches", async () => {
+  const map = { "js/career/career-ui.js": hash12("body of js/career/career-ui.js") };
+  const h = createHarness({ fetchImpl: lazyShellFetch(map) });
+  h.stores.set("apex26-321", new Map([["old", new Response("old")]]));
+  await h.lifecycleEvent("install").done();
+  assert.ok(h.stores.get("apex26-322").has(`${ORIGIN}/js/career/career-ui.js?v=${map["js/career/career-ui.js"]}`));
+  await h.lifecycleEvent("activate").done();
+  assert.deepEqual(h.deleted, ["apex26-321"]);
 });

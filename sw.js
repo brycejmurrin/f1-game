@@ -445,6 +445,7 @@ async function precacheAssetLists() {
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
     "js/audio/rivals.js",
+    "js/audio/crowd.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
     "js/audio/radio-voice.js",
@@ -500,6 +501,7 @@ async function precacheAssetLists() {
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
     "js/editor/scenery-panel.js",
+    "js/editor/bridge-panel.js",
     "js/editor/designer.js",
     // LAZY_XR — WebXR session behind navigator.xr / ENTER VR
     "js/xr/xr-plan.js",
@@ -650,13 +652,15 @@ self.addEventListener("install", (event) => {
     const cache = await openCache(name);
     // GLX is the fallback renderer every device can run: when TLX/WGX are not
     // cached (or fail), an offline boot without it is "graphics unavailable".
-    // So its deferred files are ESSENTIAL, stamped as loadBackendScripts asks.
-    const isGlx = (u) => /^js\/render\/glx\//.test(u);
+    // Career UI is also required: an update must not replace working offline
+    // career access with a shell whose lazy entry point was never cached.
+    // Stamp these files exactly as ScriptLoader requests them.
+    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || u === "js/career/career-ui.js";
     const isShell = (u) => u === "./" || u === "index.html";
     // A lazy file's key: its content hash from the shell's map, else the build.
     const lazyV = urls.lazyV || new Map();
     const stampKey = (u) => u + "?v=" + (lazyV.get(u) || build);
-    const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isGlx).map(stampKey));
+    const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isRequiredLazy).map(stampKey));
     await Promise.all(["./", "index.html"].map((u) => cache.put(u, urls.shellResponse())));
     await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u))) await cacheRequiredAsset(cache, u); });
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
@@ -683,8 +687,8 @@ self.addEventListener("install", (event) => {
       /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
-          // GLX went in `required` above; WGX is runtime-only (opt-in).
-          return !isGlx(bare) && !isRuntimeOnlyOptional(bare);
+          // GLX and career UI went in `required`; WGX is runtime-only (opt-in).
+          return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
         });
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
     // BACKGROUND pool (scenery / data / net — not WGX), then SETTLED, then
@@ -848,7 +852,7 @@ self.addEventListener("fetch", (event) => {
   // Shell bust navigations (?b= from index.html's version guard) must never
   // fall back to precached index.html — a slow/dead network would serve the
   // stale shell, and the one-shot sessionStorage guard blocks a second try.
-  const isShellBust = req.mode === "navigate" && url.searchParams.has("b");
+  const isShellBust = req.mode === "navigate" && isShellDocument(url) && url.searchParams.has("b");
   if (req.mode === "navigate" || isVersion) {
     // version.json is NEVER written to the cache here. index.html fetches it as
     // "version.json?_=<Date.now()>", so every launch would put one more entry
@@ -919,7 +923,10 @@ self.addEventListener("fetch", (event) => {
       // guard swallows the parse error).
       if (isVersion) return (await matchPreferCurrent("version.json")) || Response.error();
       if (isShellBust) return bustShell || Response.error();
-      const own = await matchPreferCurrent(req);
+      const ownURL = new URL(url.href);
+      ownURL.search = "";
+      ownURL.hash = "";
+      const own = (await matchPreferCurrent(req)) || (url.search && await matchPreferCurrent(ownURL.href));
       if (own) return own;
       // The GAME shell answers only the game's own address ("/", a directory
       // URL, "/index.html", or an extensionless deep link). Another root page
@@ -947,8 +954,9 @@ self.addEventListener("fetch", (event) => {
 
   // RECORDED RADIO VOICES ARE NETWORK-FIRST. assets/voice/*.json and *.bin are
   // fetched as unversioned pairs (js/audio/voice-pack.js); cache-first could
-  // serve a stale index with a fresh bin (or the reverse) after a deploy and
-  // corrupt clip offsets for the whole cache generation. Same strategy as pack.
+  // keep a rebaked voice stale for the whole cache generation. Same strategy
+  // as pack. Each response races independently; voice-pack.js verifies the
+  // manifest's binary digest before accepting a pair (including old bare keys).
   if (url.pathname.includes("/assets/voice/") && !DEV_HOST) {
     packNetworkFirst(event, req);
     return;

@@ -172,6 +172,9 @@ const GameStore = (function () {
       }
       return { ok: true, durable, reason, retried };
     },
+    failedKeys() {
+      return [..._writeFails.values()].map((f) => ({ key: shortKey(f.k), lane: f.lane, reason: f.name }));
+    },
     keyRevision(k) {
       return this._clearRev + ":" + (this._keyRev.get(fullKey(k)) || 0);
     },
@@ -250,14 +253,17 @@ const GameStore = (function () {
       // localStorage cache. Checked first so a session clear() cannot drop it.
       try { if (e.storageArea && e.storageArea !== localStorage) return false; } catch (_) { /* storage blocked: nothing to compare */ }
       if (e.key === null) {
-        for (const key of _rawOverrides.keys()) _writeFails.delete(key);
+        _writeFails.clear();
+        mirrorForeign(null);
         _rawOverrides.clear(); this.rawRev++;
         this._cache.clear(); this._clearRev++; this.rev++; this.foreign++;
         this._notify({ key: null, foreign: true, clear: true });
         return true;
       }
       if (typeof e.key !== "string" || e.key.indexOf("apex26.") !== 0) return false;
-      if (_rawOverrides.delete(e.key)) _writeFails.delete(e.key);
+      _rawOverrides.delete(e.key);
+      _writeFails.delete(e.key);
+      mirrorForeign(e.key);
       this.rawRev++;
       this._cache.delete(e.key);
       this._keyRev.set(e.key, (this._keyRev.get(e.key) || 0) + 1);
@@ -329,7 +335,9 @@ const GameStore = (function () {
   const MIRROR_OPEN_MS = 4000;      // a blocked/never-settling open() degrades to "no mirror"
   const MIRROR_FLUSH_MS = 500;      // settleRound() writes the slot and the season back to back
   const MIRROR_RETRY_MS = 2000;     // one automatic retry; a later write/pagehide retries retained failures again
-  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, ready: null, settled: false };
+  const AUTHORED_KEY = /^apex26\.(?:customTeam|customLogo|(?:parts|setup|setupPresets)\.[A-Za-z0-9_-]{1,64}|livery\.(?:custom\.)?[A-Za-z0-9_-]{1,64})$/;
+  const AUTHORED_ROW_BYTES = 512 * 1024, AUTHORED_TOTAL_BYTES = 2 * 1024 * 1024, AUTHORED_KEYS = 96;
+  const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, settled: false, skipped: 0, authoredBytes: 0, authoredKeys: 0, limitReason: null, ready: null };
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
   let _mirrorPending = new Map();   // full key -> { v: JSON string or null for a delete, lsOk }
   // Compare the last COMMITTED/restored payload, not permanent key ownership:
@@ -339,7 +347,28 @@ const GameStore = (function () {
   let _mirrorFlight = null;         // serialize bursts so an older transaction cannot finish last
   let _restoreDone = false;         // flush waits for mirrorRestore: a boot re-save must not overwrite the row it restores
 
-  function mirrorKey(key) { return MIRROR_KEY.test(key); }
+  function mirrorKey(key) { return MIRROR_KEY.test(key) || AUTHORED_KEY.test(key); }
+  function authoredBytes(k, v, baseline) { return (k.length + (v === null ? 0 : typeof v === "string" ? v.length : AUTHORED_ROW_BYTES) + (typeof baseline === "string" ? baseline.length : 0)) * 2; }
+  // Foreign winners supersede retries AND queued mirror work. An already open
+  // transaction is followed by this winner in the next serialized flush.
+  let _foreignEpoch = 0;
+  const _foreignKeys = new Map();
+  const _mirrorKnown = new Set();
+  function mirrorEpoch(k) { return _foreignEpoch + ":" + (_foreignKeys.get(k) || 0); }
+  function mirrorForeign(key) {
+    if (key === null) {
+      _foreignEpoch++;
+      const keys = new Set([..._mirrorKnown, ..._mirrorPending.keys(), ..._mirrorSeen.keys()]);
+      _mirrorPending.clear(); _mirrorSeen.clear();
+      mirror.pending = 0;
+      for (const k of keys) mirrorQueue(k, null, true);
+      return;
+    }
+    _foreignKeys.set(key, (_foreignKeys.get(key) || 0) + 1);
+    _mirrorPending.delete(key); _mirrorSeen.delete(key); mirror.pending = _mirrorPending.size;
+    if (!mirrorKey(key)) return;
+    try { mirrorQueue(key, localStorage.getItem(key), true, { foreign: true }); } catch (_) { /* unavailable */ }
+  }
 
   function mirrorOpen() {
     if (_mirrorDb) return _mirrorDb;
@@ -384,12 +413,15 @@ const GameStore = (function () {
   // restore must prefer it even though the key is present on disk.
   function mirrorQueue(key, json, lsOk, options) {
     if (typeof indexedDB === "undefined" || !indexedDB) return;
+    _mirrorKnown.add(key);
     const prior = _mirrorPending.get(key);
     // A refused delete needs a tombstone: removing its mirror would leave the
     // undeleted localStorage value as the only surviving copy at the next boot.
     const v = json === null && lsOk === false ? "null" : json;
     const user = !(options && options.migration) || !!(prior && prior.user);
-    _mirrorPending.set(key, { v, lsOk: lsOk !== false, user });
+    let disk;
+    try { disk = localStorage.getItem(key); } catch (_) { disk = undefined; }
+    _mirrorPending.set(key, { v, lsOk: lsOk !== false, user, disk, foreign: !!(options && options.foreign), epoch: mirrorEpoch(key) });
     mirror.pending = _mirrorPending.size;
     if (_mirrorTimer !== null) return;
     if (typeof setTimeout !== "function") { mirrorFlush(); return; }
@@ -427,21 +459,43 @@ const GameStore = (function () {
       let t;
       try { t = db.transaction(MIRROR_STORE, "readwrite"); } catch (e) { res(false); return; }
       const os = t.objectStore(MIRROR_STORE), committed = new Map();
-      for (const [k, e] of batch) {
-        // Cross-tab: a quota-refused (lsOk:false) row is the only durable copy
-        // of a newer save. A peer tab that never saw storage events can still
-        // flush lsOk:true with an OLDER value — refuse that downgrade (BUGS.md B5).
-        // Same payload with lsOk:true is fine (boot healed the disk and agrees).
-        const getReq = os.get(k);
-        getReq.onsuccess = () => {
-          const prev = getReq.result;
+      let authoredTotals = null;
+      const all = os.getAll();
+      all.onsuccess = () => {
+        const rows = new Map((all.result || []).map((r) => [r.k, r]));
+        let bytes = 0, keys = 0;
+        for (const [k, row] of rows) if (AUTHORED_KEY.test(k)) { bytes += authoredBytes(k, row.v, row.baseline); keys++; }
+        for (const [k, e] of batch) {
+          if (e.epoch !== mirrorEpoch(k)) continue;
+          const prev = rows.get(k), authored = AUTHORED_KEY.test(k);
           const value = e.v === null ? "null" : e.v;
-          if (prev && prev.lsOk === false && e.lsOk === true && value !== prev.v && _mirrorSeen.get(k) !== prev.v) return;
-          if (e.v === null) os.delete(k); else os.put({ k, v: e.v, lsOk: e.lsOk });
+          if (!e.foreign && prev && prev.lsOk === false && e.lsOk === true && value !== prev.v && _mirrorSeen.get(k) !== prev.v) continue;
+          if (authored) {
+            if (prev && !e.lsOk && e.v !== prev.v && _mirrorSeen.get(k) !== prev.v) continue;
+            // localStorage is synchronous across tabs: detect a winner even if
+            // its storage event has not run in this document yet.
+            let disk;
+            try { disk = localStorage.getItem(k); } catch (_) { continue; }
+            if (disk !== e.disk) continue;
+            const baseline = e.lsOk ? null : e.disk;
+            const size = authoredBytes(k, e.v, baseline), old = prev ? authoredBytes(k, prev.v, prev.baseline) : 0;
+            const count = keys + (prev ? 0 : 1), total = bytes - old + size;
+            if ((!prev && count > AUTHORED_KEYS) || (e.v !== null && (size > AUTHORED_ROW_BYTES || total > AUTHORED_TOTAL_BYTES))) {
+              mirror.skipped++; mirror.limitReason = "authored mirror limit"; continue;
+            }
+            bytes = total; keys = count;
+            // Keep deletion tombstones so a formerly owned value is not
+            // resurrected by a late mirror flush from another tab.
+            os.put({ k, v: e.v, lsOk: e.lsOk, baseline });
+            rows.set(k, { k, v: e.v, lsOk: e.lsOk, baseline });
+          } else if (e.v === null) { os.delete(k); rows.delete(k); }
+          else { os.put({ k, v: e.v, lsOk: e.lsOk }); rows.set(k, { k, v: e.v, lsOk: e.lsOk }); }
           committed.set(k, e.v);
-        };
-      }
+        }
+        authoredTotals = { bytes, keys };
+      };
       t.oncomplete = () => {
+        if (authoredTotals) { mirror.authoredBytes = authoredTotals.bytes; mirror.authoredKeys = authoredTotals.keys; }
         for (const [k, v] of committed) { if (v === null) _mirrorSeen.delete(k); else _mirrorSeen.set(k, v); }
         mirror.flushed += committed.size; res(true);
       };
@@ -454,7 +508,7 @@ const GameStore = (function () {
         // key while this transaction was in flight. Otherwise a transient IDB
         // abort is permanent data loss precisely when localStorage also refused
         // the write and the mirror is the only durable route left.
-        for (const [k, v] of batch) if (!_mirrorPending.has(k)) _mirrorPending.set(k, v);
+        for (const [k, v] of batch) if (v.epoch === mirrorEpoch(k) && !_mirrorPending.has(k)) _mirrorPending.set(k, v);
         mirror.pending = _mirrorPending.size;
         Log.warn("game", "durable mirror write failed for " + batch.size + " key(s)");
         // Retry once automatically. If storage remains unavailable, retain the
@@ -477,6 +531,7 @@ const GameStore = (function () {
   // disk holds the older value, and the boot's own re-save of it (Career.load)
   // must neither win here nor overwrite the row when the queue flushes.
   function mirrorRestore() {
+    const epoch = _foreignEpoch, foreignKeys = new Map(_foreignKeys);
     let canRestore = false;
     try { canRestore = typeof indexedDB !== "undefined" && !!indexedDB && typeof localStorage !== "undefined"; }
     catch (_) { /* storage global denied: boot without mirror restore */ }
@@ -490,8 +545,21 @@ const GameStore = (function () {
       r.onerror = () => res([]);
     })).then((rows) => {
       const restored = [];
+      let authoredTotal = 0, authoredCount = 0;
       for (const row of rows) {
-        if (!row || typeof row.k !== "string" || typeof row.v !== "string" || !mirrorKey(row.k)) continue;
+        if (!row || typeof row.k !== "string" || !mirrorKey(row.k)) continue;
+        if (epoch !== _foreignEpoch) { if (!_mirrorPending.has(row.k)) mirrorQueue(row.k, null, true); continue; }
+        if ((foreignKeys.get(row.k) || 0) !== (_foreignKeys.get(row.k) || 0)) continue;
+        _mirrorKnown.add(row.k);
+        const authored = AUTHORED_KEY.test(row.k), tombstone = authored && row.v === null;
+        if (!tombstone && typeof row.v !== "string") continue;
+        if (authored) {
+          const size = authoredBytes(row.k, row.v, row.baseline);
+          if (size > AUTHORED_ROW_BYTES || authoredTotal + size > AUTHORED_TOTAL_BYTES || authoredCount >= AUTHORED_KEYS) {
+            mirror.skipped++; mirror.limitReason = "authored mirror limit"; continue;
+          }
+          authoredTotal += size; authoredCount++;
+        }
         _mirrorSeen.set(row.k, row.v);
         // Automatic load/migration saves may be stale; explicit imports, edits
         // and deletions made while IDB opens are newer and must survive restore.
@@ -499,16 +567,21 @@ const GameStore = (function () {
         if (p && p.user) continue;
         let present = null;
         try { present = localStorage.getItem(row.k); } catch (e) { return 0; }   // storage unreadable: nothing to restore into
+        // A failed authored write may replace only the primary bytes it
+        // originally failed against. A newer primary can outlive its writer
+        // before the debounced mirror catches up. Epochs cannot survive reboot.
+        if (authored && row.lsOk === false && present !== null && present !== row.v &&
+            (!Object.prototype.hasOwnProperty.call(row, "baseline") || present !== row.baseline)) continue;
         const newer = row.lsOk === false && present !== row.v;
         if (present !== null && !newer) continue;
         if (newer && p) _mirrorPending.delete(row.k);
         let landed = true;
-        try { localStorage.setItem(row.k, row.v); } catch (e) { landed = false; }
+        try { if (tombstone) localStorage.removeItem(row.k); else localStorage.setItem(row.k, row.v); } catch (e) { landed = false; }
         if (!landed) {
           if (!newer) continue;             // still no room: the mirror keeps it for next time
           // Still no room, but the session must run on the newer value, not the
           // stale disk copy: serve it from the cache; the row stays lsOk:false.
-          try { store._cache.set(row.k, parseStored(row.v, row.k)); } catch (e) { continue; }
+          try { store._cache.set(row.k, tombstone ? undefined : parseStored(row.v, row.k)); } catch (e) { continue; }
         } else {
           // Heal the refusal marker too, or a later boot can restore this row
           // over newer disk progress. The payload comparison also covers peers.
@@ -518,6 +591,7 @@ const GameStore = (function () {
         store._keyRev.set(row.k, (store._keyRev.get(row.k) || 0) + 1);
         restored.push(row.k);
       }
+      mirror.authoredBytes = authoredTotal; mirror.authoredKeys = authoredCount;
       if (restored.length) {
         store.rev++;
         mirror.restored += restored.length;
@@ -544,6 +618,8 @@ const GameStore = (function () {
 
   mirror.ready = mirrorRestore();
   store.mirror = mirror;           // { supported, restored, flushed, failed, pending, ready } — __apex.persistState()
+  store.mirrorPolicy = Object.freeze({ authoredRowBytes: AUTHORED_ROW_BYTES, authoredTotalBytes: AUTHORED_TOTAL_BYTES, authoredKeys: AUTHORED_KEYS,
+    includes: (key) => mirrorKey(fullKey(key)) });
   store.mirrorFlush = mirrorFlush; // flush the debounced batch now (tests; pagehide)
 
   // A tab closing mid-debounce would drop the last burst; pagehide is the one

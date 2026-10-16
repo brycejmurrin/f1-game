@@ -135,12 +135,13 @@ export function fullTierPassed(jobs = []) {
  * Rows from collected facts. Pure: inject what the API returned.
  * @param {Array<{ pr: object, runs?: object[], jobs?: object[], jobsRunId?: number, checkRuns?: object[] }>} items
  *   pr = the pulls/{n} object (needs number, title, draft, head.sha/ref, auto_merge, mergeable_state)
- * @param {{ cap?: { cap:number, count:number, ok?:boolean } }} [opts]
+ * @param {{ cap?: { cap:number, count:number, ok?:boolean }, armed?: number }} [opts]
+ *   armed = repository-wide initial count, including siblings omitted from items.
  */
 export function evaluate(items, opts = {}) {
   const cap = opts.cap || { cap: MAX_LIVE, count: 0, ok: true };
   const ctx = { cap, room: Math.max(0, cap.cap - cap.count),
-    armed: (items || []).filter((it) => it.pr && it.pr.auto_merge).length };
+    armed: opts.armed ?? (items || []).filter((it) => it.pr && it.pr.auto_merge).length };
   const rows = [];
   for (const it of [...(items || [])].sort((a, b) => a.pr.number - b.pr.number)) {
     const pr = it.pr;
@@ -207,19 +208,18 @@ export function measure(opts = {}) {
   const capV = capMeasure({ request, cap: opts.cap });
   if (capV.error) return fail(capV.error);
 
-  let nums;
-  if (opts.only != null) {
-    nums = [opts.only];
-  } else {
-    nums = [];
-    for (let page = 1; page <= 5; page++) {
-      const r = request(`pulls?state=open&base=${encodeURIComponent(DEPLOY)}&per_page=100&page=${page}`);
-      if (r.error) return fail(r.error);
-      const batch = Array.isArray(r.json) ? r.json : [];
-      nums.push(...batch.map((p) => p.number));
-      if (batch.length < 100) break;
-    }
+  // --pr limits expensive detail/CI reads, not the repository-wide armed cap.
+  // The list includes auto_merge metadata; no sibling detail request is needed.
+  // https://docs.github.com/en/rest/pulls/pulls#list-pull-requests
+  const armedByPr = new Map();
+  for (let page = 1; page <= 5; page++) {
+    const r = request(`pulls?state=open&base=${encodeURIComponent(DEPLOY)}&per_page=100&page=${page}`);
+    if (r.error) return fail(r.error);
+    const batch = Array.isArray(r.json) ? r.json : [];
+    for (const pr of batch) armedByPr.set(pr.number, !!pr.auto_merge);
+    if (batch.length < 100) break;
   }
+  const nums = opts.only != null ? [opts.only] : [...armedByPr.keys()];
   const items = [];
   for (const n of nums) {
     const one = request(`pulls/${n}`);
@@ -230,6 +230,7 @@ export function measure(opts = {}) {
     }
     const sha = pr.head?.sha;
     if (!sha) return fail(`PR #${n}: no head sha`);
+    armedByPr.set(n, !!pr.auto_merge);   // refresh selected rows after discovery
     const runsR = request(`actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=20`);
     if (runsR.error) return fail(`PR #${n} runs: ${runsR.error}`);
     const runs = runsR.json?.workflow_runs || [];
@@ -249,7 +250,7 @@ export function measure(opts = {}) {
     }
     items.push({ pr, runs, jobs, jobsRunId: ci.runId, checkRuns: checks.json?.check_runs || [] });
   }
-  const result = evaluate(items, { cap: capV });
+  const result = evaluate(items, { cap: capV, armed: [...armedByPr.values()].filter(Boolean).length });
   return { ok: true, ...result, capLine: capLine(capV) };
 }
 

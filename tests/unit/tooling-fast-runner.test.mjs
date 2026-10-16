@@ -11,9 +11,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
-  parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK }
+  parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
+  selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS }
   from "../../tools/ci/tooling-fast.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "apex-tf-"));
 
@@ -187,6 +191,34 @@ test("ceiling breach", () => assert.deepEqual(["js/net/lobby.js lines: 1895 > 18
     assert.match(log, /js\/net\/lobby\.js lines: 1895 > 1894 \(\+1\)/);
     assert.match(log, /operator: 'deepStrictEqual'/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CLI: default --jobs stays 1 (AGENTS.md rule 4 load limits); --changed is a first-class flag", () => {
+  assert.equal(DEFAULT_JOBS, 1);
+  const d = parseToolingFastArgv([]);
+  assert.equal(d.jobs, 1);
+  assert.equal(parseToolingFastArgv(["--changed"]).changed, true);
+  assert.match(TOOLING_FAST_USAGE, /--changed/);
+});
+
+test("--changed selects pinned unit tests for a tool edit, not the full suite", () => {
+  const all = ["tests/unit/behind-ship.test.mjs", "tests/unit/agent-config.test.mjs", "tests/unit/a11y-opts.test.mjs",
+    "tests/unit/test-bg-outcome.test.mjs"];
+  const pinIndex = new Map([["tools/ci/test-bg.mjs", new Set(["tests/unit/agent-config.test.mjs"])]]);
+  const r = selectToolingFastChanged(["tools/ci/test-bg.mjs"], { allFiles: all, pinIndex,
+    scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
+  assert.equal(r.reason, "matched");
+  assert.deepEqual(r.files.sort(), ["tests/unit/agent-config.test.mjs", "tests/unit/test-bg-outcome.test.mjs"].sort());
+  assert.ok(r.files.length < all.length);
+  assert.deepEqual(shardsCoveringFiles(r.files, all), ["2/2"]);
+});
+
+test("--changed fail-safes to the full list on infra paths", () => {
+  const all = ["tests/unit/behind-ship.test.mjs", "tests/unit/agent-config.test.mjs"];
+  const r = selectToolingFastChanged(["tests/groups.json"], { allFiles: all,
+    scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
+  assert.equal(r.reason, "run-all-path");
+  assert.deepEqual(r.files, all);
 });
 
 test("CLI: --help and unknown flags never start the suite", () => {

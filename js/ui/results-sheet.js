@@ -233,8 +233,9 @@ function buildResults(order, race) {
   // the retirements among the untimed. An untimed car with no `r` keeps the
   // local flag — the best a guest can do until the payload says.
   const np = G.netPlay;
-  const guest = np && np.active && np.active() && !np.ownsClassification();
-  const verdict = guest && np.peerResult();
+  const kept = np && np.lastResult && np.lastResult();   // the host left after its RESULT (#2199)
+  const guest = !!kept || (np && np.active && np.active() && !np.ownsClassification());
+  const verdict = guest && (kept || np.peerResult());
   // Element-guarded, like the adopt path in js/game.js: a wire payload of
   // [null] satisfies Array.isArray and throws on e.d.
   const hostRow = new Map(Array.isArray(verdict)
@@ -658,17 +659,29 @@ function buildTTResults() {
     const code = action("res-ghost-copy-code", "COPY CODE");
     code.onclick = () => copy(code, "code", "Ghost code");
     const download = action("res-ghost-download", "DOWNLOAD");
-    download.onclick = () => {
+    download.onclick = async () => {
+      if (download.disabled) return;
       const file = GhostShare.fileExport(shareGhost, shareOpts);
       if (!file.ok) { download.textContent = "UNAVAILABLE"; return; }
-      const href = URL.createObjectURL(new Blob([file.text], { type: "application/json" }));
-      const a = document.createElement("a");
-      a.href = href; a.download = file.name; a.hidden = true;
-      document.body.appendChild(a); a.click(); a.remove();
-      // 10 s, the house idiom — see js/ui/settings-export.js. A 0 ms revoke can
-      // kill the object URL before the browser has finished reading it.
-      setTimeout(() => URL.revokeObjectURL(href), 10000);
-      download.textContent = "DOWNLOADED";
+      download.disabled = true;
+      download.textContent = "SAVING…";
+      try {
+        const blob = new Blob([file.text], { type: "application/json" });
+        if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+          await NativeDownload.saveBlob(blob, file.name);
+        } else {
+          const href = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = href; a.download = file.name; a.hidden = true;
+          document.body.appendChild(a); a.click(); a.remove();
+          // 10 s, the house idiom — see js/ui/settings-export.js. A 0 ms revoke can
+          // kill the object URL before the browser has finished reading it.
+          setTimeout(() => URL.revokeObjectURL(href), 10000);
+        }
+        download.textContent = "DOWNLOADED";
+      } catch (e) {
+        download.textContent = typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "CANCELLED" : "DOWNLOAD FAILED";
+      } finally { download.disabled = false; }
     };
   }
 

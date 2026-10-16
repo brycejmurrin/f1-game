@@ -159,7 +159,26 @@ const InputHoldButtons = (function () {
     function wireTap(id, fire) {
       const el = document.getElementById(id);
       if (!el) return;
-      el.addEventListener("pointerdown", function (e) { if (e && e.pointerType === "mouse" && e.button !== 0) return; fire(); });
+      const enabled = () => !el.disabled && !(el.getAttribute && el.getAttribute("aria-disabled") === "true");
+      el.addEventListener("pointerdown", function (e) {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        if (enabled()) fire();   // keep the paddle's immediate down-edge response
+      });
+      el.addEventListener("click", function (e) {
+        // Pointer clicks already fired on DOWN. Native keyboard/AT activation
+        // and .click() have detail 0: no pointer bookkeeping can strand them.
+        if (e.detail === 0 && enabled()) fire();
+      });
+      el.addEventListener("keydown", function (e) {
+        if (e.code !== "Space" && e.key !== " " && e.key !== "Enter" &&
+            e.code !== "Enter" && e.code !== "NumpadEnter") return;
+        // Activate once on DOWN, like a pointer paddle. Spend the native default
+        // so it cannot click again; keep Space off the window's BOOST binding.
+        e.preventDefault(); e.stopPropagation();
+        if (!e.repeat) el.click();
+      });
+      // KEYUP must reach Input: a driving key held before this button gained
+      // focus still needs its release (including a rebound Space/GAS binding).
     }
 
     return { wireHold, wireTap, holdReleasePointer, holdReleaseAll, holdTargetGone, lostCaptureShouldRelease,

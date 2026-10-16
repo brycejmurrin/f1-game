@@ -15,6 +15,7 @@
 // still a lap, and the second case pins that.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { runInContext } from "node:vm";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -64,12 +65,28 @@ function cutOffTrack(g, maxSteps) {
   return { counted: (p.cuts | 0) > before, steps: i };
 }
 
+function ghostState(g) {
+  return runInContext(`(() => {
+    Ghost.flush(); InputGhost.flush();
+    return JSON.stringify({ pose: Ghost.snapshot(), input: InputGhost.snapshot(),
+      poseStore: localStorage.getItem("apex26.ghost.v1"),
+      inputStore: localStorage.getItem("apex26.inputGhost.v1") });
+  })()`, g.ctx);
+}
+
+function recordSamples(g) {
+  g.apex.jump(0.02, 60, 0);
+  g.apex.setInput({ throttle: true, steer: 0 });
+  for (let i = 0; i < 90; i++) g.apex.step(1 / 60, 1);
+}
+
 test("a time-trial lap with a counted cut sets no record and no ghost", async () => {
   const g = await timeTrial();
   const { G } = g;
 
   // A clean lap first, so the assertion below is about the SECOND lap being
   // refused rather than about nothing ever having been written.
+  recordSamples(g);
   armLap(g, 42);
   crossLine(g);
   const p = G.player;
@@ -77,6 +94,12 @@ test("a time-trial lap with a counted cut sets no record and no ghost", async ()
   const cleanBest = p.best;
   const cleanRecord = G.ttRecord;
   assert.ok(isFinite(cleanRecord), "the time-trial record must have been written");
+
+  const cleanGhosts = ghostState(g);
+  const saved = JSON.parse(cleanGhosts);
+  assert.ok(saved.pose?.t.length >= 8, "clean pose tape must exist");
+  assert.ok(saved.input?.steer.length >= 30, "clean input tape must exist");
+  assert.ok(saved.poseStore && saved.inputStore, "both tapes must be flushed to storage");
 
   const cut = cutOffTrack(g, 200);
   assert.ok(cut.counted, "the engine never counted a cut — this test is measuring nothing");
@@ -89,6 +112,17 @@ test("a time-trial lap with a counted cut sets no record and no ghost", async ()
   assert.equal(p.best, cleanBest, "an off-track lap must not become the personal best");
   assert.equal(G.ttRecord, cleanRecord, "…nor the time-trial record");
   assert.equal(p.incidentInvalidLap, false, "the next lap starts clean");
+  assert.equal(ghostState(g), cleanGhosts, "invalid lap must preserve both envelopes and durable stores");
+
+  recordSamples(g);
+  armLap(g, 35);
+  crossLine(g);
+  const replacement = JSON.parse(ghostState(g));
+  assert.ok(replacement.pose.time < saved.pose.time, "next clean lap replaces pose tape");
+  assert.ok(replacement.input.time < saved.input.time, "next clean lap replaces input tape");
+  assert.notEqual(replacement.poseStore, saved.poseStore);
+  assert.notEqual(replacement.inputStore, saved.inputStore);
+  g.close();
 });
 
 test("a brief excursion under the cut threshold still sets a record", async () => {

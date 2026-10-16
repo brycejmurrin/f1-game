@@ -140,6 +140,40 @@ test("Files share feedback stays visible and accessible with Undo instructions",
   assert.match(b.dom.byId("pm-share-code-help").textContent, /APXG1 \/ #ghost=/);
 });
 
+for (const kind of ["setup", "livery", "daily", "undo", "invalid"]) test(`Files ${kind} share import releases the Settings modal only when navigating`, () => {
+  const events = [];
+  const b = bootImportUI({ globals: { ShareCode: {
+    decode: () => kind === "invalid" ? { ok: false, reason: "corrupt" } : { ok: true, kind },
+    apply: (_decoded, hooks) => {
+      if (kind === "setup" || kind === "livery") hooks.openGarage("share");
+      if (kind === "daily") hooks.openDaily();
+      return { ok: true, kind };
+    },
+    messageFor: () => "status",
+  } } });
+  const settings = b.dom.document.createElement("dialog"), garage = b.dom.document.createElement("section");
+  settings.id = "pmsettings"; garage.id = "carsetup";
+  b.dom.document.body.append(settings, garage);
+  settings.hidden = false; settings.open = true; garage.hidden = true;
+  settings.close = () => { settings.open = false; events.push("native-close"); };
+  b.G.closeSettings = () => { settings.hidden = true; settings.close(); events.push("settings-cleanup"); };
+  b.G.openGarage = (from) => { events.push("garage:" + from); garage.hidden = false; };
+  b.G.openDailyPicker = () => { events.push("daily"); };
+
+  b.dom.byId("pm-share-code-in").value = "share code";
+  b.dom.byId("pm-share-code-import").click();
+  if (kind === "setup" || kind === "livery") {
+    assert.deepEqual(events, ["native-close", "settings-cleanup", "garage:share"]);
+    assert.equal(garage.hidden, false);
+  } else if (kind === "daily") {
+    assert.deepEqual(events, ["native-close", "settings-cleanup", "daily"]);
+  } else {
+    assert.deepEqual(events, [], "invalid codes and UNDO stay on Settings");
+  }
+  assert.equal(settings.open, kind === "undo" || kind === "invalid", "native modal ownership follows navigation");
+  assert.equal(settings.hidden, kind !== "undo" && kind !== "invalid");
+});
+
 for (const [label, decoded, applied, message] of [
   ["invalid code", { ok: false, reason: "corrupt" }, null, "That share code is incomplete or corrupt."],
   ["empty Undo", { ok: true, kind: "undo" }, { ok: false, reason: "nothing-to-undo" }, "There is no share code import to undo."],
@@ -180,13 +214,14 @@ test("ensureMounted remounts after the files panel was emptied", () => {
   }
 });
 
-for (const fail of [false, true]) test(`native backup waits for sharing and reports ${fail ? "failure" : "success"}`, async () => {
+for (const outcome of ["success", "failure", "cancelled"]) test(`native backup waits for sharing and reports ${outcome}`, async () => {
   let finish, calls = 0, saved;
-  const held = new Promise((resolve, reject) => { finish = () => fail ? reject(new Error("disk full")) : resolve(); });
+  const held = new Promise((resolve, reject) => { finish = () => outcome === "success" ? resolve() : reject(new Error(outcome === "cancelled" ? "Share canceled" : "disk full")); });
   const b = bootImportUI({ globals: {
     Blob,
     URL: { createObjectURL() { throw new Error("native backup must not use an anchor"); } },
-    NativeDownload: { viable: () => true, saveBlob: (blob, name) => { calls++; saved = { blob, name }; return held; } },
+    NativeDownload: { viable: () => true, saveBlob: (blob, name) => { calls++; saved = { blob, name }; return held; },
+      isCancelled: (e) => e.message === "Share canceled" },
   } });
   const button = b.dom.byId("pm-settings-all");
   const pending = button.onclick();
@@ -202,7 +237,7 @@ for (const fail of [false, true]) test(`native backup waits for sharing and repo
   finish();
   await pending;
   assert.equal(button.disabled, false);
-  assert.match(button.textContent, fail ? /FAILED/ : /SAVED/);
+  assert.match(button.textContent, outcome === "success" ? /SAVED/ : outcome === "cancelled" ? /CANCELLED/ : /FAILED/);
   assert.equal(calls, 1);
 });
 

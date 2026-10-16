@@ -41,6 +41,16 @@ function load(options = {}) {
         },
       }) };
       const transaction = { objectStore: () => ({
+        // Bounded mirror flush inventories existing rows in the readwrite
+        // transaction before applying its batch, just like actual IndexedDB.
+        getAll() {
+          const request = {};
+          queueMicrotask(() => {
+            request.result = mirrorRows.map((row) => ({ ...row }));
+            if (request.onsuccess) request.onsuccess();
+          });
+          return request;
+        },
         // B5 flush reads prev via get() before put — refuse older lsOk:true.
         get(k) {
           const request = {};
@@ -53,7 +63,9 @@ function load(options = {}) {
         },
         put() {}, delete() {},
       }) };
-      queueMicrotask(() => { if (transaction.oncomplete) transaction.oncomplete(); });
+      // Request success handlers run before transaction completion. Queue the
+      // completion after the requests synchronously issued by mirrorFlush.
+      queueMicrotask(() => queueMicrotask(() => { if (transaction.oncomplete) transaction.oncomplete(); }));
       return transaction;
     },
   };
@@ -486,7 +498,12 @@ test("quota-failed calendar adoption retains original through slot switching and
       if (k === "apex26.career.driver.0") throw new DOMException("full", "QuotaExceededError");
       d.set(k, v);
     } });
-    Career.load(); assert.equal(Career.planning().adopt(), false);
+    Career.load();
+    if (future) {   // a newer build's save is unsupported, not calendar-protected: never loaded, never touched
+      assert.equal(Career.active(), false); assert.equal(Career.planning().adopt(), false);
+      assert.equal(disk.get("apex26.career.driver.0"), raw); continue;
+    }
+    assert.equal(Career.planning().adopt(), false);
     assert.equal(disk.get("apex26.career.driver.0"), raw);
     Career.useSlot("driver", 1); Career.useSlot("driver", 0);
     assert.equal(Career.planning().protection().raw, raw);
@@ -521,7 +538,7 @@ test("explicit null stamp and huge future version preserve raw and block public 
     const raw = JSON.stringify(original);
     const disk = new Map([["apex26.career.driver.0", raw]]);
     const { Career } = load({ disk }); Career.load();
-    assert.equal(Career.conflicted(), true);
+    assert.equal(Career.conflicted(), props.v <= 2);   // a future version is unsupported (never loaded), not calendar-protected
     assert.equal(disk.get("apex26.career.driver.0"), raw);
     assert.equal(Career.start({ flavour: "driver", slot: 0 }), null);
     assert.equal(disk.get("apex26.career.driver.0"), raw);
@@ -673,6 +690,27 @@ test("real CareerScreen creates and opens hub and slots with planning helper pre
   assert.equal(dom.byId("cr-title").textContent, "CAREER MODES");
   assert.equal(dom.byId("cr-go").hidden, true);
 });
+
+for (const flavour of ["driver", "myteam"]) for (let i = 0; i < 3; i++) {
+  test(`future ${flavour}:${i} remains occupied and protected until explicit deletion`, () => {
+    const key = `apex26.career.${flavour}.${i}`;
+    const future = JSON.stringify({ v: 2 ** 32, flavour, money: 123, season: { config: { future: true } }, tdev: { haas: 15 } });
+    const disk = new Map([[key, future], ["apex26.careerSlot", JSON.stringify(`${flavour}:${i}`)]]);
+    const { Career } = load({ disk });
+    assert.equal(Career.load(), null);
+    assert.equal(Career.active(), false);
+    const info = Career.slots(flavour)[i];
+    assert.equal(info.used, true);
+    assert.equal(info.unsupported, true);
+    assert.notEqual(Career.firstFree(flavour), i);
+    assert.equal(Career.useSlot(flavour, i), null);
+    assert.equal(Career.start({ flavour, slot: i }), null);
+    Career.save();
+    assert.equal(disk.get(key), future);
+    assert.equal(Career.deleteSlot(flavour, i).ok, true);
+    assert.equal(Career.slots(flavour)[i].used, false);
+  });
+}
 
 // #2193: with the live slot's localStorage key missing (evicted / cleared) but the
 // IndexedDB mirror still holding it, the synchronous boot load() fell through to

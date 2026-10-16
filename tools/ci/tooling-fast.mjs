@@ -12,7 +12,8 @@
  *
  * So `--jobs=N` runs N files at once and the log reads exactly as before: one
  * START and one PASS/FAIL per file, each with its own index and duration.
- * DEFAULT 1, so every existing caller is byte-identical.
+ * DEFAULT 1, so every existing caller is byte-identical; local runs pass --jobs=3
+ * (AGENTS.md rule 4: a CPU-wide default is the box load that times runs out).
  *
  * WHY, measured here: the serial suite is ~230 s and the deploy pays it once per
  * push ATTEMPT. With five or six agent sessions landing on the deploy branch at
@@ -23,6 +24,7 @@
  * js/ or css/ edit to the whole tooling-fast group (see its RULES).
  *
  *   node tools/ci/tooling-fast.mjs                  # full suite, serial
+ *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
  *   … --order=list                                   # list order, not longest-first
@@ -37,12 +39,15 @@
  * The file list is the source of truth for coverage (test-coverage-audit
  * imports TOOLING_FAST_FILES). Keep package.json as `node tools/ci/tooling-fast.mjs`.
  */
-import { spawn, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { changedPaths } from "../lib/changed-files.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
+import { DEPLOY_BRANCH, selectionReceipt } from "./pick-tests.mjs";
+import { TRACKED, circuitsTouched, isDocsOnly } from "./select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const LOGDIR = path.join(ROOT, "artifacts/logs");
@@ -201,11 +206,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/change-driver-tools.test.mjs",
   "tests/unit/change-kind.test.mjs",
   "tests/unit/changed-files.test.mjs",
+  "tests/unit/changelog-fragments.test.mjs",
   // resolveChromium finds Playwright's headless shell when the full archive
   // was never unpacked — the cloud-agent / MCP bootstrap path.
   "tests/unit/chromium-shell.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
+  // CI guards born 2026-10-15: ci-rerun.mjs refuses a superseded/live/green/re-run run; ci-cancel-on-close.yml joins ci.yml's PR group. Pure, no network or browser.
+  "tests/unit/ci-guard-tools.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
   "tests/unit/ci-verdict.test.mjs",
   "tests/unit/ci-watch.test.mjs",
@@ -332,6 +340,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-stage.test.mjs",
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
+  // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
+  "tests/unit/dev-flags.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   // Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.
   "tests/unit/director.test.mjs",
@@ -344,6 +354,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/driver-ratings-personality.test.mjs",
   "tests/unit/driving-coach.test.mjs",
   "tests/unit/driving-cues.test.mjs",
+  // Droplets lens overlay gates (rain rate, onboard-only, caps, reduced motion, LOW off) + spray scaling / nearest-N. ~0.2 s.
+  "tests/unit/droplets-spray.test.mjs",
   // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
   // named legend has to round-trip through two setters, and the inert VM DOM
   // builds no SettingRow children, so painting the row would assert nothing.
@@ -546,6 +558,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/input-ghost.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
+  // knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.
+  "tests/unit/knob-ab.test.mjs",
   "tests/unit/lamp-bake.test.mjs",
   "tests/unit/lamp-chunks.test.mjs",
   "tests/unit/lamp-density.test.mjs",
@@ -601,6 +615,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
   "tests/unit/lobby-codes.test.mjs",
   "tests/unit/lobed-trees.test.mjs",
+  // lockup-bench.mjs sweep (speed × pedal × brake bias × weather) pinned on
+  // Monza; VM pins dry/rain shapes for bias- and speed-dependent wheelLock.
+  "tests/unit/lockup-bench-vm.test.mjs",
   "tests/unit/log-namespaces.test.mjs",
   // LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.
   // VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.
@@ -702,6 +719,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/physics-characterization-vm.test.mjs",
   "tests/unit/pick-tests.test.mjs",
   "tests/unit/pick-unit-slices.test.mjs",
+  // Pit canopy lamps on Bahrain working lane: real setFrameLights cull, tail reserve, phone 24 / TLX-lite 16. ~0.5 s.
+  "tests/unit/pit-canopy-cull.test.mjs",
   // ...and the pit lane's pure geometry: the window WRAPS the start/finish
   // line, the lane is metres not a fraction of the lap, the box is long
   // enough to stop in, and the COMMITMENT that replaced the pit button tells
@@ -727,6 +746,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pu-harvest-audio.test.mjs",
   // shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.
   "tests/unit/publish-shots.test.mjs",
+  // STANDING-WATER PUDDLES: js/render/shared/puddles.js reference mask (sample pins, growth/drying, edge bias) + every constant mirrored in GLX/TLX/WGX + the PUDDLES knob plumbing. Pure, < 1 s.
+  "tests/unit/puddles.test.mjs",
   // Push hold: queued + running Actions JOBS by OS vs the 40 Linux / 5 macOS slots, never runs. Fixtures.
   "tests/unit/queue-depth.test.mjs",
   "tests/unit/quick-validate.test.mjs",
@@ -753,6 +774,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // radio-lines phrasebook: slot fill, recent-history pick, variant counts.
   "tests/unit/radio-lines.test.mjs",
   "tests/unit/radio-voice.test.mjs",
+  // LOCALIZED RAIN: a drifting shower over a window of the lap, per-segment closed-form lag, lap mean = old global. VM, ~0.3 s.
+  "tests/unit/rain-cells.test.mjs",
+  // Two PRs auto-raising one module's ceiling merge clean (ratchets.d fragments, #2291).
+  "tests/unit/ratchet-merge-hotspot.test.mjs",
   "tests/unit/ratchets.test.mjs",
   // Merge Desk: refuse mark-ready when ≥3 ready PRs already hold full-tier CI.
   "tests/unit/ready-full-cap.test.mjs",
@@ -801,6 +826,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/road-lut-frame.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
+  "tests/unit/save-durability.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/save-schema-registry.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
@@ -968,6 +994,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
+  "tests/unit/touch-drag-anchor.test.mjs",
+  // Drag range widens with speed by the same fraction digitalRateIn sheds.
+  // Low / mid / high, the OFF knob, and the same finger travel. VM, < 0.2 s.
+  "tests/unit/touch-drag-speed.test.mjs",
   "tests/unit/track-accuracy-validator.test.mjs",
   // Perf hunt 2 (T1/T2/T4): the build's spatial short-cuts answer exactly what the slow path did. Engine prelude in a VM, < 1 s.
   "tests/unit/track-build-grids.test.mjs",
@@ -1040,6 +1070,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // setTargetAtTime ramps, zero per-frame nodes. Fake-audio VM, < 1 s.
   "tests/unit/tyre-squeal-slip.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  "tests/unit/ui-explorer-core.test.mjs",
+  "tests/unit/ui-explorer-report.test.mjs",
+  "tests/unit/ui-explorer.test.mjs",
   // ui-fit r7: camera tuner rail-off portrait — #ct-previews placed in grid
   // row 3, one minmax column, #ct-close / #ct-prev-* --tap-paint floors
   // (#camtune-inner / #ct-* only; lighting untouched).
@@ -1054,6 +1087,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (survey rank 1; 26×26 vs 52, 82 soft taps) and SATIN/CHROME tags do
   // not ellipsis (20 trunc). css/carsetup.css #cs-options.cs-liv-grid only.
   "tests/unit/ui-fit-garage-livery-r6.test.mjs",
+  // ui-fit r6 rank 5: lighting over flyby stacked dock — side-by-side on
+  // wide short, #lt-rows 3-row floor; camera / #fb-* tap floors untouched.
+  "tests/unit/ui-fit-lighting-flyby-stack.test.mjs",
   // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
   // floors (#lighting-inner / #lt-* only; camera untouched).
   "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
@@ -1063,6 +1099,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: Settings ACCESSIBILITY #pm-panel-a11y pad / scroll-pad
   // so the last colourblind help clears BACK (survey rank 8; 844×390).
   "tests/unit/ui-fit-settings-a11y-r6.test.mjs",
+  // ui-fit round 6: Settings APPEARANCE studio reflow + pad above BACK
+  // (survey rank 7; 300×3604 @ 390×844, 222×5059 @ scale 200).
+  "tests/unit/ui-fit-settings-appearance-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
@@ -1077,6 +1116,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/uilayers-modal-order.test.mjs",
   "tests/unit/validation-cli.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
+  "tests/unit/visual-oracle.test.mjs",
+  "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/wait-polling.test.mjs",
@@ -1104,6 +1145,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane
   // quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.
   "tests/unit/wind-speed.test.mjs",
+  // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
+  // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
+  "tests/unit/wind.test.mjs",
   "tests/unit/xr-backend-pin.test.mjs",
   "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",
@@ -1453,13 +1497,152 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   return { ok, passed, failed, results, logPath };
 }
 
+export const DEFAULT_JOBS = 1;
+
+/** Paths that force a full tooling-fast run in --changed mode (fail-safe). */
+export const TOOLING_FAST_CHANGED_RUN_ALL = [
+  /^tests\/groups\.json$/,
+  /^package(-lock)?\.json$/,
+  /^playwright\.config\.js$/,
+  /^tools\/gen\/gen-test-groups\.mjs$/,
+  /^tools\/manifest\.cjs$/,
+  /^index\.html$/,
+  /^sw\.js$/,
+  /^version\.json$/,
+  /^\.github\/workflows\//,
+  /^tests\/helpers\//,
+  /^tools\/lib\//,
+];
+
+const PATH_PIN_RE = /["'`]((?:js|css|tools|types|desktop|docs|tests\/|index\.html|AGENTS\.md|CLAUDE\.md|README\.md|\.claude\/|\.cursor\/|sw\.js|version\.json)[^"'`]+)["'`]/g;
+
+const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|environment-json|comment-citations|agent-surface|agent-fleet)\.test\.mjs$/;
+
+let _pinIndex = null;
+
+function indexPathKey(map, key, testFile) {
+  const norm = key.replace(/\\/g, "/");
+  let cur = norm;
+  while (cur) {
+    if (!map.has(cur)) map.set(cur, new Set());
+    map.get(cur).add(testFile);
+    const slash = cur.lastIndexOf("/");
+    if (slash < 0) break;
+    cur = cur.slice(0, slash);
+  }
+}
+
+/** Map repo-relative paths → tooling-fast unit files that pin them in source. */
+export function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
+  const map = new Map();
+  for (const f of files) {
+    if (f.startsWith("//")) continue;
+    const abs = path.join(root, f);
+    let src = "";
+    try { src = fs.readFileSync(abs, "utf8"); } catch (_) { continue; }
+    PATH_PIN_RE.lastIndex = 0;
+    let m;
+    while ((m = PATH_PIN_RE.exec(src))) indexPathKey(map, m[1], f);
+  }
+  return map;
+}
+
+function pinIndex() {
+  if (!_pinIndex) _pinIndex = buildToolingFastPinIndex();
+  return _pinIndex;
+}
+
+/** Which CI tooling-fast shards (1/2, 2/2) touch any of `files`. */
+export function shardsCoveringFiles(files, allFiles = TOOLING_FAST_FILES, shardCount = 2) {
+  const want = new Set(files);
+  const out = [];
+  for (let i = 1; i <= shardCount; i++) {
+    const spec = `${i}/${shardCount}`;
+    if (applyFileShard(allFiles, spec).some((f) => want.has(f))) out.push(spec);
+  }
+  return out;
+}
+
+/** Changed paths vs the deploy branch (merge-base with origin/DEPLOY_BRANCH). */
+export function changedVsDeploy(ref = `origin/${DEPLOY_BRANCH}`, root = ROOT) {
+  try {
+    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
+    return changedPaths([base], { cwd: root });
+  } catch (_) {
+    try { return changedPaths(["HEAD~1"], { cwd: root }); } catch (_) { return []; }
+  }
+}
+
+/** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. */
+export function selectToolingFastChanged(changed, opts = {}) {
+  const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
+  const tfSet = new Set(allFiles);
+  const full = (reason, extra = {}) => ({
+    files: [...allFiles],
+    reason,
+    shards: shardsCoveringFiles(allFiles, allFiles),
+    ...extra,
+  });
+
+  if (!changed.length) return { files: [], reason: "empty", shards: [], changed: 0 };
+
+  if (isDocsOnly(changed)) {
+    const docsTests = allFiles.filter((f) => DOCS_FAST_TESTS.test(f));
+    const files = docsTests.length ? docsTests : allFiles;
+    return { files, reason: "docs-only", shards: shardsCoveringFiles(files, allFiles) };
+  }
+
+  const circ = circuitsTouched(changed, opts.ref || "");
+  const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
+  if (tracked.length) return full("tracked", { tracked });
+
+  if (changed.some((f) => TOOLING_FAST_CHANGED_RUN_ALL.some((re) => re.test(f)))) {
+    return full("run-all-path");
+  }
+
+  let scripts = opts.scripts;
+  if (!scripts) {
+    try {
+      scripts = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).scripts;
+    } catch (_) {
+      return full("no-package-json");
+    }
+  }
+  const receipt = selectionReceipt(changed, scripts);
+  if (receipt.reason === "unmatched") return full("unmatched", { unclaimed: receipt.unclaimed });
+
+  const selected = new Set();
+  const index = opts.pinIndex || pinIndex();
+
+  for (const f of changed) {
+    const norm = f.replace(/\\/g, "/");
+    if (tfSet.has(norm)) selected.add(norm);
+    let cur = norm;
+    while (cur) {
+      const hits = index.get(cur);
+      if (hits) for (const t of hits) selected.add(t);
+      const slash = cur.lastIndexOf("/");
+      if (slash < 0) break;
+      cur = cur.slice(0, slash);
+    }
+    if (/^tools\/ci\/tooling-fast\.mjs$/.test(norm)) selected.add("tests/unit/tooling-fast-runner.test.mjs");
+    if (/^tools\/ci\/test-bg\.mjs$/.test(norm)) selected.add("tests/unit/test-bg-outcome.test.mjs");
+  }
+
+  if (!selected.size) return full("no-pin-match");
+
+  const files = allFiles.filter((f) => selected.has(f));
+  if (!files.length) return full("no-listed-match");
+  return { files, reason: "matched", shards: shardsCoveringFiles(files, allFiles), changed: changed.length };
+}
+
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 export const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--jobs=N] [--changed] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --help`;
 
 /** Split a file list across CI jobs (`--shard=1/2`). Stride, not contiguous. */
@@ -1493,7 +1676,8 @@ export function parseToolingFastArgv(argv) {
   return {
     help: false,
     files: args.length ? args : null, // null = full TOOLING_FAST_FILES
-    jobs: val("jobs") ? Number(val("jobs")) : 1,
+    changed: argv.includes("--changed"),
+    jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
     order: val("order"),
     record: argv.includes("--record"),
     shard: val("shard"),
@@ -1515,7 +1699,17 @@ if (isMain) {
     console.log(TOOLING_FAST_USAGE);
     process.exit(0);
   }
-  const files0 = parsed.files || [...TOOLING_FAST_FILES];
+  let files0 = parsed.files;
+  let changedMeta = null;
+  if (parsed.changed) {
+    changedMeta = selectToolingFastChanged(changedVsDeploy());
+    files0 = changedMeta.files;
+    console.log(`[tooling-fast] --changed reason=${changedMeta.reason} ` +
+      `changed=${changedMeta.changed ?? 0} ` +
+      `files=${files0.length} shards=${changedMeta.shards.join(",") || "none"}`);
+  } else if (!files0) {
+    files0 = [...TOOLING_FAST_FILES];
+  }
   const files = applyFileShard(files0, parsed.shard);
   const { ok } = await runToolingFast(files, {
     jobs: parsed.jobs,
