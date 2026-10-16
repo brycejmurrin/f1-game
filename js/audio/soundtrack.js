@@ -502,6 +502,7 @@ var GameAudioSoundtrack = (function () {
       for (const url in _musicLoadControllers) {
         try { _musicLoadControllers[url].abort(); } catch (e) { /* already settled */ }
         delete _musicLoadControllers[url];
+        delete _musicLoads[url];
       }
       // stop() and disconnect() get their OWN try each. Sharing one meant a throw
       // from stop() (stop-before-start is the documented case) skipped the
