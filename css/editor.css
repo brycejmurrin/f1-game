@@ -623,4 +623,25 @@
   #trackdesigner .td-foot .td-msg:empty { display: none; }
 }
 
+/* Portrait toolbar safety: the floating edit strip covered the first row of
+   control points on phones. Give it its own auto-sized row so every map point
+   remains visible and tappable; short landscape keeps the dedicated side rail
+   above. Scenery already owns this row and its live-map row below. */
+@media (max-width: 760px) and (orientation: portrait) {
+  #trackdesigner:not([data-mode="scenery"]) .td-stage {
+    grid-template-rows: auto minmax(72px, 1fr) auto;
+  }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > .td-chips[data-role="toolbar"] {
+    position: static;
+    grid-row: 1;
+    pointer-events: auto;
+  }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > canvas:not([data-role="profile"]) {
+    grid-row: 2;
+  }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > canvas[data-role="profile"] {
+    grid-row: 3;
+  }
+}
+
 }
