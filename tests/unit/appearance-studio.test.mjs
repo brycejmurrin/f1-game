@@ -139,6 +139,14 @@ test("Undo restores the last visual batch; current-screen preset preserves other
   studio.reset("screen"); assert.equal(values.homeScene, "photo"); assert.equal(values.uiTheme, "light");
 });
 
+test("HUD screen scope does not rewrite the global HUD profile", () => {
+  assert.equal(studioForScope().includes("hudProfile"), false);
+});
+
+function studioForScope() {
+  return load({ hudProfile: "minimal" }).studio.SCREEN_KEYS.hud;
+}
+
 test("Named profiles can be updated and deleted without changing the live visual state", () => {
   const { studio, values } = load(); studio.saveProfile("Desktop paddock"); studio.applyPreset("sunlight");
   studio.saveProfile("Sunlight desktop", "profile-1"); assert.equal(studio.profiles().length, 1);
