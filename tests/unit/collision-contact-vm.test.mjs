@@ -523,6 +523,7 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
   const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
   const fixture = JSON.parse(readFileSync(join(ROOT_C, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
   const script = Data.build(fixture, (name) => Teams.LIST.find((t) => t.name === name) || null, Tracks.LIST);
+  script.cautions = [{ from: 1, to: 1, level: 3, tFrom: 0, tTo: 8, cause: "WATCH REGRESSION" }];
   const line = (p, speed, x) => ({ t: [0, 2, 8], prog: [p, p + 2 * speed, p + 8 * speed], x: [x, x, x] });
   Real.launch(script, { seat: "STR", watch: true, traces: { frame: "track", cars: {
     63: line(100, 40, 0), 16: line(103, 20, 0), 18: line(400, 30, 12),
@@ -576,9 +577,8 @@ test("paused WATCH keeps overlapping traces and ignores manual recover in the re
     const p = g.G.player, penalty = p.penalty;
     const field = watched.filter((c) => !c.retired);
     const Sporting = vm.runInContext("SportingRegs", g.ctx), control = Sporting.createPassWatch();
-    g.G.holdCaution(3, "WATCH REGRESSION");
-    g.step(1);   // held flags are published by the ordinary race-control update
-    assert.equal(g.G.cautionLevel(), 3);
+    g.step(1);   // the recorded safety car remains fixed at the paused replay clock
+    assert.equal(g.G.cautionLevel(), 3, "the recorded safety-car window owns WATCH flags");
     control.tick(p, field, 3, DT); g.step(1);   // establish STR ahead under the safety car
     p.prog = 500;   // a recorded overtake/seek discontinuity must never become a driving offence
     let charged = 0;

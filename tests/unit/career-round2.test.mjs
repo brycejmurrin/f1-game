@@ -24,9 +24,10 @@ const IDS = ["albert_park", "shanghai", "suzuka", "miami", "montreal", "monaco",
   "hungaroring", "zandvoort", "monza", "madrid", "baku", "sepang", "singapore", "cota", "mexico", "interlagos", "vegas",
   "qatar", "abudhabi", "x1"];
 
-function load(n = 24) {
+function load(n = 24, realParts = false) {
   const stored = new Map();
   const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console, Set, Map, WeakSet, Infinity, Error });
+  ctx.window = ctx;
   ctx.GameStore = {
     CAREER_V: 1,
     store: {
@@ -41,6 +42,7 @@ function load(n = 24) {
   // SEASON is its own array (tracks.js filters LIST), so a test can change the calendar without the catalogue.
   ctx.Tracks = { LIST: list, SEASON: list.slice(), seasonIndex(i) { return this.LIST.indexOf(this.SEASON[i]); } };
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/core/hash32.js", "js/data/teams.js", "js/data/driver-ratings.js",
+    ...(realParts ? ["js/physics/consts.js", "js/car/parts.js"] : []),
     "js/career/save-migrate.js", "js/career/regulations.js", "js/career/career.js", "js/career/season-cal.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
@@ -49,12 +51,95 @@ function load(n = 24) {
   return { ctx, run, stored, Career: run("Career"), SeasonCal: run("SeasonCal"), Teams: run("Teams"), DriverRatings: run("DriverRatings") };
 }
 const started = (opts = {}) => {
-  const h = load(opts.n);
+  const h = load(opts.n, opts.realParts);
   h.Career.start(Object.assign({ flavour: "driver", teamId: "haas", seed: 9 }, opts.start));
   h.Career.engage(true);
   return h;
 };
 const raced = (h) => h.run("Tracks.LIST")[h.Career.trackIndex()].id;
+
+// This build is obtainable through the garage in the OPEN era; every option
+// remains legal when Aston Martin's works-based cap falls from 1740 to 1530.
+const CAP_BUILD = {
+  engine: "stock", aero: "minimal", suspension: "carbon_pushrods", brakes: "brembo_evo",
+  tyres: "hypersoft", ers: "sig_astonmartin_ers", gearbox: "seamless_shift", fuel: "hydro_synth",
+  exhaust: "hyper_scav", floor: "venturi", cockpit: "full_shroud", wheels: "works_rim",
+};
+function capCareer() {
+  const h = started({ realParts: true, start: { teamId: "astonmartin" } });
+  const c = h.Career.data();
+  c.year = 2029; c.deal.left = 2;
+  c.fitted = { ...CAP_BUILD };
+  c.owned = [...new Set([...c.owned, ...Object.values(CAP_BUILD)])];
+  return { ...h, c, Parts: h.run("Parts"), team: h.Teams.LIST.find(t => t.id === c.team) };
+}
+
+test("an era cap fall refits only researched parts and persists a legal budget without spending", () => {
+  const h = capCareer(), { c, Career, Parts, team } = h;
+  const owned = [...c.owned], money = c.money;
+  assert.equal(Parts.getCost(c.fitted, team), 1740);
+  assert.equal(Career.budget(), 1740);
+  c.season.round = Career.roundsTotal();
+  Career.rollover();
+  assert.equal(Career.budget(), 1530);
+  assert.ok(Parts.getCost(c.fitted, team) <= Career.budget(), "the effective race build obeys the new cap");
+  assert.deepEqual([...c.owned], owned, "research is never confiscated");
+  assert.equal(c.money, money, "refitting owned parts is free");
+  for (const opt of Object.values(Parts.resolveSetup(c.fitted, team).options)) {
+    assert.ok(!opt.cost || owned.includes(opt.id), "no unresearched replacement");
+  }
+  const fitted = JSON.stringify(c.fitted);
+  assert.equal(JSON.stringify(h.stored.get("career.driver.0").fitted), fitted);
+  Career.load();
+  assert.equal(JSON.stringify(Career.data().fitted), fitted, "reload cannot restore the over-cap build");
+});
+
+test("activating an old over-cap save repairs fitting; inactive reads and valid fits stay untouched", () => {
+  const h = capCareer(), { Career, Parts, team } = h;
+  h.c.year = 2030; Career.engage(false); Career.save();
+  const before = JSON.stringify(h.c.fitted), owned = JSON.stringify(h.c.owned), money = h.c.money;
+  Career.load();
+  assert.equal(JSON.stringify(Career.data().fitted), before, "a loaded save does not impose career rules on free play");
+  Career.engage(true);
+  const c = Career.data(), fitted = c.fitted;
+  assert.ok(Parts.getCost(fitted, team) <= Career.budget());
+  assert.equal(JSON.stringify(c.owned), owned);
+  assert.equal(c.money, money);
+  assert.equal(JSON.stringify(h.stored.get("career.driver.0").fitted), JSON.stringify(fitted));
+  Career.engage(true);
+  assert.strictEqual(c.fitted, fitted, "a valid fitting is not replaced");
+  assert.equal(JSON.stringify(c.fitted), JSON.stringify(h.stored.get("career.driver.0").fitted));
+});
+
+test("slot activation normalizes an old fitting without touching ownership or automatically restoring it later", () => {
+  const h = capCareer(), { Career, Parts, team } = h;
+  const incoming = JSON.parse(JSON.stringify(h.c));
+  incoming.year = 2030;
+  h.stored.set("career.driver.1", incoming);
+  Career.useSlot("driver", 1);
+  const c = Career.data(), fitted = JSON.stringify(c.fitted);
+  assert.ok(Parts.getCost(c.fitted, team) <= Career.budget());
+  assert.deepEqual([...c.owned], incoming.owned);
+  assert.equal(JSON.stringify(h.stored.get("career.driver.1").fitted), fitted);
+  c.budgetLvl = 3; Career.engage(true);
+  assert.equal(JSON.stringify(c.fitted), fitted, "a higher cap lets the player choose what to refit");
+});
+
+test("budget repair preserves a banned stored id whose resolved category costs nothing", () => {
+  const h = capCareer(), { Career, Parts, team } = h;
+  h.c.year = 2030;
+  h.c.fitted.fuel = "custom_formula";
+  h.c.owned.push("custom_formula");
+  const banned = h.run('Regulations.bannedIds("powertrain")');
+  assert.ok(banned.has("custom_formula"));
+  Career.engage(true);
+  assert.equal(h.c.fitted.fuel, "custom_formula", "the shelved choice is not erased by a cap repair");
+  assert.ok(Parts.getCost(h.c.fitted, team) <= Career.budget());
+  assert.ok(h.c.owned.includes("custom_formula"));
+  const fitted = JSON.stringify(h.c.fitted);
+  Career.engage(true);
+  assert.equal(JSON.stringify(h.c.fitted), fitted, "repair is deterministic and idempotent");
+});
 
 // ---- C1 ---------------------------------------------------------------------------------------
 test("C1: start() stamps the calendar by id", () => {

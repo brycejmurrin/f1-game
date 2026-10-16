@@ -21,7 +21,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fnSource } from "../helpers/fn-source.mjs";
-import { symbolSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import vm from "node:vm";
 import { carDrawVm, WORKS } from "../helpers/car-draw-vm.mjs";
 
@@ -85,7 +85,7 @@ test("AI world pose is mirrored after this step's (s, x) writes", () => {
 });
 
 test("visible procedural cars draw a body-only mesh and planted wheels", () => {
-  const game = read("js/game.js");
+  const game = gameSource();
   // The mesh caches, wheel meshes and the GLB loader live in the car-draw seam
   // (js/car/car-draw.js); game.js keeps the draw loop that consumes them.
   const cd = read("js/car/car-draw.js");
@@ -147,9 +147,11 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.match(cd, /function cockpitBodyMesh\(team, car, visualKey = playerVisualKey\)/);
   assert.match(read("js/garage/setup-camera.js"), /function garageSeat\(\)/);
   const draw = game.match(
-    /const body = carDraw\.modelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
+    /const body = carDraw\.modelBuf \? null :[\s\S]{0,520}drawPlayerWheels\(c, _groundMat/
   );
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
+  assert.match(game, /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/,
+    "rivals past tier 2 share one distant body mesh");
   // The caster passes live in js/render/shared/shadow-pass.js (teamMesh through deps, the player through G).
   const sp = read("js/render/shared/shadow-pass.js");
   // C8 (TLX-PERF-HUNT 2026-10-11): the car pass gates the player on distance like the AI cars.

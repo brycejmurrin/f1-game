@@ -17,6 +17,10 @@ const NetLobby = (function () {
     let codeReopen = null;
     let _answersSeen = null;   // {code, set}: answers already taken for this room code (see codeHost)
     let codeReopenTimer = null;        // the pending 250 ms reopen — owned, cancellable
+    let codeRoomCode = null;           // the code codeRoom (or a pending reopen) advertises
+    // The code INVITE ANOTHER stopped with guests in: CLOSE back to the room
+    // reopens it, since the host was last told it is "still open" (#2197).
+    let codeParked = null;
     const mintGuestId = () => "g" + (++nextGuestId);
     let pendingId = null;
     const MAX_GUESTS = 3;
@@ -248,7 +252,7 @@ const NetLobby = (function () {
             if (G.setNetRoom) G.setNetRoom(false);
             // …and stop ADVERTISING it: the code onConnected reopened (and its
             // pending transport) would answer the old code and pull us back in.
-            sealRoom();
+            sealRoom(); stopScan();   // a camera INVITE ANOTHER opened must not outlive the room (#2200)
             show("pick");
             // inviteAnother() hid these; the pick is a fresh start, as open().
             if ($("vs-join")) $("vs-join").hidden = false;
@@ -442,7 +446,7 @@ const NetLobby = (function () {
           reopenRoom(sessions.size > 0 && sessions.size < MAX_GUESTS);
           dropPending();
           if (sessions.size) { show("room"); renderRoom(); }
-          else { teardown(); show("pick"); }   // leave the lobby usable, not dead
+          else { teardown(); stopScan(); show("pick"); }   // leave the lobby usable, not dead
         }
       }, 250);
     }
@@ -460,6 +464,7 @@ const NetLobby = (function () {
       if (!again || !ok) return;
       const gen = operationGeneration;
       clearTimeout(codeReopenTimer);
+      codeRoomCode = again;
       codeReopenTimer = setTimeout(() => {
         codeReopenTimer = null;
         if (!operationCurrent(gen)) return;
@@ -1234,7 +1239,7 @@ const NetLobby = (function () {
     // race-settings exits back to the hidden #vsfriend dialog. Nobody can join a
     // race that has already started, so stop advertising one.
     function sealRoom() {
-      codeReopen = null;     // no silent reopen on some later, unrelated connect
+      codeReopen = null; codeParked = null;     // no silent reopen on some later, unrelated connect
       clearTimeout(codeReopenTimer); codeReopenTimer = null;   // incl. one already in flight
       stopCodeWait();        // cancel the poll loop AND close the Nostr room
       dropPending();         // and the half-built invite transport it minted
@@ -1382,7 +1387,14 @@ const NetLobby = (function () {
         say("That is four players — the grid is full.", true);
         return { ok: false, error: "room_full" };
       }
+      // Stop the reopened code room (as host() does) rather than orphan it:
+      // invalidateOperations() stales its generation, after which it reposts
+      // its offer but drops every answer. CLOSE brings the same code back.
+      const live = (codeRoom || codeReopenTimer) ? codeRoomCode : null;
       invalidateOperations();
+      stopCodeWait(); dropPending();
+      clearTimeout(codeReopenTimer); codeReopenTimer = null;
+      if (live) codeParked = live;
       resetSteps();        // the consumed invite/QR/answer, and a camera left running from the last sub-step
       show("pick");
       if ($("vs-join")) $("vs-join").hidden = true;
@@ -1654,6 +1666,13 @@ const NetLobby = (function () {
               say(msg);
               return;
             }
+            // Nobody in, nothing watching: take the dead code down, in host copy
+            // (nostr's is the GUEST's "Check the six characters…") (#2200).
+            if (r.error === "expired" && !opts.quiet) {
+              const msg = "The room code expired — tap NEW CODE for another.";
+              paintHostCode(""); tagFailReason("expired", msg); say(msg, true);
+              return;
+            }
             if (r.error === "expired" || r.error === "no_relay") {
               tagFailReason(r.error, r.message);
               say(r.message || "The room service went away. Use the invite link or QR instead.", true);
@@ -1739,7 +1758,8 @@ const NetLobby = (function () {
           return cancelledResult();
         }
         if (!sub.ok) { say(sub.message || "Could not open that room.", true); return sub; }
-        codeRoom = sub;
+        codeRoom = sub; codeRoomCode = code;
+        if (!opts.quiet) codeParked = null;   // a new code replaces a parked one
         // First publish path returned ok — safe to share the code now.
         if (!opts.quiet) {
           paintHostCode(code);
@@ -1840,6 +1860,7 @@ const NetLobby = (function () {
         const why = (done.error === "reply_failed" && answered && !answered.ok) ? answered : done;
         if (why.error === "expired" || why.error === "no_relay") tagFailReason(why.error, why.message);
         if (why.error !== "cancelled") say(why.message || "Could not join that room.", true);
+        if (transport === pending) dropPending();   // its RTCPeerConnection, not left open until GO/CLOSE (#2200)
         return why;
       }
       watch();
@@ -1998,7 +2019,7 @@ const NetLobby = (function () {
       friendQualifying = false; qualiAborted = false;
       stopScan();
       stopCodeWait();
-      codeReopen = null;
+      codeReopen = null; codeParked = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
       teardown();
       role = null;
@@ -2075,6 +2096,7 @@ const NetLobby = (function () {
           stopScan();         // a camera never outlives the step that opened it
           dropPending();      // abandon the half-built invite, keep the room
           stopCodeWait();
+          if (codeParked) { codeReopen = codeParked; codeParked = null; reopenRoom(transports.size < MAX_GUESTS); }
           show("room");
           renderRoom();
           say("");
