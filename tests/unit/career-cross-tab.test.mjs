@@ -422,6 +422,27 @@ test("title-menu season hydrate skips when a session entry is already open", () 
   assert.match(title, /getElementById\("loading"\)/);
 });
 
+for (const flavour of ["driver", "myteam"]) for (let i = 0; i < 3; i++) {
+  test(`future ${flavour}:${i} remains occupied and protected until explicit deletion`, () => {
+    const key = `apex26.career.${flavour}.${i}`;
+    const future = JSON.stringify({ v: 2 ** 32, flavour, money: 123, season: { config: { future: true } }, tdev: { haas: 15 } });
+    const disk = new Map([[key, future], ["apex26.careerSlot", JSON.stringify(`${flavour}:${i}`)]]);
+    const { Career } = load({ disk });
+    assert.equal(Career.load(), null);
+    assert.equal(Career.active(), false);
+    const info = Career.slots(flavour)[i];
+    assert.equal(info.used, true);
+    assert.equal(info.unsupported, true);
+    assert.notEqual(Career.firstFree(flavour), i);
+    assert.equal(Career.useSlot(flavour, i), null);
+    assert.equal(Career.start({ flavour, slot: i }), null);
+    Career.save();
+    assert.equal(disk.get(key), future);
+    assert.equal(Career.deleteSlot(flavour, i).ok, true);
+    assert.equal(Career.slots(flavour)[i].used, false);
+  });
+}
+
 // #2193: with the live slot's localStorage key missing (evicted / cleared) but the
 // IndexedDB mirror still holding it, the synchronous boot load() fell through to
 // another slot and DURABLY repointed careerSlot. The restore then skipped the

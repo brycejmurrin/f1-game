@@ -1403,6 +1403,37 @@ test('recovery file UI confirms only its reviewed card and reports durable compl
  assert.equal(h.store.get('career.driver.1').money,777);assert.notEqual(h.store.get('career.driver.0').money,777);assert.equal(ui.notices.at(-1),'CAREER RESTORED');
 });
 
+for (const flavour of ["driver", "myteam"]) for (let i = 0; i < 3; i++) {
+  test(`import cannot replace future ${flavour}:${i} or partially write its bag`, () => {
+    const source = loadHarness();
+    fillSix(source);
+    const envelope = source.CareerBackup.build();
+    const target = loadHarness();
+    fillSix(target);
+    const key = `apex26.career.${flavour}.${i}`;
+    target.disk.set(key, JSON.stringify({ v: 2 ** 32, flavour, future: { intact: true } }));
+    target.foreign(key);
+    const before = [...target.disk.entries()];
+    const result = target.CareerBackup.apply(envelope, { otherFlavourConfirmed: true, liveSlot: "myteam:2" });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "newer-version");
+    assert.deepEqual([...target.disk.entries()], before);
+  });
+}
+
+test("a future schema in the last incoming backup row rejects the whole bag before writes", () => {
+  const source = loadHarness();
+  fillSix(source);
+  const envelope = source.CareerBackup.build();
+  envelope.slots[5].data.v = 2 ** 32;
+  const target = loadHarness();
+  fillSix(target);
+  const before = [...target.disk.entries()];
+  const result = target.CareerBackup.apply(envelope, { otherFlavourConfirmed: true });
+  assert.equal(result.reason, "newer-version");
+  assert.deepEqual([...target.disk.entries()], before);
+});
+
 // #2165: a Daily class key is Ghost.contextKey() — JSON of the car/tune config,
 // full of `{`, `"` and `,`. cleanDayEntry ran it through ID_RE and dropped every
 // class on import, so a fresh-device restore's share line read "NO LAP".

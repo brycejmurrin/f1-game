@@ -35,8 +35,12 @@ const CareerBackup = (function () {
   // 0, which would silently turn a poisoned file into a zero-credit career.
   // `rowFlavour` is the slot the file files it under; a driver career that
   // claims a MY TEAM row (a hand edit) would load as a driver save in that set.
+  function futureSave(data) {
+    return !!(data && typeof SaveMigrate !== "undefined" && Number(data.v) > SaveMigrate.CAREER_V);
+  }
   function slotPayloadOk(data, rowFlavour) {
     if (data == null) return { ok: true };
+    if (futureSave(data)) return { ok: false, reason: "newer-version" };
     if (Array.isArray(data)) return { ok: false, reason: "slot-not-object" };
     if (!isObj(data)) return { ok: false, reason: "slot-not-object" };
     if (data.flavour != null && flavourIn(data.flavour) !== flavourIn(rowFlavour)) {
@@ -519,6 +523,7 @@ const CareerBackup = (function () {
     const s = store();
     if (!s) return { ok: false, durable: false, reason: "no-store" };
     const key = slotKey(f, i);
+    if (futureSave(s.get(key, null))) return { ok: false, durable: false, reason: "newer-version" };
     if (expectedRevision != null && s.keyRevision && expectedRevision !== s.keyRevision(key)) {
       return { ok: false, durable: false, reason: "conflict" };
     }
@@ -749,6 +754,7 @@ const CareerBackup = (function () {
       // An empty row is "nothing to restore", never "delete": build() exports
       // all six slots, so writing its nulls wiped saves the backup never had.
       if (row.data == null) { skipped.push(id); continue; }
+      if (s && futureSave(s.get(slotKey(f, idx), null))) return { ok: false, reason: "newer-version", slot: id };
       if (Object.prototype.hasOwnProperty.call(expected, id)) {
         const now = revisionOf(f, idx);
         if (expected[id] !== now) return { ok: false, reason: "conflict", slot: id };

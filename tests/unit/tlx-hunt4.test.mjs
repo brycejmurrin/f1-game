@@ -284,3 +284,86 @@ test("A-H1: tlx.js wiring — every plain-Mesh family on _instUsage, every Insta
   assert.match(fnSource(TLX, "function _coAppend(geo, w, opts) {"), /setRange0\(b\.ib, b\.visible \* CO_STRIDE\); b\.ib\.needsUpdate = true;/);
   assert.match(fnSource(TLX, "function uploadStream(slot, floats) {"), /setRange0\(slot\.ib, floats\);[^\n]*\n\s*slot\.ib\.needsUpdate = true;/);
 });
+
+// Warm-only meshes must keep the compiled pipeline without retaining another RenderObject per race.
+// Real vendored renderer + fake GL: listener and program counts are state evidence, never rendered pixels.
+async function warmProbeRig(t) {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
+  camera.position.z = 5; camera.updateMatrixWorld();
+  const geos = Array.from({ length: 5 }, () => buildTri());
+  const materials = geos.map(() => new THREE.MeshBasicNodeMaterial());
+  t.after(() => { for (const g of geos) g.dispose(); for (const m of materials) m.dispose(); });
+  const calls = [], compile = renderer.compileAsync.bind(renderer);
+  let reject = false, hold = null;
+  renderer.compileAsync = async (mesh, ...args) => {
+    calls.push(mesh);
+    await compile(mesh, ...args);
+    if (hold) await hold;
+    if (reject) throw new Error("injected rejected compile");
+  };
+  // The empty baseline span lets these behavioral regressions run against the old warm function too.
+  const at = TLX.indexOf("      const _warmProbes = new WeakMap();");
+  const helper = at < 0 ? "" : TLX.slice(at, TLX.indexOf("      async function warmFxPrograms() {", at));
+  const warm = new Function("THREE", "renderer", "scene", "camera", "geos", "materials", `
+    const _warmFx = true, fx = { skidMat: materials[0], particleMats: [materials[1], materials[2]], glowMat: materials[3], lineMat: materials[4] };
+    const [skidStream, a, b, glowStream, lineStream] = geos.map(geo => ({ geo })), partStreams = [a, b];
+    const ensureStream = () => {}, _blob = null, _decalRuns = new Map(), _coWarm = async () => {};
+    ${helper}
+    ${fnSource(TLX, "async function warmFxPrograms() {")}
+    return warmFxPrograms;
+  `)(THREE, renderer, scene, camera, geos, materials);
+  return { fg, renderer, geos, materials, calls, warm,
+    reject: (on) => { reject = on; }, hold: (p) => { hold = p; },
+    listeners: () => materials.map(m => m._listeners?.dispose?.length || 0) };
+}
+
+test("warm probes: repeated actual FX compilation keeps five owned meshes and the warmed programs", async (t) => {
+  const h = await warmProbeRig(t);
+  await h.warm();
+  const programs = h.fg.counts.createProgram;
+  assert.ok(programs > 0, "the first warm really compiles programs");
+  const listeners = h.listeners();
+  for (let i = 0; i < 4; i++) await h.warm();
+  assert.equal(new Set(h.calls).size, 5, "one probe per live stream/material, reused across five warms");
+  assert.deepEqual(h.listeners(), listeners, "the material listener counts plateau after the first warm");
+  assert.equal(h.fg.counts.createProgram, programs, "keeping ownership preserves warmed programs");
+  for (const geo of h.geos) geo.dispose();
+  assert.deepEqual(h.listeners(), [0, 0, 0, 0, 0], "releasing stream geometries releases every probe/render object");
+});
+
+test("warm probes: rejected compile retries reuse the probe; material disposal releases it", async (t) => {
+  const h = await warmProbeRig(t);
+  h.reject(true);
+  for (let i = 0; i < 3; i++) await assert.rejects(h.warm(), /injected rejected compile/);
+  assert.equal(new Set(h.calls).size, 1, "failed warm retries own one probe instead of leaking another");
+  const geometryListeners = h.geos[0]._listeners?.dispose?.length || 0;
+  h.materials[0].dispose();
+  assert.ok((h.geos[0]._listeners?.dispose?.length || 0) < geometryListeners,
+    "an evicted material removes probe ownership listeners (three keeps a geometry observer)");
+  assert.equal(h.calls[0].geometry, null, "the retired probe releases its geometry reference");
+  h.reject(false);
+  await h.warm();
+  assert.equal(new Set(h.calls).size, 6, "a later warm can create a fresh probe after material retirement");
+});
+
+test("warm probes: geometry disposal during a pending compile defers object release through rejection", async (t) => {
+  const h = await warmProbeRig(t);
+  let release;
+  h.hold(new Promise(resolve => { release = resolve; })); h.reject(true);
+  const pending = h.warm();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.length, 1);
+  const mesh = h.calls[0];
+  let disposed = 0; mesh.addEventListener("dispose", () => disposed++);
+  h.geos[0].dispose();
+  assert.equal(disposed, 0, "the in-flight compiler still owns its probe");
+  release();
+  await assert.rejects(pending, /injected rejected compile/);
+  assert.equal(disposed, 1, "the rejected compiler releases its retired probe exactly once");
+  assert.equal(mesh.geometry, null);
+  assert.equal(h.listeners()[0], 0);
+});
