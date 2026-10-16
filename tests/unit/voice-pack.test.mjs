@@ -175,6 +175,23 @@ test("multiple cache misses load one model, and a no-op append touches neither m
     assert.deepEqual(noOp, first);
     assert.deepEqual(f.counts(), { loads: 1, generations: 2 });
     assert.equal(f.calls().length, 4, "only initial encodes and duration probes ran");
+
+    const extra = { key: "@line:pit entry", text: "Pit entry open." };
+    const appended = await recordClips({ ...f.opts, list: [...list, extra],
+      clips: { ...first.clips }, chunks: [first.binary] });
+    assert.deepEqual(appended.binary.subarray(0, first.binary.length), first.binary,
+      "partial append preserves every previously published byte");
+    for (const { key } of list) assert.deepEqual(appended.clips[key], first.clips[key],
+      "existing clip offsets, lengths and durations are unchanged");
+    const [offset, length, duration] = appended.clips[extra.key];
+    assert.equal(offset, first.binary.length, "new clip begins immediately after existing bytes");
+    assert.equal(offset + length, appended.binary.length);
+    assert.equal(duration, 1.25);
+    const recorded = JSON.parse(appended.binary.subarray(offset, offset + length).toString().slice("encoded:".length));
+    assert.equal(recorded.text, extra.text, "the new index entry points to the requested speech");
+    assert.deepEqual(f.counts(), { loads: 2, generations: 3 }, "partial append adds just one model load and generation");
+    assert.equal(f.calls().length, 6, "partial append adds one encode and one duration probe");
+    assert.equal(f.calls().filter((args) => args.length > 2).length, 3, "only the new clip is encoded");
   } finally { f.close(); }
 });
 
