@@ -33,6 +33,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Start lights keep real time on slow devices: a low frame rate no longer leaves the grid stuck at 0 KPH while the lights crawl on (#1882).
 - On street circuits a retired car parked on the track is now solid: you hit it instead of driving through it, and AI cars steer around it (#2162).
 - Photo captures on the THREE.JS WebGL2 path yield while waiting for GPU readback; capture resources are released on failure or timeout.
+- Browsed-away high-resolution livery bitmaps are released when their THREE.JS textures are freed.
 - Blue flags: letting one lapping car through no longer counts toward a penalty for the next one in the queue (#2163).
 - Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
 - A car handed back after a heavy shunt never drives backwards at speed (#2167).
