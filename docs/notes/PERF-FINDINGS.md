@@ -3482,6 +3482,45 @@ are in `tests/`. Fix before wiring `TrackGraph.batches()` up.
 > dual-sig cull cache skips redundant GPU uploads when the frustum is unchanged.
 > Do not defer work based on the “tests only” line above.
 
+### Vertex-cache reordering (meshoptimizer) would gain nothing — measured 2026-09-14
+
+Do not spend a day on it. ACMR looks alarming on props (2.00–2.26 against a 3.0
+worst case) but ACMR is **floored by verts/tri**: props are quad soup at 2.0+
+verts/tri because flat shading needs unshared normals, so no ordering can get
+ACMR below that. The metric that is not misleading is **ATVR** (vertex-shader
+invocations per vertex; best case 1.0):
+
+| mesh | tris | verts | v/tri | ACMR(32) | **ATVR** |
+|---|---|---|---|---|---|
+| props (vegas) | 265,524 | 531,048 | 2.00 | 2.00 | **1.000** |
+| props (monza) | 171,830 | 370,224 | 2.15 | 2.15 | **0.998** |
+| props (spa) | 141,270 | 319,866 | 2.26 | 2.26 | **0.998** |
+| road | 66,372 | 38,720 | 0.58 | 0.58 | **0.994** |
+| terrain | 57,760 | 31,768 | 0.55 | 0.55 | **1.000** |
+
+Every large mesh already transforms each vertex once, so there is no reordering
+win on road, terrain or props. (Source: `docs/plans/2026-09-14-texture-memory-plan.md`,
+"What is already settled".)
+
+### TLX vertex-colour bisect — packing colour costs luma on the WebGPU leg (2026-09-14)
+
+Probe `meanLuma` on the TLX **WebGPU** leg, one change at a time (the WebGL2 leg
+cannot read a frame, so it is unmeasured):
+
+| variant | meanLuma |
+|---|---|
+| control (unpacked) | 45.6 |
+| normal packed | 45.6 (no effect) |
+| colour packed (8-bit) | 42.9 (about −6 %) |
+| normal + colour | 42.8 |
+| colour as three's `Float16BufferAttribute` (itemSize 4) | 39.1 (darker, which is backwards on precision grounds) |
+
+The half-float encoder is ruled out: `tlx-chunked.js` `_toHalf` rounds and agrees
+with `vertex-pack.js` on 400 k samples. The fault is in how three hands that array
+to the WebGPU backend, and it is **unexplained**. Do not ship colour packing on
+that leg until it is understood; do not re-run this bisect without a new
+instrument (open question: `docs/plans/2026-09-14-texture-memory-plan.md` Task 5).
+
 ## R5 — per-chunk lamps: shared bake, WGX native, ULTRA-night default (2026-08-27)
 
 SwiftShader is the CPU oracle throughout; wall-clock rAF means GPU-blocking

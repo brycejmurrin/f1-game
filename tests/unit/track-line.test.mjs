@@ -226,3 +226,34 @@ test("memo: a rebuild of the same inputs is byte-identical, unshared, and any in
   const h1 = track(2100, 6.5, kA); h1.def = { id: "syn", turns: [1040 / 2100], lineHints: [{ turn: 1, apexShift: 16 }] };
   assert.ok(!same(a2, TL.bake(h1)), "a changed lineHints hit the memo");
 });
+
+// #2545 — the corner scan must not be cut at node 0. A straddling corner's tail has nodes in the
+// K_OFF..K_ON hysteresis band; a scan that STARTS in that band (first node <= K_ON) drops band
+// nodes the same corner keeps mid-lap, so its apex and extent depend on where the lap's seam is.
+// The yardstick is the SAME corner placed mid-lap, where the scan start is irrelevant.
+const tri = (c, half, kPeak) => (s, total) => {
+  let d = Math.abs(s - c); d = Math.min(d, total - d);
+  return Math.max(0, kPeak * (1 - d / half));
+};
+
+test("a corner straddling node 0 bakes exactly like the same corner mid-lap (one corner, same apex offset and length)", () => {
+  const total = 2000;
+  const seam = TL.bake(track(total, 7, tri(0, 44, 0.03)));
+  const mid = TL.bake(track(total, 7, tri(1000, 44, 0.03)));
+  assert.equal(seam.lineCorners.length, 1, "one corner across the seam");
+  assert.equal(mid.lineCorners.length, 1);
+  const a = seam.lineCorners[0], b = mid.lineCorners[0];
+  const offA = ((a.sApex + total / 2) % total) - total / 2;     // signed distance from the peak at s=0
+  const offB = b.sApex - 1000;
+  assert.ok(Math.abs(offA - offB) < 1e-3, `apex ${offA.toFixed(3)} m off the peak at the seam, ${offB.toFixed(3)} m mid-lap`);
+  assert.ok(Math.abs(a.len - b.len) < 1e-3, `corner length ${a.len} at the seam, ${b.len} mid-lap`);
+  const n = seam.n, ds = total / n;
+  assert.ok(Math.abs(seam.line[0] - seam.line[n - 1]) <= TL.SLOPE_MAX * ds + 1e-6, "seam step within the slope cap");
+});
+
+test("two same-sign corners split by a short gap across node 0 merge into one corner", () => {
+  const total = 2000;
+  // k = 0.02 on [1976,1992) and [4,20): a 12 m straight spans the seam, under MERGE_M.
+  const t = TL.bake(track(total, 7, (s) => ((s >= 1976 && s < 1992) || (s >= 4 && s < 20) ? 0.02 : 0)));
+  assert.equal(t.lineCorners.length, 1, `${t.lineCorners.length} corners; the pair is one corner (gap < MERGE_M)`);
+});

@@ -109,10 +109,8 @@ const WeatherArc = (function () {
      *  flag. The seed still draws 2–7 minutes; a host-supplied wxArc.dur is
      *  never recapped (the lobby already agreed those seconds). ~48 m/s is a
      *  conservative race-average so a street circuit is not over-cut. */
-    function capPlanDur(dur) {
+    function capPlanDur(dur, laps = capLaps(), len = G.track && G.track.total) {
       dur = Math.max(1, dur | 0);
-      const laps = capLaps();
-      const len = G.track && G.track.total;
       if (!(laps > 0) || !(len > 0)) return dur;
       const cap = Math.max(90, Math.floor(laps * (len / 48) * 0.72));
       return Math.min(dur, cap);
@@ -135,22 +133,35 @@ const WeatherArc = (function () {
     let memo = null;     // { key, plan }
     /** The CHANGEABLE plan derived from (sim seed, race counter): 2–7 minutes
      *  to a target that is never the weather we start on, then capPlanDur. */
-    function planFor() {
-      const seed = planSeed();
+    function planInputs() {
       const round = (G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.drawRound && G.season)
         ? SeasonCal.drawRound(G.season) : G.raceRound;
       // `base` is the weather the armed race STARTED on: raceWeather itself walks
       // away from it during the arc.
-      const from = base != null ? base : G.raceWeather;
-      const key = [seed, round, from, capLaps(), G.track && G.track.total].join("|");
-      if (memo && memo.key === key) return { to: memo.plan.to, dur: memo.plan.dur };
+      return { seed: planSeed(), round, from: base != null ? base : G.raceWeather };
+    }
+    function drawPlan(seed, round, from, laps, len) {
       const r = (k) => Career.hash(seed, round, "wx", k);
       const opts = DRAWN.filter((w) => w !== from);
       let to = opts[Math.floor(r("to") * opts.length)] || "wet";
       if (to === "rain" && from !== "storm" && r("storm") < STORM_ODDS) to = "storm";
-      const dur = capPlanDur(120 + Math.floor(r("dur") * 300));
-      memo = { key, plan: { to, dur } };
-      return { to, dur };
+      return { to, dur: capPlanDur(120 + Math.floor(r("dur") * 300), laps, len) };
+    }
+    function planFor() {
+      const { seed, round, from } = planInputs();
+      const key = [seed, round, from, capLaps(), G.track && G.track.total].join("|");
+      if (memo && memo.key === key) return { to: memo.plan.to, dur: memo.plan.dur };
+      const plan = drawPlan(seed, round, from, capLaps(), G.track && G.track.total);
+      memo = { key, plan };
+      return { to: plan.to, dur: plan.dur };
+    }
+    /** The plan planFor() WOULD draw, with no memo write and no G.wxArcPlan cache (the getter freezes what it
+     *  reads until laps/weather/circuit change). o = { laps, len, from } override the live inputs, so a sheet can
+     *  show the forecast for the settings it is staging; the race sheet reads it for its FORECAST line. */
+    function previewPlan(o) {
+      o = o || {};
+      const i = planInputs();
+      return drawPlan(i.seed, i.round, o.from != null ? o.from : i.from, o.laps != null ? o.laps : capLaps(), o.len != null ? o.len : G.track && G.track.total);
     }
     function startChangeable() {
       if (!changeable || isTimeTrial() || isQuali()) return null;
@@ -477,7 +488,7 @@ const WeatherArc = (function () {
 
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, syncWetness, wetness, wetnessAt, viewWetness, rainSectors, planFor, startChangeable, endChangeable, restoreBase, endSession,
+      startArc, tick, syncWetness, wetness, wetnessAt, viewWetness, rainSectors, planFor, previewPlan, startChangeable, endChangeable, restoreBase, endSession,
       get arc() { return arc; }, set arc(v) { arc = v; },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },

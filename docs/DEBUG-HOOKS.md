@@ -364,6 +364,9 @@ has finished building.
 ### `go() → state`
 Skip the countdown but leave the grid intact, so the whole field races and packs
 up normally. For observing pack/AI behaviour rather than a static shot.
+Call it only after `race()`/`tt()` returned a truthy result: on a fresh page it
+still sets `state: "race"` but there is no player or car (`physState()` is `null`,
+`jump()` is `false`; #2532).
 
 ### `finishRace() → {state} | false`
 Mark all cars finished, call `endRace()`, and show the results screen. Returns

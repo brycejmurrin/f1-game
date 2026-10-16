@@ -41,6 +41,14 @@ Chrome with remote debugging, using your platform's Chrome executable:
 google-chrome --remote-debugging-port=9222 --user-data-dir=/absolute/path/to/f1-game/scratch/debug-chrome
 ```
 
+In the Cloud container use the discovered Chromium (`node tools/lib/chromium-path.mjs --path`,
+normally `/opt/pw-browsers/chromium-*/chrome-linux/chrome`), headless and without a sandbox:
+
+```sh
+"$(node tools/lib/chromium-path.mjs --path)" --headless=new --no-sandbox --remote-debugging-port=9222 \
+  --user-data-dir=scratch/debug-chrome http://127.0.0.1:3456/ &
+```
+
 Navigate that browser to `http://127.0.0.1:3456/`. Only attach to an authorized
 local reproduction in this dedicated profile. The debugger supports HTTP
 loopback pages and `about:blank`, not GitHub Pages, browser extensions, workers,
@@ -113,7 +121,7 @@ mode, pass the same name and a JSON argument object to the wrapper's `call`.
 | `debugger_attach` | Attach the exact selected page ID; does not launch Chrome. |
 | `debugger_state` | Read attachment, current pause token/stack/scopes and background operation status. |
 | `debugger_scripts` | Find parsed script IDs, optionally filtering by URL substring. |
-| `debugger_source` | Read a bounded source excerpt using one-based line numbers. |
+| `debugger_source` | Read a bounded source excerpt using one-based line numbers. Needs a `scriptId` (from `debugger_scripts`, or a stack frame in `pause.frames[].scriptId`), never a URL. |
 | `debugger_breakpoint` | Set an exact-URL breakpoint with one-based line/column and optional condition. |
 | `debugger_remove_breakpoint` | Remove a breakpoint owned by this debugger session. |
 | `debugger_control` | Request pause, resume, step over, step into or step out; inspect state afterward. |
@@ -161,6 +169,32 @@ For the task workflow and measured traps, load the project skill
    Check `cleanupErrors`; command acknowledgment and an observed resumed event
    are reported separately. Unexpected socket loss cannot guarantee a resume.
 
+### Starting a pause in the game
+
+`race()` with no argument returns `false`, and `go()` alone leaves
+`state:"race"` with zero cars (#2532), so no breakpoint in the car loop fires.
+Start a real race first, in one `debugger_run`, then break in the tick:
+
+```js
+debugger_run {expression:"(async()=>{ __apex.headless(true); const r = __apex.race('bahrain','day','dry'); await __apex.go(); return r; })()", awaitPromise:true}
+debugger_breakpoint {url:"<game.js URL from debugger_scripts>", line:<a line in the tick>}
+```
+
+Read `debugger_state` until `paused:true`. `race()` returns `false` when the
+circuit id is unknown; check `__apex.info().track` before trusting a pause.
+
+### Slow commands under software rendering
+
+With full software GL (SwiftShader, no GPU) each frame takes long enough that
+`attach`, `detach` and `debugger_exceptions` can answer
+`response timed out; execution may still be active` **although the command
+applied**. Read `debugger_state` (or re-send the idempotent command) rather than
+assuming failure. Call `__apex.headless(true)` first: commands then take about
+0.2 s. A `Debugger.disable` timeout during `debugger_detach` is reported as
+`cleanupWarnings` (closing the CDP session disables the domain anyway); a failed
+`setPauseOnExceptions`, `removeBreakpoint` or `resume` stays a `cleanupErrors`
+entry and `isError`.
+
 ### Lessons from real game sessions
 
 - Discover the exact loaded URL, including its query string; a script can use a
@@ -188,10 +222,12 @@ For the task workflow and measured traps, load the project skill
   `throwOnSideEffect:true`; `allowSideEffects:true`, `debugger_run` and breakpoint
   conditions can mutate state. This is not a sandbox or an authorization layer.
 - CDP command deadlines do not cancel JavaScript. A running evaluation returns
-  `unknown` if its response times out; another run is refused until detach.
+  `unknown` if its response times out (10 minutes); another run is refused until detach.
+  A run stopped at a breakpoint reports `paused`, and `pending` again after resume.
   No automatic `Runtime.terminateExecution` is used.
 - Keep captures bounded: first10 frames/6 scopes per frame,200 script rows,
-  100 breakpoints (first20 summarized),10 operation results,4KB per stored result,
+  100 breakpoints (first 20 summarized), 10 operation rows (only the newest carries its
+  result, so a response does not re-send old ones), 4KB per stored result,
   128KB per tool response, and8MiB per CDP message. Large results are explicitly
   truncated so they cannot hide the pause token needed to resume.
 - JS heap/profiling remains in Chrome DevTools MCP. This debugger does not

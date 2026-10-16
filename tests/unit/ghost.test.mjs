@@ -492,3 +492,27 @@ test("a same-circuit rebuild does not re-key the ghost (sameCircuit reads the id
   assert.match(st, /_loadTrackBody\(idx, def, built, prevId\);/);
   assert.match(src, /const sameCircuit = prevTrackId === def\.id;/);
 });
+
+test("Ghost.record drops non-finite samples so a NaN frame cannot become the best lap (live debugger hunt C1)", () => {
+  const { Ghost } = createHarness();
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) {
+    // frame 5 carries NaN in each channel in turn
+    Ghost.record(i === 5 ? NaN : i * 0.1, i === 6 ? NaN : i * 20, i === 7 ? NaN : 0);
+  }
+  assert.equal(Ghost.finishLap(1.2), true);
+  const g = Ghost.snapshot();
+  assert.ok(g.t.length >= 8, "the finite frames are kept");
+  assert.ok([...g.t, ...g.s, ...g.x].every(Number.isFinite), "no NaN reaches the stored trace");
+  assert.ok(Number.isFinite(Ghost.at(0.55).s), "playback lookup stays finite");
+});
+
+test("Ghost.finishLap refuses a trace that fails validation", () => {
+  const { Ghost } = createHarness();
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 10; i++) Ghost.record(i * 0.1, i * 20, 0);
+  assert.equal(Ghost.finishLap(Infinity), false);
+  assert.equal(Ghost.hasGhost(), false);
+});
