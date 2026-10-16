@@ -29,7 +29,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
 - A car handed back after a heavy shunt never drives backwards at speed (#2167).
 - AI cars hold their line under the Safety Car and VSC instead of weaving to defend (#2175).
-- The default renderer no longer stalls while it loads the baked materials, and no longer leaks memory each time a car's wheels or team meshes are rebuilt (#2149, #2150).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - The game still opens when the browser blocks access to saved data at startup.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
@@ -56,6 +55,12 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
 
 - Repeated track and lighting warm-ups reuse their renderer probes and release them with their resources, avoiding retained warm-up meshes.
+
+- Restoring a backup keeps a completed sprint's progress even when the sprint awarded no points.
+- Friends who leave qualifying still join the race when the connection's outgoing queue is busy.
+- WATCH restores recorded flags and weather after seeking, and a paused red flag no longer restarts the race.
+- Saving an edited custom circuit preserves its replacement identity across reloads, including a full library.
+- HUD shift and toggle buttons respond to keyboard and assistive activation; inverted wheels navigate menus consistently with driving.
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
