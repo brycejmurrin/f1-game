@@ -1,0 +1,1 @@
+1792167131	Bryce Murrin	Fix WATCH AUTO/FOLLOW LOCK label-in-name and enforce IncidentSim global MAX_TAKEOVER across clusters/walls. Own js/ui/watch-transport.js, js/physics/incident-sim.js and existing focused tests only; no experience/settings, no group-registration edits (#2463 owner).  [cursor/watch-incident-fixes-73c8; session 1e08d3328331f2e149b0cc62]
