@@ -103,6 +103,27 @@ export const TWINNED = {
  *  bahrain-foundation's scenery audit on CI (2026-09-22, run 35689898056) and
  *  was reverted; move one only when its browser copy has been re-run green
  *  under the fixtures, in the same change that adapts it. */
+export const ADAPTED_PAGE_GROUPS = Object.freeze({
+  a: Object.freeze([
+    "tests/specs/albert-park-foundation.spec.js",
+    "tests/specs/autopilot.spec.js",
+    "tests/specs/logging.spec.js",
+    "tests/specs/projection.spec.js",
+  ]),
+  b: Object.freeze([
+    "tests/specs/agent-drive-bench.spec.js",
+    "tests/specs/cota-foundation.spec.js",
+    "tests/specs/imola-foundation.spec.js",
+    "tests/specs/parts-livery-contrast.spec.js",
+    "tests/specs/physics-fixes.spec.js",
+    "tests/specs/pit-lane.spec.js",
+    "tests/specs/race-control.spec.js",
+  ]),
+});
+
+export const adaptedPageGroupFor = (spec) =>
+  Object.entries(ADAPTED_PAGE_GROUPS).find(([, files]) => files.includes(spec))?.[0];
+
 export const ADAPTED = {
   "tests/specs/albert-park-foundation.spec.js":
     "Albert Park runtime foundation through __apex model/geometry diagnostics; 2/2 under the adapter in 4.5 s; m-albert-hero-fountain proves the required fountain count is watched",
