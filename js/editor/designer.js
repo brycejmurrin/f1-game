@@ -853,13 +853,15 @@ const TrackDesigner = (function () {
     stage.insertBefore(ui.toolbar, canvas);
     // rail
     const rail = el("div", "td-rail"); ui.rail = rail;
-    const tabs = el("div", "td-tabs"); tabs.setAttribute("role", "tablist");
+    const tabs = el("div", "td-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Track Designer workspace");
     ui.tabDesign = tabBtn("DESIGN", "design"); ui.tabLib = tabBtn("MY CIRCUITS", "library"); ui.tabHow = tabBtn("HOW TO", "howto");
     tabs.append(ui.tabDesign, ui.tabLib, ui.tabHow);
-    ui.paneDesign = el("section", "td-pane"); ui.paneDesign.setAttribute("role", "tabpanel"); ui.paneDesign.dataset.pane = "design";
-    ui.paneLib = el("section", "td-pane"); ui.paneLib.setAttribute("role", "tabpanel"); ui.paneLib.dataset.pane = "library"; ui.paneLib.hidden = true;
-    ui.paneHow = el("section", "td-pane"); ui.paneHow.setAttribute("role", "tabpanel"); ui.paneHow.dataset.pane = "howto"; ui.paneHow.hidden = true;
-    ui.paneHow.setAttribute("aria-label", "How to build a circuit");
+    ui.paneDesign = el("section", "td-pane"); ui.paneDesign.id = "trackdesigner-pane-design"; ui.paneDesign.setAttribute("role", "tabpanel"); ui.paneDesign.dataset.pane = "design";
+    ui.paneLib = el("section", "td-pane"); ui.paneLib.id = "trackdesigner-pane-library"; ui.paneLib.setAttribute("role", "tabpanel"); ui.paneLib.dataset.pane = "library"; ui.paneLib.hidden = true;
+    ui.paneHow = el("section", "td-pane"); ui.paneHow.id = "trackdesigner-pane-howto"; ui.paneHow.setAttribute("role", "tabpanel"); ui.paneHow.dataset.pane = "howto"; ui.paneHow.hidden = true;
+    ui.paneDesign.setAttribute("aria-labelledby", "trackdesigner-tab-design");
+    ui.paneLib.setAttribute("aria-labelledby", "trackdesigner-tab-library");
+    ui.paneHow.setAttribute("aria-labelledby", "trackdesigner-tab-howto");
     rail.append(tabs, ui.paneDesign, ui.paneLib, ui.paneHow);
     buildDesignPane(ui.paneDesign);
     const libraryFiles = el("div", "td-chips"); libraryFiles.dataset.role = "library-files";
@@ -936,6 +938,24 @@ const TrackDesigner = (function () {
   function tabBtn(label, pane) {
     const b = btn(label, "sel-chip td-tab", () => showPane(pane));
     b.setAttribute("role", "tab");
+    b.id = "trackdesigner-tab-" + pane;
+    b.setAttribute("aria-controls", "trackdesigner-pane-" + pane);
+    b.tabIndex = pane === "design" ? 0 : -1;
+    b.dataset.pane = pane;
+    b.addEventListener("keydown", (e) => {
+      const tabs = [ui.tabDesign, ui.tabLib, ui.tabHow];
+      const i = tabs.indexOf(e.currentTarget);
+      if (i < 0) return;
+      let next = -1;
+      if (e.key === "ArrowRight" || e.key === "ArrowDown") next = (i + 1) % tabs.length;
+      else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = (i + tabs.length - 1) % tabs.length;
+      else if (e.key === "Home") next = 0;
+      else if (e.key === "End") next = tabs.length - 1;
+      if (next < 0) return;
+      e.preventDefault(); e.stopPropagation();
+      tabs[next].focus();
+      showPane(tabs[next].dataset.pane);
+    });
     return b;
   }
   function showPane(pane) {
@@ -944,7 +964,7 @@ const TrackDesigner = (function () {
     for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
       const on = id === pane;
       p.hidden = !on;
-      b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false");
+      b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1;
     }
     if (pane === "library") renderLibrary();
   }
@@ -958,7 +978,7 @@ const TrackDesigner = (function () {
       details.appendChild(el("summary", "td-label", task.title));
       const steps = el("ol");
       for (const text of task.steps) steps.appendChild(el("li", "td-hint", text));
-      details.append(steps, el("p", "td-hint", task.note), btn("OPEN " + task.mode.toUpperCase(), "sel-chip", () => { setMode(task.mode); showPane("design"); }));
+      details.append(steps, el("p", "td-hint", task.note), btn("OPEN " + task.mode.toUpperCase(), "sel-chip", () => { setMode(task.mode); showPane("design"); if (ui.tabDesign) ui.tabDesign.focus(); }));
       pane.appendChild(details);
     }
     const list = (label, rows) => {
