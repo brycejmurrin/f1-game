@@ -918,6 +918,7 @@ const LAZY_AUDIO = [
   "js/audio/music-lib.js",
   "js/audio/spotify.js",
   "js/audio/rivals.js",
+  "js/audio/crowd.js",
   "js/audio/car-sfx.js",
   "js/audio/voice-pack.js",
   "js/audio/radio-voice.js",
@@ -933,6 +934,7 @@ const LAZY_AUDIO_EDGES = [
   ["js/audio/tone-model.js", "js/audio/engine.js"],
   ["js/audio/ers-layer.js", "js/audio/engine.js"],
   ["js/audio/engine.js", "js/audio/music-lib.js"],
+  ["js/audio/engine.js", "js/audio/crowd.js"],
   ["js/audio/voice-pack.js", "js/audio/radio-voice.js"],
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],
   ["js/audio/announcer-recorded.js", "js/audio/announcer.js"],
@@ -1011,13 +1013,14 @@ const LAZY_EDITOR = [
   "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (per-node height grips → callbacks)
   "js/editor/selection-panel.js", // DesignerSelection: shared point/range controls
   "js/editor/scenery-panel.js", // DesignerScenery: theme discovery, atmosphere and prop inspector
+  "js/editor/bridge-panel.js", // DesignerBridges: authored road-overpass controls
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
 // stamps / randomise / validate / insight / fixes / canvas / profile destructure TrackShape at eval — the
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 // elev-presets is pure (optional CustomTracks.LIMITS at call time) — no shape edge.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/designer.js")
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/bridge-panel.js" && f !== "js/editor/designer.js")
   .map((f) => ["js/editor/shape.js", f])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 

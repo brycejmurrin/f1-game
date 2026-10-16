@@ -38,7 +38,7 @@
         [0.10, 0.30, -1, 30, 17],
         [0.12, 0.32,  1, 34, 16],
         [0.34, 0.40,  1, 30, 18],
-        [0.52, 0.62, -1, 32, 17],
+        [0.52, 0.55, -1, 32, 17],   // ends where the Adelaide vault stand (0.556) begins: its back rows reach gap ~30
         [0.55, 0.66,  1, 36, 16],
         [0.72, 0.88, -1, 30, 18],
         [0.74, 0.90,  1, 34, 17],
@@ -587,10 +587,12 @@
       cameraTower(K(0.580), -1, 30, { h: 17 });
       cameraTower(K(0.920), -1, 26, { h: 15 });
       // Split forestEdge so the ferme (s≈0.34 R) and Adelaide stands stay clear.
+      // Measured on clip-audit: the R run past 0.48 put crowns 3.3 m into the
+      // ferme silos, and the L run from 0.62 reached the Adelaide stand.
       forestEdge(0.10, 0.28, -1, 32, { density: 0.38, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.10, 0.28, 1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.38, 0.50, -1, 32, { density: 0.36, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
-      forestEdge(0.38, 0.50, 1, 36, { density: 0.34, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
-      forestEdge(0.62, 0.88, -1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.38, 0.48, 1, 36, { density: 0.34, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      forestEdge(0.64, 0.88, -1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.62, 0.88, 1, 36, { density: 0.34, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
     };

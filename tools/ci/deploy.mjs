@@ -909,6 +909,9 @@ export function main() {
     if (JSON_OUT) console.log(JSON.stringify(v, null, 2)); else log(JSON.stringify(v));
     return 0;
   }
+  // Advisory health must answer even when Git planning cannot fetch or merge.
+  // Keep --gate-only precedence, but avoid plan() as well as preflight().
+  if (flag("--train") && !flag("--plan")) { trainHealth(); return 0; }
   const p = plan();
   if (flag("--plan")) {
     if (JSON_OUT) console.log(JSON.stringify(p, null, 2));
@@ -922,10 +925,6 @@ export function main() {
     }
     return 0;
   }
-  // BEFORE preflight, deliberately. This is the one subcommand that must answer
-  // on a box too busy to deploy: "was the train already red" is exactly the
-  // question you ask while a browser run is pinning loadavg above the refusal.
-  if (flag("--train")) { trainHealth(); return 0; }
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
   trainHealth();

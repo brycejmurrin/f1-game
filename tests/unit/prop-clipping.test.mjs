@@ -21,7 +21,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
-import { circuitsTouched } from "../../tools/ci/select-specs.mjs";
+import { staleStrictIds as staleRows } from "../../tools/lib/stale-rows.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -180,33 +180,12 @@ test("prop interpenetration stays within the per-circuit baseline", () => {
   assert.deepEqual(grown, [], `prop interpenetration grew:\n  ${grown.join("\n  ")}`);
 });
 
-// WHICH stale rows fail (#2183). A cap above the measurement is a lie, but the
-// lie is usually someone ELSE's improvement — a shared scenery fix merged
-// elsewhere — and failing it on every PR reddened every geometry PR's full
-// tier for a row it never touched (2026-10-15, #2138). So on a pull request a
-// stale row fails only for a circuit THIS diff touches (circuitsTouched, the
-// sweeps job's own scoping source) or when the diff edits the baseline itself
-// (then the whole file must be true: `clip-audit --all --lower`). Every other
-// stale row is an advisory. Local runs stay strict for every row, and non-PR CI
-// (train, nightly) is advisory, the ratchets.json LOOSE precedent: an
-// improvement never blocks shipping. "Grown" (the test above) fails everywhere,
-// and nothing here can raise a cap.
-// Returns null = every row strict, else the Set of strict ids.
-export function staleStrictIds(env = process.env, changed = () => prChangedFiles(env)) {
-  if (!env.GITHUB_EVENT_NAME) return null;
-  if (env.GITHUB_EVENT_NAME !== "pull_request") return new Set();
-  const diff = changed();
-  if (!diff) return null;                 // cannot read the diff: fail safe, strict
-  if (diff.files.includes("tools/track/clip-baseline.json")) return null;
-  return new Set(circuitsTouched(diff.files, diff.ref).ids);
-}
-function prChangedFiles(env) {
-  try {
-    const git = (...a) => execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-    const ref = git("merge-base", `origin/${env.GITHUB_BASE_REF}`, "HEAD");
-    return { ref, files: git("diff", "--name-only", ref, "HEAD").split("\n").filter(Boolean) };
-  } catch { return null; }
-}
+// WHICH stale rows fail (#2183): tools/lib/stale-rows.mjs holds the policy,
+// shared with scenery-ground-audit. Local runs are strict for every row, a PR
+// fails only its own circuits' stale rows (or all of them when it edits the
+// baseline), the train is advisory.
+const staleStrictIds = (env = process.env, changed) =>
+  staleRows("tools/track/clip-baseline.json", env, changed);
 
 test("stale-row policy: strict locally, scoped to the diff on a PR, advisory on the train", () => {
   const pr = { GITHUB_EVENT_NAME: "pull_request", GITHUB_BASE_REF: "ship" };
