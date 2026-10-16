@@ -798,6 +798,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // REJECTION, and index.html turns an unhandled one into a full-screen
   // overlay over the running race. Pure source scan, well under a second.
   "tests/unit/reject-lint.test.mjs",
+  "tests/unit/release-provenance.test.mjs",
   // js/race/reliability.js (random DNFs) had no unit test — only career.spec,
   // over budget and nightly-only. Pure VM with a stub hash, well under a second.
   "tests/unit/reliability.test.mjs",
