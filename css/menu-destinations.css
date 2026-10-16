@@ -20,7 +20,7 @@
 :where(body[data-density="compact"]) #menu-buttons > .menu-destination .mb-sub { display: none; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons > .menu-destination > .bigbtn {
   display: flex; align-items: center; justify-content: center; gap: .4em;
-  font-size: clamp(.7rem, calc(2.6 * var(--vwz)), calc(var(--fs-4) * var(--ui-compact-text, 1)));
+  font-size: calc(var(--fs-4) * var(--ui-compact-text, 1));
   white-space: normal; text-wrap: balance; overflow-wrap: anywhere; line-height: 1.15;
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons > .menu-destination .btn-ico { margin: 0; flex: none; }
