@@ -1,37 +1,61 @@
 # Live debugger hunt — lighting and standalone Season (2026-10-16)
 
-Lane: `cursor/live-debug-lighting-season-8d2f`. Debug Chrome (SwiftShader, headless=new) on
-`http://127.0.0.1:3456/`, driven through the `js-debugger` MCP. Software-browser evidence only: no
-claim about a player's GPU.
+Lane: `cursor/live-debug-lighting-season-8d2f` (PR #2567). Debug Chrome (SwiftShader, headless=new,
+844x600) on a local `serve`, driven through the `js-debugger` MCP. Software-browser evidence only: no
+claim about a player's GPU. **Result: no confirmed defect in either area; no source change.**
 
-## Status: in progress (skeleton)
-
-## Lighting — captures so far
+## Lighting
 
 | probe | result |
 |---|---|
-| 10 circuits x day/dusk/night/dawn, `race()` then wait for `info().track === id`, `lightState()` NaN scan | no NaN in any field; `floodEmit` 0 / 0.069 / ~0.145 / ~0.233 for day / dawn / dusk / night; 31 of 40 rows built in the 10 s wait (the other 9 timed out on SwiftShader and are not evidence) |
+| 10 circuits x day/dusk/night/dawn (`race()`, wait for `info().track === id`, `lightState()` NaN scan) | no NaN in any field; `floodEmit` 0 / 0.069 / 0.13-0.175 / 0.233 for day / dawn / dusk / night (Spa night 0.327 and day 0 on every circuit); 31 of 40 rows built within the 10 s wait, the other 9 timed out on SwiftShader and are not evidence |
+| all 191 `lightTune` knobs set to NaN, Infinity, -1e9, 1e9, `"x"`, `null` on Singapore night | no throw, no NaN in `lightState()` or `lightTune()`, every knob restored exactly |
+| lamp cap: rendered night on Singapore, Vegas, Monaco, Madrid, Jeddah, Bahrain | `numLights` = 40 = `lampCull` wherever a track was loaded (baked 163-271); the cap holds |
+| mid-race `setTimeOfDay` day/dusk/night/dawn | each change rebuilds the track (`build start … night=false`), as designed |
+| caught-exception pausing (`all`) across 3 circuit switches with time-of-day changes | no pause from game code; the only pause was my own probe script reading a sparse `Log.records` ring |
 
-## Season — captures so far
+Not covered: LightPresets/LightEdits baking, lamp-bake atlas across 10 switches, frame-lights
+allocation counts. The existing unit files (`lamp-bake`, `frame-lights-*`, `light-presets-*`,
+`light-store-*`) own those; this lane did not add evidence beyond them.
+
+## Season (standalone)
+
+Probed in-page against `SeasonCal` with `flow` set to `"season"`:
 
 | probe | result |
 |---|---|
 | saved season, calendar `[t0, ghost, t1, t2, t3]`, round 3, stage `race`, drop 2 | `resume()` maps to round 2 (t2) and compacts `roundPts` to `[5,3,2]`: correct |
-| tie on 20 points, countback, drop 2 of 6 | order a, c, b: correct |
-| sprint-per-round + classic + flPoint, 12-car order | sprint 8 pts, then GP 10 + FL 1 (d4: 4 + 2 + 1 = 7): correct |
+| 3-way tie on 20 points, countback, drop 2 of 6 | order a, c, b: correct |
+| sprint-per-round + classic table + flPoint, 12-car order | sprint 8 pts, then GP 10 + FL 1 (d4: 4 + 2 + 1 = 7): correct |
 | short race 2 of 5 laps at a sprint round | 0 points (under 50 %): by design |
 
-## Observations (not defects)
+Not covered: the SETUP screen draft (`season-ui.js`), quali on/off through the UI, and a reload with a
+round finished mid-way through the real save path.
+
+## Observations (not confirmed defects)
 
 - O1 `SeasonCal.resume()` of a save whose calendar holds ONLY unknown circuit ids: `remap` is null, the
-  config normalises to the full default calendar and the stored round is kept as is, so a finished
+  config normalises to the full default calendar (24 rounds) and the stored round is kept, so a finished
   2-round season reads as round 2 of 24. The load is flagged lossy, so it cannot be written back.
-  Reachable only with a stale cached shell.
-- O2 Debugger harness: `Runtime.evaluate` of a long `awaitPromise` loop times out with `headless(false)`
-  on SwiftShader; the page then also refuses `Debugger.enable` until the render settles.
-  `headless(true)` plus a stored `window.__x` result read afterwards is reliable.
+  Reachable only with a stale cached shell. Not fixed: it needs a product call (restart vs keep).
+- O2 Unexplained: in rendered runs the game twice sat in `state: "menu"` with `track: null` after a
+  scripted `race()` + `go()` + `setTimeOfDay()` (Madrid then Bahrain; Spa in the exception pass), and
+  `lightState()` then read `numLights 0`. Not reproduced on demand (Singapore then Bahrain stayed in
+  the race with 40 lights), and the 500-record `Log` ring had wrapped past the transition, so the cause
+  is unknown. It is a harness-sequencing suspect (a `race()` issued while the previous build or
+  rebuild was still settling), not a lighting defect.
 
-## Not yet covered
+## Tool observations (js-debugger)
 
-Lamp cap and floodlight gate, `lightTune` extremes, LightPresets/LightEdits baking, lamp-bake across
-10 switches, frame-lights allocations, Season SETUP screen, caught-exception pauses.
+- A long `awaitPromise` loop under `headless(false)` on SwiftShader makes `Runtime.evaluate` time out
+  and the page refuse `Debugger.enable` until the render settles; one run needed the debug Chrome
+  killed and relaunched. A fire-and-forget async script that stores into a `window` global, read back
+  later, is reliable.
+- `debugger_state` returns every past operation, so its output grows with each probe; reading a result
+  costs more context the longer the session runs.
+- `Log.records` can hold holes (`undefined` entries): `Array.from(Log.records).map(x => x.level)` throws.
+
+## Cleanup
+
+Debugger detached (`cleanupErrors: []`), exception pausing set to `none`, debug Chrome and `serve`
+stopped by PID, load back under 1.
