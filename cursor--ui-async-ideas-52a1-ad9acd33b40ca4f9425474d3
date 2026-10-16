@@ -1,1 +1,0 @@
-1792145693	Bryce Murrin	Fix audited stale asynchronous Camera/Flyby UI opens after close/back/resume/quit. Scope js/camera/cam-tuner-boot.js and flyby-panel.js plus existing focused tests and changelog only; prior menu claim stale and remote branch absent. No general menu reorganization or renderer edits.  [cursor/ui-async-ideas-52a1; session ad9acd33b40ca4f9425474d3]
