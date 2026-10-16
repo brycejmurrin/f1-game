@@ -33,7 +33,9 @@ const AppearanceStudio = (function () {
   const VISUAL_KEYS = Object.freeze(Object.keys(DEFAULTS));
   const LOOKS = { lookPause: "pause", lookDatahub: "datahub", lookSelect: "select", lookRace: "race", lookCareer: "career", lookGarage: "garage", lookPopups: "popups" };
   const SCREEN_KEYS = Object.freeze({ home: ["titleIntro", "menuWash", "titleArt", "titleLayout", "homeScene", "backgroundMotion", "homeCamera"],
-    career: ["lookCareer"], race: ["lookRace"], hud: ["hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
+    pause: ["lookPause"], datahub: ["lookDatahub"], select: ["lookSelect"],
+    career: ["lookCareer"], race: ["lookRace"], garage: ["lookGarage"],
+    hud: ["hudMetricsLayout", "hudMapVis", "hudGapsVis", "hudMirror", "hudScale", "hudBtnScale", "hudBtnOpacity", "hudPanelOpacity", "hudAccent", "hudAccentHex"],
     popups: ["lookPopups"] });
   const PRESETS = Object.freeze([
     { id: "classic", name: "CLASSIC", note: "Original motorsport style", values: { homeScene: "static" } },
@@ -150,7 +152,7 @@ const AppearanceStudio = (function () {
     if (!ui || typeof url !== "string" || !/^(data:image\/(png|jpeg|webp);base64,|blob:)/.test(url)) return false;
     ui.preview.style.setProperty("--studio-scene-image", 'url("' + url.replace(/["\\\n\r]/g, "") + '")'); return true;
   }
-  const pageLabel = () => ({ home: "Home", career: "Career", race: "Race Setup", hud: "HUD", popups: "Popup" })[previewPage];
+  const pageLabel = () => ({ home: "Home", pause: "Pause Menu", datahub: "Data Hub", select: "Track Selector", career: "Career", race: "Race Setup", garage: "Garage", hud: "HUD", popups: "Popup" })[previewPage];
   function node(tag, cls, text) { const e = document.createElement(tag); if (cls) e.dataset.as = cls.replace(/^as-/, ""); if (text != null) e.textContent = text; return e; }
   function button(text, fn, cls) { const e = node("button", cls, text); e.type = "button"; e.addEventListener("click", fn); return e; }
   function group(host, title) { const box = node("section", "as-box"); box.appendChild(node("h3", "as-heading", title)); host.appendChild(box); return box; }
@@ -184,13 +186,17 @@ const AppearanceStudio = (function () {
     if (previewPage === "home") { for (const name of ["RACE", "WATCH", "GARAGE", "SETTINGS"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "career") { plate.append(node("h3", "", "DRIVER CAREER"), node("p", "", "NEXT RACE · MONZA"), node("div", "as-preview-door", "CONTINUE WEEKEND"), node("p", "", "DEVELOPMENT     TEAM     SEASON")); }
     else if (previewPage === "race") { plate.append(node("h3", "", "RACE SETTINGS"), node("p", "", "MONZA · GRAND PRIX")); for (const name of ["WEEKEND     RACE", "WEATHER     DRY", "LAPS     12", "START RACE"]) plate.appendChild(node("div", "as-preview-door", name)); }
+    else if (previewPage === "pause") { plate.append(node("h3", "", "PAUSED")); for (const name of ["RESUME", "RESTART", "SETTINGS", "QUIT"]) plate.appendChild(node("div", "as-preview-door", name)); }
+    else if (previewPage === "datahub") { plate.append(node("h3", "", "F1 DATA HUB"), node("p", "", "LAP ANALYSIS     TYRES     TELEMETRY")); for (const name of ["SECTOR TIMES", "SPEED TRACE", "RACE PACE"]) plate.appendChild(node("div", "as-preview-door", name)); }
+    else if (previewPage === "select") { plate.append(node("h3", "", "TRACK SELECTOR"), node("p", "", "CLASSICS     SEASON")); for (const name of ["MONZA", "SUZUKA", "MONACO"]) plate.appendChild(node("div", "as-preview-door", name)); }
+    else if (previewPage === "garage") { plate.append(node("h3", "", "GARAGE"), node("p", "", "CAR SETUP")); for (const name of ["ENGINE", "AERO", "CHASSIS", "LIVERY"]) plate.appendChild(node("div", "as-preview-door", name)); }
     else if (previewPage === "hud") {
       plate.append(node("h3", "", s.hudProfile.toUpperCase() + " HUD"), node("div", "as-preview-door", "P3     LAP 4 / 12"), node("div", "as-preview-speed", "287 " + (s.speedUnits === "mph" ? "KM/H → 178 MPH" : "KM/H")));
       if (s.hudGapsVis !== "off" && s.hudProfile !== "minimal") plate.appendChild(node("p", "", "P2 NOR +1.2     P4 LEC −0.8"));
       if (s.hudMetricsLayout !== "compact") plate.appendChild(node("p", "", s.hudMetricsLayout === "timing" ? "S1 28.412     S2 31.090" : "TYRES 82%     ENERGY 64%"));
     } else { plate.append(node("h3", "", "RACE RESULTS")); for (const name of ["1   NORRIS", "2   VERSTAPPEN", "3   YOU · +8 POSITIONS"]) plate.appendChild(node("div", "as-preview-door", name)); plate.appendChild(node("p", "", "CONTINUE")); }
     body.appendChild(plate); body.dataset.screen = previewPage;
-    const lookKey = ({ career: "lookCareer", race: "lookRace", popups: "lookPopups" })[previewPage], look = lookKey && s[lookKey];
+    const lookKey = ({ pause: "lookPause", datahub: "lookDatahub", select: "lookSelect", career: "lookCareer", race: "lookRace", garage: "lookGarage", popups: "lookPopups" })[previewPage], look = lookKey && s[lookKey];
     plate.style.borderRadius = look && look.corners === "sharp" ? "0" : look && look.corners === "pill" ? "var(--r-lg)" : "var(--r-md)";
     plate.style.textAlign = look && look.head === "centre" ? "center" : "left";
     plate.style.setProperty("--preview-density", look && look.density === "tight" ? ".7" : look && look.density === "roomy" ? "1.3" : "1");
@@ -290,7 +296,7 @@ const AppearanceStudio = (function () {
     ui.photoNote = node("p", "as-note"); ui.photoNote.setAttribute("role", "status"); ui.photoNote.setAttribute("aria-live", "polite");
     ui.photoBox.append(node("h3", "as-heading", "SAVED PHOTOS"), photoActions, ui.photoPreview, ui.photoNote); sceneBox.appendChild(ui.photoBox);
     const tools = node("div", "as-preview-toolbar"), pages = node("div", "as-segment"); pages.setAttribute("role", "group"); pages.setAttribute("aria-label", "Preview screen");
-    for (const [id, name] of [["home", "HOME"], ["career", "CAREER"], ["race", "RACE SETUP"], ["hud", "HUD"], ["popups", "POPUP"]]) { const b = button(name, () => { previewPage = id; render(); }); pages.appendChild(b); ui.pages.push({ id, b }); }
+    for (const [id, name] of [["home", "HOME"], ["pause", "PAUSE"], ["datahub", "DATA HUB"], ["select", "TRACK SELECTOR"], ["career", "CAREER"], ["race", "RACE SETUP"], ["garage", "GARAGE"], ["hud", "HUD"], ["popups", "POPUP"]]) { const b = button(name, () => { previewPage = id; render(); }); pages.appendChild(b); ui.pages.push({ id, b }); }
     const shapes = node("div", "as-segment"); shapes.setAttribute("role", "group"); shapes.setAttribute("aria-label", "Preview device"); for (const [id, name] of [["desktop", "Desktop"], ["phone", "Phone"]]) { const b = button(name, () => { previewShape = id; render(); }); shapes.appendChild(b); ui.shapes.push({ id, b }); }
     tools.append(pages, shapes); ui.previewWrap = node("div", "as-preview-wrap"); ui.preview = node("div", "as-preview"); ui.preview.setAttribute("aria-label", "Illustrative appearance preview"); ui.previewWrap.appendChild(ui.preview); previewSide.append(tools, ui.previewWrap, node("p", "as-note", "Representative preview. Use the advanced screen controls below for exact layout and the real-screen preview."));
     ui.status = node("p", "as-status"); ui.status.setAttribute("role", "status"); ui.status.setAttribute("aria-live", "polite"); controls.appendChild(ui.status);
