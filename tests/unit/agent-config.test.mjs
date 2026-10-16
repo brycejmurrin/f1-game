@@ -192,6 +192,10 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
     "node tools/ci/verify-change.mjs --wait",
     "node tools/ci/test-solo.mjs tests/specs/autopilot.spec.js",
     "python3 tools/mcp/probe-mcp.py chrome-start",
+    "tools/mcp/js-debugger-mcp.sh call debugger_attach '{}'",
+    "bash tools/mcp/js-debugger-mcp.sh call debugger_control '{}'",
+    "node tools/mcp/js-debugger-cli.mjs serve-http",
+    "node tools/mcp/js-debugger-smoke.mjs",
     // 2026-09-24: the path-prefix and npm-script forms walked past the guard.
     "node ./tools/ci/test-bg.mjs smoke",
     "node /home/user/f1-game/tools/ci/test-bg.mjs smoke",
@@ -208,6 +212,8 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
     "npm run test:tooling-fast",
     "node --test tests/unit/ratchets.test.mjs",
     "node tools/track/verify-track.cjs monza",
+    "tools/mcp/js-debugger-mcp.sh list-tools",
+    "bash tools/mcp/js-debugger-mcp.sh status",
   ];
   for (const cmd of browser) assert.equal(run(cmd, true).status, 2, `a subagent must not run: ${cmd}`);
   for (const cmd of nodeOnly) assert.equal(run(cmd, true).status, 0, `a subagent may run: ${cmd}`);
@@ -364,7 +370,7 @@ test("a subagent cannot reach a browser through MCP tools either", () => {
   const mcp = groups.find((g) => (g.hooks || []).some((h) => h.command.includes("mcp-browser-guard.sh")));
   assert.ok(mcp, "the MCP browser guard is registered");
   const re = new RegExp(mcp.matcher);
-  for (const n of ["mcp__playwright-official__browser_navigate", "mcp__chrome-devtools__new_page",
+  for (const n of ["mcp__playwright-official__browser_navigate", "mcp__chrome-devtools__new_page", "mcp__js-debugger__debugger_attach", "mcp__js-debugger__debugger_control",
                    "mcp__apex-tools__apex_shot", "mcp__apex-tools__apex_shot_survey", "mcp__apex-tools__apex_track", "mcp__apex-tools__apex_job_start"])
     assert.ok(re.test(n), `matcher must select ${n}`);
   for (const n of ["mcp__apex-tools__apex_track_audit", "mcp__apex-tools__apex_status", "mcp__github__get_me", "Bash"])
@@ -376,6 +382,9 @@ test("a subagent cannot reach a browser through MCP tools either", () => {
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }).status, 2);
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_attach", agent_id: "a1" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_control", agent_type: "reviewer" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_state" }).status, 0, "parent retains debugger access");
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate" }).status, 0, "the main session keeps its browser");
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }).status, 0, "tree tools stay open to subagents");
 });

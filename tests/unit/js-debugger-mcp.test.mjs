@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { readFileSync } from "node:fs";
 import { Cdp, localUrl } from "../../tools/mcp/js-debugger-cdp.mjs";
 import { DebugSession } from "../../tools/mcp/js-debugger-session.mjs";
 import { callTool, handleRpc, TOOLS } from "../../tools/mcp/js-debugger-mcp.mjs";
@@ -161,6 +162,20 @@ test("real stdio subprocess discovery and malformed JSON recovery, no browser la
   const [code] = await once(child, "exit"); assert.equal(code, 0, err);
   const rows = out.trim().split("\n").map(JSON.parse); assert.equal(rows.length, 3); assert.equal(rows[0].error.code, -32700);
   assert.equal(rows.find(r => r.id === 2).result.tools.length, 13);
+});
+test("project catalogs launch the separate debugger wrapper and discover its tools", async () => {
+  const read = path => JSON.parse(readFileSync(new URL("../../" + path, import.meta.url), "utf8"));
+  const server = read(".mcp.json").mcpServers["js-debugger"];
+  assert.deepEqual(server, read(".cursor/mcp.json").mcpServers["js-debugger"]);
+  assert.deepEqual(server, read("tools/mcp/js-debugger-mcp.json").mcpServers["js-debugger"]);
+  const child = spawn(server.command, server.args, { cwd: new URL("../..", import.meta.url), stdio: ["pipe", "pipe", "pipe"] });
+  let out = "", err = ""; child.stdout.on("data", b => { out += b; }); child.stderr.on("data", b => { err += b; });
+  child.stdin.end('{"jsonrpc":"2.0","id":1,"method":"initialize"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"debugger_state"}}\n');
+  assert.equal((await once(child, "exit"))[0], 0, err);
+  const rows = out.trim().split("\n").map(JSON.parse);
+  assert.equal(rows.find(r => r.id === 1).result.serverInfo.name, "js-debugger-mcp");
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 13);
+  assert.equal(rows.find(r => r.id === 3).result.structuredContent.connected, false);
 });
 
 async function shell(command, port) {

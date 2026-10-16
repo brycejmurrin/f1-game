@@ -11,15 +11,22 @@ closes the browser, starts a test group, or edits application source.
 Requires Node 22+ (native WebSocket/fetch) and Bash for the shell wrapper; no
 additional npm package or build. The direct Node stdio entrypoint remains
 available on machines without Bash.
-Keep the default three-server project catalog. Merge the **opt-in** entry from
-`tools/mcp/js-debugger-mcp.json` into the MCP client's local configuration when
-debugging. Use an absolute script path if the client's working directory is not
-the repository root. The command is:
+The project registers `js-debugger` in Claude Code's root `.mcp.json` and
+Cursor's `.cursor/mcp.json`. Claude's enabled-server list, Cursor Cloud's launch
+allowlist and Codex's `.codex/config.toml` mirror the same entry. Reload the MCP
+client after pulling this change; workspace trust and Cloud dashboard attachment
+still apply (see `docs/AGENT-SURFACE.md`). The server starts unattached and never
+launches Chrome by itself.
+
+For another project, copy the entry from `tools/mcp/js-debugger-mcp.json` into
+its local MCP configuration. Use an absolute script path if the client's
+working directory is not the repository root:
 
 ```json
 {
   "mcpServers": {
     "js-debugger": {
+      "type": "stdio",
       "command": "bash",
       "args": ["/absolute/path/to/f1-game/tools/mcp/js-debugger-mcp.sh", "serve"]
     }
