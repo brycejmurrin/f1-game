@@ -758,6 +758,16 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
   assert.match(wgx, /_releaseOwnedMatMaps/);
 });
 
+test("TLX rejects partial material readbacks so Assets can retry", () => {
+  const tlx = read("js/render/three/tlx.js");
+  const at = tlx.indexOf("function readbackTextureLayers(size, images, n, data)");
+  assert.ok(at > 0, "TLX material readback helper moved");
+  const body = tlx.slice(at, tlx.indexOf("\n      }", at));
+  assert.match(body, /const expected = \[\]/);
+  assert.match(body, /filled === expected\.length \? filled : 0/,
+    "a missing layer must reject the whole array instead of binding a zero-filled page");
+});
+
 test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
   const src = read("js/perf/renderer-picker.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
@@ -4020,6 +4030,17 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // A-H4: an InstancedMesh caster (tlxCasterAttr=0) disposes; the attribute Mesh has no dispose(), so its event.
   assert.match(sh, /function disposeCaster\(m\) \{\s*try \{ if \(m\.isInstancedMesh\) m\.dispose\(\); else m\.dispatchEvent\(\{ type: "dispose" \}\); \}/);
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const disposeInstancedObject = new Function(`return (${fnSource(tlxSrc, "function disposeInstancedObject(mesh) {")})`)();
+  const plain = { dispatches: 0, dispatchEvent(e) { this.dispatches++; this.event = e; } };
+  disposeInstancedObject(plain);
+  assert.equal(plain.dispatches, 1, "attribute-backed plain Meshes release three's render object through its dispose event");
+  assert.deepEqual(plain.event, { type: "dispose" });
+  const instanced = { isInstancedMesh: true, disposals: 0, dispose() { this.disposals++; } };
+  disposeInstancedObject(instanced);
+  assert.equal(instanced.disposals, 1, "real InstancedMesh resources use its native dispose method");
+  assert.doesNotMatch(tlxSrc, /(?:mv|batch)\.imesh\.dispose\(\)/, "freeing a batch must not call nonexistent Mesh.dispose directly");
+  assert.match(tlxSrc, /disposeInstancedObject\(mv\.imesh\);[\s\S]*?disposeInstancedObject\(batch\.imesh\);/,
+    "both the mirror and main batch use the lifecycle-aware disposer");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");
   // A released geometry (freeMesh / chunked free) is parked out of every slot

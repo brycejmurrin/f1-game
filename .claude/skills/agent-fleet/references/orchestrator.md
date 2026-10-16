@@ -38,6 +38,10 @@ CAPS: ≤ <n> screenshots/captures (default 25); ≤ 2 nested subagents; abort a
 ORCHESTRATOR: <host>:<your session id>
 USER GRANTS: "<the user's exact words>" (<UTC time>) — what this worker may do beyond AGENTS.md,
       scoped to the lane (OWNED globs / issue list, follow-up PRs included), not to PR numbers
+MODE/SEED: permission_mode "auto"; source_revision <deploy branch | NAMED integration branch>; model <id>.
+PR: <worker | orchestrator> opens the DRAFT PR, base <deploy branch | track-survey-assets>.
+DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step the PR must contain>
+PUSH: when your own cycle is green (no slot; launch-policy.md, Paced push).
 Load skill agent-fleet and follow references/worker.md.
 Open a DRAFT PR; keep its fleet block current; subscribe with your host's tool.
 When blocked or unsure: set state: blocked, needs-orchestrator: yes, comment
@@ -46,6 +50,37 @@ the ORCHESTRATOR session. Do not guess past a blocker.
 Mark ready only after ready-gate.mjs exits 0.
 Do not enable auto-merge or merge.
 ```
+
+### Hard lines (plan WS1, 2026-10-16-agent-friction-fix-plan; #2380)
+
+A brief missing any of these cost real sessions: 3 of 14 fix workers parked on a
+permission prompt, stale-seeded workers cost $5.55–9.50 against $1.74–2.74, and
+12 of 25 surveyors refused a relayed PR ask. Check the brief against this list
+before every `create_session`:
+
+1. `permission_mode: "auto"`, confirmed afterwards with `get_session`.
+2. `source_url` plus `source_revision` = the deploy branch or a NAMED
+   integration branch, never a stale topic branch or the default.
+3. The model stated (`claude-sonnet-5-5` for lanes and workers).
+4. Who opens the PR and its base (survey lane: `track-survey-assets`). A brief
+   that says "no PR" contradicts AGENTS.md rule 12; say who opens it instead.
+5. The full deliverable checklist in the FIRST brief (sections, weathers and
+   frames, docs, the commit recipe) so no round-two message is needed.
+6. The PUSH line (green-cycle push; the slot is retired).
+7. The `USER GRANTS:` quote and `Do not enable auto-merge or merge.`
+
+### Pre-launch quota check (#2380)
+
+50 of 61 failed sessions died on the account quota, and a launch burst is what
+trips `Sandbox allocation failed … rate_limited`.
+
+- Before every `create_session` and before every Agent wave larger than 5, call
+  `get_session` (no id = yourself) and read `rate_limit_info`. At
+  `allowed_warning` or worse, launch nothing: park under `worker.md` §Quota
+  park, with one `send_later` at the reset.
+- Stagger launches by ≥ 30 s and confirm each child with `get_session`
+  (`status_bucket`, granted `permission_mode`, repo attached) before the next.
+- Waves stay within the lane caps in `launch-policy.md`.
 
 ## Authority, permissions and modes (the 2026-10-15 track-survey fleet)
 

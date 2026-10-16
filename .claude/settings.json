@@ -196,6 +196,98 @@
         "hooks": [
           {
             "type": "command",
+            "if": "Bash(*git*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*gh *)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*kill*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*pgrep*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*curl*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*node*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*npm*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*npx*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*playwright*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*chrom*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*python*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*sh *)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*eval*)",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180,
+            "onFailure": "block"
+          },
+          {
+            "type": "command",
+            "if": "Bash(*xargs*)",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
             "timeout": 180,
             "onFailure": "block"
