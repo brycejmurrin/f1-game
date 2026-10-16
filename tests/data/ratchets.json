@@ -13,12 +13,12 @@
       "lines": 3323
     },
     "js/car/car3d.js": {
-      "lines": 2208
+      "lines": 2207
     },
     "js/game.js": {
-      "codeLines": 5330,
+      "codeLines": 5314,
       "gMembers": 292,
-      "lines": 9637,
+      "lines": 9618,
       "topLets": 155
     },
     "js/lighting/presets.js": {
@@ -59,11 +59,11 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 335,
+      "ceiling": 336,
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 181,
+      "ceiling": 182,
       "slack": 0
     },
     "rawSpacing": {
@@ -71,7 +71,7 @@
       "slack": 0
     },
     "shellNodes": {
-      "ceiling": 2182,
+      "ceiling": 2179,
       "slack": 25
     },
     "subFloorFontSize": {

@@ -3582,6 +3582,7 @@ factory for roughly 10 net lines. Revisit when the other net-lobby hunt PRs (#24
 mode's concise help after initialization, mode changes and rookie presets.
 The three shell elements provide a native expandable comparison while keeping
 selected-mode help visible. These are intentional UI additions, not extra slack;
-`node tools/check/ratchets.mjs --update` records the measured sizes and folds the
-existing fragment without changing its effective ceilings. Native browser tests
+`node tools/check/ratchets.mjs --update --fragment --reason="surveyed phone UI accessibility fixes"`
+records the measured sizes without folding another branch's fragment or changing
+the shared baseline. Native browser tests
 cover all three throttle modes and opening/closing the disclosure.
