@@ -28,17 +28,13 @@ packet is worthless) and "event" (reliable/ordered: lobby, start tick, lap
 times, results). loopback() wires two endpoints IN ONE PAGE with injectable
 latency/jitter/loss so the netcode is testable with no network at all; rtc()
 is the real RTCPeerConnection. Both deliver only on pump(), so latency and
-loss are reproducible rather than wall-clock. A TURN RELAY SHIPS BY DEFAULT (a
-Metered free-tier credentials URL) because without one two devices ON THE SAME
-WI-FI often cannot connect: the only host candidate a browser offers is mDNS-
-obfuscated, and when that name will not resolve the sole remaining pair is
-srflx-to-srflx, which needs router hairpinning many do not do. The key is
-readable in devtools — inherent to client-side TURN, which is why the operator
-documents this exact fetch from a browser — and apex26.turnApi overrides it
-outright. prefetchIce() must be AWAITED BEFORE a connection is built (lobby's
-readyIce()): iceServers are fixed at construction, so a fetch that lands 200
-ms later gathers STUN-only and every wire dump reads relay:0 while the relay
-is demonstrably alive
+loss are reproducible rather than wall-clock. No TURN credential ships in the
+client: browser-visible provider keys are reusable by anyone who downloads the
+game. Configure a player-owned, short-lived credentials endpoint through
+`apex26.turnApi` when relay service is needed; the default is honest STUN-only
+operation. `prefetchIce()` must be AWAITED BEFORE a connection is built
+(lobby's `readyIce()`): `iceServers` are fixed at construction, so a fetch that
+lands 200 ms later gathers STUN-only.
 
 ### `js/net/sdp.js` — `NetSdp`
 

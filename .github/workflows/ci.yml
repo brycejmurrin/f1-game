@@ -136,13 +136,10 @@ run-name: "${{ (github.event_name == 'pull_request' && github.event.action == 'l
 # conflicted only in meaning, and nothing was running the suite that would have
 # said so. That is exactly the silent class this gate exists for.
 #
-# It is not added yet for one reason: golden images are environment-sensitive,
-# and those six were generated in a dev container. If GitHub's runner renders
-# even slightly differently — a font fallback, a SwiftShader build — the gate
-# goes permanently red and blocks every deploy, which is the failure this
-# workflow already caused once by another route. Add it by first running it on a
-# PR as a non-blocking step and comparing, not by putting it straight into
-# `needs:`.
+# It is now blocking on scheduled and manual runs. The runner and dev container
+# were measured as portable; a mismatch must fail the verdict so stale UI
+# goldens cannot remain green indefinitely. It remains excluded from Pages calls
+# because the release train uses live browser checks rather than dev-captured PNGs.
 
 on:
   # NO PUSH TRIGGER (2026-10-16, the CI/CD review #2333 finding 3). A topic
@@ -1474,14 +1471,15 @@ jobs:
     name: Renderer specs on a real GPU (macos-latest, Metal)
     needs: select
     # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
-    # comment forbids it, because this job is already outside the deploy gate
-    # (renderer-filter is skipped on the Pages call, so this is too). The
+    # comment forbids it, because the selector owns the path decision.
+    # Pages calls now run the filter against the live commit, so a release that
+    # changes renderer bytes also gets the Metal check before publication. The
     # "skipped reads as passed" hazard the sweeps avoid is about a job whose
     # verdict the deploy consumes; nothing consumes this one but the checks list.
     # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
     # ready PR whose filter said the diff touches the renderer. Never a
     # draft PR or a bare topic-branch push — see the filter's header.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!inputs.concurrency_key && needs.select.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (needs.select.outputs.renderer == 'true' && (inputs.concurrency_key != '' || github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is
@@ -2065,17 +2063,20 @@ jobs:
       # fail-safing every PR into the full fleet until 2026-09-22.
       - name: Does this diff touch the renderer?
         id: renderer
-        if: ${{ !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
+        if: ${{ inputs.concurrency_key != '' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft) }}
         env:
-          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || (github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before) }}
           EVENT: ${{ github.event_name }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
         run: |
           set -u
           run_all() { echo "renderer=true" >> "$GITHUB_OUTPUT"; echo "RUNNING RENDERER SPECS: $1"; exit 0; }
-          case "$EVENT" in
-            push|pull_request) ;;
-            *) run_all "event is '$EVENT', not a push/pull_request" ;;
-          esac
+          if [ "$CALLED" != true ]; then
+            case "$EVENT" in
+              push|pull_request) ;;
+              *) run_all "event is '$EVENT', not a push/pull_request" ;;
+            esac
+          fi
           # A PR diffs against the test commit's first parent (ci-pr-base.sh):
           # the event's base.sha lags one sync behind it.
           [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
@@ -2356,9 +2357,8 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # THE GOLDEN-MENU TRIAL. NON-BLOCKING BY CONSTRUCTION — do not add it to any
-  # `needs:`, and do not remove `continue-on-error` without the comparison this
-  # job exists to produce.
+  # THE GOLDEN-MENU CHECK. Blocking on scheduled/manual runs: a mismatch is
+  # evidence that the committed UI baseline is stale or the runner changed.
   #
   # The header above already names `test:baseline` as the group that arguably
   # belongs in the gate and is not in it, and gives the reason: the six goldens
@@ -2374,8 +2374,7 @@ jobs:
   # tolerance (title-phone-landscape 49,499 on the runner vs 49,516 here;
   # garage-phone-landscape 10,318 vs 10,319). Three of the six have simply not
   # been re-blessed since the UI moved, and they fail in a fresh container too.
-  # So the way in is: RE-BLESS the six, keep this job non-blocking for a few
-  # more PRs to confirm they hold, then gate on it as a DOM identity gate.
+  # Its actual/diff artifact remains available for diagnosis when it fails.
   #
   # IT IS NOT A RENDERER GATE AND CANNOT BECOME ONE. The spec calls
   # __apex.headless(true) and hides #game before it shoots, so a dead render
@@ -2528,7 +2527,6 @@ jobs:
     # dispatch answer without a runner slot on every push while 200-290 jobs
     # queue (docs/notes/CI-CAPACITY-2026-09-29.md).
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
-    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
