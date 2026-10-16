@@ -17,10 +17,11 @@ export const TOOLS = [
   def("debugger_attach", "Attach a page target by id. One session at a time; local HTTP repros/about:blank only. May pause JavaScript.", { endpoint, targetId: str("Page id from debugger_targets") }, ["endpoint", "targetId"]),
   def("debugger_detach", "Remove owned breakpoints, reset exception pauses, resume, disable and detach. Reports cleanup failures; never closes the browser."),
   def("debugger_state", "Read current pause/stack/scopes and nonblocking operation results. A command acknowledgment is not a pause verdict.", {}, [], true),
-  def("debugger_scripts", "List parsed scripts, at most 200. Narrow by URL substring.", { filter: { type: "string", maxLength: 1000 } }, [], true),
+  def("debugger_scripts", "List parsed scripts (named URLs first, max 200; reports total/truncated). Anonymous/eval scripts hidden unless includeAnonymous. Filter = URL substring, or regex with regex:true.",
+    { filter: { type: "string", maxLength: 1000 }, regex: { type: "boolean" }, includeAnonymous: { type: "boolean" } }, [], true),
   def("debugger_source", "Read a bounded script source excerpt. Lines and columns in this MCP are ONE-based.",
     { scriptId: str("Script id from debugger_scripts or a stack frame"), startLine: integer("First line"), count: integer("Line count, max 200", 1, 200) }, ["scriptId"], true),
-  def("debugger_breakpoint", "Set a URL breakpoint, optionally conditional. ONE-based line/column; URL breakpoints survive reload. Conditions execute JavaScript.",
+  def("debugger_breakpoint", "Set a URL breakpoint, optionally conditional. ONE-based line/column; URL breakpoints survive reload. Conditions execute JavaScript. Setting the same location again replaces it. Empty locations + warning = wrong URL or script not parsed.",
     { url: str("Exact script URL, including query if present"), line: integer("Source line"), column: integer("Source column"), condition: { type: "string", maxLength: 4000 } }, ["url", "line"]),
   def("debugger_remove_breakpoint", "Remove a breakpoint created by this debugger session.", { id: str("Breakpoint id") }, ["id"]),
   def("debugger_control", "Pause on the next JS statement, resume, or step over/into/out. Inspect state for a NEW pause token; steps may finish without pausing.",
@@ -30,7 +31,18 @@ export const TOOLS = [
     { pauseToken: token, frame: integer("Zero-based frame index (first 10 frames retained)", 0, 9), expression, allowSideEffects: { type: "boolean" } }, ["pauseToken", "expression"]),
   def("debugger_properties", "Read own property descriptors without invoking getters. Object must belong to the current pause.",
     { pauseToken: token, objectId: str("Scope/evaluation/property objectId"), offset: integer("Property offset", 0), limit: integer("Page size", 1, 100) }, ["pauseToken", "objectId"], true),
-  def("debugger_run", "Execute potentially mutating JS while running. Returns immediately with operationId so a breakpoint cannot block resume. Read result via debugger_state. A timeout does not cancel execution.",
+  def("debugger_logpoint", "Non-pausing breakpoint: records `expression` (evaluated in the frame) on each hit into a bounded page-side ring. For hot loops (NaN tracing). Read with debugger_logpoint_read.",
+    { url: str("Exact script URL"), line: integer("Source line"), column: integer("Source column"), expression: str("Expression to record, e.g. `speed`", 1000),
+      maxHits: integer("Ring size (default 100)", 1, 300), maxChars: integer("Max chars per value (default 200)", 10, 500) }, ["url", "line", "expression"]),
+  def("debugger_logpoint_read", "Read (and optionally clear) logpoint hits: total hit count plus the newest `limit` retained values. Page must be running.",
+    { id: str("Logpoint id (default: all)", 20), clear: { type: "boolean" }, limit: integer("Newest values per logpoint (default 50)", 1, 300) }, [], false),
+  def("debugger_exception_log", "Collect caught/uncaught exceptions WITHOUT pausing (auto-resume): message, url:line, top-5 stack, per-message counts. action start|read|clear|stop; stop resets pause-on-exceptions.",
+    { action: { type: "string", enum: ["start", "read", "clear", "stop"] }, state: { type: "string", enum: ["all", "uncaught"] }, max: integer("Retained entries (default 100)", 1, 300) }, ["action"]),
+  def("debugger_listeners", "Count event listeners by type on window, document or a CSS selector (first match) via DOMDebugger.getEventListeners. For leak hunts across restarts.",
+    { target: str("window | document | CSS selector (default window)", 500), detail: integer("Also list the first N listeners with script:line (default 0)", 0, 100) }, [], true),
+  def("debugger_instances", "Count live objects for a constructor/prototype expression (Runtime.queryObjects; GCs first). Includes subclass instances. For AudioNode/Mesh leak counts. Page must be running.",
+    { expression: str("Constructor or prototype expression, e.g. AudioNode", 1000) }, ["expression"]),
+  def("debugger_run", "Execute potentially mutating JS while running. Returns immediately with operationId so a breakpoint cannot block resume. Read result via debugger_state. ALWAYS mutating: it has no allowSideEffects flag (only debugger_evaluate has one, default off). A new run abandons a pending/unknown one (marked abandoned; JS not cancelled).",
     { expression, awaitPromise: { type: "boolean", description: "Wait for a returned Promise in the background operation (default false)" } }, ["expression"]),
 ];
 
@@ -40,7 +52,9 @@ function validate(tool, args) {
   for (const key of required) if (!Object.hasOwn(args, key)) throw Error(`Missing argument: ${key}`);
   for (const [key, value] of Object.entries(args)) {
     const spec = properties[key];
-    if (!spec) throw Error(`Unknown argument: ${key}`);
+    if (!spec) throw Error(key === "allowSideEffects" && tool.name === "debugger_run"
+      ? "debugger_run is always mutating and takes no allowSideEffects; that flag exists only on debugger_evaluate (paused frames, default off)"
+      : `Unknown argument: ${key}`);
     if (spec.type === "integer" ? !Number.isInteger(value) : typeof value !== spec.type) throw Error(`Invalid type for ${key}`);
     if (spec.enum && !spec.enum.includes(value)) throw Error(`Invalid ${key}`);
     if (spec.type === "integer" && (value < spec.minimum || value > spec.maximum)) throw Error(`Out of range: ${key}`);
@@ -55,7 +69,9 @@ export async function callTool(session, name, args = {}) {
     const a = args;
     const routes = {
       debugger_targets: () => session.listTargets(a.endpoint), debugger_attach: () => session.attach(a.endpoint, a.targetId),
-      debugger_detach: () => session.detach(), debugger_state: () => session.state(true), debugger_scripts: () => session.scriptsList(a.filter),
+      debugger_detach: () => session.detach(), debugger_state: () => session.state(true), debugger_scripts: () => session.scriptsList(a.filter, { regex: a.regex, includeAnonymous: a.includeAnonymous }),
+      debugger_logpoint: () => session.setLogpoint(a), debugger_logpoint_read: () => session.readLogpoints(a),
+      debugger_exception_log: () => session.exceptionLogControl(a), debugger_listeners: () => session.listeners(a), debugger_instances: () => session.instances(a),
       debugger_source: () => session.source(a.scriptId, a.startLine ?? 1, a.count ?? 40),
       debugger_breakpoint: () => session.setBreakpoint(a.url, a.line, a.column, a.condition),
       debugger_remove_breakpoint: () => session.removeBreakpoint(a.id), debugger_control: () => session.control(a.action, a.pauseToken),

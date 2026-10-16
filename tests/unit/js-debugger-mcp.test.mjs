@@ -36,7 +36,7 @@ test("loopback validation refuses remote/rebinding/credentials and wrong protoco
   for (const u of ["http://127.0.0.1:9222", "http://localhost:9222", "http://[::1]:9222"]) assert.equal(localUrl(u).protocol, "http:");
 });
 test("tools expose actual debugger operations; malformed arguments fail before attachment", async () => {
-  assert.equal(TOOLS.length, 13);
+  assert.equal(TOOLS.length, 18);
   const s = new DebugSession();
   for (const [name, args] of [["debugger_breakpoint", { url: "x", line: 0 }], ["debugger_control", { action: "unknown" }],
     ["debugger_source", { scriptId: "s1", count: 201 }], ["debugger_state", { surprise: true }], ["debugger_evaluate", { pauseToken: "x", expression: "x", allowSideEffects: "true" }]]) {
@@ -219,11 +219,119 @@ test("dead endpoint and missing tool name give actionable messages", async () =>
   assert.match(r.stdout, /call needs a tool name/);
   await assert.rejects(debuggerRequest("/healthz", null, 1), /on port 1|nothing listening on 127\.0\.0\.1:1/);
 });
-test("unknown timed-out execution blocks subsequent run until detach", async () => {
+test("T5: a timed-out (unknown) or pending run no longer blocks; it is marked abandoned and its late result dropped", async () => {
   const { s, c } = await attached(); c.reply = async () => { throw Error("response timed out; execution may still be active"); };
   s.run("forever()"); await new Promise(setImmediate);
-  assert.equal(s.state().operations[0].status, "unknown"); assert.throws(() => s.run("again()"), /unknown/);
+  assert.equal(s.state().operations[0].status, "unknown");
+  let late; c.reply = () => new Promise(resolve => { late = resolve; });
+  const second = s.run("again()"); assert.deepEqual(second.abandoned, [1]);
+  assert.equal(s.state().operations[0].status, "abandoned");
+  const third = s.run("third()"); assert.deepEqual(third.abandoned, [2]);
+  late({ result: { value: 1 } }); await new Promise(setImmediate);
+  assert.equal(s.state().operations.find(o => o.id === 2).status, "abandoned", "late result must not resurrect an abandoned run");
 });
+test("T6: debugger_run is documented as always mutating and refuses allowSideEffects with a pointer to debugger_evaluate", async () => {
+  const run = TOOLS.find(t => t.name === "debugger_run"), ev = TOOLS.find(t => t.name === "debugger_evaluate");
+  assert.match(run.description, /ALWAYS mutating/); assert.match(run.description, /no allowSideEffects/);
+  assert.ok(ev.inputSchema.properties.allowSideEffects); assert.ok(!run.inputSchema.properties.allowSideEffects);
+  const { s } = await attached(); const r = await callTool(s, "debugger_run", { expression: "1", allowSideEffects: true });
+  assert.equal(r.isError, true); assert.match(r.structuredContent.error, /only on debugger_evaluate/);
+});
+test("T1: scripts hide anonymous rows by default, list named URLs first, report total/truncated, and eviction keeps game.js", async () => {
+  const { s, c } = await attached();
+  for (let i = 0; i < 250; i++) c.emit("Debugger.scriptParsed", { scriptId: "a" + i, url: "", startLine: 0, endLine: 1 });
+  c.emit("Debugger.scriptParsed", { scriptId: "g", url: "http://127.0.0.1:3456/js/game.js?v=dev", startLine: 0, endLine: 9 });
+  let r = await s.scriptsList("game.js");
+  assert.deepEqual(r.scripts.map(x => x.scriptId), ["g"]); assert.equal(r.total, 1); assert.equal(r.truncated, false);
+  r = await s.scriptsList("", { includeAnonymous: true });
+  assert.equal(r.scripts.length, 200); assert.equal(r.total, 251); assert.equal(r.truncated, true); assert.equal(r.scripts[0].scriptId, "g");
+  r = await s.scriptsList("js/(game|core)\\.js", { regex: true }); assert.equal(r.total, 1);
+  assert.equal((await s.scriptsList("")).anonymousHidden, 250);
+  for (let i = 0; i < 2100; i++) c.emit("Debugger.scriptParsed", { scriptId: "b" + i, url: "", startLine: 0, endLine: 1 });
+  assert.ok(s.scripts.has("g"), "2000-entry eviction must drop anonymous scripts before a named one");
+});
+test("T1: an unresolved breakpoint warns loudly and suggests the exact parsed URL", async () => {
+  const { s, c } = await attached();
+  c.emit("Debugger.scriptParsed", { scriptId: "g", url: "http://127.0.0.1:3456/js/game.js?v=dev", startLine: 0, endLine: 9 });
+  const bp = await s.setBreakpoint("http://127.0.0.1:3456/js/game.js", 5);
+  assert.deepEqual(bp.locations, []); assert.match(bp.warning, /NO LOCATIONS/); assert.match(bp.warning, /game\.js\?v=dev/);
+  const r = await callTool(s, "debugger_breakpoint", { url: "http://127.0.0.1:3456/never.js", line: 1 });
+  assert.match(r.structuredContent.warning, /not parsed yet/);
+});
+test("T4: setting a breakpoint at an owned location removes the old CDP breakpoint by id first, even when unresolved", async () => {
+  const { s, c } = await attached(); let n = 0;
+  c.reply = async method => method === "Debugger.setBreakpointByUrl" ? { breakpointId: "same", locations: [] } : {};
+  const a = await s.setBreakpoint(frame.url, 4, 3, "x === 1"); assert.deepEqual(a.locations, []);
+  const b = await s.setBreakpoint(frame.url, 4, 3, "x === 2");
+  const seq = c.calls.map(x => x.method).filter(m => m.includes("Breakpoint"));
+  assert.deepEqual(seq, ["Debugger.setBreakpointByUrl", "Debugger.removeBreakpoint", "Debugger.setBreakpointByUrl"]);
+  assert.equal(b.condition, "x === 2"); assert.equal(s.breakpoints.size, 1);
+  assert.deepEqual(c.calls.find(x => x.method === "Debugger.removeBreakpoint").params, { breakpointId: "same" });
+  c.reply = async method => { if (method === "Debugger.removeBreakpoint") throw Error("cdp down"); return { breakpointId: "same", locations: [] }; };
+  await assert.rejects(s.setBreakpoint(frame.url, 4, 3, "x === 3"), /old condition may still be armed/);
+  assert.equal(s.breakpoints.get("same").condition, "x === 2", "a failed remove must not claim the new condition");
+});
+test("A1: logpoint condition never pauses, records into a page ring, and read/clear go through Runtime.evaluate", async () => {
+  const { s, c } = await attached();
+  const r = await callTool(s, "debugger_logpoint", { url: frame.url, line: 4, expression: "speed * 2" });
+  assert.equal(r.isError, false); const call = c.calls.find(x => x.method === "Debugger.setBreakpointByUrl");
+  assert.match(call.params.condition, /return false\}\)\(\)$/); assert.match(call.params.condition, /speed \* 2/);
+  // Execute the generated condition for real, in a scope that defines `speed`.
+  const run = (speed) => new Function("speed", "globalThis_", `return ${call.params.condition.replaceAll("globalThis", "globalThis_")}`)(speed, globalThis_);
+  var globalThis_ = {}; assert.equal(run(2), false); run(NaN); run(Infinity);
+  const ring = globalThis_.__apexDbgLog[r.structuredContent.id];
+  assert.deepEqual(ring.items.map(i => i.v), [4, "NaN", "Infinity"]); assert.equal(ring.n, 3);
+  for (let i = 0; i < 150; i++) run(i); assert.equal(ring.items.length, 100, "ring is bounded"); assert.equal(ring.n, 153);
+  c.reply = async (method, params) => { assert.equal(method, "Runtime.evaluate"); return { result: { value: { lp1: { hits: 3, retained: 3, items: [{ i: 1, v: "NaN" }] } } } }; };
+  const read = await callTool(s, "debugger_logpoint_read", { clear: true });
+  assert.equal(read.structuredContent.logpoints[0].hits, 3); assert.match(c.calls.at(-1).params.expression, /clear/);
+  paused(c); assert.equal((await callTool(s, "debugger_logpoint_read", {})).isError, true);
+});
+test("A2: exception log records message/location/top-5 stack and auto-resumes without surfacing a pause", async () => {
+  const { s, c } = await attached();
+  assert.equal((await callTool(s, "debugger_exception_log", { action: "read" })).isError, true);
+  await s.exceptionLogControl({ action: "start", state: "all", max: 2 });
+  assert.deepEqual(c.calls.at(-1), { method: "Debugger.setPauseOnExceptions", params: { state: "all" }, timeout: undefined });
+  const frames = Array.from({ length: 8 }, (_, i) => ({ ...frame, functionName: "f" + i, callFrameId: "cf" + i }));
+  for (let i = 0; i < 3; i++) c.emit("Debugger.paused", { reason: "exception", data: { description: "TypeError: boom " + (i % 2) + "\n    at x", uncaught: i === 2 }, callFrames: frames });
+  assert.equal(s.pause, null, "no visible pause"); assert.equal(c.calls.filter(x => x.method === "Debugger.resume").length, 3);
+  const r = await s.exceptionLogControl({ action: "read" });
+  assert.equal(r.total, 3); assert.equal(r.entries.length, 2, "bounded ring"); assert.equal(r.entries[1].stack.length, 5);
+  assert.match(r.entries[1].message, /^TypeError: boom 0$/); assert.match(r.entries[1].at, /fixture\.js:4$/); assert.equal(r.counts["TypeError: boom 0"], 2);
+  c.emit("Debugger.paused", { reason: "other", callFrames: [frame] }); assert.ok(s.pause, "non-exception pauses still surface");
+  assert.equal((await s.exceptionLogControl({ action: "clear" })).cleared, true);
+  assert.equal((await s.exceptionLogControl({ action: "read" })).total, 0);
+  await s.exceptionLogControl({ action: "stop" }); assert.equal(c.calls.at(-1).params.state, "none"); assert.equal(s.exceptionLog, null);
+});
+test("A3: listeners counts by type via DOMDebugger.getEventListeners and releases the object group", async () => {
+  const { s, c } = await attached();
+  c.reply = async (method, params) => {
+    if (method === "Runtime.evaluate") return { result: { objectId: "w1" } };
+    if (method === "DOMDebugger.getEventListeners") return { listeners: [{ type: "keydown", scriptId: "s1", lineNumber: 1, columnNumber: 0 }, { type: "keydown", scriptId: "s1", lineNumber: 2, columnNumber: 0 }, { type: "resize", scriptId: "s1", lineNumber: 3, columnNumber: 0 }] };
+    return {};
+  };
+  c.emit("Debugger.scriptParsed", { scriptId: "s1", url: frame.url, startLine: 0, endLine: 9 });
+  const r = await callTool(s, "debugger_listeners", { target: "#hud", detail: 2 });
+  assert.deepEqual(r.structuredContent.byType, { keydown: 2, resize: 1 }); assert.equal(r.structuredContent.total, 3);
+  assert.equal(r.structuredContent.listeners[0].url, frame.url); assert.equal(r.structuredContent.listeners.length, 2);
+  assert.match(c.calls.find(x => x.method === "Runtime.evaluate").params.expression, /querySelector\("#hud"\)/);
+  assert.ok(c.calls.some(x => x.method === "Runtime.releaseObjectGroup" && x.params.objectGroup === "apex-dbg-listeners"));
+});
+test("A4: instances queries the prototype, reads the array length and releases the group", async () => {
+  const { s, c } = await attached();
+  c.reply = async (method, params) => {
+    if (method === "Runtime.evaluate") return { result: { objectId: "p1" } };
+    if (method === "Runtime.queryObjects") { assert.equal(params.prototypeObjectId, "p1"); return { objects: { objectId: "arr1" } }; }
+    if (method === "Runtime.callFunctionOn") { assert.equal(params.objectId, "arr1"); return { result: { value: 7 } }; }
+    return {};
+  };
+  const r = await callTool(s, "debugger_instances", { expression: "AudioNode" });
+  assert.equal(r.structuredContent.count, 7);
+  assert.ok(c.calls.some(x => x.method === "Runtime.releaseObjectGroup" && x.params.objectGroup === "apex-dbg-instances"));
+  c.reply = async () => ({ result: {}, exceptionDetails: { text: "x" } });
+  assert.equal((await callTool(s, "debugger_instances", { expression: "Nope" })).isError, true);
+});
+
 test("CDP timeout and close reject pending calls without claiming cancellation", async () => {
   const socket = new EventTarget(); socket.readyState = 1; socket.send = () => {}; socket.close = () => {};
   const c = new Cdp(socket, 5);
@@ -234,7 +342,7 @@ test("JSON-RPC protocol responds to initialize/list/ping, not notifications", as
   const s = new DebugSession();
   const request = method => ({ jsonrpc: "2.0", id: 1, method });
   assert.equal((await handleRpc(s, request("initialize"))).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 13);
+  assert.equal((await handleRpc(s, request("tools/list"))).result.tools.length, 18);
   assert.equal(await handleRpc(s, { jsonrpc: "2.0", method: "notifications/initialized" }), null);
   assert.equal((await handleRpc(s, request("missing"))).error.code, -32601);
   assert.equal((await handleRpc(s, [])).error.code, -32600);
@@ -255,7 +363,7 @@ test("real stdio subprocess discovery and malformed JSON recovery, no browser la
   child.stdin.end('bad json\n{"jsonrpc":"2.0","id":1,"method":"initialize"}\n{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"debugger_state","arguments":null}}\n');
   const [code] = await once(child, "exit"); assert.equal(code, 0, err);
   const rows = out.trim().split("\n").map(JSON.parse); assert.equal(rows.length, 4); assert.equal(rows[0].error.code, -32700);
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 13);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 18);
   assert.equal(rows.find(r => r.id === 3).error.code, -32602);
 });
 test("project catalogs launch the separate debugger wrapper and discover its tools", async () => {
@@ -269,7 +377,7 @@ test("project catalogs launch the separate debugger wrapper and discover its too
   assert.equal((await once(child, "exit"))[0], 0, err);
   const rows = out.trim().split("\n").map(JSON.parse);
   assert.equal(rows.find(r => r.id === 1).result.serverInfo.name, "js-debugger-mcp");
-  assert.equal(rows.find(r => r.id === 2).result.tools.length, 13);
+  assert.equal(rows.find(r => r.id === 2).result.tools.length, 18);
   assert.equal(rows.find(r => r.id === 3).result.structuredContent.connected, false);
 });
 
@@ -338,7 +446,7 @@ test("wrapper validates port and missing-daemon calls fail without creating a se
   const daemon = await startDebuggerHttp({ port: 0 }); const port = daemon.server.address().port; await daemon.close();
   const result = await shell(["call", "debugger_state", "{}"], port);
   assert.equal(result.code, 1); assert.match(result.body.error, /start js-debugger-mcp.sh serve-http/);
-  assert.equal((await shell(["list-tools"], port)).body.length, 13);
+  assert.equal((await shell(["list-tools"], port)).body.length, 18);
 });
 test("daemon shutdown drops incomplete uploads before cleaning up a paused target", { timeout: 3000 }, async () => {
   const { s, c } = await attached(); paused(c);

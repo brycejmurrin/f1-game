@@ -33,6 +33,23 @@ callers; the Chrome CDP endpoint is a separate address supplied by its owner.
 Starting a process does not attach tools to the chat; project MCP changes need
 client reload/trust. Never edit global agent instructions for this workflow.
 
+## Get a Chrome to attach to
+
+```sh
+node tools/mcp/debug-chrome.mjs start     # static server 3456 + headless Chromium on 9222; refuses beside a test run
+node tools/mcp/debug-chrome.mjs status    # endpoint + targets;  stop: kills only its own PIDs
+```
+
+Not an MCP tool: the debugger still never launches Chrome.
+
+## Without pausing (hot loops, leaks)
+
+`debugger_logpoint` (value per hit into a bounded ring, read with `debugger_logpoint_read`),
+`debugger_exception_log` (start/read/clear/stop), `debugger_listeners` and
+`debugger_instances` (counts across restarts). `debugger_run` is always mutating (no
+`allowSideEffects`; only `debugger_evaluate` has it) and a new run abandons a hung one.
+`debugger_scripts` hides anonymous scripts and reports `total`/`truncated`.
+
 ## Reproduce → pause → inspect → resume
 
 1. Call `debugger_targets` with the real CDP `endpoint`; attach its exact

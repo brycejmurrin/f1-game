@@ -92,7 +92,7 @@ try {
   }
   const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "native-smoke", version: "1" } });
   check("stdio initialize and tool discovery", () => assert.equal(init.serverInfo.name, "js-debugger-mcp"));
-  assert.equal((await rpc("tools/list")).tools.length, 13);
+  assert.equal((await rpc("tools/list")).tools.length, 18);
   const target = (await call("debugger_targets", { endpoint })).targets.find(t => t.url === url + "/"); assert.ok(target);
   await call("debugger_attach", { endpoint, targetId: target.id });
   const script = (await call("debugger_scripts", { filter: "fixture.js" })).scripts[0]; assert.ok(script);
@@ -162,6 +162,35 @@ try {
   await call("debugger_run", { expression: "Promise.resolve(42)", awaitPromise: true });
   state = await until(s => s.operations.at(-1).status === "completed");
   check("async execution result", () => assert.equal(state.operations.at(-1).result.result.value, 42));
+  // T1/A1-A4/T5: scripts filter, non-pausing logpoint, exception log, listener and instance counts.
+  const named = await call("debugger_scripts", {});
+  check("scripts: anonymous hidden, totals reported", () => { assert.ok(named.scripts.every(x => x.url)); assert.equal(typeof named.total, "number"); assert.equal(named.truncated, false); });
+  const lp = await call("debugger_logpoint", { url: url + "/fixture.js", line: 9, expression: "n" });
+  assert.equal(lp.locations[0].line, 9);
+  await call("debugger_run", { expression: "window.finalResult = fixture()" });
+  state = await until(s => s.operations.at(-1).status === "completed");
+  const hits = await call("debugger_logpoint_read", { id: lp.id });
+  check("logpoint records without pausing", () => { assert.equal(state.paused, false); assert.deepEqual(hits.logpoints[0].items.map(i => i.v), [41]); assert.equal(hits.logpoints[0].hits, 1); });
+  await call("debugger_logpoint_read", { clear: true });
+  assert.equal((await call("debugger_logpoint_read", {})).logpoints[0].hits, 0);
+  check("logpoint ring clear", () => {});
+  await call("debugger_remove_breakpoint", { id: lp.breakpointId });
+  await call("debugger_exception_log", { action: "start" });
+  await call("debugger_run", { expression: 'try { throw Error("logged-by-smoke") } catch (e) {}' });
+  state = await until(s => s.operations.at(-1).status === "completed");
+  const elog = await call("debugger_exception_log", { action: "read" });
+  check("exception log records a caught exception without pausing", () => { assert.equal(state.paused, false); assert.ok(elog.entries.some(e => /logged-by-smoke/.test(e.message))); });
+  await call("debugger_exception_log", { action: "stop" });
+  await call("debugger_run", { expression: 'window.addEventListener("apexprobe", () => {}); window.Probe = class Probe {}; window.keep = [new Probe(), new Probe(), new Probe()]; 1' });
+  await until(s => s.operations.at(-1).status === "completed");
+  const ls = await call("debugger_listeners", { target: "window" });
+  check("listeners counted by type", () => assert.equal(ls.byType.apexprobe, 1));
+  const inst = await call("debugger_instances", { expression: "Probe" });
+  check("instances counted via queryObjects", () => assert.equal(inst.count, 3));
+  await call("debugger_run", { expression: "new Promise(() => {})", awaitPromise: true });
+  const abandoning = await call("debugger_run", { expression: "1" });
+  check("a new run abandons a hung one", () => assert.equal(abandoning.abandoned.length, 1));
+  await until(s => s.operations.at(-1).status === "completed");
   await page.evaluate(() => new Promise(resolve => {
     const iframe = document.createElement("iframe"); iframe.onload = resolve;
     iframe.srcdoc = "<script>window.frameValue = 1; //# sourceURL=iframe-debugger-fixture.js<\/script>";

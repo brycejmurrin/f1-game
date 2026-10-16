@@ -1,6 +1,7 @@
 // @doc Agent debugger session: pause generations, breakpoints, scopes and nonblocking execution.
 import { randomUUID } from "node:crypto";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
+import { recordException, traceMethods } from "./js-debugger-trace.mjs";
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
 const sourceLocation = p => ({ scriptId: p.scriptId, line: p.lineNumber + 1, column: (p.columnNumber ?? 0) + 1 });
@@ -16,6 +17,7 @@ export class DebugSession {
     this.cdp = null; this.pause = null; this.sequence = 0;
     this.scripts = new Map(); this.objects = new Set(); this.breakpoints = new Map();
     this.operations = new Map(); this.operationSequence = 0; this.connecting = false;
+    this.logpoints = new Map(); this.logpointSequence = 0; this.exceptionLog = null;
     this.generation = randomUUID();
   }
   resetPause() {
@@ -38,6 +40,11 @@ export class DebugSession {
   clearScripts() {
     this.scripts.clear();
     for (const bp of this.breakpoints.values()) bp.locations = [];
+  }
+  // Anonymous/eval scripts flood the table; evict those first so a named game.js survives.
+  evictable() {
+    for (const [id, script] of this.scripts) if (!script.url) return id;
+    return this.scripts.keys().next().value;
   }
   forgetScript(id) {
     this.scripts.delete(id);
@@ -79,12 +86,14 @@ export class DebugSession {
       this.target = { id: target.id, url: clip(target.url, 1000), title: clip(target.title, 200) };
       this.generation = randomUUID(); this.operations.clear(); this.scripts.clear();
       client.on("Debugger.scriptParsed", s => {
-        if (this.scripts.size >= 2000 && !this.scripts.has(s.scriptId)) this.forgetScript(this.scripts.keys().next().value);
+        if (this.scripts.size >= 2000 && !this.scripts.has(s.scriptId)) this.forgetScript(this.evictable());
         this.scripts.set(s.scriptId, { scriptId: s.scriptId, url: clip(s.url), startLine: s.startLine + 1, endLine: s.endLine + 1, executionContextId: s.executionContextId });
         for (const b of s.resolvedBreakpoints || []) this.resolveBreakpoint(b.breakpointId, b.location);
       });
       client.on("Debugger.breakpointResolved", b => this.resolveBreakpoint(b.breakpointId, b.location));
       client.on("Debugger.paused", event => {
+        // Exception log mode records and resumes: the page never visibly stops.
+        if (recordException(this, event)) return;
         this.resetPause();
         this.markOperations("pending", "paused");
         this.pause = { token: `${this.generation}:${++this.sequence}`, reason: event.reason,
@@ -108,7 +117,7 @@ export class DebugSession {
       });
       client.on("Debugger.globalObjectCleared", () => { this.resetPause(); this.clearScripts(); });
       client.on("disconnect", () => {
-        this.resetPause(); this.scripts.clear(); this.breakpoints.clear();
+        this.resetPause(); this.scripts.clear(); this.breakpoints.clear(); this.logpoints.clear(); this.exceptionLog = null;
         if (this.cdp === client) { this.cdp = null; this.target = null; }
       });
       await client.send("Runtime.enable");
@@ -126,10 +135,12 @@ export class DebugSession {
     const observed = () => { resumedEventObserved = true; };
     client.on("Debugger.resumed", observed);
     // Reset exception pauses and owned breakpoints before resuming the program.
+    this.exceptionLog = null;
     const commands = [["Debugger.setPauseOnExceptions", { state: "none" }],
       ...[...this.breakpoints.keys()].map(breakpointId => ["Debugger.removeBreakpoint", { breakpointId }]),
       ["Runtime.releaseObjectGroup", { objectGroup: this.generation }]];
     if (this.pause) commands.push(["Runtime.releaseObjectGroup", { objectGroup: this.pause.token }]);
+    if (this.logpoints.size) commands.push(["Runtime.evaluate", { expression: "delete globalThis.__apexDbgLog", silent: true }]);
     await Promise.all(commands.map(async ([method, params]) => {
       try { await client.send(method, params, 1000); } catch (e) { cleanupErrors.push(`${method}: ${clip(e.message)}`); }
     }));
@@ -142,11 +153,21 @@ export class DebugSession {
     }
     client.close(); this.cdp = null; this.target = null; this.resetPause();
     client.removeListener("Debugger.resumed", observed);
-    this.breakpoints.clear(); this.scripts.clear();
+    this.breakpoints.clear(); this.logpoints.clear(); this.scripts.clear();
     return { detached: true, cleanupErrors, cleanupWarnings, cleanupAcknowledged: cleanupErrors.length === 0, resumedEventObserved };
   }
-  async scriptsList(filter = "") {
-    this.connected(); return { scripts: [...this.scripts.values()].filter(s => s.url.includes(filter)).slice(0, 200) };
+  // T1: anonymous/eval scripts (empty URL) used to fill the 200-row cap and hide game.js.
+  // Named URLs sort first; `filter` is a substring (or a regex with regex:true).
+  async scriptsList(filter = "", { regex = false, includeAnonymous = false } = {}) {
+    this.connected();
+    let test = s => s.url.includes(filter);
+    if (regex) { const re = new RegExp(filter); test = s => re.test(s.url); }
+    const rows = [...this.scripts.values()].filter(s => (includeAnonymous || s.url) && test(s));
+    rows.sort((a, b) => (a.url ? 0 : 1) - (b.url ? 0 : 1));
+    const out = { scripts: rows.slice(0, 200), total: rows.length, truncated: rows.length > 200,
+      anonymousHidden: includeAnonymous ? 0 : [...this.scripts.values()].filter(s => !s.url && test(s)).length };
+    if (out.truncated) out.note = "More than 200 matches: narrow filter (or use regex:true).";
+    return out;
   }
   async source(scriptId, startLine, count) {
     if (!this.scripts.has(scriptId)) throw Error("Unknown/stale scriptId; list scripts again");
@@ -155,18 +176,34 @@ export class DebugSession {
     return { scriptId, startLine, totalLines: lines.length,
       source: lines.slice(startLine - 1, startLine - 1 + count).map((s, i) => `${startLine + i}: ${clip(s, 1000)}`).join("\n") };
   }
-  async setBreakpoint(url, line, column = 1, condition = "") {
+  // Remove the CDP breakpoint behind `bp` by id even when it never resolved (T4): an
+  // unresolved URL breakpoint is still armed in Chrome with its old condition.
+  async dropBreakpoint(bp) {
+    await this.connected().send("Debugger.removeBreakpoint", { breakpointId: bp.id });
+    this.breakpoints.delete(bp.id); this.logpoints.delete(bp.logpoint);
+  }
+  async setBreakpoint(url, line, column = 1, condition = "", extra = {}) {
+    const same = [...this.breakpoints.values()].find(b => b.url === url && b.line === line && b.column === column);
+    if (same) await this.dropBreakpoint(same).catch(e => { throw Error(`Cannot replace breakpoint ${same.id} (old condition may still be armed): ${e.message}`); });
     if (this.breakpoints.size >= 100) throw Error("Breakpoint limit 100 reached; remove unused breakpoints");
     const r = await this.connected().send("Debugger.setBreakpointByUrl", { url, lineNumber: line - 1,
       columnNumber: column - 1, condition });
-    const bp = { id: r.breakpointId, url, line, column, locations: [] };
+    const bp = { id: r.breakpointId, url, line, column, condition: clip(condition, 300), locations: [], ...extra };
     this.breakpoints.set(bp.id, bp);
     for (const p of (r.locations || []).slice(0, 5)) this.resolveBreakpoint(bp.id, p);
+    if (!bp.locations.length) {
+      const base = url.split(/[?#]/)[0].split("/").pop();
+      const near = [...this.scripts.values()].filter(s => s.url && base && s.url.split(/[?#]/)[0].endsWith(base)).map(s => s.url);
+      bp.warning = near.length && !near.includes(url)
+        ? `NO LOCATIONS: no parsed script has this exact URL. Use one of these exact URLs: ${[...new Set(near)].slice(0, 5).join(" | ")}`
+        : "NO LOCATIONS: the script is not parsed yet (it resolves on load) or the URL is wrong. Check debugger_scripts {filter} for the exact URL; a line past the script's end also never resolves.";
+    }
     return bp;
   }
   async removeBreakpoint(id) {
-    if (!this.breakpoints.has(id)) throw Error("Breakpoint is not owned by this session");
-    await this.connected().send("Debugger.removeBreakpoint", { breakpointId: id }); this.breakpoints.delete(id);
+    const bp = this.breakpoints.get(id);
+    if (!bp) throw Error("Breakpoint is not owned by this session");
+    await this.dropBreakpoint(bp);
     return { removed: id };
   }
   async control(action, token) {
@@ -202,7 +239,10 @@ export class DebugSession {
   run(expression, awaitPromise = false) {
     const client = this.connected();
     if (this.pause) throw Error("Use debugger_evaluate while paused");
-    if ([...this.operations.values()].some(o => ["pending", "unknown"].includes(o.status))) throw Error("An evaluation is pending or its execution is unknown; inspect state/resume or detach first");
+    // T5: a pending/unknown run no longer blocks. It is marked abandoned (its late result is
+    // dropped); the page JS it started is NOT cancelled.
+    const abandoned = [];
+    for (const o of this.operations.values()) if (["pending", "unknown"].includes(o.status)) { o.status = "abandoned"; abandoned.push(o.id); }
     const id = ++this.operationSequence, generation = this.generation;
     const operation = { id, status: "pending" }; this.operations.set(id, operation);
     if (this.operations.size > 10) this.operations.delete(this.operations.keys().next().value);
@@ -210,8 +250,9 @@ export class DebugSession {
     // prevent a later MCP request from inspecting and resuming it.
     client.send("Runtime.evaluate", { expression, awaitPromise, returnByValue: true,
       generatePreview: false, objectGroup: generation }, 600000).then(r => {
-      if (this.generation === generation) Object.assign(operation, { status: r.exceptionDetails ? "exception" : "completed", result: operationResult(r) });
-    }, e => { if (this.generation === generation) Object.assign(operation, { status: "unknown", error: clip(e.message) }); });
-    return { operationId: id, status: "pending", note: "Inspect debugger_state; a response timeout does not cancel JavaScript execution." };
+      if (this.generation === generation && operation.status !== "abandoned") Object.assign(operation, { status: r.exceptionDetails ? "exception" : "completed", result: operationResult(r) });
+    }, e => { if (this.generation === generation && operation.status !== "abandoned") Object.assign(operation, { status: "unknown", error: clip(e.message) }); });
+    return { operationId: id, status: "pending", ...(abandoned.length ? { abandoned } : {}), note: "Inspect debugger_state; a response timeout does not cancel JavaScript execution." };
   }
 }
+Object.assign(DebugSession.prototype, traceMethods());

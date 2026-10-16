@@ -1,0 +1,1 @@
+Fixed: the js-debugger MCP lists named scripts first and warns on unresolved breakpoints; added non-pausing logpoints, exception log, listener and instance counts, and a debug-chrome launcher CLI (#2534).
