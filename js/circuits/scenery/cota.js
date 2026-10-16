@@ -183,7 +183,7 @@
         });
       }
       motorhome(K(0.99), -1, 40, 30, 8, 60, { wall: [0.88, 0.88, 0.90], window: glass });
-      motorhome(K(0.04), -1, 38, 26, 7, 44, { wall: [0.80, 0.80, 0.83], window: glass });
+      motorhome(K(0.04), -1, 46, 26, 7, 44, { wall: [0.80, 0.80, 0.83], window: glass });
       // race-control / media tower at pit exit (s≈0.05, L) — set back 16m so inner face clear
       building(K(0.05), -1, 16, 16, 18, 22, { kind: "notch", wall: cotaBlue, window: glass, floor: 5 });
 
@@ -257,7 +257,7 @@
           conc: [0.74, 0.72, 0.68], concAlt: [0.66, 0.64, 0.60] });
 
       // rise +0.15: outer row sat 0.19 m under terrain on the T1 climb (ground-audit).
-      spectatorHill(0.088, 0.118, -1, 58, { rows: 5, rise: 1.45, depth: 2.2, density: 0.55, grass: dryGrass });
+      spectatorHill(0.088, 0.118, -1, 58, { rows: 5, rise: 2.95, depth: 2.2, density: 0.55, grass: dryGrass });
 
       amphiStage(0.76, 1, 68);
 
@@ -583,7 +583,7 @@
       billboard(K(0.40), -1, 18, 16, 6, [0.92, 0.5, 0.1]);
       billboard(K(0.50),  1, 18, 18, 6, [0.1, 0.6, 0.35]);
       billboard(K(0.70), -1, 16, 16, 6, redSteel);
-      billboard(K(0.88),  1, 18, 16, 6, cotaBlue);
+      billboard(K(0.885), 1, 22, 16, 6, cotaBlue);
 
       [0.04, 0.12, 0.20, 0.28, 0.43, 0.58, 0.64, 0.80, 0.90].forEach((s, i) => {
         marshalPost(K(s), (i % 2 ? 1 : -1), 7);
