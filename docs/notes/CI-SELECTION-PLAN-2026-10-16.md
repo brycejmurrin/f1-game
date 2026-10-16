@@ -1,98 +1,155 @@
-# CI test selection and tiering — plan (2026-10-16, DRAFT)
+# CI test selection and tiering — plan (2026-10-16)
 
 Third pass after [CICD-REVIEW-2026-10-16](CICD-REVIEW-2026-10-16.md) and
 [CICD-JOBS-REVIEW-2026-10-16](CICD-JOBS-REVIEW-2026-10-16.md). The ask (Bryce, 2026-10-16): dive into runs, how jobs
 and tests are selected and their history; research how diff-based selection is best set up; draft a plan.
-Status: DRAFT. Steps 0b and 0c (selection audit, catch history) are still being measured; items that depend on them
-say so, and nothing below is built until its evidence is in and its owner decision is made.
+Every proposal is built later in its own small PR; nothing here changes a workflow or tool. M = measured,
+E = estimated. Per-day figures scale 40 h of history by 0.6, or one day of merges (~170) by its rates.
 
 ## Plan
-- [x] 0a — Measure runner load and the train since train-on-push (§1)
-- [x] 0d — Literature and tool-doc research (§2)
-- [ ] **now:** 0b — Selection audit: overlap between guards and node suites, over-broad rules, tier fit, train reuse
-- [ ] 0c — Catch history (~40 h): what each job × tier catches; base-inherited, flake, merge-interaction reds
-- [ ] 1 — Train: spec legs wait for the guards (§3.1)
-- [ ] 2 — Draft tier: run never-failing jobs less often (§3.2; Bryce's decision, needs 0c)
-- [ ] 3 — Recall sampling from the nightly full run (§3.3)
-- [ ] 4 — Per-spec coverage map, additive only (§3.4; needs 3)
-- [ ] 5 — Budget and floor tests warn before they hit zero (§3.5)
-- [ ] 6 — Train spacing, decided by the 24 h re-measure (§3.6)
+- [x] 0a — Runner load and the train since train-on-push (§1)
+- [x] 0b — Selection audit: 160 merges replayed through today's selectors (§3)
+- [x] 0c — Catch history: 40 h, 2,097 runs, 284 failed jobs classified (§2)
+- [x] 0d — Literature and tool-doc research (§5)
+- [ ] **now:** Bryce's decisions D1–D3 (§6)
+- [ ] P1 — Node tier: drop fail-safes no node script reads; thin the tooling-fast overlap on every run (§4 P1)
+- [ ] P2 — Base reds: mark inherited reds, regenerate global-consistency artifacts on the train (§4 P2)
+- [ ] P3 — Draft tier: no Pure-node unit suites (D1)
+- [ ] P4 — Browser routing: `hud` group, `js/editor/`, CSS + unit pin (§4 P4)
+- [ ] P5 — Local tooling-fast receipt checked before CI spends a run (§4 P5)
+- [ ] P6 — Train: spec legs wait for guards; zero-catch legs move to the nightly (D2)
+- [ ] P7 — Merge only on a completed full tier (D3)
+- [ ] P8 — Sweeps: manifest edits that change no fleet-read key do not trigger the fleet (§4 P8)
+- [ ] P9 — Recall sampling from the nightly rotation; per-spec coverage map after it (§4 P9)
+- [ ] P10 — Flakes the tally found go to the quarantine or get fixed (§4 P10)
+- [ ] P11 — Train spacing, decided by the 24 h re-measure due 2026-10-17 07:55Z
 
-## 1. Measured (2026-10-16)
-Window 17:40–20:20Z unless stated; GitHub REST jobs of ~240 runs (runs over 90 s, newest 200 per workflow, so it
-undercounts). The pool: 31–42 of 40 slots busy in every 10-minute sample; PR runs 85 % of runner time, trains 15 %.
+## 1. Load and the train (M)
+Pool: 31–42 of 40 slots busy in every 10-minute sample (17:40–20:20Z); 40 h total 91,690 job-min ≈ 55,000/day
+against 57,600 slot-min/day. Queue wait, not test time, makes runs slow: train legs p50 14.8 min waiting vs
+4.2 min running at 20:00Z.
 
-| tier | runs | job-min/run | biggest jobs (job-min/run, failures/jobs) |
+| tier (17:40–20:20Z) | runs | job-min/run | biggest jobs (job-min/run, failures/jobs) |
 |---|---|---|---|
-| draft (`run-ci`) | 98 | 21.7 | Structural guards 10.0 (42/271), Pure-node unit suites 8.6 (0/239), smoke 0.8, sweeps 0.8 |
-| ready | 32 | 88.2 | Selected specs 49.6 (5/359), node suites 14.0 (0/134), guards 11.0 (2/96), sweeps 7.0 (2/77) |
-| train (since 07:51Z, 12.7 h) | 33 completed | 134 green / 205 red p50 | 9,132 job-min/day; ≈ 7,600 before train-on-push |
+| draft (`run-ci`) | 98 | 21.7 | Structural guards 10.0 (42/271), Pure-node unit suites 8.6 (0/239) |
+| ready | 32 | 88.2 | Selected specs 49.6 (5/359), node suites 14.0 (0/134), guards 11.0, sweeps 7.0 |
 
-Train: merge → live p50 42 / p90 114 min (48 / 107 before); wall 10–21 min idle, 34–48 min when the pool is full (all
-leg queue wait). 6 of 33 trains red: 3 selected-spec reds, 3 Structural-guards reds that each PR had passed alone
-(source-pin ceiling ×2, skill-hint routing floor) — each still ran every spec leg (205–266 job-min) after guards were
-red at minute 6–30.
+Train since train-on-push (12.7 h): 33 completed (27 green), 9,132 job-min/day vs ≈ 7,600 for the old fast tier +
+trains; merge → live p50 42 / p90 114 min (48 / 107 before). Wall 10–21 min idle, 34–48 min when the pool is full.
 
-## 2. What the literature says
+## 2. What each job catches (40 h, 2026-10-15 04:29Z → 10-16 20:30Z; M)
+Failed leaf jobs by class: BASE (inherited from a red tip) 166 (58 %), REAL 81, unresolved 22, train-first 5,
+FLAKE 7 + 2 pass-on-retry, INFRA 3. REAL failures form 52 episodes (one fix each); the train caught 0 of them first.
+
+| group × tier | job-min | REAL episodes | note |
+|---|---|---|---|
+| Structural guards, draft / ready | 6,410 / 6,737 | 14 / 14 | 27 of 28 failed in a file the author's required local `test:tooling-fast` runs |
+| Pure-node unit suites, draft | 9,432 | 5 | all 5 also run on the PR's first ready run; 0 unique; 0.4–4.9 h earlier |
+| Pure-node unit suites, ready / train+nightly | 10,276 / 5,297 | 4 / 0 | |
+| Selected specs, ready / train | 25,527 / 7,545 | 10 / 0 (3 of 4 train-first incidents) | never runs on drafts (`ci.yml:2210`) |
+| Geometry sweeps, ready / train | 3,458 / 1,537 | 3 / 1 | |
+| Smoke, Driving model, Parts census (all tiers) | 2,130 / 1,789 / 1,208 | 0 / 0 / 0 | |
+
+Base reds: 128 runs were red ONLY because the tip was red — 12,188 job-min (≈ 7,300/day). Ten spells of
+0.2–6.2 h (median ≈ 1.5 h); 7 of 10 were global-consistency tests (hash cards, counts, ratchet caps, baselines) that
+two individually green PRs broke together. Worst: source-pin-hygiene, 24 branches, 3,149 job-min.
+Merges: of 356, 284 (80 %) had a green full tier on the head, 42 a green fast tier only, 30 no completed gate;
+3 of the 4 train-first incidents followed such a merge. One draft branch pushed 44 times in 3 h (40 cancelled by its
+own next push), using CI as its edit loop. Top flake: capture-tools-regressions (8 first-try fails on 8 branches,
+unit file, not quarantinable today — the quarantine ledger is spec-only).
+
+## 3. How selection works, and where it is too broad (M, 160 merges replayed)
+Browser breadth comes from GROUP ROUTING, not fallbacks (select-specs reasons: matched 82, infra 65 — infra no
+longer widens — docs 13, unmatched 0); legs per merge: code PRs 14.4, tests/tools PRs 1.0. Node breadth comes from
+FALLBACKS: `node-plan.mjs:197` runs every script on any TRACKED path, `pick-unit-slices.mjs:120,285` starts all 9
+slices on any workflow file or unmatched path — 72 of 160 merges ran every node script. `NODE_PLAN_SKIP_TF` thins the
+150 files that guards also runs only on a matched plan (`node-plan.mjs:244`); `all()` keeps them (`:193`), so every
+train and every fallback PR plan runs them twice. Already efficient: unmatched fails closed; docs-only plans 0 legs;
+VM-twinned specs run once; smoke and physics-characterization never enter `selected`; circuit diffs are scoped; train
+tree-equal reuse fired on 2 of ~104 trains and reusing a PR's merge-ref verdict would cover ≤ 6 of 60 merges.
+
+## 4. Proposals, ranked by runner-minutes saved against signal lost
+| # | change | saves /day | signal lost | owner |
+|---|---|---|---|---|
+| P1 | node fail-safes + overlap | 2,000–2,700 E | none found | me |
+| P2 | base reds | up to ≈ 7,300 M red-only cost; ≥ 50 % E | none (the tip stays red) | me |
+| P3 | no Pure-node on drafts | ≈ 5,660 M (less after P1) | 5 catches move to ready, 0 unique | D1 |
+| P4 | browser routing | ≈ 2,200 E | a non-HUD module breaking the HUD reaches the train | me |
+| P5 | local tooling-fast receipt | ≈ 2,000 M + 45 red push cycles | none | me |
+| P6 | train guards-first + zero-catch legs | ≈ 1,100 E + ≈ 1,800 M | node/driving/census interaction reds move to the nightly | D2 |
+| P7 | merge only on a full tier | 0 runner-min; ≈ 3,300 job-min of train-first reds | merge latency = one ready run | D3 |
+| P8 | manifest fleet trigger | ≈ 250 E | none | me |
+| P9 | recall sampling, coverage map | quality | none (additive) | me |
+| P10 | flake fixes / quarantine | ≈ 1,500 M of flake-red runs | none | me |
+
+**P1.** A guards-only path list (`tests/data/ratchets.d/*` — the commit hook writes it — `ratchets.json`,
+`skill-routing/*`, `tolerance-exceptions.json`, `.github/{labels,gpu-census-request}.json`, non-ci workflows,
+templates) is dropped before the TRACKED test: every reader of those files is a tooling-fast file guards runs in the
+same run. `package.json` routes by the changed script names (all 18 of 18 diffs touched only `scripts`); any other
+key stays fail-safe. Slice rules for `js/editor/`, `js/roster.js`, `.agents/`, `plugins/`. `all()` sets `skipTf: true`
+— guards and node suites share the `fast_tier_run == ''` gate, so the overlap always runs once in guards. Modelled
+node job-min per PR run 14.4 → 10.7.
+**P2.** `ci-verdict` reports a failure as INHERITED when it is exactly a test named by `flake-tally --base-red` or
+the train's last red verdict, and the PR still shows it; a PR that also changes that test's files is never marked
+inherited. Prevention: a train-side bot regenerates the global-consistency artifacts the way `ratchets.d/` handles
+ratchets, so two green PRs no longer leave the tip red for 1.5 h.
+**P4.** A `hud` browser group (hud-layout, ui-button-touch, ui-scale) routed by HUD paths instead of all of
+`js/ui/`, `css/` and the `js/audio/` fallback (hud-layout: 22 % of selected minutes; the replay drops it from 23 of 58
+selections, −794 of 2,001 planner-min; its only reds were one timing-out test). `js/editor/` routes track-designer
+only (`pick-tests.mjs:114` names it, yet routes all of `modes`: the career trio, 77 planner-min). A CSS change shipped
+with its `tests/unit` pin stays a CSS change (`change-kind.mjs:20`; 4 of 160 merges planned 9–10 legs where
+`cssSpecs()` picks 1–2).
+**P5.** `test:tooling-fast` writes a receipt keyed on the tree hash; the pre-push hook refuses a code push whose tree
+has none, so CI stops being the edit loop (27 of 28 guards catches, 3,265 job-min in 45 runs).
+**P6.** In the `workflow_call` tier only: `selected` needs `guards` (3 guard-red trains in 12.7 h each ran every leg,
+≈ 200 job-min); Pure-node, Driving model and Parts census leave the train for the nightly (0 catches in 5,297 + the
+others' job-min). Smoke stays on the train.
+**P8.** `tools/manifest.cjs` triggers the fleet sweep only when a fleet-read export changes (keys derived by grep;
+9 of 11 manifest-only fleet runs changed none).
+**P9.** Each nightly failure that is not a flake and was green the last time that group ran: replay `select-specs`
+over the PRs merged between the two runs; a spec no PR selected is a MISSED case → an issue and a `select-recall`
+CASE (Meta's learning runs, sampled by group, no extra runner cost). After two weeks of recall data, a per-spec
+Chromium `page.coverage` map (functions executed below each IIFE body) ADDS specs to the rule-based selection.
+**P10.** capture-tools-regressions (8 branches), test-bg-outcome zombie, voice-pack ensureStaged, tlx-probes boot,
+track-switch-memory: fix, or extend the quarantine ledger to unit files.
+
+Checked and not proposed: reusing the draft verdict at ready already exists (`ci.yml:502`, same head SHA) and fired
+on 4 of 69 ready runs — ready runs follow a new push or sync; the catch-history figure of ≈ 4,400/day for "same-head
+reuse" needs re-deriving before anything is built on it.
+
+## 5. What the literature says
 - Judge a selector by faulty-CHANGE recall: Meta's deployed selector reports > 99.9 % of faulty changes while catching
-  > 95 % of individual failures, selecting under a third of dependency-based tests, at half the cost
-  ([arXiv:1810.05286](https://arxiv.org/abs/1810.05286)). `select-recall.mjs` already holds this line.
-- Keep measuring: Meta runs every dependent test on a sample (≈ a quarter of changes) off-peak and retrains weekly
-  behind an assertion (e.g. selection rate < 0.3 at test recall 0.9); flaky failures are filtered by retry first.
+  > 95 % of individual failures, selecting under a third of dependency-based tests, at half the cost; it measures
+  recall on off-peak "learning runs" of every dependent test (≈ a quarter of changes) and retrains weekly behind an
+  assertion; flaky failures are filtered by retry first ([arXiv:1810.05286](https://arxiv.org/abs/1810.05286)).
 - Almost nothing fails, and what fails is close to the change: of 5.5 M affected Google targets 91.3 % never failed,
   1.23 % ever caught a breakage or fix, pass:fail 99:1, targets > 10 dependency edges away hardly ever break; run
   never-failing tests less often, batched after submission ([Memon et al. 2017](https://research.google/pubs/pub45861/)).
-- Presubmit selects; a batched full run backstops (Meta "stabilization" every few hours, Google TAP postsubmit
-  milestones; Microsoft TIA falls back to all tests when it cannot analyse a commit and always adds previously failing
-  and new tests — [docs](https://learn.microsoft.com/en-ie/previous-versions/azure/devops/pipelines/test/test-impact-analysis?view=tfs-2017)).
+- Presubmit selects; a batched full run backstops (Meta "stabilization", Google TAP postsubmit milestones; Microsoft
+  TIA falls back to all tests when it cannot analyse a commit —
+  [docs](https://learn.microsoft.com/en-ie/previous-versions/azure/devops/pipelines/test/test-impact-analysis?view=tfs-2017)).
 - Dynamic per-test file dependencies are cheap and near-safe: Ekstazi saved 32 % mean (54 % on long suites) over 615
   revisions ([abstract](https://users.ece.utexas.edu/~gligoric/papers/abstracts/GligoricETAL15Ekstazi.txt)).
 - Playwright `--only-changed` (1.46) follows test-file imports ([release notes](https://playwright.dev/docs/release-notes));
-  this repo's specs boot the whole game through `<script>` tags, so it would select everything. Chromium's
+  these specs boot the whole game through `<script>` tags, so it would select everything. Chromium's
   [`page.coverage`](https://playwright.dev/docs/api/class-coverage) returns V8 function ranges per script URL instead.
 - Never path-filter a required workflow; gate jobs with `if:` and require one `always()` aggregator
   ([GitHub](https://docs.github.com/en/enterprise-server@3.19/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks),
   [Mergify](https://mergify.com/blog/path-filters-are-not-a-ci-gate)). ci.yml's `CI` verdict job already is this.
 
-## 3. Proposals
-### 3.1 Train: spec legs wait for the guards
-In the `workflow_call` tier only, `selected` gains `guards` in `needs:` and `needs.guards.result == 'success'` in its
-`if:`; the `CI` verdict still fails on the red guards, so nothing is hidden. Saves ≈ 200 job-min per guard-red train
-(3 in 12.7 h ≈ 1,100 job-min/day). Cost: green trains start legs after guards (5–9 min idle) instead of at once;
-legs already wait 0–22 min for a runner, so the wall grows by less than the guards time. PR tiers unchanged.
-Verify: ci-coverage pin on the `selected` needs/if; the next red-guards train shows legs `skipped`.
+## 6. Decisions for Bryce
+- **D1 — Pure-node unit suites off draft runs.** ≈ 5,660 job-min/day (≈ 10 % of the pool) for 5 catches in 40 h, all
+  also caught by the PR's first ready run, 0.4–4.9 h later. Recommendation: do P1 first, re-measure two days, then
+  drop them from drafts unless the diff reaches files outside the tooling-fast set.
+- **D2 — The train runs only what can catch a merge interaction.** Spec legs wait for guards; Pure-node, Driving
+  model and Parts census move to the nightly (0 train catches in 40 h). ≈ 2,900 job-min/day; train wall +≈ 5 min when
+  idle. Recommendation: yes.
+- **D3 — Merge only on a completed full tier.** 20 % of merges landed without one; 3 of 4 train-first reds followed
+  such a merge. Cost: no runner-minutes; a merge waits for one ready run. Mechanism: `ready-gate`/Merge Desk refuses,
+  or `CI` becomes a required check in the ruleset (Bryce's setting). Recommendation: yes, through the ruleset.
 
-### 3.2 Draft tier: run never-failing jobs less often (Bryce's decision)
-Pure-node unit suites: 8.6 job-min per draft run, 0 failures in 239 draft jobs here (8 of 3,390 in the first review's
-21.7 h, all tiers), ≈ 13 % of the pool. They stay on ready runs and trains. Narrow form: run them on a
-draft only when the diff reaches files outside the `test:tooling-fast` set the author must run before pushing.
-Waits for 0c: how many of those 8 reds were first caught on a draft run, and how much later the ready tier saw them.
-
-### 3.3 Recall sampling from the nightly rotation
-The nightly runs ONE browser group a night on the tip (`tools/ci/nightly-group.mjs` rotates every rotatable group),
-so each group is a full, unselected run of its specs every rotation cycle. For each nightly failure that is not a
-flake (flake-tally) and was green the previous time that group ran, find the merged PRs between the two runs and
-replay `select-specs` on each PR's diff; a failing spec that no PR selected is a MISSED case: open or update one
-issue and add a `select-recall` CASE. That is Meta's "learning run" at no extra runner cost, sampled by group rather
-than by change. Report change recall and selection rate weekly in the flake tally.
-
-### 3.4 Per-spec coverage map (additive; after 3.3 gives a baseline)
-In the nightly rotation (each group in turn), collect `page.coverage` JS coverage per spec (Chromium only, as CI is) and keep the functions with
-count > 0 below each IIFE body (every file's top level runs at boot, so file-level coverage would select everything).
-Store the map as a nightly artifact; `select-specs` reads the newest one and ADDS specs whose executed functions
-intersect the diff's changed functions (hunks mapped to function ranges with espree, already a dependency), then
-orders by history. It never removes a rule-selected spec until 3.3 shows its recall over ≥ 2 weeks.
-
-### 3.5 Budget and floor tests warn before they hit zero
-The guard-red trains came from aggregate budgets (source-pin raw-read ceiling, skill-hint routing floor) that two PRs
-each passed alone. A PR whose change leaves less than N headroom prints a warning annotation naming the budget and
-the open PRs touching the same files, so the second PR syncs first. Needs 0c's count of such reds.
-
-### 3.6 Train spacing
-A minimum gap between train starts (e.g. 30 min) would cut ≈ 62 → ≈ 40 trains/day (≈ −3,000 job-min/day) for
-≈ +10–15 min merge → live p50. Decided by the 24 h re-measure due 2026-10-17 07:55Z.
-
-## 4. Not changing, with the reason
-- Ready-tier selected legs (49.6 job-min/run, the only place spec reds show before the train).
-- The train re-running selected specs: merged trees differ from the trees the PRs tested.
-- Draft-tier guards: 42 of 271 draft guard jobs failed; 0c says how many were base-inherited.
+## 7. Not changing, with the reason
+- Ready-tier selected legs (10 REAL episodes in 40 h; each miss becomes a ≈ 1,600 job-min train-first incident).
+- Selected specs on the train: the only catcher of 3 of the 4 train-first incidents.
+- Draft-tier guards: 14 REAL episodes, and docs or `.claude/` pushes skip the train, so the PR is their only guards run.
+- Geometry sweeps (4 catches), Emulated VR (1), smoke on the train.
