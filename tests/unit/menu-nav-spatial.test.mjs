@@ -356,3 +356,39 @@ for (const className of ["dh-tpopup-body", "dh-telem-main", "dh-telem-side"]) {
     assert.equal(pane.scrollTop, 600);
   });
 }
+
+// The DISPLAY page's BACK sits in the foot, off to one side of the pane's last
+// control. Down off the end of a pane used to reach it only when the band
+// happened to be empty, which changed with every row added above (#2352). Scoped
+// to a control INSIDE a scroll pane and a target OUTSIDE it, so Down from BACK
+// (no pane) and in-band successors are untouched — the Zandvoort trap stays shut.
+test("step(): ArrowDown off the last control of a scroll pane lands on the foot below it, not the wrap to the top", () => {
+  const { step } = loadMenuNav();
+  const top = el("first", 153, 40, 320, 40);
+  const last = el("last", 153, 480, 320, 40);
+  const back = el("back", 582, 718, 116, 61);
+  const pane = { contains: (n) => n === top || n === last };
+  top.closest = last.closest = () => pane;
+  assert.equal(step(last, 0, 1, [top, last, back]).id, "back");
+});
+
+test("step(): the pane's foot never beats an in-band successor, and Down from the foot does not enter the pane", () => {
+  const { step } = loadMenuNav();
+  const top = el("first", 153, 40, 320, 40);
+  const mid = el("mid", 153, 300, 320, 40);
+  const last = el("last", 153, 480, 320, 40);
+  const back = el("back", 582, 718, 116, 61);
+  const pane = { contains: (n) => n === top || n === mid || n === last };
+  top.closest = mid.closest = last.closest = () => pane;
+  assert.equal(step(mid, 0, 1, [top, mid, last, back]).id, "last", "in-band successor wins");
+  assert.equal(step(back, 0, 1, [top, mid, last, back]).id, "first", "BACK (no pane) wraps as before");
+});
+
+test("step(): the pane-foot phase is scoped to a pane and sits between the sideways pass and the vertical wrap", () => {
+  const after = extractFn(SRC, "step").split(/if \(best\) return best;/)[1];
+  assert.match(after, /from\.closest && from\.closest\(SCROLLERS\)/, "only a control inside a scroll pane");
+  assert.match(after, /pane\.contains\(el\)/, "only targets outside that pane");
+  assert.ok(after.search(/pickSideways\s*\(/) < after.search(/from\.closest && from\.closest\(SCROLLERS\)/)
+    && after.search(/from\.closest && from\.closest\(SCROLLERS\)/) < after.search(/if \(dy && edge\) return edge/),
+    "sideways pass, then the pane foot, then the vertical wrap");
+});
