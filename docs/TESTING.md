@@ -1024,51 +1024,41 @@ the line.
 
 ---
 
-### Release train (2026-09-10)
+### Release train (2026-09-10; on push since 2026-10-16)
 
-`pages.yml` no longer runs on push. The deploy branch took 140-300 commits a
-day from several agents when the train was designed (3-131 a day measured
-2026-10-14), and a deploy per push meant a 14-job gate and a Pages
-deployment per commit, gates cancelling each other in bursts, and the account's
-20 job slots spent re-testing trees one commit apart. Two tiers replace it:
+`pages.yml` runs on every code push to the deploy branch (prose paths
+ignored), on the hourly cron `41 * * * *` as a backstop (GitHub's scheduler
+runs this repository's crons HOURS late) and on a manual `workflow_dispatch`
+= "deploy now". The train takes the tip, gates it once and publishes exactly
+that commit; the workflow-level `pages-train-<ref>` group keeps one running
+and ONE pending run, and a newer push replaces the pending one, so a merge
+burst costs one gate per gate length and the train always takes the newest
+tip (GitHub's default `queue: single`; the 2026-10-16 CI/CD review, #2333,
+finding 3). From 2026-09-10 to 2026-10-16 a deploy-branch push ran a FAST
+tier in `ci.yml` (guards, node suites, census, driving-model, selection in a
+no-cancel `ship-fast` group) whose green poked the train, and the train
+re-armed itself for a tip that went green mid-run; measured on 2026-10-15/16
+that tier reached 38 % of merges (184 pushes, 112 replaced while pending)
+and cost 5,587 job-minutes a day for verdicts the train repeated, so the
+push starts the train directly and the merge's verdict is the train's
+`ci / …` rows (`node tools/ci/ci-watch.mjs --sha <merge sha>` follows them,
+or says `superseded` when a newer push replaced the pending train).
 
-- **Fast tier, per push to the deploy branch** (`ci.yml`, `on: push`):
-  Structural guards as two parallel tooling-fast halves
-  (`Structural guards (tooling A)` / `(tooling B)`) plus the aggregator
-  still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 —
-  `ci.yml` header; #1075), node suites, parts census, driving-model,
-  change-aware selection. Five to nine minutes, four slots, its own
-  concurrency group so sessions never cancel each other's verdict. This run
-  is the answer to "did my push break anything".
-- **The train** (`pages.yml`; started by `ci.yml`'s `poke-train` job when a
-  deploy-branch push's fast tier goes green, by a manual `workflow_dispatch`
-  = "deploy now", by its own `rearm` job when the tip moved on to a green
-  fast tier while it ran, and by the hourly cron `41 * * * *` as a backstop — GitHub's
-  scheduler runs this repository's crons HOURS late: the 03:17 nightly is
-  created between 07:54 and 08:18 on each of its last five days, and the
-  train's first three ticks on 2026-09-10 never arrived at all): `verdict`
-  refuses any branch but `DEPLOY_BRANCH`, reads the
-  live shell's `apex-sha` (`tools/ci/pages-live-sha.sh`), stops in one slot when
-  the tip is already live, otherwise hands the live commit to `ci.yml` as
-  `before_sha` (so the sweeps, smoke and selection filters diff against exactly
-  what is live) and skips the gate when the tip's tree already has a green run
-  (`tools/ci/pages-reuse-verdict.sh`). The tip's own fast tier counts while its
-  run is still in progress once the tree-only jobs are green (the poking run
-  always is), and a tip whose fast tier concluded `failure` stops the train at
-  the verdict (retired 2026-10-16 with the ship fast tier). The gate group never cancels: a running
-  gate finishes, the next tick waits, a later tick replaces the waiting one.
-  Then `publishable`, `deploy` (exact artifact, monotonic) and `verify-live` as
-  before. Measured 2026-10-14: the gate's median is 20.5 min and a gated
-  publish (dispatch to live) 23 min median, 73 min p90 — queue waits in the
-  03-08 UTC bursts, not the tests, make the tail. After a train, `rearm`
-  dispatches one more for a tip that went green while it ran (only when no
-  other pages.yml run is queued or running), so a commit no longer waits for
-  the cron; and `poke-train` pokes from a superseded green commit unless the
-  tip's fast tier is red (a still-pending tip used to block every poke in a
-  merge burst, 2026-10-14).
+`verdict` refuses any branch but `DEPLOY_BRANCH`, reads the live shell's
+`apex-sha` (`tools/ci/pages-live-sha.sh`), stops in one slot when the tip is
+already live, otherwise hands the live commit to `ci.yml` as `before_sha` (so
+the sweeps, smoke and selection filters diff against exactly what is live;
+never the push's previous tip, which may be unpublished) and skips the gate
+when the tip's tree already has a green run (`tools/ci/pages-reuse-verdict.sh`).
+The gate group never cancels: a running gate finishes, the next push waits, a
+later push replaces the waiting one. Then `publishable`, `deploy` (exact
+artifact, monotonic) and `verify-live` as before. Measured 2026-10-14: the
+gate's median is 20.5 min and a gated publish (dispatch to live) 23 min
+median, 73 min p90 — queue waits in the 03-08 UTC bursts, not the tests, make
+the tail.
 
 Inside `ci.yml` a Pages call is recognised by its `concurrency_key` (the
-caller's event is `schedule` or `workflow_dispatch` there, never `push`): the
+caller's event is `push`, `schedule` or `workflow_dispatch` there): the
 sweeps and smoke ship filters accept it as a gate with a base, the smoke job
 takes the 50-minute cap and runs `smoke.spec.js` rather than the nightly's wide
 group, and `select` plans against the live commit. `tests/unit/ci-coverage.test.mjs`
@@ -1118,7 +1108,7 @@ Two always-judged checks give the gate fixed names:
   failed). Since 2026-10-10 (R3-CI-HEALTH-2) `selected` itself needs only
   `select`, so the browser legs start as soon as the plan exists instead of
   queueing behind the ~6 min guards shards; `selected-verdict`, `ci-verdict`
-  and `poke-train` still need `guards`, so a guards red still fails the gate. A needed job skipped by its `if:` is a pass; a needed failure or
+  still need `guards`, so a guards red still fails the gate. A needed job skipped by its `if:` is a pass; a needed failure or
   cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
   It is the only check that also carries smoke, the sweeps, renderer-macos and
   xr, and since 2026-10-15 it is the deploy branch's ONE required check (an
@@ -1160,11 +1150,10 @@ Two always-judged checks give the gate fixed names:
 - `Emulated VR (IWER / xr-emulated)` when the diff reaches XR paths
 - `Pack smoke (ubuntu-latest)` (`desktop.yml`, packaging paths only)
 - `Golden menus on a runner (trial, non-blocking)` (nightly/dispatch only, advisory)
-- `Poke the release train` (deploy-branch push fast tier only — not PRs)
 
 Heavy jobs use one shared skip expression on deploy pushes and draft PRs (`github.event.pull_request.draft` inside `ci.yml`; `desktop.yml` uses `draft == false`). `ready_for_review` is listed on every `pull_request` trigger so marking ready starts the full tier on the same `head_sha` (draft fast runs may cancel — AGENTS.md rule 8 dedupe).
-| **Ship push** | push to deploy branch | Fast tier only; a green run pokes the Pages train from the tip, or from a superseded commit when no train is queued or running. Pushes share one no-cancel `ship-fast` group: the running fast tier finishes and only the newest waiting push stays queued (`docs/notes/CI-MERGE-BURST-2026-10-03.md`). |
-| **Pages train** | poke / dispatch / cron | Full gate against live `before_sha`; gate group never cancels. |
+| **Ship push** | push to deploy branch | Starts `pages.yml` directly (2026-10-16): no ci.yml run of its own. |
+| **Pages train** | push / dispatch / cron | Full gate against live `before_sha` (ci.yml called with `concurrency_key`); one running + one pending, the newest push replaces the pending one; never cancelled mid-run. |
 | **Nightly** | `ci.yml` schedule `17 4 * * *` (04:17 UTC) | Rotating browser group (`nightly-group.mjs`) instead of smoke-only; renderer / gfx on real GPU; coverage for the ~61 specs `select-specs` never picks. `gpu-census.yml` runs on its own staggered cron (`47 5 * * *`, 05:47 UTC) for adapter identity. |
 
 Every `pull_request` workflow uses a per-PR concurrency group with

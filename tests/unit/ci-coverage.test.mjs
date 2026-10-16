@@ -311,9 +311,13 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
     return { list: out, at };
   };
   const onBlock = ciWorkflow.slice(ciWorkflow.indexOf("\non:\n"), ciWorkflow.indexOf("\njobs:\n"));
-  const pushIgnore = listAfter(onBlock, "paths-ignore");
-  assert.ok(pushIgnore.list.length >= 3, `ci.yml push paths-ignore parsed to ${pushIgnore.list.length} entries`);
-  assert.ok(pushIgnore.at < onBlock.indexOf("  pull_request:"), "the one paths-ignore list must be the push one");
+  // The prose paths-ignore lives on pages.yml's push since 2026-10-16 (the
+  // train runs on push; ci.yml has no push trigger).
+  const pagesOn = pagesWorkflow.slice(pagesWorkflow.indexOf("\non:\n"), pagesWorkflow.indexOf("\npermissions:"));
+  const pushIgnore = listAfter(pagesOn, "paths-ignore");
+  assert.ok(pushIgnore.list.length >= 3, `pages.yml push paths-ignore parsed to ${pushIgnore.list.length} entries`);
+  assert.ok(pushIgnore.at < pagesOn.indexOf("  schedule:"), "the one paths-ignore list must be the push one");
+  assert.doesNotMatch(onBlock, /^\s+paths-ignore:/m, "ci.yml carries no paths-ignore list at all: no push trigger, an unfiltered pull_request");
   const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
   assert.ok(prBlock.includes("types: [opened, synchronize, reopened, ready_for_review, labeled]"), "the pull_request block was sliced whole");
   assert.doesNotMatch(prBlock, /paths(-ignore)?:/,
@@ -495,12 +499,11 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // unique run_id group (the nightly must not share the tip's group —
   // run 2758). The train is not in this group: pages.yml passes a unique
   // concurrency_key. PR branches keep newest-wins cancel on pull_request.
-  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && \(github\.event\.label\.name != 'run-ci' \|\| !github\.event\.pull_request\.draft\)\) && format\('label-\{0\}', github\.run_id\)\) \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| \(github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && 'ship-fast'\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
-    "PR runs of one branch share a group; dispatched/scheduled runs keep run_id; deploy-branch pushes share ship-fast");
+  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && \(github\.event\.label\.name != 'run-ci' \|\| !github\.event\.pull_request\.draft\)\) && format\('label-\{0\}', github\.run_id\)\) \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
+    "PR runs of one branch share a group; dispatched/scheduled runs keep run_id (no ship-fast since 2026-10-16: pages.yml runs on push)");
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
     "newest wins on PR only; ship pushes must not cancel each other");
-  assert.match(ciWorkflow, /&& 'ship-fast'\)/,
-    "deploy-branch pushes share one no-cancel group: one fast tier at a time in a burst");
+  assert.doesNotMatch(ciWorkflow, /'ship-fast'/, "the deploy-branch fast tier and its group are gone (2026-10-16)");
   assert.doesNotMatch(ciWorkflow, /'ship-push'/,
     "shared ship-push group is retired — it cancelled earlier merges mid-run");
   // The deploy gate is unaffected: its caller supplies a unique key. The train
@@ -1502,25 +1505,27 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   // deploy branch is exempt by construction: it reaches this workflow through
   // pages.yml's `uses:` call, which no path filter touches.
   const onBlock = ciWorkflow.slice(ciWorkflow.indexOf("\non:\n"), ciWorkflow.indexOf("\npermissions:"));
-  const pushBlock = onBlock.slice(onBlock.indexOf("  push:"), onBlock.indexOf("  pull_request:"));
+  // NO push trigger since 2026-10-16 (CI/CD review #2333 finding 3): the deploy branch's
+  // push starts pages.yml, which calls this workflow; the prose paths-ignore moved there.
+  assert.doesNotMatch(onBlock, /^  push:/m, "ci.yml runs on pull_request, schedule, dispatch and workflow_call only");
+  const pagesOn = pagesWorkflow.slice(pagesWorkflow.indexOf("\non:\n"), pagesWorkflow.indexOf("\npermissions:"));
+  const pushBlock = pagesOn.slice(pagesOn.indexOf("  push:"), pagesOn.indexOf("  schedule:"));
   const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
-  assert.match(pushBlock, /paths-ignore:\n(?:\s+- "[^"]+"\n)+/, "push must carry a paths-ignore list");
+  assert.match(pushBlock, /paths-ignore:\n(?:\s+- "[^"]+"\n)+/, "the train's push must carry a paths-ignore list");
   for (const p of ['"docs/**"', '"**/*.md"', '".claude/**"', '".cursor/**"']) assert.ok(pushBlock.includes(`- ${p}`), `${p} missing from paths-ignore`);
   // pull_request is NOT filtered (2026-09-30): every required check must report on every PR.
   assert.doesNotMatch(prBlock, /paths-ignore:/, "a path-filtered pull_request trigger leaves prose-only PRs unmergeable under branch protection");
-  // The deploy branch is NOT ignored any more: a push there gets the FAST tier
-  // (pages.yml is a train and no longer runs on push), so the push must reach
-  // this workflow, and the two heavy browser jobs must opt out of that tier by
-  // the one shared expression.
-  assert.doesNotMatch(pushBlock, /branches-ignore/, "deploy-branch pushes must reach ci.yml for the fast tier");
+  // The deploy branch's push must reach the train; the heavy browser jobs still
+  // opt out of a draft PR's fast tier by the one shared expression.
+  assert.doesNotMatch(pushBlock, /branches-ignore/, "deploy-branch pushes must reach pages.yml");
   // Draft synchronize is CI-free unless label run-ci (2026-10-15 fast-track); heavy
   // jobs still wait for `ready_for_review`, which must therefore be a trigger type.
   const fastTier = "!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))";
   assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review, labeled\]/,
     "labeled run-ci must be able to opt draft PRs into CI");
   assert.match(ciWorkflow, /draft-ci-skipped:/, "draft pushes without run-ci report a skip job");
-  // Only the deploy branch pushes start a run; a topic branch runs through its PR.
-  assert.match(pushBlock, /branches:\n\s+- claude\/f1-game-project-26h3ng\n/, "push must be scoped to the deploy branch");
+  // Only the deploy branch's push starts a train; a topic branch runs through its PR.
+  assert.match(pushBlock, /branches:\n\s+- claude\/f1-game-project-26h3ng\n/, "the train's push must be scoped to the deploy branch");
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
   const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  sweeps-roll-up:\n"));
   assert.ok(smokeJob.includes(fastTier), "smoke must sit out the deploy branch's fast tier with the shared expression");
@@ -1659,12 +1664,12 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
     { name: "Golden menus on a runner (trial, non-blocking)", conclusion: "skipped" }];
 
   const green = verdict([ci(B)]);
-  assert.equal(green.out, `::notice::base ${B.slice(0, 7)} was green — ci.yml run 11`);
+  assert.equal(green.out, `::notice::base ${B.slice(0, 7)} was green — run 11`);
   assert.match(green.summary, /### Base verdict/);
   assert.match(green.summary, new RegExp(`base \`${B.slice(0, 7)}\` was \\*\\*green\\*\\*`));
 
   const red = verdict([ci(B, { conclusion: "failure" })], failed);
-  assert.equal(red.out, `::notice::base ${B.slice(0, 7)} was red on: Per-circuit geometry sweeps, Selected specs (change-aware gate) — ci.yml run 11`);
+  assert.equal(red.out, `::notice::base ${B.slice(0, 7)} was red on: Per-circuit geometry sweeps, Selected specs (change-aware gate) — run 11`);
   assert.doesNotMatch(red.out, /Structural guards|Golden menus/, "a green or skipped job is not a failure");
   assert.match(red.summary, /red on: Per-circuit geometry sweeps/);
 
@@ -1672,11 +1677,15 @@ test("base-verdict.sh: the newest deploy-branch run strictly below this head, na
   assert.match(verdict([ci(C, { id: 99, conclusion: "failure" }), ci(X, { id: 98, conclusion: "failure" }), ci(B)]).out,
     new RegExp(`base ${B.slice(0, 7)} was green`),
     "a run of this head, and a run on a commit that is not an ancestor, are both skipped");
-  assert.match(verdict([ci(B, { id: 7 })], [], { GITHUB_RUN_ID: "7" }).out, /no completed ci\.yml run/,
+  assert.match(verdict([ci(B, { id: 7 })], [], { GITHUB_RUN_ID: "7" }).out, /no completed ci\.yml \/ pages\.yml run/,
     "a run never reads itself as its own base");
-  assert.match(verdict([ci(B, { path: ".github/workflows/pages.yml" })]).out, /no completed ci\.yml run/,
+  // 2026-10-16: the deploy branch's push starts pages.yml (the train calls ci.yml), so a
+  // pages.yml run on the base IS the base verdict; any other workflow still is not.
+  assert.match(verdict([ci(B, { path: ".github/workflows/pages.yml" })]).out, new RegExp(`base ${B.slice(0, 7)} was green`),
+    "a pages.yml train on the base is the base verdict");
+  assert.match(verdict([ci(B, { path: ".github/workflows/fleet.yml" })]).out, /no completed ci\.yml \/ pages\.yml run/,
     "another workflow's verdict is not this gate's base");
-  assert.match(verdict([ci(B, { status: "in_progress", conclusion: null })]).out, /no completed ci\.yml run/,
+  assert.match(verdict([ci(B, { status: "in_progress", conclusion: null })]).out, /no completed ci\.yml \/ pages\.yml run/,
     "a run still going has no verdict to report");
   assert.match(verdict([ci(B, { conclusion: "cancelled" })], failed).out, /was red \(cancelled\) on: Per-circuit/,
     "a cancelled base is red, and says which kind");

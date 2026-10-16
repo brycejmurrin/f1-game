@@ -145,42 +145,19 @@ run-name: "${{ (github.event_name == 'pull_request' && github.event.action == 'l
 # `needs:`.
 
 on:
-  push:
-    # THE DEPLOY BRANCH ONLY (2026-09-24, decision 1c). A `claude/<topic>`
-    # branch gets CI through its DRAFT PR (AGENTS.md rule 12 opens one after
-    # the first push): every branch push used to start a run that its own PR
-    # event cancelled seconds later (rule 8's dedupe), and 172 jobs queued
-    # against ~20 slots on 2026-09-23. A branch pushed with no PR starts no
-    # run — `ci-watch.mjs` says `= ci none`, and the fix is to open the PR.
-    branches:
-      - claude/f1-game-project-26h3ng
-    # EVERY branch, the deploy branch included (2026-09-10). pages.yml no
-    # longer runs on push — it is a release train (three ticks an hour) that
-    # calls this workflow for the FULL gate on the tip. A push to the deploy
-    # branch gets the FAST tier here instead: guards, node suites, the parts
-    # census, driving-model and the change-aware selection. Ship pushes share
-    # ONE group, `ship-fast`, with no cancel (2026-10-03, Bryce): the run in
-    # progress always finishes and only the NEWEST waiting push stays queued
-    # behind it, so a merge burst costs one fast tier at a time instead of one
-    # per merge (30 merges in 90 min queued ~750 jobs on 40 slots and held the
-    # site 30 PRs behind). The skipped middle commits are tested by the next
-    # run, which contains them. The train is a different group (pages.yml's unique
-    # concurrency_key) and is never cancelled by a later push. The browser
-    # smoke shards, the geometry sweeps and the renderer jobs are the train's
-    # (and ready PRs'). The tier is decided by ONE expression,
-    # repeated on the heavy jobs (smoke, ship-filter, sweeps):
-    #   inputs.concurrency_key == '' && (<deploy-branch push> || <draft PR>)
-    # (a Pages call always carries a concurrency_key, so it is never fast).
-    # ACTIONS MINUTES (2026-09-02): a docs / skills / rules-only commit ships
-    # nothing, so it buys no gate. The guard suite that checks those trees
-    # runs locally on every edit (test:tooling-fast); the deploy branch is
-    # gated by the train regardless of what the diff touched.
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - ".claude/**"
-      - ".cursor/**"
-      - ".codex/**"
+  # NO PUSH TRIGGER (2026-10-16, the CI/CD review #2333 finding 3). A topic
+  # branch gets CI through its PR (2026-09-24, decision 1c: every branch push
+  # used to start a run its own PR event cancelled seconds later). The deploy
+  # branch got a FAST tier here from 2026-09-10 to 2026-10-16 (guards, node
+  # suites, census, driving-model, selection in the no-cancel `ship-fast`
+  # group) whose green poked the Pages train; measured on 2026-10-15/16 it
+  # reached 38 % of merges (184 pushes, 112 replaced while pending, 70
+  # completed) and cost 5,587 job-minutes a day for verdicts the train
+  # repeated. pages.yml now runs on push itself and calls this workflow for
+  # the full gate (the `workflow_call` below, with `concurrency_key` set), so
+  # a merge's verdict is the train's `ci / …` rows: `ci-watch.mjs --sha
+  # <merge sha>` lists that run, or `= ci superseded` when a newer push
+  # replaced its pending train.
   pull_request:
     # A DRAFT PR with the `run-ci` label is the FAST tier too (the same
     # expression, below): guards, the selection plan, node suites, parts
@@ -324,10 +301,11 @@ permissions:
 # pull_request.head.ref, and a later synchronize/ready_for_review cancels the
 # older PR run on that same branch (cancel-in-progress true for pull_request).
 #
-# SHIP PUSHES: see the `ship-fast` note inside the block below (2026-10-03),
-# which superseded a per-sha group. The deploy path is unchanged: a Pages
-# caller supplies its run id (unique concurrency_key), so every deploy gate has
-# its own group and is cancelled only by pages.yml's own per-branch rule.
+# SHIP PUSHES start no run here since 2026-10-16 (pages.yml runs on push); the
+# `ship-fast` group that coalesced them (2026-10-03) is gone. The deploy path
+# is unchanged: a Pages caller supplies its run id (unique concurrency_key), so
+# every deploy gate has its own group and is cancelled only by pages.yml's own
+# per-branch rule.
 concurrency:
   # A dispatched run gets its own group: it shares the ref with every push,
   # and cancellation killed the first dispatched `ui` group 30 s in when the
@@ -341,17 +319,12 @@ concurrency:
   # is queued behind exactly that. Run 2758 (2026-09-08) ended `cancelled` at
   # 20 min with no job over its cap and nothing failing, which is the shape
   # this produces.
-  # A push to the DEPLOY branch (the fast tier) joins the shared `ship-fast`
-  # group with NO cancel (2026-10-03): a running fast tier always finishes
-  # (the old `ship-push` + cancel killed runs mid-way and hid their reds), and
-  # GitHub's one-pending-run-per-group rule keeps only the newest waiting push
-  # (https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
-  # Keying each push on github.sha ran one fast tier PER MERGE and clogged the
-  # queue in bursts (docs/notes/CI-MERGE-BURST-2026-10-03.md). Dispatch and
-  # schedule still get a unique run_id group. The run that is DEPLOYING is
-  # not in this group: pages.yml always passes a unique concurrency_key, and
-  # its own `pages-gate-*` group has cancel-in-progress false.
-  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && 'ship-fast') || github.event.pull_request.head.ref || github.ref_name }}
+  # Dispatch and schedule get a unique run_id group. The run that is
+  # DEPLOYING is not in this group: pages.yml always passes a unique
+  # concurrency_key, and its own `pages-gate-*` group has cancel-in-progress
+  # false. (The deploy branch's `ship-fast` push group, 2026-10-03 to
+  # 2026-10-16, is gone with the push trigger.)
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -908,7 +881,7 @@ jobs:
     name: Per-circuit geometry sweeps (${{ matrix.shard }}of4)
     runs-on: ubuntu-latest
     needs: [select]
-    # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
+    # Not in a draft PR's FAST tier; the train (a Pages call) runs it.
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) && (needs.select.outputs.geometry != 'false' || needs.select.outputs.geometry_targeted != '') }}
     # FOUR suite shards (2026-10-14). Pages train 38500310338 spent 1118 s in
     # the single-runner Geometry sweeps step (1218 s job) while every browser
@@ -1051,7 +1024,7 @@ jobs:
   smoke:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
-    # Not in the deploy branch's FAST tier (see `on: push`); the train runs it.
+    # Not in a draft PR's FAST tier; the train (a Pages call) runs it.
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) }}
     # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
     # in opposite directions. `inputs.smoke != false` skipped this job on EVERY

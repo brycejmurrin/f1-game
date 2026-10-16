@@ -19,11 +19,11 @@ Review, hunt or survey findings on the PR → agent `finding-verifier` before yo
 A draft PR's fast-tier run and its `ready_for_review` run land in the same
 concurrency group (`ci-…head.ref`) with `cancel-in-progress`, so marking the PR
 ready cancels the fast run on the same `head_sha` seconds after it starts
-(ci.yml runs on push for the deploy branch only). **A live sibling on
+(ci.yml runs on pull_request; a deploy-branch push starts `pages.yml`). **A live sibling on
 that SHA is dedupe, not a red.** Do not re-run it and do not report it as a
-failure. (Dispatch/schedule use `run_id`; deploy-branch pushes share ONE
-no-cancel group, `ship-fast`, since 2026-10-03: the run in progress finishes and
-only the newest waiting push stays queued.) Before marking ready, run
+failure. (Dispatch/schedule use `run_id`; deploy-branch pushes queue in
+pages.yml's `pages-train-*` group: the train in progress finishes, only the
+newest waiting push stays pending; `ci-watch.mjs --sha` says `superseded`.) Before marking ready, run
 `node tools/ci/ready-gate.mjs` (exit 0 = Structural guards / tooling-fast green
 on the tip) **and** `node tools/ci/ready-full-cap.mjs` (exit 1 = wait — ≥3 ready
 PRs already hold full-tier CI; draft fast-tier is uncapped).

@@ -85,7 +85,7 @@ a just-fixed bug is usually on the previous build: check live version FIRST.
 ### Sharp edges
 
 - A PR into the deploy branch does NOT deploy until merged; a push there
-  gets ci.yml's fast tier and, if green, pokes `pages.yml`.
+  starts `pages.yml` (the train gates the tip; its `ci / …` rows are the verdict).
 - After the deploy lands, clients may need one reload for the service worker to
   drop the old shell (`pwa-cache-service-worker`).
 - If `git push` is rejected (non-fast-forward), a session landed while you

@@ -176,8 +176,7 @@ Before fixing a red you did NOT cause, run `node tools/ci/who-is-on-it.mjs` (`--
 SYNC ONLY WHEN YOU MUST: GitHub reports CONFLICTING/DIRTY or a required tip check is red; clean-behind is not a reason, and every re-sync buys a full PR run. Sync by merging origin/ship through `node tools/ci/sync-pr.mjs <branch>`, never a hand merge (it cures ratchets and generated-file conflicts, leaves you ON `sync-pr-<branch>`, and pushes nothing without `--push`; recovery in check-changes).
 `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge → `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it cures generated-file conflicts and stops on any other).
 It prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push (`--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops, `--train` adds the nightly rota).
-Shipping is a RELEASE TRAIN: a green fast tier pokes `pages.yml`, which gates the tip once and publishes exactly that
-commit (dispatch = "deploy now"; gated publish median 23 min, p90 73; a train re-arms itself for a tip that went green mid-run; one green tip → one train, never dual-dispatch Pages). "Live?" = ancestor
+Shipping is a RELEASE TRAIN: a push to the deploy branch starts `pages.yml`, which gates the tip once and publishes exactly that commit (dispatch = "deploy now"; gated publish median 23 min, p90 73; one running + one pending train, a newer push replaces the pending one; never dual-dispatch Pages). "Live?" = ancestor
 of the live `apex-sha` (agent `deploy-research`; `docs/TESTING.md` §Release train).
 
 ### Backlog

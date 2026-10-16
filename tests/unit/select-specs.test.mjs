@@ -958,14 +958,16 @@ test("a docs-only change is 'nothing to select', never 'unmatched'", () => {
   assert.equal(isDocsOnly([]), false);
 });
 
-test("DOCS_ONLY still mirrors ci.yml's paths-ignore", () => {
+test("DOCS_ONLY still mirrors the deploy push's paths-ignore (pages.yml since 2026-10-16)", () => {
   // The comment on DOCS_ONLY says these two lists move together. If someone
   // adds a path to the workflow's ignore list and not here, a deploy touching
-  // only that path fails closed again — which is the whole defect.
-  const ci = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
-  const ignored = [...ci.matchAll(/^\s*-\s+"([^"]+)"\s*$/gm)].map((m) => m[1]);
+  // only that path fails closed again — which is the whole defect. The list
+  // moved from ci.yml's push to pages.yml's push on 2026-10-16 (the train
+  // runs on push; ci.yml has no push trigger).
+  const pages = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
+  const ignored = [...pages.matchAll(/^\s*-\s+"([^"]+)"\s*$/gm)].map((m) => m[1]);
   for (const pat of ["docs/**", "**/*.md", ".claude/**", ".cursor/**"]) {
-    assert.ok(ignored.includes(pat), `ci.yml no longer ignores ${pat} — re-derive DOCS_ONLY`);
+    assert.ok(ignored.includes(pat), `pages.yml no longer ignores ${pat} — re-derive DOCS_ONLY`);
   }
   assert.equal(DOCS_ONLY.length, 4, "a pattern was added or removed without updating this pin");
 });
