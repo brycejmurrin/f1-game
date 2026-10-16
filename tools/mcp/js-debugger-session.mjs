@@ -17,7 +17,7 @@ export class DebugSession {
     this.cdp = null; this.pause = null; this.sequence = 0;
     this.scripts = new Map(); this.objects = new Set(); this.breakpoints = new Map();
     this.operations = new Map(); this.operationSequence = 0; this.connecting = false;
-    this.logpoints = new Map(); this.logpointSequence = 0; this.exceptionLog = null; this.lost = null;
+    this.logpoints = new Map(); this.logpointSequence = 0; this.exceptionLog = null; this.lost = null; this.lastEndpoint = null;
     this.generation = randomUUID();
   }
   resetPause() {
@@ -82,9 +82,13 @@ export class DebugSession {
     return st;
   }
   async listTargets(endpoint, kind = "page") {
+    this.lastEndpoint = endpoint;
     return { targets: (await this.discover(endpoint, kind)).map(({ webSocketDebuggerUrl, ...t }) => t) };
   }
   async attach(endpoint, targetId) {
+    endpoint = endpoint || this.lastEndpoint;
+    if (!endpoint) throw Error("endpoint is required: pass endpoint (e.g. http://127.0.0.1:9222) or call debugger_targets first, which remembers it");
+    this.lastEndpoint = endpoint;
     if (this.connecting || this.cdp) throw Error("Already attached or attaching; detach first");
     this.connecting = true;
     let client;
@@ -142,11 +146,13 @@ export class DebugSession {
     } catch (e) { client?.close(); this.cdp = null; this.target = null; throw e; }
     finally { this.connecting = false; }
   }
-  async detach() {
+  // T13: detach ALWAYS drops the local session, however the CDP cleanup fares (a wedged page, a
+  // timed-out evaluate): cleanup runs under one deadline, failures are reported, the daemon stays attachable.
+  async detach(deadlineMs = 4000) {
     const client = this.cdp;
-    if (!client) return { detached: true, cleanupErrors: [] };
+    if (!client) { this.pause = null; return { detached: true, cleanupErrors: [] }; }
     const cleanupErrors = [], cleanupWarnings = [];
-    let resumedEventObserved = false;
+    let resumedEventObserved = false, timer;
     const observed = () => { resumedEventObserved = true; };
     client.on("Debugger.resumed", observed);
     // Reset exception pauses and owned breakpoints before resuming the program.
@@ -156,20 +162,31 @@ export class DebugSession {
       ["Runtime.releaseObjectGroup", { objectGroup: this.generation }]];
     if (this.pause) commands.push(["Runtime.releaseObjectGroup", { objectGroup: this.pause.token }]);
     if (this.logpoints.size) commands.push(["Runtime.evaluate", { expression: "delete globalThis.__apexDbgLog", silent: true }]);
-    await Promise.all(commands.map(async ([method, params]) => {
-      try { await client.send(method, params, 1000); } catch (e) { cleanupErrors.push(`${method}: ${clip(e.message)}`); }
-    }));
-    for (const method of [...(this.pause ? ["Debugger.resume"] : []), "Debugger.disable"]) {
-      try { await client.send(method, {}, 1000); } catch (e) {
-        // Closing the CDP session below disables the domain anyway, so a slow
-        // Debugger.disable (full software-GL frames) is a warning, not a failed cleanup.
-        (method === "Debugger.disable" ? cleanupWarnings : cleanupErrors).push(`${method}: ${clip(e.message)}`);
+    const wasPaused = !!this.pause;
+    const cleanup = async () => {
+      await Promise.all(commands.map(async ([method, params]) => {
+        try { await client.send(method, params, 1000); } catch (e) { cleanupErrors.push(`${method}: ${clip(e.message)}`); }
+      }));
+      for (const method of [...(wasPaused ? ["Debugger.resume"] : []), "Debugger.disable"]) {
+        try { await client.send(method, {}, 1000); } catch (e) {
+          // Closing the CDP session below disables the domain anyway, so a slow
+          // Debugger.disable (full software-GL frames) is a warning, not a failed cleanup.
+          (method === "Debugger.disable" ? cleanupWarnings : cleanupErrors).push(`${method}: ${clip(e.message)}`);
+        }
       }
+    };
+    try {
+      await Promise.race([cleanup().catch(e => { cleanupErrors.push(clip(e.message)); }),
+        new Promise(resolve => { timer = setTimeout(() => { cleanupErrors.push(`cleanup deadline ${deadlineMs} ms exceeded; local session dropped`); resolve(); }, deadlineMs); })]);
+    } finally {
+      clearTimeout(timer);
+      this.deliberate = true;
+      try { client.close(); } catch {} finally { this.deliberate = false; }
+      this.cdp = null; this.target = null; this.pause = null; this.objects.clear(); this.exceptionLog = null;
+      try { client.removeListener("Debugger.resumed", observed); } catch {}
+      this.breakpoints.clear(); this.logpoints.clear(); this.scripts.clear(); this.connecting = false;
     }
-    this.deliberate = true; client.close(); this.deliberate = false; this.cdp = null; this.target = null; this.resetPause();
-    client.removeListener("Debugger.resumed", observed);
-    this.breakpoints.clear(); this.logpoints.clear(); this.scripts.clear();
-    return { detached: true, cleanupErrors, cleanupWarnings, cleanupAcknowledged: cleanupErrors.length === 0, resumedEventObserved };
+    return { detached: true, cleanupErrors: [...cleanupErrors], cleanupWarnings, cleanupAcknowledged: cleanupErrors.length === 0, resumedEventObserved };
   }
   // T1: anonymous/eval scripts (empty URL) used to fill the 200-row cap and hide game.js.
   // Named URLs sort first; `filter` is a substring (or a regex with regex:true).
@@ -184,7 +201,16 @@ export class DebugSession {
     if (out.truncated) out.note = "More than 200 matches: narrow filter (or use regex:true).";
     return out;
   }
-  async source(scriptId, startLine, count) {
+  // T12: accept a script URL (+ endLine) instead of a scriptId; the newest parse of that URL wins.
+  async source(scriptId, startLine, count, { url, endLine } = {}) {
+    if (!scriptId && url) {
+      const rows = [...this.scripts.values()].filter(x => x.url === url);
+      const pick = rows.at(-1) || [...this.scripts.values()].filter(x => x.url && x.url.split(/[?#]/)[0].endsWith(url)).at(-1);
+      if (!pick) throw Error(`No parsed script with url ${clip(url, 200)}; list it with debugger_scripts {filter}`);
+      scriptId = pick.scriptId;
+    }
+    if (!scriptId) throw Error("debugger_source needs scriptId, or url (+ startLine/endLine)");
+    if (endLine) count = Math.min(200, Math.max(1, endLine - startLine + 1));
     if (!this.scripts.has(scriptId)) throw Error("Unknown/stale scriptId; list scripts again");
     const r = await this.connected().send("Debugger.getScriptSource", { scriptId });
     const lines = (r.scriptSource || "").split("\n");
@@ -246,7 +272,9 @@ export class DebugSession {
       expression, silent: true, throwOnSideEffect: !allowSideEffects, returnByValue: false,
       generatePreview: false, objectGroup: token, timeout: 1000 }, 2000);
     this.paused(token);
-    return { ...result, result: this.remember(result.result), ok: !result.exceptionDetails };
+    const refused = !allowSideEffects && result.exceptionDetails && /side.?effect/i.test(JSON.stringify(result.exceptionDetails));
+    return { ...result, result: this.remember(result.result), ok: !result.exceptionDetails,
+      ...(refused ? { hint: "Refused as a possible side effect (V8 also treats localStorage/sessionStorage and similar reads as side-effecting). If the read is intended, retry with allowSideEffects:true." } : {}) };
   }
   async properties(token, objectId, offset, limit) {
     this.paused(token);
@@ -256,6 +284,23 @@ export class DebugSession {
     return { total: r.result?.length || 0, properties: (r.result || []).slice(offset, offset + limit)
       .map(p => ({ name: clip(p.name), enumerable: p.enumerable, configurable: p.configurable,
         value: this.remember(p.value), get: this.remember(p.get), set: this.remember(p.set) })), exceptionDetails: r.exceptionDetails };
+  }
+  // T14a: a pause whose Debugger.resumed never arrived must not block runs forever. Probe it:
+  // a real frame id fails once the page is no longer stopped there; a frameless synthetic pause is
+  // probed with resume, which V8 refuses when the thread is not paused.
+  async verifyPause() {
+    const pause = this.pause; if (!pause) return;
+    const frame = pause.frames[0];
+    try {
+      if (frame) await this.connected().send("Debugger.evaluateOnCallFrame", { callFrameId: frame.callFrameId, expression: "0", throwOnSideEffect: true, silent: true }, 1500);
+      else await this.connected().send("Debugger.resume", {}, 1500);
+    } catch (e) {
+      if (this.pause === pause && /call frame|not paused|while paused|invalid/i.test(e.message)) { this.resetPause(); this.markOperations("paused", "pending"); }
+    }
+  }
+  async runTool(expression, awaitPromise, timeoutMs) {
+    if (this.pause) await this.verifyPause();
+    return this.run(expression, awaitPromise, timeoutMs);
   }
   run(expression, awaitPromise = false, timeoutMs = 600000) {
     const client = this.connected();

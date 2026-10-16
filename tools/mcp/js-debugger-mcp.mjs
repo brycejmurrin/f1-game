@@ -14,20 +14,21 @@ const def = (name, description, properties = {}, required = [], readOnlyHint = f
   annotations: { readOnlyHint, destructiveHint: !readOnlyHint, openWorldHint: true } });
 export const TOOLS = [
   def("debugger_targets", "List targets in an already-running local Chrome (default pages; targetType service_worker|worker|all for sw.js and workers). No browser is launched.", { endpoint, targetType: { type: "string", enum: ["page", "service_worker", "worker", "all"] } }, ["endpoint"], true),
-  def("debugger_attach", "Attach a page target by id. One session at a time; local HTTP repros/about:blank only. May pause JavaScript.", { endpoint, targetId: str("Page id from debugger_targets") }, ["endpoint", "targetId"]),
+  def("debugger_attach", "Attach a page target by id. One session at a time; local HTTP repros/about:blank only. May pause JavaScript. endpoint may be omitted after debugger_targets.", { endpoint, targetId: str("Page id from debugger_targets") }, ["targetId"]),
   def("debugger_detach", "Remove owned breakpoints, reset exception pauses, resume, disable and detach. Reports cleanup failures; never closes the browser."),
   def("debugger_state", "Read current pause/stack/scopes and operation results. Reports `detached: target gone` after a lost target and `pageUnresponsive` when a long run blocks the page. An acknowledgment is not a pause verdict.", {}, [], true),
   def("debugger_scripts", "List parsed scripts (named URLs first, max 200; reports total/truncated). Anonymous/eval scripts hidden unless includeAnonymous. Filter = URL substring, or regex with regex:true.",
     { filter: { type: "string", maxLength: 1000 }, regex: { type: "boolean" }, includeAnonymous: { type: "boolean" } }, [], true),
   def("debugger_source", "Read a bounded script source excerpt. Lines and columns in this MCP are ONE-based.",
-    { scriptId: str("Script id from debugger_scripts or a stack frame"), startLine: integer("First line"), count: integer("Line count, max 200", 1, 200) }, ["scriptId"], true),
+    { scriptId: str("Script id from debugger_scripts or a stack frame (or pass url)"), url: str("Exact script URL instead of scriptId; newest parse wins", 1000),
+      startLine: integer("First line"), endLine: integer("Last line (alternative to count)"), count: integer("Line count, max 200", 1, 200) }, [], true),
   def("debugger_breakpoint", "Set a URL breakpoint, optionally conditional. ONE-based line/column; URL breakpoints survive reload. Conditions execute JavaScript. Setting the same location again replaces it. Empty locations + warning = wrong URL or script not parsed.",
     { url: str("Exact script URL, including query if present"), line: integer("Source line"), column: integer("Source column"), condition: { type: "string", maxLength: 4000 } }, ["url", "line"]),
   def("debugger_remove_breakpoint", "Remove a breakpoint created by this debugger session.", { id: str("Breakpoint id") }, ["id"]),
   def("debugger_control", "Pause on the next JS statement, resume, step over/into/out, or cancel (terminate the running script). Inspect state for a NEW pause token; steps may finish without pausing.",
     { action: { type: "string", enum: ["pause", "resume", "over", "into", "out", "cancel"] }, pauseToken: token }, ["action"]),
   def("debugger_exceptions", "Configure pause-on-exceptions for this session: none, uncaught or all.", { state: { type: "string", enum: ["none", "uncaught", "all"] } }, ["state"]),
-  def("debugger_evaluate", "Evaluate in a paused stack frame. Side effects rejected by default; explicit allowSideEffects permits mutation. Exceptions are tool errors.",
+  def("debugger_evaluate", "Evaluate in a paused stack frame (frame = zero-based index). Side effects rejected by default (V8 also refuses localStorage reads: retry with allowSideEffects:true). Exceptions are tool errors.",
     { pauseToken: token, frame: integer("Zero-based frame index (first 10 frames retained)", 0, 9), expression, allowSideEffects: { type: "boolean" } }, ["pauseToken", "expression"]),
   def("debugger_properties", "Read own property descriptors without invoking getters. Object must belong to the current pause.",
     { pauseToken: token, objectId: str("Scope/evaluation/property objectId"), offset: integer("Property offset", 0), limit: integer("Page size", 1, 100) }, ["pauseToken", "objectId"], true),
@@ -47,15 +48,21 @@ export const TOOLS = [
       timeoutMs: integer("Response deadline in ms (default 600000). Past it the op is timedOut but still tracked and a late result is recorded", 1000, 600000) }, ["expression"]),
 ];
 
+// T12: parameter names agents guess. Accepted as aliases only when the tool has the real one;
+// any other unknown key is refused with the list of valid names.
+const ALIASES = { frameIndex: "frame", frame_index: "frame", mode: "state", token: "pauseToken", scriptUrl: "url", target_id: "targetId" };
 function validate(tool, args) {
   if (!args || typeof args !== "object" || Array.isArray(args)) throw Error("arguments must be an object");
   const { properties, required } = tool.inputSchema;
-  for (const key of required) if (!Object.hasOwn(args, key)) throw Error(`Missing argument: ${key}`);
+  for (const [alias, real] of Object.entries(ALIASES)) {
+    if (Object.hasOwn(args, alias) && !properties[alias] && properties[real] && !Object.hasOwn(args, real)) { args[real] = args[alias]; delete args[alias]; }
+  }
+  for (const key of required) if (!Object.hasOwn(args, key)) throw Error(`Missing argument: ${key}${properties[key]?.description ? ` (${properties[key].description.slice(0, 80)})` : ""}`);
   for (const [key, value] of Object.entries(args)) {
     const spec = properties[key];
     if (!spec) throw Error(key === "allowSideEffects" && tool.name === "debugger_run"
       ? "debugger_run is always mutating and takes no allowSideEffects; that flag exists only on debugger_evaluate (paused frames, default off)"
-      : `Unknown argument: ${key}`);
+      : `Unknown argument: ${key}; valid arguments: ${Object.keys(properties).join(", ") || "(none)"}`);
     if (spec.type === "integer" ? !Number.isInteger(value) : typeof value !== spec.type) throw Error(`Invalid type for ${key}`);
     if (spec.enum && !spec.enum.includes(value)) throw Error(`Invalid ${key}`);
     if (spec.type === "integer" && (value < spec.minimum || value > spec.maximum)) throw Error(`Out of range: ${key}`);
@@ -73,18 +80,19 @@ export async function callTool(session, name, args = {}) {
       debugger_detach: () => session.detach(), debugger_state: () => session.stateWithHealth(), debugger_scripts: () => session.scriptsList(a.filter, { regex: a.regex, includeAnonymous: a.includeAnonymous }),
       debugger_logpoint: () => session.setLogpoint(a), debugger_logpoint_read: () => session.readLogpoints(a),
       debugger_exception_log: () => session.exceptionLogControl(a), debugger_listeners: () => session.listeners(a), debugger_instances: () => session.instances(a),
-      debugger_source: () => session.source(a.scriptId, a.startLine ?? 1, a.count ?? 40),
+      debugger_source: () => session.source(a.scriptId, a.startLine ?? 1, a.count ?? 40, { url: a.url, endLine: a.endLine }),
       debugger_breakpoint: () => session.setBreakpoint(a.url, a.line, a.column, a.condition),
       debugger_remove_breakpoint: () => session.removeBreakpoint(a.id), debugger_control: () => session.control(a.action, a.pauseToken),
       debugger_exceptions: () => session.exceptions(a.state), debugger_evaluate: () => session.evaluate(a.pauseToken, a.frame ?? 0, a.expression, a.allowSideEffects),
-      debugger_properties: () => session.properties(a.pauseToken, a.objectId, a.offset ?? 0, a.limit ?? 30), debugger_run: () => session.run(a.expression, a.awaitPromise, a.timeoutMs),
+      debugger_properties: () => session.properties(a.pauseToken, a.objectId, a.offset ?? 0, a.limit ?? 30), debugger_run: () => session.runTool(a.expression, a.awaitPromise, a.timeoutMs),
     };
-    const changesSession = !["debugger_targets", "debugger_state", "debugger_scripts"].includes(name);
+    // detach never waits behind a stuck command: it is the recovery path (T13).
+    const changesSession = !["debugger_targets", "debugger_state", "debugger_scripts", "debugger_detach"].includes(name);
     if (changesSession && session.toolBusy) throw Error("Another debugger command is in progress; inspect state or retry after its response");
     let body;
     if (changesSession) session.toolBusy = true;
     try { body = await routes[name](); }
-    finally { if (changesSession) session.toolBusy = false; }
+    finally { if (changesSession || name === "debugger_detach") session.toolBusy = false; }
     if (JSON.stringify(body).length > 128000) throw Error("Result exceeds 128KB; narrow the request. The debugger action may already have completed.");
     return { content: [{ type: "text", text: JSON.stringify(body) }], structuredContent: body,
       isError: body.ok === false || !!body.cleanupErrors?.length || !!body.exceptionDetails };

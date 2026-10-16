@@ -316,12 +316,19 @@ test that fails on the #2535 head and passes now (`tests/unit/js-debugger-mcp.te
 | T9 | `awaitPromise` past the deadline read `unknown`, result lost | `timeoutMs` per call; the op stays tracked with `timedOut:true`, and a late result is recorded (`late:true`). Page JS is **not** cancelled by a timeout or detach | `T9:` ×2, smoke |
 | T10 | A long loop wedged the page and the tool | `debugger_state` probes the page when a run is pending > 2 s and reports `pageUnresponsive`; `debugger_control cancel` ends the script | `T10:`, smoke |
 | T11 | Attachment lost when Chrome died/the container resumed, silently | `detached: "target gone: <reason>"` in state; `debug-chrome status` reports `chromeAlive`, `cdpResponding`, `viewport` | `T11:`, smoke |
+| T12 | Guessable parameters cost failed calls (`endpoint` again, `frameIndex`, `mode`, `source` by URL) | `attach` remembers the last endpoint; aliases `frameIndex`→`frame`, `mode`→`state`, `token`→`pauseToken`; `debugger_source {url,startLine,endLine}`; every rejection lists the valid argument names and a missing one is described | `T12:`, smoke |
+| T13 | After a timed-out evaluate, detach/attach failed and needed a daemon restart | `detach` always drops the local session under one 4 s deadline (reports `cleanupErrors`, never waits behind a stuck command) so the daemon stays attachable | `T13:` |
+| T14 | (a) A stale pause blocked `debugger_run`; (b) a `localStorage` read was refused with no hint | (a) `debugger_run` probes the pause (`evaluateOnCallFrame`, or `resume` for a frameless one) and clears it when the page is no longer stopped; (b) the refusal carries a `hint` to retry with `allowSideEffects:true` (V8 treats storage reads as side-effecting) | `T14a:`, `T14b:`, smoke |
 | V | `--window-size=844,390` gave an 844x198 viewport | `debug-chrome start --device phone-landscape\|desktop` runs a holder holding `Emulation.setDeviceMetricsOverride` + touch emulation, and prints the measured `innerWidth x innerHeight` | `tests/unit/debug-chrome.test.mjs` |
 
 **Chunk long loops.** A run that holds the main thread (a `race()` loop, `headless(false)` for
 minutes) blocks every `Runtime.evaluate`, so state reads show `pageUnresponsive`. Run work in bounded
 chunks (one `debugger_run` per few seconds of simulation, `awaitPromise` for each), and use `cancel` as
 the escape hatch; it can leave game state half-updated, so reload after it.
+
+**Keep `headless(true)` for logic hunts.** Un-headless software GLX pegs the GPU process at about
+350% CPU and CDP stops answering, so every tool times out. `__apex.headless(true)` suppresses drawing,
+not simulation, and keeps the page responsive; only turn drawing on for a visual question.
 
 **Emulation lifetime.** CDP emulation overrides end with the session that set them. The holder process
 keeps one session open for that reason; `stop` ends it with the browser.

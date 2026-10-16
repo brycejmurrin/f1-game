@@ -544,3 +544,54 @@ test("T2: debugger_state carries only the latest operation's result, however man
   assert.equal(ops.filter(o => o.result).length, 1); assert.ok(ops.at(-1).result);
   assert.ok(JSON.stringify(ops).length < 6000, "response size must not grow with the number of past runs");
 });
+test("T12: attach remembers the last endpoint; common parameter aliases are accepted and every rejection names the right key", async () => {
+  const { s, c } = await attached(); await s.detach();
+  assert.equal((await callTool(new DebugSession(), "debugger_attach", { targetId: "t" })).structuredContent.error.includes("endpoint is required"), true);
+  s.discover = async () => [{ type: "page", id: "t", url: "about:blank", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/t" }];
+  await s.listTargets("http://127.0.0.1:9222");
+  const c2 = new FakeCdp(); s.open = async () => c2;
+  assert.equal((await callTool(s, "debugger_attach", { targetId: "t" })).isError, false, "endpoint omitted after debugger_targets");
+  paused(c2); const token = s.pause.token;
+  c2.reply = async () => ({ result: { type: "number", value: 1 } });
+  const ev = await callTool(s, "debugger_evaluate", { pauseToken: token, frameIndex: 0, expression: "1" });
+  assert.equal(ev.isError, false); assert.equal(c2.calls.at(-1).params.callFrameId, "frame1");
+  const bad = await callTool(s, "debugger_evaluate", { pauseToken: token, expression: "1", bogus: 1 });
+  assert.match(bad.structuredContent.error, /Unknown argument: bogus; valid arguments: pauseToken, frame, expression, allowSideEffects/);
+  assert.match((await callTool(s, "debugger_evaluate", { expression: "1" })).structuredContent.error, /Missing argument: pauseToken \(Current pause\.token/);
+  assert.equal((await callTool(s, "debugger_exceptions", { mode: "none" })).isError, false);
+  assert.deepEqual(c2.calls.at(-1), { method: "Debugger.setPauseOnExceptions", params: { state: "none" }, timeout: undefined });
+  c2.emit("Debugger.scriptParsed", { scriptId: "s1", url: frame.url, startLine: 0, endLine: 20 });
+  c2.reply = async () => ({ scriptSource: Array.from({ length: 20 }, (_, i) => "line" + (i + 1)).join("\n") });
+  const src = (await callTool(s, "debugger_source", { url: frame.url, startLine: 3, endLine: 5 })).structuredContent;
+  assert.equal(src.source, "3: line3\n4: line4\n5: line5");
+  assert.match((await callTool(s, "debugger_source", {})).structuredContent.error, /needs scriptId, or url/);
+});
+test("T13: detach always drops the local session, even when every CDP call hangs, and the daemon can attach again", async () => {
+  const { s, c } = await attached(); await s.setBreakpoint(frame.url, 4); paused(c);
+  c.send = () => new Promise(() => {}); // wedged page: no CDP answer ever
+  s.toolBusy = true; // a stuck command must not block the recovery path
+  const r = await callTool(s, "debugger_detach", {});
+  assert.equal(r.structuredContent.detached, true); assert.ok(r.structuredContent.cleanupErrors.length, "failures are reported");
+  assert.equal(s.cdp, null); assert.equal(s.breakpoints.size, 0); assert.equal(s.pause, null); assert.equal(s.state().connected, false);
+  const c2 = new FakeCdp(); s.open = async () => c2;
+  await s.attach("http://127.0.0.1:9222", "t"); assert.equal(s.state().connected, true);
+}, { timeout: 15000 });
+test("T14a: a pause whose resumed event never arrived does not block debugger_run; a live pause still does", async () => {
+  const { s, c } = await attached(); paused(c);
+  c.reply = async method => { if (method === "Debugger.evaluateOnCallFrame") throw Error("Invalid call frame id"); return {}; };
+  const ok = await callTool(s, "debugger_run", { expression: "1" }); assert.equal(ok.isError, false); assert.equal(s.pause, null);
+  paused(c); c.reply = async () => ({ result: { value: 0 } });
+  const live = await callTool(s, "debugger_run", { expression: "1" }); assert.equal(live.isError, true); assert.match(live.structuredContent.error, /while paused/);
+  // synthetic frameless pause (iframe destroyed): resume probe says the thread is not paused
+  c.emit("Runtime.executionContextDestroyed", { executionContextId: 99 }); assert.deepEqual(s.pause.frames, []);
+  c.reply = async method => { if (method === "Debugger.resume") throw Error("Can only perform operation while paused."); return {}; };
+  assert.equal((await callTool(s, "debugger_run", { expression: "2" })).isError, false);
+});
+test("T14b: a refused paused evaluate (e.g. localStorage read) says to retry with allowSideEffects:true", async () => {
+  const { s, c } = await attached(); paused(c);
+  c.reply = async () => ({ result: { type: "object" }, exceptionDetails: { text: "Uncaught", exception: { description: "EvalError: Possible side-effect in debug-evaluate" } } });
+  const r = await callTool(s, "debugger_evaluate", { pauseToken: s.pause.token, expression: "localStorage.getItem('apex26.x')" });
+  assert.equal(r.isError, true); assert.match(r.structuredContent.hint, /allowSideEffects:true/);
+  const ok = await callTool(s, "debugger_evaluate", { pauseToken: s.pause.token, expression: "localStorage.getItem('apex26.x')", allowSideEffects: true });
+  assert.equal(ok.structuredContent.hint, undefined);
+});
