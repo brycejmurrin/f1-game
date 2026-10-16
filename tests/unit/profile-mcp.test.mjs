@@ -15,9 +15,9 @@ function call(name, args) {
 }
 const argvOf = (r) => JSON.parse(r.out).argv;
 
-test("there is no standalone apex_profile browser tool (needs a .claude guard entry); the job kind is listed", () => {
+test("apex_profile is a direct browser tool next to apex_profile_query; the job kind is still listed", () => {
   const names = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout).map((t) => t.name);
-  assert.ok(!names.includes("apex_profile")); assert.ok(names.includes("apex_profile_query"));
+  assert.ok(names.includes("apex_profile")); assert.ok(names.includes("apex_profile_query"));
   const js = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout).find((t) => t.name === "apex_job_start");
   assert.ok(js.inputSchema.properties.kind.enum.includes("profile"));
 });
@@ -37,4 +37,14 @@ test("apex_profile_query dryRun: query.mjs, artifacts-only path", () => {
   const argv = argvOf(call("apex_profile_query", { dryRun: true, file: "artifacts/profiles/vegas-spans.json", top: 5 }));
   assert.ok(argv.some((a) => a.endsWith("perf/query.mjs"))); assert.ok(argv.includes("--top"));
   assert.doesNotMatch(call("apex_profile_query", { dryRun: true, file: "package.json" }).out, /"ok":\s*true/);
+});
+
+test("apex_profile dryRun: the same profile.mjs argv as the job kind; bad base and mode refused", () => {
+  const args = { dryRun: true, track: "monza", repeat: 3, frames: 90, base: "origin/main" };
+  const direct = argvOf(call("apex_profile", args));
+  assert.deepEqual(direct, argvOf(call("apex_job_start", { ...args, kind: "profile" })));
+  assert.ok(direct.some((a) => a.endsWith("perf/profile.mjs")));
+  assert.doesNotMatch(call("apex_profile", { dryRun: true, base: "--upload-pack=x" }).out, /"ok":\s*true/);
+  assert.doesNotMatch(call("apex_profile", { dryRun: true, mode: "bogus" }).out, /"ok":\s*true/);
+  assert.doesNotMatch(call("apex_profile", { dryRun: true, kind: "ui_matrix" }).out, /"ok":\s*true/, "the kind is not caller-chosen");
 });
