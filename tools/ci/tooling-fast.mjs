@@ -759,6 +759,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // radio-lines phrasebook: slot fill, recent-history pick, variant counts.
   "tests/unit/radio-lines.test.mjs",
   "tests/unit/radio-voice.test.mjs",
+  // LOCALIZED RAIN: a drifting shower over a window of the lap, per-segment closed-form lag, lap mean = old global. VM, ~0.3 s.
+  "tests/unit/rain-cells.test.mjs",
   // Two PRs auto-raising one module's ceiling merge clean (ratchets.d fragments, #2291).
   "tests/unit/ratchet-merge-hotspot.test.mjs",
   "tests/unit/ratchets.test.mjs",
@@ -1116,6 +1118,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane
   // quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.
   "tests/unit/wind-speed.test.mjs",
+  // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
+  // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
+  "tests/unit/wind.test.mjs",
   "tests/unit/xr-backend-pin.test.mjs",
   "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",

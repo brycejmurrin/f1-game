@@ -1569,6 +1569,8 @@ test("AI heading reuses current grip without changing normal or recovery steerin
     const { AiDrive, gripMult, tyres, dirtyAirMul, aeroDfMult, clamp, damp, K, aiT } = deps;
     const { VMAX, LAT_MAX, STEER_VMAX, AI_HEAD_VMIN, AI_XTRACK_GAIN, AI_HEAD_MAX, AI_YAW_LAT, AI_YAW_MAX } = K;
     const vStd = speed => speed * VMAX / (VMAX * Math.max(PACE, 0.05));
+    // updateCar's per-step weather grip (gripMult(c) × aquaplane, read once into the scratch S.gmC).
+    const S = { gmC: gripMult(c) };
     ${decl[1]}
     if (c.human) steer = inputSteer; else {
     ${game.slice(start, end)}
