@@ -160,5 +160,9 @@ test('plugin advertises the checkout MCP catalog without owning server startup',
     assert.match(skill, new RegExp('`' + server + '`'));
   }
   assert.match(readme, /does not start a second copy/);
+  assert.match(readme, /tools\/env\/ensure-mcp-ready\.sh/);
+  assert.match(readme, /does not change host trust/);
   assert.match(skill, /one browser MCP/);
+  assert.match(skill, /tools\/env\/ensure-mcp-ready\.sh/);
+  assert.match(skill, /cannot attach host MCPs/);
 });

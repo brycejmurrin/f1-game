@@ -18,6 +18,16 @@ The plugin consumes the three MCP servers already configured by the game checkou
 
 Use one browser server and one browser process at a time. The repository MCP configuration is the source of truth; the plugin advertises these names for routing and does not install or launch them.
 
+## Setup behavior
+
+When the checkout is local, run the existing idempotent bootstrap before the first probe:
+
+```sh
+bash tools/env/ensure-mcp-ready.sh
+```
+
+It verifies the Apex wrapper, runs the MCP smoke checks, and discovers the available Chromium binary. Add `--strict` when a missing local dependency should fail the workflow. This does not change host trust, attach project `.mcp.json`, or edit a user's global Codex/Claude/Cursor configuration; those actions require the host's own settings and approval flow.
+
 From the game repository, validate the plugin against the real game VM:
 
 ```sh
