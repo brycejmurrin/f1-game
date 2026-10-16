@@ -99,6 +99,50 @@ test("a malformed token response is retryable and preserves the session", async 
   assert.equal(disk.get(TOKEN_KEY), original);
 });
 
+test("a token response whose body stalls settles as a retryable refresh failure", async () => {
+  let signal, resolveBody;
+  const body = new Promise((resolve) => { resolveBody = resolve; });
+  const { SpotifyMusic, disk, flush } = load((url, opts) => {
+    if (String(url).includes("/api/token")) {
+      signal = opts.signal;
+      return Promise.resolve({ ok: true, status: 200, json: () => body });
+    }
+    return Promise.resolve(jsonResponse({ product: "premium" }));
+  }, { globals: { AbortController } });
+  const checking = SpotifyMusic.check();
+  await settle();
+  flush();
+  const result = await checking;
+  assert.equal(signal.aborted, true, "the stalled token body must be aborted");
+  assert.equal(result.reason, "refresh-failed");
+  assert.ok(disk.has(TOKEN_KEY), "a body timeout must preserve the refresh token");
+  resolveBody({ access_token: "late", refresh_token: "late", expires_in: 3600 });
+  await Promise.resolve();
+});
+
+test("an account response whose body stalls settles as a network failure", async () => {
+  let signal, resolveBody;
+  const body = new Promise((resolve) => { resolveBody = resolve; });
+  const { SpotifyMusic, flush } = load((url, opts) => {
+    if (String(url).includes("/api/token")) return Promise.resolve(jsonResponse({
+      access_token: "fresh", refresh_token: "fresh", expires_in: 3600,
+    }));
+    if (String(url).includes("/v1/me")) {
+      signal = opts.signal;
+      return Promise.resolve({ ok: true, status: 200, json: () => body });
+    }
+    return Promise.resolve(jsonResponse({ devices: [] }));
+  }, { globals: { AbortController } });
+  const checking = SpotifyMusic.check();
+  await settle();
+  flush();
+  const result = await checking;
+  assert.equal(signal.aborted, true, "the stalled account body must be aborted");
+  assert.equal(result.reason, "network");
+  resolveBody({ product: "premium" });
+  await Promise.resolve();
+});
+
 test("concurrent callers share one rotating refresh request", async () => {
   let refreshRequests = 0;
   const { SpotifyMusic, disk } = load((url) => {
