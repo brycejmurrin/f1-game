@@ -56,6 +56,10 @@ A PR that ends `cancelled` twice, zero failures — the recipe:
     node tools/ci/sync-pr.mjs <branch> --plan   # cached refs only; no conflict proof
     node tools/ci/sync-pr.mjs <branch> --push   # fresh verified sync, when publication is intended
 
+**Run the predicate first:** `node tools/ci/needs-sync.mjs <branch>` prints `= sync needed: conflict | stale-red | no`
+(exit 0 = sync, 1 = no, 3 = could not decide). `sync-pr.mjs` and `pr-board.mjs` run it themselves; `sync-pr` refuses a `no`
+(exit 4) unless `--force-clean-behind`. `stale-red` = ci.yml red on the head and the tip moved since that run started.
+
 **Do not sync on every tip move.** Branch protection requires the `CI`
 check green on the PR's own head (one check since 2026-10-15; the fast-tier
 names before that), NOT an up-to-date branch, and every re-sync is a fresh PR run. Sync when GitHub
