@@ -214,7 +214,9 @@ const CareerBackup = (function () {
       return validate(parsed, raw);
     }
     if (!isObj(raw)) return { ok: false, reason: "not-object" };
-    if (new Blob([JSON.stringify(raw)]).size > MAX_BYTES) return { ok: false, reason: "too-large" };
+    try {
+      if (new Blob([JSON.stringify(raw)]).size > MAX_BYTES) return { ok: false, reason: "too-large" };
+    } catch (_) { return { ok: false, reason: "bad-json" }; }
     if (raw.format !== FORMAT) return { ok: false, reason: "wrong-format" };
     if (!Array.isArray(raw.slots)) return { ok: false, reason: "slots-not-array" };
     if (raw.slots.length > 12) return { ok: false, reason: "too-many-slots" };

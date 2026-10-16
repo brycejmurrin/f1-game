@@ -1564,3 +1564,10 @@ test("backup byte cap applies to UTF-8 strings and object imports before writes"
   assert.equal(h.CareerBackup.apply(envelope).reason, "too-large");
   assert.equal(h.disk.size, 0);
 });
+
+test("in-memory unserialisable backups are refused before any write", () => {
+  const h = loadHarness(), envelope = envWith({});
+  envelope.cycle = envelope;
+  assert.equal(h.CareerBackup.apply(envelope).reason, "bad-json");
+  assert.equal(h.disk.size, 0);
+});

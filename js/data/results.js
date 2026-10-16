@@ -112,7 +112,7 @@ const DataResults = (function () {
       const staleApi = typeof F1API.staleMark === "function" && typeof F1API.staleSince === "function" ? F1API : null;
       const mark = staleApi ? staleApi.staleMark() : 0;
       function publish(status, error) {
-        const dataAt = status === "ready" && staleApi ? staleApi.staleSince(mark) : null;
+        const dataAt = (status === "ready" || status === "empty") && staleApi ? staleApi.staleSince(mark) : null;
         wrap.tabOutcome = { status, error: error || null, at: Date.now(), dataAt, offlineCopy: dataAt != null,
           hasData: status === "ready" };
         if (onOutcome) onOutcome(wrap);
@@ -139,7 +139,7 @@ const DataResults = (function () {
       ]).then(function (both) {
         if (myGen !== bodyGen) return;
         paint(meta, both[0] || [], both[1] || [], slot);
-        publish("ready");
+        publish(both[0] && both[0].length ? "ready" : "empty");
       }, function (err) {
         // NOT the empty-tab copy. "Nothing published yet" and "OpenF1 rate-limited
         // that request" look identical to a player, and only one of them is worth
