@@ -217,6 +217,12 @@ test("hostile payloads are rejected with a reason and change nothing", () => {
   const cases = [
     [{ format: "nope", slots: [] }, "wrong-format"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: { money: NaN } }] }, "nan-money"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { driver: { name: "A", code: { toString: null }, num: 99 } }) }] }, "driver-code"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { driver: { name: {}, code: "YOU", num: 99 } }) }] }, "driver-name"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { driver: { name: "A", code: "YOU", num: {} } }) }] }, "driver-num"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: [1, 2, 3] }] }, "slot-not-object"],
     // A driver career filed under a MY TEAM row (and the reverse) would load as
     // the wrong flavour in that slot set.
