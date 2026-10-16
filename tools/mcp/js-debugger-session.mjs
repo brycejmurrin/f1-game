@@ -97,7 +97,10 @@ export class DebugSession {
       const target = rows.find(t => t.id === targetId);
       if (!target) throw Error("Unknown page targetId; use debugger_targets");
       // The repository's debugger works on local repros, never the deployed site.
-      if (target.url !== "about:blank") localUrl(target.url.replace(/^blob:/, "").split(/[?#]/)[0]);
+      if (target.url !== "about:blank") {
+        try { localUrl(target.url.replace(/^blob:/, "").split(/[?#]/)[0]); }
+        catch { throw Error(`Refusing to attach ${clip(target.url, 200)}: the debugger only attaches pages served from 127.0.0.1, localhost or [::1] (local repros only, never the deployed site). Serve the page locally, e.g. node tools/mcp/debug-chrome.mjs start`); }
+      }
       const ws = localUrl(target.webSocketDebuggerUrl, true), origin = localUrl(endpoint);
       if (ws.host !== origin.host) throw Error("Target WebSocket must use the discovery host and port");
       client = await this.open(ws.href); this.cdp = client;

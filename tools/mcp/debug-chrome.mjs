@@ -96,6 +96,8 @@ async function runPlan(port, plan) {
 async function hold(port, device) {
   const d = DEVICES[device]; const { send, ws } = await pageSocket(port);
   await send("Emulation.setDeviceMetricsOverride", { width: d.width, height: d.height, deviceScaleFactor: d.deviceScaleFactor, mobile: d.mobile });
+  // A hidden/background tab gets no frames, so race() would wait forever: keep the page focused.
+  await send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {});
   await send("Emulation.setTouchEmulationEnabled", { enabled: d.touch, maxTouchPoints: d.touch ? 5 : 0 });
   await new Promise(res => { ws.onclose = res; });
 }

@@ -335,6 +335,15 @@ not simulation, and keeps the page responsive; only turn drawing on for a visual
 `__apex.headless(true)` as soon as `__apex` exists. To reload by hand, do the same sequence:
 `about:blank`, the game URL, `__apex.headless(true)`.
 
+**Local pages only.** `debugger_attach` refuses any page not served from `127.0.0.1`, `localhost` or
+`[::1]` (and `about:blank`): this debugger is for local repros, never the deployed site. The refusal
+says so and points at `debug-chrome start`.
+
+**Keep the page visible.** A hidden or backgrounded tab gets no animation frames, so `race()` and any
+`requestAnimationFrame`-driven wait never finish. Do not background the debug page; `debug-chrome`'s
+holder also sets `Emulation.setFocusEmulationEnabled`. A script filter that matches nothing returns
+`total:0`, never the full list.
+
 **Emulation lifetime.** CDP emulation overrides end with the session that set them. The holder process
 keeps one session open for that reason; `stop` ends it with the browser.
 

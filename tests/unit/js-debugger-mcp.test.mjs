@@ -594,3 +594,17 @@ test("T14b: a refused paused evaluate (e.g. localStorage read) says to retry wit
   const ok = await callTool(s, "debugger_evaluate", { pauseToken: s.pause.token, expression: "localStorage.getItem('apex26.x')", allowSideEffects: true });
   assert.equal(ok.structuredContent.hint, undefined);
 });
+test("boot lane: a non-matching or invalid filter returns nothing / a clear error, never everything", async () => {
+  const { s, c } = await attached();
+  c.emit("Debugger.scriptParsed", { scriptId: "g", url: "http://127.0.0.1:3456/js/game.js", startLine: 0, endLine: 9 });
+  c.emit("Debugger.scriptParsed", { scriptId: "h", url: "http://127.0.0.1:3456/js/hud.js", startLine: 0, endLine: 9 });
+  assert.equal((await s.scriptsList("")).total, 2);
+  const none = await s.scriptsList("no-such-script.js"); assert.deepEqual([none.scripts, none.total], [[], 0]);
+  assert.equal((await s.scriptsList("^http.*/hud\\.js$", { regex: true })).scripts[0].scriptId, "h");
+  const bad = await callTool(s, "debugger_scripts", { filter: "(", regex: true }); assert.equal(bad.isError, true); assert.match(bad.structuredContent.error, /regular expression/i);
+});
+test("boot lane: attaching a non-local page is refused with a message that says why", async () => {
+  const c = new FakeCdp();
+  const s = new DebugSession({ discover: async () => [{ type: "page", id: "t", url: "https://brycejmurrin.github.io/f1-game/", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/t" }], open: async () => c });
+  await assert.rejects(s.attach("http://127.0.0.1:9222", "t"), /only attaches pages served from 127\.0\.0\.1, localhost or \[::1\] \(local repros only/);
+});
