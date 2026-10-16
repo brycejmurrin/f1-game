@@ -629,11 +629,14 @@ function fakeNetSession(made) {
     return s;
   };
 }
+function initialGuestSettings(extra = {}) {
+  return Object.assign({ track: 0, laps: 3, weather: "dry", tod: "day", quali: false, difficulty: "normal", revision: 0 }, extra);
+}
 const TWO_TEAMS = [
   { id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [{ name: "A1" }, { name: "A2" }] },
   { id: "beta", short: "BET", name: "Beta", color: [0, 0, 1], drivers: [{ name: "B1" }, { name: "B2" }] },
 ];
-async function connectedGuest({ teams = TWO_TEAMS, teamIdx = 0 } = {}) {
+async function connectedGuest({ teams = TWO_TEAMS, teamIdx = 0, receiveSettings = true } = {}) {
   const made = [];
   const h = harness({ scanFactory: () => ({ stop() {}, start() {} }), teams,
     netSession: fakeNetSession(made), transportStatus: "open" });
@@ -642,6 +645,7 @@ async function connectedGuest({ teams = TWO_TEAMS, teamIdx = 0 } = {}) {
   h.lobby.watchForOpen();                     // the 250 ms poll sees "open" and binds the session
   for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
   assert.equal(made.length, 1, "the guest's session was bound");
+  if (receiveSettings) made[0].deliver("settings", initialGuestSettings());
   return { h, s: made[0], hellos: () => made[0].sent.filter((m) => m.t === "hello") };
 }
 
@@ -944,7 +948,7 @@ test("READY is host-relayed with from, and guests key _ready by from||id", () =>
   // (their only peer connection is the host). Mirror the HELLO pattern.
   assert.match(SOURCE, /sess\.sendEvent\(NetPlay\.EV\.READY,\s*tagged\)/,
     "host must relay READY to every other guest");
-  assert.match(SOURCE, /ready:\s*!!\(d && d\.ready\),\s*from:\s*id/,
+  assert.match(SOURCE, /ready:\s*!!_ready\.get\(who\),\s*from:\s*id/,
     "relayed READY carries from like HELLO");
   assert.match(SOURCE, /const who = role === "host" \? id : \(\(d && d\.from != null\) \? d\.from : id\);/,
     "guests key _ready by from when present, else the connection id");
@@ -1063,11 +1067,11 @@ test("a guest applies dirty air and AI pace in memory, and rejects bad values", 
 });
 
 test("leaving the room gives the guest back its own rules", async () => {
-  const { h, s } = await connectedGuest();
+  const { h, s } = await connectedGuest({ receiveSettings: false });
   ruleGuestStubs(h);
   h.G.raceLaps = 3; h.G.difficulty = "normal"; h.G.seed = 77; h.G.raceRound = 1;
   try {
-    s.deliver("settings", { laps: 12, difficulty: "hard", seed: 4242, round: 9, dirtyAir: "off", aiPace: "catchup" });
+    s.deliver("settings", initialGuestSettings({ laps: 12, difficulty: "hard", seed: 4242, round: 9, dirtyAir: "off", aiPace: "catchup" }));
     s.deliver("settings", { laps: 15 });   // a second payload must not re-snapshot the host's values
     assert.equal(h.G.raceLaps, 15);
   } finally { h.lobby.cancel(); }
@@ -1185,6 +1189,7 @@ test("host leave during 3p friend quali forgets relayed rivals (QualiNet unlock)
     made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
     made[0].deliver("hello", { from: "g2", rank: 2, team: "beta", driver: 1 });
     assert.ok(h.lobby.roomState().peers.some((p) => p.from === "g2"), "the relayed guest is in the roster");
+    made[0].deliver("settings", initialGuestSettings({ quali: true })); h.lobby.setReady(true);
     made[0].deliver("go", {});
     assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
     assert.equal(closers.length, 1);
@@ -1884,6 +1889,7 @@ async function readyHostRoom() {
   made[0].deliver("hello", { team: "beta", driver: 0 });
   made[0].deliver("ready", { ready: true });
   h.lobby.setReady(true);
+  h.fixtureSession = made[0];
   return h;
 }
 const settle = async (h) => {
@@ -1932,6 +1938,9 @@ test("the host rewinds its sim stream before the race builds, as the guest's app
   h.G.startRace = async () => { writes.push("startRace"); return { ok: true }; };
   h.G.netPlay = { start: () => ({ ok: true }), hostStart() {} };
   try {
+    h.lobby.roomChanged("rules");
+    const revision = h.fixtureSession.sent.filter((m) => m.t === "settings").at(-1).d.revision;
+    h.fixtureSession.deliver("ready", { ready: true, revision }); h.lobby.setReady(true);
     h.lobby.startFromRoom();
     await settle(h);
     const rewind = writes.indexOf(1234), build = writes.indexOf("startRace");
@@ -2037,6 +2046,7 @@ async function guestInQuali(extra = {}, sheetUp) {
   for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
   assert.equal(made.length, 1);
   made[0].deliver("hello", { team: "beta", driver: 0, rank: 1 });
+  made[0].deliver("settings", initialGuestSettings({ quali: true })); h.lobby.setReady(true);
   made[0].deliver("go", {});
   assert.equal(h.lobby.qualifying(), true, "friend quali is armed");
   return ctx;
@@ -2218,4 +2228,176 @@ test("codeHost never reveals a dead code when invite or publish fails", async ()
     assert.equal(publishFail.elements.get("vs-code-copy").disabled, true);
     assert.doesNotMatch(publishFail.status.textContent, /Waiting for them/i);
   } finally { publishFail.lobby.cancel(); }
+});
+
+
+for (const outcome of [false, { kind: "canceled" }]) {
+  test("failed guest start restores rules and releases session/pump: " + JSON.stringify(outcome), async () => {
+    const { h, s } = await connectedGuest();
+    let closes = 0, pumps = 0;
+    s.close = () => { closes++; }; s.pump = () => { pumps++; };
+    try {
+      s.deliver("settings", { laps: 7 }); h.lobby.setReady(true);
+      h.G.startRace = async () => outcome;
+      s.deliver("go", {});
+      await new Promise((r) => setImmediate(r));
+      assert.equal(h.lobby.status().guests, 0);
+      assert.equal(h.G.raceLaps, 3);
+      assert.equal(closes, 1);
+      const before = pumps;
+      await new Promise((r) => setTimeout(r, 60));
+      assert.equal(pumps, before, "lobby pump stopped");
+      h.lobby.cancel(); assert.equal(closes, 1, "cleanup is idempotent");
+      await h.lobby.join(); assert.equal(h.lobby.status().role, "guest", "fresh join is usable");
+    } finally { h.lobby.cancel(); }
+  });
+}
+
+test("guest readiness follows effective settings revision and identical replay preserves consent", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    s.deliver("settings", initialGuestSettings());
+    h.lobby.setReady(true);
+    s.deliver("settings", initialGuestSettings());
+    assert.equal(h.lobby.roomState().selfReady, true);
+    s.deliver("settings", { laps: 7, revision: 1 });
+    assert.equal(h.lobby.roomState().selfReady, false);
+    h.lobby.setReady(true);
+    assert.equal(s.sent.filter((m) => m.t === "ready").at(-1).d.revision, 1);
+    let starts = 0; h.G.startRace = async () => { starts++; return false; };
+    s.deliver("go", { revision: 0 });
+    assert.equal(starts, 0, "stale start revision is refused");
+    s.deliver("go", { revision: 1 });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(starts, 1);
+  } finally { h.lobby.cancel(); }
+});
+
+test("host settings edits invalidate every ready acknowledgment and stale READY cannot unlock START", async () => {
+  const { h, made } = await connectedHost();
+  const s = made[0];
+  try {
+    s.deliver("hello", { team: "beta", driver: 0 });
+    s.deliver("ready", { ready: true, revision: 0 }); h.lobby.setReady(true);
+    h.G.raceLaps = 7; h.lobby.roomChanged("rules");
+    const revision = s.sent.filter((m) => m.t === "settings").at(-1).d.revision;
+    assert.equal(revision, 1);
+    s.deliver("ready", { ready: true, revision: 0 }); h.lobby.setReady(true);
+    assert.equal(h.lobby.startFromRoom(), false);
+    s.deliver("ready", { ready: true, revision });
+    assert.equal(h.lobby.roomState().peerReady, true);
+    h.lobby.roomChanged("rules");
+    assert.equal(h.lobby.roomState().peerReady, true, "identical publish preserves guest consent");
+  } finally { h.lobby.cancel(); }
+});
+
+test("rejected settings block GO until valid settings are accepted and explicitly readied", async () => {
+  const { h, s } = await connectedGuest();
+  let starts = 0; h.G.startRace = async () => { starts++; return false; };
+  try {
+    s.deliver("settings", initialGuestSettings()); h.lobby.setReady(true);
+    s.deliver("settings", { laps: 0 }); s.deliver("go", {});
+    assert.equal(starts, 0); assert.equal(h.G.raceLaps, 3);
+    h.lobby.setReady(true); assert.equal(h.lobby.roomState().selfReady, false);
+    s.deliver("settings", { laps: 7, revision: 1 }); s.deliver("go", {});
+    assert.equal(starts, 0, "a partial snapshot cannot recover rejected settings");
+    s.deliver("settings", { track: 0, laps: 7, weather: "dry", tod: "day", quali: false, difficulty: "normal", revision: 1 }); s.deliver("go", { revision: 1 });
+    assert.equal(starts, 0);
+    h.lobby.setReady(true); s.deliver("go", { revision: 1 });
+    await new Promise((r) => setImmediate(r)); assert.equal(starts, 1);
+  } finally { h.lobby.cancel(); }
+});
+
+test("guest roster bursts settle to each peer's latest HELLO and READY without another event", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    for (const [from, team, driver] of [[undefined, "beta", 0], ["g2", "alpha", 1], ["g3", "beta", 1]]) {
+      for (let n = 0; n < 8; n++) {
+        s.deliver("hello", { from, team, driver, label: n });
+        s.deliver("ready", { from, ready: n !== 7 });
+      }
+    }
+    assert.equal(h.lobby.roomState().peers.length, 3, "host link does not share one aggregate window");
+    await new Promise((r) => setTimeout(r, 1050));
+    assert.ok(h.lobby.roomState().peers.every((p) => p.label === 7));
+    assert.equal(h.lobby.roomState().peerReady, false, "final not-ready flushes too");
+    for (const from of [undefined, "g2", "g3"]) s.deliver("ready", { from, ready: true });
+    assert.equal(h.lobby.roomState().peerReady, true);
+  } finally { h.lobby.cancel(); }
+});
+
+test("LEFT and cancel discard queued roster state", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    for (let n = 0; n < 8; n++) s.deliver("hello", { from: "g2", team: "beta", driver: 1 });
+    s.deliver("left", { from: "g2" });
+    await new Promise((r) => setTimeout(r, 1050));
+    assert.equal(h.lobby.roomState().peers.length, 0, "queued HELLO cannot resurrect a departed peer");
+  } finally { h.lobby.cancel(); }
+});
+
+
+test("delayed first full SETTINGS cannot inherit pre-snapshot READY", async () => {
+  const { h, s } = await connectedGuest({ receiveSettings: false });
+  let starts = 0; h.G.startRace = async () => { starts++; return false; };
+  try {
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().selfReady, false);
+    assert.match(h.status.textContent, /complete race settings before READY/);
+    s.deliver("go", { revision: 0 }); assert.equal(starts, 0);
+    s.deliver("settings", { laps: 77, revision: 0 }); h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().selfReady, false, "partial first settings do not enable readiness");
+    const snapshot = initialGuestSettings({ laps: 77, weather: "wet", tod: "night", difficulty: "hard" });
+    s.deliver("settings", snapshot);
+    assert.equal(h.G.raceLaps, 77); assert.equal(h.lobby.roomState().selfReady, false);
+    s.deliver("go", { revision: 0 }); s.deliver("go", {});
+    assert.equal(starts, 0, "first snapshot still needs explicit consent, even for legacy GO");
+    h.lobby.setReady(true); s.deliver("settings", snapshot);
+    assert.equal(h.lobby.roomState().selfReady, true, "identical first snapshot replay preserves fresh consent");
+    s.deliver("go", { revision: 0 }); await new Promise((r) => setImmediate(r));
+    assert.equal(starts, 1);
+  } finally { h.lobby.cancel(); }
+});
+
+test("revisionless initial settings keep legacy optional defaults but require an initial READY", async () => {
+  const { h, s } = await connectedGuest({ receiveSettings: false });
+  let starts = 0; h.G.startRace = async () => { starts++; return false; };
+  try {
+    h.G.seed = 123; h.G.raceRound = 4;
+    const snapshot = initialGuestSettings(); delete snapshot.revision;
+    s.deliver("settings", snapshot);
+    assert.equal(h.G.seed, 123); assert.equal(h.G.raceRound, 4);
+    s.deliver("go", {}); assert.equal(starts, 0);
+    h.lobby.setReady(true); s.deliver("go", {});
+    await new Promise((r) => setImmediate(r)); assert.equal(starts, 1);
+  } finally { h.lobby.cancel(); }
+});
+
+test("revisionless READY after a host edit explains the required client update", async () => {
+  const { h, made } = await connectedHost();
+  try {
+    const s = made[0]; s.deliver("hello", { team: "beta", driver: 0 });
+    s.deliver("ready", { ready: true }); h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().peerReady, true);
+    h.G.raceLaps = 7; h.lobby.roomChanged("rules");
+    s.deliver("ready", { ready: true });
+    assert.equal(h.lobby.roomState().peerReady, false);
+    assert.match(h.status.textContent, /needs to update or reload/);
+  } finally { h.lobby.cancel(); }
+});
+
+test("guest coalescing retains the last valid profile when the final HELLO is invalid", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    for (let n = 0; n < 8; n++) s.deliver("hello", { from: "g2", team: "beta", driver: 1, label: n });
+    for (const profile of [{ team: "evil", driver: 999 }, { team: "beta", driver: 99 }, { team: "beta", driver: "1" }]) {
+      s.deliver("hello", Object.assign({ from: "g2", label: "invalid-final" }, profile));
+    }
+    s.deliver("ready", { from: "g2", ready: true });
+    for (let n = 0; n < 7; n++) s.deliver("ready", { from: "g2", ready: true });
+    s.deliver("ready", { from: "g2", ready: "invalid-final" });
+    await new Promise((r) => setTimeout(r, 1050));
+    assert.equal(h.lobby.roomState().peers[0].label, 7);
+    assert.equal(h.lobby.roomState().peerReady, true, "invalid READY cannot replace the pending legitimate state");
+  } finally { h.lobby.cancel(); }
 });
