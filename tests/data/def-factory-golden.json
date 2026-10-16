@@ -1,5 +1,5 @@
 {
-  "_doc": "sha256[0..16) of Tracks.LIST metadata and materialised points; tests/unit/track-def-factory.test.mjs recomputes the canon. 2026-10-14 fuji: Circuit Yard scenery realism (#1502) — green runoff + fogDensity 0.0022 (palette only; points unchanged). Earlier 2026-10-11 on merge of race-runtime-hunt base: miami from #1365 scenery, monaco from this PR (bankZones Massenet/Mirabeau as turn 3 / turn 7; points unchanged). Earlier 2026-10-10 for monaco alone; earlier 2026-10-10 (round-2 bug hunt, train A) for the 28 circuits whose authored defs changed: 12 hwZones re-keyed onto the corner they name, the korea/buddh/bahrain hairpin fold clamp, and the splineAlpha plumb (copied only when authored, so the other 24 hashes are unchanged). Earlier: 2026-10-05 for Buddh/Fuji/Korea chord samples that clear Catmull-Rom tarmac folds (and Buddh sparse / Korea tree:none furniture); Hungaroring, Imola and Spa hashes from track-realism batch two (corner/sector/aero metadata).",
+  "_doc": "sha256[0..16) of Tracks.LIST metadata and materialised points; tests/unit/track-def-factory.test.mjs recomputes the canon. 2026-10-14 Monaco: extend hairpin cliff city/foliage exclusion to remove the floating city slab (metadata only; materialised road points unchanged). 2026-10-14 fuji: Circuit Yard scenery realism (#1502) — green runoff + fogDensity 0.0022 (palette only; points unchanged). Earlier 2026-10-11 on merge of race-runtime-hunt base: miami from #1365 scenery, monaco from this PR (bankZones Massenet/Mirabeau as turn 3 / turn 7; points unchanged). Earlier 2026-10-10 for monaco alone; earlier 2026-10-10 (round-2 bug hunt, train A) for the 28 circuits whose authored defs changed: 12 hwZones re-keyed onto the corner they name, the korea/buddh/bahrain hairpin fold clamp, and the splineAlpha plumb (copied only when authored, so the other 24 hashes are unchanged). Earlier: 2026-10-05 for Buddh/Fuji/Korea chord samples that clear Catmull-Rom tarmac folds (and Buddh sparse / Korea tree:none furniture); Hungaroring, Imola and Spa hashes from track-realism batch two (corner/sector/aero metadata).",
   "hashes": {
     "abudhabi": "634013de52542929",
     "albert_park": "f59c0a4861f890ee",
@@ -30,7 +30,7 @@
     "magny_cours": "3c586df82aa76fd6",
     "mexico": "62ec0f7906becda2",
     "miami": "0885c2addf77d728",
-    "monaco": "7b880211a01cb454",
+    "monaco": "8cb45ba79e3caacb",
     "mont_tremblant": "aaf2288518c66a07",
     "montreal": "40ff8552a79ece66",
     "monza": "d0ad2f3fc9ea15cc",
