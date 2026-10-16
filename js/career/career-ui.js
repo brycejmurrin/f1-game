@@ -833,7 +833,9 @@ function create(G) {
     const numIn = addField("NUMBER", draft.num == null || Number.isNaN(draft.num) ? "" : String(draft.num), 2, (v) => {
       const t = String(v).trim();
       if (!t) { draft.num = null; return; }
-      const n = parseInt(t, 10);
+      // Read the whole numeric value: parseInt turned 1e2 and 1.5 into 1,
+      // bypassing draftErrors' integer/range gate. Integral 1e1 means 10.
+      const n = Number(t);
       draft.num = Number.isFinite(n) ? n : null;
     }, "number", "num");
     numIn.min = "1"; numIn.max = "99";
