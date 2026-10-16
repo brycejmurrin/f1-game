@@ -38,6 +38,15 @@ inputs; no physical-device, GPU or long-session claim follows.
   rev (0.50 -> 0.4408, 0.98 -> 0.7208, 1.0 -> 0.7324); across the gear 3 -> 4 shift at rev 0.98 -> 0.72 the
   only step is the rev drop itself (0.7208 -> 0.5691), all values finite, no non-finite or past-time
   `setValueAtTime`/ramp/`setTargetAtTime` write on any AudioParam.
+- Keyboard vs menus, live, in a running race (`__apex.inputState().key` / `.gate`): ArrowUp latches `key.throttle`
+  while driving and releases; with the pause menu open (`gate.anyOpen`) ArrowUp/ArrowLeft set no latch (menu-nav moves
+  focus instead); an ArrowUp held when Escape opens the menu stays latched only until its keyup, which clears it
+  under the menu; after Escape on the focused element the menu closes, focus returns to `BODY`, ArrowUp latches
+  and releases again (no stuck key).
+- Touch steer, live (844 px wide window, 198 px tall — the drag range still follows the long edge:
+  `touchRangePx` 101.28 = 844 x 0.12): half range 0.53, full range and 3x over-range clamp to 1, opposite side
+  -0.951 (dead zone ~5 px), a resting second finger takes the steer at 0 (documented "most recent touch wins") and
+  lifting it returns the first finger's value, all fingers up -> `touchSteer` 0 and the output ramps out.
 - Persistence: `#soundbtn` toggles `apex26.sound` both ways and `GameAudio.enabled()` follows; after a reload
   with sound/sfx/music = false and volSfx 0.5, volMusic 0.3 stored, the real panel (after the first gesture)
   reports `enabled() === false`, button `SOUND OFF`, `volumes() = {sfx: 0.5, music: 0.3}`.
@@ -47,8 +56,7 @@ inputs; no physical-device, GPU or long-session claim follows.
 - `ctx.suspend()` while running: the state stayed `running` after 400 ms in the headless page, so suspend/resume
   and the hidden/visible `visibilitychange` path are inconclusive (the close/rebuild path above ran).
 - A `devicechange`-driven rebuild: deferred without a sticky user activation in this page, so no rebuild ran.
-- Rotated-screen tilt driven live (math only read), touch steer at 844x390, inverted pedals, two pads,
-  keyboard leaks menu <-> race, rebind conflicts. Next round.
+- Rotated-screen tilt driven live (math only read), inverted pedals, two pads, rebind conflicts.
 - Caught-exception pauses: `debugger_exceptions all` was never enabled; the unhandled `error`/`unhandledrejection`
   counters stayed at 0 over every audio probe.
 - Browser group `input`: 146/147; the one failure is `sliders.spec.js › OVERALL SPEED lifts BOTH…`, a 120 s
@@ -68,6 +76,9 @@ inputs; no physical-device, GPU or long-session claim follows.
   `navigator.getGamepads` defined with `defineProperty` is non-writable by default, so later plain
   assignments silently kept the old pad; the boolean `Input.throttle()` hides the analog value, use
   `throttleLevel()` / `brakeLevel()`.
+- **T6** harness: a `KeyboardEvent` dispatched on `window` never reaches `document`-level handlers, so a menu's
+  Escape-to-close did nothing until the event was dispatched on `document.activeElement`; `Input.onKey` (window)
+  still saw it. Dispatch key events on the focused element to match a real keypress.
 - **T5** `GameAudio` is a stub (no `enabled()`, `debug().contextState` `uninitialised`, `init()` creates nothing)
   until the first gesture/`ensureAudio()` loads LAZY_AUDIO: an `init()` before that is a silent no-op, and a
   reload returns to the stub. Probe the real engine only after `GameAudio.enabled` exists. Also
@@ -77,5 +88,6 @@ inputs; no physical-device, GPU or long-session claim follows.
 
 ## Next step
 
-Keyboard leaks into menus during a race, touch steer at 844x390 (`Emulation.setDeviceMetricsOverride` + touch
-emulation), the `visibilitychange` path with a real hidden tab, and a `devicechange` rebuild after a gesture.
+The `visibilitychange` path with a real hidden tab, a `devicechange` rebuild after a gesture, `ctx.suspend()` in a
+non-headless page, rotated-screen tilt (`screen.orientation.angle` 90/270) driven live, and two pads / inverted
+pedals live.
