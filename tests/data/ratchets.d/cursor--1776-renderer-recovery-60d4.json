@@ -3,8 +3,5 @@
     "js/render/glx/glx.js": {
       "lines": 6
     }
-  },
-  "tree": {
-    "waitForTimeout": -1
   }
 }
