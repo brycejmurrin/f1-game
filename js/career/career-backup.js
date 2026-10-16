@@ -551,7 +551,38 @@ const CareerBackup = (function () {
   function seasonAhead(local, incoming) {
     if (!isObj(local)) return false;
     const a = local.round | 0, b = incoming.round | 0;
-    return a !== b ? a > b : seasonPts(local) > seasonPts(incoming) || qualifyingAhead(local, incoming);
+    return a !== b ? a > b : seasonPts(local) > seasonPts(incoming)
+      || qualifyingAhead(local, incoming) || sprintAhead(local, incoming);
+  }
+  function sprintAhead(local, incoming) {
+    // A shortened sprint can award zero points but still advance to the GP.
+    // Protect that stage only within the same championship and weekend.
+    if (local.stage !== "race" || incoming.stage === "race") return false;
+    const a = cleanExtra("season", local), b = cleanExtra("season", incoming);
+    if (!a.ok || !b.ok) return false;
+    const mine = a.value, theirs = b.value, c = mine.config;
+    const id = c && c.trackIds[mine.round];
+    if (!id || !(c.sprint === true || (c.sprint === "rounds" && c.sprintIds.includes(id)))
+        || !sameSeasonValue(c, theirs.config) || mine.round !== theirs.round) return false;
+    if ((incoming.seed != null && incoming.seed !== mine.seed)
+        || (local.seed != null && local.seed !== mine.seed)) return false;
+    // award() adds zero-valued rows and display codes even when nobody scores.
+    const nonzero = (map) => Object.fromEntries(Object.entries(map).flatMap(([key, value]) => {
+      if (Array.isArray(value)) {
+        value = value.slice();
+        while (value.length && !value[value.length - 1]) value.pop();
+      }
+      return (Array.isArray(value) ? value.length : value) ? [[key, value]] : [];
+    }));
+    for (const key of ["pts", "teamPts", "finishes", "roundPts"]) {
+      if (!sameSeasonValue(nonzero(mine[key]), nonzero(theirs[key]))) return false;
+      delete mine[key]; delete theirs[key];
+    }
+    for (const id of Object.keys(theirs.driverCodes)) if (mine.driverCodes[id] !== theirs.driverCodes[id]) return false;
+    for (const key of ["stage", "seed", "driverCodes", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"]) {
+      delete mine[key]; delete theirs[key];
+    }
+    return sameSeasonValue(mine, theirs);
   }
 
   // Badges are earned once and never revoked: import is a UNION of the two
