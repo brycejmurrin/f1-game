@@ -68,6 +68,18 @@ null / -1 (they use `find`, not property lookup); every legend's era has a PERIO
 both `BASE` and `HIRES`; `DriverRatings.get` on prototype keys and on tier `NaN/undefined/"x"/-5/99/Infinity` is
 finite on all seven axes. One defect found (F1 below).
 
+## Pause triage (caught-exception pauses)
+
+One session, `debugger_exceptions all`, `reject` mode, RESULTS opened (the path every fault mode shares):
+
+| # | pause | stack | triage |
+|---|---|---|---|
+| 1 | promiseRejection | injected `window.fetch` -> `fetchTimed` (`api-transport.js:208`) -> `fetchOnce` -> `attempt` | the harness's own `Promise.reject(TypeError)`; the transport's `.catch` in `attempt()` handles it. Not a defect |
+
+Resume produced no second pause, so the rest of the failure path (transport -> hub `loadTab` rejection arm ->
+`errorBlock`) throws nothing that is caught-and-ignored. Telemetry/picker loaders were not paused separately (they share
+this transport). One browser session only; not exhaustive.
+
 ## Fixes
 
 - **F1 (low)** `DriverRatings.get(code, tier, deltas)` added a persisted delta with `+`: a string `"5"` concatenated
