@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-ahIIg+W6KliuhOKnEcN9KqkAm5pzec8nCfsXuXb5m2Y=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-VDaDzxpzc09TF8sKjwiLLWzS7+JfGHej+ezVU2djJKc=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -403,16 +403,23 @@
     }
     try { sessionStorage.setItem(RETRY_KEY, "1"); } catch (_) {}
     var go = function () { location.reload(); };
-    Promise.resolve()
+    // OFFLINE IS NOT A BROKEN INSTALL. With no network a missing shell-tag entry
+    // is a cache miss, and sweeping apex26-* would delete the only copy of the
+    // game the player has. The sweep runs only after a network answer (any HTTP
+    // status) proves the edge is reachable; otherwise show the overlay and stop.
+    var offline = function () {
+      show("Module failed to load", el.src,
+        "The network is unreachable, so the local copy was left alone. Reconnect and reload.", true);
+    };
+    if (navigator.onLine === false) { offline(); return; }
+    fetch(el.src, { cache: "reload" })
       .then(function () {
         if (!window.caches) return null;
         return caches.keys().then(function (names) {
           // Only OUR caches: github.io is a SHARED origin, so keys() also lists other projects' Cache Storage.
           return Promise.all(names.filter(function (n) { return n.indexOf("apex26-") === 0; }).map(function (n) { return caches.delete(n); }));
-        });
-      })
-      .then(function () { return fetch(el.src, { cache: "reload" }); })
-      .then(go, go);
+        }).then(go, go);
+      }, offline);
   }, true);
   // A CLEAN load clears the one-shot, so a genuine failure weeks later still
   // gets its retry. A load that lost a script keeps the flag set — that is what
@@ -3637,6 +3644,8 @@
 <script defer crossorigin="anonymous" src="js/camera/trackside.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/setup-trials.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/setup-trial-session.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-presets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-experiments.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
@@ -3757,6 +3766,7 @@
 <script defer crossorigin="anonymous" src="js/ui/update-check.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/race-message-history.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/controller-profile-controls.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/condition-cue-controls.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/race-mix-controls.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>
 <!-- /@gen-shell:scripts -->

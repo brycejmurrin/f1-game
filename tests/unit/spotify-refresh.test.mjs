@@ -38,7 +38,12 @@ function load(fetchImpl, opts = {}) {
   const element = (id) => {
     if (!elements.has(id)) elements.set(id, {
       value: "", dataset: {}, addEventListener(event, fn) { this[event] = fn; },
-      appendChild() {},
+      appendChild(child) { this.childElementCount = (this.childElementCount || 0) + 1; this.children = (this.children || []).concat(child); },
+      childElementCount: 0, children: [], hidden: false, textContent: "", style: {}, disabled: false,
+      classList: { toggle() {}, add() {}, remove() {} },
+      setAttribute(name, value) { this[name] = String(value); if (name === "src") this.src = String(value); },
+      getAttribute(name) { return this[name] == null ? null : String(this[name]); },
+      removeAttribute(name) { delete this[name]; },
     });
     return elements.get(id);
   };
@@ -57,7 +62,9 @@ function load(fetchImpl, opts = {}) {
     history: { replaceState() {} },
     document: {
       readyState: "complete",
-      getElementById(id) { return opts.dom && (id === "sp-search" || id === "sp-fwd") ? element(id) : null; },
+      getElementById(id) {
+        return opts.dom && (opts.dom === "art" || id === "sp-search" || id === "sp-fwd") ? element(id) : null;
+      },
       addEventListener() {},
       createElement(tag) {
         if (tag === "script") {
@@ -65,7 +72,7 @@ function load(fetchImpl, opts = {}) {
           scripts.push(script);
           return script;
         }
-        return {};
+        return element("created-" + tag + "-" + scripts.length);
       },
       head: { appendChild() {} },
     },
@@ -103,7 +110,29 @@ test("a retryable refresh failure preserves the long-lived Spotify session", asy
 test("album art hides a failed CDN image and does not resurrect it on refresh", () => {
   assert.match(SRC, /dataset\.apexArtFailed/);
   assert.match(SRC, /img\.onerror\s*=\s*next \? \(\) =>/);
-  assert.match(SRC, /img\.hidden = !art \|\| img\.dataset\.apexArtFailed === art/);
+  assert.match(SRC, /img\.removeAttribute\("src"\)/);
+  assert.match(SRC, /img\.hidden = false/);
+});
+
+test("failed current artwork keeps the neutral swatch visible in the player DOM", async () => {
+  const { SpotifyMusic, element } = load((url) => {
+    const u = String(url);
+    if (u.endsWith("/me/player")) return Promise.resolve(jsonResponse({
+      item: { name: "Fallback Track", artists: [{ name: "Artist" }], duration_ms: 120000,
+        album: { images: [{ url: "https://cdn.test/expired-art.jpg" }] } },
+      is_playing: true, progress_ms: 0, device: { name: "Test device", volume_percent: 50 },
+    }));
+    return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, liveToken("live-art")]], dom: "art" });
+
+  await SpotifyMusic.connect();
+  const img = element("sp-art");
+  assert.equal(img.hidden, false, "loaded artwork is visible");
+  const staleFailure = img.onerror;
+  assert.equal(typeof staleFailure, "function");
+  staleFailure();
+  assert.equal(img.hidden, false, "a failed current image leaves its neutral background visible");
+  assert.equal(img.getAttribute("src"), null, "the failed URL is removed so Chromium cannot paint a broken glyph");
 });
 
 test("a delayed account check cannot overwrite a replacement Spotify session", async () => {
@@ -339,6 +368,45 @@ test("a debounced volume PUT stays on the device selected when the drag started"
   assert.doesNotMatch(puts[0], /device_id=new-device/);
 });
 
+test("volume gestures coalesce independently when switching devices and returning", async () => {
+  const seen = [];
+  const { SpotifyMusic, flush } = landing((url) => {
+    seen.push(String(url));
+    return Promise.resolve(String(url).includes("/api/token")
+      ? jsonResponse({ access_token: "fresh", refresh_token: "r-1", expires_in: 3600,
+                       scope: "streaming user-modify-playback-state" })
+      : jsonResponse({ devices: [], items: [] }));
+  });
+  await SpotifyMusic.handleRedirect();
+  await settle();
+  seen.length = 0;
+
+  SpotifyMusic.setDevice("device-a");
+  SpotifyMusic.setDeviceVolume(70);
+  SpotifyMusic.setDevice("device-b");
+  SpotifyMusic.setDeviceVolume(20);
+  SpotifyMusic.setDevice("device-a");
+  SpotifyMusic.setDeviceVolume(40);
+  SpotifyMusic.setDeviceVolume(45);
+  assert.equal(seen.filter((u) => u.includes("/volume")).length, 0);
+  flush();
+  await settle();
+
+  const puts = seen.filter((u) => u.includes("/volume")).map((u) => new URL(u));
+  assert.equal(puts.length, 2, "one request per speaker in the pending batch");
+  assert.deepEqual(puts.map((u) => [u.searchParams.get("device_id"), u.searchParams.get("volume_percent")]),
+    [["device-a", "45"], ["device-b", "20"]]);
+
+  seen.length = 0;
+  SpotifyMusic.setDevice("device-b");
+  SpotifyMusic.setDeviceVolume(30);
+  flush();
+  await settle();
+  const next = seen.filter((u) => u.includes("/volume"));
+  assert.equal(next.length, 1, "drained gestures never leak into the next batch");
+  assert.match(next[0], /volume_percent=30&device_id=device-b/);
+});
+
 const liveToken = (access) => JSON.stringify({ access_token: access, refresh_token: access,
   expires_at: Date.now() + 3600000, scope: "streaming" });
 
@@ -352,6 +420,8 @@ test("disconnect cancels queued volume and search callbacks across reconnect", a
   await settle();
   requests.length = 0;
   SpotifyMusic.setDeviceVolume(77);
+  SpotifyMusic.setDevice("other-device");
+  SpotifyMusic.setDeviceVolume(22);
   element("sp-search").input({ target: { value: "old query" } });
   SpotifyMusic.disconnect();
   disk.set(TOKEN_KEY, liveToken("second"));

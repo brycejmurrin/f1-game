@@ -239,6 +239,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // but-unapplied. This is the mirror — a class the markup wears that no rule
   // matches, which reads as styled and is not. Pure source scan, ~0.3 s.
   "tests/unit/class-usage.test.mjs",
+  // tools/lib/cli-args.mjs: unknown flag is an error with the near miss, =/space forms agree, --help (#1697).
+  "tests/unit/cli-args.test.mjs",
   // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
   // well under a second; must run where the helper or a call-site is edited.
   "tests/unit/clipboard.test.mjs",
@@ -349,6 +351,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-stage.test.mjs",
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
+  "tests/unit/destructure-usage.test.mjs",
   // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
   "tests/unit/dev-flags.test.mjs",
   "tests/unit/digital-steer.test.mjs",
@@ -880,6 +883,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // only useful if they run right after the edit that would break them.
   "tests/unit/setup-preview-hull.test.mjs",
   "tests/unit/setup-screens-state.test.mjs",
+  "tests/unit/setup-trial-session.test.mjs",
   "tests/unit/setup-tune.test.mjs",
   // The sun shadow map's depth span holds a 250 m caster: drives the real
   // ShadowPass.sunPass on a stub renderer and projects through its light VP.
@@ -952,6 +956,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,
   // a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.
   "tests/unit/storm-weather.test.mjs",
+  "tests/unit/stuck-census.test.mjs",
   // SubagentStop report-contract hook (.claude/hooks/subagent-contract.py): spawns it on fake payloads, < 1 s.
   "tests/unit/subagent-contract-hook.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
@@ -1234,6 +1239,33 @@ export function scheduleLongestFirst(files, timings = {}) {
   const key = (f) => { const v = timings[path.isAbsolute(f) ? path.relative(ROOT, f) : f]; return typeof v === "number" ? v : Infinity; };
   return files.map((f, i) => ({ f, i, ms: key(f) }))
     .sort((a, b) => (b.ms - a.ms) || (a.i - b.i)).map((x) => x.f);
+}
+
+/** Estimate the local worker critical path for a selected file set. The real
+ * runner uses the same longest-first order and assigns each file to the least
+ * loaded worker, so this is a useful pre-PR wall-time estimate rather than a
+ * misleading sum. Unknown files remain visible in `unmeasured`; their cost is
+ * intentionally not invented. */
+export function estimateToolingFast(files, timings = loadTimings(), jobs = 1) {
+  const workerCount = Math.max(1, Number(jobs) || 1);
+  const loads = Array(workerCount).fill(0);
+  const rows = files.map((file, index) => ({
+    file,
+    index,
+    ms: typeof timings[file] === "number" ? timings[file] : null,
+  })).sort((a, b) => (b.ms ?? -1) - (a.ms ?? -1) || a.index - b.index);
+  const unmeasured = [];
+  for (const row of rows) {
+    if (row.ms === null) unmeasured.push(row.file);
+    const worker = loads.indexOf(Math.min(...loads));
+    loads[worker] += row.ms ?? 0;
+  }
+  return {
+    totalMs: loads.reduce((sum, ms) => sum + ms, 0),
+    criticalPathMs: Math.max(...loads),
+    workerMs: loads,
+    unmeasured,
+  };
 }
 
 /** The `# tests / # pass / # fail / # skipped / # todo / # cancelled` footer of a TAP run (null for a missing one). */
@@ -1648,8 +1680,15 @@ export function selectToolingFastChanged(changed, opts = {}) {
   for (const f of changed) {
     const norm = f.replace(/\\/g, "/");
     if (tfSet.has(norm)) selected.add(norm);
+    // A file edit has a precise dependency key and may also inherit its
+    // nearest directory pins. Do not fall through to the bare top-level
+    // `js`/`css`/`tools` key: those generic pins describe the whole tree and
+    // made one UI edit select hundreds of unrelated structural tests. A
+    // directory edit still reaches its root and remains deliberately broad.
+    const fileLike = /\.[^/]+$/.test(norm);
     let cur = norm;
     while (cur) {
+      if (fileLike && !cur.includes("/")) break;
       const hits = index.get(cur);
       if (hits) for (const t of hits) selected.add(t);
       const slash = cur.lastIndexOf("/");

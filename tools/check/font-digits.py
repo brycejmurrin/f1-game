@@ -26,6 +26,14 @@ fonts change, like `ratchets.mjs --update`.
 """
 import json, pathlib, sys
 
+if "--help" in sys.argv or "-h" in sys.argv:
+    # before the fontTools import, so usage works on a box without it
+    print("usage: python3 tools/check/font-digits.py [--check]\n"
+          "  (no flag) rewrite tests/data/font-digits.json from assets/fonts/ (needs fontTools: pip install fonttools brotli)\n"
+          "  --check   exit 1 if the ledger is stale\n"
+          "  --help    this text")
+    sys.exit(0)
+
 try:
     from fontTools.ttLib import TTFont
 except ImportError:

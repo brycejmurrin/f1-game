@@ -131,6 +131,22 @@ PRE='((sudo|env|exec|nice|nohup|command|setsid|doas|stdbuf([[:space:]]+-[^[:spac
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
+# --- git checkout --theirs/--ours <path> on a multi-hunk conflict (#2429) -----
+# Advisory only: taking one whole side keeps it for EVERY hunk, and --theirs
+# once dropped a unique fix. tools/ci/sync-pr.mjs is the sanctioned path.
+if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(checkout|restore)[[:space:]].*--(theirs|ours|conflict=)"; then
+  set -f
+  for w in $(printf '%s\n' "$SCAN" | grep -E "git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(checkout|restore)[[:space:]]" | head -1 | sed -E 's/.*(checkout|restore)//'); do
+    case "$w" in -*|\;|\&*|\|*) continue ;; esac
+    [ -f "$w" ] || continue
+    N=$(grep -c '^<<<<<<< ' "$w" 2>/dev/null || true)
+    if [ "${N:-0}" -ge 2 ]; then
+      echo "WARNING: $w has $N conflict hunks; this keeps one side for all of them (tools/ci/sync-pr.mjs resolves per hunk)." >&2
+    fi
+  done
+  set +f
+fi
+
 # --- pkill -f / killall on the browser or test tree ---------------------------
 # Command position only (start of line or after ; & | ( ), so a commit message
 # or echo that merely MENTIONS the words is not blocked.
@@ -451,6 +467,16 @@ EOF
   fi
   if [ -n "${APEX_GUARD_PROBE:-}" ] && [ "$DOCS_ONLY" = 1 ]; then
     echo "bash-guard probe: commit docs-only" >&2; exit 0
+  fi
+  # A TREE WITH NO tools/ (the track-survey-assets image branches) CANNOT RUN
+  # THE GUARDS: skip with a note instead of leaving the model to find
+  # APEX_SKIP_GUARDS=1 (#2428). Only when every committed path sits outside
+  # js/ css/ tools/ tests/ and the generated shell files; `commit -a` stages at
+  # commit time, so it never skips.
+  if [ ! -d "$ROOT/tools/ci" ] && [ ! -d "$ROOT/tools/check" ] && [ "$C_ALL" != "1" ] && [ -n "$(printf '%s' "$COMMITTED" | tr -d '[:space:]')" ] \
+     && ! printf '%s\n' "$COMMITTED" | grep -Eq '^(js/|css/|tools/|tests/)|^(index\.html|sw\.js|version\.json|package\.json|CHANGELOG\.md)$'; then
+    echo "guards skipped: no tools/ in this tree" >&2
+    exit 0
   fi
   if [ "$DOCS_ONLY" = 1 ]; then
     T0=$(date +%s)

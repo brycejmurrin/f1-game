@@ -382,6 +382,7 @@ test("#2184: a label-noise run (all jobs skipped, success) never hides the real 
   }, { once: true });
   assert.equal(result.code, 1, result.lines.join("\n"));
   assert.ok(result.lines.some((line) => line.startsWith("= ci failed")));
+  assert.ok(result.lines.some((line) => /^= ci failed.* sha=[0-9a-f]{40}\b/.test(line)), "#2430: the verdict line carries the full 40-char sha");
   assert.ok(!result.lines.some((line) => line.includes("#2 ")), "the noise run is not even announced");
 });
 
@@ -555,7 +556,7 @@ test("--jobs: one line per queued/pending leg with its wait age; running and fin
     job(3, "guards", "in_progress", null), job(4, "done", "completed", "success") ] };
   const lines = [];
   assert.equal(waitingJobs(SHA, { request: fixture([live], jobs), now: () => now, report: (l) => lines.push(l) }), 0);
-  assert.deepEqual(lines, ["CI › smoke 1 — queued 12m (run #60)", "CI › smoke 2 — pending 1m (run #60)", `= ci jobs 2 waiting (1 queued, 1 pending), 1 running sha=${SHA.slice(0, 7)}`]);
+  assert.deepEqual(lines, ["CI › smoke 1 — queued 12m (run #60)", "CI › smoke 2 — pending 1m (run #60)", `= ci jobs 2 waiting (1 queued, 1 pending), 1 running sha=${SHA}`]);
   const bad = [];
   assert.equal(waitingJobs(SHA, { request: () => ({ error: "HTTP 500" }), report: (l) => bad.push(l) }), 3);
 });

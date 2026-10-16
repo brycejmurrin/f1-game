@@ -158,7 +158,7 @@ test("render: header, one line per PR, a footer; empty board says so", () => {
   const out = render(r, { capLine: "ready-full-cap: 0/3" });
   const lines = out.split("\n");
   assert.match(lines[0], /^PR\s+TITLE\s+STATE\s+HEAD\s+MERGEABLE\s+AUTO-MERGE\s+CI\s+FAILING JOBS\s+GATE\s+PLAN\s+SUGGEST$/);
-  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+aaaaaaa\s+clean\s+-\s+none\s+-\s+passed\s+-\s+WAIT$/);
+  assert.match(lines[1], /^#1\s+x{39}…\s+ready\s+a{39}1\s+clean\s+-\s+none\s+-\s+passed\s+-\s+WAIT$/);
   assert.match(lines.at(-1), /^pr-board: 1 open PR\(s\); ready-full-cap: 0\/3$/);
   const empty = render(evaluate([], { cap: { cap: 3, count: 0 } }));
   assert.match(empty, /no open PRs into claude\/f1-game-project-26h3ng/);

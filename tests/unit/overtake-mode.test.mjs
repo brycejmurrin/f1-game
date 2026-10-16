@@ -301,3 +301,23 @@ test("SAFETY CAR QUEUE (B5.13): the leader runs SC pace, a car > 1 s adrift clos
   assert.equal(RC.scQueueFrac(p2, cars, 5000, leader, vTop, inLane), RC.SC_PACE, "P2 leads the queue while P1 pits");
   assert.equal(RC.scQueueFrac(p3, cars, 5000, leader, vTop, inLane), RC.SC_CATCH, "the rest still close up");
 });
+
+test("two-phase OT charges this tick's actual thrust and pauses coast/brake immediately", () => {
+  const { OM } = load();
+  const c = car({ human: true, otE: OM.energy(), otArmed: true, brakeDemand: 1 });
+  assert.equal(OM.prepare(c, true, true, true, 4), true);
+  const before = c.otE;
+  assert.equal(OM.consume(c, 1 / 60, true, 4), 1, "previous brake flag cannot suppress current thrust");
+  assert.ok(c.otE < before);
+  for (const thrust of [false, false]) {
+    OM.prepare(c, false, true, true, 4); const held = c.otE;
+    assert.equal(OM.consume(c, 1 / 60, thrust, 4), 0); assert.equal(c.otE, held); assert.equal(c.otT, 0);
+  }
+  OM.prepare(c, true, true, true, 4);
+  assert.equal(c.otOn, false, "second press toggles off on this tick");
+  assert.equal(OM.consume(c, 1 / 60, true, 4), 0);
+  c.otE = OM.energy() / 1000; c.otArmed = true;
+  OM.prepare(c, true, true, true, 4);
+  const fraction = OM.consume(c, 1 / 60, true, 4);
+  assert.ok(fraction > 0 && fraction < 1); assert.equal(c.otE, 0);
+});

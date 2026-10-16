@@ -81,16 +81,21 @@ export function testReaderFiles(dir = path.join(ROOT, "tests"), rel = "tests") {
 }
 
 /** Which tools/tests name this data file — the derived "read by" column. */
-export function readersOf(name, files) {
+export function readersOf(name, files, sources) {
+  sources ??= readerSources(files);
   const readers = new Set();
-  for (const rel of files) {
-    if (rel.endsWith(".json")) continue;
-    if (fs.readFileSync(path.join(ROOT, "tools", rel), "utf8").includes(name)) readers.add(rel);
-  }
-  for (const rel of testReaderFiles()) {
-    if (fs.readFileSync(path.join(ROOT, rel), "utf8").includes(name)) readers.add(rel);
-  }
+  for (const [rel, src] of sources) if (src.includes(name)) readers.add(rel);
   return [...readers].sort();
+}
+
+// A render has many data rows. Read the source corpus once for that render,
+// rather than reopening every tool/test for every JSON basename. Keep the
+// snapshot local to collect(), so a later render sees edits in the same process.
+function readerSources(files, read = (rel) => fs.readFileSync(path.join(ROOT, "tools", rel), "utf8")) {
+  return [
+    ...files.filter((rel) => !rel.endsWith(".json")).map((rel) => [rel, read(rel)]),
+    ...testReaderFiles().map((rel) => [rel, fs.readFileSync(path.join(ROOT, rel), "utf8")]),
+  ];
 }
 
 const cell = (s) => String(s).replace(/\|/g, "\\|");
@@ -124,18 +129,25 @@ export function collect({
   read = (rel) => fs.readFileSync(path.join(ROOT, "tools", rel), "utf8"),
 } = {}) {
   const SKILLS = liveSkills();
+  const cache = new Map();
+  const source = (rel) => {
+    if (!cache.has(rel)) cache.set(rel, read(rel));
+    return cache.get(rel);
+  };
+  let readers;
   const problems = [];
   const main = [], runner = [], data = [];
   for (const rel of files) {
     if (rel.endsWith(".json")) {
-      data.push({ rel, readers: readersOf(path.basename(rel), files) });
+      readers ??= readerSources(files, source);
+      data.push({ rel, readers: readersOf(path.basename(rel), files, readers) });
       continue;
     }
     if (!TOOL_EXT.test(rel)) {
       problems.push(`${rel}: unknown extension — teach gen-tools-readme.mjs about it or move the file`);
       continue;
     }
-    const tags = parseHeader(read(rel));
+    const tags = parseHeader(source(rel));
     if (!tags.doc) {
       problems.push(`${rel}: no \`@doc\` line in its first ${HEADER_LINES} lines`);
       continue;

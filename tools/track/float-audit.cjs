@@ -402,12 +402,22 @@ function audit(id) {
   }
   const floatingPrims = pending.map((p) => ({ p, gap: p.minY - (p._g === null ? 0 : p._g) }));
 
+  const { report, floating } = clusterFloatingPrimitives(floatingPrims, track);
+  const flagKeys = new Set(floatingPrims.map(
+    (f) => `${f.p.minX.toFixed(1)}|${f.p.minY.toFixed(1)}|${f.p.minZ.toFixed(1)}`));
+  return { id, propCells: prims.length, clusters: report.length, floating, all: report, flagKeys };
+}
+
+// Group unsupported members without changing the support-chain verdict.
+function clusterFloatingPrimitives(floatingPrims, { n, px, pz }) {
+  const byGeom = (a, b) => a.minX - b.minX || a.minZ - b.minZ || a.minY - b.minY
+                        || a.maxX - b.maxX || a.maxZ - b.maxZ || a.maxY - b.maxY;
   // group neighbouring floating primitives so one object reports once
   // Same total-order requirement, and it matters MORE here: the grouping below
   // is greedy seed-and-absorb, so which primitive gets to be a seed decides how
   // many clusters come out. Ties on gap alone left that to emission order.
   floatingPrims.sort((a, b) => (b.gap - a.gap) || byGeom(a.p, b.p));
-  const used = new Set(), report = [];
+  const used = new Set(), report = [], flagged = new Set();
   for (let i = 0; i < floatingPrims.length; i++) {
     if (used.has(i)) continue;
     const seed = floatingPrims[i];
@@ -427,7 +437,7 @@ function audit(id) {
     }
     const names = new Map();
     for (const it of group) names.set(it.p.name, (names.get(it.p.name) || 0) + 1);
-    report.push({
+    const row = {
       cells: group.length,
       minGap: +Math.min(...group.map((g2) => g2.gap)).toFixed(2),
       maxGap: +Math.max(...group.map((g2) => g2.gap)).toFixed(2),
@@ -438,17 +448,22 @@ function audit(id) {
       supported: false,
       src: [...names.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
         .map(([nm, c]) => `${nm}x${c}`).join(","),
-    });
+    };
+    report.push(row);
+    // A nearby unsupported member below THRESH cannot erase a higher defect.
+    // Decide on raw gaps; rounding is for display, including at the threshold.
+    if (group.some((it) => it.gap > THRESH)) flagged.add(row);
   }
   report.sort((a, b) => (b.minGap * b.cells) - (a.minGap * a.cells));
-  const floating = report.filter((r) => r.minGap > THRESH);
-  const flagKeys = new Set(floatingPrims.map(
-    (f) => `${f.p.minX.toFixed(1)}|${f.p.minY.toFixed(1)}|${f.p.minZ.toFixed(1)}`));
-  return { id, propCells: prims.length, clusters: report.length, floating, all: report, flagKeys };
+  const floating = report.filter((r) => flagged.has(r));
+  return { report, floating };
 }
+
+module.exports = { clusterFloatingPrimitives };
 
 // ---------------------------------------------------------------------------
 
+if (require.main === module) {
 const args = process.argv.slice(2);
 if (args.includes("--help") || args.includes("-h")) {
   console.log("usage: node tools/track/float-audit.cjs <trackId>|--all [--json] [--all-clusters] [--top N]\n       node tools/track/float-audit.cjs <trackId> --why   (the emitting scenery source line per flagged cluster)\n  Exhaustive floating-scenery detector: builds the circuit in a VM and reports prop clusters above/under the ground.");
@@ -755,4 +770,6 @@ if (args[0] === "--all") {
   if (asJson) emitJson(res);
   else printOne(res, allClusters ? 200 : 40);
   process.exit(res.floating.length ? 1 : 0);
+}
+
 }

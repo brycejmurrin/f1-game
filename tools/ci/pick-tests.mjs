@@ -298,6 +298,7 @@ export const RULES = [
   // panel, the global type and colour tokens, the picker), so they ride along.
   [/^css\/(menus|carsetup|tokens|select)\.css/, ["ui", "baseline"], "the menu chrome: only the blessed PNGs in menu-baseline.spec.js see it"],
   [/^css\//, ["ui"], "layout regressions are screenshot-visible only"],
+  [/^js\/race\/setup-trial-session\.js$/, ["garage-unit"], "fresh solo setup-trial ownership and starting conditions"],
   [/^js\/ui\/settings-search\.js$/, ["steering-unit"], "settings search ownership and focus regressions"],
   // Two rules, because "script tags + DOM shell" is LOAD-BEARING: it is one of
   // select-specs' BOOT_FALLBACK_REASONS, the strings that let node-plan.mjs
@@ -306,6 +307,9 @@ export const RULES = [
   // Rewording it to mention the art would put vm-page — logging.spec.js's VM
   // twin — back into every source edit's node plan.
   [/^index\.html/, ["baseline"], "the #title-car art the baseline PNGs pixel-compare"],
+  // index.html IS the precached shell: sw.js installs from the tags it names and its inline boot guard
+  // (version check, broken-install repair) has unit coverage only in the service-worker group (#1704).
+  [/^index\.html/, ["service-worker"], "the precached shell: the SW's install list and the boot guard's repair"],
   [/^(index|cockpit-view)\.html/, ["tiny", "ui"], "script tags + DOM shell"],
   [/^tools\/manifest\.cjs/, ["tooling-fast"], "load order is asserted against index.html"],
   [/^tools\//, ["tooling-fast"], "the tools index and every tool contract live in the tooling suite"],

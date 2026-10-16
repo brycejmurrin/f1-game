@@ -235,7 +235,7 @@ test("the overall qualifying table bands the field where each cut fell", async (
   // Under P5 (last of the Q3 runners) and under P6 (the only Q2 casualty here),
   // each naming the round the group BELOW it went out in — not the round it
   // never reached, which is the plausible-looking way to get this wrong.
-  assert.deepEqual(cuts(tree), [["5", "ELIMINATED IN Q2"], ["6", "ELIMINATED IN Q1"]]);
+  assert.deepEqual(cuts(tree), [["5", "ELIMINATED IN Q2 · P6 MAY HAVE ADVANCED WITHOUT A TIME"], ["6", "ELIMINATED IN Q1 · P7 MAY HAVE ADVANCED WITHOUT A TIME"]]);
 });
 
 test("a round view re-sorts on THAT round's time, not the classification", async () => {
@@ -252,7 +252,7 @@ test("a round view re-sorts on THAT round's time, not the classification", async
   // Gap is to THIS round's leader, so the pole-sitter reads +0.085 here.
   assert.deepEqual(r[0].slice(3), ["1:12.610", "—"]);
   assert.deepEqual(r[2].slice(3), ["1:12.695", "+0.085"]);
-  assert.deepEqual(cuts(tree), [["6", "ELIMINATED IN Q1"]]);
+  assert.deepEqual(cuts(tree), [["6", "ELIMINATED IN Q1 · SAI MAY HAVE ADVANCED WITHOUT A TIME"]]);
 });
 
 test("a round view lists only the cars that ran that round", async () => {
@@ -264,7 +264,7 @@ test("a round view lists only the cars that ran that round", async () => {
     "VER Max Verstappen", "PIA Oscar Piastri", "ANT Kimi Antonelli",
     "RUS George Russell", "HAM Lewis Hamilton", "GAS Pierre Gasly"
   ]);
-  assert.deepEqual(cuts(tree), [["5", "ELIMINATED IN Q2"]]);
+  assert.deepEqual(cuts(tree), [["5", "ELIMINATED IN Q2 · GAS MAY HAVE ADVANCED WITHOUT A TIME"]]);
 });
 
 test("the final round has no cut band and can be left again", async () => {
@@ -345,7 +345,31 @@ test("sprint qualifying is a qualifying, and its rounds are named SQ", async () 
   );
   assert.deepEqual(headers(tree), ["POS", "DRIVER", "TEAM", "SQ1", "SQ2", "SQ3"]);
   assert.deepEqual(pills(tree), ["OVERALL", "SQ1", "SQ2", "SQ3"]);
-  assert.deepEqual(cuts(tree), [["1", "ELIMINATED IN SQ2"]]);
+  assert.deepEqual(cuts(tree), [["1", "ELIMINATED IN SQ2 · P2 MAY HAVE ADVANCED WITHOUT A TIME"]]);
+});
+
+// 2023 Azerbaijan Sprint Shootout (OpenF1 session 9278, #2099): Norris (P10)
+// advanced to SQ3 and Sargeant (P15) to SQ2 but set no time there. The provider
+// has no "advanced" flag, so a band must not claim the next car was knocked out
+// where the times cannot prove it.
+test("a qualifier who advanced but set no later time is not asserted eliminated", async () => {
+  const mk = (pos, num, d) => ({ pos, num, laps: 10, points: null, dnf: false, dns: false, dsq: false,
+    duration: d, gap: d.map(() => 0) });
+  const tree = await render(
+    { sessionKey: 9278, name: "Sprint Shootout", type: "Qualifying" },
+    [mk(1, 1, [102.8, 102.5, 101.7]), mk(2, 63, [103.8, 102.9, 101.8]),
+     mk(3, 16, [103.9, 103.4, null]),            // Norris-shaped: through to SQ3, no SQ3 time
+     mk(4, 11, [104.2, 103.4, null]),
+     mk(5, 55, [104.0, null, null]),             // Sargeant-shaped: through to SQ2, no SQ2 time
+     mk(6, 44, [104.5, null, null])],
+    [{ num: 16, code: "NOR", name: "N", team: "T" }, { num: 55, code: "SAR", name: "S", team: "T" }]
+  );
+  const c = cuts(tree);
+  // The band names the car it cannot place instead of asserting it went out.
+  assert.deepEqual(c, [["2", "ELIMINATED IN SQ2 · P3 MAY HAVE ADVANCED WITHOUT A TIME"],
+                       ["4", "ELIMINATED IN SQ1 · P5 MAY HAVE ADVANCED WITHOUT A TIME"]]);
+  clickPill(tree, "SQ2");
+  assert.deepEqual(cuts(tree).map((x) => x[1]), ["ELIMINATED IN SQ2 · NOR MAY HAVE ADVANCED WITHOUT A TIME"]);
 });
 
 test("retirements sort last and say why in the time column", async () => {
@@ -362,6 +386,24 @@ test("retirements sort last and say why in the time column", async () => {
   assert.deepEqual(r.slice(1).map((x) => x[0]), ["—", "—"]);
   assert.deepEqual(r[1].slice(4, 6), ["DNF", "—"]);
   assert.deepEqual(r[2].slice(4, 6), ["DNS", "—"]);
+});
+
+// 2024 Belgian GP (OpenF1 session 9574, #2100): Russell was disqualified but the
+// provider kept his completed duration, so the time cell hid the DSQ.
+test("a DSQ / DNS / DNF that keeps a duration still says why", async () => {
+  const tree = await render(
+    { sessionKey: 9574, name: "Race", type: "Race" },
+    [
+      { pos: 1, num: 16, laps: 44, points: 25, dnf: false, dns: false, dsq: false, duration: 4796.5, gap: 0 },
+      { pos: null, num: 63, laps: 44, points: 0, dnf: false, dns: false, dsq: true, duration: 4797.04, gap: null },
+      { pos: null, num: 1, laps: 20, points: 0, dnf: true, dns: false, dsq: false, duration: 2500, gap: null },
+      { pos: null, num: 2, laps: 0, points: 0, dnf: false, dns: true, dsq: false, duration: 99, gap: null }
+    ]
+  );
+  const r = rows(tree);
+  assert.equal(r[0][4], "1:19:56.500", "an ordinary finisher keeps its time");
+  assert.deepEqual(r.slice(1).map((x) => x[4]).sort(), ["DNF", "DNS", "DSQ"]);
+  assert.ok(r.slice(1).every((x) => x[5] === "—"), "no gap beside a status");
 });
 
 // OpenF1 answers HTTP 404 {"detail":"No results found."} for a session that has

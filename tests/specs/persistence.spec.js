@@ -120,7 +120,16 @@ test.describe("persistence failure is visible", () => {
 
   test("the recovery export contains game progress, not the storage cache", async ({ page }) => {
     await bootBroken(page);
-    await page.evaluate(() => window.__apex.aeroMode("auto"));
+    await page.evaluate(() => {
+      window.__apex.career({ teamId: "williams", seat: 1, seed: 2026 });
+      window.__apex.careerMoney(123457);
+    });
+    // The hub assigns the first objective on its next tick. Capture the save
+    // after that real work settles, rather than racing the export button.
+    await page.waitForFunction(() => window.__apex.career()?.obj != null, null, { polling: 100, timeout: 10000 });
+    const expectedCareer = await page.evaluate(() => window.__apex.career());
+    expect(expectedCareer.team).toBe("williams");
+    expect(expectedCareer.money).toBe(123457);
     const download = page.waitForEvent("download");
     await page.locator("#save-export").click();
     const item = await download;
@@ -131,6 +140,7 @@ test.describe("persistence failure is visible", () => {
     expect(recovery.format).toBe("apex26-recovery-v1");
     expect(recovery.persistence.durable).toBe(false);
     expect(recovery.persistence.reason).toBe("QuotaExceededError");
+    expect(recovery.career).toEqual(expectedCareer);
     expect(recovery).not.toHaveProperty("cache");
   });
 

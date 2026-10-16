@@ -199,3 +199,10 @@ test("DRS zone labels name an S/F wrap with arrow markers", () => {
   assert.match(list, /Zone 1:.*S\/F/);
   assert.doesNotMatch(list, /5370 m &ndash; 519 m/);
 });
+
+test("track detail names its map and elevation canvases for the selected circuit", () => {
+  const h = boot({}, { trackIdx: 1 });
+  h.menus.openTrackDetail();
+  assert.equal(h.dom.byId("track-detail-canvas").getAttribute("aria-label"), "Spa circuit layout diagram");
+  assert.equal(h.dom.byId("track-detail-elev").getAttribute("aria-label"), "Spa elevation profile");
+});

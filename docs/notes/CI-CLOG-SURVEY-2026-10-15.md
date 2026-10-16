@@ -257,7 +257,12 @@ What changed (this PR):
   node gate's wall drops from vm-b1's 10.6 min (12.3 over twelve runs) to vm-page's 8.7, with the same runner-minutes.
   The only lever below 8.7 min is splitting `adapted-specs.test.mjs` across two rows.
 
-Re-measure the six job medians after a day of deploy pushes; `SLICE_COST_P50_SEC` carries the projection until then.
+The first post-rebalance projection was intentionally provisional. On 2026-10-16,
+18 successful CI runs were re-read from the Actions jobs API and their p50s were
+folded into `tools/ci/pick-unit-slices.mjs`: vm-a1 250 s, vm-a2 280 s, vm-b1
+455 s, vm-b2 295 s, page-a 164 s, page-b 391 s, slow 206 s. These are planning
+estimates, not a claim that a slow runner is defective; queue and setup time must
+be measured separately before another ownership move.
 
 First measurement (the ship push on the merge, caf37bd6, run 38700490935, 07:42 UTC, every row in full; job seconds
 with setup): vm-a1 236, vm-a2 278, vm-b1 286, vm-b2 361, page 422, slow 220. Wall 422 s (7.0 min) against 638 s

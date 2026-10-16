@@ -160,3 +160,28 @@ test("native tape starts at the next fixed boundary after a lap crossing and set
     assert.equal(IG.valid(broken), false, "v3 must carry a replay start");
   } finally { Object.assign(I, saved); A.headless(false); }
 });
+
+test("real fixed-tick OT never drains on coast or current brake and toggles off without a stale free push", async () => {
+  const A = g.apex, G = g.G, I = g.sandbox.Input, OM = g.sandbox.OvertakeMode;
+  await A.race("monza"); A.reset(0.02, 70, 0, 818); A.clearInput(); A.headless(true);
+  const names = ["throttle", "throttleLevel", "braking", "brakeLevel", "consumeOvertake"];
+  const saved = Object.fromEntries(names.map(k => [k, I[k]]));
+  let gas = false, brake = false, fire = false;
+  Object.assign(I, { throttle: () => gas, throttleLevel: () => gas ? 1 : 0,
+    braking: () => brake, brakeLevel: () => brake ? 1 : 0, consumeOvertake: () => { const p = fire; fire = false; return p; } });
+  try {
+    for (const c of G.cars) { c.lap = 2; c._otLap = 2; c._otS = c.s; }
+    Object.assign(G.player, { otE: OM.energy(), otOn: true, otT: 4, otArmed: true, brakeDemand: 0, boostOn: false });
+    const full = G.player.otE; A.step(1 / 60);
+    assert.equal(G.otEnabled(), true, "fixture is past the opening-lap activation hold");
+    assert.equal(G.player.otE, full, "coasting supplies no thrust and pays no allowance");
+    gas = true; G.player.brakeDemand = 1; A.step(1 / 60);
+    assert.ok(G.player.otE < full, "this tick's throttle spends despite previous braking flag");
+    assert.equal(G.player.deploying, true);
+    brake = true; const held = G.player.otE; A.step(1 / 60);
+    assert.equal(G.player.otE, held, "current braking pauses immediately"); assert.equal(G.player.deploying, false);
+    brake = false; fire = true; A.step(1 / 60);
+    assert.equal(G.player.otOn, false); assert.equal(G.player.otE, held);
+    assert.equal(G.player.deploying, false, "toggle-off cannot inherit last tick's otFree");
+  } finally { Object.assign(I, saved); A.headless(false); }
+});

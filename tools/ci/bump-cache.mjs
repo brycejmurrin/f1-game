@@ -63,6 +63,11 @@ const VERSION = path.join(ROOT, "version.json");
 const EXTRA_PAGES = ["controller.html", "cockpit-view.html"].map((f) => path.join(ROOT, f)).filter((f) => fs.existsSync(f));
 export const DEV_TOKEN = "dev";
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
+// Initial <script src> and <link rel="stylesheet"> tags also carry the file's FULL sha256 SRI once staged (#2312):
+// the ?v= key is 12 hex chars, and Pages serves current bytes for an older key, so only integrity authenticates them.
+const SRI_TAG_RE = /<(script|link)\b[^>]*>/gi;
+const hasSriTarget = (tag) => /^<script\b/i.test(tag) ? /\bsrc="[^"?#]+\?v=/.test(tag) : /\brel="stylesheet"/i.test(tag) && /\bhref="[^"?#]+\?v=/.test(tag);
+const INTEGRITY_ATTR_RE = /\s+integrity="([^"]*)"/i;
 const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/;
 export const LAZY_V_ID = "apex-lazy-v";
 export const LAZY_INTEGRITY_ID = "apex-lazy-integrity";
@@ -111,18 +116,31 @@ function digest(rel, encoding = "hex") {
 function readState() {
   const html = fs.readFileSync(INDEX, "utf8");
   const tags = [...html.matchAll(TAG_RE)].map((m) => ({ rel: m[2], actual: m[3] }));
+  const sri = (text, page) => {
+    const out = [];
+    for (const m of text.matchAll(SRI_TAG_RE)) {
+      if (!hasSriTarget(m[0])) continue;
+      const t = m[0].match(/\b(?:src|href)="([^"?#]+)\?v=/);
+      const i = m[0].match(INTEGRITY_ATTR_RE);
+      out.push({ rel: t[1], integrity: i ? i[1] : null, ...(page ? { page } : {}) });
+    }
+    return out;
+  };
+  const sriTags = sri(html);
   for (const page of EXTRA_PAGES) {
-    for (const m of fs.readFileSync(page, "utf8").matchAll(TAG_RE)) tags.push({ rel: m[2], actual: m[3], page: path.basename(page) });
+    const text = fs.readFileSync(page, "utf8");
+    for (const m of text.matchAll(TAG_RE)) tags.push({ rel: m[2], actual: m[3], page: path.basename(page) });
+    sriTags.push(...sri(text, path.basename(page)));
   }
   let build = null;
   try { build = JSON.parse(fs.readFileSync(VERSION, "utf8")).build; } catch (_) { /* verdict reports it */ }
   const meta = html.match(META_RE);
   const shellBuild = meta ? Number(meta[2]) : null;
-  return { html, tags, build, shellBuild };
+  return { html, tags, sriTags, build, shellBuild };
 }
 
 function verdict() {
-  const { html, tags, build, shellBuild } = readState();
+  const { html, tags, sriTags, build, shellBuild } = readState();
   const mismatches = [];
   for (const tag of tags) {
     if (!STAGED) {
@@ -134,6 +152,16 @@ function verdict() {
     try { expected = digest(tag.rel); }
     catch (error) { mismatches.push({ ...tag, error: error.message }); continue; }
     if (tag.actual !== expected) mismatches.push({ ...tag, expected });
+  }
+  for (const tag of sriTags) {
+    if (!STAGED) {
+      if (tag.integrity) mismatches.push({ rel: tag.rel, actual: tag.integrity, expected: "no integrity in the repo shell", page: tag.page });
+      continue;
+    }
+    let expected = null;
+    try { expected = "sha256-" + digest(tag.rel, "base64"); }
+    catch (error) { mismatches.push({ rel: tag.rel, error: error.message, page: tag.page }); continue; }
+    if (tag.integrity !== expected) mismatches.push({ rel: tag.rel, actual: tag.integrity, expected, page: tag.page });
   }
   // The lazy map: every lazy file the staged root holds, at its content hash.
   // The repo shell carries none (its loads fall back to ?v=<build>).
@@ -187,6 +215,11 @@ function apply() {
   const hashTags = (text) => text.replace(TAG_RE, (_all, attr, rel) => {
     tagCount++;
     return `${attr}="${rel}?v=${digest(rel)}"`;
+  }).replace(SRI_TAG_RE, (tag) => {
+    if (!hasSriTarget(tag)) return tag;
+    // Re-stamping replaces the integrity, never stacks a second one.
+    const rel = tag.match(/\b(?:src|href)="([^"?#]+)\?v=/)[1];
+    return tag.replace(INTEGRITY_ATTR_RE, "").replace(/\s*\/?>$/, (end) => ` integrity="sha256-${digest(rel, "base64")}"${end}`);
   });
   // An extra page carries the same apex-build meta when it has one (controller.html
   // since 2026-10-10: the SW compares it to the shell's), so stamp it in step.

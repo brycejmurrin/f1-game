@@ -50,7 +50,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above: `test:guards` (the commit hook,
    every commit) ⊂ `test:tooling-fast` (`gen-ladder-figures.mjs --table` sizes it) ⊂ `deploy.mjs --gate-only`, the only
    pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine; `docs/notes/PREPUSH-GATE-LADDER.md`).
-   Before every code `git push`: `npm run test:tooling-fast` plus the change-aware pick (`pick-tests`) must pass.
+   Before every code `git push`: `npm run test:tooling-fast` plus the change-aware pick (`pick-tests`) must pass; edit loops may use `verify-change --fast --json` / `tooling-fast --changed` for a diff-sized budget.
 4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards` about a minute, one `node --test`, `verify-track`, `pick-tests`).
    Background, ONE Bash `run_in_background` task logging to `artifacts/logs/`: 2–15 min (`tooling-fast`, `deploy.mjs --gate-only`) and a browser group (`test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task; exit 1 = red, 124 = still running).
    While it runs, do work that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`; shared-contract files stay out of worktrees). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout.
@@ -112,7 +112,8 @@ tables: `docs/ARCHITECTURE.md`.
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules — pay for every added line. The commit hook
   absorbs ≤ 40 lines of growth (the raise lands in your diff as `tests/data/ratchets.d/<branch>.json`, a conflict-free
-  delta); more blocks until you extract or raise it with a reason (`tools/check/ratchets.mjs --update`; also lowers).
+  delta); more blocks until you extract or raise it with a reason (`tools/check/ratchets.mjs --update`; also lowers). A deliberate TREE-metric raise (cssClasses…)
+  is `--update --fragment --reason="…"`: a delta too, `ratchets.json` untouched.
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log` (`js/core/log.js`), never bare `console.*`.
 - Coordinates: +Y up, metres, radians, arc `s`, lateral `x` +right; +k = LEFT turn (measured). Never flip a curvature
   sign without a rendered lap.
@@ -152,8 +153,7 @@ wrapped as `apex_*`. Routes: live canvas → skill `mcp-probe`; pre-push or depl
 code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps → skill `ci-watch` + `tools/ci/pr-board.mjs`
 (agent `ci-watcher` returns the board; agent `merge-desk` runs the desk); owning PRs → skill `steward`; messaging, claims and authority between sessions
 → skill `agent-fleet` (spawning siblings: `source_url`, auto mode, the user's quoted grant; `send_message` first lines; measured
-allow-rule shapes in `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`); failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`; a scoped change handed to a subagent you message mid-task → agent `worker`.
-Source debugging → skill `js-debugger` and its separate MCP (`debugger_*`, parent-only): attach to existing local Chrome, inspect breakpoints/locals, step and resume; wrapper commands and tool reference: [Agent JS debugger](docs/research/AGENT-JS-DEBUGGER-MCP.md).
+allow-rule shapes in `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`); failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`; a scoped change handed to a subagent you message mid-task → agent `worker`; source debugging → skill `js-debugger` (separate parent-owned MCP `debugger_*`; [Agent JS debugger](docs/research/AGENT-JS-DEBUGGER-MCP.md)).
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence. Bulk or post-deploy web reading goes to agent `deploy-research`.
 

@@ -30,6 +30,22 @@ const stripFrontmatter = (text) => {
   return { fm: m ? m[1] : "", body: m ? text.slice(m[0].length) : text };
 };
 
+for (const name of ["compound-debug", "compound-review", "compound-verify"]) {
+  test(`portable ${name} keeps the explicit F1 project contract`, () => {
+    const base = `.claude/skills/${name}`;
+    const { fm, body } = stripFrontmatter(read(`${base}/SKILL.md`));
+    assert.equal(parseYAML(fm)["disable-model-invocation"], true);
+    const metadata = parseYAML(read(`${base}/agents/openai.yaml`));
+    assert.equal(metadata.policy.allow_implicit_invocation, false);
+    assert.equal(fs.realpathSync(path.join(ROOT, ".agents/skills", name)), path.join(ROOT, base));
+    assert.match(body, /explicit opt-in/);
+    assert.match(body, /check-changes/);
+    assert.match(body, /verification gates govern F1 work/);
+    assert.match(read(`${base}/references/source.md`), /Every Compound Engineering/);
+    assert.match(read(`${base}/references/LICENSE`), /Copyright \(c\) 2025 Every/);
+  });
+}
+
 test("AGENTS.md stays under 200 lines and emphasises at most one line", () => {
   // Claude Code memory docs: "target under 200 lines per CLAUDE.md file.
   // Longer files consume more context and reduce adherence." Imports load in

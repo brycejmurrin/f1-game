@@ -118,6 +118,7 @@ test("pinned IWER vendor is present and ENTER VR appears; session starts/exits/r
 
   const again = await startVr(page);
   expect(again.ok && again.presenting).toBe(true);
+  await waitXrFrames(page, 2, { timeout: 45_000 });
   await endVr(page);
 
   expect(page.__xrPageErrors || []).toEqual([]);
@@ -314,24 +315,17 @@ test("WebGPU path negotiates via enabledFeatures and falls back to WebGL2", asyn
   expect(page.__xrPageErrors || []).toEqual([]);
 });
 
-test("EXIT VR restores window tick once (no double loop); camMode store unchanged", async ({ page }) => {
+test("EXIT VR resumes the game tick and restores the live camera without changing its preference", async ({ page }) => {
   test.setTimeout(180_000);
   await bootAndProbe(page);
-  // Seed a non-cockpit cam and confirm store writes.
-  await page.evaluate(() => {
-    localStorage.setItem("apex26.camMode", "1");
-  });
-  // Re-goto so camMode loads from store... actually game already booted; set live.
-  await page.evaluate(() => {
-    if (typeof setCamMode === "function") setCamMode(1); // persists chase/far
-  });
+  await page.evaluate(() => window.__apex.camera(1));
   const beforeStore = await page.evaluate(() => localStorage.getItem("apex26.camMode"));
 
   expect((await startVr(page)).ok).toBe(true);
   await waitXrFrames(page, 2, { timeout: 45_000 });
 
   const during = await page.evaluate(() => ({
-    cam: typeof camMode !== "undefined" ? camMode : null,
+    cam: window.__apex.camera().index,
     store: localStorage.getItem("apex26.camMode"),
     loopByXr: XrBoot.loopByXr(),
     diag: XrBoot.diag(),
@@ -342,32 +336,23 @@ test("EXIT VR restores window tick once (no double loop); camMode store unchange
   expect(during.diag.savedCam).toBeGreaterThanOrEqual(0);
 
   await endVr(page);
-
-  const after = await page.evaluate(() => new Promise((resolve) => {
-    let n = 0;
-    const start = performance.now();
-    function count(t) {
-      n++;
-      if (n >= 3 || performance.now() - start > 500) {
-        resolve({
-          n,
-          loopByXr: XrBoot.loopByXr(),
-          windowPending: XrBoot.diag().windowPending,
-          cam: typeof camMode !== "undefined" ? camMode : null,
-          store: localStorage.getItem("apex26.camMode"),
-          savedCam: XrBoot.diag().savedCam,
-        });
-        return;
-      }
-      requestAnimationFrame(count);
-    }
-    requestAnimationFrame(count);
-  }));
+  // Observe the game's own tick, rather than an unrelated rAF chain created
+  // by the test (which would keep running even if the game failed to resume).
+  await page.evaluate(() => {
+    globalThis.__xrFlatTicks = 0;
+    globalThis.__xrOriginalPoll = Input.poll;
+    Input.poll = (...args) => { __xrFlatTicks++; return __xrOriginalPoll.apply(Input, args); };
+  });
+  await page.waitForFunction(() => __xrFlatTicks >= 3, null, { polling: 100, timeout: 15_000 });
+  const after = await page.evaluate(() => {
+    Input.poll = __xrOriginalPoll;
+    return { loopByXr: XrBoot.loopByXr(), cam: window.__apex.camera().index,
+      store: localStorage.getItem("apex26.camMode"), savedCam: XrBoot.diag().savedCam };
+  });
   expect(after.loopByXr).toBe(false);
   expect(after.savedCam).toBe(-1);
   expect(after.store).toBe(beforeStore);
-  // Exactly one window chain should be alive — we observe a few rAFs, not a stall.
-  expect(after.n).toBeGreaterThanOrEqual(2);
+  expect(after.cam).toBe(1);
   expect(page.__xrPageErrors || []).toEqual([]);
 });
 

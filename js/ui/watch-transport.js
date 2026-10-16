@@ -55,8 +55,8 @@ const WatchTransport = (function () {
         const idx = cameras.findIndex((c) => c.id === id);
         if (idx >= 0 && G.setCamMode) { G.setCamMode(idx, { persist: false }); replay.setLocked(true); if (G.snapGameCam) G.snapGameCam(true); }
       });
-      action(top, "auto", "Let the TV director choose the driver and camera", "AUTO", () => replay.setAuto(true));
-      action(top, "lock", "Keep following the selected driver and camera", "FOLLOW LOCK", () => replay.setLocked(true));
+      action(top, "auto", "AUTO: let the TV director choose the driver and camera", "AUTO", () => replay.setAuto(true));
+      action(top, "lock", "FOLLOW LOCK: keep following the selected driver and camera", "FOLLOW LOCK", () => replay.setLocked(true));
       const photo = action(top, "photo", "Open photo mode", "PHOTO", () => { if (G.openWatchPhoto) G.openWatchPhoto(); });
       photo.hidden = typeof G.openWatchPhoto !== "function";
       root.appendChild(top);

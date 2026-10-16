@@ -48,8 +48,8 @@ function settled(promise, out) {
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf",
-  "towing", "wake", "axFrac", "axFracF", "axFracR", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
-  "kerbSndT", "kerbHapT",
+  "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
+  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking",
   // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
   // the node window; refilled lazily by updateCarBrakePlan, so a cold car is
   // simply without it (CarFields predeclares it undefined).
@@ -1431,7 +1431,7 @@ const api = {
   },
   // Load any circuit (by index or id, e.g. "monza") and start a normal race,
   // optionally forcing time of day ("day" | "night" | "default") and weather
-  // ("dry" | "wet" | "rain" | "overcast" | "fog"). "wet" = damp road, no rain;
+  // ("dry" | "wet" | "rain" | "overcast" | "fog" | "storm"). "wet" = damp road, no rain;
   // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
   // opts.laps: the race distance (default GAME_LAPS) — the tyre-class draw at
   // grid-up reads it, so a long-race bench must set it HERE, not after.
@@ -1457,7 +1457,7 @@ const api = {
     // End the previous session's weather arc FIRST: startRace's restoreBase() puts a live MIXED
     // race's chip weather back over whatever is set below (every in-game exit does this).
     if (G.endWeatherSession) G.endWeatherSession();
-    G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
+    G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog" || weather === "storm") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
     if (opts && opts.grid != null) G.raceGrid = opts.grid;   // the game's setter validates the name
     if (opts && opts.duel != null) {
@@ -2960,6 +2960,7 @@ const api = {
       for (const k of EPISODE_TRANSIENTS) delete c[k];
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
+    agentView.beginEpisode();
     G._testInput = null;
     return this.obs();
   },
