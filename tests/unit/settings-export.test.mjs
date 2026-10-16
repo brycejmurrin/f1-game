@@ -30,7 +30,7 @@ function boot(opts = {}) {
   };
   if (opts.store) Object.assign(store, opts.store);
   const sb = {
-    Math, Object, Array, Number, JSON, Map, Set, Date, String, Blob: class {},
+    Math, Object, Array, Number, JSON, Map, Set, Date, String, Blob,
     setTimeout: () => 0, clearTimeout() {},
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     GameStore: { store },
@@ -69,12 +69,13 @@ function boot(opts = {}) {
   const G = { gfx: { isMobile: !!opts.mobile }, soundOn: false };
   const plain = (v) => JSON.parse(JSON.stringify(v));
   return { SettingsExport, G, disk,
+    careerVersion: opts.career ? vm.runInContext("SaveMigrate.CAREER_V", ctx) : null,
     collect: (mode) => plain(SettingsExport.collect(mode, G)),
     garage: () => plain(SettingsExport.collectGarage()),
     career: () => plain(SettingsExport.collectCareer()),
     loadSettings: (o) => plain(SettingsExport.applySettings(o, G)),
     loadGarage: (o) => plain(SettingsExport.applyGarage(o)),
-    loadCareer: (o) => plain(SettingsExport.applyCareer(o)) };
+    loadCareer: (o, revisions) => plain(SettingsExport.applyCareer(o, revisions)) };
 }
 
 function bootImportUI(opts = {}) {
@@ -1210,5 +1211,64 @@ test("LOAD SETTINGS FILE shows a result, not an unhandled rejection, for a malfo
     assert.match(b.button.textContent, /LOAD SETTINGS FILE — /);
   } finally {
     process.off("unhandledRejection", onRej);
+  }
+});
+
+
+test("career export preserves opaque future saves in every slot without altering stored bytes", () => {
+  const version = boot({ career: true }).careerVersion;
+  for (const flavour of ["driver", "myteam"]) for (let i = 0; i < 3; i++) {
+    const key = "career." + flavour + "." + i;
+    const future = { ...CAREER_SAVE, v: version + 1, flavour,
+      money: { futureCurrency: 123 }, opaque: { untouched: ["future", { field: 7 }] } };
+    const b = boot({ career: true, disk: { ["apex26." + key]: JSON.stringify(future) } });
+    const before = [...b.disk.entries()];
+    const exported = b.career();
+    assert.deepEqual(exported.careers[key], future, key);
+    assert.equal(exported.count, 1);
+    assert.deepEqual([...b.disk.entries()], before, "export must not rewrite or migrate opaque data");
+    exported.careers[key].opaque.untouched[1].field = 99;
+    assert.deepEqual(JSON.parse(b.disk.get("apex26." + key)), future, "export is detached from storage");
+  }
+});
+
+test("future final row refuses the entire mixed legacy import before slots or selection change", () => {
+  const version = boot({ career: true }).careerVersion;
+  for (const flavour of ["driver", "myteam"]) {
+    const b = boot({ career: true, disk: { "apex26.careerSlot": '"myteam:1"',
+      "apex26.career.driver.0": JSON.stringify({ ...CAREER_SAVE, money: 100 }) } });
+    const before = [...b.disk.entries()];
+    const result = b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
+      "career.driver.0": { ...CAREER_SAVE, v: 0, money: "not-a-number" },
+      "career.driver.1": CAREER_SAVE,
+      careerSlot: "driver:0",
+      ["career." + flavour + ".2"]: { ...CAREER_SAVE, flavour, v: version + 1 },
+    } });
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, "newer-version");
+    assert.equal(result.applied, 0);
+    assert.deepEqual([...b.disk.entries()], before, "neither earlier rows nor the pointer may be written");
+  }
+});
+
+test("future preflight retains legacy migration, scope and slot/selection revision gates", () => {
+  const b = boot({ career: true });
+  const result = b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
+    "career.driver.0": { ...CAREER_SAVE, v: 0, money: "not-a-number" },
+    "career.driver.1": CAREER_SAVE, careerSlot: "driver:0",
+    season: { round: 4 }, "daily.v1": { days: {} }, customTeam: { name: "Other" },
+  } });
+  assert.equal(result.ok, true);
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 0);
+  for (const i of [0, 1]) assert.equal(JSON.parse(b.disk.get("apex26.career.driver." + i)).v, b.careerVersion);
+  for (const key of ["season", "daily.v1", "customTeam"]) assert.equal(b.disk.has("apex26." + key), false);
+  for (const changed of ["career.driver.0", "careerSlot"]) {
+    const h = boot({ career: true, store: { keyRevision: (key) => key === changed ? 1 : 0 } });
+    const before = [...h.disk.entries()];
+    const refused = h.loadCareer({ format: h.SettingsExport.CAREER_FORMAT,
+      careers: { "career.driver.0": CAREER_SAVE, careerSlot: "driver:0" } },
+    { expectedRevisions: { "driver:0": 0 }, expectedSelectionRevision: 0 });
+    assert.equal(refused.reason, "conflict", changed);
+    assert.deepEqual([...h.disk.entries()], before);
   }
 });

@@ -679,9 +679,9 @@ function resetGarage() {
 
 // THE CAREER FILE: the six championship slots and the live pointer. Same
 // allowlist discipline as the garage — only career.<flavour>.<i> and
-// careerSlot leave or enter the namespace. Every slot value runs through
-// migrateCareer on the way out and on the way in so a hand-edited or
-// older-build file cannot crash Career.load().
+// careerSlot leave or enter the namespace. Supported slots run through
+// migrateCareer on export/import; opaque future saves export verbatim and
+// refuse import so an older build cannot silently discard them.
 const CAREER_FORMAT = "apex26-career-v1";
 const CAREER_FLAVOURS = ["driver", "myteam"];
 const CAREER_SLOT_N = 3;
@@ -699,6 +699,14 @@ function migrateSlot(raw) {
   if (typeof GameStore !== "undefined" && GameStore.migrateCareer) return GameStore.migrateCareer(copy);
   return copy && typeof copy === "object" && !Array.isArray(copy) ? copy : null;
 }
+// Ask the shared authority about opaque future saves before migration can
+// discard them. Check only the version so unrelated legacy coercion, shape
+// and size decisions cannot hide a future discriminator.
+function futureCareerSlot(raw, flavour) {
+  if (typeof CareerBackup === "undefined") return false;
+  return CareerBackup.validate({ format: CareerBackup.FORMAT,
+    slots: [{ flavour, i: 0, data: { v: raw && raw.v } }] }).reason === "newer-version";
+}
 function collectCareer() {
   const out = {};
   let n = 0;
@@ -714,7 +722,7 @@ function collectCareer() {
           if (s != null) raw = JSON.parse(s);
         } catch (_) { raw = null; }
       }
-      const c = migrateSlot(raw);
+      const c = futureCareerSlot(raw, f) ? JSON.parse(JSON.stringify(raw)) : migrateSlot(raw);
       if (!c) continue;
       out[k] = c;
       n++;
@@ -762,9 +770,10 @@ function applyCareer(file, revisions) {
       else skipped++;
       continue;
     }
+    const match = CAREER_SLOT_RE.exec(k);
+    if (futureCareerSlot(bag[k], match[1])) return refused("newer-version");
     const c = migrateSlot(bag[k]);
     if (!c) { skipped++; continue; }
-    const match = CAREER_SLOT_RE.exec(k);
     slots.push({ flavour: match[1], i: Number(match[2]), data: c });
   }
   if (!slots.length && liveSlot == null) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
