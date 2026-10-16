@@ -1,0 +1,1 @@
+1792173320	Bryce Murrin	Shared responsive menu layout and focused menu validation; preserve existing local UI fixes. Own css/components.css css/settings.css css/select.css and scoped existing menu tests.  [cursor/ui-opportunity-fixes-8e4a; session 1431228b7bae33500e738a32]
