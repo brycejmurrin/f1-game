@@ -699,6 +699,7 @@ const TrackDesigner = (function () {
     const next = MODES.some((m) => m[0] === name) ? name : "edit";
     if (next === "scenery") sceneryView = true;
     if (next === mode) { refreshControls(); return mode; }
+    hideCtx();
     mode = next;
     if (mode === "elevation") toggleElevationHeat(true);
     if (ui.rail) ui.rail.scrollTop = 0;
@@ -742,12 +743,25 @@ const TrackDesigner = (function () {
   }
   const keptNote = (kept) => (kept ? " · UNDO brings back the design you had" : "");
   /** The autosaved draft, sanitized loosely (a work in progress may be red). */
-  function draftItem() {
-    const d = custom.draft();
+  function draftItem(previous) {
+    const d = previous ? (custom.draftPrev && custom.draftPrev()) : custom.draft();
     const it = d && custom.sanitize(d, { loose: true });
     if (!it || !it.pts.length) return null;
     if (typeof d.originId === "string") it.originId = d.originId;
     return it;
+  }
+
+  function recoverDraft() {
+    const previous = draftItem(true);
+    if (!previous) { renderLibrary(); return false; }
+    // Recovery always keeps the current draft, including name-only edits.
+    savedSnap = null;
+    const kept = load(previous, "recover", previous.originId);
+    savedSnap = null;
+    saveDraft();
+    showPane("design");
+    message("Previous draft recovered" + keptNote(kept));
+    return true;
   }
 
   // ── save / race ───────────────────────────────────────────────────────────
@@ -765,6 +779,7 @@ const TrackDesigner = (function () {
       return r;
     }
     design.id = r.id; design.originId = r.id;
+    saveDraft();   // persist the new library link even if autosave already ran
     savedSnap = snapshot();
     message(r.durable ? "Saved to MY CIRCUITS" : "Saved — but storage is full, so it may not survive a reload", !r.durable);
     Log.info("track", "designer saved " + r.id + " (" + design.name + ", " + design.lengthM + " m)");
@@ -846,7 +861,9 @@ const TrackDesigner = (function () {
     rail.append(tabs, ui.paneDesign, ui.paneLib, ui.paneHow);
     buildDesignPane(ui.paneDesign);
     const libraryFiles = el("div", "td-chips"); libraryFiles.dataset.role = "library-files";
-    libraryFiles.append(btn("EXPORT ALL", "sel-chip", exportLibraryFile), btn("IMPORT LIBRARY", "sel-chip", () => ui.libraryFile.click()));
+    ui.recoverDraft = btn("RECOVER PREVIOUS DRAFT", "sel-chip", recoverDraft);
+    ui.recoverDraft.hidden = true;
+    libraryFiles.append(ui.recoverDraft, btn("EXPORT ALL", "sel-chip", exportLibraryFile), btn("IMPORT LIBRARY", "sel-chip", () => ui.libraryFile.click()));
     ui.libraryFile = el("input"); ui.libraryFile.type = "file"; ui.libraryFile.accept = ".json,application/json"; ui.libraryFile.hidden = true;
     ui.libraryFile.setAttribute("aria-label", "Import a circuit library file");
     ui.libraryFile.addEventListener("change", () => { const f = ui.libraryFile.files && ui.libraryFile.files[0]; ui.libraryFile.value = ""; if (f) importLibraryFile(f); });
@@ -1463,6 +1480,7 @@ const TrackDesigner = (function () {
   }
   function renderLibrary() {
     if (!ui.lib) return;
+    if (ui.recoverDraft) ui.recoverDraft.hidden = !draftItem(true);
     while (ui.lib.firstChild) ui.lib.removeChild(ui.lib.firstChild);
     const items = custom.list();
     if (!items.length) { ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — SAVE the design on the left and it appears here. Saved circuits also show under MY CIRCUITS in the RACE picker.")); return; }
@@ -1941,9 +1959,11 @@ const TrackDesigner = (function () {
     // POINT m / single-node edit: when a SPAN is selected and the anchor is in
     // it, offset every grip in the group by the same delta (relative hills stay).
     if (keepSpan) {
-      const dh = v - elevH(design.heights[i] || 0);
-      if (dh === 0) { refreshControls(); return false; }
       const group = TrackShape.spanIndices(sel, span, design.pts.length);
+      const values = group.map(j => elevH(design.heights[j] || 0));
+      const limit = CustomTracks.LIMITS.rise;
+      const dh = Math.max(-limit - Math.min(...values), Math.min(limit - Math.max(...values), v - elevH(design.heights[i] || 0)));
+      if (dh === 0) { refreshControls(); return false; }
       const next = design.heights.slice();
       for (const j of group) next[j] = elevH((next[j] || 0) + dh);
       commit(Object.assign({}, design, { heights: next, elevations: [] }), "elev:span");

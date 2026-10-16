@@ -13,6 +13,8 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 ## 1695
 
+- Track Designer: recover displaced drafts from MY CIRCUITS after reload, keep saves linked to their circuit, dismiss point actions when switching workspaces, and preserve relative hills at elevation limits.
+
 ### New
 - Track Designer: add, edit and remove road bridges; place ponds, lakes and straight river sections from a water palette.
 
