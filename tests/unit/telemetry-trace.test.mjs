@@ -208,6 +208,34 @@ test("a driver with no GPS of their own rides the path on THEIR lap, not the oth
     `borrowed-path dot swept ${s.total.toFixed(3)} rad over its own lap, want 2pi`);
 });
 
+test("compare gaps stay at the reference finish while a slower lap keeps playing", () => {
+  const player = vm.runInContext("DataTelemetryPlayer", ctx).create({}, { paintFrame() {} });
+  const cell = () => ({ textContent: "", style: {}, classList: { toggle() {} } });
+  const lane = (finish) => ({
+    car: [{ t: 0, speed: 180, gear: 6, throttle: 100, brake: 0, rpm: 10000 },
+      { t: finish, speed: 180, gear: 6, throttle: 100, brake: 0, rpm: 10000 }],
+    cum: { t: [0, finish], d: [0, 1000] },
+  });
+  const primary = lane(80), compare = lane(82), third = lane(84);
+  const view = {
+    cursorT: 80, primary, compare, laps: [primary, compare, third], rpmMax: 12000,
+    g: {
+      speed: [cell(), cell()], gear: [cell(), cell()], thr: [cell(), cell()],
+      brk: [cell(), cell()], rpm: [cell(), cell()], drs: [cell(), cell()],
+      delta: cell(), board: [{ spd: cell(), ref: true },
+        { spd: cell(), dl: cell() }, { spd: cell(), dl: cell() }],
+    },
+  };
+  for (const t of [79, 80, 81, 82, 83]) {
+    view.cursorT = t;
+    player.paintFrame(view);
+    const expected = t < 80 ? "+1.98s" : "+2.00s";
+    assert.equal(view.g.delta.textContent, expected, `compare gauge at ${t}s`);
+    assert.equal(view.g.board[1].dl.textContent, expected.slice(0, -1), `compare board at ${t}s`);
+    assert.equal(view.g.board[2].dl.textContent, t < 80 ? "+3.95" : "+4.00", `third lane at ${t}s`);
+  }
+});
+
 // Exercise the real controller -> view -> player -> renderer wiring with a
 // synthetic feed. Canvas methods are inert: this checks state and lifecycle,
 // while the browser telemetry-compare spec owns layout and visible pixels.

@@ -371,7 +371,14 @@ const Collide = (() => {
           // per-generation cache of live state: computed later, it is the same.
           // A NaN sweep (non-finite prog or NaN x skips that hypot gate) never rejects here.
           const sx = b.x - pb.x, sd = b.prog - pb.prog;
-          if (sx === sx && sd - sd === 0 && Math.abs(deltaS(pa.prog - pb.prog)) > reachA + Math.max(6, Math.abs(b.speed) * dt * 2 + 1)) continue;
+          if (sx === sx && sd - sd === 0) {
+            // Unwrapped first (hunt-2 P6): inside one lap, |d| clear of both reach
+            // bands by 1 mm is far apart without deltaS's two `%`; the 1 mm dwarfs
+            // its rounding, and anything nearer takes the exact test below.
+            const reach = reachA + Math.max(6, Math.abs(b.speed) * dt * 2 + 1), dp = pa.prog - pb.prog, ad = dp < 0 ? -dp : dp;
+            if (ad > reach + 1e-3 && ad < track.total - reach - 1e-3) continue;
+            if (Math.abs(deltaS(dp)) > reach) continue;
+          }
           if (ownsPose(b) || incidentSim.owns(b) || netPlay.owns(b)) continue;
           sweepMotion(b, pb, dt);
           if (!pb.sweepEligible) continue;
@@ -456,6 +463,7 @@ const Collide = (() => {
 
     // Bucket-pair callbacks + per-pass inputs in module state — no closure per pass.
     let _colCbLast = false, _colCbRub = 1;
+    let _colTouched = false;   // a relaxation pass reached a contact (hunt-2 P6)
     const COL_SLOP = 0.05;   // separation slop — small, avoids a hard per-frame snap
     function _colResolveCB(a, b) { _colResolvePair(a, b, _colCbLast, _colCbRub); }
     function _colSepCB(a, b) { _colSepPair(a, b, COL_SLOP); }
@@ -533,6 +541,7 @@ const Collide = (() => {
       if (a.finished && b.finished) return;   // coasting home: kinematic, and never racing each other
       const ct = pairContact(a, b);
       if (!ct) return;
+      _colTouched = true;
       if (ct.oriented) { orientedResponse(a, b, ct, last); return; }
       const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
       if (sideContact) {
@@ -637,6 +646,7 @@ const Collide = (() => {
       if (a.finished && b.finished) return;   // coasting home: kinematic, and never racing each other
       const ct = pairContact(a, b);
       if (!ct) return;
+      _colTouched = true;
       if (ct.oriented) {
         const corr = Math.max(0, ct.depth - SLOP);
         shiftLong(a, ct.nx * corr * ct.sA); shiftLong(b, -ct.nx * corr * ct.sB);
@@ -734,6 +744,10 @@ const Collide = (() => {
         Log.debug("game", "resolveCollisions all-pairs n=" + ranked.length);
       }
       for (let pass = 0; pass < PASSES; pass++) {
+        // A pass that reached no contact moved nothing, so every later pass would
+        // read the same poses and reach none either (hunt-2 P6): stop there.
+        if (pass > 0 && !_colTouched) break;
+        _colTouched = false;
         const last = pass === PASSES - 1;
         if (useBuckets) {
           // Re-bucket only when shiftLong moved someone — idle passes keep the grid.
