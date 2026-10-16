@@ -43,6 +43,75 @@ const TLX = (function () {
     return true;
   }
 
+  // Capture the unpreserved backbuffer NOW, but wait asynchronously for its bytes.
+  // A timer around client-memory readPixels still blocked Photo for 100 s on
+  // software GL. PBO + fence polling moves GPU waiting out of that call;
+  // the final client copy can still pay driver/command-stream overhead.
+  // https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#use_non-blocking_async_data_readback
+  const _captureReads = new WeakSet();
+  async function readGlCapture(gl, w, h) {
+    if (!(w > 0 && h > 0)) throw new Error("no frame size");
+    if (_captureReads.has(gl)) throw new Error("capture already in progress");
+    _captureReads.add(gl);
+    let pbo = null, sync = null;
+    try {
+      const bytes = w * h * 4;
+      pbo = gl.createBuffer();
+      if (!pbo) throw new Error("capture buffer unavailable");
+      const binding = gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING);
+      const names = [gl.PACK_ALIGNMENT, gl.PACK_ROW_LENGTH, gl.PACK_SKIP_PIXELS, gl.PACK_SKIP_ROWS];
+      const pack = names.map((n) => gl.getParameter(n));
+      try {
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+        gl.bufferData(gl.PIXEL_PACK_BUFFER, bytes, gl.STREAM_READ);
+        if (gl.getBufferParameter(gl.PIXEL_PACK_BUFFER, gl.BUFFER_SIZE) !== bytes)
+          throw new Error("capture buffer allocation failed");
+        for (let i = 0; i < names.length; i++) gl.pixelStorei(names[i], i === 0 ? 4 : 0);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+        sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (!sync) throw new Error("capture fence unavailable");
+        gl.flush();
+      } finally {
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, binding);
+        for (let i = 0; i < names.length; i++) gl.pixelStorei(names[i], pack[i]);
+      }
+      await new Promise((resolve, reject) => {
+        // A valid full-resolution software frame exceeded 20 s; keep waiting
+        // asynchronously instead of forcing Photo's synchronous canvas fallback.
+        const deadline = performance.now() + 120000;
+        const poll = () => {
+          try {
+            if (gl.isContextLost()) throw new Error("capture context lost");
+            const status = gl.clientWaitSync(sync, 0, 0);
+            if (status === gl.ALREADY_SIGNALED || status === gl.CONDITION_SATISFIED) { resolve(); return; }
+            if (status === gl.WAIT_FAILED) throw new Error("capture fence failed");
+            if (performance.now() >= deadline) throw new Error("capture timed out");
+            setTimeout(poll, 10);
+          } catch (e) { reject(e); }
+        };
+        setTimeout(poll, 0);
+      });
+      const data = new Uint8ClampedArray(bytes);
+      // Rendering may have changed this binding while the fence was pending.
+      const bindingNow = gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING);
+      try {
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+        gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, data);
+        if (gl.isContextLost()) throw new Error("capture context lost");
+      } finally { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, bindingNow); }
+      const stride = w * 4, row = new Uint8ClampedArray(stride);
+      for (let y = 0; y < Math.floor(h / 2); y++) {
+        const a = y * stride, b = (h - 1 - y) * stride;
+        row.set(data.subarray(a, a + stride)); data.copyWithin(a, b, b + stride); data.set(row, b);
+      }
+      return { width: w, height: h, data };
+    } finally {
+      try { if (sync) gl.deleteSync(sync); } catch (_) { /* context lost */ }
+      try { if (pbo) gl.deleteBuffer(pbo); } catch (_) { /* context lost */ }
+      _captureReads.delete(gl);
+    }
+  }
+
   // addUpdateRange() mints a {start,count} per call (60-120 a frame across the instanced batches). three reads the
   // list synchronously at upload and then empties the array, so one cached range object per attribute can be re-pushed.
   function setRange0(attr, count) {
@@ -2698,10 +2767,40 @@ const TLX = (function () {
       // compile left on the WebGPU lap (PERF-FINDINGS §2ah).
       // Compile each FX material once on its
       // stream's real vertex layout, under the scene target and MRT the warm has
-      // already set; the throwaway Mesh is dropped, the stream geometry kept.
+      // already set; warm probes are reused until their stream geometry/material is released.
       // apex26.tlxWarmFx=0 is the A/B handle.
       let _warmFx = true;
       try { _warmFx = localStorage.getItem("apex26.tlxWarmFx") !== "0"; } catch (_) { /* no storage: warm them */ }
+      // Reuse warm-only render objects so their pipelines stay cached, without minting another listener per race.
+      // Their geometry/material owns the probes. A release during compile waits until that compiler is done.
+      const _warmProbes = new WeakMap();
+      async function compileWarmProbe(geo, mat, sx = 1) {
+        let mats = _warmProbes.get(geo);
+        if (!mats) _warmProbes.set(geo, mats = new Map());
+        let p = mats.get(mat);
+        if (!p) {
+          p = { meshes: new Map(), pending: 0, dead: false };
+          p.release = () => {
+            if (!p.dead) {
+              p.dead = true; mats.delete(mat);
+              geo.removeEventListener("dispose", p.release); mat.removeEventListener("dispose", p.release);
+            }
+            if (p.pending) return;
+            for (const m of p.meshes.values()) { m.dispose(); m.geometry = null; m.material = null; }
+            p.meshes.clear();
+          };
+          mats.set(mat, p);
+          geo.addEventListener("dispose", p.release); mat.addEventListener("dispose", p.release);
+        }
+        let m = p.meshes.get(sx);
+        if (!m) {
+          m = new THREE.Mesh(geo, mat); m.frustumCulled = false;
+          m.scale.x = sx; m.updateMatrixWorld(true); p.meshes.set(sx, m);
+        }
+        p.pending++;
+        try { await renderer.compileAsync(m, camera, scene); }
+        finally { if (!--p.pending && p.dead) p.release(); }
+      }
       async function warmFxPrograms() {
         if (!_warmFx || !fx) return;
         const jobs = [[skidStream, fx.skidMat], [partStreams[0], fx.particleMats && fx.particleMats[0]],
@@ -2709,9 +2808,7 @@ const TLX = (function () {
         for (const [stream, mat] of jobs) {
           if (!mat) continue;
           ensureStream(stream, 1);
-          const m = new THREE.Mesh(stream.geo, mat);
-          m.frustumCulled = false;
-          await renderer.compileAsync(m, camera, scene);
+          await compileWarmProbe(stream.geo, mat);
         }
         // The instanced blob program (A6) and decal runs (F3), if none was on screen for the scene warm.
         for (const run of [_blob, ..._decalRuns.values()]) {
@@ -2743,6 +2840,7 @@ const TLX = (function () {
       // layout in the pool like the ring above. apex26.fieldLod=0 skips them.
       const _LATE_FX = [{ roughness: 1, specular: 0, noAlphaWrite: true, alpha: 0.5 },
         { roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 }];
+      let _lateFxGeo = null;   // one tiny HDR quad for every entry warm, like the mirror-glass probe
       const _lateFxOn = () => typeof FieldLod === "undefined" || FieldLod.on;
       function _layoutKey(g) {
         let k = g.index ? g.index.array.constructor.name : "-";
@@ -2785,22 +2883,16 @@ const TLX = (function () {
           // parts (the brake ring among them) through a mirrored matrix — the
           // one field the lap's pipeline key differed in (probe, field 27).
           for (const g of geos.values()) for (const sx of [1, -1]) {
-            const m = new THREE.Mesh(g, mat);
-            m.frustumCulled = false;
-            m.scale.x = sx; m.updateMatrixWorld(true);
-            await renderer.compileAsync(m, camera, scene);
+            await compileWarmProbe(g, mat, sx);
           }
         }
         if (!_lateFxOn()) return;
-        const quad = buildGeometry({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
-          col: [2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25], idx: [0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3] });   // HDR colour: packAttr keeps it float, as on the real flame
+        const quad = _lateFxGeo || (_lateFxGeo = buildGeometry({ pos: [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], nrm: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1],
+          col: [2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25, 2.6, 1.05, 0.25], idx: [0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3] }));   // HDR colour: packAttr keeps it float, as on the real flame
         for (const o of _LATE_FX) {
           const mat = materialFor(o, false, false);
           for (const sx of [1, -1]) {
-            const m = new THREE.Mesh(quad, mat);
-            m.frustumCulled = false;
-            m.scale.x = sx; m.updateMatrixWorld(true);
-            await renderer.compileAsync(m, camera, scene);
+            await compileWarmProbe(quad, mat, sx);
           }
         }
         _warmStages.lateFx = _LATE_FX.length;
@@ -2943,10 +3035,7 @@ const TLX = (function () {
           }
           const gm = fx.mirrorGlassMaterial(mirRT.texture);
           for (const sx of [1, -1]) {
-            const m = new THREE.Mesh(_glassProbeGeo, gm);
-            m.frustumCulled = false;
-            m.scale.x = sx; m.updateMatrixWorld(true);
-            await renderer.compileAsync(m, camera, scene);
+            await compileWarmProbe(_glassProbeGeo, gm, sx);
           }
         }
         if (post.warmMirror) await post.warmMirror(mirRT.texture);
@@ -4271,7 +4360,14 @@ const TLX = (function () {
           shadowSys.castShadowChunked(mesh, model);
         },
         shadowEnd() { if (shadowSys) shadowSys.shadowEnd(); },
-        carShadowBegin(vp, boxScale) { if (shadowSys) shadowSys.carShadowBegin(vp, boxScale); },
+        // The car map renders every frame and shares the soft-present queue (as
+        // mirrorBegin): submitted while a read waits, it starved that read past
+        // the stale guard on SwiftShader (#2226). KEEP: the map is still valid.
+        carShadowBegin(vp, boxScale) {
+          if (!shadowSys) return;
+          if (_softBlit && _softReadPending) { shadowSys.carShadowKeep(); return; }
+          shadowSys.carShadowBegin(vp, boxScale);
+        },
         carShadowEnd() { if (shadowSys) shadowSys.carShadowEnd(); },
         lampShadowBegin(vp, idx) { if (shadowSys) shadowSys.lampShadowBegin(vp, idx); },
         lampShadowEnd() { if (shadowSys) shadowSys.lampShadowEnd(); },
@@ -4659,30 +4755,7 @@ const TLX = (function () {
         capturePixels() {
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (gl && typeof gl.readPixels === "function") {
-            // readPixels is a synchronous GPU→CPU stall. The Promise executor
-            // used to run it on the caller's turn — Settings › Appearance's
-            // MutationObserver → previewScene paid 10–15 s under ForceGL /
-            // llvmpipe before the first await, freezing the tab (profiled
-            // 2026-10-05). Yield one macrotask so menu UI can paint; every
-            // consumer already awaits the Promise.
-            return new Promise((resolve, reject) => {
-              const run = () => {
-                try {
-                  const w = W, h = H;
-                  if (!(w > 0 && h > 0)) throw new Error("no frame size");
-                  const raw = new Uint8Array(w * h * 4);
-                  gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
-                  const data = new Uint8ClampedArray(w * h * 4);
-                  for (let y = 0; y < h; y++) {
-                    const src = (h - 1 - y) * w * 4;
-                    data.set(raw.subarray(src, src + w * 4), y * w * 4);
-                  }
-                  resolve({ width: w, height: h, data });
-                } catch (e) { reject(e); }
-              };
-              if (typeof setTimeout === "function") setTimeout(run, 0);
-              else run();
-            });
+            return readGlCapture(gl, W, H);
           }
           const rt = _captureRT();
           if (!rt || typeof renderer.readRenderTargetPixelsAsync !== "function") {

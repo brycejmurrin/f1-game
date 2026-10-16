@@ -750,6 +750,44 @@ test("a close inside the disconnect grace window reclaims its timer", () => {
   }
 });
 
+// #2195: the race's 25 s silence grace never reached the wire — the rtc
+// endpoint closed 5 s into any "disconnected" spell, so a 6–25 s outage the
+// race promises to ride out ended the session for good.
+test("a race session's timeout sets the rtc disconnect grace: 6 s stays open, 26 s closes", () => {
+  const realSet = global.setTimeout, realClear = global.clearTimeout;
+  let now = 0;
+  const timers = new Map();
+  let nextId = 1;
+  global.setTimeout = (fn, ms) => { const id = nextId++; timers.set(id, { at: now + ms, fn }); return id; };
+  global.clearTimeout = (id) => { timers.delete(id); };
+  const advance = (ms) => {
+    now += ms;
+    for (const [id, t] of [...timers]) if (t.at <= now) { timers.delete(id); t.fn(); }
+  };
+  const run = (holdMs, raceGrace) => {
+    const h = pcHarness();
+    try {
+      if (raceGrace) {
+        globalThis.NetTransport = NetTransport;
+        const NetSession = load("js/net/session.js", "NetSession");
+        const s = NetSession.create({ transport: h.ep });
+        s.setTimeoutMs(raceGrace);
+      }
+      h.ep.pc.connectionState = "disconnected";
+      h.ep.pc.onconnectionstatechange();
+      advance(holdMs);
+      return { status: h.ep.status, closed: h.pcClosed() };
+    } finally { timers.clear(); h.done(); }
+  };
+  try {
+    assert.equal(run(6000, 25000).status, "open", "a 6 s blip closed a race wire");
+    const long = run(26000, 25000);
+    assert.equal(long.status, "closed", "a 26 s outage must still close");
+    assert.equal(long.closed, 1);
+    assert.equal(run(6000, 0).status, "closed", "the lobby keeps its 5 s grace");
+  } finally { global.setTimeout = realSet; global.clearTimeout = realClear; }
+});
+
 test("rtc stamps message ARRIVAL and hands it to onMessage; loopback stays unstamped", () => {
   // The clock-sync PONG math reads the third argument: rtc supplies a
   // performance.now() arrival stamp recorded at inbox push (pump-time
