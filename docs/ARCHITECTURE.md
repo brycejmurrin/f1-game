@@ -351,6 +351,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `followup-tools.js` | `DesignerFollowup` | LAZY_EDITOR | small designer review tools. |
 | `scenery-panel.js` | `DesignerScenery` | LAZY_EDITOR | DesignerScenery: the track designer's scenery inspector. |
 | `bridge-panel.js` | `DesignerBridges` | LAZY_EDITOR | authored road-overpass controls. |
+| `workspace.js` | `DesignerWorkspace` | LAZY_EDITOR | Track Designer workspace: navigation, disclosure groups and review actions. |
 | `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
 
 **`js/car/`**
