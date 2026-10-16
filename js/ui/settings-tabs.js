@@ -1,5 +1,5 @@
 /* SettingsNav — page stack for the pause/title Settings sheet.
-   Home opens controls, driving, display, appearance, assists, sound and backups.
+   Home opens controls, driving, driving aids, display, appearance, sound and backups.
    Lighting / camera tuners stay as their own docks. BACK pops.
    Decisions: docs/research/PAUSE-SETTINGS-IA.md.
    game.js still owns availability and all individual controls. */
@@ -12,9 +12,20 @@ const SettingsNav = (function () {
     display: "DISPLAY",
     appearance: "APPEARANCE",
     a11y: "ACCESSIBILITY",
-    advanced: "STEERING & ASSISTS",
+    advanced: "DRIVING AIDS",
     audio: "MUSIC & SOUND",
     files: "BACKUP & RESTORE",
+  };
+  const BREADCRUMBS = {
+    home: "SETTINGS",
+    controls: "SETTINGS › CONTROLS",
+    driving: "SETTINGS › DRIVING",
+    display: "SETTINGS › DISPLAY",
+    appearance: "SETTINGS › APPEARANCE",
+    a11y: "SETTINGS › ACCESSIBILITY",
+    advanced: "SETTINGS › DRIVING AIDS",
+    audio: "SETTINGS › MUSIC & SOUND",
+    files: "SETTINGS › BACKUP & RESTORE",
   };
   let live = null;
   // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
@@ -141,7 +152,7 @@ const SettingsNav = (function () {
       if (current !== "home" && current !== id) fireLeave(current);
       current = id;
       const title = document.getElementById("dlg-settings");
-      if (title) title.textContent = TITLES[id];
+      if (title) title.textContent = BREADCRUMBS[id];
       if (index) index.hidden = id !== "home";
       const pages = panels();
       for (const key of Object.keys(pages)) {

@@ -25,6 +25,7 @@ const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b
 
 function boot(disk = {}, o = {}) {
   const dom = makeDom();
+  let appearanceApplied = 0;
   dom.body.insertAdjacentHTML = () => {};
   const data = new Map(Object.entries(disk).map(([k, v]) => [k, JSON.stringify(v)]));
   const store = {
@@ -50,6 +51,7 @@ function boot(disk = {}, o = {}) {
     getComputedStyle: () => ({ getPropertyValue: () => "", display: "flex", flexDirection: "row", gridTemplateColumns: "none", paddingTop: "0px", paddingBottom: "0px" }),
     innerWidth: 1000, innerHeight: 600, requestAnimationFrame: () => 0,
     Tracks: { LIST }, Teams: { LIST: TEAMS }, Flags: { svg: () => "" },
+    AppearanceOpts: { applyAll() { appearanceApplied++; } },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
     TrackMaps: {
       corners: () => [], direction: () => "CW", elevRange: () => 0,
@@ -77,7 +79,7 @@ function boot(disk = {}, o = {}) {
   const menus = sb.Menus.create(G);
   menus.buildSelect();
   const tiles = () => selTracks.querySelectorAll(".track-row");
-  return { dom, data, G, menus, tiles, selTeams, built: () => built, LIST,
+  return { dom, data, G, menus, tiles, selTeams, built: () => built, appearanceApplied: () => appearanceApplied, LIST,
     teamPicker: () => dom.byId("teampicker") };
 }
 
@@ -107,6 +109,14 @@ test("G3: picking ANOTHER team still takes the first free seat", () => {
   assert.equal(h.G.teamIdx, 0);
   assert.equal(h.G.driverIdx, 0);
   assert.equal(h.built(), 1);
+});
+
+test("team selection reapplies TEAM appearance accents immediately", () => {
+  const h = boot({}, { teamIdx: 1, driverIdx: 1 });
+  h.menus.setTeamPicker(true);
+  h.selTeams.querySelectorAll(".team-tile")[0].onclick();
+  assert.equal(h.G.teamIdx, 0);
+  assert.equal(h.appearanceApplied(), 1);
 });
 
 test("M3: unstarring the ACTIVE circuit under FAVOURITES keeps it selected and on the strip", () => {
@@ -151,6 +161,26 @@ test("CLASSICS filter refreshes the hero preview when the active circuit is hidd
   assert.equal(h.G.trackIdx, 2);
   assert.equal(h.G.els.selPreviewName.textContent, "Imola", "preview follows the snapped classic");
 });
+
+for (const [filter, index, visible] of [["season", 0, ["0", "1"]], ["classic", 2, ["2"]], ["fav", 1, ["1"]]]) {
+  test(`explicit ${filter} filter leaves a selected custom circuit`, () => {
+    const h = boot({ trackFilter: "season", favTracks: ["spa"] });
+    h.LIST.push({ id: "custom-test", name: "Test Loop", country: "Test", custom: true });
+    h.G.trackIdx = 3;
+    h.menus.buildSelect();
+    assert.equal(h.G.trackIdx, 3, "passive designer entry preserves its custom selection");
+    assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), ["0", "1", "2", "3"], "custom is visible despite saved season filter");
+    h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === filter)
+      .onclick({ stopPropagation() {} });
+    assert.equal(h.G.trackIdx, index, "the explicit filter selects a matching circuit");
+    assert.deepEqual(h.tiles().map((r) => r.dataset.trackIdx), visible);
+    const chip = h.dom.body.querySelectorAll(".sel-chip").find((c) => c.dataset.filter === filter);
+    assert.equal(chip.getAttribute("aria-pressed"), "true");
+    assert.equal(h.G.els.selPreviewName.textContent, h.LIST[index].name);
+    assert.equal(JSON.parse(h.data.get("trackId")), h.LIST[index].id);
+    assert.equal(JSON.parse(h.data.get("trackFilter")), filter);
+  });
+}
 
 test("DRS zone labels name an S/F wrap with arrow markers", () => {
   const h = boot({}, {

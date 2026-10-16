@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
 function load(initial = {}, durable = true, reduced = false, document, globals = {}) {
@@ -33,7 +34,7 @@ test("game's Studio integration refreshes touch button size after profile apply,
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/scale.js", import.meta.url), "utf8"), context);
   vm.runInContext("const uiScale = UiScale.create(scaleDeps);", context);
   vm.runInContext(source, context);
-  const game = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const game = gameSource();
   const attachment = game.match(/AppearanceStudio\.attach\(\{[\s\S]*?\n\}\);/);
   assert.ok(attachment, "game must attach the Studio's live visual owners");
   vm.runInContext(attachment[0], context);
@@ -172,6 +173,14 @@ test("Undo restores the last visual batch; current-screen preset preserves other
   // Screen-scope RESET restores the shipped home scene (photo), not the prior garage value.
   studio.reset("screen"); assert.equal(values.homeScene, "photo"); assert.equal(values.uiTheme, "light");
 });
+
+test("HUD screen scope does not rewrite the global HUD profile", () => {
+  assert.equal(studioForScope().includes("hudProfile"), false);
+});
+
+function studioForScope() {
+  return load({ hudProfile: "minimal" }).studio.SCREEN_KEYS.hud;
+}
 
 test("Named profiles can be updated and deleted without changing the live visual state", () => {
   const { studio, values } = load(); studio.saveProfile("Desktop paddock"); studio.applyPreset("sunlight");
@@ -355,4 +364,19 @@ test("mounted Studio exposes percentage units and explains system reduced motion
   studio.applySnapshot({ ...studio.snapshot(), uiScale: 125, hudScale: 90, motion: "reduce" });
   assert.equal(note.hidden, true); assert.equal(values.motion, "reduce");
   for (const input of ranges) assert.equal(input.getAttribute("aria-valuetext"), input.value + "%");
+});
+
+test("Studio range controls keep Undo working for keyboard adjustments", () => {
+  const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const { studio, values } = load({}, true, false, dom.document);
+  const descendants = el => [el, ...el.children.flatMap(descendants)];
+  const input = descendants(panel).find(el => el.getAttribute("aria-label") === "UI size");
+  assert.ok(input);
+  dom.dispatch(input, { type: "keydown", key: "ArrowRight" });
+  input.value = "125";
+  dom.dispatch(input, { type: "input" });
+  dom.dispatch(input, { type: "change" });
+  assert.equal(values.uiScale, 125);
+  assert.equal(studio.undo(), true);
+  assert.equal(values.uiScale, null, "Undo restores the unset shipped default after a keyboard edit");
 });
