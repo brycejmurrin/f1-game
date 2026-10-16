@@ -57,7 +57,7 @@ function boot(initOpts) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
-  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/controller-profiles.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el(), initOpts);
@@ -418,6 +418,7 @@ function bootUi(desktop, helpSlots = {}, disk = null, pre = null, opts = null) {
   const winListeners = {};
   sb.addEventListener = (t, f) => { (winListeners[t] ||= []).push(f); };
   sb.removeEventListener = (t, f) => { const l = winListeners[t] || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); };
+  sb.dispatchEvent = (e) => { for (const f of [...(winListeners[e.type] || [])]) f(e); return true; };
   sb.GameAudio = null;
   if (pre) pre(sb);
   if (deferTimers) {
@@ -1596,4 +1597,67 @@ test("calibration cannot move to a second already-connected pad when its activit
   $("pm-pad-calib").onclick();
   timers.at(-1).fn();
   assert.equal(disk.padRest[other.id], 0.2, "an intentional fresh attempt calibrates the now-active pad");
+});
+
+
+function withProfileStore(sb) {
+  const data = new Map();
+  sb.GameStore = { store: { get: (k, d) => data.has(k) ? data.get(k) : d,
+    set(k, v) { data.set(k, plain(v)); return true; } } };
+}
+
+test('profile-change reentry preserves replacement-slot focus after pad bind and clear', () => {
+  for (const mode of ['bind', 'clear', 'keyboard']) {
+    const h = bootUi(true, {}, null, withProfileStore);
+    const controller = fakePad(h.sb, h.fire);
+    h.Input.poll();
+    let refreshes = 0;
+    h.sb.addEventListener('apexcontrollerprofilechange', () => { refreshes++; h.kb.render(); });
+    const host = h.$(mode === 'keyboard' ? 'pm-keys' : 'pm-pad');
+    const old = slotOf(host, 'recover', 0);
+    old.focus(); old.onclick();
+    if (mode === 'clear') h.press('Backspace');
+    else if (mode === 'keyboard') h.press('KeyF');
+    else { controller.press(3); h.Input.poll(); }
+    const replacement = slotOf(host, 'recover', 0);
+    assert.notEqual(replacement, old);
+    assert.equal(h.sb.document.activeElement, replacement, mode + ' focuses live replacement');
+    assert.equal(refreshes, mode === 'keyboard' ? 0 : 1);
+    const actual = mode === 'keyboard' ? h.Input.getKeyMap().recover[0] : h.Input.getPadMap().recover[0];
+    assert.equal(actual, mode === 'keyboard' ? 'KeyF' : mode === 'clear' ? null : 3);
+  }
+});
+
+test('wheel wizard pins the first device, ignores other axes and cancels only owner disconnect', () => {
+  const h = bootUi(true, {}, null, withProfileStore), I = h.Input;
+  const make = (id, index) => ({ id, index, connected: true, mapping: '', axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 20 }, () => ({ pressed: false, value: 0 })) });
+  const a = make('Wheel A', 0), b = make('Wheel B', 1);
+  h.sb.navigator.getGamepads = () => [a, b];
+  h.fire('gamepadconnected', { gamepad: a }); I.poll();
+  const beforeA = plain(I.getPadAxisMap());
+  h.$('pm-pad-wheel').onclick();
+  // Any connected device can provide the first answer, even while A was active.
+  b.axes[3] = -.9; I.poll();
+  a.axes[2] = .9; I.poll();
+  assert.equal(h.$('pm-pad-wheel').textContent, 'CANCEL', 'other device cannot supply throttle');
+  a.axes[1] = .9; I.poll();
+  assert.equal(h.$('pm-pad-wheel').textContent, 'CANCEL', 'other device cannot finish');
+  b.axes[2] = .9; I.poll();
+  a.connected = false; h.fire('gamepaddisconnected', { gamepad: a });
+  assert.equal(h.$('pm-pad-wheel').textContent, 'CANCEL', 'spare disconnect keeps wizard');
+  b.axes[1] = .9; I.poll();
+  assert.equal(h.$('pm-pad-wheel').textContent, 'SET UP A WHEEL');
+  assert.equal(I.controllerProfile().id, 'Wheel B', 'commit belongs to first captured device');
+  assert.equal(I.getPadAxisMap().steer, 3);
+  assert.equal(I.getPadAxisMap().throttle, 2);
+  assert.equal(I.getPadAxisMap().brake, 1);
+  const profiles = plain(I.getControllerProfiles());
+  assert.deepEqual(profiles.devices.find((p) => p.id === 'Wheel A').axes, beforeA);
+  const beforeB = plain(I.getPadAxisMap());
+  b.axes = [0, 0, 0, 0];
+  h.$('pm-pad-wheel').onclick(); b.axes[3] = -.9; I.poll();
+  b.connected = false; h.fire('gamepaddisconnected', { gamepad: b });
+  assert.equal(h.$('pm-pad-wheel').textContent, 'SET UP A WHEEL', 'owner disconnect cancels');
+  assert.deepEqual(plain(I.getControllerProfiles()).devices.find((p) => p.id === 'Wheel B').axes, beforeB);
 });
