@@ -26,7 +26,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
-import { symbolSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
@@ -45,8 +45,8 @@ test("the table: a rival's parts by camera distance; the player is never reduced
   assert.deepEqual([L.T.WHEEL_EXTRAS_M, L.T.FLAPS_M, L.T.FLAME_M, L.T.NO_DECAL_M, L.T.SHADOW_CAST_M, L.T.MIRROR_CARS],
     [50, 80, 60, 120, 50, 6]);
   const near = L.parts(at(30), false);
-  assert.deepEqual([near.tier, near.body, near.decal, near.fixedWheels, near.compound, near.spinDisc, near.flaps, near.flame, near.castsShadow],
-    [0, true, true, true, true, true, true, true, true], "30 m: everything (the near look unchanged)");
+  assert.deepEqual([near.tier, near.body, near.cheapBody, near.decal, near.fixedWheels, near.compound, near.spinDisc, near.flaps, near.flame, near.castsShadow],
+    [0, true, false, true, true, true, true, true, true, true], "30 m: everything (the near look unchanged)");
   const p55 = L.parts(at(55), false);
   assert.deepEqual([p55.tier, p55.wheels, p55.fixedWheels, p55.compound, p55.spinDisc, p55.flaps, p55.flame, p55.castsShadow],
     [1, true, true, true, false, true, true, false],
@@ -58,9 +58,9 @@ test("the table: a rival's parts by camera distance; the player is never reduced
     [1, true, false, true, true, true, false],
     "100 m: body + decal + wheels + fixed/compound, flap set STATIC, no spin");
   const far = L.parts(at(130), false);
-  assert.deepEqual([far.tier, far.body, far.decal, far.wheels, far.fixedWheels, far.compound],
-    [2, true, false, true, false, false],
-    "130 m: the body and its 4 rotating wheels, no decal, no fixed/compound");
+  assert.deepEqual([far.tier, far.body, far.cheapBody, far.decal, far.wheels, far.fixedWheels, far.compound],
+    [2, true, true, false, true, false, false],
+    "130 m: shared cheap body + 4 rotating wheels, no decal, no fixed/compound");
   const me = L.parts(at(400), true);
   assert.deepEqual([me.tier, me.fixedWheels, me.compound, me.flaps, me.flame, me.castsShadow], [0, true, true, true, true, true]);
   assert.equal(L.d2([3, 4, 0], [0, 0, 0], false), 25);
@@ -87,6 +87,7 @@ test("apex26.fieldLod = 0 returns every legacy gate; unset or 1 is on", () => {
     const { FieldLod: L } = loadLod(off);
     assert.equal(L.on, false, JSON.stringify(off));
     assert.equal(L.tier(at(500)), 0);
+    assert.equal(L.parts(at(500), false).cheapBody, false);
     assert.equal(L.wheelsLite(at(500)), false);
     assert.equal(L.flapsM(), 150, "the old 150 m flap gate");
     assert.equal(L.flame(at(500)), true, "the flame was ungated");
@@ -396,6 +397,11 @@ test("warm: TLX compiles the flame / ERS lit keys during the lights", () => {
   }
   assert.match(tlx, /if \(_lateFxOn\(\)\) for \(const o of _LATE_FX\) materialFor\(o, false, false\);/, "minted before the MRT stamp");
   assert.match(tlx, /await warmLateLit\(\);/);
+});
+
+test("game.js swaps rivals to the one shared body mesh past tier 2", () => {
+  assert.match(gameSource(), /FieldLod\.on && !c\.isPlayer && _lod >= 2 \? carDraw\.sharedRivalBodyMesh\(\) : teamBodyMesh\(c\.team, c\)/,
+    "past tier 2 the render loop shares one rival body (apex26.fieldLod=0 keeps per-seat meshes)");
 });
 
 test("warm: warmCarAssets builds the caster silhouette, the field wheels and the flame (not a whole-car mesh per rival)", () => {

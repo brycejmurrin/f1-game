@@ -89,11 +89,11 @@ test("free releases every chunk geometry before dropping the handle", () => {
 // triangle exactly once, and the lamp table must stay on the ORIGINAL cells —
 // the lit shader looks lamps up by world cell, so a merge that widened the
 // cells would squeeze more lamps under the same 24-lamp cap.
-function mergeFactory(value) {
+function mergeFactory(value, constructors = {}) {
   const sandbox = {
     window: {}, localStorage: { getItem: (k) => (k === "apex26.tlxChunkMerge" ? value : null) },
     Float32Array, Uint32Array, Uint16Array, Uint8Array, Int16Array, Int32Array, Array, Map, Math,
-    Frustum: {},
+    Frustum: {}, ...constructors,
   };
   vm.createContext(sandbox);
   seedLog(sandbox);
@@ -140,6 +140,40 @@ test("the merge is ON by default (no stored value)", () => {
   const mesh = mergeFactory(null).build(gridMesh(), 72);
   assert.equal(mesh.chunks.length, 9);
 });
+
+for (const vertices of [65535, 65536]) for (const merge of [2, 3, 4]) {
+  test(`merge ${merge} builds final indices once at the ${vertices}-vertex boundary`, () => {
+    const fixture = () => {
+      const data = gridMesh(), pos = new Float32Array(vertices * 3);
+      pos.set(data.pos);
+      pos.set(data.pos.subarray(data.pos.length - 9), pos.length - 9);
+      data.pos = pos;
+      data.idx.set([vertices - 3, vertices - 2, vertices - 1], data.idx.length - 3);
+      return data;
+    };
+    const one = mergeFactory("1").build(fixture(), 72);
+    const expected = new Map();
+    for (const c of one.chunks) {
+      const key = Math.floor(c.gx / merge) + ":" + Math.floor(c.gz / merge);
+      if (!expected.has(key)) expected.set(key, []);
+      expected.get(key).push(...c.geo.index.array);
+    }
+    const IndexArray = vertices > 65535 ? Uint32Array : Uint16Array;
+    const allocations = [];
+    const tracked = new Proxy(IndexArray, { construct(target, args) {
+      allocations.push(args[0]);
+      return Reflect.construct(target, args);
+    } });
+    const sys = mergeFactory(String(merge), { [IndexArray.name]: tracked });
+    allocations.length = 0;   // exclude the factory's float-bit reinterpretation view
+    const mesh = sys.build(fixture(), 72);
+    assert.deepEqual(Array.from(mesh.chunks, c => Array.from(c.geo.index.array)), [...expected.values()],
+      "merged chunks preserve the original cell and triangle order, including high vertex indices");
+    assert.ok(mesh.chunks.every(c => c.geo.index.array instanceof IndexArray), "correct index width");
+    assert.equal(allocations.length, mesh.chunks.length, "one final index allocation per draw chunk");
+    assert.ok(allocations.every(n => typeof n === "number"), "allocate final storage directly without copying an intermediate index array");
+  });
+}
 
 // NORMAL PACK CLAMP. packAttr's range scan admits |v| <= 1.0001 (float noise on
 // normalised normals), but round(1.0001 * 32767) = 32770 overflows Int16 and

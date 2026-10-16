@@ -13,7 +13,7 @@ import vm from "node:vm";
 import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -42,6 +42,43 @@ function bootScreen(stored = {}) {
   dom.byId("mb-race").click = () => clicks.push("mb-race");
   dom.byId("mb-tt").click = () => clicks.push("mb-tt");
   return Object.assign(vmx, { dom, G, clicks, D: ctx.TrackDesigner, DC: ctx.DesignerCanvas, root: dom.byId("trackdesigner") });
+}
+
+// The normal editor store keeps object references; SAVE mutating a cached draft
+// can therefore hide stale bytes on disk. Exercise the real store and reboot
+// from its serialized localStorage, with the autosave debounce driven by hand.
+function bootPersistedScreen(disk = new Map()) {
+  const b = bootScreen(), captured = b.ctx.GameStore.store;
+  let blocked = false, timerId = 0;
+  const timers = new Map();
+  b.ctx.setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; };
+  b.ctx.clearTimeout = (id) => timers.delete(id);
+  b.ctx.localStorage = {
+    get length() { return disk.size; },
+    key: (i) => [...disk.keys()][i] || null,
+    getItem: (k) => disk.get(k) ?? null,
+    setItem(k, v) {
+      if (blocked) { const e = new Error("full"); e.name = "QuotaExceededError"; throw e; }
+      disk.set(k, String(v));
+    },
+    removeItem: (k) => disk.delete(k),
+  };
+  for (const f of ["js/career/save-migrate.js", "js/core/store.js"]) {
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), b.ctx, { filename: f });
+  }
+  const store = b.ctx.GameStore.store;
+  // CustomTracks captured its store at eval; retain that reference while using
+  // the real store's serialization, cache and durability results underneath.
+  for (const k of ["get", "set", "write", "rawDel"]) captured[k] = store[k].bind(store);
+  return Object.assign(b, {
+    disk,
+    blockWrites: (v) => { blocked = v; },
+    flushDraft() {
+      const draft = [...timers.values()].find((t) => t.ms === 600);
+      assert.ok(draft, "an edit scheduled the draft autosave");
+      draft.fn();
+    },
+  });
 }
 
 test("init() builds the rail before any design exists; open() randomises a green loop; close() hides", async () => {
@@ -873,11 +910,11 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   b.D.setTool("select");
   const labels = () => panes(b)[0].children.map((g) => (g.children[0] && g.children[0].classList.contains("td-label") ? g.children[0] : walk(g).find((e) => e.classList.contains("td-label")))).filter(Boolean).map((l) => l.textContent);
   // MODE + numbered groups; ELEVATION / BANKING & KERBS / LOOK stay in the DOM (mode toggles visibility).
-  // #1039: 2 CORNERS stays in the rail so numbering never skips 1 → 3.
-  assert.deepEqual(labels().slice(0, 7), ["SELECT POINTS", "1 SHAPE", "2 CORNERS", "ELEVATION", "BANKING & KERBS", "SCENERY", "4 DETAILS"]);
-  assert.ok(labels().includes("5 CHECKS"));
-  const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "2 CORNERS");
-  assert.ok(shapeG && !shapeG.hidden, "2 CORNERS group stays visible under EDIT/SELECT");
+  // #1039: CORNERS stays in the rail so numbering never skips 1 → 3.
+  assert.deepEqual(labels().slice(0, 7), ["SELECT POINTS", "SHAPE", "CORNERS", "ELEVATION", "BANKING & KERBS", "SCENERY", "ROAD"]);
+  assert.ok(labels().includes("CHECKS"));
+  const shapeG = panes(b)[0].children.find((g) => g.children[0] && g.children[0].textContent === "CORNERS");
+  assert.ok(shapeG && !shapeG.hidden, "CORNERS group stays visible under EDIT/SELECT");
   assert.match(shapeG.querySelector(".td-hint").textContent, /^Pick STRAIGHT/);
   assert.deepEqual(chipsIn(b.root).filter((c) => c.dataset.mode).map((c) => c.dataset.mode), ["draw", "edit", "elevation", "scenery", "test"]);
   b.D.setMode("elevation");
@@ -886,15 +923,15 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   b.D.setMode("edit");
   b.D.setTool("corner");
   const all = labels();
-  const cornerLabel = all.find((t) => t.startsWith("2 CORNERS ·"));
-  const m = cornerLabel && cornerLabel.match(/^2 CORNERS · CORNER R (\d+) m × 90° LEFT$/);
+  const cornerLabel = all.find((t) => t.startsWith("CORNERS ·"));
+  const m = cornerLabel && cornerLabel.match(/^CORNERS · CORNER R (\d+) m × 90° LEFT$/);
   assert.ok(m, cornerLabel || all.join("|"));
   chipsIn(b.root, "TURNS RIGHT")[0].click();
   const up = walk(b.root).find((e) => e.getAttribute && e.getAttribute("aria-label") === "RADIUS m up");
   up.click();
-  assert.equal(labels().find((t) => t.startsWith("2 CORNERS ·")), "2 CORNERS · CORNER R " + (+m[1] + 5) + " m × 90° RIGHT", "live from the steppers");
+  assert.equal(labels().find((t) => t.startsWith("CORNERS ·")), "CORNERS · CORNER R " + (+m[1] + 5) + " m × 90° RIGHT", "live from the steppers");
   b.D.setTool("straight");
-  assert.equal(labels().find((t) => t.startsWith("2 CORNERS ·")), "2 CORNERS · STRAIGHT 200 m");
+  assert.equal(labels().find((t) => t.startsWith("CORNERS ·")), "CORNERS · STRAIGHT 200 m");
   // css pins for the survey defects (horizontal rail scroll, equal tabs, My Circuits empty span).
   assert.match(css, /\.td-row \.sel-chip \{[^}]*min-height:\s*var\(--tap-paint\)/, "stepper ± keys floor at --tap-paint on touch");
   assert.match(css, /\.td-row \.sel-chip \{[^}]*min-width:\s*var\(--tap-paint\)/, "stepper ± keys width floor at --tap-paint on touch");
@@ -1001,12 +1038,12 @@ test("TURNS: one info row per corner; a row selects its span, prefills the tool 
   let now = b.D.state();
   assert.deepEqual([now.sel, now.span, now.tool], [c.i0, c.i1, c.fit.kind], "the row's span, the fitted tool");
   assert.ok(now.sel !== now.span && !(now.span > 0 && now.span < now.sel), "point 0 is never inside the span");
-  const label = walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^2 CORNERS/.test(e.textContent));
-  assert.equal(label.textContent, c.fit.kind === "corner" ? "2 CORNERS · CORNER R " + c.fit.R + " m × " + c.fit.deg + "° " + dir : "2 CORNERS · HAIRPIN R " + c.fit.R + " m " + dir);
+  const label = walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^CORNERS/.test(e.textContent));
+  assert.equal(label.textContent, c.fit.kind === "corner" ? "CORNERS · CORNER R " + c.fit.R + " m × " + c.fit.deg + "° " + dir : "CORNERS · HAIRPIN R " + c.fit.R + " m " + dir);
   assert.equal(now.design.pts.length, st.design.pts.length, "selecting changes nothing");
   assert.equal(now.undo, u0);
   const replace = chipsIn(b.root, "REPLACE THE SELECTED SPAN")[0];
-  assert.ok(replace, "2 CORNERS offers REPLACE THE SELECTED SPAN");
+  assert.ok(replace, "CORNERS offers REPLACE THE SELECTED SPAN");
   replace.click();
   const v = b.D.preview();
   assert.equal(v.red, 0, "the re-stamped turn is green: " + v.issues.map((i) => i.code + ":" + i.level).join(","));
@@ -1134,7 +1171,7 @@ test("SPIRAL m: a stepper for CORNER / HAIRPIN / CHICANE / S-BEND only, 0–80 i
   openGreen(b);
   const row = rowOf(b.root, "SPIRAL m");
   assert.ok(row, "the row exists");
-  assert.match(row.parentNode.children[0].textContent, /^2 CORNERS/, "inside 2 CORNERS");
+  assert.match(row.parentNode.children[0].textContent, /^CORNERS/, "inside CORNERS");
   for (const [tool] of b.D.TOOLS) {
     b.D.setTool(tool);
     const curved = ["corner", "hairpin", "chicane", "sbend"].includes(tool);
@@ -1145,8 +1182,8 @@ test("SPIRAL m: a stepper for CORNER / HAIRPIN / CHICANE / S-BEND only, 0–80 i
   assert.equal(val.textContent, "0");
   stepBy(row, 3); assert.equal(val.textContent, "15");
   stepBy(row, 30); assert.equal(val.textContent, "80", "clamps at 80");
-  const label = () => walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^2 CORNERS/.test(e.textContent)).textContent;
-  assert.match(label(), /^2 CORNERS · CORNER R \d+ m × \d+° (LEFT|RIGHT) · SPIRAL 80 m$/);
+  const label = () => walk(panes(b)[0]).find((e) => e.classList.contains("td-label") && /^CORNERS/.test(e.textContent)).textContent;
+  assert.match(label(), /^CORNERS · CORNER R \d+ m × \d+° (LEFT|RIGHT) · SPIRAL 80 m$/);
   b.D.setTool("hairpin"); assert.equal(val.textContent, "80", "the value rides across the curved tools");
   stepBy(row, -30); assert.equal(val.textContent, "0", "clamps at 0");
   assert.doesNotMatch(label(), /SPIRAL/, "no spiral, no mention");
@@ -1154,7 +1191,7 @@ test("SPIRAL m: a stepper for CORNER / HAIRPIN / CHICANE / S-BEND only, 0–80 i
   // (The hairpin left R at 25: a 60° arc that short has no room for two spirals.)
   b.D.setTool("corner");
   stepBy(rowOf(b.root, "RADIUS m"), 7); stepBy(rowOf(b.root, "ANGLE °"), 6);
-  assert.match(label(), /^2 CORNERS · CORNER R 60 m × 90° /);
+  assert.match(label(), /^CORNERS · CORNER R 60 m × 90° /);
   const d0 = plain(b.D.state().design);
   assert.equal(b.D.applyStamp(3, 3), true);
   const flat = plain(b.D.state().design.pts);
@@ -1171,7 +1208,7 @@ test("SPAN WIDTH m: one hwZone on the span's control points, merged on repeat, c
   const d0 = openGreen(b);
   const row = rowOf(b.root, "SPAN WIDTH m"), val = row.children[2];
   const details = row.parentNode;
-  assert.ok(/^4 DETAILS/.test(details.children[0].textContent), "in 4 DETAILS");
+  assert.ok(/^ROAD/.test(details.children[0].textContent), "in 4 DETAILS");
   assert.equal(details.children[details.children.indexOf(rowOf(b.root, "HALF-WIDTH m")) + 1], row, "right under HALF-WIDTH");
   assert.equal(row.getAttribute("aria-disabled"), "true", "no span: disabled");
   assert.equal(row.children[1].getAttribute("aria-disabled"), "true");
@@ -1245,7 +1282,9 @@ test("BANK °: the SELECTED TURN banks its apex — {frac, angleDeg, widthM: the
   assert.ok(pick, "a SELECTED TURN block inside TURNS");
   assert.equal(pick.hidden, true, "hidden until a turn is selected");
   const row = rowOf(pick, "BANK °"), val = row.children[2];
+  b.D.setMode("elevation");
   list.children[1].click();
+  assert.equal(b.D.state().mode, "elevation", "selecting a turn keeps the banking workspace");
   assert.equal(pick.hidden, false);
   assert.equal(pick.children[0].textContent, "SELECTED TURN · T2");
   assert.equal(val.textContent, "FLAT");
@@ -2047,7 +2086,7 @@ test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev o
   // Stamp REPLACE THE SELECTED SPAN with CORNER.
   b.D.setTool("corner");
   const replace = chipsIn(b.root, "REPLACE THE SELECTED SPAN")[0];
-  assert.ok(replace, "2 CORNERS offers REPLACE for the group");
+  assert.ok(replace, "CORNERS offers REPLACE for the group");
   const pts0 = plain(b.D.state().design.pts);
   assert.equal(b.D.applyStamp(4, 8), true);
   assert.notDeepEqual(plain(b.D.state().design.pts), pts0, "REPLACE rewrites the span");
@@ -2300,6 +2339,67 @@ test("first-save history keeps its library identity without linking another impo
   b.D.close();
 });
 
+test("SAVE persists the current library identity across reload, even with 24 circuits", () => {
+  for (const count of [1, 24]) {
+    const b = bootPersistedScreen();
+    b.D.init(b.G, { custom: b.C, root: b.root });
+    b.D.open({ design: design() }); b.D.preview();
+    const first = b.D.save(); assert.equal(first.durable, true);
+    for (let i = 1; i < count; i++) assert.equal(b.C.upsert(design({ seed: 100 + i })).ok, true);
+    b.D.setWidth(7.5); b.D.preview(); b.flushDraft();
+    assert.equal(JSON.parse(b.disk.get("apex26.customTrackDraft")).originId, first.id);
+    const saved = b.D.save(); assert.equal(saved.durable, true); assert.notEqual(saved.id, first.id);
+    const draft = JSON.parse(b.disk.get("apex26.customTrackDraft"));
+    assert.equal(draft.id, saved.id); assert.equal(draft.originId, saved.id);
+    // Reload directly: CLOSE would itself rewrite the draft and mask the bug.
+    const restored = bootPersistedScreen(new Map(b.disk));
+    restored.D.init(restored.G, { custom: restored.C, root: restored.root });
+    restored.D.open(); restored.D.setWidth(8); restored.D.preview();
+    const edited = restored.D.save(); assert.equal(edited.ok, true, JSON.stringify(edited));
+    assert.equal(restored.C.list().length, count, "reload edits replace rather than duplicate");
+    assert.equal(restored.C.get(saved.id), null);
+    assert.equal(restored.C.get(edited.id).baseHW, 8);
+    b.D.close(); restored.D.close();
+  }
+});
+
+test("SAVE preserves its nondurable warning and retries the draft identity when storage recovers", () => {
+  const b = bootPersistedScreen();
+  b.D.init(b.G, { custom: b.C, root: b.root });
+  b.D.open({ design: design() }); b.D.preview();
+  const first = b.D.save(); assert.equal(first.durable, true);
+  b.D.setWidth(7.5); b.D.preview(); b.flushDraft();
+  const before = b.disk.get("apex26.customTrackDraft");
+  b.blockWrites(true);
+  const failedDisk = b.D.save();
+  assert.equal(failedDisk.ok, true); assert.equal(failedDisk.durable, false);
+  assert.match(msgText(b), /storage is full.*may not survive a reload/);
+  assert.equal(b.D.state().design.originId, failedDisk.id, "the session keeps its edited circuit");
+  assert.equal(b.disk.get("apex26.customTrackDraft"), before, "failed disk writes do not change persisted identity");
+  assert.equal(JSON.parse(b.disk.get("apex26.customTracks")).items[0].id, first.id);
+  b.blockWrites(false);
+  assert.equal(b.D.save().durable, true);
+  assert.equal(JSON.parse(b.disk.get("apex26.customTrackDraft")).originId, failedDisk.id);
+  assert.equal(JSON.parse(b.disk.get("apex26.customTracks")).items[0].id, failedDisk.id);
+  b.D.close();
+});
+
+test("a refused SAVE leaves the draft's persisted library identity unchanged", () => {
+  const b = bootPersistedScreen();
+  let refuse = false;
+  const custom = { ...b.C, upsert: (d, opts) => refuse ? { ok: false, reason: "write", id: "refused-id" } : b.C.upsert(d, opts) };
+  b.D.init(b.G, { custom, root: b.root });
+  b.D.open({ design: design() }); b.D.preview(); const first = b.D.save();
+  b.D.setWidth(7.5); b.D.preview(); b.flushDraft();
+  const before = b.disk.get("apex26.customTrackDraft");
+  refuse = true;
+  assert.equal(b.D.save().ok, false);
+  assert.equal(b.D.state().design.originId, first.id);
+  assert.equal(b.disk.get("apex26.customTrackDraft"), before);
+  assert.equal(b.C.list().length, 1); assert.ok(b.C.get(first.id));
+  b.D.close();
+});
+
 test("an autosaved draft of an oversize loop is rejected on open instead of freezing the tab (13-F1)", () => {
   const pts = [];
   for (let i = 0; i < 40; i++) pts.push(i % 2 ? [-9000 + (i % 7) * 100, 9000 - i * 10] : [9000 - (i % 5) * 100, -9000 + i * 10]);
@@ -2439,4 +2539,86 @@ test("newer imports and manual edits supersede pending decodes", async () => {
   const edited = b.D.loadFrom("edited"); b.D.setName("MANUAL");
   completions.get("edited")({ ok: true, design: design({ name: "STALE" }) }); assert.equal(await edited, false);
   assert.equal(b.D.state().design.name, "MANUAL"); b.D.close();
+});
+
+test("mode workspaces show only their own controls and navigation never edits the circuit", () => {
+  const b = bootScreen(); openGreen(b);
+  const visible = (node) => { for (let n = node; n; n = n.parentNode) if (n.hidden) return false; return true; };
+  const button = (text) => chipsIn(b.root, text)[0];
+  const groups = {
+    draw: button("RANDOMISE").parentNode,
+    edit: button("REVERSE"),
+    elevation: walk(b.root).find((e) => e.dataset.role === "bridges"),
+    scenery: walk(b.root).find((e) => e.dataset.role === "scenery"),
+    test: b.root.querySelector('[aria-label="Design checks"]').parentNode,
+  };
+  const before = b.D.state();
+  for (const mode of ["draw", "edit", "elevation", "scenery", "test"]) {
+    b.D.setMode(mode);
+    for (const [owner, node] of Object.entries(groups)) assert.equal(visible(node), owner === mode, owner + " controls in " + mode);
+    assert.equal(chipsIn(b.root.querySelector(".td-rail"), "TEST HERE").some(visible), mode === "test");
+    assert.equal(visible(b.root.querySelector('[aria-label="Circuit name"]')), mode === "test");
+    assert.equal(visible(button("SELECT END")), false, "RANGE replaces the duplicate selection chip");
+    assert.equal(visible(button("UNDO")), true, "history stays shared");
+  }
+  assert.deepEqual(plain(b.D.state().design), plain(before.design));
+  assert.equal(b.D.state().undo, before.undo);
+});
+
+test("authored road bridge adds, refuses overlap/unsafe inputs, edits, undoes and survives save/share", async () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("elevation");
+  const panel = walk(b.root).find((e) => e.dataset.role === "bridges");
+  const add = walk(panel).find((e) => e.dataset.role === "add-bridge");
+  const length = panel.querySelector('[aria-label="Bridge total span · m"]');
+  const rise = panel.querySelector('[aria-label="Bridge rise · m"]');
+  const list = walk(panel).find((e) => e.dataset.role === "bridge-list");
+  const status = walk(panel).find((e) => e.dataset.role === "bridge-status");
+  assert.equal(add.disabled, true);
+  b.D.selectRange(10, -1);
+  assert.equal(add.disabled, false);
+  const before = b.D.state();
+  rise.value = "30"; add.click();
+  assert.match(status.textContent, /grade budget/);
+  assert.equal(b.D.state().undo, before.undo, "invalid bridge creates no history entry");
+  rise.value = "8"; add.click();
+  const added = b.D.state();
+  assert.equal(added.design.bridges.length, 1);
+  assert.equal(added.undo, before.undo + 1);
+  assert.equal(added.design.bridges[0].halfM, 160);
+  const v = b.D.preview();
+  const flat = b.V.build(Object.assign({}, added.design, { bridges: [] })).tr;
+  assert.ok(v.tr.py.some((y, i) => y > flat.py[i] + 1), "native track build raises the actual road");
+  add.click();
+  assert.match(status.textContent, /overlap/);
+  assert.equal(b.D.state().undo, added.undo);
+  list.children[0].querySelector('[aria-label="Edit road bridge 1"]').click();
+  length.value = "400"; rise.value = "9";
+  walk(panel).find((e) => e.dataset.role === "apply-bridge").click();
+  assert.equal(b.D.state().design.bridges[0].rise, 9);
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.bridges[0].rise, 8);
+  const stored = b.C.sanitize(b.D.state().design);
+  const code = await b.CD.encode(stored), decoded = await b.CD.decode(code);
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(plain(decoded.design.bridges), plain(stored.bridges));
+  const saved = b.C.upsert(stored);
+  assert.equal(saved.ok, true);
+  assert.deepEqual(plain(b.C.list()[0].bridges), plain(stored.bridges));
+  list.children[0].querySelector('[aria-label="Remove road bridge 1"]').click();
+  assert.equal(b.D.state().design.bridges.length, 0);
+  assert.equal(b.D.undo(), true);
+  assert.equal(b.D.state().design.bridges.length, 1);
+  b.D.close(); b.D.open();
+  assert.equal(b.D.state().design.bridges.length, 1, "draft reopens with its bridge");
+});
+
+test("share clipboard fallback opens the workspace containing its copy field", async () => {
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  b.ctx.ApexClipboard = { write: async () => false };
+  const url = await b.D.share();
+  assert.ok(url && url.includes("#track="));
+  assert.equal(b.D.state().mode, "test");
+  const field = b.root.querySelector('[aria-label="Share code or link"]');
+  assert.equal(field.value, url);
+  assert.equal(field.parentNode.hidden, false);
 });

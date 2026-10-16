@@ -711,7 +711,7 @@
 
       const BAY = [0.05, 0.07, 0.13];   // dark mirror — night bay reflection plane
 
-      floodMastRing(38, { h: 24, dist: 11, cool: false, pool: true, arms: 3 });
+      floodMastRing(38, { h: 24, dist: 11, cool: false, pool: false, arms: 3 });
 
       if (circuitKit) {
         // The pit building is the engine's row of bays now (TrackPit, STREET
@@ -985,8 +985,8 @@
         }
       }
 
-      waterBand(0.26, 0.36, 1, 40, 104, 12, BAY, { id: "marina-water-30", required: true });
-      waterBand(0.80, 0.90, 1, 40, 104, 12, BAY, { id: "marina-water-84", required: true });
+      waterBand(0.26, 0.36, 1, 40, 104, 8, BAY, { id: "marina-water-30", required: true });
+      waterBand(0.80, 0.90, 1, 40, 104, 8, BAY, { id: "marina-water-84", required: true });
 
       for (const [s, gap, w, h, d] of [
         [0.390, 34, 30, 48, 24],
@@ -1012,7 +1012,7 @@
       }
 
       for (const [s, gap, depth] of [[0.20, 52, 52], [0.44, 58, 58]]) {
-        waterBand(s - 0.03, s + 0.03, 1, gap, gap + depth, 12, BAY, {
+        waterBand(s - 0.03, s + 0.03, 1, gap, gap + depth, 8, BAY, {
           id: `marina-water-depth-${Math.round(s * 100)}`,
         });
         const a = anchor(K(s), 1, 30);
@@ -1053,7 +1053,7 @@
       // modelGroup, so flyby/landmark gates never saw it, and the bay sheet
       // stopped short of this frac so the park sat on dry verge. Now a
       // required assembly + a local waterBand just beyond the plinth.
-      waterBand(0.545, 0.615, 1, 42, 110, 12, BAY, {
+      waterBand(0.545, 0.615, 1, 42, 110, 8, BAY, {
         id: "marina-water-merlion", required: true,
       });
       {
@@ -1104,7 +1104,7 @@
             }
             stage._mat = 0;
             // Cyan spout + splash burst over the bay (night-readable).
-            const mouth = vadd(vadd(head, a.r, 2.4), a.u, 0.6);
+            const mouth = vadd(vadd(head, a.r, 4.4), a.u, 0.6);   // snout front face (3.0 + 2.6/2 = 4.3); 2.4 buried the jet 1.5 m in the muzzle
             addCone(stage, mouth, 0.9, 18, WIN_CYAN, 7, jetB);
             addCone(stage, vadd(mouth, a.r, 16), 1.4, 3, [0.85, 0.95, 1.00], 7, jetB);
             // Splash pool rim slightly ABOVE the reflective disc so the two

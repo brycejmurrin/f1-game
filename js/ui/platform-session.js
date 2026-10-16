@@ -148,6 +148,12 @@ function wirePhone() {
 // PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the
 // multiplayer stack the pairing rides on, then the module owns the pairing and
 // feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
+// Pairing's generic URL builder follows its page origin. Adapt outgoing links
+// here for native hosts, preserving the private code and relay in the fragment.
+function phoneLink(url) {
+  if (!url || typeof Native === "undefined" || !Native.isNative()) return url;
+  return PhonePad.padUrl("", Native.shareBase()).replace(/#.*$/, "") + new URL(url).hash;
+}
 let phonePad = null;
 let phonePadLoading = false, phonePadGeneration = 0;
 // The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
@@ -194,11 +200,12 @@ $("pm-phonepad").onclick = () => {
     if (generation !== phonePadGeneration) return;
     phonePadLoading = false;
     if (!ok) { btn.textContent = "STEER THIS GAME WITH A PHONE"; status.textContent = "Could not load the pairing stack — check the connection."; return; }
-    $("pm-phonepad-url").textContent = PhonePad.padUrl("").replace(/#.*$/, "");
+    $("pm-phonepad-url").textContent = phoneLink(PhonePad.padUrl("")).replace(/#.*$/, "");
     phonePad = PhonePad.host({
       hud: phonePadDash,
       say: (t) => { status.textContent = t; },
       qr: (url, code) => {
+        url = phoneLink(url);
         LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
         $("pm-phonepad-code").textContent = code || "";
         $("pm-phonepad-code").setAttribute("data-private", String(!!code && code.length > 6));
@@ -213,6 +220,8 @@ $("pm-phonepad").onclick = () => {
       },
       // The phone's wire died: PhonePad hosts the same code again and the phone re-dials it (lost() follows only if it gives up).
       relinking: () => { G.announce("PHONE LINK LOST — RECONNECTING", 3, "warn"); },
+      // A first pairing that failed (expired, no relay): the status stays, the button starts over.
+      failed: () => { btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; },
       lost: () => {
         btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; G.announce("PHONE DISCONNECTED", 3, "warn");
         if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);

@@ -18,7 +18,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -110,4 +112,37 @@ test("the named moment lands at the SAME instant on a guest whose clock is 5 s o
   const err = Gg.netStart.at - (Gh.netStart.at + SKEW);
   assert.ok(Math.abs(err) < 40, `guest at − (host at + skew) = ${err} ms (was −${SKEW} with the double conversion)`);
   assert.equal(Gg.netStart.hold, Gh.netStart.hold, "one hold for both");
+});
+
+// #2199: netOrder() returned the guest's own order as soon as the session was
+// inactive, so a host that sent RESULT and quit to menu a moment later handed
+// the guest a different classification on exactly the close finish the
+// host-owned verdict exists for. And loopback close() dropped the RESULT itself.
+test("a guest keeps the host's RESULT when the host quits before the guest's results (#2199)", () => {
+  const [ta, tb] = NetTransport.loopback({ latencyMs: 20 });
+  const hs = NetSession.create({ transport: ta }), gs = NetSession.create({ transport: tb });
+  let t = 0;
+  for (let i = 0; i < 20; i++) { t += 25; hs.pump(t); gs.pump(t); }
+  const Gh = stubG(2), nh = NetPlay.create(Gh);
+  const Gg = stubG(2), ng = NetPlay.create(Gg);
+  assert.equal(ng.start({ role: "guest", session: gs }).ok, true);
+  nh.start({ role: "host", session: hs, sessions: [{ id: 1, session: hs }], peers: [{ id: 1, profile: null }] });
+  for (let i = 0; i < 4; i++) { t += 25; nh.tick(t); ng.tick(t); }
+  // The host's photo finish: drv1 ahead, which the guest's own order disagrees with.
+  const rows = [{ d: "drv1", t: 90.001, lap: 3, classified: true, r: 0 }, { d: "drv0", t: 90.002, lap: 3, classified: true, r: 0 }];
+  assert.ok(nh.reportResult(rows));
+  nh.stop("local");                                   // back to menu at once
+  for (let i = 0; i < 10; i++) { t += 25; gs.pump(t); ng.tick(t); }
+  assert.equal(ng.active(), false, "the guest's session ended (BYE or close)");
+  assert.deepEqual(ng.lastResult(), rows, "…but the host's verdict that arrived first is kept");
+
+  const netOrderSource = symbolSource("function netOrder(order)");
+  const ctx = vm.createContext({ cars: Gg.cars, netPlay: ng, Map, Set, Number, Array });
+  vm.runInContext(netOrderSource, ctx);
+  const order = vm.runInContext("netOrder(cars.slice())", ctx).map((c) => c.driverId);
+  assert.deepEqual(order, ["drv1", "drv0"], "the guest's sheet is the host's classification");
+
+  // A later race builds a new field: the kept verdict never reaches it.
+  Gg.cars = stubG(2).cars;
+  assert.equal(ng.lastResult(), null, "no stale verdict for the next race");
 });
