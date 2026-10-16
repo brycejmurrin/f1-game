@@ -55,7 +55,7 @@ var PitLane = {
   _stub: true,
   create: (G = {}) => {
     // Menu strategy writes must survive the later real-model recreation.
-    const pinKey = (id) => { const t = G.track, d = t && t.def; return "pitPlan." + ((typeof id === "string" && id.trim() ? id : null) || (d && d.id) || (t && t.id) || "track"); };
+    const pinId = (id) => { const t = G.track, d = t && t.def; return ((typeof id === "string" && id.trim() ? id : null) || (d && d.id) || (t && t.id) || "track"); };
     return ({
     _stub: true,
     zoneOf: () => null, limit: () => 999, toBox: () => Infinity,
@@ -66,10 +66,10 @@ var PitLane = {
     planFor: () => null, planInfo: () => null, twoCompoundApplies: () => false,
     // RaceSettings paintPlan/wire reads these before ensureRaceSession (CI #1180).
     pinnedStops(id) {
-      const v = G.store && G.store.get ? G.store.get(pinKey(id), "auto") : "auto";
+      const v = G.store && G.store.get ? G.store.get("pitPlan." + pinId(id), "auto") : "auto";
       return v == null || v === "auto" ? null : Math.max(0, Math.min(2, v | 0));
     },
-    setPinnedStops(v, id) { if (G.store && G.store.set) G.store.set(pinKey(id), v == null ? "auto" : (v | 0)); },
+    setPinnedStops(v, id) { if (G.store && G.store.set) G.store.set("pitPlan." + pinId(id), v == null ? "auto" : (v | 0)); },
     lossS: () => 0,
     compoundDue: () => false, nextCode: () => "", nextFor: () => null, replan: function () {},
     laneX: (_c, _hw, x) => x, laneUniform: () => null, boxUniform: () => null,
