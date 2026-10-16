@@ -27,6 +27,6 @@ The script throws, takes long, or a URL needs checking (`browser_status`, `orien
 
 ## Do not
 
-- Add this server to `.mcp.json`. The catalog stays three servers.
+- Add this server to `.mcp.json`. Keep the checkout's configured catalog; phone-browser stays a separate bridge.
 - Run it while Playwright tests or the Chrome DevTools server are up. One browser.
 - Hand them a localhost address. The phone cannot open it.
