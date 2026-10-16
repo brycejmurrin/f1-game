@@ -29,10 +29,10 @@ const OUT = join(ROOT, "artifacts/profiles");
 const argv = process.argv.slice(2);
 exitIfHelp(argv, `profile — spans | cpu | hitch | trace, with --repeat and --base A/B
 
-  node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace] [--frames N] [--repeat N] [--base <ref>] [--json]
+  node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace] [--frames N] [--repeat N] [--base <ref>] [--json] [--capture]
 
 Default track vegas, mode spans, frames 120, repeat 1. Output: artifacts/profiles/.`);
-parseFlags(argv, ["--mode", "--frames", "--repeat", "--base", "--json", "--help"]);
+parseFlags(argv, ["--mode", "--frames", "--repeat", "--base", "--json", "--capture", "--help"]);
 
 function flag(name, dflt) {
   for (let i = 0; i < argv.length; i++) {
@@ -49,6 +49,10 @@ const frames = Math.max(10, +flag("--frames", 120) || 120);
 const repeat = Math.max(1, +flag("--repeat", 1) || 1);
 const baseRef = flag("--base", null);
 const asJson = argv.includes("--json");
+// Headless TLX blits every frame to #game-soft (a readback: ~8 s a frame on SwiftShader). Timing wants it OFF, as
+// frame-hitch.mjs does; --capture puts it back. The backend itself stays the default (TLX).
+const noBlit = () => { try { sessionStorage.setItem("apex26.wgxCapture", "0"); } catch (_) { /* blocked */ } };
+const newPage = async (browser) => { const ctx = await browser.newContext({ viewport: { width: 844, height: 390 } }); if (!argv.includes("--capture")) await ctx.addInitScript(noBlit); return [ctx, await ctx.newPage()]; };
 const log = (...a) => console.error(...a);
 
 /** The deterministic scenario, evaluated in the page: same track, same start, same inputs on every ref. */
@@ -78,8 +82,7 @@ async function runSpans(root, label) {
   const runs = [];
   try {
     for (let r = 0; r < repeat; r++) {
-      const context = await browser.newContext({ viewport: { width: 844, height: 390 } });
-      const page = await context.newPage();
+      const [context, page] = await newPage(browser);
       await page.goto(srv.url);
       await page.waitForFunction(() => window.__apex != null, null, { timeout: 30000, polling: 100 });
       const res = await scenario(page, frames);
@@ -112,7 +115,7 @@ async function runTrace() {
   const srv = await startStaticServer(ROOT);
   const browser = await launchChromium({ args: ["--use-angle=swiftshader", "--disable-background-timer-throttling"] });
   try {
-    const page = await (await browser.newContext({ viewport: { width: 844, height: 390 } })).newPage();
+    const [, page] = await newPage(browser);
     await page.goto(srv.url);
     await page.waitForFunction(() => window.__apex != null, null, { timeout: 30000, polling: 100 });
     await page.evaluate((t) => { window.__apex.race(t); }, track);
