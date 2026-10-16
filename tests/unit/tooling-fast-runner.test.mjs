@@ -213,6 +213,21 @@ test("--changed selects pinned unit tests for a tool edit, not the full suite", 
   assert.deepEqual(shardsCoveringFiles(r.files, all), ["2/2"]);
 });
 
+test("a file pin does not inherit a generic top-level tree pin", () => {
+  const exact = "tests/unit/" + "exact.test.mjs";
+  const dir = "tests/unit/" + "dir.test.mjs";
+  const tree = "tests/unit/" + "tree.test.mjs";
+  const all = [exact, dir, tree];
+  const pinIndex = new Map([
+    ["js/ui/hud.js", new Set([exact])],
+    ["js/ui", new Set([dir])],
+    ["js", new Set([tree])],
+  ]);
+  const r = selectToolingFastChanged(["js/ui/hud.js"], { allFiles: all, pinIndex,
+    scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
+  assert.deepEqual(r.files.sort(), [dir, exact].sort());
+});
+
 test("--changed fail-safes to the full list on infra paths", () => {
   const all = ["tests/unit/behind-ship.test.mjs", "tests/unit/agent-config.test.mjs"];
   const r = selectToolingFastChanged(["tests/groups.json"], { allFiles: all,

@@ -1647,8 +1647,15 @@ export function selectToolingFastChanged(changed, opts = {}) {
   for (const f of changed) {
     const norm = f.replace(/\\/g, "/");
     if (tfSet.has(norm)) selected.add(norm);
+    // A file edit has a precise dependency key and may also inherit its
+    // nearest directory pins. Do not fall through to the bare top-level
+    // `js`/`css`/`tools` key: those generic pins describe the whole tree and
+    // made one UI edit select hundreds of unrelated structural tests. A
+    // directory edit still reaches its root and remains deliberately broad.
+    const fileLike = /\.[^/]+$/.test(norm);
     let cur = norm;
     while (cur) {
+      if (fileLike && !cur.includes("/")) break;
       const hits = index.get(cur);
       if (hits) for (const t of hits) selected.add(t);
       const slash = cur.lastIndexOf("/");
