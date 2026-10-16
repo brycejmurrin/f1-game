@@ -101,3 +101,58 @@ test("STRATEGY after a pick: the pin is asked and written for the selected circu
     assert.ok(plans.length > 0 && plans.every((c) => c.built === "spa"), "the sheet repainted the plan for Spa");
   } finally { g.close(); }
 });
+
+
+test("fresh STRATEGY pins persist through the lazy PitLane handoff", async () => {
+  let planWire;
+  const g = await createGame({ storage: { tyreWear: "real", "pitPlan.monza": 0, "pitPlan.spa": 2 }, onSandbox: (S) => {
+    let real;
+    Object.defineProperty(S, "SettingRow", { configurable: true, get: () => real, set: (v) => {
+      real = Object.assign({}, v, { wire: (h, opts) => { if (h === "rs-plan") planWire = opts; return v.wire(h, opts); } });
+    } });
+  } });
+  try {
+    const G = g.G, stub = G.pits;
+    assert.equal(stub._stub, true, "fresh menu uses the production session stub");
+    assert.equal(G.track, null, "no race world has been built");
+    G.trackIdx = g.sandbox.Tracks.LIST.findIndex((d) => d.id === "spa");
+    G.openRaceSettings("select");
+    assert.ok(planWire, "fresh settings wires the strategy row");
+    assert.equal(planWire.read(), "2", "fresh settings reads the selected Spa pin");
+    planWire.write("1");
+    assert.equal(planWire.read(), "1", "a fresh-menu tap is retained");
+    assert.equal(g.sandbox.localStorage.getItem("apex26.pitPlan.spa"), "1", "the stub uses the production store namespace");
+    assert.equal(G.store.get("pitPlan.monza"), 0, "Spa's tap preserves Monza");
+    planWire.write("auto");
+    assert.equal(planWire.read(), "auto");
+    assert.equal(G.store.get("pitPlan.spa"), "auto");
+    planWire.write("1");
+
+    // Contract parity also covers legacy callers and malformed/custom IDs.
+    const ctx = { store: G.store, track: { def: { id: "monza" }, id: "unused" } };
+    const pins = g.sandbox.PitLane.create(ctx);
+    for (const id of [undefined, null, {}, [], 42, "", "   "]) {
+      assert.equal(pins.pinnedStops(id), 0);
+      pins.setPinnedStops(0, id);
+    }
+    assert.equal(G.store.get("pitPlan.[object Object]", "missing"), "missing");
+    pins.setPinnedStops(2, " Custom circuit ");
+    assert.equal(pins.pinnedStops(" Custom circuit "), 2);
+    ctx.track = { id: "legacy" };
+    pins.setPinnedStops(1);
+    assert.equal(pins.pinnedStops(), 1);
+    ctx.track = null;
+    pins.setPinnedStops(null);
+    assert.equal(pins.pinnedStops(), null);
+    assert.equal(G.store.get("pitPlan.track"), "auto");
+
+    // Recreate exactly the real model the lazy bundle installs, sharing store.
+    vm.runInContext(readFileSync(new URL("../../js/race/pit-lane.js", import.meta.url), "utf8"), g.ctx);
+    const real = g.sandbox.PitLane.create(G);
+    Object.defineProperty(G, "pits", { configurable: true, get: () => real });
+    assert.equal(real._stub, undefined);
+    assert.equal(planWire.read(), "1", "the real model receives the fresh-menu selection");
+    planWire.write("2");
+    assert.equal(real.pinnedStops("spa"), 2, "the row keeps working after handoff");
+  } finally { g.close(); }
+});
