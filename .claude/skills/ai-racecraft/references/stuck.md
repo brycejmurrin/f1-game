@@ -26,5 +26,6 @@ Use `cars()` / `field()` to identify the car, then `__apex.carAt(idx)` for
 timers, `pitState`, `pits.inLane(c)` and room left/right. VM behavioral checks:
 `node --test tests/unit/ai-stuck-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs`.
 `ai-field.mjs` reports dwell/contact only (`--seconds` floor 60); it does not
-count rescues. Browser collision/appearance evidence remains separate.
+count rescues. `node tools/check/ai-race.mjs stuck --track monza --runs 3` counts
+per-car stuck episodes and rescue teleports over N seeds. Browser collision/appearance evidence remains separate.
 

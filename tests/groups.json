@@ -904,6 +904,7 @@
     "// STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,",
     "// a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.",
     "tests/unit/storm-weather.test.mjs",
+    "tests/unit/stuck-census.test.mjs",
     "// SubagentStop report-contract hook (.claude/hooks/subagent-contract.py): spawns it on fake payloads, < 1 s.",
     "tests/unit/subagent-contract-hook.test.mjs",
     "tests/unit/surface-id-parity.test.mjs",
