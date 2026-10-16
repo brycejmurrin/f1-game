@@ -445,6 +445,33 @@ test("fit pulls a moved piece back on screen without touching the stored offset"
   assert.equal(ctx.HudLayout.get("map", "other").x, 5, "stored offset unchanged");
 });
 
+test("fit follows safe areas and a changing visible viewport without rewriting the saved layout", () => {
+  const props = {}, root = {}, attrs = { 'data-hl': '' };
+  const viewport = { innerWidth: 1000, innerHeight: 600,
+    visualViewport: { width: 500, height: 300, offsetLeft: 200, offsetTop: 100 } };
+  const map = { style: { setProperty(k,v) { props[k]=v; }, removeProperty(k) { delete props[k]; } },
+    setAttribute(k,v) { attrs[k]=v; }, removeAttribute(k) { delete attrs[k]; }, hasAttribute: k => k in attrs,
+    getBoundingClientRect() {
+      const left = 900 + (parseFloat(props['--hl-x']) || 0) * 10, top = 10 + (parseFloat(props['--hl-y']) || 0) * 6;
+      return { left, top, right: left+160, bottom: top+100, width: 160, height: 100 };
+    } };
+  const saved = { v:3, standard:{other:{map:{x:5,y:0,s:110}}} }, original = JSON.stringify(saved);
+  const ctx = { window: viewport, console,
+    getComputedStyle: el => el === root ? { getPropertyValue: k => ({'--sal':'30px','--sar':'20px','--sat':'15px','--sab':'10px'}[k] || '') } : {display:'block',visibility:'visible'},
+    document: {readyState:'loading',documentElement:root,addEventListener(){},getElementById:()=>null,
+      querySelector: sel => sel === '#minimap' ? map : null, querySelectorAll:()=>[]},
+    GameStore:{store:{get:(k,d)=>k==='hudLayout'?saved:d,set(){throw new Error('fit must not persist');}}} };
+  vm.createContext(ctx);vm.runInContext(SRC+';this.HudLayout=HudLayout;',ctx);
+  for (const vv of [viewport.visualViewport, {width:250,height:200,offsetLeft:50,offsetTop:40}, null]) {
+    viewport.visualViewport = vv;
+    ctx.HudLayout.fit();
+    const r = map.getBoundingClientRect(), b = ctx.HudLayout.screenBounds();
+    assert.ok(r.left >= b.left-.1 && r.right <= b.right+.1 && r.top >= b.top-.1 && r.bottom <= b.bottom+.1, JSON.stringify({r,b}));
+    const before = { ...props };ctx.HudLayout.fit();assert.deepEqual(props,before,'repeated fits do not drift');
+    assert.equal(JSON.stringify(saved),original);
+  }
+});
+
 test("fit clamps pieces that share an offset as ONE block, so neighbours keep their spacing", () => {
   // OT and AERO both ship +30vw in the cockpit; at 1000 wide only AERO overruns
   // the right edge. Clamped one by one, AERO landed on top of OT.

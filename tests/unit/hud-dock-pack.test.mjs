@@ -62,6 +62,41 @@ test("HudLayout exports packPhoneRects for the 150% phone packer", () => {
     "packPhoneRects must be exported so the 150% packer is unit-testable");
 });
 
+test("dock packing resolves overlaps within the available viewport, not behind its edges", () => {
+  const HL = loadHudLayout(), bounds = { left: 50, top: 20, right: 280, bottom: 180 };
+  const boxes = [
+    { id: 'tyre', x: 360, y: 100, w: 80, h: 40 },
+    { id: 'gearbox', x: 260, y: 90, w: 60, h: 30 },
+    { id: 'ctrl:brake', x: 250, y: 100, w: 30, h: 50, fixed: 1 },
+  ];
+  const corrections = HL.packPhoneRects(boxes, 480, 240, bounds);
+  const placed = boxes.map(b => ({ ...b, x: b.x + (corrections[b.id]?.dx || 0), y: b.y + (corrections[b.id]?.dy || 0) }));
+  for (const b of placed.filter(b => !b.fixed)) {
+    assert.ok(b.x >= bounds.left && b.y >= bounds.top && b.x+b.w <= bounds.right && b.y+b.h <= bounds.bottom, JSON.stringify(b));
+    const control = placed.at(-1);
+    assert.ok(b.x+b.w <= control.x || b.x >= control.x+control.w || b.y+b.h <= control.y || b.y >= control.y+control.h, 'instrument clears the control');
+  }
+  assert.equal(corrections['ctrl:brake'], undefined, 'hardware controls remain fixed');
+});
+
+test("runtime phone packing respects visible bounds even for an unedited instrument", () => {
+  const props = {}, attrs = {}, root = {};
+  const tyre = { style: {setProperty(k,v){props[k]=v;},removeProperty(k){delete props[k];}},
+    setAttribute(k,v){attrs[k]=v;},removeAttribute(k){delete attrs[k];},hasAttribute:k=>k in attrs,
+    getBoundingClientRect(){const left=330+parseFloat(props['margin-left']||0),top=100+parseFloat(props['margin-top']||0);return {left,top,right:left+70,bottom:top+30,width:70,height:30};} };
+  const control = { getBoundingClientRect:()=>({left:245,top:100,right:275,bottom:140,width:30,height:40}) };
+  const ctx = {console,window:{innerWidth:480,innerHeight:240,visualViewport:{offsetLeft:80,offsetTop:20,width:220,height:180}},
+    getComputedStyle:el=>el===root?{getPropertyValue:k=>({'--sal':'60px','--sar':'20px','--hud-scale':'1.5'}[k]||'0px')}:{display:'block',visibility:'visible',zoom:'1'},
+    document:{readyState:'loading',documentElement:root,addEventListener(){},getElementById:()=>null,
+      body:{classList:{contains:()=>false}},querySelector:sel=>sel==='#hud-tyre'?tyre:null,querySelectorAll:()=>[control]},
+    GameStore:{store:{get:(k,d)=>k==='hudScale'?150:d,set(){throw new Error('packing must not save');}}}};
+  vm.createContext(ctx);vm.runInContext(HL_SRC+';this.HudLayout=HudLayout;',ctx);
+  ctx.HudLayout.fit();
+  const r=tyre.getBoundingClientRect(),b=ctx.HudLayout.screenBounds();
+  assert.ok(r.left>=b.left && r.top>=b.top && r.right<=b.right && r.bottom<=b.bottom,JSON.stringify({r,b}));
+  const before={...props};ctx.HudLayout.fit();assert.deepEqual(props,before,'packing remains stable');
+});
+
 test("dock packing lifts TYRES clear of BRAKE without moving the control", () => {
   const HL = loadHudLayout(), W = 844, H = 390;
   const tyre = { id: "tyre", x: 100, y: 260, w: 80, h: 45 };

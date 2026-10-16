@@ -86,3 +86,4 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 ### Improved
 - HUD editing puts visibility beside position and size in both editors. Hidden maps, gaps and mirrors stay selectable, with AUTO available alongside SHOW and HIDE; timing-tower edits update the whole group together.
+- HUD editing stays open as the window changes size, preserving the selected element and layout. The toolbar and custom HUD placements fit the visible screen and hardware safe areas without overwriting saved positions.

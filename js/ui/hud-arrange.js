@@ -74,7 +74,7 @@ const HudArrange = (() => {
     let pinch = null;      // { id, pid, d0, s0 } — the second pointer
     const pointers = new Map();   // pointerId -> {x, y}
     let selected = null;   // the id last touched; the toolbar's − / + / RESET act on it
-    let raf = 0, pending = null, context = null, opener = null;
+    let raf = 0, reflow = 0, pending = null, context = null, opener = null;
     let shown = null;      // dialogs WE hid: { settings, pause }
     let revealed = [];     // [{ el, hidden, text:[{el, text}] }] pieces we unhid with sample content
     let bar = null, nameEl = null, hintEl = null, picker = null, visibilityRow = null;
@@ -98,7 +98,7 @@ const HudArrange = (() => {
       bar.setAttribute("aria-label", "Arrange HUD");
       bar.style.cssText = "position:fixed;z-index:9999;" +
         "display:flex;flex-wrap:wrap;box-sizing:border-box;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;" +
-        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:13px;width:max-content;max-width:calc(100vw - 24px - 2 * max(var(--sal,0px),var(--sar,0px)));max-height:calc(100svh - 24px - 2 * max(var(--sat,0px),var(--sab,0px)));overflow:auto;";
+        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);font:inherit;font-size:var(--fs-micro,13px);width:max-content;max-width:calc(100vw - 24px - 2 * max(var(--sal,0px),var(--sar,0px)));max-height:calc(100svh - 24px - 2 * max(var(--sat,0px),var(--sab,0px)));overflow:auto;";
       const mk = (txt, aria, fn, id) => {
         const b = document.createElement("button");
         b.type = "button"; b.textContent = txt; b.id = id;
@@ -118,7 +118,7 @@ const HudArrange = (() => {
       picker = document.createElement("select");
       picker.id = "hud-arrange-element";
       picker.setAttribute("aria-label", "HUD element; use arrow keys on the Move button to position");
-      picker.style.cssText = "min-height:44px;max-width:100%;font:inherit;background:var(--bg,#111);color:inherit;";
+      picker.style.cssText = "min-width:0;min-height:44px;max-width:100%;font:inherit;background:var(--bg,#111);color:inherit;";
       picker.onchange = () => { flush(); selected = picker.value; after(); };
       bar.appendChild(picker);
       bar.appendChild(mk("MOVE", "Move selected element with arrow keys; Shift moves faster", () => {}, "hud-arrange-move"));
@@ -143,32 +143,30 @@ const HudArrange = (() => {
       document.body.appendChild(bar);
     }
     /* Prefer an edge, but use the middle when it covers less HUD content. */
-    const SLOTS = [
-      { top: "calc(8px + var(--sat,0px))", left: "50%", transform: "translateX(-50%)" },
-      { bottom: "calc(8px + var(--sab,0px))", left: "50%", transform: "translateX(-50%)" },
-      { top: "calc(8px + var(--sat,0px))", right: "calc(8px + var(--sar,0px))", transform: "none" },
-      { bottom: "calc(8px + var(--sab,0px))", left: "calc(8px + var(--sal,0px))", transform: "none" },
-      { top: "50%", left: "50%", transform: "translate(-50%, -50%)" },
-    ];
     function placeBar(rects) {
       if (!bar) return;
-      const w = bar.offsetWidth || 320, h = bar.offsetHeight || 52, W = window.innerWidth, H = window.innerHeight;
+      const bounds = HudLayout.screenBounds(window.innerWidth, window.innerHeight, 8);
+      const W = Math.max(0, bounds.right - bounds.left), H = Math.max(0, bounds.bottom - bounds.top);
+      bar.style.maxWidth = W + "px"; bar.style.maxHeight = H + "px";
+      const size = bar.getBoundingClientRect();
+      const w = size.width, h = size.height, cx = bounds.left + (W - w) / 2, cy = bounds.top + (H - h) / 2;
+      // Score exactly the same screen-pixel boxes we paint. Safe areas can be
+      // asymmetric, so centring in innerWidth alone is not a usable slot.
       const boxes = [
-        { l: W / 2 - w / 2, t: 8, r: W / 2 + w / 2, b: 8 + h },
-        { l: W / 2 - w / 2, t: H - 8 - h, r: W / 2 + w / 2, b: H - 8 },
-        { l: W - 8 - w, t: 8, r: W - 8, b: 8 + h },
-        { l: 8, t: H - 8 - h, r: 8 + w, b: H - 8 },
-        { l: W / 2 - w / 2, t: H / 2 - h / 2, r: W / 2 + w / 2, b: H / 2 + h / 2 },
+        { l: cx, t: bounds.top }, { l: cx, t: bounds.bottom - h },
+        { l: bounds.right - w, t: bounds.top }, { l: bounds.left, t: bounds.bottom - h },
+        { l: cx, t: cy },
       ];
       let best = 0, bestA = Infinity;
       for (let i = 0; i < boxes.length; i++) {
         const q = boxes[i];
         let a = 0;
-        for (const r of rects) a += Math.max(0, Math.min(q.r, r.r) - Math.max(q.l, r.l)) * Math.max(0, Math.min(q.b, r.b) - Math.max(q.t, r.t));
+        for (const r of rects) a += Math.max(0, Math.min(q.l + w, r.r) - Math.max(q.l, r.l)) * Math.max(0, Math.min(q.t + h, r.b) - Math.max(q.t, r.t));
         if (a < bestA) { bestA = a; best = i; }
       }
       for (const k of ["top", "bottom", "left", "right"]) bar.style.removeProperty(k);
-      for (const k in SLOTS[best]) bar.style[k] = SLOTS[best][k];
+      bar.style.transform = "none";
+      bar.style.left = boxes[best].l + "px"; bar.style.top = boxes[best].t + "px";
     }
     function paintBar(clash) {
       if (!bar) return;
@@ -384,6 +382,7 @@ const HudArrange = (() => {
       }
       if (!editing && was) {
         flush();
+        if (reflow) { cancelAnimationFrame(reflow); reflow = 0; }
         document.body.removeAttribute("data-hud-arrange");
         for (const [, , sel] of ELEMENTS) {
           const el = document.querySelector(sel);
@@ -501,7 +500,7 @@ const HudArrange = (() => {
       const mo = new MutationObserver(() => {
         if (!editing) return;
         if (HudLayout.shown() !== context.set || HudLayout.profile() !== context.profile) setEditing(false);
-        else if (rotate && rotate.getAttribute("aria-hidden") === "false") setEditing(false, false);
+        else if (rotate && rotate.getAttribute("aria-hidden") === "false") setEditing(false);
       });
       mo.observe(document.body, { attributes: true, attributeFilter: ["class", "data-hl-set"] });
       if (rotate) mo.observe(rotate, { attributes: true, attributeFilter: ["aria-hidden"] });
@@ -521,7 +520,22 @@ const HudArrange = (() => {
       setEditing(false);
     }, true);
     if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("resize", () => { if (editing) setEditing(false); }, { passive: true });
+      const resize = () => {
+        if (!editing) return;
+        // Finish the old gesture before its coordinate system changes. Keep
+        // the selection and saved camera/style; re-fit only the painted HUD.
+        flush(); drag = null; pinch = null; pointers.clear();
+        if (reflow) return;
+        reflow = requestAnimationFrame(() => {
+          reflow = 0;
+          if (editing) { HudLayout.fit(); after(); }
+        });
+      };
+      window.addEventListener("resize", resize, { passive: true });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", resize, { passive: true });
+        window.visualViewport.addEventListener("scroll", resize, { passive: true });
+      }
     }
 
     return Object.freeze({ setEditing, isEditing: () => editing, selected: () => selected });

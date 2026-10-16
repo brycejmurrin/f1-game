@@ -16,11 +16,12 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-arrange.js"), "utf8");
 const POLICY = fs.readFileSync(path.join(ROOT, "js/ui/hud-layout.js"), "utf8");
 const ROW = fs.readFileSync(path.join(ROOT, "js/ui/setting-row.js"), "utf8");
 
-function visibilityPolicy(elements, stored = {}, rows = {}) {
+function visibilityPolicy(elements, stored = {}, rows = {}, environment = {}) {
   const ctx = { document: { readyState: 'loading', querySelector: () => null,
+    documentElement: environment.root,
     getElementById: id => rows[id] || null, addEventListener() {} }, HudElements: elements,
     Event: class { constructor(type) { this.type = type; } },
-    GameStore: { store: { get: (k, d) => k in stored ? stored[k] : d, set: (k, v) => { stored[k] = v; } } } };
+    GameStore: { store: { get: (k, d) => k in stored ? stored[k] : d, set: (k, v) => { stored[k] = v; } } }, ...environment };
   vm.createContext(ctx); vm.runInContext(POLICY.replace(/^const\b/gm, 'var'), ctx);
   return ctx.HudLayout;
 }
@@ -113,14 +114,20 @@ function editor(pieceId = "piece", options = {}) {
     removeChild(e) { this.children.splice(this.children.indexOf(e), 1); }
     contains(e) { return this === e || this.children.some(c => c.contains(e)); }
     closest(sel) { return sel === "#" + pieceId && this.id === pieceId ? this : null; }
-    getBoundingClientRect() { return { left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20 }; }
+    getBoundingClientRect() {
+      if (this.id === 'hud-arrange-bar') {
+        const left = parseFloat(this.style.left) || 0, top = parseFloat(this.style.top) || 0;
+        return { left, top, right: left + this.offsetWidth, bottom: top + this.offsetHeight, width: this.offsetWidth, height: this.offsetHeight };
+      }
+      return { left: 10, top: 10, right: 30, bottom: 30, width: 20, height: 20 };
+    }
     get offsetWidth() {
       if (this.hidden || this.id !== 'hud-arrange-bar') return 0;
-      return options.toolbarSize ? options.toolbarSize(ids).width : 320;
+      return Math.min(options.toolbarSize ? options.toolbarSize(ids).width : 320, parseFloat(this.style.maxWidth) || Infinity);
     }
     get offsetHeight() {
       if (this.hidden || this.id !== 'hud-arrange-bar') return 0;
-      return options.toolbarSize ? options.toolbarSize(ids).height : 52;
+      return Math.min(options.toolbarSize ? options.toolbarSize(ids).height : 52, parseFloat(this.style.maxHeight) || Infinity);
     }
     focus() { doc.activeElement = this; }
   }
@@ -149,11 +156,14 @@ function editor(pieceId = "piece", options = {}) {
     preferences[key] = options.visibility || (id === 'mirror' ? 'auto' : 'on');
     rows['pm-hud' + id + '-sel'] = { value: preferences[key], dispatchEvent() { preferences[key] = this.value; } };
   }
-  const policy = visibilityPolicy(elements, preferences, rows);
-  Object.assign(layout, { LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility });
+  const viewport = { innerWidth: options.width || 1000, innerHeight: options.height || 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } };
+  const policy = visibilityPolicy(elements, preferences, rows, { window: viewport, root: {},
+    getComputedStyle: () => ({ getPropertyValue: key => options.insets?.[key] || '0px' }) });
+  Object.assign(layout, { LIM: policy.LIM, visibilityIds: policy.visibilityIds, visibility: policy.visibility, setVisibility: policy.setVisibility,
+    screenBounds: policy.screenBounds, fit() {} });
   if (options.hidden) ids.get(pieceId).hidden = true;
   if (options.rect) ids.get(pieceId).getBoundingClientRect = () => options.rect;
-  const ctx = { document: doc, window: { innerWidth: options.width || 1000, innerHeight: options.height || 500, addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); } },
+  const ctx = { document: doc, window: viewport,
     HudElements: elements,
     HudLayout: layout, M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) }, Log: { info() {} },
     requestAnimationFrame: fn => { frames.set(++frame, fn); return frame; }, cancelAnimationFrame: n => frames.delete(n),
@@ -163,7 +173,7 @@ function editor(pieceId = "piece", options = {}) {
   const api = ctx.HudArrange.create({ $: id => ids.get(id) });
   const fire = (name, args = {}) => { const e = { target: ids.get(pieceId), pointerId: 1, clientX: 100, clientY: 100, preventDefault() {}, stopPropagation() {}, stopImmediatePropagation() {}, ...args }; for (const fn of listeners[name] || []) fn(e); };
   const tick = () => { const todo = [...frames.values()]; frames.clear(); for (const fn of todo) fn(); };
-  return { api, fire, tick, writes, ids, frames, doc, get, observers, on, visibilityWrites, preferences,
+  return { api, fire, tick, writes, ids, frames, doc, get, observers, on, visibilityWrites, preferences, viewport,
     chooseVisibility(value) { const select = ids.get('hud-arrange-vis'); select.value = value; select.dispatchEvent({ type: 'change' }); },
     context(sn, pn = profile) { set = sn; profile = pn; for (const fn of observers) fn(); } };
 }
@@ -202,13 +212,25 @@ test('editor: keyboard entry selects a readout, focuses the selector and moves w
   e.fire('keydown', { key: 'Escape' }); assert.equal(e.api.isEditing(), false);
 });
 
-test('editor: resize and rotation prompt end editing and preserve pending movement', () => {
-  for (const kind of ['resize', 'rotate']) {
-    const e = editor(); e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointermove', { clientX: 150 });
-    if (kind === 'resize') e.fire('resize');
-    else { e.ids.get('rotate-device').setAttribute('aria-hidden', 'false'); for (const fn of e.observers) fn(); }
-    assert.equal(e.api.isEditing(), false); assert.equal(e.writes.at(-1).v.x, 5); assert.equal(e.frames.size, 0);
-  }
+test('editor: resizing preserves selection and pending movement, ends the old gesture and reflows once', () => {
+  const e = editor(); e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointermove', { clientX: 150 });
+  e.viewport.innerWidth = 600; e.viewport.innerHeight = 300;
+  e.fire('resize'); e.fire('resize');
+  assert.equal(e.api.isEditing(), true); assert.equal(e.api.selected(), 'piece');
+  assert.equal(e.writes.length, 1); assert.equal(e.writes[0].v.x, 5); assert.equal(e.frames.size, 1);
+  e.tick(); e.fire('pointermove', { clientX: 200 }); e.tick();
+  assert.equal(e.writes.length, 1, 'the old pointer cannot move the piece in the new coordinate system');
+  const r = e.ids.get('hud-arrange-bar').getBoundingClientRect();
+  assert.ok(r.left >= 8 && r.right <= 592 && r.top >= 8 && r.bottom <= 292);
+  e.fire('resize'); e.api.setEditing(false);
+  assert.equal(e.frames.size, 0, 'exit also cancels a queued reflow');
+});
+
+test('editor: a required rotation prompt ends editing and restores its original dialog', () => {
+  const e = editor(); e.api.setEditing(true); e.fire('pointerdown'); e.fire('pointermove', { clientX: 150 });
+  e.ids.get('rotate-device').setAttribute('aria-hidden', 'false'); for (const fn of e.observers) fn();
+  assert.equal(e.api.isEditing(), false); assert.equal(e.writes.at(-1).v.x, 5); assert.equal(e.frames.size, 0);
+  assert.equal(e.ids.get('pmsettings').hidden, false);
 });
 
 
@@ -326,9 +348,7 @@ test('editor: initial toolbar avoids the HUD using its visible content-sized box
   assert.equal(bar.offsetWidth, 800);
   assert.equal(bar.offsetHeight, 100);
   // Derive the painted slot from its actual dimensions and positioning.
-  const left = bar.style.left === '50%' ? (1000 - bar.offsetWidth) / 2 :
-    bar.style.right ? 1000 - 8 - bar.offsetWidth : 8;
-  const top = bar.style.top ? 8 : 500 - 8 - bar.offsetHeight;
+  const left = parseFloat(bar.style.left), top = parseFloat(bar.style.top);
   const overlap = Math.max(0, Math.min(left + bar.offsetWidth, piece.right) - Math.max(left, piece.left)) *
     Math.max(0, Math.min(top + bar.offsetHeight, piece.bottom) - Math.max(top, piece.top));
   assert.equal(overlap, 0, 'the visible toolbar fits below the HUD rather than using a fictitious narrow top slot');
@@ -343,10 +363,19 @@ test('editor: toolbar uses the clear middle when every edge covers HUD content',
   e.doc.querySelectorAll = () => [control];
   e.api.setEditing(true);
   const bar = e.ids.get('hud-arrange-bar');
-  assert.equal(bar.style.top, '50%'); assert.equal(bar.style.left, '50%');
-  assert.equal(bar.style.transform, 'translate(-50%, -50%)');
+  assert.equal(bar.style.top, '200px'); assert.equal(bar.style.left, '100px');
+  assert.equal(bar.style.transform, 'none');
   const painted = { top: (500 - bar.offsetHeight) / 2, bottom: (500 + bar.offsetHeight) / 2 };
   assert.ok(painted.top > top.bottom && painted.bottom < bottom.top, 'neither edge readout is obscured');
+});
+
+test('editor: toolbar stays inside asymmetric safe areas on a narrow, short screen', () => {
+  const e = editor('speed', { on: true, width: 420, height: 180,
+    insets: { '--sal': '70px', '--sar': '10px', '--sat': '20px', '--sab': '15px' },
+    toolbarSize: () => ({ width: 800, height: 200 }) });
+  e.api.setEditing(true);
+  const r = e.ids.get('hud-arrange-bar').getBoundingClientRect();
+  assert.ok(r.left >= 78 && r.top >= 28 && r.right <= 402 && r.bottom <= 157, JSON.stringify(r));
 });
 
 

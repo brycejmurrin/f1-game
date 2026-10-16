@@ -351,10 +351,21 @@ const HudLayout = (function () {
      full on a screen that has room. translate runs in vw/vh divided by the
      band's zoom, so a screen-px correction is exactly px / innerWidth * 100. */
   const EDGE = 4;
-  function clampAxis(lo, hi, size) {
-    if (hi - lo > size - 2 * EDGE) return EDGE - lo;     // bigger than the screen: pin its start
-    if (lo < EDGE) return EDGE - lo;
-    if (hi > size - EDGE) return size - EDGE - hi;
+  // Intersect the visible viewport with hardware insets. Browser zoom and
+  // keyboards can expose only part of the layout viewport; never save this fit.
+  function screenBounds(W = window.innerWidth, H = window.innerHeight, gap = EDGE) {
+    const safe = doc && doc.documentElement && typeof getComputedStyle === "function" ? getComputedStyle(doc.documentElement) : null;
+    const inset = (name) => safe && safe.getPropertyValue ? Math.max(0, parseFloat(safe.getPropertyValue(name)) || 0) : 0;
+    const vv = typeof window !== "undefined" && window.visualViewport;
+    const x = vv && vv.width > 0 ? vv.offsetLeft || 0 : 0, y = vv && vv.height > 0 ? vv.offsetTop || 0 : 0;
+    return { left: Math.max(x, inset("--sal")) + gap, top: Math.max(y, inset("--sat")) + gap,
+      right: Math.min(W - inset("--sar"), x + (vv && vv.width > 0 ? vv.width : W)) - gap,
+      bottom: Math.min(H - inset("--sab"), y + (vv && vv.height > 0 ? vv.height : H)) - gap };
+  }
+  function clampAxis(lo, hi, min, max) {
+    if (hi - lo > max - min) return min - lo;     // bigger than the available screen: pin its start
+    if (lo < min) return min - lo;
+    if (hi > max) return max - hi;
     return 0;
   }
   // Pieces that share one NON-ZERO offset move as ONE BLOCK: clamping each on
@@ -379,6 +390,7 @@ const HudLayout = (function () {
     resetClearance();
     clearPackMarks();
     const W = window.innerWidth, H = window.innerHeight;
+    const bounds = screenBounds(W, H);
     const a = all()[shown()];
     const groups = new Map();   // "x,y" offset (or "solo:id" at 0,0) -> [{ el, e, r }]
     for (const [id, , sel] of ELEMENTS) {
@@ -399,7 +411,7 @@ const HudLayout = (function () {
     for (const g of groups.values()) {
       let l = Infinity, t = Infinity, rr = -Infinity, bb = -Infinity;
       for (const m of g) { l = Math.min(l, m.r.left); t = Math.min(t, m.r.top); rr = Math.max(rr, m.r.right); bb = Math.max(bb, m.r.bottom); }
-      const dx = clampAxis(l, rr, W), dy = clampAxis(t, bb, H);
+      const dx = clampAxis(l, rr, bounds.left, bounds.right), dy = clampAxis(t, bb, bounds.top, bounds.bottom);
       g.dx = dx; g.dy = dy;
       for (const m of g) {
         if (dx) m.el.style.setProperty("--hl-x", String(+(m.e.x + dx / W * 100).toFixed(2)));
@@ -473,7 +485,7 @@ const HudLayout = (function () {
   const PACK_FIXED = Object.freeze({ announce: 1, flag: 1, map: 1, tower: 1 });
   const PACK_DOCK = Object.freeze({ tyre: 1, gearbox: 1, speed: 1, energy: 1 });
   const PACK_MOVE = Object.freeze(Object.keys(PACK_DOCK));
-  function packPhoneRects(boxes, W, H) {
+  function packPhoneRects(boxes, W, H, bounds = { left: PACK_AIR, top: PACK_AIR, right: W - PACK_AIR, bottom: H - PACK_AIR }) {
     const by = Object.create(null);
     const fixed = Object.create(null);
     if (!boxes || !(W > 0) || !(H > 0)) return {};
@@ -505,11 +517,10 @@ const HudLayout = (function () {
     const hit = (a, b) => a.L < b.R - 0.5 && b.L < a.R - 0.5 && a.T < b.B - 0.5 && b.T < a.B - 0.5;
     const clampOn = (m) => {
       const r = rect(m);
-      if (r.L < PACK_AIR) m.dx += PACK_AIR - r.L;
-      if (r.T < PACK_AIR) m.dy += PACK_AIR - r.T;
-      if (r.R > W - PACK_AIR) m.dx -= r.R - (W - PACK_AIR);
-      if (r.B > H - PACK_AIR) m.dy -= r.B - (H - PACK_AIR);
+      m.dx += clampAxis(r.L, r.R, bounds.left, bounds.right);
+      m.dy += clampAxis(r.T, r.B, bounds.top, bounds.bottom);
     };
+    for (const id of PACK_MOVE) if (by[id] && !isFixed(id)) clampOn(by[id]);
     const separate = (moverId, obstacleId) => {
       const m = by[moverId], o = by[obstacleId];
       if (!m || !o || isFixed(moverId)) return false;
@@ -628,7 +639,7 @@ const HudLayout = (function () {
         boxes.push({ id: "ctrl:" + i, x: r.left, y: r.top, w: r.width, h: r.height, fixed: 1 });
       }
     } catch (_) { /* harness querySelectorAll stubs */ }
-    const corr = packPhoneRects(boxes, W, H);
+    const corr = packPhoneRects(boxes, W, H, screenBounds(W, H));
     if (!corr || !Object.keys(corr).length) return;
     for (const id of Object.keys(corr)) {
       const row = ELEMENTS.find((e) => e[0] === id);
@@ -742,9 +753,7 @@ const HudLayout = (function () {
       const r = el.getBoundingClientRect();
       return r.width && r.height ? r : null;
     };
-    const safe = doc.documentElement && typeof getComputedStyle === "function" ? getComputedStyle(doc.documentElement) : null;
-    const inset = (name) => safe && safe.getPropertyValue ? Math.max(0, parseFloat(safe.getPropertyValue(name)) || 0) : 0;
-    const bounds = { left: EDGE + inset("--sal"), top: EDGE + inset("--sat"), right: W - EDGE - inset("--sar"), bottom: H - EDGE - inset("--sab") };
+    const bounds = screenBounds(W, H);
     const inside = (r) => r.left >= bounds.left && r.top >= bounds.top && r.right <= bounds.right && r.bottom <= bounds.bottom;
     const mapEl = doc.querySelector("#minimap");
     const mapBox = mapEl && !has("desktop") && has("hud-prof-broadcast") && W > H
@@ -1240,7 +1249,7 @@ const HudLayout = (function () {
     PACK_AIR, PACK_SCALE_MIN, PACK_FIXED, PACK_MOVE,
     get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
-    hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility,
+    hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility, screenBounds,
   };
 })();
 Object.freeze(HudLayout);

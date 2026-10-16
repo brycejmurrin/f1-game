@@ -789,6 +789,50 @@ async function checkHudVisibilityEditors(page, testInfo) {
   expect(errors, "HUD controls have no console or uncaught application errors").toEqual([]);
 }
 
+async function checkAdaptiveHudEditor(page, testInfo, sizes) {
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+  await page.addInitScript(() => {
+    localStorage.setItem("apex26.textSize", '"larger"');
+    localStorage.setItem("apex26.hudScale", '150');
+  });
+  await page.goto("/"); await expect(page).toHaveTitle(/Apex 26/); await waitReady(page);
+  await page.evaluate(() => window.__apex.headless(true));
+  await openPauseSettings(page);
+  await page.locator("#pm-open-display").click();
+  await page.locator("#pm-hud-details > summary").click();
+  await page.evaluate(() => {
+    for (const [key, value] of Object.entries({ "--sal": "44px", "--sar": "12px", "--sat": "18px", "--sab": "12px" })) document.documentElement.style.setProperty(key, value);
+  });
+  await page.locator("#pm-hud-arrange").click();
+  await page.locator("#hud-arrange-element").selectOption("map");
+  await page.locator("#hud-arrange-move").focus(); await page.keyboard.press("ArrowRight");
+  const saved = await page.evaluate(() => localStorage.getItem("apex26.hudLayout"));
+  const bar = page.locator("#hud-arrange-bar");
+  expect(await bar.evaluate(el => parseFloat(getComputedStyle(el).fontSize)), "toolbar respects larger text").toBe(18);
+  for (const viewport of sizes) {
+    await page.setViewportSize(viewport);
+    await expect(bar).toBeVisible();
+    await expect(page.locator("#hud-arrange-element")).toHaveValue("map");
+    await expect.poll(() => page.evaluate(() => {
+      const r = document.getElementById("hud-arrange-bar").getBoundingClientRect();
+      return r.left >= 52-.5 && r.top >= 26-.5 && r.right <= innerWidth-20+.5 && r.bottom <= innerHeight-20+.5;
+    })).toBe(true);
+    const geometry = await bar.evaluate(el => ({ width: el.clientWidth, content: el.scrollWidth }));
+    expect(geometry.content, "toolbar controls wrap without sideways scrolling").toBeLessThanOrEqual(geometry.width+1);
+    await expect(page.locator("#hud-arrange-done")).toBeInViewport();
+    expect(await page.evaluate(() => localStorage.getItem("apex26.hudLayout")), "responsive fitting never rewrites saved positions").toBe(saved);
+    await page.screenshot({ path: testInfo.outputPath("hud-adaptive-" + viewport.width + "x" + viewport.height + ".png") });
+  }
+  await page.locator("#hud-arrange-larger").click();
+  await expect(page.locator("#hud-arrange-name")).toHaveText("110%");
+  await page.locator("#hud-arrange-done").click();
+  await expect(page.locator("#pmsettings")).toBeVisible();
+  await testInfo.attach("console-health", { body: JSON.stringify({ errors }), contentType: "application/json" });
+  expect(errors).toEqual([]);
+}
+
 test.describe("HUD — ARRANGE HUD on-screen editor", () => {
   // The on-screen editor for MOVE & SIZE (js/ui/hud-arrange.js). Landscape touch:
   // the player this exists for, and the shape where pieces meet the docks.
@@ -798,11 +842,19 @@ test.describe("HUD — ARRANGE HUD on-screen editor", () => {
     await checkHudVisibilityEditors(page, testInfo);
   });
 
+  test("adapts to short touch landscape sizes without ending the edit", async ({ page }, testInfo) => {
+    await checkAdaptiveHudEditor(page, testInfo, [{ width: 640, height: 300 }, { width: 480, height: 240 }, LANDSCAPE]);
+  });
+
   test.describe("desktop toolbar placement", () => {
     test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
 
     test("visibility stays consistent between the slider and on-screen editors on desktop", async ({ page }, testInfo) => {
       await checkHudVisibilityEditors(page, testInfo);
+    });
+
+    test("adapts through narrow portrait and desktop sizes without losing selection", async ({ page }, testInfo) => {
+      await checkAdaptiveHudEditor(page, testInfo, [{ width: 640, height: 300 }, { width: 320, height: 480 }, { width: 1280, height: 720 }]);
     });
 
     test("entry uses the populated toolbar size without a later position jump", async ({ page }) => {
