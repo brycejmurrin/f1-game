@@ -23,7 +23,16 @@ and the tool result names that path instead of inlining the page. That file is t
    It spills to a file; note the path.
 3. Digest: `node tools/ci/session-transcript.mjs <path>`. Add `--only errors`, `--only tools`, `--only chat`,
    `--only turns`, `--grep '<re>'`, `--width 240`, `--hooks` (successful hooks too) or `--json`.
-4. Older history: the footer prints `= more: … before_id <id>`. Call `list_events` with that `before_id`, then
+4. Quota noise: a session parked on the account usage limit is woken by every check-in and PR event, and each wake
+   is an instant `api_error` turn. The digest folds the run into ONE `QUOTA ×N quota retries (first … last …)`
+   row (wakes between retries are counted, not listed) and ends with `= state: quota-parked until <reset>` when the
+   newest real activity (a call, a reply, a turn) is a limit error. `--raw` keeps every retry row.
+   **Page past the noise:** a parked session's newest pages are pure retries, so follow the `before_id` in the
+   footer until the fold is no longer the whole page; the real work is on the older pages.
+5. Many sessions: `--summary` prints ONE line for the pages given (title = first typed prompt or `--title`, cumulative
+   cost, time of the last real turn, `quota-parked until …` or `active`, failed-hook count; `--json` for an
+   object). Triage with it first, then digest only the sessions that matter.
+6. Older history: the footer prints `= more: … before_id <id>`. Call `list_events` with that `before_id`, then
    re-run the script with **every** saved page (it dedupes by uuid and sorts by time, and a tool result on a newer
    page joins its call on an older one).
 
