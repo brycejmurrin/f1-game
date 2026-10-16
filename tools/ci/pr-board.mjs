@@ -40,6 +40,7 @@ import { fileURLToPath } from "node:url";
 import { api, measure as capMeasure, reportLine as capLine, DEPLOY, MAX_LIVE } from "./ready-full-cap.mjs";
 import { guardsVerdict, planVerdict } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
+import { needsSync, verdictLine } from "./needs-sync.mjs";
 
 export { DEPLOY, MAX_LIVE };
 /** At most this many PRs armed repo-wide (AGENTS.md §Concurrent PRs, Merge Desk's hard gate). */
@@ -275,7 +276,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
 and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
-GET requests only. Exit 0 printed, 2 bad args, 3 API/token.`);
+Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
+Exit 0 printed, 2 bad args, 3 API/token.`);
   const args = parseArgs(argv);
   if (args.error) {
     console.error(`pr-board: ${args.error}`);
@@ -286,6 +288,14 @@ GET requests only. Exit 0 printed, 2 bad args, 3 API/token.`);
     console.error(`pr-board: ${v.error}`);
     process.exit(v.badArgs ? 2 : 3);
   }
-  if (args.json) console.log(JSON.stringify({ rows: v.rows, cap: v.cap, line: v.capLine }, null, 2));
-  else console.log(render(v, { capLine: v.capLine }));
+  // needs-sync.mjs runs FIRST for every row the board would send to SYNC or FIX
+  // (a red may be stale, a "dirty" may be generated-file-only): one verdict line each.
+  const sync = {};
+  for (const r of v.rows) if (r.suggest === "SYNC" || r.suggest === "FIX") sync[r.number] = needsSync(r.branch);
+  const syncLine = (n) => (sync[n].ok ? `${verdictLine(sync[n])} (${sync[n].why})` : `= sync needed: unknown (${sync[n].error})`);
+  if (args.json) console.log(JSON.stringify({ rows: v.rows.map((r) => (sync[r.number] ? { ...r, sync: sync[r.number] } : r)), cap: v.cap, line: v.capLine }, null, 2));
+  else {
+    console.log(render(v, { capLine: v.capLine }));
+    for (const n of Object.keys(sync)) console.log(`#${n} ${syncLine(n)}`);
+  }
 }

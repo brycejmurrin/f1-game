@@ -91,6 +91,8 @@ to merge or widen scope; merge conflict = `sync-pr.mjs`, never rebase;
 base recovered (the red was already on the ship tip) = say so, do not fix it;
 closed or merged = unsubscribe and send DONE.
 
+Owners watch their PR with `subscribe_pr_activity` and run no per-PR timer of their own beyond this safety net;
+before any sync they run `needs-sync.mjs`.
 Safety net: `send_later` first check-in about 50 min after a push, then about
 4 h; stop after 3 empty ones or on merge/close. `watch_url` is for non-PR
 external hooks only (a webhook that wakes the session); it ends with the

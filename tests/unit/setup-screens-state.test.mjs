@@ -634,6 +634,7 @@ function loadSetupUi() {
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
     PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
   });
+  vm.runInNewContext(src("js/garage/setup-experiments.js"), sb);
   vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
   return { dom, ui: sb.SetupUI.create(G), G, $: G.$, observers };
 }
@@ -685,6 +686,7 @@ test("garage: Change Car shows the sheet with aria-busy before heavy buildSetup 
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
     PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
   });
+  vm.runInNewContext(src("js/garage/setup-experiments.js"), sb);
   vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
   const deferred = sb.SetupUI.create(g);
   dom.byId("select").hidden = false;

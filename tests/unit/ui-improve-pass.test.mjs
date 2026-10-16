@@ -2080,7 +2080,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact garage hides part blurbs so more option rows fit");
   assert.equal(decl(css("css/carsetup.css"), /#cs-options \.cs-tune-editor > \.adv-help:not\(#cs-rake-readout\)/, "display"), "none",
     "compact SETUP hides the long tune note and keeps the rake readout");
-  assert.match(code("js/garage/setup-sheet.js"), /wrap\.className\s*=\s*"cs-tune-editor"/,
+  assert.match(code("js/garage/setup-experiments.js"), /wrap\.className\s*=\s*"cs-tune-editor"/,
     "SETUP must not reuse cs-liv-editor (that class translucents the paint sheet)");
   assert.equal(decl(css("css/carsetup.css"), /#cs-options \.cs-liv-editor > \.adv-help:not\(#cs-rake-readout\)/, "display"), "none",
     "compact paint editor still hides its long help notes");
@@ -2121,7 +2121,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(selectJs, /G\.daily\.select\(/, "daily controls stage a plan on the picker");
   assert.doesNotMatch(selectJs, /onclick\s*=\s*\([^)]*\)\s*=>\s*\{[^}]*G\.daily\.open\(/,
     "a picker chip must never bypass NEXT, Race Settings and RACE!");
-  assert.match(code("js/garage/setup-sheet.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
+  assert.match(code("js/garage/setup-experiments.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
   const resultsJs = code("js/ui/results-sheet.js");
   assert.match(resultsJs, /btn\.id\s*=\s*"res-daily-share"/);
   assert.match(resultsJs, /clrBtn\.id\s*=\s*"res-ghost-clear"/);

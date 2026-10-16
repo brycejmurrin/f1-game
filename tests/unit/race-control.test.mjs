@@ -905,6 +905,54 @@ test("classify(): a flagged finisher below 90 % of the winner's laps stays in th
     "unclassified follow by laps (flagged finishers first), then distance");
 });
 
+test("all-DNF classification uses the retired leader's completed distance, excluding DSQ references", () => {
+  const RC = load(null);
+  const make = (id, lap, extra = {}) => ({ id, lap, prog: (lap - 1) * 1000 + 100, retired: true, ...extra });
+  const lead = make("lead", 11), near = make("near", 10), early = make("early", 9);
+  const dsq = make("dsq", 51, { dsq: "compound" });
+  const cars = [early, dsq, near, lead];
+  const order = RC.classify(cars, [], [], [dsq, lead, near, early]);
+  assert.deepEqual(order.map((c) => c.id), ["lead", "near", "early"]);
+  assert.equal(lead.classified, true, "10 completed laps is the reference");
+  assert.equal(near.classified, true, "9 completed laps meets the 90% cutoff");
+  assert.equal(early.classified, false, "8 completed laps is below the cutoff");
+  assert.equal(dsq.classified, false, "DSQ cannot raise the reference or earn points");
+  assert.deepEqual({ ...RC.shortRun([lead, near, early], 20) }, { laps: 10, of: 20 });
+  assert.deepEqual({ ...RC.shortRun(cars, 20) }, { laps: 10, of: 20 }, "DSQ cannot inflate the shortened-race points column");
+  assert.deepEqual({ ...RC.shortRun([dsq], 20) }, { laps: 0, of: 20 }, "an entirely disqualified field has no eligible distance");
+});
+
+test("all-DNF short runs retain zero-lap and finished-retired semantics", () => {
+  const RC = load(null);
+  for (const lap of [0, 1]) {
+    const car = { lap, prog: 0, retired: true, finished: false };
+    assert.deepEqual({ ...RC.shortRun([car], 20) }, { laps: 0, of: 20 });
+    assert.equal(RC.classify([car], [], [], [car])[0], car);
+    assert.equal(car.classified, false, "a retirement before completing any lap remains NC");
+  }
+  const car = { lap: 11, prog: 10100, retired: true, finished: true };
+  assert.deepEqual({ ...RC.shortRun([car], 20) }, { laps: 10, of: 20 }, "a retired finished marker is not a chequered finisher");
+  RC.classify([car], [], [], [car]);
+  assert.equal(car.classified, true);
+  assert.deepEqual({ ...RC.shortRun([], 20) }, { laps: 0, of: 20 });
+  assert.equal(RC.shortRun([car], 0), null);
+});
+
+test("all-DNF fallback leaves flagged and no-flag running references unchanged", () => {
+  const RC = load(null);
+  const winner = { lap: 11, prog: 10000, finished: true };
+  const near = { lap: 10, prog: 9100, retired: true };
+  const early = { lap: 9, prog: 8100, retired: true };
+  RC.classify([winner, near, early], [winner], [], [near, early]);
+  assert.equal(near.classified, true); assert.equal(early.classified, false);
+  assert.equal(RC.shortRun([winner, near], 20), null, "a genuine finisher makes a full race");
+  const runner = { lap: 6, prog: 5100 };
+  const fartherRetiree = { lap: 11, prog: 10100, retired: true };
+  RC.classify([runner, fartherRetiree], [], [runner], [fartherRetiree]);
+  assert.equal(runner.classified, true); assert.equal(fartherRetiree.classified, true);
+  assert.deepEqual({ ...RC.shortRun([runner, fartherRetiree], 20) }, { laps: 5, of: 20 }, "live reference remains authoritative until everyone retires");
+});
+
 test("replay flag snapshots bypass live hazards and red restarts, and normal apply/reset release ownership", () => {
   let queries = 0;
   const RC = load({ active: () => true, hazards: () => { queries++; return hazards(20, 20); } });

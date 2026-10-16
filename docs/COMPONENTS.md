@@ -146,6 +146,7 @@ not.
 | `pane-` | 9 | `components.css` | — |
 | `music-` | 9 | `tuner.css` | — |
 | `set-` | 17 | `settings-controls.css` | `race-setup.css`, `tuner.css` |
+| `player-` | 5 | `player-tools.css` | — |
 | `settings-` | 5 | `player-tools.css` | — |
 | `race-` | 2 | `player-tools.css` | — |
 | `save-` | 8 | `save-health.css` | — |

@@ -259,6 +259,38 @@ test("a championship round ended by the human's retirement pays the shortened-ra
   } finally { g5.close(); }
 });
 
+test("all-DNF season settlement classifies 90% distance and pays the shortened-race table", async () => {
+  const game = await createGame({ track: "monza", carMeshes: false });
+  try {
+    const a = game.apex, G = game.G;
+    a.headless(true);
+    const SeasonCal = vm.runInContext("SeasonCal", game.ctx);
+    G.flow = "season"; G.session = "race";
+    const config = SeasonCal.applyConfig(Object.assign(SeasonCal.fresh(), { quali: false, trackIds: ["monza", "spa"] }));
+    G.season = config.season; G.trackIdx = SeasonCal.trackIndex(0); G.raceLaps = 20;
+    const before = G.cars; G.startRace();
+    await settle(() => G.cars !== before && (G.state === "count" || G.state === "race"), 4000);
+    a.go(); game.step(60);
+    const leader = G.player, [near, early] = G.cars.filter((c) => !c.human), L = G.track.total;
+    for (const car of G.cars) {
+      const completed = car === leader ? 10 : car === near ? 9 : car === early ? 8 : 0;
+      Object.assign(car, { lap: completed + 1, prog: completed * L + 100, retired: true, finished: false, bestLap: 0, dsq: null });
+    }
+    G.endRace();
+    assert.equal(G.state, "results");
+    assert.equal(leader.classified, true);
+    assert.equal(near.classified, true);
+    assert.equal(early.classified, false);
+    assert.equal(leader.finPos, 1); assert.equal(near.finPos, 2); assert.equal(early.finPos, 3);
+    assert.equal(new Set(G.cars.map((car) => car.finPos)).size, G.cars.length, "every retirement retains a distinct result position");
+    assert.ok(G.cars.every((car) => car.finPos >= 1 && car.finPos <= G.cars.length));
+    assert.equal(G.season.pts[leader.driverId], 19, "10 of 20 completed laps pays the 50%-75% table, not zero or full points");
+    assert.equal(G.season.pts[near.driverId], 14);
+    assert.equal(G.season.pts[early.driverId] || 0, 0, "below-cutoff retirement earns no points");
+    assert.equal(G.cars.filter((car) => (G.season.pts[car.driverId] || 0) > 0).length, 2);
+  } finally { game.close(); }
+});
+
 test("the live loop flags a lapped human on the same step as the winner in either roster order", async () => {
   const game = await createGame({ track: "monza", carMeshes: false });
   try {

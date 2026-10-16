@@ -15,6 +15,26 @@ const { panelCover, presentOpts, glareScale } = vm.runInContext("SetupCamera", c
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
 const noCam = () => { throw new Error("camTop must only be read on the portrait axis"); };
 const CANVAS = rect(0, 0, 1440, 900);
+test('garage held camera controls release only their owning pointer, or window blur', () => {
+  const source = read('js/garage/setup-camera.js');
+  const fn = source.slice(source.indexOf('function holdSetupCtl('), source.indexOf('holdSetupCtl("cs-view-in"'));
+  for (const end of ['pointerup', 'pointercancel', 'lostpointercapture', 'blur']) {
+    const handlers = {}, win = {}, rates = { az: 1 }; let steps = 0;
+    const el = { addEventListener(t, f) { (handlers[t] ||= []).push(f); }, setPointerCapture() {} };
+    const sb = { $: () => el, G: { setupPreviewOn: true }, preview: false, arrival: {}, spHeld: null,
+      window: { addEventListener(t, f) { (win[t] ||= []).push(f); } } };
+    vm.runInNewContext(fn + ';holdSetupCtl("left", rates, step);', Object.assign(sb, { rates, step: () => steps++ }));
+    const fire = (list, type, id) => { for (const f of list[type] || []) f({ type, pointerId: id, preventDefault() {} }); };
+    fire(handlers, 'pointerdown', 11); assert.equal(sb.spHeld, rates); assert.equal(steps, 1);
+    fire(win, 'pointerup', 22); assert.equal(sb.spHeld, rates, 'another finger cannot stop the held camera');
+    fire(handlers, 'pointerdown', 22); assert.equal(steps, 1, 'another pointer cannot steal this control');
+    if (end === 'blur') fire(win, end);
+    else { fire(handlers, end, 22); assert.equal(sb.spHeld, rates); fire(handlers, end, 11); }
+    assert.equal(sb.spHeld, null, end + ' releases the owner');
+    fire(handlers, 'pointerdown', 33); assert.equal(sb.spHeld, rates, 'control can be entered again');
+    fire(win, 'pointerup', 33); assert.equal(sb.spHeld, null);
+  }
+});
 
 test("a RIGHT dock returns the same unsigned fraction it always did", () => {
   for (const w of [0, 120, 410, 540, 1100, 1440]) {
