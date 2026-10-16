@@ -220,6 +220,8 @@ $("pm-phonepad").onclick = () => {
       },
       // The phone's wire died: PhonePad hosts the same code again and the phone re-dials it (lost() follows only if it gives up).
       relinking: () => { G.announce("PHONE LINK LOST — RECONNECTING", 3, "warn"); },
+      // A first pairing that failed (expired, no relay): the status stays, the button starts over.
+      failed: () => { btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; },
       lost: () => {
         btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; G.announce("PHONE DISCONNECTED", 3, "warn");
         if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);

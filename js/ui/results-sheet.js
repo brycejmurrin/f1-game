@@ -233,8 +233,9 @@ function buildResults(order, race) {
   // the retirements among the untimed. An untimed car with no `r` keeps the
   // local flag — the best a guest can do until the payload says.
   const np = G.netPlay;
-  const guest = np && np.active && np.active() && !np.ownsClassification();
-  const verdict = guest && np.peerResult();
+  const kept = np && np.lastResult && np.lastResult();   // the host left after its RESULT (#2199)
+  const guest = !!kept || (np && np.active && np.active() && !np.ownsClassification());
+  const verdict = guest && (kept || np.peerResult());
   // Element-guarded, like the adopt path in js/game.js: a wire payload of
   // [null] satisfies Array.isArray and throws on e.d.
   const hostRow = new Map(Array.isArray(verdict)

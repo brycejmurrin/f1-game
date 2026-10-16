@@ -277,7 +277,12 @@ const ShareCode = (function () {
   function importValues(store, decoded, values) {
     const keys = Object.keys(values);
     const prev = {};
-    for (const k of keys) prev[k] = store.get(k, null);
+    // What the player STORED, not get()'s shipped GarageDefaults fallback: undoing
+    // over a default must leave the key absent, not pin the default (#2191).
+    for (const k of keys) {
+      const v = typeof store.getStored === "function" ? store.getStored(k) : store.get(k, null);
+      prev[k] = v === undefined ? null : v;
+    }
     const oldUndo = store.get(UNDO_KEY, undefined);
     const rec = { keys, prev, at: Date.now(), pending: true };
     const failed = (reason) => ({ ok: false, kind: decoded.kind, team: decoded.team, reason });

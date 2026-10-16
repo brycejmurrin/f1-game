@@ -76,7 +76,7 @@ const driverRec = (d) => ({ name: d.name, code: d.code, num: d.num });
 
 let career = null;        // the loaded save, or null
 let engaged = false;
-function engage(on) { engaged = !!on; applyRegs(); }
+function engage(on) { engaged = !!on; if (applyRegs()) save({ migration: true }); }
 function inCareer() { return engaged && career != null; }
 
 // Career draws never touch simRnd(): consuming that stream here would make a
@@ -136,6 +136,7 @@ function migrateSlots() {
   const next = { driver: 0, myteam: 0 };
   for (const item of found) {
     const c = item.value;
+    if (c && Number(c.v) > GameStore.CAREER_V) continue;
     const f = flavourIn(c && c.flavour);
     // Never overwrite: a set that already holds saves is the current layout, and
     // a stale key left behind by a half-finished migration must not clobber it.
@@ -146,6 +147,10 @@ function migrateSlots() {
     next[f]++;
   }
 }
+const unsupportedSlot = (f, i) => {
+  const raw = store.get(slotKey(f, i), null);
+  return !!(raw && Number(raw.v) > GameStore.CAREER_V);
+};
 const readSlot = (f, i) => migrateCareer(store.get(slotKey(f, i), null));
 
 if (store.subscribe) store.subscribe((change) => {
@@ -181,12 +186,14 @@ function load(options) {
   const live = String(store.get("careerSlot", "driver:0")).split(":");
   slotFlavour = flavourIn(live[0]);
   slotIdx = slotIn(live[1]);
+  pointerHeld = false;
+  const wanted = [slotFlavour, slotIdx];
   career = readSlot(slotFlavour, slotIdx);
   if (!career)
     outer: for (const f of FLAVOURS)
       for (let i = 0; i < SLOTS; i++) {
         const c = readSlot(f, i);
-        if (c) { slotFlavour = f; slotIdx = i; career = c; setLive({ migration: true }); break outer; }
+        if (c) { slotFlavour = f; slotIdx = i; career = c; holdPointer(wanted) || setLive({ migration: true }); break outer; }
       }
   adoptCalendar(career);
   armRevision();
@@ -194,11 +201,29 @@ function load(options) {
   // the key it was migrated FROM), so persisting the climbed shape is this
   // function's job — otherwise a v0 save would migrate in memory on every boot
   // and never on disk, and the next build's ladder would start from v0 again.
-  if (persist) save({ migration: true });
   applyRegs();
+  if (persist) save({ migration: true });
   return career;
 }
-function setLive(options) { store.set("careerSlot", `${slotFlavour}:${slotIdx}`, options); }
+function setLive(options) { pointerHeld = false; store.set("careerSlot", `${slotFlavour}:${slotIdx}`, options); }
+// #2193: a live slot whose key is missing at boot may still be in the IndexedDB
+// mirror. Falling through to another slot must not durably repoint careerSlot
+// before that restore runs (it skips a present key), or the player lands in a
+// different career for good. Play the fallback in memory; once the mirror
+// settles, persist it only if the wanted slot never came back — a restoredBatch
+// load() in between re-reads the untouched pointer and selects the original.
+let pointerHeld = false;
+function holdPointer(wanted) {
+  const m = store.mirror;
+  if (!m || m.settled !== false || !m.ready || typeof m.ready.then !== "function") return false;
+  pointerHeld = true;
+  m.ready.then(() => {
+    if (!pointerHeld) return;
+    pointerHeld = false;
+    if (!readSlot(wanted[0], wanted[1])) setLive({ migration: true });
+  });
+  return true;
+}
 let lastSave = { ok: true, durable: true, reason: null };
 function writeResult(key, value, options) {
   if (typeof store.write === "function") return store.write(key, value, options);
@@ -206,6 +231,10 @@ function writeResult(key, value, options) {
   return { ok: true, durable, reason: durable ? null : (store.broken || "Error") };
 }
 function save(options) {
+  if (unsupportedSlot(slotFlavour, slotIdx)) {
+    lastSave = { ok: false, durable: false, reason: "newer-version" };
+    return career;
+  }
   if (career) {
     // A storage event invalidates GameStore's parsed cache, but this module owns a
     // long-lived object reference. Never write that reference over a newer save
@@ -239,6 +268,9 @@ function clear() {
 }
 
 function slotInfo(c, f, i) {
+  if (unsupportedSlot(f, i)) return { flavour: f, i, used: true, unsupported: true,
+    live: false, teamName: "UPDATE REQUIRED", code: "", name: "Newer save",
+    year: "Newer build", round: 0, rounds: 0, money: 0, seasons: 0, wins: 0, titles: 0 };
   if (!c) return { flavour: f, i, used: false };
   const team = teamOf(c.team);
   const tally = tallyOf(c);
@@ -275,13 +307,17 @@ function firstFree(flavour) {
 function useSlot(flavour, i) {
   const f = flavourIn(flavour);
   const n = slotIn(i);
+  if (unsupportedSlot(f, n)) {
+    lastSave = { ok: false, durable: false, reason: "newer-version" };
+    return null;
+  }
   if (career && (f !== slotFlavour || n !== slotIdx)) save();
   slotFlavour = f;
   slotIdx = n;
   setLive();
   career = adoptCalendar(readSlot(f, n));
   armRevision();
-  applyRegs();      // a different save can be a different era
+  if (applyRegs()) save({ migration: true });   // a different save can have a lower cap
   return career;
 }
 function deleteSlot(flavour, i, expectedRevision) {
@@ -324,7 +360,7 @@ function start(opts) {
   const target = o.slot != null ? slotIn(o.slot)
     : free >= 0 ? free
     : (flavour === slotFlavour ? slotIdx : -1);
-  if (target < 0) return null;
+  if (target < 0 || unsupportedSlot(flavour, target)) return null;
   // Save the career being left before the new one takes its place — starting a
   // career must not cost an unsaved change in the one you were playing.
   if (career && (flavour !== slotFlavour || target !== slotIdx)) save();
@@ -786,6 +822,36 @@ function applyRegs() {
   const e = inCareer() ? era() : null;
   if (!e || !Regulations) { Parts.setLegality(null, ""); return; }
   Parts.setLegality(Regulations.legalityFor(e.id), e.id);
+  return !careerConflict && refitBudget();
+}
+
+// An era can lower the works-based cap even when every fitted part stays legal.
+// Refit only OWNED legal options, preserving research and banned stored ids that
+// resolve freely. Prefer the smallest single-category saving covering the excess;
+// otherwise take the largest available saving and repeat. No automatic upgrades.
+function refitBudget() {
+  if (!Parts.resolveSetup) return false;   // rules-only harnesses may omit the catalog resolver
+  const team = teamOf(career.team), cap = budget(), have = owned(career.team);
+  let fit = Parts.resolveSetup(career.fitted, team), changed = false;
+  while (fit.cost > cap) {
+    const excess = fit.cost - cap;
+    let best = null;
+    for (const cat of Parts.CATALOG) for (const opt of cat.options) {
+      if (!Parts.isOptionAvailable(opt, team, have)) continue;
+      const saving = (fit.options[cat.id].cost || 0) - (opt.cost || 0);
+      if (saving <= 0) continue;
+      const covers = saving >= excess, distance = Math.abs(saving - excess);
+      const id = cat.id + ":" + opt.id;
+      if (!best || (covers && !best.covers) || (covers === best.covers &&
+          (distance < best.distance || (distance === best.distance && id < best.id))))
+        best = { cat: cat.id, opt: opt.id, covers, distance, id };
+    }
+    if (!best) break;   // every real category has a free default; defensive for incomplete catalogs
+    career.fitted[best.cat] = best.opt;
+    fit = Parts.resolveSetup(career.fitted, team);
+    changed = true;
+  }
+  return changed;
 }
 
 // The ceiling every career budget obeys: the whole top shelf minus its dearest

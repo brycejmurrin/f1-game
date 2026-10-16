@@ -43,11 +43,28 @@
       const HUIZACHE  = [0.36, 0.44, 0.26];
 
       // ── Papel-picado banner strip along a stand front ────────────────────────
+      // One 4 m box per node (the node spacing, so neighbours abut and the run
+      // reads as one strip instead of 6 m boxes overlapping into a stick). Each
+      // box is tangent-aligned by place(), so on a bend the run is a chord; a
+      // box is skipped where the line turns more than ~7 deg over its +-2 nodes
+      // (R < ~130 m: the Foro Sol and Horquilla corners, where the strip used to
+      // cut across the verge and lawn) or where the ground steps more than
+      // 0.5 m to its neighbour (a strip slanting off a slope). Measured: the
+      // pit-straight and park runs are unchanged, the Foro runs keep only their
+      // straights.
       const banners = (s, side, gap) => {
         const k = K(s);
+        let prevY = null;
         for (let i = -2; i <= 2; i++) {
-          const kk = (k + i + n) % n;
-          place(kk, side, gap, [0.4, 1.1, 6], fiesta[(kk + (i & 1)) % 4]);
+          const kk = (k + i + n) % n, a = (kk - 2 + n) % n, b = (kk + 2) % n;
+          const ax = px[kk] - px[a], az = pz[kk] - pz[a], bx = px[b] - px[kk], bz = pz[b] - pz[kk];
+          const turn = Math.acos(Math.max(-1, Math.min(1,
+            (ax * bx + az * bz) / ((Math.hypot(ax, az) * Math.hypot(bx, bz)) || 1))));
+          const c = anchor(kk, side, gap).c, y = terrainYAt(c[0], c[2]);
+          const steep = prevY !== null && y !== null && Math.abs(y - prevY) > 0.5;
+          if (y !== null) prevY = y;
+          if (turn > 0.12 || steep) continue;
+          place(kk, side, gap, [0.4, 1.1, 4], fiesta[(kk + (i & 1)) % 4]);
         }
       };
 
@@ -453,11 +470,11 @@
       // Keep footprints CLEAR of every road leg: long/wide patches on the Foro
       // inside and midfield folds were footprint-rejected (terrain-over-road
       // Mexico migration pin: models.suppressed must stay []).
-      const FIELD = [0.30, 0.44, 0.24];
+      const FIELD = [0.38, 0.45, 0.25];
       const DIRT  = [0.50, 0.40, 0.28];
       const PLAZA = [0.70, 0.68, 0.64];
       const ASPH  = [0.30, 0.30, 0.32];
-      const LAWN  = [0.34, 0.50, 0.28];
+      const LAWN  = [0.40, 0.47, 0.26];
       // Trackside verge — short along-track pieces so the Foro inside corner
       // never chords onto the road (foro-verge-r-* was footprint-rejected).
       for (const s of [0.74, 0.77, 0.80, 0.83]) {
@@ -470,19 +487,19 @@
         const aL = anchor(K(s), -1, 16), aR = anchor(K(s), 1, 16);
         if (!onTrack(aL.c[0], aL.c[2], 8))
           groundPatch(K(s), -1, 14, [12, 0.55, 18], s < 0.79 ? FIELD : DIRT,
-                      { id: `foro-floor-l-${K(s)}`, samples: 4 });
+                      { id: `foro-floor-l-${K(s)}`, samples: 6 });
         if (!onTrack(aR.c[0], aR.c[2], 8))
           groundPatch(K(s),  1, 14, [12, 0.55, 18], s < 0.79 ? DIRT : FIELD,
-                      { id: `foro-floor-r-${K(s)}`, samples: 4 });
+                      { id: `foro-floor-r-${K(s)}`, samples: 6 });
       }
       {
         const aL = anchor(K(0.785), -1, 36), aR = anchor(K(0.785), 1, 36);
         if (!onTrack(aL.c[0], aL.c[2], 14))
           groundPatch(K(0.785), -1, 32, [28, 0.6, 28], FIELD,
-                      { id: "foro-infield-left", samples: 5 });
+                      { id: "foro-infield-left", samples: 9 });
         if (!onTrack(aR.c[0], aR.c[2], 14))
           groundPatch(K(0.785),  1, 32, [28, 0.6, 28], DIRT,
-                      { id: "foro-infield-right", samples: 5 });
+                      { id: "foro-infield-right", samples: 9 });
       }
       // Park / sports midfield plazas — compact so a fold never lands a
       // patch over another leg (mexico-plaza-deportes was footprint-rejected).
@@ -497,7 +514,7 @@
       ]) {
         const a = anchor(K(s), side, gap + sz[0] / 2);
         if (onTrack(a.c[0], a.c[2], Math.max(sz[0], sz[2]) * 0.35)) continue;
-        groundPatch(K(s), side, gap, sz, col, { id, samples: 5 });
+        groundPatch(K(s), side, gap, sz, col, { id, samples: 8 });
       }
       // Discrete service pads further out than the verges
       for (const [s, side, gap, id] of [
@@ -722,12 +739,12 @@
         boundedStand(s, 1, 32, 26, CONCRETE, GREEN, false);
       }
       // Wave-4 hero: Peraltada / Estadio grandstand — long curved seating wall
-      // on the banked final sweep (research: Grandstand 14/15 view toward
+      // on the final sweep, banked 3.5 deg at 0.89-0.93 (research: Grandstand 14/15 view toward
       // Peraltada; festive green/white/red fascia). Gap 40 sits behind the
       // boundedStand rings at 14/32 so clip-audit stays within mexico's baseline.
       {
         // Far outer ring — gap 62 clears the terrace at 46 and any parallel
-        // stretch the banked Peraltada brings close.
+        // stretch the Peraltada sweep brings close.
         const a = anchor(K(0.935), 1, 62);
         if (!onTrack(a.c[0], a.c[2], 20)) {
           const b = [a.r, a.u, a.t];
@@ -785,7 +802,7 @@
       // and drew nothing — ground-audit's buried count. The corner's kerbs are
       // kerb()'s, above.)
 
-      // Mexican flag strip accents at the Peraltada outer bank
+      // Mexican flag strip accents at the Peraltada outer edge (3.5 deg bank, 0.89-0.93)
       for (let i = 0; i < 6; i++) {
         const f = 0.88 + i * 0.018;
         const k = K(f);
@@ -855,10 +872,12 @@
       // themselves (1.85 m, clip-audit 2026-10-05).
       terrace(0.215, 0.248,  1, 20, { rows: 4, rise: 1.6, depth: 2.6,
         crowd: crowdCols, density: 0.6, step: 9 });
-      // gap 18, not 20: with the trees that grew through it now kept out
+      // Span ends at 0.945 (was 0.965): with the generic city pass off the rows
+      // past it emit and read as unsupported over the falling ground (ground-audit
+      // unsupported 3 -> 5; 0 at 0.945). Gap 18, not 20: with the trees that grew through it now kept out
       // (blocked() below), its back rows over the falling ground read as
       // unsupported at 20 (ground-audit 13 > 11); 2 m closer they seat.
-      terrace(0.915, 0.965, -1, 18, { rows: 4, rise: 1.6, depth: 2.6,
+      terrace(0.915, 0.945, -1, 18, { rows: 4, rise: 1.6, depth: 2.6,
         crowd: crowdCols, density: 0.6, step: 9 });
 
       avenue(0.60, 0.70, -1, 15, 30);
