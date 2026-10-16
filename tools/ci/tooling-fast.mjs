@@ -1235,6 +1235,33 @@ export function scheduleLongestFirst(files, timings = {}) {
     .sort((a, b) => (b.ms - a.ms) || (a.i - b.i)).map((x) => x.f);
 }
 
+/** Estimate the local worker critical path for a selected file set. The real
+ * runner uses the same longest-first order and assigns each file to the least
+ * loaded worker, so this is a useful pre-PR wall-time estimate rather than a
+ * misleading sum. Unknown files remain visible in `unmeasured`; their cost is
+ * intentionally not invented. */
+export function estimateToolingFast(files, timings = loadTimings(), jobs = 1) {
+  const workerCount = Math.max(1, Number(jobs) || 1);
+  const loads = Array(workerCount).fill(0);
+  const rows = files.map((file, index) => ({
+    file,
+    index,
+    ms: typeof timings[file] === "number" ? timings[file] : null,
+  })).sort((a, b) => (b.ms ?? -1) - (a.ms ?? -1) || a.index - b.index);
+  const unmeasured = [];
+  for (const row of rows) {
+    if (row.ms === null) unmeasured.push(row.file);
+    const worker = loads.indexOf(Math.min(...loads));
+    loads[worker] += row.ms ?? 0;
+  }
+  return {
+    totalMs: loads.reduce((sum, ms) => sum + ms, 0),
+    criticalPathMs: Math.max(...loads),
+    workerMs: loads,
+    unmeasured,
+  };
+}
+
 /** The `# tests / # pass / # fail / # skipped / # todo / # cancelled` footer of a TAP run (null for a missing one). */
 export function tapSummary(text) {
   const out = {};

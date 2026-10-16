@@ -129,6 +129,8 @@ test("verify-change --plan on a docs-only change selects no browser batches", ()
   assert.equal(plan.fast.toolingFastReason, "docs-only");
   assert.equal(plan.fast.toolingFastFiles, 9, "docs-only edits should run the focused docs integrity set");
   assert.ok(plan.fast.toolingFastEstimatedMs > 0, "the plan should expose a measured timing estimate");
+  assert.ok(plan.fast.toolingFastCriticalPathMs > 0);
+  assert.ok(plan.fast.toolingFastCriticalPathMs <= plan.fast.toolingFastEstimatedMs);
   assert.deepEqual(plan.batches, [], "no browser minutes for a prose change");
 });
 
