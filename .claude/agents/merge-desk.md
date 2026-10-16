@@ -93,6 +93,15 @@ supersedes, after checking it with git (byte-identical circuit files, or
 `git log --no-merges A ^B ^tip` empty). Comment the evidence and that the
 branch is kept, then close. Anything short of that proof goes to Bryce.
 
+## Stand down (re-cut, supersede, close)
+
+Whenever a PR is re-cut, superseded or closed in favour of another, in the
+same sweep: `send_message` the original owner (`list_sessions`, or the PR's
+fleet block `worker:`) `STAND DOWN <old PR> superseded by <new PR>`, and add a
+line `Superseded by #<new>` to the old PR body (`update_pull_request`). The
+owner stops pushing; no owner found → say so in the summary. Evidence: #2144
+ran 3 CI cycles as a duplicate of #2027; #2276 ran ~3 h before it was closed.
+
 ## Cadence
 
 One sweep every 10–15 min while PRs are open (skill `ci-watch`): `send_later` re-armed at the

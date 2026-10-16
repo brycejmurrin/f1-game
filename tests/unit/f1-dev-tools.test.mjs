@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
 import path from 'node:path';
+import {webcrypto} from 'node:crypto';
 import {compare, summarize, main} from '../../plugins/f1-dev-tools/skills/f1-dev-tools/scripts/compare.mjs';
 const require = createRequire(import.meta.url);
 const root = path.resolve(import.meta.dirname, '../..');
@@ -20,6 +21,22 @@ test('real game API: capture/restore, raw preset inheritance, invalid inputs and
     const dev = g.ctx.F1Dev;
     const inspection = dev.inspect();
     assert.equal(inspection.info.track,'monza');
+    const diagnostic = dev.diagnose();
+    assert.equal(diagnostic.schema,'f1-dev-diagnostic/v1');
+    assert.equal(diagnostic.inspection.info.track,'monza');
+    assert.ok(diagnostic.manifest && typeof diagnostic.manifest === 'object');
+    assert.ok(['visible','hidden',null].includes(diagnostic.page.visibility));
+    g.ctx.crypto = webcrypto;
+    g.ctx.fetch = async url => ({ ok:true, status:200,
+      headers:{get(name){ return name === 'content-type' ? 'application/javascript' : null; }},
+      async arrayBuffer(){ return Uint8Array.from([114,101,108,101,97,115,101,45,98,121,116,101]).buffer; } });
+    const assets = await dev.checkAssets(['/version.json']);
+    assert.equal(assets.schema,'f1-dev-assets/v1');
+    assert.equal(assets.results[0].bytes,12);
+    assert.equal(assets.results[0].sha256,'eee72d707e993fd13d8d85ac1d29e252be7b283f561fce296eed019a1ed4c9cd');
+    const storageReport = await dev.storageReport();
+    assert.equal(storageReport.schema,'f1-dev-storage/v1');
+    assert.ok(Array.isArray(storageReport.localStorage));
     const originalDiag=g.apex.diag,originalTimer=g.apex.gpuTimer;
     g.apex.diag=()=>({env:{backend:'webgl2',backendState:{api:'webgl2'},renderScale:0.5},gl:{renderer:'ANGLE (Google, Vulkan SwiftShader Device)'},perf:{tier:4}});
     g.apex.gpuTimer=()=>({software:false});
@@ -144,7 +161,7 @@ test('plugin advertises the checkout MCP catalog without owning server startup',
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'plugins/f1-dev-tools/plugin.json'), 'utf8'));
   const advertised = manifest.extensions?.['com.openai']?.interface?.capabilities;
   assert.deepEqual(advertised, ['apex-tools', 'playwright-official', 'chrome-devtools']);
-  assert.equal(manifest.version, '0.2.0');
+  assert.equal(manifest.version, '0.3.0');
 
   const checkout = JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8'));
   assert.deepEqual(Object.keys(checkout.mcpServers).sort(), [...advertised].sort());

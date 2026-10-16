@@ -173,6 +173,7 @@ const RaceSettings = (function () {
     const fullLaps = () => (Tracks.LIST[G.trackIdx] && Tracks.LIST[G.trackIdx].gpLaps) || 57;
 
     let rsReturn = "select";
+    let searchReturn = null;
     let draftKey = "";
     let netRoom = false;
 
@@ -204,7 +205,7 @@ const RaceSettings = (function () {
       // never raised: SEASON SETUP's 57 LAPS became FULL (79 at Monaco) on
       // every circuit shorter than ~5.35 km. That value keeps its own chip.
       if (!tt && !lapOpts.includes(raceLaps)) {
-        if (isChampionship() && raceLaps > 0 && raceLaps < full) { lapOpts.push(raceLaps); lapOpts.sort((a, b) => a - b); }
+        if (searchReturn || (isChampionship() && raceLaps > 0 && raceLaps < full)) { lapOpts.push(raceLaps); lapOpts.sort((a, b) => a - b); }
         else { raceLaps = full; G.raceLaps = full; }
       }
       SettingRow.paint("rs-laps", raceLaps, lapOpts.map((n) => [n, !tt && n === full ? full + " (FULL)" : String(n)]));
@@ -561,6 +562,7 @@ const RaceSettings = (function () {
     }
 
     function openRaceSettings(from) {
+      searchReturn = null;
       rsReturn = from || "select";
       if (!netRoom) {
         const daily = isTimeTrial() && G.daily ? G.daily.current() : null;
@@ -586,6 +588,19 @@ const RaceSettings = (function () {
       scheduleFlybyTrack();
     }
 
+    // Search reveals the current preferences without staging a new race draft.
+    // The ordinary picker entry still owns defaulting and lap normalization.
+    function openSettingSearch(back, arrived) {
+      if (G.state !== "menu" || netRoom || isTimeTrial() || isChampionship()) return false;
+      searchReturn = back;
+      rsReturn = "pmsettings";
+      buildRaceSettings();
+      $("pmsettings").hidden = true;
+      $("race-settings").hidden = false;
+      if (arrived) arrived();
+      return true;
+    }
+
     function wireButtons() {
       els.selGo.onclick = () => {
         if (G.soundOn) GameAudio.uiSelect();
@@ -599,6 +614,7 @@ const RaceSettings = (function () {
       $("sel-car").onclick = () => openGarage("select");
       $("rs-cancel").onclick = () => {
         $("race-settings").hidden = true;
+        if (searchReturn) { const back = searchReturn; searchReturn = null; $("pmsettings").hidden = false; back(); return; }
         // Rebuilt, not just revealed: reached from results -> NEXT ROUND ->
         // qualifying -> BACK, the picker still titled the previous round.
         if (rsReturn === "select") buildSelect();
@@ -648,6 +664,7 @@ const RaceSettings = (function () {
       buildRaceSettings,
       wireRaceSettings,
       openRaceSettings,
+      openSettingSearch,
       openRaceSetup,
       setNetRoom,
       resetDraft,

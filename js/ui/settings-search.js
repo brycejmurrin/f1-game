@@ -28,9 +28,36 @@ const SettingsSearch = (function () {
     ["boost-pitch", "Boost pitch / rev lift", "audio", "as-t-boostlift", "ers deploy engine tone high ringy"],
     ["radio", "Team radio", "audio", "as-radio-sel", "voice engineer speech"],
   ].map((r) => Object.freeze({ id: r[0], label: r[1], page: r[2], target: r[3], aliases: r[4] })));
+  // Owners register descriptors without loading their controls. Re-registration
+  // replaces only that owner's rows; disposing an old registration is harmless.
+  const owners = new Map(), subscribers = new Set();
+  const PAGES = new Set(["controls", "driving", "display", "appearance", "a11y", "advanced", "audio", "files"]);
+  function register(owner, descriptors) {
+    if (typeof owner !== "string" || !owner || !Array.isArray(descriptors)) throw new TypeError("Settings search owner and descriptors required");
+    const rows = descriptors.map((r) => {
+      if (!r || typeof r.id !== "string" || !/^[a-z0-9_-]+$/i.test(r.id) || typeof r.label !== "string" || !r.label.trim()
+          || typeof r.target !== "string" || !/^[a-z][a-z0-9_-]*$/i.test(r.target) || (!PAGES.has(r.page) && typeof r.navigate !== "function")) throw new TypeError("Invalid settings search descriptor");
+      return Object.freeze({ ...r, aliases: String(r.aliases || ""), owner });
+    });
+    if (new Set(rows.map((r) => r.id)).size !== rows.length) throw new TypeError("Duplicate settings search id");
+    for (const row of rows) if (CATALOG.some((r) => r.id === row.id) || [...owners].some(([id, existing]) => id !== owner && existing.some((r) => r.id === row.id))) throw new TypeError("Settings search id already owned");
+    owners.set(owner, rows);
+    for (const fn of subscribers) fn();
+    return () => { if (owners.get(owner) === rows) { owners.delete(owner); for (const fn of subscribers) fn(); } };
+  }
+  function optionsOf(row) {
+    // Read labels only. Never select an option, dispatch change, or ensure a
+    // lazy bundle merely to answer a query.
+    const target = typeof document !== "undefined" ? document.querySelector("#" + row.target) : null;
+    const labels = target && target.tagName === "SELECT" ? [...target.children].map((o) => o.textContent || "").join(" ") : "";
+    return labels + " " + (typeof row.options === "function" ? String(row.options() || "") : String(row.options || ""));
+  }
   function find(query) {
     const words = String(query || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return words.length ? CATALOG.filter((r) => words.every((w) => (r.label + " " + r.aliases).toLowerCase().includes(w))) : [];
+    return words.length ? CATALOG.concat(...owners.values()).filter((r) => {
+      const haystack = (r.label + " " + r.aliases + " " + optionsOf(r)).toLowerCase();
+      return words.every((w) => haystack.includes(w));
+    }) : [];
   }
   function reveal(target) {
     if (!target) return false;
@@ -66,13 +93,14 @@ const SettingsSearch = (function () {
     function unavailable(row) {
       clearFeedback();
       const message = row.label + " is unavailable in the current session or on this device. BACK returns to your search.";
-      const panel = document.querySelector("#" + panelIds[row.page]);
+      const panel = panelIds[row.page] ? document.querySelector("#" + panelIds[row.page]) : null;
       if (panel) {
         destinationNote = document.createElement("p"); destinationNote.className = "adv-help";
         destinationNote.setAttribute("role", "status"); destinationNote.textContent = message;
         panel.insertBefore(destinationNote, panel.firstChild);
       }
-      if (typeof LiveRegion !== "undefined") LiveRegion.say(message, "hud");
+      if (!panel) note.textContent = row.unavailableReason || message;
+      if (typeof LiveRegion !== "undefined") LiveRegion.say(row.unavailableReason || message, "hud");
     }
     function paint() {
       list.replaceChildren();
@@ -83,29 +111,39 @@ const SettingsSearch = (function () {
         button.type = "button"; button.className = "sel-chip"; button.textContent = row.label + " · " + row.page.toUpperCase();
         button.dataset.settingResult = row.id;
         button.onclick = () => {
-          last = row.id; fromSearch = true; clearFeedback();
-          o.show(row.page, true, () => {
+          clearFeedback();
+          // Navigation ownership is committed only after the destination won
+          // the lazy generation race. A cancelled audio request owns no BACK.
+          const arrived = () => {
+            last = row.id; fromSearch = true;
             if (o.onSelect) o.onSelect(row.page);
             const placed = reveal(document.querySelector("#" + row.target));
             if (!placed) unavailable(row);
             return placed;
-          });
+          };
+          if (typeof row.navigate === "function") { if (row.navigate(arrived) === false) unavailable(row); }
+          else o.show(row.page, true, arrived);
         };
         li.appendChild(button); list.appendChild(li);
       }
     }
     input.oninput = paint;
+    subscribers.add(paint);
     paint();
     return Object.freeze({
       restore() {
         if (!fromSearch) return false;
         fromSearch = false; clearFeedback();
         const button = [...list.querySelectorAll("button")].find((b) => b.dataset.settingResult === last);
-        (button || input).focus({ preventScroll: true });
-        return true;
+        const target = button || input;
+        target.focus({ preventScroll: true });
+        if (target.scrollIntoView) target.scrollIntoView({ block: "nearest" });
+        return document.activeElement === target;
       },
+      cancel() { fromSearch = false; clearFeedback(); },
+      dispose() { subscribers.delete(paint); clearFeedback(); box.remove(); },
       input,
     });
   }
-  return Object.freeze({ CATALOG, find, reveal, create });
+  return Object.freeze({ CATALOG, register, find, reveal, create });
 })();

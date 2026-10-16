@@ -301,7 +301,39 @@ test("unload during parallel downloads rejects the stale generation before any d
   assert.deepEqual(maps, [null]);
   assert.equal(assets.state().tier, "off");
   assert.equal(assets.state().uploaded, false);
-  assert.equal(assets.state().bytes, 32, "finished downloads still count as fetched bytes");
+  assert.equal(assets.state().bytes, 0, "unload releases the pack byte accounting");
+});
+
+test("unload drops cached models and rejects late manifest/model responses", async () => {
+  const manifests = [deferredAssetDownload(), deferredAssetDownload()];
+  const modelDownload = deferredAssetDownload();
+  let manifestGets = 0;
+  const assets = assetLoader({
+    fetch(url) {
+      if (url.endsWith("manifest.json")) return manifests[manifestGets++].promise;
+      return modelDownload.promise;
+    },
+  });
+  assets.init({ createTextureArray() {}, setMaterialMaps() {} });
+
+  const oldManifest = assets.manifest();
+  assets.unload();
+  const nextManifest = assets.manifest();
+  manifests[0].resolve({ ok: true, json: async () => ({ models: { old: { file: "old.ax26" } } }) });
+  assert.equal(await oldManifest, false, "a response from before unload cannot become the active pack");
+  manifests[1].resolve({ ok: true, json: async () => ({ models: { fresh: { file: "fresh.ax26" } } }) });
+  assert.deepEqual(await nextManifest, { models: { fresh: { file: "fresh.ax26" } } });
+  assert.equal(assets.models().length, 1);
+  assert.equal(assets.models()[0], "fresh");
+
+  const staleModel = assets.model("fresh");
+  await new Promise(setImmediate);
+  assets.unload();
+  modelDownload.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) });
+  assert.equal(await staleModel, null);
+  assert.equal(assets.modelSync("fresh"), null, "a late model decode cannot repopulate the cache");
+  assert.equal(assets.models().length, 0);
+  assert.equal(assets.state().bytes, 0);
 });
 
 test("material and model loads recover after a temporarily unavailable pack", async () => {

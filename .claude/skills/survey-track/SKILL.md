@@ -1,7 +1,7 @@
 ---
 name: survey-track
 argument-hint: "<circuit ids…> [target year]"
-description: "Use when a circuit needs an end-to-end accuracy or grounding pass (gaps, terrain-over-road, channels/steps, sunk water), or a multi-circuit realism campaign (/survey-track spa monza: dated evidence, one surveyor per circuit). Props → scenery-dress; geometry hooks only → agent-view."
+description: "Use when a circuit needs an end-to-end accuracy or grounding pass (gaps, terrain-over-road, channels/steps, sunk water), or a multi-circuit realism campaign (/survey-track spa monza: one surveyor per circuit). Props → scenery-dress; geometry hooks only → agent-view."
 ---
 
 # Survey & update a track

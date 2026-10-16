@@ -96,3 +96,32 @@ test("CarMesh.drawAeroEdge is opt-in debug, not the shipped wing look", () => {
   const file = fs.readFileSync(new URL("../../js/car/car-mesh.js", import.meta.url), "utf8");
   assert.match(file, /apex26\.aeroEdge/, "off-by-default localStorage latch");
 });
+
+test("moving and rest flap meshes honor carbon surface independently of hidden paint and finish", () => {
+  const { Car3D, CarMesh } = loadParts();
+  let serial = 0;
+  CarMesh.init({ createMesh: (data) => ({ serial: ++serial, data }), freeMesh() {} });
+  const red = [1, 0, 0], element = Car3D.aeroFlaps(4)[0];
+  const paint = CarMesh.getAeroFlap(4, red, 0, null, element, "chrome", "paint");
+  const carbon = CarMesh.getAeroFlap(4, red, 0, null, element, "chrome", "carbon");
+  assert.notEqual(carbon, paint, "same-color caches still distinguish surface policy");
+  assert.equal(CarMesh.getAeroFlap(4, red, 0, null, element, "chrome", "carbon"), carbon);
+  assert.ok(carbon.data.mat.every((m) => m === Car3D.SURFACES.carbon));
+  assert.ok(paint.data.mat.some((m) => m === Car3D.FINISH_SURFACE.chrome));
+  for (const open of [false, true]) for (const only of [undefined, "front", "rear"]) {
+    const bare = CarMesh.getAeroFlapSet(4, red, null, "chrome", open, only, "carbon");
+    const painted = CarMesh.getAeroFlapSet(4, red, null, "chrome", open, only, "paint");
+    assert.notEqual(bare, painted);
+    assert.ok(bare.data.mat.length > 0 && bare.data.mat.every((m) => m === Car3D.SURFACES.carbon));
+  }
+});
+
+test("complete carbon car build threads bare surface onto its appended flaps", () => {
+  const painted = M.Car3D.buildComplete([.2,.3,.4], [1,0,0], { livery: { wingCarbon: "paint", finish: "chrome" } });
+  const carbon = M.Car3D.buildComplete([.2,.3,.4], [1,0,0], { livery: { wingCarbon: "carbon", finish: "chrome" } });
+  assert.equal(carbon.flapInfo.surface, "carbon");
+  const body = M.Car3D.build([.2,.3,.4], [1,0,0], { livery: { wingCarbon: "carbon", finish: "chrome" } });
+  const tail = carbon.mat.slice(body.mat.length);
+  assert.ok(tail.length > 0 && tail.every((m) => m === M.Car3D.SURFACES.carbon));
+  assert.equal(painted.flapInfo.surface, "paint");
+});

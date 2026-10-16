@@ -74,6 +74,11 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
 | WAIT | Nothing. Cap full, CI running, gate pending, 2 already armed, `MERGE-HOLD:` set. |
 | NONE | Nothing: armed with MERGE and healthy. |
 
+2a. Re-cut / supersede / close of a PR another session owns: in the same sweep
+   `send_message` its owner `STAND DOWN <old PR> superseded by <new PR>` and put
+   `Superseded by #<new>` in the old PR body, so no worker spends a CI cycle on
+   it (#2388). The worker-side bullet (`agent-fleet`
+   `references/worker.md` §Waiting) makes the worker re-read claims and PR state first.
 3. Run this check BEFORE acting on a row: stand down on any PR a live session is actively pushing (a push inside the
    last ~10 min, or a live `who-is-on-it` claim): no flip, no sync, no arm race
    with its fix push. Say so in the summary.
