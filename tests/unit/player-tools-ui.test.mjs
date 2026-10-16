@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 const read = (name) => fs.readFileSync(new URL("../../" + name, import.meta.url), "utf8");
 function host() {
   const dom = makeDom({ readyState: "loading" }), events = new Map();
@@ -205,7 +206,7 @@ test("inspection timeout updates semantic controls and disposal stops detached e
   controls.dispose(); api.inspect("saddleTint"); assert.equal(button.getAttribute("aria-pressed"), "false"); api.end();
 });
 test("garage contour borrows the current decal mesh adapter for procedural and loaded-GLB body modes", () => {
-  const h = host(), game = read("js/game.js"), camera = read("js/garage/setup-camera.js");
+  const h = host(), game = gameSource(), camera = read("js/garage/setup-camera.js");
   const callback = game.match(/previewDecalMesh:\s*(\(team\)\s*=>\s*\{[\s\S]*?\})\s*\}\);/);
   assert.ok(callback, "the actual SetupCamera dependency injects its mesh getter");
   const team = { id: "mercedes" }, parts = { body: "works" }, liv = { finShape: "none", spineHeight: "dorsal" }, procMesh = {}, glbMesh = {}, model = {}, calls = [], draws = [];
