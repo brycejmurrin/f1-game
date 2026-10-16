@@ -46,25 +46,21 @@ export const NODE_SLICES = ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page-a", "page-
 
 /**
  * Measured / expected p50 job durations (seconds). Used only for --costs /
- * savings estimates — never for selection. Re-balanced 2026-10-15
- * (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §7): the job medians of three
- * green ship pushes BEFORE the move were vm-a1 133, vm-a2 130, vm-b1 638,
- * vm-b2 241, page 525, slow 201. The values below are the FIRST ship-push
- * run after the move (caf37bd6, run 38700490935, 2026-10-15 07:42 UTC, every
- * row in full, setup included): the wall fell from vm-b1's 638 s to page's
- * 422 s. One run, not a median — re-measure from the job logs after a day
- * and replace these.
+ * savings estimates — never for selection. Re-measured 2026-10-16 from 18
+ * recent successful CI runs (setup included). Keep this table current when a
+ * full deploy train changes runner images or test composition; queue and setup
+ * time still need to be measured separately before moving ownership.
  */
 export const SLICE_COST_P50_SEC = {
-  guards: 279,
-  "vm-a1": 236,
-  "vm-a2": 278,
-  "vm-b1": 286,
-  "vm-b2": 361,
-  "page-a": 210,
-  "page-b": 210,
-  slow: 220,
-  "driving-model": 100,
+  guards: 374,
+  "vm-a1": 250,
+  "vm-a2": 280,
+  "vm-b1": 455,
+  "vm-b2": 295,
+  "page-a": 164,
+  "page-b": 391,
+  slow: 206,
+  "driving-model": 120,
 };
 
 /** Which npm scripts / groups.json keys feed each slice. MIRRORS the case
