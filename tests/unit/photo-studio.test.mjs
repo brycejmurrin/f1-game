@@ -498,6 +498,32 @@ test("contact sheet captures three sequential renderer frames and labels one bou
   assert.equal(b.downloads.length, 1, "cancel does not download");
 });
 
+for (const outcome of ["success", "write failure", "share cancellation"]) test("contact sheet awaits native export " + outcome, async () => {
+  let resolve, reject, calls = 0, saved, settled = false;
+  const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+  const b = boot({ nativeDownload: { viable: () => true, saveBlob: (blob, name) => {
+    calls++; saved = { blob, name }; return held;
+  } } });
+  const pending = b.api.contactSheet([1, 2, 3], () => {}, () => false);
+  pending.then(() => { settled = true; }, () => { settled = true; });
+  await turn();
+  assert.equal(calls, 1);
+  assert.equal(saved.name, "apex26-replay-moment.png");
+  assert.equal(await saved.blob.text(), "photo");
+  assert.deepEqual(b.downloads, [], "native export must not fall back to an anchor");
+  assert.equal(settled, false, "contact-sheet completion must wait for native saving and sharing");
+  if (outcome === "success") {
+    resolve();
+    assert.equal(await pending, true);
+  } else {
+    const error = new Error(outcome === "share cancellation" ? "Share canceled" : "disk full");
+    const rejected = assert.rejects(pending, (caught) => caught === error);
+    reject(error);
+    await rejected;
+  }
+  assert.equal(settled, true);
+});
+
 test("album exposes bounded safe read-only thumbnails and recovers with visit photos", async () => {
   const db = photoDb(seededPhotos(8)); const b = boot({ indexedDB: { open: () => db.open() } });
   const rows = await b.PS.album(); assert.equal(rows.length, 6);

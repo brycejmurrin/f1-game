@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import { githubToken, NO_TOKEN_HINT } from "./ci/github-token.mjs";
 import { assertOutputDir } from "./lib/output-paths.mjs";
 import {
-  SHIP_BRANCH, ARTIFACT_PREFIX,
+  REPO, SHIP_BRANCH, ARTIFACT_PREFIX,
   artifactName, listPackArtifacts, pickNearestPack, compareCommits,
   resolveCommitSha,
 } from "./shot/garage-before.mjs";

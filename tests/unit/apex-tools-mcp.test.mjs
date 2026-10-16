@@ -56,12 +56,13 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
   assert.doesNotMatch(src, /name:\s*"tinyfish_/);
 });
 
-test(".mcp.json registers apex-tools in the three-server catalog", () => {
+test(".mcp.json registers apex-tools alongside the separate debugger server", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "js-debugger",
     "playwright-official",
   ]);
   assert.equal(cfg.mcpServers["apex-tools"].type, "stdio");

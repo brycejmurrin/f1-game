@@ -40,6 +40,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 import { chromiumArgsForBackend, installProbeInit } from "./probe-page.mjs";
+import { parseFlags } from "../lib/cli-args.mjs";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 const COMMANDS = {
@@ -70,6 +71,8 @@ if (!argv.length || argv[0] === "-h" || argv[0] === "--help") {
             + "--weather dry|wet|rain|overcast|fog  --tod dawn|day|dusk|night  --seed <uint32>  --vm (Node VM, no browser)");
   process.exit(0);
 }
+
+parseFlags(argv, ["--at", "--brake", "--camera", "--cols", "--detail", "--edges", "--from", "--horizon", "--id", "--kind", "--kinds", "--lateral", "--lats", "--limit", "--near", "--north", "--offset", "--out", "--points", "--profile", "--radius", "--range", "--reach", "--rows", "--samples", "--seconds", "--seed", "--speed", "--ss", "--stations", "--steer", "--team", "--throttle", "--to", "--tod", "--visible", "--vm", "--weather", "--what"]);
 
 // `help` is the one command that needs no circuit, so allow it in either slot.
 let track = argv[0], cmd = argv[1] || "world";

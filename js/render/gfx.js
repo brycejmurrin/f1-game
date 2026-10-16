@@ -229,8 +229,30 @@ const Gfx = (function () {
    * Never throws (failures resolve to null), so it is safe on every browser and
    * cannot break the existing WebGL2 game.
    */
+  // One alternate-init generation owns access to the canvas. Revocation is
+  // synchronous even when a browser adapter/init promise cannot be cancelled.
+  function createInitOwner(canvas) {
+    let active = true, claimed = false;
+    const canvasLease = new Proxy(canvas, {
+      get(target, key) {
+        if (key === "getContext") return function (...args) {
+          if (!active) return null;
+          const context = target.getContext(...args);
+          if (context) claimed = true;
+          return context;
+        };
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+      set(target, key, value) { if (!active) return true; return Reflect.set(target, key, value, target); },
+    });
+    return { canvas: canvasLease, get active() { return active; }, get claimed() { return claimed; },
+      abort() { active = false; }, check() { if (!active) throw new Error("Renderer initialization cancelled"); } };
+  }
   async function create(canvas, opts) {
     try {
+      const owner = opts && opts.initOwner;
+      if (owner) { owner.check(); canvas = owner.canvas; }
       // RendererBoot has already resolved ephemeral overrides (notably XR).
       // Direct callers may omit the option and keep the saved 2D preference.
       let pref = opts && opts.backend;
@@ -245,6 +267,7 @@ const Gfx = (function () {
           return null;
         }
         const backend = await TLX.create(canvas, opts || {});
+        if (owner) owner.check();
         if (backend) { Log.info("gfx", "Gfx.bind backend=three"); return backend; }
         Log.info("gfx", "Gfx.bind fallback webgl2");
         return null;   // TLX.create returns null on any failure
@@ -263,6 +286,7 @@ const Gfx = (function () {
       if (typeof WGX === "undefined" || !WGX || typeof WGX.create !== "function") return null;
 
       const backend = await WGX.create(canvas, opts || {});
+      if (owner) owner.check();
       if (backend) { Log.info("gfx", "Gfx.bind backend=webgpu"); return backend; }
       Log.info("gfx", "Gfx.bind fallback webgl2");
       return null;   // WGX.create returns null on any failure
@@ -272,7 +296,7 @@ const Gfx = (function () {
     }
   }
 
-  return { create };
+  return { create, createInitOwner };
 })();
 
 // No-build global export.

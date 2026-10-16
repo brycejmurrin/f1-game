@@ -37,7 +37,7 @@ test('agent help boots once with the selected seed and measured startup budget',
     startStaticServer: async () => ({ url: 'http://fixture/' }),
     launchChromium: async () => ({ newPage: async () => page }),
     installProbeInit: async () => calls.push(['init']),
-    chromiumArgsForBackend: () => [], sleep: async () => {},
+    chromiumArgsForBackend: () => [], sleep: async () => {}, parseFlags: () => ({}),
     shutdown: async () => { cleaned++; },
   });
   assert.deepEqual(calls, [['init'], ['goto', 'http://fixture/?seed=0'], ['wait', 45000, 100]]);

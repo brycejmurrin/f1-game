@@ -1282,7 +1282,7 @@ test("phone samples bunched into one millisecond still reach the filter", () => 
 // path under IWER): one mapFrame -> inject on a fresh Input carries a finite
 // `steer` and NO `roll`, and the first frame's steer/pedals are finite.
 test("XR from a cold start: the first injected stick sample is finite all the way through Input", () => {
-  const { Input, sb, clock } = bootInput();
+  const { Input, sb, clock, key } = bootInput();
   for (const f of ["js/xr/xr-rig.js", "js/xr/xr-input.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: f });
   const XrInput = vm.runInContext("XrInput", sb);
   const pad = (axes, buttons) => ({ axes, buttons: buttons.map((v) => ({ value: v, pressed: v > 0.5 })) });
@@ -1303,7 +1303,24 @@ test("XR from a cold start: the first injected stick sample is finite all the wa
   assert.ok(Number.isFinite(steer) && steer > 0.5, "the very first frame steers, finite: " + steer);
   assert.ok(Number.isFinite(Input.throttleLevel()) && Input.throttleLevel() > 0.5);
   assert.ok(Number.isFinite(Input.brakeLevel()) && Input.brakeLevel() > 0.5);
-  assert.ok(Input.lookingBack(), "squeeze is the look-back hold bit");
+  assert.equal(s.held, 0, "XR squeeze preserves the default stable seated gaze");
+  assert.equal(Input.lookingBack(), false, "XR cannot inject a synthetic look-back hold");
+  // Input still reports ordinary look-back intent; the immersive camera gate
+  // enforces comfort for keyboard/pad intent only while XR is presenting.
+  Input.remoteLost();
+  key("KeyB", true);
+  assert.equal(Input.lookingBack(), true, "ordinary keyboard look-back remains available");
+  key("KeyB", false);
+  assert.equal(Input.lookingBack(), false);
+  const physical = { index: 0, connected: true, id: "standard pad", mapping: "standard", axes: [0, 0, 0, 0],
+    buttons: Array.from({ length: 18 }, (_, i) => ({ value: i === 11 ? 1 : 0, pressed: i === 11 })) };
+  sb.navigator.getGamepads = () => [physical];
+  sb.dispatchEvent({ type: "gamepadconnected", gamepad: physical });
+  Input.poll();
+  assert.equal(Input.lookingBack(), true, "ordinary physical pad look-back remains available");
+  physical.buttons[11] = { value: 0, pressed: false };
+  Input.poll();
+  assert.equal(Input.lookingBack(), false, "physical pad release clears the hold");
 });
 
 test("wheel pedal axes never feed onboard free-look; an ordinary right stick still does", () => {

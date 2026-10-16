@@ -507,6 +507,7 @@ async function precacheAssetLists() {
     "js/editor/followup-tools.js",
     "js/editor/scenery-panel.js",
     "js/editor/bridge-panel.js",
+    "js/editor/workspace.js",
     "js/editor/designer.js",
     // LAZY_XR — WebXR session behind navigator.xr / ENTER VR
     "js/xr/xr-plan.js",
