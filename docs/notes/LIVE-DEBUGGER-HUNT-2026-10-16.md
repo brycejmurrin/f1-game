@@ -59,13 +59,49 @@ Checked and consistent (not bugs): `prog` is negative before the start line (`pr
   re-attach to change a condition. Likely cause: the tool's registry no longer holds the Chrome breakpoint id once
   `locations` empties, so the remove is a registry-only no-op.
 
+### Deeper pass (core race loop, after the orchestrator narrowed scope)
+
+Same debug Chrome recipe, `debugger_exceptions all` for the whole pass (no pause fired in any of it).
+
+- **Restart storm** (monaco → `race()` ×10 → circuit switch ×5 over spa, vegas, singapore, monza, suzuka): window +
+  document listeners flat at 9 before and after (wrapped `addEventListener`/`removeEventListener` after the first
+  race), live `setInterval`s 0, `LoopHealth` 0 faults. No listener/timer growth in the restart or switch path.
+- **Soak** (monza, `laps:30`, player parked, 22 cars via `cars()` every tick, 150 000 ticks ≈ 41 min of race time, AI
+  field reached lap 21): no non-finite `speed`/`prog`, no `prog` regression > 1 m within a lap, HUD gap text never
+  contained `NaN`/`Infinity`/`undefined`, `LoopHealth` 0 faults. Camera jump trap never moved (camera follows the
+  parked player) so it proves nothing. Only trip: |Δspeed| > 15 m/s in a tick — see F1.
+- **Not done:** the stepped physics tick (`into`/`over` through `updateCarBicycle`) and the soak on 3 circuits (monza
+  only); the soak needs a driving player to exercise camera/HUD under motion — there is no player autopilot hook.
+
+### F1 — AI does not brake for a stationary human car; the contact deletes ~48 m/s in one tick (medium confidence)
+
+Filed as issue [#2565](https://github.com/brycejmurrin/f1-game/issues/2565) (`bug`, `ready`).
+
+Repro (synthetic: the player is parked, a real player can stall/spin): `__apex.race("monza",null,null,{laps:30})`,
+`headless(true)`, `go()`, never give input, `step(1/60)` ~8 000 ticks while watching `cars()` for |Δspeed| > 30.
+Hit at tick 7 943 / 8 314 / 8 403 (varies run to run) on lap 1 at the pit straight, the player sitting on its grid
+slot (s ≈ 5755.6, x +3.0, `rank 22`).
+
+- Approach trace (car 13, every 6th tick, gap to the player in m / speed m/s): 79.1/54.0, 52.1/54.1, 25.0/54.3,
+  14.2/53.6, 9.0/51.2, then the hit at 4.8 m. No braking until ~14 m, speed even rises 54.0 → 54.3 on the way.
+- Contact (tick 8 314): car 13 `s 5750.9 x 2.96` 52.81 → **5.09 m/s**; the human car `v 5.1`; both end at the same speed
+  (perfectly inelastic, momentum not conserved: the striker loses 47.7 m/s, the target gains 5.1). Neighbours cars
+  1 and 5 passed at x −0.12 / 0.4 at ~57 m/s — they avoided the lane, car 13 did not. 2 984 m/s² for one 16.7 ms tick.
+- Where to look: AI obstacle awareness for a stationary car ahead in its own lane (`js/physics/ai-drive.js`, racecraft
+  session) and the contact response (`js/physics/collide.js`, the incidents session owns it). No fix attempted: > 20
+  lines, outside my files, and whether a parked human car should be braked for is a design call.
+- Confidence medium: the scenario is synthetic (a player that never moves) and I could not tell from the trace whether
+  the one-tick speed collapse is intended "no pass-through" behaviour. The first soak's 60 m/s drop (65.7 → 5.3 on lap
+  6, car 7) was the same mechanism but was not captured at the pause.
+
 ### Faults
 
-None in game code. Six circuits × the driven scenarios above produced no NaN, no exception pause and no LoopHealth
+None in game code beyond F1. Six circuits × the driven scenarios above produced no NaN, no exception pause and no LoopHealth
 fault. The honest gaps are the cells marked **not exercised** (pit entry/stop, WATCH/replay, garage UI open/close, a
 confirmed GLX backend) and prog/lap-inconsistency traps (`c.prog < (c.lap-1)*L - 1`), tyre/fuel/ERS, camera matrix and
-HUD gap-format breakpoints, which were not armed. No fix and no unit test were warranted, so no `tests/unit/**`
-change; no GitHub issues filed (T1–T4 belong to the debugger tool, owned by #2534 — summarised for the orchestrator).
+HUD gap-format breakpoints, which were not armed (the deeper pass checked HUD gap text and `prog` regressions
+in-page instead). No fix and no unit test were warranted, so no `tests/unit/**` change; F1 is filed as issue #2565
+(T1–T4 belong to the debugger tool, owned by #2534 — summarised for the orchestrator).
 
 ### Cleanup
 
