@@ -1,5 +1,5 @@
 /* SettingsNav — page stack for the pause/title Settings sheet.
-   Home opens controls, driving, display, appearance, assists, sound and backups.
+   Home opens controls, driving, driving aids, display, appearance, sound and backups.
    Lighting / camera tuners stay as their own docks. BACK pops.
    Decisions: docs/research/PAUSE-SETTINGS-IA.md.
    game.js still owns availability and all individual controls. */
@@ -41,6 +41,13 @@ const SettingsNav = (function () {
       panel: () => document.getElementById("pm-panel-review"), door: null }),
   });
   function panel(id) { return Object.hasOwn(routes, id) ? routes[id].panel() : null; }
+  // Preserve the upstream breadcrumb heading using the registry hierarchy.
+  function breadcrumb(id) {
+    if (!Object.hasOwn(routes, id)) id = "home";
+    const names = [];
+    for (let route = id; route; route = routes[route].parent || (route === "home" ? null : "home")) names.unshift(routes[route].title);
+    return names.join(" › ");
+  }
   let live = null;
   // Subscribers told when a page is hidden by show()/back() (the CONTROLS wheel
   // wizard disarms itself here). Module-level so a subscriber needs no instance.
@@ -146,7 +153,7 @@ const SettingsNav = (function () {
       if (current !== "home" && current !== id) fireLeave(current);
       current = id;
       const title = document.getElementById("dlg-settings");
-      if (title) title.textContent = routes[id].title;
+      if (title) title.textContent = breadcrumb(id);
       if (index) index.hidden = id !== "home";
       const pages = panels();
       for (const key of Object.keys(pages)) {
@@ -237,7 +244,7 @@ const SettingsNav = (function () {
   }
 
   return {
-    create, routes, panel,
+    create, routes, panel, breadcrumb,
     show: (id, focus) => { if (live) live.show(id, focus); },
     current: () => live ? live.current() : "home",
     showDirect: (id, focus) => { if (live) live.showDirect(id, focus); },

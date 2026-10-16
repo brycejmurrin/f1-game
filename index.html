@@ -574,7 +574,7 @@
 </div>
 
 <!-- race HUD -->
-<div id="hud" hidden>
+  <div id="hud" role="region" aria-label="Race HUD" aria-live="off" hidden>
   <!-- Each box has its own id: the hide rules (css/hud.css) key on it, never on
        a child position, so adding or re-ordering a box cannot hide the wrong one.
        DELTA is static too (js/ui/hud.js paintHudDelta unhides it): vs the ghost
@@ -808,7 +808,7 @@
 </dialog>
 
 <!-- settings sub-menu — opened from pause or title. Door index, then
-     CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC pages. Lighting and
+     CONTROLS / DRIVING / DISPLAY / MUSIC pages. Lighting and
      camera tuners open from DISPLAY's advanced visuals. -->
 <dialog id="pmsettings" class="screen dim" data-esc-close="pm-settings-close" aria-labelledby="dlg-settings" hidden>
   <div id="pmsettings-inner" class="sheet">
@@ -3088,7 +3088,7 @@
         <dt>OVERTAKE</dt>
         <dd>Follow within one second to arm it, then activate for about 3–5 seconds of electric power, depending on the car&rsquo;s electric system. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
         <dt>GEARS</dt>
-        <dd>Choose SETTINGS › CONTROLS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
+        <dd>Choose SETTINGS › DRIVING AIDS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
         <dt>RACE CONTROL</dt>
         <dd>Yellow flags, the virtual safety car, the safety car and the red flag are OFF by default. Turn them on in RACE SETTINGS › CAUTIONS. Cars a lap down move aside for the car lapping them.</dd>
         <!-- PIT STOPS came from the deploy branch while this branch restructured
@@ -3109,7 +3109,7 @@
         <dt>WHAT IT COSTS</dt>
         <dd>The whole lap through the pits, against racing the same stretch, plus the time stood still &mdash; which is why it is worth different amounts at different circuits rather than a fixed penalty. A long pit straight costs more than a short one. That difference is what decides one stop against two</dd>
       <dt id="htp-driving">DRIVING COACH</dt>
-      <dd>Open <b>SETTINGS &rarr; DRIVING</b> and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
+      <dd>Open <b>SETTINGS &rarr; DRIVING AIDS</b> and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
         <br><b>Where the lap went.</b> Once you have a saved best lap on a circuit, each completed lap is compared with it corner by corner, and the corner that cost the most time is named when you cross the line. The DRIVING page shows the lap total and the two worst corners. Each figure covers a corner and the straight after it, because a slow straight is usually paid for at the apex before it, and the comparison only exists against your own best lap in the same car.
         <br>It waits during flags, other race messages and pit stops, and spaces tips out so brief corrections do not cause a stream of messages. Reopen DRIVING to read the latest tip and its explanation. BRAKING CUES groups the predictive warning and line-speed beep; the predictive cue takes priority, and both must be OFF to silence braking cues. SESSION REVIEW counts the tips recorded this session; those counts are not a driving score.</dd>
       <dt>WHAT THE TIPS MEAN</dt>
@@ -3123,16 +3123,16 @@
         <br><b>X-mode in corners:</b> the active aero was open while cornering hard. Close it before you turn in.
         <br><b>Track limits:</b> a warning was recorded for leaving the track. Four in a row cost five seconds.</dd>
       <dt>PRACTICE A SECTION</dt>
-      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>SETTINGS &rarr; DRIVING</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b>, or your <b>RECOVER</b> key (<b>R</b> by default) while driving, restores the saved grid, race clock and practice goal. <b>REWIND 10s</b> needs no starting point: it steps every car and the race clock back about ten seconds.
+      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>PAUSE &rarr; PRACTICE</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b>, or your <b>RECOVER</b> key (<b>R</b> by default) while driving, restores the saved grid, race clock and practice goal. <b>REWIND 10s</b> needs no starting point: it steps every car and the race clock back about ten seconds.
         <br><b>This makes the session unscored.</b> Laps and ghosts will not be saved after a starting point is set or you rewind. Restart the session to set records again. A solo race or qualifying session can use checkpoints and rewind after you choose ARM PRACTICE (UNSCORED), which cannot be undone for that session; daily challenges, multiplayer, season and career races cannot be armed.</dd>
       <dt>PRACTICE GOALS</dt>
       <dd><b>Free practice:</b> repeat any section. <b>Sector:</b> cross the next sector line cleanly. <b>Corner:</b> drive through the next corner; the result shows your time, minimum speed and exit speed. <b>Full lap:</b> cross the line to start timing, then complete a clean lap; practice laps are never saved, so this is how to time one. <b>Braking:</b> build speed before saving, then brake firmly and keep braking until the car stops; a tap followed by coasting does not count, and the result is your stopping distance, plus how many metres of it were spent below the hardest braking the car managed on that attempt. <b>Trail braking:</b> brake firmly, keep some brake on as the car turns in, then release it while the car is still turning. <b>Slalom:</b> make six direction changes while moving; the car must change direction, not just the stick. <b>Launch:</b> stop the car before saving, then launch to racing speed, timed from your first throttle. <b>Race start:</b> set it on the grid before the lights; it ends at the first corner and scores the places you gained. <b>Racecraft goals</b> need other cars close by and no caution: SLIPSTREAM closes on the car ahead in its wake, OVERTAKE passes the car ahead (only when it runs your pace), DEFEND holds your place against a quicker car attacking you, and TRAFFIC clears three slower cars without contact. If the moment is wrong, a message says what to do first. Each goal judges what the car did and shows the result on screen when it ends. Contact or leaving the track marks an attempt for retry; clean completions are saved separately from lap records, and the DRIVING page shows this session's attempts and your saved best.</dd>
       <dt>PIT STRATEGY</dt>
-      <dd>With tyre wear enabled, <b>SETTINGS &rarr; DRIVING &rarr; PIT STRATEGY &rarr; NEXT TYRES</b> selects the compound fitted at your next stop; AUTO lets the game choose. Enter the pit lane yourself. Pit loss, tyre life and energy use are estimates based on the circuit and recent driving. More clean sectors and laps improve the available data.</dd>
+      <dd>With tyre wear enabled, <b>PAUSE &rarr; PIT STRATEGY &rarr; NEXT TYRES</b> selects the compound fitted at your next stop; AUTO lets the game choose. Enter the pit lane yourself. Pit loss, tyre life and energy use are estimates based on the circuit and recent driving. More clean sectors and laps improve the available data.</dd>
       <dt>SESSION REVIEW</dt>
       <dd>Review coaching tip counts, recent incidents and penalties after a run. Tips are listed most-repeated first and grouped by the turn they happened at, so one corner earning most of them is easy to see; when the same mistake comes up three times the review names the practice goal that drills it. Circuits without curated turn numbers simply show no location. <b>TECHNICAL DATA</b> contains the optional <b>DOWNLOAD SESSION DATA</b> JSON file and AI passing decisions. You do not need these tools to use the coach.</dd>
       <dt>LICENCE BADGES</dt>
-      <dd>Achievements kept on this device, listed in SETTINGS &rarr; DRIVING &rarr; LICENCE BADGES: FIRST WIN, PODIUM, POLE POSITION (with a driven qualifying lap), FASTEST LAP, CLEAN SHEET (a race with no track-limits strike or penalty), DAILY DEVOTION (a 7-day daily challenge streak) and 2026 WORLD TOUR (a win at every venue of the real 2026 calendar; the page counts the venues won so far). New badges appear on the results screen. Race badges are not given in a time trial, a practice session, a DUEL or a race with fewer than three cars.</dd>
+      <dd>Achievements kept on this device, listed in SETTINGS &rarr; PROGRESS &rarr; LICENCE BADGES: FIRST WIN, PODIUM, POLE POSITION (with a driven qualifying lap), FASTEST LAP, CLEAN SHEET (a race with no track-limits strike or penalty), DAILY DEVOTION (a 7-day daily challenge streak) and 2026 WORLD TOUR (a win at every venue of the real 2026 calendar; the page counts the venues won so far). New badges appear on the results screen. Race badges are not given in a time trial, a practice session, a DUEL or a race with fewer than three cars.</dd>
         <dt>TRACK LIMITS</dt>
         <dd>Every counted cut deletes that lap's time. In a race the first two are warnings, the third brings the black-and-white flag, and the fourth and every one after it add +5 s. The HUD shows the count in every driving camera.</dd>
         <dt id="htp-setup">CAMERA</dt>
@@ -3146,7 +3146,7 @@
           <br>THROTTLE: HOLD keeps your thumb on GAS, LATCH makes GAS a tap-on, tap-off switch, AUTO drives the throttle so you only steer and brake. LEFT-HANDED swaps the two on-screen thumb groups. RECALIBRATE TILT makes the way you hold the phone straight ahead. MANUAL GEARS need tilt, a keyboard or a pad.
           <br>STEER THIS GAME WITH A PHONE shows a room code and QR code: scan or type it on a phone and the phone becomes the wheel (both need internet). In CONTROLLER, BUTTON NAMES fixes prompts that name the wrong buttons, CALIBRATE STICK cures a drifting stick, SET UP A WHEEL maps a wheel and pedals the browser cannot, and RESET CONTROLLER restores the default buttons.</dd>
         <dt>DRIVING AIDS</dt>
-        <dd>Choose driving presets, gears, active aero and steering aids here. Fine response curves and dead zones are under CONTROLS › ADVANCED INPUT &amp; HANDLING. STEER ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING. Expand ADVANCED for detailed steering adjustments.
+        <dd>Choose driving presets, gears, active aero and steering aids here. Fine response curves and dead zones are under CONTROLS › ADVANCED INPUT &amp; HANDLING. STEER ASSIST helps steer the car; the visual DRIVING LINE is in RACE SETTINGS. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed, not the analog stick. Find BRAKING CUES in SETTINGS › DRIVING AIDS. Open CONTROLS › ADVANCED INPUT &amp; HANDLING for detailed steering adjustments.
           <br><b>PRESETS</b> set every handling slider at once. ROOKIE is the easiest: the most corner help and line pull, the earliest braking cue, and AUTO throttle. RELAX is nearly as forgiving but leaves the throttle to you. STANDARD is the default car with no corner help. PRO is STANDARD with sharper RESPONSE. Moving any slider afterwards shows CUSTOM. OVERALL SPEED is separate: it slows or speeds the whole field, you and the AI alike.
           <br><b>FEEL:</b> TILT SENSITIVITY, and STEERING from SUPER EASY through ASSISTED and NORMAL to SIM (SIM also quickens turn-in).
           <br><b>AIDS:</b> DRIVING HELP (OFF, MEDIUM, HIGH) steers part of each corner for you. STEER ASSIST (OFF, CORNERS, FULL) pulls the steering toward the ideal line. HAPTICS sets vibration strength; iPhone and iPad cannot vibrate from a web page. TRIGGER HAPTICS (when the pad supports it) routes lock-up to the brake trigger and wheelspin to the throttle; adaptive trigger resistance is not available from a web page.

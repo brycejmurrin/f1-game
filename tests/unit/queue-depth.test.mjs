@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   LINUX_SLOTS, LINUX_HOLD, MACOS_SLOTS, QUEUED_HOLD, MAX_RUNS, DEFAULT_OUT,
-  isMac, countJobs, evaluate, reportLine, measure, pushTargets, pushStartsCi, pushVerdict,
+  isMac, countJobs, evaluate, reportLine, measure, pushTargets, pushStartsCi, pushVerdict, waitForOk, HYSTERESIS_MS,
 } from "../../tools/ci/queue-depth.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -242,4 +242,43 @@ test("a `pending` job waits in a CI lane, not for a runner: counted apart, never
   assert.equal(v.laneWaiting, 30);
   assert.equal(v.linux.oldestQueuedMin, null, "a lane wait is not a runner wait");
   assert.equal(reportLine(v), "= queue ok (7 Linux jobs in flight / 40, 0 queued, 0 macOS / 5; 7 Linux running, 30 waiting in CI lanes)");
+});
+
+// ── #2383: --wait, hysteresis and the trend ─────────────────────────────────
+const gauge = (inFlight, queued) => {
+  const v = evaluate(countJobs([...many(Math.max(0, inFlight - queued), "in_progress"), ...many(queued, "queued")]), { runsExamined: 1, runsLive: 1, now: 0 });
+  return { ...v, line: reportLine(v) };
+};
+const clock = () => { let t = 0; return { now: () => t, wait: async (ms) => { t += ms; } }; };
+
+test("--wait: holds until ok has held for 2 min, then exits 0 with the trend", async () => {
+  const c = clock(), seq = [gauge(134, 98), gauge(112, 60), gauge(30, 2), gauge(28, 1), gauge(25, 0), gauge(20, 0), gauge(18, 0), gauge(17, 0)];
+  const lines = [];
+  const w = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => seq.shift(), ...c, report: (l) => lines.push(l) });
+  assert.equal(w.code, 0);
+  assert.deepEqual(w.trend.inFlight, [134, 112, 30, 28, 25, 20, 18]);
+  assert.ok(lines[0].includes("hold") || lines[0].startsWith("= queue"), lines[0]);
+  assert.match(lines.at(-1), /^= queue ok .*trend in-flight 134→112→30→28→25→20→18, queued 98→60→2→1→0→0→0/);
+  assert.ok(lines.some((l) => l.startsWith("= queue settling")), "one ok poll is not a go");
+  assert.equal(HYSTERESIS_MS, 120000);
+});
+
+test("--wait: a hold between oks resets the 2 min clock", async () => {
+  const c = clock(), seq = [gauge(10, 0), gauge(10, 0), gauge(134, 98), gauge(10, 0), gauge(10, 0), gauge(10, 0), gauge(10, 0), gauge(10, 0)];
+  const w = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => seq.shift(), ...c });
+  assert.equal(w.code, 0);
+  assert.equal(w.trend.inFlight.length, 8, "the early oks did not count once the hold interrupted them");
+});
+
+test("--wait: 124 on timeout with the last trend; an API error retries, three in a row exit 3", async () => {
+  const c = clock();
+  const lines = [];
+  const w = await waitForOk({ minutes: 2, intervalS: 30, measureFn: () => gauge(134, 98), ...c, report: (l) => lines.push(l) });
+  assert.equal(w.code, 124);
+  assert.match(lines.at(-1), /^= queue timeout — still hold after 2 min; trend in-flight 134→134→134→134/);
+  const e = clock(); let n = 0;
+  const flaky = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => (++n <= 2 ? { error: "HTTP 502" } : gauge(5, 0)), ...e });
+  assert.equal(flaky.code, 0, "two errors then readings: keep polling");
+  const down = await waitForOk({ minutes: 30, intervalS: 30, measureFn: () => ({ error: "HTTP 502" }), ...clock() });
+  assert.equal(down.code, 3);
 });

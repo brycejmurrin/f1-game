@@ -35,6 +35,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -45,6 +46,7 @@ const read = (p) => p === "js/game.js"
 // Comment-stripped source: a pin can only match code, and a comment can
 // neither fail nor satisfy it.
 const code = (p) => (p.startsWith("css/") ? readCssSource(p) : read(p)).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+const gameUnionCode = () => gameSource().replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 /** The span between two source needles, ASSERTING BOTH EXIST FIRST.
  *
  * `src.slice(src.indexOf(a), src.indexOf(b))` is the shape that disarmed this
@@ -263,7 +265,7 @@ test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js
   // The picker's own behaviour — a <select> with ‹ › steps, "WEBGPU
   // (UNAVAILABLE)" without navigator.gpu — is driven through bootPicker()
   // below; this is the ownership rule only.
-  assert.doesNotMatch(code("js/game.js"), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
+  assert.doesNotMatch(gameUnionCode(), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
   assert.match(code("js/perf/renderer-picker.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
   // The preset file keeps the GRAPHICS button only — the split is the ownership rule.
   assert.doesNotMatch(code("js/perf/quality-preset.js"), /pm-renderer|apex26\.gfxBackend/);
@@ -756,6 +758,16 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
   assert.match(wgx, /_matOwnedAlbedo/);
   assert.match(wgx, /matPlaceAlbedoView/);
   assert.match(wgx, /_releaseOwnedMatMaps/);
+});
+
+test("TLX rejects partial material readbacks so Assets can retry", () => {
+  const tlx = read("js/render/three/tlx.js");
+  const at = tlx.indexOf("function readbackTextureLayers(size, images, n, data)");
+  assert.ok(at > 0, "TLX material readback helper moved");
+  const body = tlx.slice(at, tlx.indexOf("\n      }", at));
+  assert.match(body, /const expected = \[\]/);
+  assert.match(body, /filled === expected\.length \? filled : 0/,
+    "a missing layer must reject the whole array instead of binding a zero-filled page");
 });
 
 test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
@@ -4020,6 +4032,17 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // A-H4: an InstancedMesh caster (tlxCasterAttr=0) disposes; the attribute Mesh has no dispose(), so its event.
   assert.match(sh, /function disposeCaster\(m\) \{\s*try \{ if \(m\.isInstancedMesh\) m\.dispose\(\); else m\.dispatchEvent\(\{ type: "dispose" \}\); \}/);
   const tlxSrc = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const disposeInstancedObject = new Function(`return (${fnSource(tlxSrc, "function disposeInstancedObject(mesh) {")})`)();
+  const plain = { dispatches: 0, dispatchEvent(e) { this.dispatches++; this.event = e; } };
+  disposeInstancedObject(plain);
+  assert.equal(plain.dispatches, 1, "attribute-backed plain Meshes release three's render object through its dispose event");
+  assert.deepEqual(plain.event, { type: "dispose" });
+  const instanced = { isInstancedMesh: true, disposals: 0, dispose() { this.disposals++; } };
+  disposeInstancedObject(instanced);
+  assert.equal(instanced.disposals, 1, "real InstancedMesh resources use its native dispose method");
+  assert.doesNotMatch(tlxSrc, /(?:mv|batch)\.imesh\.dispose\(\)/, "freeing a batch must not call nonexistent Mesh.dispose directly");
+  assert.match(tlxSrc, /disposeInstancedObject\(mv\.imesh\);[\s\S]*?disposeInstancedObject\(batch\.imesh\);/,
+    "both the mirror and main batch use the lifecycle-aware disposer");
   assert.match(tlxSrc, /function freeInstancedBatch\(batch\) \{\s*if \(!batch\) return;\s*if \(shadowSys && shadowSys\.freeInstanced\) shadowSys\.freeInstanced\(batch\);/,
     "and TLX frees it with the batch");
   // A released geometry (freeMesh / chunked free) is parked out of every slot
