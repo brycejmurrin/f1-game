@@ -495,6 +495,22 @@ export function setFlakeTallyTestHooks(hooks = {}) {
   _delay = hooks.delay || ((ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve()));
 }
 
+/** Every job of a run, 30 per page. `jobs?per_page=100` answers HTTP 502 on large runs (38570932657, 38514313174;
+ *  #2233) while per_page=30 with paging works. -> { jobs } or { error }. */
+export const JOBS_PAGE = 30;
+export const MAX_JOB_PAGES = 12;
+export async function listRunJobs(runId, { token } = {}) {
+  const jobs = [];
+  for (let page = 1; page <= MAX_JOB_PAGES; page++) {
+    const r = await githubApi("GET", `actions/runs/${runId}/jobs?per_page=${JOBS_PAGE}&page=${page}`, { token });
+    if (r.error) return jobs.length ? { jobs, error: null } : { error: r.error };
+    const got = r.json?.jobs || [];
+    jobs.push(...got);
+    if (got.length < JOBS_PAGE || (r.json?.total_count != null && jobs.length >= r.json.total_count)) break;
+  }
+  return { jobs };
+}
+
 export async function githubApi(method, pathQs, { token, raw = false, absUrl = null, body = undefined } = {}) {
   const auth = token || githubToken();
   if (!auth) return { error: NO_TOKEN_HINT };
@@ -667,11 +683,11 @@ export async function collectRunEvents(run, {
   }
 
   if (!events.length) {
-    const jobs = await githubApi("GET", `actions/runs/${runId}/jobs?per_page=100`, { token });
+    const jobs = await listRunJobs(runId, { token });
     if (jobs.error) {
       notes.push(`jobs: ${jobs.error}`);
     } else {
-      for (const job of jobs.json?.jobs || []) {
+      for (const job of jobs.jobs) {
         // Browser jobs upload playwright artifacts or run npm test / playwright.
         const name = String(job.name || "");
         if (!/smoke|selected|driving|renderer|playwright|browser|gfx|xr/i.test(name)) continue;

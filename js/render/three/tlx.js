@@ -1066,7 +1066,7 @@ const TLX = (function () {
         return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
       }
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
-      const DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
+      let DPR_CAP = mobileTier ? 1.5 : 2;   // GRAPHICS: HIGH on a phone restores full DPR (glx.js MOBILE_TIER contract)
 
       // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present — the
@@ -4132,6 +4132,11 @@ const TLX = (function () {
           renderScale = v; resizeNow(); return true;
         },
         getRenderScale() { return renderScale; },
+        // PerfGov.init (after create) caps the backing store at DPR 1 once the crash sentinel holds two strikes: the scene/ldr/canvas targets shrink with dpr^2 (#1641). Only ever lowers.
+        capDpr(n) {
+          if (!(n >= 1) || n >= DPR_CAP) return false;
+          DPR_CAP = n; resizeNow(); return true;
+        },
         setSpatialUpscale, getSpatialUpscale,
         getPresentSize,
         get width() { return W; },
