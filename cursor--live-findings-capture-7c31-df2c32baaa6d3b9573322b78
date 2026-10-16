@@ -1,1 +1,0 @@
-1792167425	Bryce Murrin	#2460 actual test conflict only: retain audio search regressions and upstream player-tools tests; preserve original narrow career/search changes. Full gate on2d661edfe passed18entries2245s. Official sync then new merged-tree verification, no other PR changes.  [cursor/live-findings-capture-7c31; session df2c32baaa6d3b9573322b78]
