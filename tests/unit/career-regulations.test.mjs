@@ -29,10 +29,10 @@ function load() {
   ctx.globalThis = ctx;
   vm.createContext(ctx);
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js",
-                   "js/car/parts.js", "js/career/regulations.js"])
+                   "js/car/parts.js", "js/career/regulations.js", "js/career/career-planning.js"])
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   const grab = (n) => vm.runInContext(n, ctx);
-  return { Parts: grab("Parts"), Teams: grab("Teams"), Regulations: grab("Regulations") };
+  return { Parts: grab("Parts"), Teams: grab("Teams"), Regulations: grab("Regulations"), Planning: grab("CareerPlanning") };
 }
 
 test("the first era is OPEN, and it lasts the whole first build", () => {
@@ -184,4 +184,28 @@ test("the banned set does not depend on the catalog's authoring order (tie-break
   const eng = Parts.CATALOG.find((c) => c.id === "engine");
   const top = Math.max(...eng.options.map((o) => o.cost || 0));
   assert.ok(eng.options.filter((o) => o.cost === top).length > Regulations.BAN_TOP, "the engine ladder ties at the top");
+});
+
+test("next-era impact preview preserves inventory and active legality with resolver-equivalent fallback", () => {
+  const { Parts, Regulations, Planning, Teams } = load();
+  const team = Teams.LIST.find((t) => t.id === "haas");
+  const banned = Regulations.bannedIds("powertrain");
+  const fitted = {};
+  for (const cat of Parts.CATALOG) {
+    const opt = cat.options.find((o) => banned.has(o.id));
+    if (opt) fitted[cat.id] = opt.id;
+  }
+  const data = { team: team.id, fitted, owned: Object.values(fitted), year: 2029 };
+  Parts.setLegality(null);
+  const before = JSON.stringify(data);
+  const p = Planning.create({ data: () => data, api: () => ({ seasonsElapsed: () => 3 }) });
+  const preview = p.transition();
+  assert.equal(preview.name, "POWERTRAIN FREEZE"); assert.equal(preview.seasons, 1);
+  assert.equal(JSON.stringify(data), before); assert.equal(Parts.legality(), null);
+  Parts.setLegality(Regulations.legalityFor("powertrain"), "powertrain");
+  const resolved = Parts.resolveSetup(fitted, team);
+  for (const change of preview.changes) {
+    const cat = Parts.CATALOG.find((x) => (x.label || x.id) === change.category);
+    assert.equal(change.replacement, resolved.setup[cat.id]); assert.equal(change.cost, 0);
+  }
 });

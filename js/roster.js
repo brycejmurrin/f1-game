@@ -653,9 +653,15 @@
   ],
     LAZY_CAM_EDITOR_EDGES: [],
     LAZY_CAREER_UI: [
+    "js/career/career-planning-ui.js",
     "js/career/career-ui.js"
   ],
-    LAZY_CAREER_UI_EDGES: [],
+    LAZY_CAREER_UI_EDGES: [
+    [
+      "js/career/career-planning-ui.js",
+      "js/career/career-ui.js"
+    ]
+  ],
     LAZY_TRACK_BUILD: [
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
