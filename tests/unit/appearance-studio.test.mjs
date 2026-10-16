@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
 function load(initial = {}, durable = true, reduced = false, document, globals = {}) {
@@ -33,7 +34,7 @@ test("game's Studio integration refreshes touch button size after profile apply,
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/scale.js", import.meta.url), "utf8"), context);
   vm.runInContext("const uiScale = UiScale.create(scaleDeps);", context);
   vm.runInContext(source, context);
-  const game = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const game = gameSource();
   const attachment = game.match(/AppearanceStudio\.attach\(\{[\s\S]*?\n\}\);/);
   assert.ok(attachment, "game must attach the Studio's live visual owners");
   vm.runInContext(attachment[0], context);
