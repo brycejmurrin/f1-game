@@ -1166,18 +1166,18 @@ test("I-01: a mapping-\"\" pad's buttons 14/15 do not steer; a standard pad's st
 });
 
 test("wheel menu directions honor steering inversion and the signed calibrated centre", () => {
-  for (const invert of [1, -1]) for (const rest of [-0.2, 0, 0.2]) {
+  for (const mapping of ["", "standard"]) for (const invert of [1, -1]) for (const rest of [-0.1, 0, 0.2]) {
     const { Input, sb, fire, dispatched, tick } = menuRig();
-    const pad = rawPad({ mapping: "", id: "Wheel", axes: [rest * invert, 0, -1, -1] });
+    const pad = rawPad({ mapping, id: mapping ? "Standard pad" : "Wheel", axes: [rest * invert, 0, -1, -1] });
     Input.setPadAxisMap({ steer: 0, steerInvert: invert, throttle: 2, brake: 3 });
     Input.setPadRest(rest);
     sb.navigator.getGamepads = () => [pad];
     fire("gamepadconnected", { gamepad: pad });
     tick();
-    assert.deepEqual(dispatched.map((e) => e.key), [], `centre: invert ${invert}, rest ${rest}`);
-    for (const [offset, key] of [[-0.5, "ArrowLeft"], [0.5, "ArrowRight"]]) {
-      pad.axes[0] = (rest + offset) * invert; tick();
-      assert.deepEqual(dispatched.map((e) => e.key), [key], `invert ${invert}, rest ${rest}`);
+    assert.deepEqual(dispatched.map((e) => e.key), [], `centre: mapping ${mapping}, invert ${invert}, rest ${rest}`);
+    for (const [offset, key] of [[-0.7, "ArrowLeft"], [0.5, "ArrowRight"]]) {
+      pad.axes[0] = +((rest + offset) * invert).toFixed(2); tick();
+      assert.deepEqual(dispatched.map((e) => e.key), [key], `mapping ${mapping}, invert ${invert}, rest ${rest}, raw ${pad.axes[0]}`);
       dispatched.length = 0;
       pad.axes[0] = rest * invert; tick();
       assert.deepEqual(dispatched.map((e) => e.key), [], "returning to calibrated centre stops menu movement");
@@ -1381,6 +1381,109 @@ test("I-09: a right/middle mouse button neither presses a hold button nor fires 
   assert.equal(taps, 1);
 });
 
+test("deferred stick calibration belongs to the visible Controls request", () => {
+  let leave;
+  const disk = {};
+  const r = bootUi(true, {}, disk, (g) => { g.SettingsNav = { onLeave: (fn) => { leave = fn; } }; });
+  const { Input, $, kb, sb, fire } = r;
+  const timers = new Map(); let timerId = 0;
+  sb.setTimeout = (fn) => { timers.set(++timerId, fn); return timerId; };
+  sb.clearTimeout = (id) => timers.delete(id);
+  const flush = () => { const work = [...timers.values()]; timers.clear(); work.forEach((fn) => fn()); };
+  const pad = rawPad({ id: "Calibration pad", axes: [0.2, 0, 0, 0] });
+  sb.navigator.getGamepads = () => [pad];
+  fire("gamepadconnected", { gamepad: pad }); Input.poll();
+  $("pm-pad-calib").onclick(); leave("controls"); flush();
+  assert.equal(disk.padRest, undefined, "BACK must not persist the delayed centre");
+  $("pm-pad-calib").onclick(); kb.disarmAll(); flush();
+  assert.equal(disk.padRest, undefined, "CLOSE/RESUME must not persist the delayed centre");
+  $("pm-pad-calib").onclick(); $("pm-pad-calib").onclick();
+  assert.equal(timers.size, 1, "a newer request replaces the older timer");
+  flush();
+  assert.deepEqual(plain(disk.padRest), { "Calibration pad": 0.2 }, "completed request remains persistent");
+  delete disk.padRest;
+  $("pm-pad-calib").onclick();
+  const other = rawPad({ id: "Other pad", index: 1, axes: [0.3, 0, 0, 0] });
+  sb.navigator.getGamepads = () => [other]; flush();
+  assert.equal(disk.padRest, undefined, "another pad cannot own an outstanding request");
+  sb.navigator.getGamepads = () => [pad];
+  $("pm-pad-calib").onclick(); $("pm-pad-calib").closest = () => ({}); flush();
+  assert.equal(disk.padRest, undefined, "a hidden owner cannot save even without a leave notification");
+});
+
+test("calibration status announces wizard progress without moving focus", () => {
+  const { Input, $, sb, fire } = bootUi(true, {}, {});
+  const note = $("pm-pad-calib-note");
+  assert.equal(note.attrs.role, "status");
+  assert.equal(note.attrs["aria-live"], "polite");
+  assert.equal(note.attrs["aria-atomic"], "true");
+  $("pm-pad-calib").onclick(); assert.match(note.textContent, /No controller/);
+  const pad = rawPad({ mapping: "", id: "Accessible wheel", axes: [0, -1, -1, -1] });
+  sb.navigator.getGamepads = () => [pad]; fire("gamepadconnected", { gamepad: pad }); Input.poll();
+  $("pm-pad-wheel").focus(); const focus = sb.document.activeElement;
+  $("pm-pad-wheel").onclick(); assert.match(note.textContent, /Turn the wheel LEFT/);
+  pad.axes[0] = -1; Input.poll(); assert.match(note.textContent, /THROTTLE/);
+  assert.equal(sb.document.activeElement, focus);
+  $("pm-pad-wheel").onclick(); assert.match(note.textContent, /cancelled/);
+  assert.equal(sb.document.activeElement, focus);
+});
+
+test("phone ownership, parked diagnostics and controls refresher preserve driving state", () => {
+  const disk = { onboarded: 7, onboardRaces: 9, coachStats: { corners: 12 } };
+  const r = bootUi(true, {}, disk, (g) => {
+    g.__ctx = vm.createContext(g);
+    vm.runInContext(read("js/ui/onboard.js"), g.__ctx);
+  });
+  const { Input, $, sb, kb, fire } = r;
+  let now = 100; sb.performance.now = () => now;
+  Input.remoteSample({ thr: 0, brk: 0, roll: 0 });
+  assert.equal(Input.activeInputSource(), "keyboard", "idle phone does not steal labels");
+  Input.remoteSample({ thr: 0.8, brk: 0, roll: 10 });
+  assert.equal(Input.activeInputSource(), "phone");
+  assert.equal(Input.throttleLevel(), 0.8);
+  r.sb.UiLayers.navOpen = () => true;
+  assert.equal(Input.throttleLevel(), 0);
+  assert.equal(Input.steer(), 0);
+  assert.equal(Input.remoteEvent("overtake"), false);
+  assert.equal(Input.consumeOvertake(), false);
+  assert.equal(Input.remoteEvent("navDown"), true, "menu navigation remains available");
+  r.sb.UiLayers.navOpen = () => false;
+  assert.equal(Input.remoteEvent("overtake"), true);
+  assert.equal(Input.consumeOvertake(), true);
+  Input.remoteLost();
+  const pad = rawPad({ id: "Preview pad", axes: [0.2, 0, 0, 0] });
+  sb.navigator.getGamepads = () => [pad]; fire("gamepadconnected", { gamepad: pad }); Input.poll();
+  Input.calibratePad(); Input.setPadAxisMap({ steer: 0, throttle: 1, brake: 2, throttleRest: 0, throttleFar: 1, brakeRest: 0, brakeFar: 1 });
+  pad.axes[1] = 1; pad.axes[2] = 0.5;
+  r.sb.UiLayers.navOpen = () => true; Input.poll();
+  const before = plain(Input.debugState());
+  const values = Input.parkedPadPreview();
+  assert.equal(values.steer, 0); assert.equal(values.throttle, 1);
+  assert.ok(values.brake > 0 && values.brake < 1);
+  assert.deepEqual(plain(Input.debugState()), before, "preview must not change input latches or settings");
+  const timers = new Map(); let id = 0;
+  sb.setTimeout = (fn) => { timers.set(++id, fn); return id; }; sb.clearTimeout = (i) => timers.delete(i);
+  const preview = $("pm-pad-section").kids.find((n) => n.id === "pm-pad-preview");
+  preview.onclick(); assert.equal(preview.attrs["aria-expanded"], "true");
+  assert.equal(timers.size, 1); kb.disarmAll(); assert.equal(timers.size, 0);
+  assert.equal(preview.attrs["aria-expanded"], "false");
+  const Onboard = vm.runInContext("Onboard", sb.__ctx);
+  const lines = [];
+  const g = { store: { get: (k, d) => disk[k] ?? d, set: (k, v) => { disk[k] = v; } }, state: "race", paused: false,
+    player: { otArmed: true, xArmed: true, aeroX: 0 }, raceAeroMode: "auto", announce: (line) => { lines.push(line); return true; } };
+  const coach = Onboard.create(g);
+  const refresher = $("howtoplay").kids.find((n) => n.id === "htp-controls-refresher");
+  refresher.onclick(); assert.equal(coach.state().shown, 0); assert.equal(coach.state().races, 0);
+  assert.deepEqual(disk.coachStats, { corners: 12 });
+  r.sb.UiLayers.navOpen = () => false; now++;
+  Input.remoteSample({ thr: 1, roll: 0 }); coach.tick(1);
+  assert.match(lines[0], /TAP OVERTAKE/);
+  g.player.otArmed = false; coach.tick(9);
+  assert.equal(lines.length, 1, "auto aero keeps its existing suppression");
+  Input.setKeyBinding("aero", 0, "KeyG"); r.press("KeyG");
+  g.raceAeroMode = "manual"; coach.tick(1);
+  assert.match(lines[1], /ACTIVE AERO — G/, "physical keyboard switches subsequent hints");
+});
 
 // Keep cancelled callbacks runnable: a queued callback must remain harmless
 // even after clearTimeout, and must not cancel a fresh request in its place.

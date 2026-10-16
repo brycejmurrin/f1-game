@@ -54,4 +54,64 @@ test.describe("jump start (false start)", () => {
     expect(out.state).toBe("race");
     expect(out.timePenaltyS).toBe(0);
   });
+
+  test("auto-throttle is exempt through the reaction window, including a fast legal build", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.autoThrottle", JSON.stringify(true));
+      localStorage.setItem("apex26.unlimitedBudget", JSON.stringify(true));
+      localStorage.setItem("apex26.tyreWear", JSON.stringify("real"));
+    });
+    const fast = {
+      engine: "sprint", aero: "reg26_concept", suspension: "titanium_spring", brakes: "regen_brakes",
+      tyres: "hypersoft", ers: "overcharge", gearbox: "seamless_shift", fuel: "custom_formula",
+      exhaust: "hyper_scav", floor: "venturi", cockpit: "open_cell", wheels: "mag_forged",
+    };
+    for (const [name, setup] of [["stock", {}], ["fast", fast]]) {
+      await toMenu(page);
+      await pinFreePlay(page, { parts: setup, race: ["monza", "day", "dry"] });
+      await page.waitForFunction(() => window.__apex.info().state === "count",
+        null, { polling: 100, timeout: 30_000 });
+      const out = await page.evaluate((requested) => {
+        const a = window.__apex, team = Teams.LIST.find((t) => t.id === "mclaren");
+        const resolved = Parts.resolveSetup(requested, team);
+        a.clearInput();
+        const grid = { state: a.info().state, speed: a.physState().speed };
+        for (let i = 0; i < 600 && a.info().state === "count"; i++) a.step(1 / 60, 1);
+        const green = {
+          state: a.info().state, raceT: a.timing().raceT,
+          speed: a.physState().speed, timePenaltyS: a.world({ detail: "drive" }).ego.penalties.timePenaltyS,
+        };
+        const speedGate = PhysicsConsts.VMAX * Math.max(a.tuning().pace, 0.05) * SportingRegs.JUMP_START_SPEED_VREF;
+        let crossedReactionGate = false, manualInput = false, contact = false;
+        for (let i = 0; i < 30; i++) {
+          a.step(1 / 60, 1);
+          const input = a.inputState();
+          manualInput ||= input.throttle || input.throttleLevel !== 0;
+          contact ||= a.carAt().contactT > 0;
+          if (a.timing().raceT < SportingRegs.JUMP_START_REACT_S && a.physState().speed > speedGate) crossedReactionGate = true;
+        }
+        return {
+          grid, green, crossedReactionGate, manualInput, contact,
+          finalSpeed: a.physState().speed, timePenaltyS: a.world({ detail: "drive" }).ego.penalties.timePenaltyS,
+          fieldSize: a.timing().total, wear: a.tyres().level,
+          autoThrottle: GameStore.store.get("autoThrottle", false), freeBuild: GameStore.store.get("unlimitedBudget", false),
+          legal: Object.values(resolved.options).every((o) => Parts.isOptionAvailable(o, team)),
+          requestedResolved: Object.entries(requested).every(([cat, id]) => resolved.setup[cat] === id),
+        };
+      }, setup);
+      expect(out.grid).toEqual({ state: "count", speed: 0 });
+      expect(out.green).toEqual({ state: "race", raceT: 0, speed: 0, timePenaltyS: 0 });
+      expect(out.autoThrottle).toBe(true);
+      expect(out.freeBuild).toBe(true);
+      expect(out.legal).toBe(true);
+      expect(out.requestedResolved).toBe(true);
+      expect(out.fieldSize).toBe(22);
+      expect(out.wear).toBe("real");
+      expect(out.manualInput).toBe(false);
+      expect(out.contact).toBe(false);
+      expect(out.crossedReactionGate).toBe(name === "fast");
+      expect(out.finalSpeed).toBeGreaterThan(0);
+      expect(out.timePenaltyS).toBe(0);
+    }
+  });
 });

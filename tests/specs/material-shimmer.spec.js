@@ -27,6 +27,7 @@
 
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
+import { frameContent } from "../helpers/visual-oracle.js";
 import { awaitSoftCapture } from "../helpers/soft-capture.js";
 
 const FRAMES = 6;           // consecutive frames per condition
@@ -47,8 +48,14 @@ async function roadFrames(page, mix) {
   }, { mix, SPEED, START });
 
   const shots = [];
+  const startS = await page.evaluate(() => window.__apex.physState().s);
+  const progress = [];
   for (let f = 0; f < FRAMES; f++) {
-    await page.evaluate((STEP) => window.__apex.step(STEP, 1), STEP);
+    progress.push(await page.evaluate((STEP) => {
+      window.__apex.step(STEP, 1);
+      window.__apex.snapCam();
+      return window.__apex.physState().s;
+    }, STEP));
     // Headless Chrome hides #game and presents ON DEMAND onto #game-soft, so
     // a frame exists to read only after a blit is armed and lands; drawing
     // #game read an uncomposited, blank buffer (remote shimmer group, run
@@ -71,16 +78,20 @@ async function roadFrames(page, mix) {
   }
   // Mean absolute luminance delta between consecutive frames.
   let total = 0, n = 0;
+  const transitions = [];
   for (let f = 1; f < shots.length; f++) {
     const a = shots[f - 1], b = shots[f];
+    let transitionTotal = 0;
     for (let i = 0; i < a.length; i += 4) {
       const la = a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114;
       const lb = b[i] * 0.299 + b[i + 1] * 0.587 + b[i + 2] * 0.114;
-      total += Math.abs(la - lb); n++;
+      const change = Math.abs(la - lb);
+      total += change; transitionTotal += change; n++;
     }
+    transitions.push(transitionTotal / (a.length / 4));
   }
-  const blank = shots[0].every((v, i) => i % 4 === 3 || v === shots[0][i % 4]);
-  return { delta: n ? total / n : 0, frames: shots.length, blank };
+  const blank = shots.some((shot) => !frameContent(shot).nonblank);
+  return { delta: n ? total / n : 0, frames: shots.length, blank, transitions, distance: progress.at(-1) - startS, progress };
 }
 
 test.describe("baked materials — temporal stability", () => {
@@ -88,13 +99,9 @@ test.describe("baked materials — temporal stability", () => {
   test.setTimeout(600_000);
   // OPT-IN: APEX_SHIMMER=1 npm run test:shimmer
   //
-  // Off by default for two honest reasons. It has never been run to completion,
-  // so it must not be able to redden a shared gate; and CI renders through
-  // SwiftShader, whose texture filtering differs from real silicon, so the
-  // numbers it produces are indicative rather than authoritative. Enable it
-  // deliberately, on hardware you trust, and read a failure as "go look",
-  // not as a measurement.
-  test.skip(!process.env.APEX_SHIMMER, "opt-in: set APEX_SHIMMER=1 (unverified, SwiftShader-sensitive)");
+  // Filtering varies by GPU. Run this explicitly on the target renderer;
+  // a failure requires investigation rather than silently widening the ratio.
+  test.skip(!process.env.APEX_SHIMMER, "opt-in: set APEX_SHIMMER=1 (hardware-sensitive)");
 
   test("baked tarmac does not crawl relative to procedural", async ({ page }) => {
     // image-grade-visual's size, for the same reason: an llvmpipe readback of
@@ -108,6 +115,14 @@ test.describe("baked materials — temporal stability", () => {
     await page.evaluate(() => window.Assets.load());
     await page.waitForFunction(() => window.__apex.assets().uploaded === true, null, { polling: 100, timeout: 30000 });
     await page.evaluate(() => window.__apex.race("monza"));
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => {
+      window.__apex.go();
+      window.__apex.freeze(true); // only explicit fixed steps move the scene
+      window.__apex.setInput({ throttle: true, steer: 0 });
+      window.__apex.camera("chase");
+    });
+    expect(await page.evaluate(() => window.__apex.info().state)).toBe("race");
     await page.waitForTimeout(1500);
 
     const off = await roadFrames(page, 0);
@@ -118,7 +133,19 @@ test.describe("baked materials — temporal stability", () => {
 
     // A blank capture would make both deltas ~0 and the test vacuously green —
     // the same trap the service-worker request counting fell into earlier.
+    for (const { condition, run } of [{ condition: "procedural", run: off }, { condition: "baked", run: on }]) {
+      expect(run.transitions.length, `${condition}: every capture pair was measured`).toBe(FRAMES - 1);
+      for (const [i, delta] of run.transitions.entries()) {
+        expect(delta, `${condition}: captures ${i}→${i + 1} must move; deltas=${JSON.stringify(run.transitions)}`).toBeGreaterThan(0.05);
+      }
+      expect(run.distance, "the road probe must actually drive the sampled stretch").toBeGreaterThan(FRAMES * STEP * SPEED * 0.8);
+      expect(run.distance).toBeLessThan(FRAMES * STEP * SPEED * 1.2);
+      expect(run.progress.every((s, i) => i === 0 || s > run.progress[i - 1])).toBe(true);
+    }
+    expect(on.distance, "both material conditions sample the same motion").toBeCloseTo(off.distance, 1);
     expect(off.blank, "procedural capture was blank — the measurement is meaningless").toBe(false);
+    expect(on.blank, "every baked frame must contain visible road detail").toBe(false);
+    expect(on.delta, "baked frames must show motion").toBeGreaterThan(0.05);
     expect(off.delta, "procedural frames show no motion at all; the car may not be moving").toBeGreaterThan(0.05);
 
     const ratio = on.delta / Math.max(off.delta, 0.001);

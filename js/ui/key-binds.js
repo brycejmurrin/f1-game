@@ -16,7 +16,15 @@ function create(G) {
   const { $, store } = G;
   const tick = () => { if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiTick(); };
   const sections = [];
+  let stopPreview = () => {};
+  let stickTimer = 0;
+  let stickGeneration = 0;
   let calibration = null;
+  function cancelStick() {
+    clearTimeout(stickTimer);
+    stickTimer = 0;
+    stickGeneration++;
+  }
   const controlsPageActive = () => {
     const panel = $("pm-panel-controls");
     if (panel && panel.hidden) return false;
@@ -26,13 +34,15 @@ function create(G) {
     if (host && host.closest && host.closest("[hidden]")) return false;
     return true;
   };
-  const calibNote = $("pm-pad-calib-note");
-  const say = (t) => { if (calibNote) calibNote.textContent = t; };
   function cancelCalibration() {
-    if (!calibration) return;
-    clearTimeout(calibration.timer);
-    calibration = null;
-    say("Calibration cancelled — press CALIBRATE STICK to try again.");
+    if (calibration) {
+      clearTimeout(calibration.timer);
+      calibration = null;
+      const note = $("pm-pad-calib-note");
+      const msg = "Calibration cancelled — press CALIBRATE STICK to try again.";
+      if (note && note.textContent !== msg) note.textContent = msg;
+    }
+    cancelStick();
   }
 
   // The same activity report drives Help and first-run coaching prompts.
@@ -57,7 +67,8 @@ function create(G) {
     // rebind used to force the active-device <details> open and insertBefore it
     // to the front, undoing a manual Keyboard/Controller/Touch choice.
     if (root.dataset.helpInputReady) return;
-    const kind = activeInputKind();
+    const source = activeInputKind();
+    const kind = source === "phone" ? "touch" : source;
     const current = details.find((el) => el.getAttribute("data-input") === kind) || details[0];
     for (const el of details) el.open = el === current;
     root.dataset.helpInputReady = "1";
@@ -72,7 +83,7 @@ function create(G) {
   function section(dev) {
     const { host, note, reset: resetBtn, help, section: wrap } = dev;
     if (!host) return null;
-    dev.load(store.get(dev.key, null));
+    if (dev.key !== "pad" || !Input.controllerProfile || !Input.controllerProfile()) dev.load(store.get(dev.key, null));
     let armed = null;   // { id, slot, btn } while a slot waits for input
     const setNote = (t) => { if (note) note.textContent = t; };
     const save = () => store.set(dev.key, dev.get());
@@ -313,6 +324,7 @@ function create(G) {
     && (!Input.padRest || Input.padRest() === 0);
   const resetController = () => {
     cancelCalibration();
+    stopPreview();
     if (abortWheel) abortWheel();
     Input.resetPad();
     if (Input.setPadAxisMap) {
@@ -397,6 +409,13 @@ function create(G) {
     SettingRow.paint($("pm-padbrand"), Input.padLabelMode(), BRANDS);
   }
 
+  const calibNote = $("pm-pad-calib-note");
+  if (calibNote) {
+    calibNote.setAttribute("role", "status");
+    calibNote.setAttribute("aria-live", "polite");
+    calibNote.setAttribute("aria-atomic", "true");
+  }
+  const say = (t) => { if (calibNote && calibNote.textContent !== t) calibNote.textContent = t; };
   const calibBtn = $("pm-pad-calib");
   // With wheel capture stopped, this uses Input's live usage ranking and
   // configured-wheel preference, exactly as its calibration sampler does.
@@ -405,20 +424,31 @@ function create(G) {
     catch (_) { return null; }
   }
   if (calibBtn && Input.calibratePad) calibBtn.onclick = () => {
-    disarmAll();
+    stopPreview();
+    for (const s of sections) s.disarm(true, false);
+    if (abortWheel) abortWheel();
+    cancelStick();
     if (!Input.padPresent()) { say("No controller detected. Press a button on it first — a browser hides a pad until you do."); return; }
     // The press that ran this button is not the stick, so sample on the next
     // turn of the loop rather than the instant of the click.
     say("Let go of the stick…");
+    const generation = stickGeneration;
+    const owner = Input.padCalibrationOwner ? Input.padCalibrationOwner() : undefined;
     const device = calibrationDevice();
-    const request = calibration = { id: device && device.id, index: device && device.index, timer: 0 };
-    request.timer = setTimeout(() => {
-      if (calibration !== request) return;
+    const request = calibration = { id: device && device.id, index: device && device.index, timer: 0, generation, owner };
+    request.timer = stickTimer = setTimeout(() => {
+      if (calibration !== request || generation !== stickGeneration) return;
+      stickTimer = 0;
       const current = calibrationDevice();
       if (!current || current.id !== request.id || current.index !== request.index
           || !controlsPageActive()) { cancelCalibration(); return; }
+      if (Input.padCalibrationOwner && owner !== Input.padCalibrationOwner()) {
+        cancelCalibration();
+        say("Controller changed — calibration cancelled. Press CALIBRATE STICK again for this controller.");
+        return;
+      }
       calibration = null;
-      if (Input.calibratePad()) {
+      if (Input.calibratePad(owner)) {
         // Stored: the hint promises the offset applies "from then on", and it
         // used to be lost on the next reload (loaded back below).
         store.set("padRest", Input.padRestStore ? Input.padRestStore() : Input.padRest());
@@ -459,7 +489,11 @@ function create(G) {
       running = false;
       Input.beginAxisCapture(null);
       wheelBtn.textContent = "SET UP A WHEEL";
+      say("Wheel setup cancelled — nothing changed.");
     };
+    /* BACK from the CONTROLS page must stop the wizard too: only closeSettings
+       disarmed it, so it kept re-mapping axes and zeroing the pedals from the
+       home page. SettingsNav.onLeave(fn) is called with the page id as it hides. */
     const finish = (map, msg) => {
       running = false;
       clearTimeout(stepTimer);
@@ -481,6 +515,7 @@ function create(G) {
     };
     wheelBtn.onclick = () => {
       cancelCalibration();
+      stopPreview();
       if (running) {   // a second press abandons it and puts everything back
         abortWheel();
         say("Wheel setup cancelled — nothing changed.");
@@ -525,6 +560,7 @@ function create(G) {
           // for left, so a POSITIVE reading means this wheel is inverted.
           if (st.key === "steer") map.steerInvert = dir > 0 ? -1 : 1;
           else if (st.key === "throttle") map.pedalInvert = dir > 0 ? 1 : -1;
+          say(st.done);
           i++;
           tick();
           clearTimeout(stepTimer);
@@ -534,12 +570,94 @@ function create(G) {
       step();
     };
   }
-  if (Input.setPadAxisMap) Input.setPadAxisMap(store.get("padAxes", null));
+  // Opt-in diagnostic under the Controls menu: it reads the same processed
+  // controller travel while the menu keeps the driving latches neutral.
+  const previewHost = $("pm-pad-section");
+  if (previewHost && Input.parkedPadPreview) {
+    const button = document.createElement("button");
+    button.id = "pm-pad-preview"; button.type = "button";
+    button.textContent = "CHECK CONTROLS";
+    button.setAttribute("aria-expanded", "false");
+    const panel = document.createElement("div");
+    panel.id = "pm-pad-preview-panel"; panel.hidden = true;
+    button.setAttribute("aria-controls", panel.id);
+    const note = document.createElement("p"); note.className = "adv-help";
+    note.textContent = "Release the controls to check centre, then press each pedal and turn fully each way. This check changes no settings.";
+    panel.appendChild(note);
+    const meters = {};
+    for (const [key, name, min] of [["steer", "Steering", -1], ["throttle", "Throttle", 0], ["brake", "Brake", 0]]) {
+      const row = document.createElement("label"); row.className = "set-row";
+      const text = document.createElement("span"); text.textContent = name;
+      const meter = document.createElement("meter");
+      meter.min = min; meter.max = 1; meter.value = 0;
+      meter.setAttribute("aria-label", name);
+      const reading = document.createElement("span");
+      row.append(text, meter, reading); panel.appendChild(row);
+      meters[key] = { meter, reading };
+    }
+    const calibrate = document.createElement("button");
+    calibrate.type = "button"; calibrate.textContent = "CALIBRATE STICK";
+    calibrate.onclick = () => { stopPreview(); if (calibBtn) { calibBtn.focus(); calibBtn.click(); } };
+    const tuning = document.createElement("button");
+    tuning.type = "button"; tuning.textContent = "DEAD ZONE & SATURATION…";
+    tuning.onclick = () => { stopPreview(); const advanced = $("pm-advanced"); if (advanced && advanced.click) advanced.click(); };
+    panel.append(calibrate, tuning);
+    previewHost.append(button, panel);
+    let previewTimer = 0, running = false, generation = 0;
+    stopPreview = () => {
+      running = false; generation++;
+      clearTimeout(previewTimer); previewTimer = 0;
+      panel.hidden = true; button.textContent = "CHECK CONTROLS";
+      button.setAttribute("aria-expanded", "false");
+    };
+    const sample = (owner) => {
+      if (!running || owner !== generation) return;
+      if (previewHost.closest && previewHost.closest("[hidden]")) { stopPreview(); return; }
+      const values = Input.parkedPadPreview();
+      note.textContent = values ? "Release to check centre; press pedals fully and turn both ways. No settings are changed." : "No controller detected. Press a button on it first.";
+      for (const key of Object.keys(meters)) {
+        const value = values ? values[key] : 0;
+        const text = key === "steer" ? (Math.abs(value) < 0.01 ? "centred" : `${Math.round(Math.abs(value) * 100)}% ${value < 0 ? "left" : "right"}${Math.abs(value) >= 0.99 ? " — full steering" : ""}`)
+          : value < 0.01 ? "released" : value >= 0.99 ? "fully pressed" : `${Math.round(value * 100)}%`;
+        meters[key].meter.value = value;
+        meters[key].meter.setAttribute("aria-valuetext", text);
+        meters[key].reading.textContent = text;
+      }
+      previewTimer = setTimeout(() => sample(owner), 100);
+    };
+    button.onclick = () => {
+      if (running) { stopPreview(); return; }
+      cancelStick(); if (abortWheel) abortWheel();
+      running = true; panel.hidden = false;
+      button.textContent = "STOP CONTROL CHECK";
+      button.setAttribute("aria-expanded", "true");
+      sample(++generation);
+    };
+  }
+  // Re-arm only the three device-aware marks, preserving coach statistics,
+  // mappings and saves. Onboard owns its live instance; no game façade needed.
+  const helpSheet = $("howtoplay");
+  if (helpSheet && typeof Onboard !== "undefined" && Onboard.resetControlsRefresher) {
+    const refresher = document.createElement("button");
+    refresher.id = "htp-controls-refresher"; refresher.type = "button";
+    refresher.textContent = "REPEAT CONTROL REMINDERS";
+    const note = document.createElement("p"); note.className = "adv-help";
+    note.setAttribute("role", "status"); note.setAttribute("aria-atomic", "true");
+    refresher.onclick = () => {
+      if (Onboard.resetControlsRefresher()) {
+        note.textContent = "Brake, overtake and aero reminders re-enabled for your next races, using your current controls.";
+        tick();
+      }
+    };
+    helpSheet.append(refresher, note);
+  }
+  if (Input.setPadAxisMap && (!Input.controllerProfile || !Input.controllerProfile())) Input.setPadAxisMap(store.get("padAxes", null));
   if (Input.setPadRest) Input.setPadRest(store.get("padRest", 0));   // CALIBRATE STICK, persisted
 
   function disarmAll() {
     cancelCalibration();
-    for (const s of sections) s.disarm(true, false);
+    stopPreview();
+    for (const s of sections) s.disarm(true, false);   // closeSettings: nothing stays armed into a race
     if (abortWheel) abortWheel();
   }
   // BACK hides only this settings page; CLOSE / RESUME call disarmAll too.

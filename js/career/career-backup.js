@@ -157,15 +157,12 @@ const CareerBackup = (function () {
     const name = filename || ("apex26-career-backup-" + Date.now() + ".json");
     const text = typeof envelope === "string" ? envelope : serialize(envelope);
     const blob = new Blob([text], { type: "application/json" });
-    // Prefer the Capacitor Share path when the native shim is viable; otherwise
-    // the click interceptor on NativeDownload still catches the <a download>.
+    // Native failures (including a dismissed chooser) stay failures. Falling
+    // back to an anchor invokes the native click interceptor a second time.
     if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable()
         && typeof NativeDownload.saveBlob === "function") {
       return NativeDownload.saveBlob(blob, name).then(function () {
         return { ok: true, name: name };
-      }).catch(function (err) {
-        log("warn", "career backup native download failed: " + ((err && err.message) || err));
-        return clickDownload(blob, name);
       });
     }
     return Promise.resolve(clickDownload(blob, name));
@@ -243,6 +240,55 @@ const CareerBackup = (function () {
       return { ok: false, reason: "ghosts-forbidden" };
     }
     return { ok: true, envelope: raw };
+  }
+
+  // Recovery exports contain one active snapshot, not six named slots. The
+  // destination is explicit and this adapter only reviews; apply owns writes.
+  function recoveryEnvelope(raw, target, rawText) {
+    if (!target || !FLAVOURS.includes(target.flavour) || !Number.isInteger(target.i) || target.i < 0 || target.i >= SLOTS) return { ok: false, reason: "bad-slot" };
+    let clone, text;
+    try {
+      text = typeof raw === "string" ? raw : JSON.stringify(raw);
+      if (!text || text.length > MAX_BYTES || new Blob([text]).size > MAX_BYTES || (rawText && new Blob([rawText]).size > MAX_BYTES)) return { ok: false, reason: "too-large" };
+      clone = JSON.parse(text);
+    } catch (_) { return { ok: false, reason: "bad-json" }; }
+    if (!isObj(clone) || clone.format !== "apex26-recovery-v1") return { ok: false, reason: "wrong-format" };
+    if (clone.career == null && clone.season == null) return { ok: false, reason: "empty-recovery" };
+    const envelope = { format: FORMAT, slots: [] };
+    if (clone.career != null) {
+      const data = clone.career;
+      if (!isObj(data)) return { ok: false, reason: "slot-not-object" };
+      if (data.flavour != null && !FLAVOURS.includes(data.flavour)) return { ok: false, reason: "flavour-mismatch" };
+      if ((data.flavour || "driver") !== target.flavour) return { ok: false, reason: "flavour-mismatch" };
+      if (typeof SaveMigrate === "undefined" || !Number.isSafeInteger(SaveMigrate.CAREER_V)
+        || (data.v != null && (!Number.isSafeInteger(data.v) || data.v < 0 || data.v > SaveMigrate.CAREER_V))) return { ok: false, reason: "unsupported-version" };
+      envelope.slots.push({ flavour: target.flavour, i: target.i, data });
+    }
+    // A foreign calendar must never be silently shortened by SeasonCal.load.
+    for (const season of [clone.career && clone.career.season, clone.season]) {
+      if (!season) continue;
+      if (!isObj(season)) return { ok: false, reason: "season-not-object" };
+      const ids = season.config && season.config.trackIds;
+      if (ids != null && (!Array.isArray(ids) || !ids.length || ids.length > 64 || new Set(ids).size !== ids.length
+        || typeof Tracks === "undefined" || !Array.isArray(Tracks.LIST)
+        || ids.some((id) => !Tracks.LIST.some((t) => t.id === id)))) return { ok: false, reason: "unsupported-calendar" };
+    }
+    if (clone.season != null) {
+      const keys = ["round", "pts", "teamPts", "driverCodes", "finishes", "roundPts", "config", "stage", "lastFl", "seed", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"];
+      if (Object.keys(clone.season).some((k) => !keys.includes(k))) return { ok: false, reason: "unsupported-season" };
+      if (clone.season.round != null && (!Number.isInteger(clone.season.round) || clone.season.round < 0 || clone.season.round > 200)) return { ok: false, reason: "season-invalid" };
+      if (clone.season.config != null) {
+        const config = clone.season.config;
+        const configKeys = ["trackIds", "quali", "sprint", "sprintIds", "laps", "points", "flPoint", "drop"];
+        if (!isObj(config) || Object.keys(config).some((k) => !configKeys.includes(k))) return { ok: false, reason: "unsupported-calendar" };
+        const clean = cleanSeasonConfig(config);
+        if (Object.keys(config).some((k) => JSON.stringify(config[k]) !== JSON.stringify(clean[k]))) return { ok: false, reason: "unsupported-calendar" };
+      }
+      if (clone.season.qualiOrder != null && typeof cleanQualifying !== "function") return { ok: false, reason: "unsupported-qualifying" };
+      envelope.season = clone.season;
+    }
+    const checked = validate(envelope, rawText || text);
+    return checked.ok ? { ok: true, envelope, recovery: true } : checked;
   }
 
   // THE OPTIONAL EXTRAS ARE UNTRUSTED. validate() only proved they were objects, and
@@ -486,6 +532,10 @@ const CareerBackup = (function () {
       if (!migrated) return { ok: false, durable: false, reason: "migrate-failed" };
       value = migrated;
     }
+    if (typeof CareerRestorePoints !== "undefined") {
+      const previous = s.get(key, null);
+      if (previous) CareerRestorePoints.capture(f, i, previous, { reason: "before-import" });
+    }
     const result = typeof s.write === "function" ? s.write(key, value) : { ok: true, durable: s.set(key, value) !== false, reason: null };
     if (typeof Career !== "undefined" && Career) {
       const live = Career.slot && Career.slot();
@@ -698,6 +748,8 @@ const CareerBackup = (function () {
 
     const s = store();
     const selected = o.liveSlot;
+    if (o.recovery && envelope.season != null && o.expectedSeasonRevision != null && s && s.keyRevision
+      && o.expectedSeasonRevision !== s.keyRevision("season")) return { ok: false, reason: "conflict" };
     if (selected != null && !/^(driver|myteam):[0-2]$/.test(selected)) return { ok: false, reason: "bad-slot" };
     if (selected != null && o.expectedSelectionRevision != null && s && s.keyRevision
         && o.expectedSelectionRevision !== s.keyRevision("careerSlot")) return { ok: false, reason: "conflict" };
@@ -770,7 +822,7 @@ const CareerBackup = (function () {
     let seasonWritten = false;
     // The second mode confirmation must not replay already-restored global progress.
     // MY TEAM identity still accompanies its slot on that confirmation.
-    const progressExtras = o.includeExtras !== false && o.includeProgressExtras !== false;
+    const progressExtras = o.includeExtras !== false && o.includeProgressExtras !== false && !(o.recovery && failed);
     if (s && typeof s.write === "function") {
       // validate() proved every extra cleans; what is written is the cleaned copy.
       // recordWrite tracks durable/issues the same way slot restores do (#1296).
@@ -807,7 +859,9 @@ const CareerBackup = (function () {
       }
     }
 
-    if (typeof Career !== "undefined" && Career && Career.load) Career.load({ persist: false });
+    // Recovery restores storage for later deliberate slot selection; load()
+    // would auto-adopt the first imported slot on a fresh install.
+    if (!o.recovery && typeof Career !== "undefined" && Career && Career.load) Career.load({ persist: false });
     // The write above bumped the season key's revision under SeasonCal's armed one,
     // so its next save() read as a conflict and the title kept showing the old
     // championship until something re-entered SEASON. Re-arm it from the store.
@@ -853,6 +907,7 @@ const CareerBackup = (function () {
     download: download,
     exportAll: exportAll,
     validate: validate,
+    recoveryEnvelope: recoveryEnvelope,
     apply: apply,
     preview: preview,
     writeSlot: writeSlot,
