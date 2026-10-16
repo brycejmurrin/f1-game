@@ -8,6 +8,35 @@ Harness: `window.fetch` wrapped for api hosts (jolpi.ca, openf1.org) with a `__m
 (`reject`, `delay`, `500`, `trunc`, `schema`, `empty`, `null`, `arr`, `429`); `apex26.api.*` localStorage cleared
 between modes; each tab opened through `DataHub.open(id)` after `DataHub.close()`; DOM snapshot of the tab body.
 
+## Summary (orchestrator format)
+
+**Scope covered:** fetch fault injection (reject, 500, truncated, wrong schema, empty, null, `[]`) over SCHEDULE /
+STANDINGS / RESULTS / TELEMETRY / EXPORT; four tab-race scenarios plus a year-pill race; `telemetry-model.js` with
+mismatched-length laps; `legends.js` and `driver-ratings.js` edge cases; one caught-exception pause session.
+
+| id | file:line | severity | verdict | debugger evidence | fix commit | test | issue |
+|---|---|---|---|---|---|---|---|
+| F1 | js/data/driver-ratings.js `get()` delta loop | low | VM-ONLY (Node VM; needs a corrupt career save) | none live: found by reading + VM fuzz (`82 + "5"` = `"825"`) | 0d3296e0 | `driver-ratings-personality.test.mjs` last case (fails on old code) | — |
+| O1 | api-transport.js attempt() MAX_RETRY | info | BY-DESIGN | 500 mode: LOADING ~30 s (10 s + 20 s backoff) before the error card | — | — | — |
+| O2 | api.js `jStandingsList` / `jRaces` | info | BY-DESIGN | wrong-schema JSON reads as "season hasn't started" | — | — | — |
+
+**Clean areas (do not re-hunt):** every Data Hub tab under reject / 500 / truncated / empty / null / `[]` (error card or
+empty copy, no NaN, no stuck spinner); tab switching, close mid-fetch + reopen (same and different tab), year pills
+(generation counter holds, 0 page errors); `brakingDuel` / `cumDist` / `timeAtDist` with unequal laps; Legends and
+DriverRatings lookups on prototype keys, `null`, tier NaN/Infinity.
+
+**js-debugger tool problems hit:**
+- `debugger_run` with `awaitPromise` and a long body returns `unknown` ("Runtime.evaluate response timed out") after
+  ~30-60 s while the page JS keeps running; `debugger_detach` does not stop it. Two overlapping loops corrupted my
+  first matrix. Workaround: fire-and-forget (`return 'started'`) and store progress in a `window` object.
+- A pending/unknown operation blocks every later `debugger_run` ("An evaluation is pending… detach first").
+- `debugger_state` returns every operation since attach, cumulatively, so polling gets more expensive; detach and
+  reattach to reset it.
+- Page timers are ~3-5x slower than wall clock under SwiftShader with the game's render loop running.
+
+**Next step:** a recorded-lap vs reference-lap compare through the real telemetry DOM needs a live OpenF1 lap (or a
+fixture served through the fetch override); not attempted.
+
 ## Area 1 — network fault injection
 
 Harness note (a false start, kept so nobody repeats it): the first matrix was launched while an earlier
