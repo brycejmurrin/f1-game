@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { cameraControls, scenarioShots } from "./survey-scenarios.mjs";
+import zlib from "node:zlib";
 
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);
 const TODS = new Set(["day", "dusk", "dawn", "night"]);
@@ -101,6 +102,19 @@ export function normalizeSurveyTracks(args = {}, known = null) {
   return out;
 }
 
+/** Two cells with one name write and replace ONE image, so a gallery would count a single final view twice
+ *  (`fracs:[.101,.104]` both round to `-10-`; #1982). Reject at plan time, naming the colliding fracs. */
+export function assertUniqueShotNames(shots) {
+  const by = new Map();
+  for (const s of shots) by.set(s.name, [...(by.get(s.name) || []), s.frac]);
+  const dup = [...by].filter(([, fr]) => fr.length > 1);
+  if (dup.length) {
+    throw new Error(`survey cells share a name and would overwrite one image: ${dup.map(([n, fr]) => `${n} (fracs ${fr.join(", ")})`).join("; ")}`
+      + " — space the fracs further apart (names round to 1 %) or give shots[] explicit unique names");
+  }
+  return shots;
+}
+
 /** Machine-readable plan for a survey run (no I/O). */
 export function buildTrackShotSurveyPlan(args = {}) {
   if (!args.location && (args.angles || args.weathers || args.camera)) throw new Error("angles/weathers/camera require a named location");
@@ -138,6 +152,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
       };
     });
     if (shots.length > MAX_SURVEY_SHOTS) throw new Error(`shots max ${MAX_SURVEY_SHOTS}`);
+    assertUniqueShotNames(shots);
     return {
       preset: presetKey,
       label,
@@ -182,6 +197,7 @@ export function buildTrackShotSurveyPlan(args = {}) {
   if (shots.length > MAX_SURVEY_SHOTS) {
     throw new Error(`survey would take ${shots.length} shots (max ${MAX_SURVEY_SHOTS}); lower count or use one cam`);
   }
+  assertUniqueShotNames(shots);
 
   return {
     preset: presetKey,
@@ -212,18 +228,49 @@ export function shotPngPath(outDir, name) {
 }
 
 /** Split planned shots into already-on-disk (resume) vs still needed. */
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+/** Structural PNG check (signature, IHDR with a real size, every chunk's CRC, a closing IEND). Existence is not
+ *  evidence: a truncated or text-filled file used to count as a finished cell on resume (#1982). Pixels are not
+ *  decoded; that stays the capture's own spread/kb score. -> null when sound, else the reason. */
+export function pngProblem(file) {
+  let buf;
+  try { buf = fs.readFileSync(file); } catch (e) { return `unreadable (${e.code || e.message})`; }
+  if (buf.length < 8 || !buf.subarray(0, 8).equals(PNG_SIG)) return "not a PNG (bad signature)";
+  let off = 8, first = true, sawEnd = false;
+  while (off + 12 <= buf.length) {
+    const len = buf.readUInt32BE(off);
+    const type = buf.toString("latin1", off + 4, off + 8);
+    if (off + 12 + len > buf.length) return `truncated in a ${type} chunk`;
+    if (first && (type !== "IHDR" || len !== 13)) return "first chunk is not IHDR";
+    if (first && (buf.readUInt32BE(off + 8) < 1 || buf.readUInt32BE(off + 12) < 1)) return "zero-size image";
+    first = false;
+    if (zlib.crc32(buf.subarray(off + 4, off + 8 + len)) !== buf.readUInt32BE(off + 8 + len)) return `bad CRC in a ${type} chunk`;
+    off += 12 + len;
+    if (type === "IEND") { sawEnd = true; break; }
+  }
+  return sawEnd ? null : "no IEND chunk (truncated)";
+}
+
+/** Split a plan into cells to capture and cells already on disk. A cell only counts as resumed when its PNG is
+ *  structurally sound; an unsound one is listed in `invalid` (with why) and recaptured. */
 export function filterResumeShots(outDir, shots, resume = false, context = null) {
-  if (!resume) return { pending: shots.slice(), resumed: [] };
+  if (!resume) return { pending: shots.slice(), resumed: [], invalid: [] };
   const pending = [];
   const resumed = [];
+  const invalid = [];
   for (const s of shots) {
     const png = context?.extension ? path.join(outDir, `${s.name}.${context.extension}`) : shotPngPath(outDir, s.name);
     let matches = !context;
     if (context) { try { matches = JSON.parse(fs.readFileSync(png + ".capture.json", "utf8")).identity === context.identities[s.name]; } catch {} }
-    if (fs.existsSync(png) && matches) resumed.push({ ...s, png, resumed: true });
+    if (!fs.existsSync(png)) { pending.push(s); continue; }
+    // An unsound PNG is recaptured whatever its receipt says (#1982); other formats (preview JPEG) are judged by identity alone.
+    const why = png.endsWith(".png") ? pngProblem(png) : null;
+    if (why) { invalid.push({ name: s.name, reason: why }); pending.push(s); }
+    else if (matches) resumed.push({ ...s, png, resumed: true });
     else pending.push(s);
   }
-  return { pending, resumed };
+  return { pending, resumed, invalid };
 }
 
 /** Heuristic flags for a captured cell (spread/kb from track-session). */
@@ -243,6 +290,13 @@ export function writeSurveyProgress(outDir, progress) {
   const file = path.join(outDir, "progress.json");
   fs.writeFileSync(file, JSON.stringify({ ...progress, updatedAt: new Date().toISOString() }, null, 2) + "\n");
   return file;
+}
+
+/** The one terminal state the CLI and the MCP adapter both write to progress.json. The adapter used to write
+ *  "done" unconditionally and then answer ok:false, so a poller saw success for a run whose shots failed (#1983). */
+export function surveyTerminalState(trackResults = [], hardFail = false) {
+  const bad = hardFail || trackResults.some((t) => t.error || t.failed > 0 || !(t.captured > 0 || t.skipped));
+  return bad ? "failed" : "done";
 }
 
 export function writeSurveyFindings(outDir, meta) {

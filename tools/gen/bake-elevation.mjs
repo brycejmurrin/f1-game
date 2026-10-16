@@ -138,6 +138,15 @@ async function elevations(lnglat) {
 // meet) — realPoints() de-trends any residual, but a profile that needs
 // de-trending has already lied about a gradient somewhere.
 const MAX_GRADE = 0.055;
+// Default [1,2,1] passes, and the circuits whose relief is one short, steep climb
+// the global limits flatten. cota (#2208): raw SRTM climbs 25 m to the T1 crest
+// in ~330 m (published: 30+ m); the 0.012 kink clamp alone held the crest to
+// 10.5 m, six passes and the 5.5 % grade cap the rest. Per-circuit overrides of
+// passes / kink / grade, named and never global (header: SRTM noise on 11 circuits).
+const SMOOTH_PASSES = 6;
+const SMOOTH_OVERRIDE = { cota: 1 };
+const GRADE_OVERRIDE = { cota: 0.08 };
+const KINK_OVERRIDE = { cota: 0.06 };
 // The gradient CHANGE allowed between adjacent samples. A road can sit inside
 // MAX_GRADE everywhere and still feel violent, because what a driver feels is
 // the second derivative, not the first: shipped 2026-09-14 with slope clamped
@@ -176,8 +185,8 @@ function smoothClosed(p, passes) {
 // Walk the loop repeatedly, pulling any step steeper than MAX_GRADE back to it
 // by moving BOTH ends half way. Converges because every pass strictly reduces
 // the largest step; the cap on iterations is a guard, not a target.
-function clampGrade(p, spacing) {
-  const n = p.length, lim = MAX_GRADE * spacing;
+function clampGrade(p, spacing, grade = MAX_GRADE) {
+  const n = p.length, lim = grade * spacing;
   let a = p.slice(), worst = 0;
   for (let iter = 0; iter < 200; iter++) {
     let moved = false;
@@ -199,8 +208,8 @@ function clampGrade(p, spacing) {
 // Nudging the middle sample toward the chord it sits off reduces that residual
 // directly, and does so without touching the endpoints, so the lap stays closed
 // and the macro shape (which is the part SRTM gets right) is preserved.
-function clampKink(p, spacing) {
-  const n = p.length, lim = MAX_KINK * spacing;
+function clampKink(p, spacing, kink = MAX_KINK) {
+  const n = p.length, lim = kink * spacing;
   let a = p.slice();
   for (let iter = 0; iter < 400; iter++) {
     let moved = false;
@@ -217,7 +226,7 @@ function clampKink(p, spacing) {
 
 // resample per-vertex elevations to SAMPLES points evenly spaced by arc length,
 // normalized so the start sits at 0
-function toProfile(coords, ele) {
+function toProfile(coords, ele, passes = SMOOTH_PASSES, kink = MAX_KINK, grade = MAX_GRADE) {
   const N = coords.length;
   const cum = [0];
   for (let i = 1; i < N; i++) cum.push(cum[i - 1] + metres(coords[i - 1], coords[i]));
@@ -241,8 +250,8 @@ function toProfile(coords, ele) {
   // is still a narrow low-pass at this spacing — it attenuates the 2-3 sample
   // wiggles that are sampling artefacts and leaves anything spanning several
   // hundred metres, which is every real gradient a circuit has, untouched.
-  const eased = clampKink(smoothClosed(prof, 6), spacing);
-  const { prof: capped, worstRaw } = clampGrade(eased, spacing);
+  const eased = clampKink(smoothClosed(prof, passes), spacing, kink);
+  const { prof: capped, worstRaw } = clampGrade(eased, spacing, grade);
   const base = capped[0];
   return {
     prof: capped.map((v) => +(v - base).toFixed(2)),
@@ -297,7 +306,7 @@ async function bake(ids) {
         coords = line.geometry.coordinates.map((c) => [c[0], c[1]]);
       }
       const ele = await elevations(coords);
-      const { prof, spacing, worstRaw } = toProfile(coords, ele);
+      const { prof, spacing, worstRaw } = toProfile(coords, ele, SMOOTH_OVERRIDE[id] ?? SMOOTH_PASSES, KINK_OVERRIDE[id] ?? MAX_KINK, GRADE_OVERRIDE[id] ?? MAX_GRADE);
       const lo = Math.min(...prof), hi = Math.max(...prof);
       let grade = 0;
       for (let i = 0; i < prof.length; i++) {

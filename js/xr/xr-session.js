@@ -40,6 +40,8 @@ const XrSession = (function () {
   let _bindings = null;             // { getRenderer, onFrame, onStart, onEnd, setCamCockpit, motionLock }
   let _inputLatch = { primary: false, secondary: false };
   let _anchor = { eye: [0, 1.2, 0], fwd: [0, 0, 1], up: [0, 1, 0] };
+  const _eyeFrames = [];          // borrowed until the next eyeFrames call
+  let _resetPending = false;      // explicit recenter required after origin loss
   let _eyeBags = null;              // reused per-eye compose outputs
   let _lastError = null;
   let _listeners = [];
@@ -133,8 +135,11 @@ const XrSession = (function () {
 
   function sessionInit(preferWebgpu) {
     const optional = ["local-floor", "bounded-floor", "layers"];
+    const overlay = typeof document !== "undefined" && document.body;
+    if (overlay) optional.push("dom-overlay");
     if (preferWebgpu) optional.push("webgpu");
     return {
+      ...(overlay ? { domOverlay: { root: overlay } } : {}),
       requiredFeatures: [],
       optionalFeatures: optional,
     };
@@ -245,6 +250,8 @@ const XrSession = (function () {
       }
     }
     _refSpace = _baseRefSpace;
+    _resetPending = false;
+    if (_baseRefSpace.addEventListener) _baseRefSpace.addEventListener("reset", onReferenceReset);
 
     // Hand the session to the renderer (TLX three.xr.setSession, or GLX layer).
     const b = _bindings;
@@ -277,12 +284,12 @@ const XrSession = (function () {
       _xrTime = time;
       _xrFrame = frame;
       _xrFrameCount++;
-      if (!_centered || _recenterPending) recenter(frame);
+      if ((!_centered && !_resetPending) || _recenterPending) recenter(frame);
       try { pollInput(frame); } catch (e) {
         // A controller/injected-input failure must not strand the XR clock or
         // leave its last throttle sample latched while the headset keeps moving.
         if (typeof Input !== "undefined" && Input.remoteLost) {
-          try { Input.remoteLost(); } catch (_) { /* input teardown is best-effort */ }
+          try { Input.remoteLost("xr"); } catch (_) { /* input teardown is best-effort */ }
         }
         try { Log.warn("xr", "pollInput", e && e.message); } catch (_) { /* */ }
       }
@@ -313,10 +320,15 @@ const XrSession = (function () {
   function pollInput(frame) {
     if (!_session || typeof XrInput === "undefined") return;
     const sources = _session.inputSources;
-    const mapped = XrInput.mapFrame(sources, _inputLatch);
+    const menuOpen = typeof UiLayers !== "undefined" && UiLayers.navOpen && UiLayers.navOpen();
+    const mapped = XrInput.mapFrame(sources, _inputLatch, {
+      driving: typeof XROpts === "undefined" || !XROpts.xrInput || XROpts.xrInput() !== "existing",
+      menuOpen: !!menuOpen, overlay: !!_session.domOverlayState && !_resetPending,
+    });
     _inputLatch = mapped.latch;
     if (mapped.recenter) recenter();
     const input = (typeof Input !== "undefined") ? Input : null;
+    if (_resetPending || _session.visibilityState !== "visible") mapped.driving = false;
     if (input) XrInput.inject(input, mapped);
   }
 
@@ -338,6 +350,7 @@ const XrSession = (function () {
       _refSpace = _baseRefSpace.getOffsetReferenceSpace(t);
       _centered = true;
       _recenterPending = false;
+      _resetPending = false;
       emit("recenter", off);
       return true;
     } catch (e) {
@@ -350,12 +363,14 @@ const XrSession = (function () {
    * Build per-eye frame bags from the current XRFrame + seated anchor.
    * Returns an array of { viewport?, view, proj, viewProj, invProj, invViewProj, eye }
    * or null when the pose is unavailable (keep last mono frame).
+   * The list and its bags are borrowed scratch, valid for synchronous rendering
+   * only; callers must not retain them across frames.
    * `frameOpt` — pass the XRFrame from the active session rAF callback when
    * calling outside onFrame (XRFrame is invalid once that callback returns).
    */
   function eyeFrames(layer, frameOpt) {
     const xrFrame = frameOpt || _xrFrame;
-    if (!xrFrame || !_refSpace) return null;
+    if (!xrFrame || !_refSpace || _resetPending) return null;
     if (!_centered && !recenter(xrFrame)) return null;
     let pose = null;
     try { pose = xrFrame.getViewerPose(_refSpace); } catch (_) { return null; }
@@ -370,7 +385,8 @@ const XrSession = (function () {
         });
       }
     }
-    const out = [];
+    const out = _eyeFrames;
+    out.length = pose.views.length;
     for (let i = 0; i < pose.views.length; i++) {
       const v = pose.views[i];
       const bag = _eyeBags[i];
@@ -387,7 +403,7 @@ const XrSession = (function () {
       } else {
         bag.viewport = null;
       }
-      out.push(bag);
+      out[i] = bag;
     }
     return out;
   }
@@ -414,6 +430,11 @@ const XrSession = (function () {
       try { s.removeEventListener("end", onSessionEnd); } catch (_) { /* */ }
       try { s.removeEventListener("visibilitychange", onVisibility); } catch (_) { /* */ }
     }
+    if (_baseRefSpace && _baseRefSpace.removeEventListener) {
+      try { _baseRefSpace.removeEventListener("reset", onReferenceReset); } catch (_) { /* ended space */ }
+    }
+    _resetPending = false;
+    _eyeFrames.length = 0;
     _session = null;
     _refSpace = null;
     _baseRefSpace = null;
@@ -423,7 +444,7 @@ const XrSession = (function () {
     _enabledFeatures = [];
     _running = false;
     if (typeof Input !== "undefined" && Input.remoteLost) {
-      try { Input.remoteLost(); } catch (_) { /* */ }
+      try { Input.remoteLost("xr"); } catch (_) { /* */ }
     }
     const b = _bindings;
     if (b && typeof b.detachSession === "function") {
@@ -434,6 +455,16 @@ const XrSession = (function () {
     }
     emit("end", {});
     try { Log.info("xr", "immersive-vr ended"); } catch (_) { /* */ }
+  }
+
+  function onReferenceReset(event) {
+    if (!_session || (event && event.target && event.target !== _baseRefSpace)) return;
+    // Runtime transforms may be unavailable. Pause and require deliberate A/X
+    // recenter rather than guessing a transform and rotating the seated driver.
+    _resetPending = true;
+    _recenterPending = false;
+    if (typeof Input !== "undefined" && Input.remoteLost) { try { Input.remoteLost("xr"); } catch (_) { /* best effort */ } }
+    emit("reset", { recenterRequired: true });
   }
 
   function onVisibility() {

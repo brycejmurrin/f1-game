@@ -116,3 +116,17 @@ test("a career draws from its season seed, ahead of the session's", () => {
   assert.deepEqual(careerPlan(1, 99), careerPlan(2, 99));
   assert.notDeepEqual(careerPlan(1, 99), careerPlan(1, 100));
 });
+
+test("previewPlan is the plan planFor would draw, for any staged laps, and caches nothing", () => {
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const b = boot({ simSeed: () => seed, raceLaps: 25 });
+    const live = plain(b.wa.planFor());
+    for (const laps of [3, 5, 12]) {
+      const staged = boot({ simSeed: () => seed, raceLaps: laps });
+      assert.deepEqual(plain(b.wa.previewPlan({ laps })), plain(staged.wa.planFor()), `seed ${seed}, ${laps} laps`);
+    }
+    assert.equal(b.wa.plan, null, "previewing never freezes a plan on the arc");
+    assert.deepEqual(plain(b.wa.previewPlan()), live, "no override = the live plan");
+    assert.deepEqual(plain(b.wa.planFor()), live, "and planFor's own memo is untouched by the previews");
+  }
+});

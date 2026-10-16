@@ -208,6 +208,10 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
     "node tools/ci/verify-change.mjs --wait",
     "node tools/ci/test-solo.mjs tests/specs/autopilot.spec.js",
     "python3 tools/mcp/probe-mcp.py chrome-start",
+    "tools/mcp/js-debugger-mcp.sh call debugger_attach '{}'",
+    "bash tools/mcp/js-debugger-mcp.sh call debugger_control '{}'",
+    "node tools/mcp/js-debugger-cli.mjs serve-http",
+    "node tools/mcp/js-debugger-smoke.mjs",
     // 2026-09-24: the path-prefix and npm-script forms walked past the guard.
     "node ./tools/ci/test-bg.mjs smoke",
     "node /home/user/f1-game/tools/ci/test-bg.mjs smoke",
@@ -224,6 +228,8 @@ test("the Bash guard refuses a browser run from inside a subagent, and only ther
     "npm run test:tooling-fast",
     "node --test tests/unit/ratchets.test.mjs",
     "node tools/track/verify-track.cjs monza",
+    "tools/mcp/js-debugger-mcp.sh list-tools",
+    "bash tools/mcp/js-debugger-mcp.sh status",
   ];
   for (const cmd of browser) assert.equal(run(cmd, true).status, 2, `a subagent must not run: ${cmd}`);
   for (const cmd of nodeOnly) assert.equal(run(cmd, true).status, 0, `a subagent may run: ${cmd}`);
@@ -380,7 +386,7 @@ test("a subagent cannot reach a browser through MCP tools either", () => {
   const mcp = groups.find((g) => (g.hooks || []).some((h) => h.command.includes("mcp-browser-guard.sh")));
   assert.ok(mcp, "the MCP browser guard is registered");
   const re = new RegExp(mcp.matcher);
-  for (const n of ["mcp__playwright-official__browser_navigate", "mcp__chrome-devtools__new_page",
+  for (const n of ["mcp__playwright-official__browser_navigate", "mcp__chrome-devtools__new_page", "mcp__js-debugger__debugger_attach", "mcp__js-debugger__debugger_control",
                    "mcp__apex-tools__apex_shot", "mcp__apex-tools__apex_shot_survey", "mcp__apex-tools__apex_track", "mcp__apex-tools__apex_job_start"])
     assert.ok(re.test(n), `matcher must select ${n}`);
   for (const n of ["mcp__apex-tools__apex_track_audit", "mcp__apex-tools__apex_status", "mcp__github__get_me", "Bash"])
@@ -392,6 +398,9 @@ test("a subagent cannot reach a browser through MCP tools either", () => {
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate", agent_id: "a1" }).status, 2);
   assert.equal(run({ tool_name: "mcp__chrome-devtools__new_page", transcript_path: "/p/subagents/agent-x.jsonl" }).status, 2);
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_eval", agent_id: "a1" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_attach", agent_id: "a1" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_control", agent_type: "reviewer" }).status, 2);
+  assert.equal(run({ tool_name: "mcp__js-debugger__debugger_state" }).status, 0, "parent retains debugger access");
   assert.equal(run({ tool_name: "mcp__playwright-official__browser_navigate" }).status, 0, "the main session keeps its browser");
   assert.equal(run({ tool_name: "mcp__apex-tools__apex_track_audit", agent_id: "a1" }).status, 0, "tree tools stay open to subagents");
 });
@@ -611,8 +620,10 @@ test("the always-on instruction surface stays inside its budget", () => {
     assert.equal(typeof description, "string", `${d.name}: description must be a YAML string`);
     descWords += description.split(/\s+/).filter(Boolean).length;
   }
-  assert.ok(descWords <= 1600,
-    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1600) — tighten one, or retire a skill`);
+  // Raised 1600 -> 1700 on 2026-10-16 (Bryce: "Raise the skill budget"): 40 skills left
+  // ~0 slack, so every skill edit traded routing recall (skill-hint-hook floor) for budget.
+  assert.ok(descWords <= 1700,
+    `${skills.length} skill descriptions cost ~${descWords} always-on words (budget 1700) — tighten one, or retire a skill`);
 });
 
 // ── BYTE AND ROUTING BUDGETS (2026-10-14, docs/notes/AGENT-GUARDS-2026-10-14.md) ──
@@ -671,8 +682,9 @@ test("skill descriptions: a char budget, every arrow resolves, every skill has r
     assert.ok(exists(`tests/data/skill-routing/queries/${name}.json`),
       `${name} has no tests/data/skill-routing/queries/${name}.json (5 should-fire + 3 near-miss queries)`);
   }
-  // 11,986 chars on 2026-10-14, rounded up to the next 100. Trim one to add one.
-  assert.ok(chars <= 12000, `${skills.length} skill descriptions are ${chars} chars (budget 12,000)`);
+  // 11,986 chars on 2026-10-14, rounded up to the next 100. Raised to 12,800 on 2026-10-16
+  // (Bryce: "Raise the skill budget") for the same reason as the word budget. Trim one to add one.
+  assert.ok(chars <= 12800, `${skills.length} skill descriptions are ${chars} chars (budget 12,800)`);
   for (const f of fs.readdirSync(path.join(ROOT, "tests/data/skill-routing/queries"))) {
     const rows = JSON.parse(read(`tests/data/skill-routing/queries/${f}`));
     assert.ok(skills.includes(f.replace(/\.json$/, "")), `${f}: no such skill`);
@@ -824,3 +836,55 @@ test("bash-guard's `if:` filters parse, and every policed command shape still re
   for (const cmd of ["ls -la", "cat README.md", "grep -n foo file", "head -5 x", "sed -n 1,5p x"])
     assert.ok(!reaches(cmd), `read-only command should skip bash-guard: ${cmd}`);
 });
+
+// #1984: a delegation prompt must not grant a write the track-surveyor edit hook denies.
+test("the survey-track delegation template owns exactly what the track-surveyor hook lets it write (#1984)", () => {
+  const tpl = fs.readFileSync(path.join(ROOT, ".claude/skills/survey-track/references/delegation.md"), "utf8");
+  const owned = tpl.split("\n").find((l) => l.startsWith("OWNED"));
+  assert.ok(owned, "template has an OWNED line");
+  assert.match(owned, /js\/circuits\/<id>\.js/);
+  assert.match(owned, /js\/circuits\/scenery\/<id>\.js/);
+  assert.doesNotMatch(owned, /docs\//, "docs/tracks/<id>.md is not writable by the surveyor");
+  assert.match(tpl.split("\n").find((l) => l.startsWith("FORBIDDEN")), /docs\/\*\*/);
+  const hook = fs.readFileSync(path.join(ROOT, ".claude/hooks/protect-files.sh"), "utf8");
+  assert.match(hook, /only js\/circuits\/<id>\.js, js\/circuits\/scenery\/<id>\.js, scratch\/ and\s+#\s+artifacts\//);
+});
+
+// Skill hygiene pins from the 2026-10-16 issue burn-down (#1693 #1688 #1687 #1700).
+{
+  const skillsDir = path.join(ROOT, ".claude/skills");
+  const skillText = (rel) => fs.readFileSync(path.join(skillsDir, rel), "utf8");
+
+  test("no SKILL.md quotes a suite size ('~100 tests'): a count drifts, the command does not (#1693)", () => {
+    const hits = [];
+    for (const d of fs.readdirSync(skillsDir)) {
+      const f = path.join(skillsDir, d, "SKILL.md");
+      if (!fs.existsSync(f)) continue;
+      fs.readFileSync(f, "utf8").split("\n").forEach((l, i) => {
+        if (/~?\d+\+? tests\b/.test(l)) hits.push(`${d}/SKILL.md:${i + 1}: ${l.trim()}`);
+      });
+    }
+    assert.deepEqual(hits, []);
+  });
+
+  test("check-changes routes the add-a-VM-twin recipe and the scoped DEFECT-LEDGER grep (#1688 #1687)", () => {
+    const body = skillText("check-changes/SKILL.md");
+    assert.match(body, /references\/vm-twin\.md/);
+    assert.match(body, /DEFECT-LEDGER\.md/);
+    const ref = skillText("check-changes/references/vm-twin.md");
+    for (const needle of ["vm-portable.mjs", "ADAPTED", "TWINNED", "mutants.json", "twin-fidelity.mjs", "twinDebt"])
+      assert.ok(ref.includes(needle), `vm-twin.md must name ${needle}`);
+    // the recipe names real files
+    for (const rel of ["tools/check/vm-portable.mjs", "tools/check/twin-fidelity.mjs", "tools/ci/twinned-specs.mjs",
+      "tests/data/mutants.json", "tests/helpers/vm-page.js", "docs/notes/DEFECT-LEDGER.md"])
+      assert.ok(fs.existsSync(path.join(ROOT, rel)), `${rel} must exist`);
+  });
+
+  test("mcp-probe carries the tool-naming table; renderer-debug carries all_dark and the webgpu smoke (#1700)", () => {
+    const probe = skillText("mcp-probe/SKILL.md");
+    assert.match(probe, /`chrome_click`.*`click`/);
+    const wgx = skillText("renderer-debug/references/wgx.md");
+    assert.match(wgx, /all_dark/);
+    assert.match(wgx, /apex-eval\.mjs monza .* --backend webgpu/);
+  });
+}

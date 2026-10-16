@@ -413,6 +413,21 @@ test("an unconfirmed in-race RENDERER tap keeps the picker's options, and the qu
   assert.equal(h.sel.value, "three", "the picker snaps back to the unset default renderer");
 });
 
+test("an in-race RENDERER confirm belongs to the value that asked (H29): a different pick re-asks instead of reloading", () => {
+  const h = bootGfx();
+  h.body.dataset.race = "1";
+  h.sel.value = "webgpu";
+  h.dom.dispatch(h.sel, { type: "change" });
+  assert.equal(h.sel.dataset.armed, "1", "first pick arms");
+  h.sel.value = "three";   // a different renderer within the 5 s window
+  h.dom.dispatch(h.sel, { type: "change" });
+  assert.equal(h.pendingReload(), false, "the other value is a NEW question, not the confirm of the first");
+  assert.equal(h.sb.localStorage.getItem("apex26.gfxBackend"), null, "nothing is written");
+  assert.equal(h.sel.dataset.armed, "1", "and it is armed for the new value");
+  h.dom.dispatch(h.sel, { type: "change" });   // the deliberate second tap on the same value
+  assert.equal(h.sb.localStorage.getItem("apex26.gfxBackend"), "three", "confirming the SAME value proceeds");
+});
+
 test("a stale arm never carries into the next race; out of a race it is cleared, not consumed", () => {
   const h = bootGfx();
   h.body.dataset.race = "1";

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list.
+// @doc Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.
 // @section runner
 /**
  * tooling-fast.mjs — run the structural unit suites with per-file progress.
@@ -522,6 +522,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-output-target.test.mjs",
   // #2153: GLX resize() snaps a ±1 px present/render jitter (WGX hysteresis) so the post chain is not rebuilt (mock).
   "tests/unit/glx-resize-hysteresis.test.mjs",
+  "tests/unit/glx-resource-balance.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/handback.test.mjs",
@@ -568,10 +569,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/incident-rpm.test.mjs",
+  "tests/unit/init-owner-resize-observer.test.mjs",
   // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
+  "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
   // knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.
@@ -694,6 +697,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/onboard.test.mjs",
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
+  "tests/unit/over-road-scan.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
   // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
   "tests/unit/pace-math.test.mjs",
@@ -826,6 +830,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/ci/remote-group.mjs + browser-group.yml: the group/shard validation
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
+  // Renderer ownership, post health, material detail and particle residency; isolated VM.
+  "tests/unit/render-final-contracts.test.mjs",
   // render() lighting-prep pure-move: renderLightingPrep owns sky/lightning/lamps; call-order pin. ~0.05 s.
   "tests/unit/render-lighting-prep.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
@@ -972,6 +978,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/telemetry-view-resize.test.mjs",
   "tests/unit/terrain-falloff.test.mjs",
   "tests/unit/terrain-normals.test.mjs",
+  "tests/unit/terrain-y.test.mjs",
   "tests/unit/test-bg-outcome.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
   "tests/unit/test-groups-generated.test.mjs",
@@ -1016,6 +1023,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.
   "tests/unit/tlx-round2.test.mjs",
   "tests/unit/tlx-texture-release.test.mjs",
+  // tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).
+  "tests/unit/tolerance-diff.test.mjs",
   "tests/unit/tooling-fast-runner.test.mjs",
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",

@@ -349,6 +349,7 @@ const FULL = [
   "js/perf/race-entry-profile.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
+  "js/render/shared/compatibility-recovery.js",
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
   "js/ui/dock-layout.js",
@@ -365,6 +366,7 @@ const FULL = [
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
   "js/ui/hud-damage.js",     // the DAMAGE chip on #hud-damage (paints Damage; display only)
   "js/ui/live-region.js",    // LiveRegion: the one writer of #announce-live (flag > penalty > save > radio > HUD queue)
+  "js/ui/hud-skin.js",   // HudSkin: runtime team accent (skinAccent) — for GameHud
   "js/ui/hud-readouts.js",   // gap laps, ERS MJ/state, BB, blue flag, race DELTA trace, spoken HUD — for GameHud
   "js/ui/hud-relative.js",   // opt-in RELATIVE box: road neighbours ±2, gaps, laps up/down — for GameHud
   "js/ui/hud-strategy.js",   // opt-in STRATEGY panel: tyre laps, pit loss, next stop, undercut cue — for GameHud
@@ -405,6 +407,7 @@ const FULL = [
   "js/career/custom-team.js",
   "js/ui/quali-sheet.js",
   "js/ui/onboard.js",
+  "js/physics/debris-draw.js",
   "js/physics/debris-world.js",
   "js/physics/incident-sim.js",
   "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)
@@ -560,6 +563,7 @@ const TRACK_VM = [
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
   "js/track/scenery/venue.js",
+  "js/track/scenery/guards.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -638,6 +642,7 @@ const HARD_EDGES = [
   ["js/camera/cam-groups.js", "js/ui/hud-layout.js"], // camSet reads CamGroups.COCKPIT_LAYOUT at eval
   ["js/camera/cam-groups.js", "js/ui/hud.js"],      // ONBOARD_IDS = CamGroups.ONBOARD at eval
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
+  ["js/ui/hud-skin.js", "js/ui/hud.js"],            // updateHud calls HudSkin.skinAccent (call time; ordered with its peers)
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
@@ -1059,13 +1064,14 @@ const LAZY_EDITOR = [
   "js/editor/followup-tools.js", // review proposals, scenery recipes and learning cards
   "js/editor/scenery-panel.js", // DesignerScenery: theme discovery, atmosphere and prop inspector
   "js/editor/bridge-panel.js", // DesignerBridges: authored road-overpass controls
+  "js/editor/workspace.js",  // DesignerWorkspace: inspector disclosures and navigation state
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
 // stamps / randomise / validate / insight / fixes / canvas / profile destructure TrackShape at eval — the
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 // elev-presets is pure (optional CustomTracks.LIMITS at call time) — no shape edge.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/followup-tools.js" && f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/bridge-panel.js" && f !== "js/editor/designer.js")
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/followup-tools.js" && f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/bridge-panel.js" && f !== "js/editor/workspace.js" && f !== "js/editor/designer.js")
   .map((f) => ["js/editor/shape.js", f])
   .concat([["js/editor/followup-tools.js", "js/editor/scenery-panel.js"]])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
@@ -1129,6 +1135,7 @@ const LAZY_TRACK_BUILD = [
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
   "js/track/scenery/venue.js",
+  "js/track/scenery/guards.js",
   "js/track/scenery/build-props.js",
 ];
 const LAZY_TRACK_BUILD_EDGES = [
@@ -1139,6 +1146,7 @@ const LAZY_TRACK_BUILD_EDGES = [
   ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/venue.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/guards.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/themes.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/landmark-kit.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/circuit-kit.js", "js/track/scenery/build-props.js"],

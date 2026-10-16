@@ -417,6 +417,9 @@ const RealReplay = (function () {
 
     function onKey(e) {
       if (!run || G.state !== "race" || G.paused || G.photoMode || !e || e.repeat) return;
+      // Ctrl/Cmd/Alt chords belong to the browser (Ctrl+Plus/Minus zoom, Ctrl+N, Alt+arrows):
+      // the replay keys are the bare keys, and Shift stays theirs (Shift+= is "+").
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target, tag = t && t.tagName;
       // THE TRANSPORT'S OWN BUTTONS AND TIMELINE keep the replay keys: a click
       // leaves focus there, and the keys went dead until something else took

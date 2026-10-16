@@ -1110,6 +1110,40 @@ test("a mid-race BYE keeps lastReason and does not fire onStop (race continues o
   assert.equal(sB.sent.some((m) => m.t === "left"), true);
 });
 
+// Live-confirmed (js-debugger, 2026-10-16): the BYE handler closes the leaver,
+// close() fires onClose("local") synchronously, and the LEFT the other guests
+// received said why:"local" for a clean leave.
+test("a guest BYE tells the other guests why:\"bye\", not the close() artefact \"local\"", () => {
+  const G = stubG(3);
+  const net = NetPlay.create(G);
+  const sA = fakeSession(), sB = fakeSession();
+  assert.equal(net.start({
+    role: "host", session: sA,
+    sessions: [{ id: "a", session: sA }, { id: "b", session: sB }],
+  }).ok, true);
+  sA.deliver("bye", {});
+  const left = sB.sent.filter((m) => m.t === "left");
+  assert.equal(left.length, 1, "the remaining guest is told once");
+  assert.equal(left[0].d.why, "bye");
+  assert.equal(net.status().reason, "bye");
+});
+
+// Same close() artefact on the host's incompatible-build drop (found while fixing the BYE one).
+test("dropping one incompatible guest tells the others why:\"incompatible_physics\", not \"local\"", () => {
+  const G = stubG(3);
+  const net = NetPlay.create(G);
+  const sA = fakeSession(), sB = fakeSession();
+  assert.equal(net.start({
+    role: "host", session: sA,
+    sessions: [{ id: "a", session: sA }, { id: "b", session: sB }],
+  }).ok, true);
+  sA.deliver("model", { physics: "not-this-build", strategy: -1 });
+  assert.equal(net.active(), true, "one incompatible guest does not end the race");
+  const left = sB.sent.filter((m) => m.t === "left");
+  assert.equal(left.length, 1);
+  assert.equal(left[0].d.why, "incompatible_physics");
+});
+
 test("a local stop fires onStop once and keeps reason local through socket teardown", () => {
   const G = stubG();
   const net = NetPlay.create(G);

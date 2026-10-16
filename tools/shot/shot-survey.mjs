@@ -12,6 +12,7 @@ import {
   buildTrackShotSurveyPlan,
   estimateSurveyMs,
   filterResumeShots,
+  surveyTerminalState,
   normalizeSurveyTracks,
   scoreShotFindings,
   writeCompareIndex,
@@ -159,12 +160,14 @@ for (let ti = 0; ti < tracks.length; ti++) {
   const outDir = tracks.length === 1 ? outRoot : path.join(outRoot, track);
   fs.mkdirSync(outDir, { recursive: true });
   const identityContext = { extension: profile === "preview" ? "jpg" : "png", identities: Object.fromEntries(plan.shots.map(s=>[s.name,captureIdentity({ source, track, shot:s, profile, seed, gpu:sessionEnv().APEX_GPU })])) };
-  const { pending, resumed } = filterResumeShots(outDir, plan.shots, resume, identityContext);
+  const { pending, resumed, invalid } = filterResumeShots(outDir, plan.shots, resume, identityContext);
+  for (const bad of invalid) console.error(`shot-survey: ${track}/${bad.name}.${identityContext.extension} is not a valid image (${bad.reason}); recapturing`);
+  const invalidNames = new Set(invalid.map((b) => b.name));
   for (const s of pending) {
-    if (fs.existsSync(path.join(outDir, `${s.name}.${identityContext.extension}`))) throw new Error("Existing capture does not match this plan/revision; choose a new output directory: " + s.name);
+    if (!invalidNames.has(s.name) && fs.existsSync(path.join(outDir, `${s.name}.${identityContext.extension}`))) throw new Error("Existing capture does not match this plan/revision; choose a new output directory: " + s.name);
   }
   writeSurveyProgress(outRoot, {
-    state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length,
+    state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, invalid,
     shotsPerTrack: plan.shots.length, estimateMs,
   });
 
@@ -256,7 +259,7 @@ if (tracks.length > 1 && wantIndex) {
 }
 
 writeSurveyProgress(outRoot, {
-  state: hardFail ? "failed" : "done", tracks, trackResults: trackResults.map((t) => ({
+  state: surveyTerminalState(trackResults, hardFail), tracks, trackResults: trackResults.map((t) => ({
     track: t.track, captured: t.captured, failed: t.failed, error: t.error,
   })),
   compareIndex, estimateMs,
