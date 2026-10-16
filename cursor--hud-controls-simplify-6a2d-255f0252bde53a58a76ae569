@@ -1,0 +1,1 @@
+1792112120	Bryce Murrin	PR2305 title Arrange HUD preview and keyboard layer fixes: js/ui/hud-arrange.js js/ui/layers.js existing HUD and menu tests; own new changelog fragment only, no shared CHANGELOG edits. Parent browser one process; full gate before publishing.  [cursor/hud-controls-simplify-6a2d; session 255f0252bde53a58a76ae569]
