@@ -986,7 +986,7 @@ const GLXBackend = (function () {
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
       "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uPitLane", "uPitBox", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uWind", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
-      "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
+      "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark", "uPuddles",
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
       "uLampNearClamp", "uWindowSunFlash", "uSkyRimGlow", "uAmbContactDark", "uLampWallSpill",
       "uMatAlbedoTex", "uMatNormalTex", "uMatTexMix", "uMatTexScale[0]",
@@ -1882,6 +1882,7 @@ const GLXBackend = (function () {
     uf1(litU.uMistHeight,  _litUf, "mistHeight",  T && T.mistHeight  != null ? T.mistHeight  : 0.30);
     uf1(litU.uShadowTintAmt, _litUf, "shadowTintAmt", T && T.shadowTintAmt != null ? T.shadowTintAmt : 0.0);
     uf1(litU.uWetDark,     _litUf, "wetDark",     T && T.wetDark     != null ? T.wetDark     : 1.0);
+    uf1(litU.uPuddles,     _litUf, "puddles",     T && T.puddles     != null ? T.puddles     : 1.0);   // PUDDLES (TUNE_DEFS def 1)
     // WIND knobs → LIT_VS uWind (foliage sway): xy = unit direction in world xz
     // from WIND DIRECTION (degrees), z = WIND speed scale. Defaults mirror
     // TUNE_DEFS (35°, 1.0); same vector as TLX U.wind.

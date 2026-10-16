@@ -8100,24 +8100,22 @@ function render(dt) {
             dirt ? 0.46 : 0.30, dirt ? 0.40 : 0.36, dirt ? 0.26 : 0.15,
             dt * 30);
         }
-        // Rain spray: every car at speed on a wet road drags a lingering plume
-        // (Particles.spray: ~1.5 s clouds, so 9-30/s here holds what 0.7 s puffs
-        // at 14-48/s did) — lighter on "wet" (drying line) than under "rain".
-        // vStd on BOTH halves: 15 and the /45 span describe a fraction of the
-        // car's envelope (spray starts at ~21 % of top speed and is full at
-        // ~83 %), so fed a raw ground speed they moved with the OVERALL SPEED
-        // slider — at pace 0.5 the strength could never exceed (36-15)/45 = 0.47
-        // and full spray was unreachable, at pace 1.3 it was pinned at 1 down
-        // every straight. The particle VELOCITY stays real m/s (A16).
-        if (wet && vStd(c.speed) > 15) {
-          const str = clamp((vStd(c.speed) - 15) / 45, 0, 1) * Storm.sprayK(raceWeather);   // storm 1.35 / rain 1 / wet 0.6
-          const sxo = Math.random() < 0.5 ? -0.6 : 0.6;   // behind either rear tyre (str > 0: vStd > 15)
+        // Rain spray: every car at speed on a wet road drags a plume, a rooster
+        // tail and hanging mist (Particles.spray) — lighter on "wet" (drying
+        // line) than under "rain". Strength/rate: Particles.sprayStr (vStd, so
+        // the OVERALL SPEED slider cannot pin or cap it) × road wetness; only
+        // the nearest sprayCars() cars to the camera emit (sprayAdmit). The
+        // particle VELOCITY stays real m/s (A16).
+        const _sdx = tmpMat[12] - camEye[0], _sdz = tmpMat[14] - camEye[2];
+        if (wet && vStd(c.speed) > 15 && Particles.sprayAdmit(_sdx * _sdx + _sdz * _sdz)) {
+          const str = Particles.sprayStr(vStd(c.speed), Storm.sprayK(raceWeather), frame.wetness);   // storm 1.35 / rain 1 / wet 0.6
+          const sxo = (((Math.random() * 3) | 0) - 1) * 0.6;   // either rear tyre or the diffuser (centre)
           Particles.spray(
             tmpMat[12] + tmpMat[0] * sxo - tmpF[0] * 2.1,
             tmpMat[13] + 0.28,
             tmpMat[14] + tmpMat[2] * sxo - tmpF[2] * 2.1,
             -tmpF[0] * c.speed * 0.28, -tmpF[2] * c.speed * 0.28, str,
-            dt * (9 + 21 * str));
+            dt * Particles.sprayRate(str));
         }
         carFx.emit(c, _groundMat, dt, state);   // plank sparks + an AI lock-up's marks (js/fx/car-fx.js)
       }
@@ -8308,6 +8306,7 @@ function render(dt) {
   marshalPanels.update(dt);   // the posts' light panels: yellow / red / green from race control
   Particles.update(dt);
   Particles.draw();
+  Droplets.tick(paused ? 0 : dt, onboard && !photoMode, frame.rain || 0, Storm.is(raceWeather), player ? vStd(player.speed) : 0, motionReduced());   // lens/visor rain (js/fx/droplets.js)
 
   // Per-time cinematic grade + bloom. DRAMATIC = high contrast, deep shadows,
   // bloom ONLY on genuinely bright sources (floodlights, sun disc, neon) against

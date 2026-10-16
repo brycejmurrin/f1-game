@@ -118,6 +118,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
+| `puddles.js` | `Puddles` | tag | Puddles: the ONE reference for the standing-water mask the three lit shaders hand-mirror (GLX glsl-lit.js, TLX tsl-lit.js, WGX wgsl-chunks.js). |
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
 | `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
 
@@ -456,6 +457,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. |
+| `droplets.js` | `Droplets` | tag | Droplets: rain on the lens / visor for the ONBOARD cameras (cockpit, hood, visor, helmet, T-cam). |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
 | `car-fx.js` | `CarFx` | tag | CarFx: per-car motion effects js/game.js's render loop asks for once a car's grounded basis is built — the PLANK SPARKS a car throws when its floor bottoms… |
 

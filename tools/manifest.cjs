@@ -150,6 +150,7 @@ const FULL = [
   "js/render/shared/gltf.js",
   "js/render/shared/assets.js",
   "js/render/shared/driving-line.js",
+  "js/render/shared/puddles.js",   // Puddles: the ONE reference for the standing-water mask the three lit shaders mirror (tests/unit/puddles.test.mjs)
   "js/data/teams.js",
   "js/data/driver-ratings.js",
   // Legends sits with the other driver data and AHEAD of js/car/liveries.js,
@@ -261,6 +262,7 @@ const FULL = [
   "js/garage/pit-signs.js",
   "js/physics/body-attitude.js",
   "js/fx/particles.js",
+  "js/fx/droplets.js",         // Droplets: onboard lens/visor rain overlay (game.js ticks it at render)
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",
   "js/career/ai-dev.js",
@@ -590,6 +592,7 @@ const HARD_EDGES = [
   // multiplayer stack left FULL: a HARD_EDGES pair must have BOTH ends in FULL
   // to be orderable by tag position.
   ["js/core/mat4.js", "js/render/shared/driving-line.js"],           // binds M4.clamp at eval
+  ["js/core/mat4.js", "js/render/shared/puddles.js"],                // binds M4.clamp at eval
   // Reads the stored palette / opacity into DrivingLine AT EVAL, so the first
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
