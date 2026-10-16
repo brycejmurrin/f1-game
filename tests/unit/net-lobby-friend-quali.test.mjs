@@ -65,6 +65,21 @@ for (const [name, startRace] of [
   });
 }
 
+test("a failed start after the lobby closed lands on the menu WITH a visible notice, not a silent return (H30)", async () => {
+  const { G, lobby } = await hostUp(async () => { throw new Error("scenery failed"); });
+  const realGet = document.getElementById;
+  const calls = [];
+  G.quitToMenu = () => calls.push("quit");
+  G.announce = (msg) => { calls.push("announce:" + msg); return true; };
+  try {
+    assert.equal(lobby.startFromRoom(), true);
+    document.getElementById = (id) => (id === "vsfriend" ? { hidden: true, classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, removeAttribute() {} } : null);
+    await G._done();
+    assert.deepEqual(calls.map((c) => c.split(":")[0]), ["quit", "announce"], "back to the menu, then say why: " + JSON.stringify(calls));
+    assert.match(calls[1], /COULD NOT START THE RACE/);
+  } finally { document.getElementById = realGet; lobby.cancel(); }
+});
+
 test("hunt fixes: SIMULATE / no valid lap still reports a time; tyres + reliability are race rules; a paused friend race brakes the car", async () => {
   const { readFileSync } = await import("node:fs");
   const r = (f) => readFileSync(new URL("../../" + f, import.meta.url), "utf8");
