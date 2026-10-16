@@ -929,6 +929,7 @@ window.SpotifyMusic = (function () {
   }
 
   const BACKEND = {
+    prev,
     start() {
       if (!BACKEND.active()) return;
       if (!paused) return;                     // already playing: no-op
@@ -1136,7 +1137,7 @@ window.SpotifyMusic = (function () {
     // stored token outlives its app by an hour, so without this a corrected
     // Client ID (a typo, or the secret pasted by mistake) stays broken until
     // DISCONNECT is pressed, with nothing on screen saying why.
-    if (v !== clientId()) { clearToken(); teardown(); }
+    if (v !== clientId()) endSession();
     lsSet(K_ID, v);
     setStatus("configured", "Client ID saved. Press CONNECT to sign in to Spotify.");
     return v;
@@ -1156,9 +1157,27 @@ window.SpotifyMusic = (function () {
         "Could not renew the Spotify session. Check your connection and try again.") : beginAuth()));
   }
 
-  function disconnect() {
+  // Sign-out must clear credentials synchronously. Send the outgoing pause
+  // first with a snapshot, without api()'s deferred token lookup/401 refresh:
+  // its completion must never act on a replacement session.
+  function endSession() {
+    const t = readToken();
+    if (mode() === "remote" && inUse() && BACKEND.active() && t) {
+      const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+      const done = () => { if (timer !== null) clearTimeout(timer); };
+      try {
+        const opts = { method: "PUT", headers: { Authorization: "Bearer " + t.access_token } };
+        if (ac) opts.signal = ac.signal;
+        Promise.resolve(fetch(API + "/me/player/pause" + remoteQuery(), opts)).then(done, done);
+      } catch (e) { done(); /* sign-out still releases the local session */ }
+    }
     clearToken();
     teardown();
+  }
+
+  function disconnect() {
+    endSession();
     setStatus(available() ? "configured" : "off",
       available() ? "Signed out of Spotify on this device." : copyOff());
   }

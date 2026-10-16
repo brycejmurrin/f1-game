@@ -1470,6 +1470,57 @@ test('portable recovery adapter reviews one chosen slot, restores offline, and l
   const result=h.CareerBackup.apply(adapted.envelope,{recovery:true,expectedRevisions:{'driver:2':h.CareerBackup.revisionOf('driver',2)},expectedSeasonRevision:h.store.keyRevision('season')});
   assert.equal(result.ok,true);assert.equal(result.durable,true);assert.equal(h.store.get('career.driver.2').money,123);assert.equal(h.store.get('season').round,2);assert.equal(h.store.get('careerSlot',null),selected);
 });
+test('active-career recovery aliases restore the career without replacing the standalone season', () => {
+  const source = loadHarness();
+  source.Career.start({ teamId: 'haas', seed: 42 });
+  const career = source.Career.data();
+  career.season.round = 1;
+  career.season.pts = { 'haas:0': 25 };
+  career.season.driverCodes = { 'haas:0': 'YOU' };
+  career.season.finishes = { 'haas:0': [1] };
+  career.season.roundPts = { 'haas:0': [25] };
+  career.season.startedRound = 1;
+  career.season.qualiOrder = [{ id: 'haas:0', t: 71.2, human: true }];
+  career.season.qualiTrack = 't1';
+  career.season.qualiMode = 'career:driver:0';
+  career.season.qualiSeat = 'haas:0|haas';
+  career.results = [{ r: 0, p: 1, pts: 25 }];
+  // select-screen's old exporter emitted the same live object in both fields.
+  const raw = { format: 'apex26-recovery-v1', career, season: career.season };
+  const original = JSON.stringify(raw);
+  const target = loadHarness();
+  target.store.set('season', { round: 0, pts: { 'haas:1': 18 } });
+  const standalone = target.disk.get('apex26.season');
+  const adapted = target.CareerBackup.recoveryEnvelope(JSON.stringify(raw), { flavour: 'driver', i: 2 });
+  assert.equal(adapted.ok, true);
+  assert.equal(Object.hasOwn(adapted.envelope, 'season'), false);
+  assert.equal(target.CareerBackup.apply(adapted.envelope, { recovery: true }).durable, true);
+  assert.equal(target.disk.get('apex26.season'), standalone);
+  target.Career.useSlot('driver', 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(target.Career.data().season)), JSON.parse(JSON.stringify(career.season)));
+  assert.deepEqual(JSON.parse(JSON.stringify(target.Career.data().results)), career.results);
+  assert.equal(JSON.stringify(raw), original);
+});
+
+test('recovery rejects lossy career calIds before restoring any career or standalone data', () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: 'haas', seed: 1 });
+  h.store.set('season', { round: 1, pts: { 'haas:0': 18 } });
+  for (const calIds of [['t0', 'removed', 't1'], ['t0', 't0'], [], 't0', [1], Array.from({ length: 65 }, (_, i) => 't' + i)]) {
+    const career = save({ season: { round: 2, calIds, pts: { 'haas:0': 43 } } });
+    career.results = [{ r: 0, p: 1, pts: 25 }, { r: 1, p: 2, pts: 18 }];
+    for (const season of [career.season, { round: 2, pts: { 'haas:0': 43 } }]) {
+      const raw = { format: 'apex26-recovery-v1', career, season };
+      const original = JSON.stringify(raw), disk = Array.from(h.disk.entries());
+      const result = h.CareerBackup.recoveryEnvelope(raw, { flavour: 'driver', i: 1 });
+      assert.equal(result.ok, false);
+      assert.equal(result.reason, 'unsupported-calendar');
+      assert.equal(JSON.stringify(raw), original);
+      assert.deepEqual(Array.from(h.disk.entries()), disk);
+    }
+  }
+});
+
 test('recovery future, unknown or lossy calendars and malformed files are refused without changing raw or disk',()=>{
   const h=loadHarness(),target={flavour:'driver',i:1};
   const cases=[{format:'apex26-recovery-v2',career:save()}, {format:'apex26-recovery-v1',career:save({v:999})}, {format:'apex26-recovery-v1',career:save({season:{round:1,config:{trackIds:['removed']}}})}, {format:'apex26-recovery-v1',season:{round:1,config:{trackIds:['t0','t0']}}}, {format:'apex26-recovery-v1',season:{round:-1}}, {format:'apex26-recovery-v1',season:{round:1,futureRules:{}}}, {format:'apex26-recovery-v1',career:save({flavour:'myteam'})}];

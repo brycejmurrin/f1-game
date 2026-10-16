@@ -19,9 +19,13 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function createHarness(opts = {}) {
   const store = opts.store || new Map(Object.entries(opts.disk || {}));
+  const listeners = new Map();
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
-    setItem(k, v) { store.set(k, String(v)); },
+    setItem(k, v) {
+      if (opts.failWrites && opts.failWrites()) throw new Error("dummy storage unavailable");
+      store.set(k, String(v));
+    },
     removeItem(k) { store.delete(k); },
     clear() { store.clear(); },
   };
@@ -30,9 +34,13 @@ function createHarness(opts = {}) {
     module: { exports: {} },
     TextEncoder,
     console,
-    window: { __APEX_BUILD: opts.build != null ? opts.build : 42 },
+    window: {
+      __APEX_BUILD: opts.build != null ? opts.build : 42,
+      addEventListener(type, listener) { listeners.set(type, listener); },
+    },
     PhysicsConsts: { REVISION: opts.physRev || "test-rev-1", FIXED_DT: 1 / 60 },
   };
+  if (opts.deferWrites) sandbox.requestIdleCallback = () => {};
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
   seedSaveMigrate(ctx);
@@ -44,6 +52,7 @@ function createHarness(opts = {}) {
     GameStore: vm.runInContext("GameStore", ctx),
     disk: store,
     sandbox,
+    storageEvent(key) { listeners.get("storage")({ key }); },
   };
 }
 
@@ -193,6 +202,45 @@ test("a foreign tab's input ghost survives this tab's save (two harnesses, one d
   assert.equal(B.InputGhost.bestTime(), 15, "the other tab's spa PB is read, not B's stale cache");
   B.GameStore.store.onForeignWrite({ key: null });
   assert.equal(B.InputGhost.hasGhost(), false, "a foreign storage.clear() drops the cached ghost");
+});
+
+test("flush preserves a faster foreign PB over a pending local lap through reload", () => {
+  const disk = new Map();
+  const A = createHarness({ store: disk, deferWrites: true });
+  const B = createHarness({ store: disk, deferWrites: true });
+  for (const h of [A, B]) h.InputGhost.setTrack("monza", "dummy-class");
+  assert.equal(driveLap(A.InputGhost, 1200, 20), true);
+  assert.equal(driveLap(B.InputGhost, 1140, 19), true);
+  B.InputGhost.flush();
+  A.storageEvent("apex26.inputGhost.v1");
+  assert.equal(A.InputGhost.bestTime(), 19);
+  A.InputGhost.flush();
+  const reloaded = createHarness({ store: disk });
+  reloaded.InputGhost.setTrack("monza", "dummy-class");
+  assert.equal(reloaded.InputGhost.bestTime(), 19);
+  assert.equal(reloaded.InputGhost.steps(), 1140);
+});
+
+test("a failed flush retains pending laps across a foreign write for a later retry", () => {
+  const disk = new Map();
+  let refuse = true;
+  const A = createHarness({ store: disk, deferWrites: true, failWrites: () => refuse });
+  A.InputGhost.setTrack("monza");
+  driveLap(A.InputGhost, 1200, 20);
+  A.InputGhost.flush();
+  assert.equal(disk.has("apex26.inputGhost.v1"), false);
+  const B = createHarness({ store: disk });
+  B.InputGhost.setTrack("spa");
+  driveLap(B.InputGhost, 1260, 21);
+  A.storageEvent("apex26.inputGhost.v1");
+  assert.equal(A.InputGhost.bestTime(), 20, "unsaved PB survives foreign cache invalidation");
+  refuse = false;
+  A.InputGhost.flush();
+  const reloaded = createHarness({ store: disk });
+  reloaded.InputGhost.setTrack("monza");
+  assert.equal(reloaded.InputGhost.bestTime(), 20);
+  reloaded.InputGhost.setTrack("spa");
+  assert.equal(reloaded.InputGhost.bestTime(), 21);
 });
 
 test("quantizeSteer / packFlags are stable helpers", () => {
