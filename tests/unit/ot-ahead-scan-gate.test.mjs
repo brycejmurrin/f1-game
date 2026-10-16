@@ -29,7 +29,7 @@ function loadOM() {
 
 test("updateCar gates the overtake ahead scan on otNeedAhead", () => {
   const game = src("js/game.js");
-  const a = game.indexOf("let ahead = null, gapAhead = Infinity;");
+  const a = game.indexOf("const otSpeed = Math.max(0, c.speed);");
   const endMark = "gapAhead = ahead && c.speed > 1 ? gapAhead / c.speed : Infinity;";
   const b = game.indexOf(endMark, a);
   assert.ok(a > 0 && b > a, "ahead scan site present");
@@ -39,10 +39,25 @@ test("updateCar gates the overtake ahead scan on otNeedAhead", () => {
   assert.match(block, /c\.otE\s*>\s*0/, "held allowance still pays for the walk");
   assert.match(block, /if\s*\(\s*otNeedAhead\s*\)/, "walk runs only when needed");
   assert.match(block, /Collide\.scanOtAhead/, "ahead walk is the wrap-aware bucket scan");
+  assert.match(block, /const otSpeed = Math\.max\(0, c\.speed\)/, "reverse speed cannot make the arc reach negative");
+  assert.match(block, /otW = OT_GAP \* otSpeed \+ 1/, "ahead scan uses the clamped speed");
   const collide = src("js/physics/collide.js");
   const fn = collide.slice(collide.indexOf("function _onOtO"), collide.indexOf("function scanOtAhead"));
   assert.match(fn, /o\.finished \|\| o\.retired/);
   assert.match(fn, /s\.skip && s\.skip\(o\)/);
+});
+
+test("a held allowance keeps a valid ahead-search radius while reversing", () => {
+  const game = src("js/game.js");
+  const a = game.indexOf("const otSpeed = Math.max(0, c.speed);");
+  const b = game.indexOf("if (c._otLap == null || c._otS == null)", a);
+  assert.ok(a > 0 && b > a, "reverse-safe overtake block present");
+  const block = game.slice(a, b);
+  assert.match(block, /const otSpeed = Math\.max\(0, c\.speed\)/);
+  assert.match(block, /otW = OT_GAP \* otSpeed \+ 1/);
+  // The radius is 1 m at a stop or in reverse, so Collide's bucket walker
+  // receives a finite non-negative reach even when an allowance is retained.
+  assert.equal(Math.max(0, -5) * 1 + 1, 1);
 });
 
 test("otNeedAhead is true on a detection-line crossing when open, false in clear air with no allowance", () => {

@@ -14,6 +14,24 @@
  * `gh auth token` via github-token.mjs.
  *
  *   node tools/ci/flake-tally.mjs              # last 14 scheduled runs
+ *   node tools/ci/flake-tally.mjs --events all --days 7        # every ci.yml / pages.yml run of the week
+ *   node tools/ci/flake-tally.mjs --events all --days 7 --propose   # + quarantine rows (JSON) for the repeat offenders
+ *   node tools/ci/flake-tally.mjs --events all --days 7 --issue     # upsert the `Flaky tests (last 7 days)` issue
+ *
+ * DAILY (2026-10-16, the CI/CD review #2333, flaky-test question): the nightly
+ * is one run a day; the fleet's PR runs and the Pages train are hundreds, and
+ * their junit says which tests pass on retry or fail on one branch and not
+ * another. `--events all` reads every FAILED ci.yml and pages.yml run of the last N
+ * days — under APEX_FAIL_ON_FLAKY=1 a pass-on-retry reds the run unless the
+ * spec is already in the ledger, so a green run holds no news; a cancelled
+ * run tested nothing to the end — and only the logs of its failed browser
+ * jobs (one jobs call + one log per red browser job, not an artifact per
+ * leg: a day is ~1,300 runs and the token has ~1,000 requests an hour), and
+ * `proposeRows()` names the repeat offenders — a test that passed on retry in
+ * ≥ 2 runs, or failed on ≥ 3 distinct branches (a red that follows the test,
+ * not the change). `.github/workflows/flake-tally.yml` runs it daily and keeps
+ * one open issue; the quarantine file itself stays a human/agent commit, so
+ * the ledger keeps an owner and an evidence URL (AGENTS.md §Concurrent PRs).
  *   node tools/ci/flake-tally.mjs --runs 7
  *   node tools/ci/flake-tally.mjs --runs 3 --json
  *   node tools/ci/flake-tally.mjs --help
@@ -30,13 +48,25 @@ export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
 export const WORKFLOW_FILE = "ci.yml";
 export const DEFAULT_RUNS = 14;
+export const DEFAULT_DAYS = 2;
+/** --events all reads at most this many runs (newest first): ~1,000 GITHUB_TOKEN requests/hour is the budget. */
+export const MAX_ALL_RUNS = 400;
+/** Runs listed per page for --events all; at most MAX_ALL_PAGES pages (1,500 runs). */
+export const MAX_ALL_PAGES = 15;
+/** proposeRows: a test that passed only on retry in this many runs is a flake. */
+export const PROPOSE_FLAKY_RUNS = 2;
+/** proposeRows: a test that failed on this many distinct branches follows the test, not the change. */
+export const PROPOSE_FAIL_BRANCHES = 3;
+export const ISSUE_TITLE = "Flaky tests (daily tally)";
+export const ISSUE_LABEL = "flaky";
+export const ISSUE_MARKER = "<!-- flake-tally: rewritten daily by .github/workflows/flake-tally.yml -->";
 export const ARTIFACT_PREFIX = "playwright-artifacts-";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const API = `https://api.github.com/repos/${REPO}`;
 
-/** @typedef {{ spec: string, title: string, kind: "fail"|"flaky", runId: number|string }} FlakeEvent */
-/** @typedef {{ test: string, spec: string, fails: number, flakyPasses: number, runsSeen: number, lastSeenRunId: number|string }} TallyRow */
+/** @typedef {{ spec: string, title: string, kind: "fail"|"flaky", runId: number|string, branch?: string }} FlakeEvent */
+/** @typedef {{ test: string, spec: string, fails: number, flakyPasses: number, runsSeen: number, lastSeenRunId: number|string, branches: string[] }} TallyRow */
 
 // ── pure parsers (unit-tested) ─────────────────────────────────────────────
 
@@ -218,13 +248,14 @@ export function tallyEvents(events) {
     const key = JSON.stringify([e.spec, e.title]);
     let row = map.get(key);
     if (!row) {
-      row = { spec: e.spec, title: e.title, fails: 0, flakyPasses: 0, runs: new Set(), last: e.runId };
+      row = { spec: e.spec, title: e.title, fails: 0, flakyPasses: 0, runs: new Set(), branches: new Set(), last: e.runId };
       map.set(key, row);
     }
     if (e.kind === "flaky") row.flakyPasses++;
     else if (e.kind === "fail") row.fails++;
     else continue;
     row.runs.add(String(e.runId));
+    if (e.branch) row.branches.add(String(e.branch));
     // Prefer the numerically newer run id when both are numbers.
     const a = Number(row.last);
     const b = Number(e.runId);
@@ -242,6 +273,7 @@ export function tallyEvents(events) {
     flakyPasses: r.flakyPasses,
     runsSeen: r.runs.size,
     lastSeenRunId: r.last,
+    branches: [...r.branches].sort(),
   }));
   rows.sort((a, b) =>
     (b.fails + b.flakyPasses) - (a.fails + a.flakyPasses)
@@ -252,11 +284,117 @@ export function tallyEvents(events) {
   return rows;
 }
 
-export function formatMarkdownTable(rows, { runsExamined = 0 } = {}) {
+/**
+ * The repeat offenders: rows worth a quarantine proposal. A pass-on-retry in
+ * PROPOSE_FLAKY_RUNS runs is a flake by definition; a first-try failure on
+ * PROPOSE_FAIL_BRANCHES distinct branches follows the test, not any one
+ * change. A row that only fails on one branch is that branch's regression and
+ * is NOT proposed.
+ * @param {TallyRow[]} rows
+ */
+export function proposeRows(rows, { flakyRuns = PROPOSE_FLAKY_RUNS, failBranches = PROPOSE_FAIL_BRANCHES } = {}) {
+  return (rows || []).filter((r) => r.flakyPasses >= flakyRuns || (r.branches || []).length >= failBranches)
+    .map((r) => ({ ...r, reason: r.flakyPasses >= flakyRuns
+      ? `passed only on retry in ${r.flakyPasses} run(s)`
+      : `failed first-try on ${r.branches.length} branches (${r.branches.slice(0, 4).join(", ")})` }));
+}
+
+/**
+ * Quarantine rows in the shape tests/data/flaky-quarantine.json carries NOW:
+ * the legacy spec-level row (spec, since, owner, why) or the exact-title row
+ * (#2280: + title, evidence, expires, review). The shape is read from the
+ * file's first entry so this tool never writes a row the ledger's test would
+ * refuse; it prints them, a person or agent commits them (AGENTS.md rule 9).
+ * @param {ReturnType<typeof proposeRows>} proposals
+ */
+export function quarantineRows(proposals, { schemaKeys = ["spec", "since", "owner", "why"], today = new Date(), owner = "brycejmurrin", repo = REPO, expireDays = 30 } = {}) {
+  const day = (d) => d.toISOString().slice(0, 10);
+  const exact = schemaKeys.includes("title");
+  return (proposals || []).map((r) => {
+    const evidence = `https://github.com/${repo}/actions/runs/${r.lastSeenRunId}`;
+    const row = { spec: r.spec, since: day(today), owner,
+      why: `flake-tally ${day(today)}: ${r.reason}; fails ${r.fails}, flaky-passes ${r.flakyPasses}, runs seen ${r.runsSeen}; last ${evidence}` };
+    if (exact) Object.assign(row, { title: r.test, evidence, expires: day(new Date(today.getTime() + expireDays * 864e5)),
+      review: `Fix the cause and delete this row once the exact test passes without retry on three CI runs; never extend without fresh evidence.` });
+    return row;
+  });
+}
+
+/** Read the quarantine ledger's row shape (keys of its first entry, or the legacy keys). */
+export function quarantineSchemaKeys(file = path.join(ROOT, "tests/data/flaky-quarantine.json")) {
+  try {
+    const q = JSON.parse(fs.readFileSync(file, "utf8"));
+    const first = (q.quarantine || [])[0];
+    if (first && typeof first === "object") return Object.keys(first);
+  } catch { /* fall through */ }
+  return ["spec", "since", "owner", "why"];
+}
+
+/** The issue body: marker, the table, the proposals, how to act. */
+export function formatIssueBody(rows, { runsExamined = 0, days = DEFAULT_DAYS, proposals = [], quarantine = [], now = new Date() } = {}) {
+  const lines = [ISSUE_MARKER, "",
+    `Every FAILED \`ci.yml\` and \`pages.yml\` run of the last ${days} day(s), read ${now.toISOString().slice(0, 16)}Z: **${runsExamined}** runs (a green run holds no unquarantined flake under APEX_FAIL_ON_FLAKY=1; cancelled runs skipped; at most ${MAX_ALL_RUNS}).`,
+    "A row is a test that failed first-try or passed only on retry; `branches` says on how many PR branches it failed, so a red that follows the test shows up and a branch's own regression does not.",
+    "",
+    "| test | spec | fails | flaky-passes | runs seen | branches | last seen run id |",
+    "|---|---|---|---|---|---|---|"];
+  for (const r of rows.slice(0, 60)) {
+    lines.push(`| ${r.test.replace(/\|/g, "\\|")} | ${r.spec} | ${r.fails} | ${r.flakyPasses} | ${r.runsSeen} | ${(r.branches || []).length} | ${r.lastSeenRunId} |`);
+  }
+  if (!rows.length) lines.push("| (no failures or retries in the window) | | | | | | |");
+  lines.push("", `## Proposed quarantine rows (${proposals.length})`, "");
+  if (!proposals.length) lines.push("None: no test passed only on retry in ≥ 2 runs or failed first-try on ≥ 3 branches.");
+  for (const p of proposals) lines.push(`- \`${p.spec}\` › ${p.test} — ${p.reason}`);
+  if (quarantine.length) {
+    lines.push("", "Rows in the ledger's current shape (`tests/data/flaky-quarantine.json`; a PR adds them with an owner and the evidence run — never a silent add, AGENTS.md rule 9):", "", "```json", JSON.stringify(quarantine, null, 2), "```");
+  }
+  lines.push("", `Re-run by hand: \`node tools/ci/flake-tally.mjs --events all --days ${days} --propose\`. A row that fails on ONE branch only is that branch's regression: fix it there.`);
+  return lines.join("\n");
+}
+
+/**
+ * Every FAILED ci.yml / pages.yml run created in the last `days` days, any
+ * event, any branch, newest first, at most `maxRuns`. Green runs hold no
+ * first-try failure or unquarantined retry (APEX_FAIL_ON_FLAKY=1 reds the run);
+ * cancelled runs tested nothing to the end. Paged at 100 with the REST
+ * `status=failure` filter (a conclusion value is accepted there).
+ */
+export async function listAllRuns({ days = DEFAULT_DAYS, token, now = new Date(), maxPages = MAX_ALL_PAGES, maxRuns = MAX_ALL_RUNS } = {}) {
+  const since = new Date(now.getTime() - days * 864e5).toISOString().slice(0, 19) + "Z";
+  const runs = [];
+  for (let page = 1; page <= maxPages && runs.length < maxRuns; page++) {
+    const r = await githubApi("GET", `actions/runs?status=failure&created=${encodeURIComponent(">=" + since)}&per_page=100&page=${page}`, { token });
+    if (r.error) return { error: r.error, code: r.code };
+    const batch = r.json?.workflow_runs || [];
+    for (const x of batch) {
+      if (!/\/(ci|pages)\.yml$/.test(String(x.path || ""))) continue;
+      if (x.conclusion !== "failure") continue;
+      if (runs.length < maxRuns) runs.push(x);
+    }
+    if (batch.length < 100) break;
+  }
+  return { runs };
+}
+
+/** Create or rewrite the one open `flaky`-labelled issue whose body starts with ISSUE_MARKER. */
+export async function upsertIssue(body, { token, title = ISSUE_TITLE, label = ISSUE_LABEL } = {}) {
+  const list = await githubApi("GET", `issues?state=open&labels=${encodeURIComponent(label)}&per_page=50`, { token });
+  if (list.error) return { error: list.error };
+  const hit = (list.json || []).find((i) => !i.pull_request && String(i.body || "").startsWith(ISSUE_MARKER));
+  if (hit) {
+    const r = await githubApi("PATCH", `issues/${hit.number}`, { token, body: JSON.stringify({ body, title }) });
+    return r.error ? { error: r.error } : { number: hit.number, updated: true };
+  }
+  const r = await githubApi("POST", "issues", { token, body: JSON.stringify({ title, body, labels: [label] }) });
+  return r.error ? { error: r.error } : { number: r.json?.number, created: true };
+}
+
+export function formatMarkdownTable(rows, { runsExamined = 0, days = null } = {}) {
   const lines = [];
-  lines.push(`# Nightly flake tally`);
+  lines.push(days ? `# Flake tally (last ${days} days, every ci.yml / pages.yml run)` : `# Nightly flake tally`);
   lines.push("");
-  lines.push(`Scheduled CI runs examined: **${runsExamined}** (branch \`${DEPLOY_BRANCH}\`).`);
+  lines.push(days ? `Failed runs examined: **${runsExamined}** (any event, any branch; green and cancelled runs skipped).`
+    : `Scheduled CI runs examined: **${runsExamined}** (branch \`${DEPLOY_BRANCH}\`).`);
   lines.push("");
   lines.push("| test | spec | fails | flaky-passes | runs seen | last seen run id |");
   lines.push("| --- | --- | ---: | ---: | ---: | ---: |");
@@ -300,7 +438,7 @@ export function setFlakeTallyTestHooks(hooks = {}) {
   _delay = hooks.delay || ((ms) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve()));
 }
 
-export async function githubApi(method, pathQs, { token, raw = false, absUrl = null } = {}) {
+export async function githubApi(method, pathQs, { token, raw = false, absUrl = null, body = undefined } = {}) {
   const auth = token || githubToken();
   if (!auth) return { error: NO_TOKEN_HINT };
   const url = absUrl || `${API}/${pathQs}`;
@@ -314,7 +452,7 @@ export async function githubApi(method, pathQs, { token, raw = false, absUrl = n
   for (let attempt = 1; attempt <= 4; attempt++) {
     let res;
     try {
-      res = await _fetch(url, { method, headers, signal: AbortSignal.timeout(90_000) });
+      res = await _fetch(url, { method, headers, body, signal: AbortSignal.timeout(90_000) });
     } catch (err) {
       last = err;
       if (attempt === 4) return { error: String(err.message || err) };
@@ -427,13 +565,14 @@ export async function collectRunEvents(run, {
   workDir,
   maxArtifactBytes = 80 * 1024 * 1024,
   preferLogs = false,
+  failedJobsOnly = false,
 } = {}) {
   const runId = run.id;
   /** @type {FlakeEvent[]} */
   let events = [];
   const notes = [];
 
-  if (!preferLogs) {
+  if (!preferLogs && !failedJobsOnly) {
     const listed = await listRunPlaywrightArtifacts(runId, { token });
     if (listed.error) {
       notes.push(`artifacts: ${listed.error}`);
@@ -480,6 +619,7 @@ export async function collectRunEvents(run, {
         const name = String(job.name || "");
         if (!/smoke|selected|driving|renderer|playwright|browser|gfx|xr/i.test(name)) continue;
         if (job.conclusion === "skipped" || job.conclusion === "cancelled") continue;
+        if (failedJobsOnly && job.conclusion !== "failure") continue;
         const log = await fetchJobLogText(job.id, { token });
         if (log.error) {
           notes.push(`log ${job.id}: ${log.error}`);
@@ -490,6 +630,7 @@ export async function collectRunEvents(run, {
     }
   }
 
+  for (const e of events) if (run.head_branch) e.branch = run.head_branch;
   // Deduplicate identical events from multiple shards naming the same flake.
   const seen = new Set();
   events = events.filter((e) => {
@@ -503,11 +644,20 @@ export async function collectRunEvents(run, {
 }
 
 export const USAGE = `usage: node tools/ci/flake-tally.mjs [--runs N] [--branch <ref>] [--json] [--work-dir <dir>]
+       node tools/ci/flake-tally.mjs --events all [--days N] [--propose] [--issue] [--json]
        node tools/ci/flake-tally.mjs --help
 
 Tally first-try failures and pass-on-retry flakes across the last N scheduled
 CI runs on ${DEPLOY_BRANCH} (default N=${DEFAULT_RUNS}). Writes a markdown table
-to stdout and appends it to $GITHUB_STEP_SUMMARY when set.`;
+to stdout and appends it to $GITHUB_STEP_SUMMARY when set.
+
+--events all   every FAILED ci.yml / pages.yml run of the last --days N
+               (default ${DEFAULT_DAYS}) on any branch, newest ${MAX_ALL_RUNS} at most;
+               only the logs of its failed browser jobs are read
+--propose      also print the repeat offenders as quarantine rows (JSON) in
+               the ledger's current shape; nothing is written
+--issue        create or rewrite the open \`${ISSUE_LABEL}\`-labelled issue
+               "${ISSUE_TITLE}" with the table and the proposals`;
 
 function parseArgs(argv) {
   const opt = (k, d) => {
@@ -521,6 +671,10 @@ function parseArgs(argv) {
     runs: Math.max(1, Number(opt("--runs", DEFAULT_RUNS)) || DEFAULT_RUNS),
     branch: opt("--branch", DEPLOY_BRANCH),
     json: argv.includes("--json"),
+    all: opt("--events", "schedule") === "all",
+    days: Math.max(1, Number(opt("--days", DEFAULT_DAYS)) || DEFAULT_DAYS),
+    propose: argv.includes("--propose"),
+    issue: argv.includes("--issue"),
     workDir: opt("--work-dir", path.join(ROOT, "artifacts", "flake-tally")),
     help: argv.includes("--help") || argv.includes("-h"),
   };
@@ -532,7 +686,8 @@ export async function runFlakeTally(argv = process.argv.slice(2), { token } = {}
   const auth = token !== undefined ? token : githubToken();
   if (!auth) return { code: 3, text: NO_TOKEN_HINT };
 
-  const listed = await listScheduledRuns({ n: args.runs, branch: args.branch, token: auth });
+  const listed = args.all ? await listAllRuns({ days: args.days, token: auth })
+    : await listScheduledRuns({ n: args.runs, branch: args.branch, token: auth });
   if (listed.error) return { code: 3, text: listed.error };
   const runs = listed.runs || [];
   /** @type {FlakeEvent[]} */
@@ -542,13 +697,23 @@ export async function runFlakeTally(argv = process.argv.slice(2), { token } = {}
 
   for (const run of runs) {
     process.stderr.write(`[flake-tally] run ${run.id} ${run.created_at} ${run.conclusion}\n`);
-    const { events, notes } = await collectRunEvents(run, { token: auth, workDir: args.workDir });
+    const { events, notes } = await collectRunEvents(run, { token: auth, workDir: args.workDir, failedJobsOnly: args.all });
     all.push(...events);
     if (notes.length) runNotes.push(`${run.id}: ${notes.join("; ")}`);
   }
 
   const rows = tallyEvents(all);
-  const md = formatMarkdownTable(rows, { runsExamined: runs.length });
+  const proposals = args.propose || args.issue ? proposeRows(rows) : [];
+  const quarantine = proposals.length ? quarantineRows(proposals, { schemaKeys: quarantineSchemaKeys() }) : [];
+  let md = formatMarkdownTable(rows, { runsExamined: runs.length, days: args.all ? args.days : null });
+  if (args.propose) md += `\n## Proposed quarantine rows (${proposals.length})\n\n` + (proposals.length
+    ? proposals.map((p) => `- \`${p.spec}\` › ${p.test} — ${p.reason}`).join("\n") + "\n\n```json\n" + JSON.stringify(quarantine, null, 2) + "\n```\n"
+    : "None.\n");
+  let issue = null;
+  if (args.issue) {
+    issue = await upsertIssue(formatIssueBody(rows, { runsExamined: runs.length, days: args.days, proposals, quarantine }), { token: auth });
+    md += `\nissue: ${issue.error ? `ERROR ${issue.error}` : `#${issue.number} ${issue.created ? "created" : "updated"}`}\n`;
+  }
   if (process.env.GITHUB_STEP_SUMMARY) {
     try { fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, md + "\n"); } catch (e) {
       process.stderr.write(`[flake-tally] GITHUB_STEP_SUMMARY write failed: ${e.message}\n`);
@@ -557,12 +722,12 @@ export async function runFlakeTally(argv = process.argv.slice(2), { token } = {}
   if (args.json) {
     return {
       code: 0,
-      text: JSON.stringify({ runsExamined: runs.length, runs: runs.map((r) => r.id), rows, notes: runNotes }, null, 2) + "\n",
+      text: JSON.stringify({ runsExamined: runs.length, runs: runs.map((r) => r.id), rows, proposals, quarantine, issue, notes: runNotes }, null, 2) + "\n",
       rows,
       runsExamined: runs.length,
     };
   }
-  return { code: 0, text: md, rows, runsExamined: runs.length, notes: runNotes };
+  return { code: issue && issue.error ? 3 : 0, text: md, rows, proposals, quarantine, issue, runsExamined: runs.length, notes: runNotes };
 }
 
 async function main() {

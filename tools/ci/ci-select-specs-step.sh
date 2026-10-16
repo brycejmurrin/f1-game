@@ -86,7 +86,7 @@ node -e '
   for (const j of shards)
     console.log(`JOB ${j.name}: ${j.tests} tests, ~${j.sec} s expected, ${j.timeout} min cap${j.shard ? `, --shard=${j.shard}` : ""}${j.circuits ? `, APEX_CIRCUITS=${j.circuits}` : ""}`);
   // DROPPED: routed specs this plan will NOT run — over budget, bigger than the
-  // whole cap, or squeezed out. `poke-train` reads it to tell two very different
+  // whole cap, or squeezed out. selected-verdict reads it to tell two very different
   // skips apart: a plan that is empty because the diff affects no spec, and a
   // plan that is empty because every spec it affects was unaffordable. The
   // second was counted as a pass, and it is exactly the renderer case — six gfx
