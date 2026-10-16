@@ -1,0 +1,1 @@
+1792143180	Bryce Murrin	Delayed title-door cancellation only: js/editor/custom-tracks.js create door handler, existing custom-tracks unit test and changelog. No shared router/game.js/designer or PR2353 feature edits.  [cursor/editor-load-owner-a63f; session b3ea0a5e722e2a434d6a61b6]
