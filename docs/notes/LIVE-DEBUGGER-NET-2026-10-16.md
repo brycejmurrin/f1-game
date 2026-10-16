@@ -3,9 +3,9 @@
 ## Scope covered
 `js/net/netplay.js` (host and guest roles, BYE/LEFT, stall, hidden pump, ARM, goLocal/goWire,
 event fuzz), `session.js` (heartbeat, hidden pump), `snapshot.js` (encode/decode, tick wrap,
-out-of-order, duplicate), `lobby.js` code-host expiry path (read-only). Not yet: hostile
-packets beyond event fuzz, start-countdown agreement under a paused host, rejoin loop leak
-count, Nostr reconnect (requested by the orchestrator, queued).
+out-of-order, duplicate), `lobby.js` code-host expiry path (read-only), plus the
+orchestrator's deeper round: hostile snapshots, a frozen host across the start, a 10 s guest
+pause, a 10x start/leave/stop loop, and a static read of the Nostr socket reopen.
 
 ## Findings
 
@@ -16,7 +16,16 @@ count, Nostr reconnect (requested by the orchestrator, queued).
 | N3 | netplay.js:~625 | low | CONFIRMED (unit; same mechanism as N1) | incompatible-build drop closes the session itself, so close() reports "local" to the other guests | 35a39eb3 | net-authority.test.mjs "dropping one incompatible guest ..." (fails without fix) | - |
 
 ## Clean areas (do not re-hunt)
-Stall tolerance and the 30 s race timeout drop (LEFT reason `timeout` correct); hidden-tab
+Deeper round (host on monza, two loopback guests, virtual clock): a guest naming the OTHER
+guest's wire id leaves that car untouched (authority holds); lap 255 / s 5000 is clamped
+(lap stays 0, all pose fields finite); a tick run through 2^32-5 -> wrap, out-of-order and
+duplicate ticks, and s/x/speed = 1e9 leave every pose field finite and the session active;
+a host frozen 5 s across the start names ONE instant and both guests receive the identical
+`at` (the instant stays valid because the lead is longer than the freeze; a freeze past it
+makes both peers skip the lights together); 10 start -> BYE -> stop rounds add zero
+event listeners and zero intervals, end inactive with no remotes (status().events is the
+capped 32-entry log); a guest silent 10 s goes stale (car back to AI, human=false) and
+snaps back (human=true) on its next packet. Stall tolerance and the 30 s race timeout drop (LEFT reason `timeout` correct); hidden-tab
 500 ms pumps (no false drop, true silence still dropped); host BYE at a guest; 11 junk
 payloads x every event type at a guest (no throw, no state change); late ARM (both peers get
 the same named instant); goLocal/goWire handover on silence/resume; snapshot encode of
@@ -25,8 +34,12 @@ NaN/Infinity (wire is clamped finite); tick wrap, out-of-order and duplicate pus
 ## Not run, and why
 Mid-race rejoin and a third guest (lobby phase: needs real signalling, no mid-race add
 API); QR/scan leg (camera, second device); ARM deadline expiry (45 s) not reached live;
-countdown agreement with a paused host, 10 s guest pause, x10 rejoin leak count, Nostr
-reconnect mid-handshake (queued, not started); real-network and phone behaviour.
+Nostr reconnect mid-handshake (relays are unreachable here; the reopen-with-backoff path in
+`nostr.js` ~403-432 is covered by `net-nostr-sockets.test.mjs` and was only read); real
+network and phone behaviour. Caveat on the 10 s guest pause: the harness posts snapshots
+but does not step physics, so it shows the stale/handover mechanics, not AI driving:
+after a 10 s silence the first packet 550 m ahead snaps the car in one frame (178 m), which
+is BY-DESIGN (no blend on goWire) but worth knowing; it was not checked against a real race.
 
 ## js-debugger tool problems hit
 See "Debugger / harness notes" below: `debugger_run` has no `allowSideEffects`; an unknown
@@ -34,7 +47,8 @@ See "Debugger / harness notes" below: `debugger_run` has no `allowSideEffects`; 
 earlier operation, so output grows without bound until re-attach.
 
 ## Next step
-Finish the queued deeper hunts, then ready-gate and SWEEP once the draft PR is green.
+Ready-gate and SWEEP once the draft PR is green; no open defects in this lane beyond N2
+(sibling-owned).
 
 Lane `cursor/live-debug-net-4e7a` (PR #2552). Driven with the js-debugger MCP against a
 headless Chromium (CDP :9222, two tabs of `http://127.0.0.1:3456/`), source SHA = the
