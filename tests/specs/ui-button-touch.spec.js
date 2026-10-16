@@ -230,8 +230,8 @@ async function openLightingPhotoMode(page) {
   await openPauseSettings(page);
   // Menu clicks stay as locator.click: the pause menu parks the render loop, so
   // Playwright's stability checks are cheap here (lighting-tuner-grade's table).
-  await page.locator("#pm-open-display").click();
-  await page.locator("#pm-visual-tuners > summary").click();
+  // The tuners live on the Visual Studio page now, and its disclosure is open by default.
+  await page.locator("#pm-open-visual").click();
   // openSettings() re-runs syncSettingsAvailability; after go() the door is live.
   await page.waitForFunction(() => {
     const b = document.getElementById("pm-lighting");
@@ -301,14 +301,18 @@ test.describe("Lighting tuner — pause lifecycle", () => {
       const panel = document.getElementById("lighting-inner").getBoundingClientRect();
       const t = document.getElementById("pc-toggle").getBoundingClientRect();
       const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
-      return { barRight: bar.right, panelLeft: panel.left, hit: hit && hit.closest("#pc-toggle") ? "pc-toggle" : hit && hit.id };
+      return { barRight: bar.right, panelLeft: panel.left, hit: hit && hit.closest("#pc-toggle") ? "pc-toggle" : hit && hit.id,
+        covered: hit && !hit.closest("#pc-toggle") ? hit.tagName + "." + String(hit.className) + " in #" + (hit.closest("[id]") || {}).id : null,
+        rects: { toggle: [t.x, t.y, t.width, t.height].map(Math.round), hit: hit ? [hit.getBoundingClientRect().x, hit.getBoundingClientRect().y, hit.getBoundingClientRect().width, hit.getBoundingClientRect().height].map(Math.round) : null,
+          panel: [panel.x, panel.y, panel.width, panel.height].map(Math.round), bar: [bar.x, bar.y, bar.width, bar.height].map(Math.round) },
+        view: document.getElementById("lighting-inner").dataset.editorView, body: document.body.className } ;
     });
     expect(geo.barRight, JSON.stringify(geo)).toBeLessThan(geo.panelLeft);
-    expect(geo.hit).toBe("pc-toggle");
+    expect(geo.hit, JSON.stringify(geo)).toBe("pc-toggle");
   });
 
   // …and pressing it again walks the real route back out, one screen per press.
-  test("Escape walks free cam -> tuner -> display -> settings -> pause -> racing", async ({ page }) => {
+  test("Escape walks free cam -> tuner -> visual studio -> settings -> pause -> racing", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openLightingPhotoMode(page);
@@ -317,22 +321,23 @@ test.describe("Lighting tuner — pause lifecycle", () => {
       return {
         photo: document.body.classList.contains("photo-mode"),
         lighting: !$("lighting").hidden,
-        display: !$("pm-panel-display").hidden,
+        visual: !$("pm-panel-visual").hidden && !$("pmsettings").hidden,
         settingsHome: !$("pm-settings-index").hidden,
         settings: !$("pmsettings").hidden,
         pause: !$("pausemenu").hidden,
       };
     });
+    const expectAt = async (want) => { const got = await where(); expect(got, "got " + JSON.stringify(got)).toEqual(want); };
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: true, display: false, settingsHome: false, settings: false, pause: false });
+    await expectAt({ photo: false, lighting: true, visual: false, settingsHome: false, settings: false, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: true, settingsHome: false, settings: true, pause: false });
+    await expectAt({ photo: false, lighting: false, visual: true, settingsHome: false, settings: true, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: true, settings: true, pause: false });
+    await expectAt({ photo: false, lighting: false, visual: false, settingsHome: true, settings: true, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: false, settings: false, pause: true });
+    await expectAt({ photo: false, lighting: false, visual: false, settingsHome: false, settings: false, pause: true });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: false, settings: false, pause: false });
+    await expectAt({ photo: false, lighting: false, visual: false, settingsHome: false, settings: false, pause: false });
   });
 
   /* ESCAPE MUST BE ABLE TO PAUSE AT ALL, which is not as obvious as it sounds:

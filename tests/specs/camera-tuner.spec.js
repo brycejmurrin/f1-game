@@ -63,7 +63,7 @@ for (const [door, panel, close] of [["pm-camtune", "camtune", "ct-close"], ["pm-
     async function settings() {
       await page.locator("#pausebtn").click();
       await page.locator("#pm-settings").click();
-      await page.locator("#pm-open-display").click();
+      await page.locator("#pm-open-visual").click();
       const disclosure = page.locator("#pm-visual-tuners");
       if (!(await disclosure.evaluate(el => el.open))) await disclosure.locator("summary").click();
     }
@@ -87,7 +87,7 @@ for (const [door, panel, close] of [["pm-camtune", "camtune", "ct-close"], ["pm-
       await page.locator("#" + door).click();
       await expect(page.locator("#" + panel)).toHaveJSProperty("hidden", false);
       await page.locator("#" + close).click();
-      await expect(page.locator("#pm-panel-display")).toBeVisible();
+      await expect(page.locator("#pm-panel-visual")).toBeVisible();   // the editors return to the page that opened them
       expect(errors).toEqual([]);
     } finally { release(); }
   });
@@ -257,8 +257,7 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
     __apex.camera("hood");
     document.getElementById("pausebtn").click();
     document.getElementById("pm-settings").click();
-    document.getElementById("pm-open-display").click();
-    document.querySelector("#pm-visual-tuners > summary").click();
+    document.getElementById("pm-open-visual").click();
     document.getElementById("pm-camtune").click();
   });
   // The #camtune wrapper is a zero-width fixed shell (the docked .sheet inside

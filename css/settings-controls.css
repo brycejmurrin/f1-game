@@ -681,7 +681,8 @@ button:has(> [data-fold]) {
   column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
   align-content: start;
 }
-#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; }
+/* One column: a slider owns Left/Right, so a second column of sliders is unreachable by D-pad. */
+#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-driving .preset-row,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner details,

@@ -147,11 +147,16 @@ const openFolds = (page) => page.evaluate(() => { for (const d of UiLayers.top()
 
 async function walk(page, layerId, { restore = "" } = {}) {
   expect(await page.evaluate(() => window.__aud.top()), `#${layerId} is the top layer`).toBe(layerId);
+  // Let the sheet finish reflowing (shape/density/fold state) before a walk measures its geometry: a walk that
+  // starts mid-reflow steps over rows that are about to move.
+  const settle = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await settle();
   const kb = await page.evaluate(({ layerId, restore }) => window.__aud.walk(layerId, false, restore), { layerId, restore });
   expect(kb.all, `${layerId}: the first arrow press lands on a control of the layer`).toContain(kb.seed);
-  expect(kb.missed, `${layerId}: every control is reachable with the arrow keys`).toEqual([]);
+  expect(kb.missed, `${layerId}: every control is reachable with the arrow keys; missed: ${JSON.stringify(kb.missed)}`).toEqual([]);
+  await settle();
   const pad = await page.evaluate(({ layerId, restore }) => window.__aud.walk(layerId, true, restore), { layerId, restore });
-  expect(pad.missed, `${layerId}: every control is reachable with the D-pad`).toEqual([]);
+  expect(pad.missed, `${layerId}: every control is reachable with the D-pad; missed: ${JSON.stringify(pad.missed)}`).toEqual([]);
   return kb;
 }
 
@@ -283,7 +288,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
     expect(await page.evaluate(() => document.activeElement.parentElement.open), "the pad's A opens it").toBe(true);
 
     const sel = await page.evaluate(() => {
-      const s = UiLayers.top().querySelector("details[open] select:not([disabled])");
+      const s = UiLayers.top().querySelector("#pm-panel-display details[open] select:not([disabled])");   // this page only: other pages carry open folds too
       s.focus();
       return { id: s.id, n: s.options.length, i: s.selectedIndex };
     });

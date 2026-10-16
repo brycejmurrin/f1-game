@@ -21,6 +21,10 @@ const EditorWorkspace = (function () {
     toggle.setAttribute("aria-pressed", "false");
     toggle.setAttribute("aria-label", "Show unobstructed preview");
     bar.append(label, toggle);
+    // The FREE CAMERA door stays on the always-visible toolbar: on a short screen the rail it
+    // lives in is folded into the tools disclosure, which would hide the only way into it.
+    const entry = options.entry && doc.getElementById(options.entry);
+    if (entry) bar.append(entry);
     const note = make("p", options.note || "Changes save automatically on this device.", "ew-note");
     sheet.prepend(note);
     sheet.prepend(bar);
@@ -113,6 +117,7 @@ const EditorWorkspace = (function () {
     ].map(([id, rail, title, note]) => attach(doc.getElementById(id), {
       rail, title, note, done: ({ lighting: "lt-close", camtune: "ct-close", flyby: "fb-close", garrival: "ga-close" })[id],
       previews: id === "camtune" ? "ct-previews" : null,
+      entry: ({ lighting: "pc-toggle", flyby: "fb-freecam" })[id] || null,
       help: id === "garrival" ? "#ga-rows > .adv-help" : null, launcher: "pm-" + id, nested: id === "flyby" ? "freecam" : null,
     }));
   }

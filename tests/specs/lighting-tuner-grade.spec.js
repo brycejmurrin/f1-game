@@ -91,8 +91,7 @@ const walkToImageTuner = async (page) => {
   await page.evaluate(() => {
     document.getElementById("pausebtn").click();
     document.getElementById("pm-settings").click();
-    document.getElementById("pm-open-display").click();
-    document.querySelector("#pm-visual-tuners > summary").click();
+    document.getElementById("pm-open-visual").click();
     document.getElementById("pm-lighting").click();
     // pm-lighting's handler builds the tab strip synchronously, so the tab
     // exists by the next statement — the same assumption ui-redesign makes.

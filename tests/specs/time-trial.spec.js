@@ -353,10 +353,10 @@ for (const device of [
       for (const selector of ['#announce', '#lights', '.hud-top', '#minimap'])
         await expect(page.locator(selector)).toHaveCSS('visibility', 'hidden');
       await expect(page.locator("#pm-coach-help")).toContainText(/text tips/i);
-      for (const id of ["pm-practice-panel", "pm-pit-panel", "pm-session-review"])
-        await expect(page.locator("#" + id)).not.toHaveAttribute("open", "");
-      await expect(page.locator("#pm-drill-sel")).toBeHidden();
-      await expect(page.locator("#pm-pit-choice-sel")).toBeHidden();
+      // Practice, pit strategy and the session review are pages of their own (opened from Pause):
+      // none of their controls belong on the Driving Aids page.
+      for (const id of ["pm-practice-panel", "pm-pit-panel", "pm-session-review", "pm-drill-sel", "pm-pit-choice-sel"])
+        await expect(page.locator("#" + id)).toBeHidden();
       await page.locator("#pm-coach-sel").selectOption("on");
       await expect(page.locator("#pm-coach-sel")).toHaveValue("on");
       const initialCoach = await page.evaluate(() => window.__apex.physState().driving.coach);
@@ -366,7 +366,12 @@ for (const device of [
       expect(initialCoach.latest).toBeNull();
       expect(initialCoach.total).toBe(0);
       await expect(page.locator("#pm-coach-tip")).toContainText(/next tip.*after you drive/i);
-      await press("#pm-practice-panel > summary");
+      await press("#pm-settings-close");
+      await expect(page.locator("#pm-settings-index")).toBeVisible();
+      await press("#pm-settings-close");
+      await expect(page.locator("#pausemenu")).toBeVisible();
+      await press("#pm-practice");
+      await expect(page.locator("#pm-practice-panel")).toBeVisible();
       await expect(page.locator("#pm-drill-sel")).toBeVisible();
       await page.locator("#pm-drill-sel").selectOption("sector");
       await expect(page.locator("#pm-drill-status")).toContainText("Finish the next sector");
@@ -380,9 +385,13 @@ for (const device of [
       const driving=await page.evaluate(()=>window.__apex.physState().driving);
       expect(driving.practice).toBe(true);
       expect(driving.insights.drill.mode).toBe("sector");
-      await press("#pm-practice-panel > summary");
+      await page.locator("#pm-practice-retry").scrollIntoViewIfNeeded();
+      await page.screenshot({path:info.outputPath("practice-controls.png")});
+      await press("#pm-settings-close");
+      await expect(page.locator("#pausemenu")).toBeVisible();
       await expect(page.locator("#pm-practice-set")).toBeHidden();
-      await press("#pm-pit-panel > summary");
+      await press("#pm-strategy");
+      await expect(page.locator("#pm-pit-panel")).toBeVisible();
       const select=page.locator("#pm-pit-choice-sel");
       await expect(select).toBeEnabled();
       const value=await select.locator("option").nth(1).getAttribute("value");
@@ -392,21 +401,15 @@ for (const device of [
       await expect(page.locator("#pm-pit-help")).toContainText(compound.split(" · ")[1]);
       await expect(page.locator("#pm-pit-help")).toContainText("Choosing tyres does not call you into the pits");
       await expect(page.locator("#pm-pit-estimate")).toContainText("Estimated pit loss:");
-      await press("#pm-pit-panel > summary");
-      await press("#pm-practice-panel > summary");
-      await page.locator("#pm-practice-retry").scrollIntoViewIfNeeded();
-      await page.screenshot({path:info.outputPath("practice-controls.png")});
-      await press("#pm-practice-panel > summary");
-      await press("#pm-pit-panel > summary");
       await select.scrollIntoViewIfNeeded();
       await page.screenshot({path:info.outputPath("pit-controls.png")});
-      await press("#pm-pit-panel > summary");
-      await press("#pm-session-review > summary");
+      await press("#pm-settings-close");
+      await expect(page.locator("#pausemenu")).toBeVisible();
+      await press("#pm-review");
+      await expect(page.locator("#pm-session-review")).toBeVisible();
       await expect(page.locator("#pm-coach-summary")).toContainText(/no tips|0 tips/i);
-      await press("#pm-session-review > summary");
       await press("#pm-settings-close");
-      await expect(page.locator("#pm-settings-index")).toBeVisible();
-      await press("#pm-settings-close");
+      await expect(page.locator("#pausemenu")).toBeVisible();
       await press("#pm-howto");
       await page.locator('#htp-contents a[href="#htp-driving"]').click();
       await expect(page.locator("#htp-driving")).toBeInViewport();
