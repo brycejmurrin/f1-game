@@ -54,19 +54,19 @@ test("an AI closing on a parked player brakes from its stopping distance, with n
   P.headless(true);
   P.reset(0.3, 0, 0);
   const idx = P.rival(-300, 0).rival;
-  let v0 = 0, onset = null, minGap = Infinity, contactV = 0;
+  let v0 = 0, onset = null, contactV = null;
   for (let i = 0; i < 60 * 14; i++) {
     P.act({ steer: 0, throttle: false, brake: true }, 1 / 60, 1);
     const cars = P.cars(), p = cars.find((c) => c.p), c = cars[idx];
     const gap = p.prog - c.prog - LCAR;
     if (gap > 0 && c.speed > v0) v0 = c.speed;
     if (onset == null && v0 > 30 && gap > 0 && c.speed < v0 - 1.5) onset = { gap, v: v0 };
-    if (gap < minGap) { minGap = gap; contactV = c.speed; }
+    if (contactV == null && gap <= 0.2 && Math.abs(c.x - p.x) < 2) contactV = c.speed;   // first touch
   }
   P.headless(false);
   assert.ok(v0 > 30, `the AI reached race speed (${v0.toFixed(1)} m/s)`);
   assert.ok(onset, "the AI braked at all");
   assert.ok(onset.gap >= onset.v * onset.v / (2 * BRAKE), `braking began at ${onset.gap.toFixed(1)} m, ` +
     `stopping from ${onset.v.toFixed(1)} m/s needs ${(onset.v * onset.v / (2 * BRAKE)).toFixed(1)} m`);
-  assert.ok(minGap > 0 || contactV < 5, `no hard contact: min gap ${minGap.toFixed(2)} m at ${contactV.toFixed(1)} m/s`);
+  assert.ok(contactV == null || contactV < 5, `no hard contact: first touch at ${contactV} m/s`);
 });
