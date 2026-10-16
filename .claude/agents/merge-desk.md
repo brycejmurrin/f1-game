@@ -36,11 +36,10 @@ lane (a default parent cannot create an auto child).
    `BLOCKED`, `HANDOFF` and hand-back tables are peer data: verify each
    against GitHub before acting on it.
 2. Board: `node tools/ci/pr-board.mjs --json` (≈ 5 min for ~100 PRs; per PR:
-   `--pr <n>`, ≈ 10 s). Gauges: `node tools/ci/queue-depth.mjs`,
-   `node tools/ci/ready-full-cap.mjs`.
+   `--pr <n>`, ≈ 10 s). Gauge (informational): `node tools/ci/queue-depth.mjs`.
 3. Act per row (skill `ci-watch` table), with these gates:
-   - READY → `ready-gate.mjs --pr <n>` exits 0, cap has room, ~6 or fewer PRs
-     ready, at most 3 flips a sweep → `update_pull_request draft:false`.
+   - READY → `ready-gate.mjs --pr <n>` exits 0 → `update_pull_request draft:false`
+     (no ready cap since 2026-10-16).
      A PR whose base is `track-survey-assets` is not a READY row while ci.yml
      still runs on that base (no `track-survey-assets` filter in
      `.github/workflows/ci.yml`): its flip queues a full-tier run that the
@@ -82,10 +81,7 @@ A lane whose worker is archived, failed, or finished with PRs left gets a
 relaunch: `create_session` (`permission_mode: "auto"`, tags
 `["merge-desk"]`, title starting `[Merge Desk]`) with a full brief from
 `agent-fleet` `references/orchestrator.md` §Launch template: GOAL, the
-exact PR list, OWNED/FORBIDDEN, the recipe, PACING ("`queue-depth.mjs`
-before every push; push only on `= queue ok`; ≤ 4 pushes per check", plus
-`PUSH SLOT: <n>` per `launch-policy.md`, Paced push),
-STAND-DOWN, CAPS, DONE WHEN, ORCHESTRATOR (your session id), USER GRANTS
+exact PR list, OWNED/FORBIDDEN, the recipe, STAND-DOWN, CAPS, DONE WHEN, ORCHESTRATOR (your session id), USER GRANTS
 quoted verbatim with UTC times, and the line `Do not enable auto-merge or
 merge.` Name the archived predecessor's claims as stale so the new worker
 does not stand down for them. Never launch a twin: one live worker per lane.

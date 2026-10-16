@@ -589,7 +589,7 @@ test("BROADCAST PiP in WATCH: two cars 8 m apart put the partner in the inset (l
   } finally { g.close(); }
 });
 
-function transportReplay(extra = {}) {
+function transportReplay(extra = {}, { completeSubject = false } = {}) {
   const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
     Log: { info() {}, warn() {}, debug() {} },
     CamModes: { CAM_MODES: ["cockpit", "side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) },
@@ -602,8 +602,9 @@ function transportReplay(extra = {}) {
     setCamMode: (m) => { G.camMode = m; } };
   const replay = vm.runInContext("RealReplay", ctx).create(G);
   const options = { script: { laps: 2, drivers, passes: [{ t: 12, lap: 1, by: 2, over: 1, pos: 1 }] },
-    traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, 10) } },
+    traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, completeSubject ? 30 : 10) } },
     seats: new Map([[cars[0], drivers[0]], [cars[1], drivers[1]]]), follow: "AAA", camera: "auto" };
+  if (completeSubject) assert.ok(options.traces.cars[2].t.at(-1) >= options.script.passes[0].t, "event navigation fixture includes BBB footage at its pass");
   replay.start(options);
   return { replay, G, cars, snaps, drivers, options, ctx };
 }
@@ -740,7 +741,7 @@ test("BROADCAST manual camera ownership keeps the on-air shot and AUTO baseline 
 });
 
 test("WATCH follow lock survives director holds and event navigation, AUTO releases it, and restart clears playback state", () => {
-  const { replay, G } = transportReplay();
+  const { replay, G } = transportReplay({}, { completeSubject: true });
   replay.setLocked(true);
   replay.tick(25);
   assert.equal(replay.status().follow, "AAA", "the selected driver stays locked beyond the old twenty-second hold");
@@ -759,7 +760,7 @@ test("WATCH follow lock survives director holds and event navigation, AUTO relea
 });
 
 test("WATCH paused event navigation paints the final subject and event shot in one camera snap", () => {
-  const { replay, G, cars } = transportReplay();
+  const { replay, G, cars } = transportReplay({}, { completeSubject: true });
   const frames = [];
   G.snapGameCam = (paint) => frames.push({ paint, car: G.player.code, prog: G.player.prog,
     camera: G.camMode, T: G.raceT });
@@ -773,7 +774,7 @@ test("WATCH paused event navigation paints the final subject and event shot in o
 });
 
 test("WATCH timeline changes reset commentary at the new clock and pose before snapping", () => {
-  const { replay, G, options } = transportReplay();
+  const { replay, G, options } = transportReplay({}, { completeSubject: true });
   const order = [];
   G.raceRadio = { resetTimeline: () => order.push(["radio", G.raceT, G.player.prog]) };
   G.snapGameCam = () => order.push(["snap", G.raceT, G.player.prog]);
@@ -1398,8 +1399,8 @@ test("WATCH unavailable driver selection stays honest and never locks the previo
   replay.stop();
 });
 
-async function watchEnvironment(startLap = 1) {
-  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+async function watchEnvironment(startLap = 1, duration = 350, tyreWear = "real") {
+  const g = await createGame({ track: "baku", storage: { tyreWear } });
   const { script } = scriptIn(g), RR = vm.runInContext("RealRace", g.ctx);
   for (const d of script.drivers) {
     d.lapStart = Array.from({ length: 51 }, (_, i) => i * 10);
@@ -1409,7 +1410,7 @@ async function watchEnvironment(startLap = 1) {
     { from: 5, to: 7, level: 4, tFrom: 42, tTo: 69, cause: "RED FLAG" }];
   script.rain = Array.from({ length: 52 }, (_, lap) => lap >= 2 && lap <= 30);
   const v = g.G.track.total / 10;
-  const traces = { frame: "track", cars: { 63: line(1, v, 0, 0, 350), 16: line(-20, v, 1, 0, 350) } };
+  const traces = { frame: "track", cars: { 63: line(1, v, 0, 0, duration), 16: line(-20, v, 1, 0, duration) } };
   const previousCar = g.G.cars[0];
   RR.launch(script, { seat: "RUS", watch: true, camera: "heli", traces, startLap });
   await g.settle(() => g.G.cars[0] !== previousCar && g.G.state === "count", 8000);
@@ -1479,6 +1480,42 @@ test("WATCH takes its recorded flag ownership through the normal starting countd
     }
     replay.seek(35); assert.equal(g.apex.caution().level, 0);
     g.step(60); assert.equal(g.apex.caution().level, 0);
+    G.quitToMenu();
+  } finally { g.close(); }
+});
+
+test("HIGHLIGHTS rejects missing and ended subject footage before nearby pass suppression", () => {
+  const { replay, options } = transportReplay();
+  options.script.passes = [{ t: 12, by: 2, over: 1 }, { t: 13, by: 1, over: 2 }];
+  for (const subject of [undefined, line(0, 45, 0, 0, 10), line(0, 45, 0, 15, 30)]) {
+    if (subject) options.traces.cars[2] = subject;
+    else delete options.traces.cars[2];
+    replay.start({ ...options, reel: true });
+    assert.deepEqual(Array.from(replay.describe().events, (e) => e.num), [1]);
+    assert.equal(replay.status().follow, "AAA");
+  }
+  options.traces.cars[2] = line(0, 45, 0, 0, 30);
+  replay.start({ ...options, reel: true });
+  assert.deepEqual(Array.from(replay.describe().events, (e) => e.num), [2]);
+  assert.equal(replay.status().follow, "BBB", "restored subject footage restores the first pass");
+  replay.stop();
+});
+
+test("WATCH seeks and playing show recorded sets including a same-compound restop", async () => {
+  const { g, G, replay, script } = await watchEnvironment(1, 400, "off");
+  try {
+    const d = script.drivers.find((d) => d.code === "RUS");
+    d.stints = [{ from: 1, to: 31, c: "MEDIUM" }, { from: 32, to: 36, c: "SOFT" }, { from: 37, to: 51, c: "SOFT" }];
+    g.apex.go(); replay.setPaused(true);
+    const c = G.cars.find((c) => c.code === "RUS");
+    replay.seek(315); assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 2);
+    const log = c.tyreLog;
+    replay.seek(316); assert.equal(c.tyreLog, log, "same stint preserves metadata identity");
+    replay.seek(365); assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 3); assert.equal(c.pitStops, 2);
+    assert.notEqual(c.tyreLog, log);
+    replay.seek(305); assert.equal(c.tyre.code, "M"); assert.equal(c.tyreStints, 1); assert.equal(c.pitStops, 0);
+    replay.seek(309.9); replay.setPaused(false); replay.tick(0.2);
+    assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 2);
     G.quitToMenu();
   } finally { g.close(); }
 });

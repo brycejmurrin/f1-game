@@ -11,7 +11,7 @@ Verify is `--verify=fast` by default (tooling-fast `--jobs=3` + the node suites
 `node-plan.mjs` needs for the branch's own diff; `full` = every suite, `none` =
 clean merge only), each stage timed; a stopped stage prints
 `sync-pr.mjs <branch> --resume --from=<stage>`, which re-verifies the kept temp
-branch without a new merge. `--push` waits while `queue-depth.mjs` holds.
+branch without a new merge. `--push` publishes at once (no queue hold since 2026-10-16).
 
 ```sh
 node tools/ci/sync-pr.mjs <branch>              # verifies, leaves HEAD on sync-pr-<branch>
