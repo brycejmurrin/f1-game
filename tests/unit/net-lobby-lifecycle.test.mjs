@@ -1024,6 +1024,20 @@ test("an invalid seed or round rejects the whole payload, as every other field d
   } finally { h.lobby.cancel(); }
 });
 
+test("a guest accepts STORM in settings and in a MIXED plan, and still rejects unknown weather", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    h.G.raceWeather = "dry";
+    s.deliver("settings", { laps: 5, weather: "snow" });
+    assert.equal(h.G.raceWeather, "dry", "an unknown name still rejects the payload whole");
+    s.deliver("settings", initialGuestSettings({ laps: 5, weather: "storm", revision: 1 }));
+    assert.equal(h.G.raceWeather, "storm", "storm is accepted");
+    h.G.raceLaps = 3;
+    s.deliver("settings", initialGuestSettings({ laps: 9, weather: "rain", wxArc: { to: "storm", dur: 200 }, revision: 2 }));
+    assert.equal(h.G.raceLaps, 9, "a MIXED plan drawn toward storm is accepted");
+  } finally { h.lobby.cancel(); }
+});
+
 // ── dirty air and AI pace are race rules; a guest's own rules come back ───────
 // Both change every AI car's grip / vmax, and each peer simulated its own saved
 // choice. And applySettings overwrote the guest's laps/difficulty/tyres/… in
