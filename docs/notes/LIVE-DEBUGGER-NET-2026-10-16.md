@@ -14,9 +14,25 @@ pause, a 10x start/leave/stop loop, and a static read of the Nostr socket reopen
 | N1 | netplay.js:597/652 | low (wrong reason copy, hand-back reason) | CONFIRMED-LIVE | pause at 597: why="local", carFor=1, active=true; stack onClose<-session.close<-BYE handler; guest B got {wire:1,why:"local"} | a95a7949 | net-authority.test.mjs "a guest BYE tells the other guests why:\"bye\"" (fails without fix) | - |
 | N2 | lobby.js:1839 (+clearInterval sites 321,345,411,451,459,470,2192) | low (wrong copy) | CONFIRMED-LIVE | pause after `watcherArmed = !!pollTimer`: watcherArmed=true, pollTimer=116 (dead id), sessions=0, transport=null | not mine (sibling cursor/hunt-debugger-fixes-*) | - | - |
 | N3 | netplay.js:~625 | low | CONFIRMED (unit; same mechanism as N1) | incompatible-build drop closes the session itself, so close() reports "local" to the other guests | 35a39eb3 | net-authority.test.mjs "dropping one incompatible guest ..." (fails without fix) | - |
+| N4 | netplay.js:~1200 (goLocal/goWire, STALE_MS = 2000) | low (visual) | CONFIRMED-LIVE, BY-DESIGN | real-time stepped race (game loop running, host + one loopback peer, 17 s: 5 s speaking, 8 s silent, 4 s speaking): `human` false at +2.0 s of silence, AI drove the car 393 -> 630 m (30 m/s) while the peer's true position went to 880 m (60 m/s); first packet back: car 629.8 -> 873.8 m in ONE frame (max in-phase step otherwise 2 m); no lap/prog glitch (lap stayed 1, prog == s), nearest neighbour at the snap 20.1 m (no overlap; global minimum 2.8 m earlier in the race) | none (proposal below) | - | - |
+
+N4 proposal: the snap is the size of (real speed - stand-in AI speed) x silence, so any gap over
+~5 m is a visible pop for the observer. A blend only helps small gaps (a 2-4 s stall,
+roughly 20-60 m): ease `c.s` toward the wire value over ~250 ms when `|delta| < ~60 m`, keep the
+hard snap above that (sliding 250 m through traffic is worse than a pop), and skip the blend
+when the target lands within ~8 m of another car. Not implemented: game-feel call, touches
+the pose path every packet.
 
 ## Clean areas (do not re-hunt)
-Deeper round (host on monza, two loopback guests, virtual clock): a guest naming the OTHER
+Follow-up round: invite decoding is typed under hostile input (empty/null/number/dots/unicode
+-> `bad_code`; 600 kB junk, truncated, 100 kB-compressed 100 MB deflate bomb in both `z` and
+`s` modes -> `corrupt_code`, 0.5 s total, the inflate cap holds; invite fed to
+`acceptAnswer` -> `wrong_code_kind`). A flipped character inside a valid code can still decode
+to a code that later fails at `setRemoteDescription` (no checksum; the later failure is typed
+`corrupt_code`). Forced ICE failure (`RTCPeerConnection` subclass reporting `failed`): the
+lobby paints a typed, actionable line ("Could not connect after 0s (failed/failed). This
+network never revealed a public address ... try a different network"), `pending` clears, and
+INVITE ANOTHER returns to its chooser instead of hanging. Deeper round (host on monza, two loopback guests, virtual clock): a guest naming the OTHER
 guest's wire id leaves that car untouched (authority holds); lap 255 / s 5000 is clamped
 (lap stays 0, all pose fields finite); a tick run through 2^32-5 -> wrap, out-of-order and
 duplicate ticks, and s/x/speed = 1e9 leave every pose field finite and the session active;
@@ -34,7 +50,9 @@ NaN/Infinity (wire is clamped finite); tick wrap, out-of-order and duplicate pus
 ## Not run, and why
 Mid-race rejoin and a third guest (lobby phase: needs real signalling, no mid-race add
 API); QR/scan leg (camera, second device); ARM deadline expiry (45 s) not reached live;
-Nostr reconnect mid-handshake (relays are unreachable here; the reopen-with-backoff path in
+Phone-pad pairing beyond the invite decode path (needs a second device and a camera for the
+QR leg); TURN with real relays (only the forced-failure path was driven). Nostr reconnect
+mid-handshake (relays are unreachable here; the reopen-with-backoff path in
 `nostr.js` ~403-432 is covered by `net-nostr-sockets.test.mjs` and was only read); real
 network and phone behaviour. Caveat on the 10 s guest pause: the harness posts snapshots
 but does not step physics, so it shows the stale/handover mechanics, not AI driving:
