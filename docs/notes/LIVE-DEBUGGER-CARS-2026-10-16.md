@@ -3,11 +3,31 @@
 Lane: `cursor/live-debug-cars-9b4f`. Tool: js-debugger MCP on a SwiftShader headless Chrome (844x600). Software-browser
 evidence only: no GPU, device or long-session claim follows.
 
+## Scope covered
+
+Ghost share encode/decode/fuzz and Ghost record/finish (live page); FieldLod selector (live page, plus a logging breakpoint on
+a real 22-car Bahrain start); Car3D builds, Parts and Helmets APIs (node vm over the real files); car-mesh cache bounds
+(read-through); input-ghost validation (read-through).
+
 ## Findings
 
-| id | area | verdict | where |
-|---|---|---|---|
-| C1 | ghost | FIXED | `Ghost.record` accepted a NaN/Infinity frame and `finishLap` stored it as the best lap: `at()` returned NaN, `GhostShare.fileExport` refused it ("invalid"). Now non-finite frames are dropped and `finishLap` runs `valid()`. Test: `tests/unit/ghost.test.mjs`. |
+| id | file:line | severity | verdict | debugger evidence | fix commit | test | issue |
+|---|---|---|---|---|---|---|---|
+| C1 | js/car/ghost.js `record`/`finishLap` | medium | CONFIRMED-LIVE | `debugger_run` in the page: a NaN frame at i=5 -> `finishLap` true, `at(0.55).s` null (NaN), snapshot `[30,40,NaN,60,70]`, `GhostShare.fileExport(...).ok` false | c46a007d | `tests/unit/ghost.test.mjs` (2 new, failed before) | none |
+| C2 | js/car/helmets.js `designFor` | low | BY-DESIGN (unreachable: only caller passes the roster's numeric number) | node vm: `designFor("constructor"/"__proto__")` returns a non-design object | none | none | none |
+| C3 | js/car/input-ghost.js `finishLap` | low | BY-DESIGN (callers always supply context + initialState) | read-through only | none | none | none |
+
+## Clean areas (do not re-hunt)
+
+`GhostShare.decode` against 16 malformed inputs; `FieldLod` tier/parts/nearest/lensK2 incl. NaN/Inf/negative; Car3D geometry
+for 11 presets x 4 variants and every team x catalog option (3 267 builds, no NaN/index/normal/determinism defect, flat heap);
+`Parts` API garbage fuzz; car-mesh caches `_compoundRings`, `_mirrorFbMeshes`, `_mirrorGlassMeshes`, `_flapSets`, `_crewMeshes`.
+
+## Not run, and why
+
+Live whole-race LOD with camera cycling, `renderer.info.memory` over 20 team switches, input-ghost replay drift at lap end,
+ghost on a reversed/shifted circuit: SwiftShader renders ~0.4 fps here. Browser groups `audit car modes tiny` from pick-tests:
+the fix is a 3-line guard covered by the unit test.
 
 ## Ghost share decode (live, `GhostShare.decode`)
 
@@ -61,3 +81,7 @@ of the declared circuit length, so a shifted/reversed layout cannot index outsid
   breakpoint plus a 0.4 fps SwiftShader page).
 - `debugger_state` replays every past operation result on each call, so the reply grows with the session.
 - `debugger_scripts` takes no filter argument and returns all ~270 scripts.
+
+## Next step
+
+Fast-tier CI, `ready-gate.mjs --pr 2564`, then `SWEEP 2564` to Merge Desk. The Not-run list needs a GPU runner.
