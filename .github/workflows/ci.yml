@@ -433,6 +433,16 @@ jobs:
           git cat-file -e "$base^{commit}" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng
           echo "ratchet base: $base ${RATCHET_MODE:+(advisory)}"
           node tools/check/ratchets.mjs --base "$base" $RATCHET_MODE
+      # A PR that loosens a test tolerance next to production changes fails (#1685; AGENTS.md rule 9). Rows that
+      # are genuinely right go in tests/data/tolerance-exceptions.json with a reason.
+      - name: Test tolerances are not loosened
+        if: steps.reuse.outputs.reuse != 'true' && github.event_name == 'pull_request'
+        env:
+          TOL_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          base="$(bash tools/ci/ci-pr-base.sh "$TOL_BASE")"
+          git cat-file -e "$base^{commit}" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng
+          node tools/check/tolerance-diff.mjs --base "$base"
       - name: Every test file belongs to a topical group
         if: steps.reuse.outputs.reuse != 'true'
         run: npm run test:audit
