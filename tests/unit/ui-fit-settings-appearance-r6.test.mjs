@@ -25,6 +25,7 @@ const WIDE = "#pmsettings-inner[data-shape=\"wide\"] #appearance-studio";
 const WIDE_COMPACT_LIST = "#pmsettings-inner[data-shape=\"wide\"][data-density=\"compact\"] #appearance-studio [data-as=\"preset-list\"]";
 const WIDE_COMPACT_TILE = "#pmsettings-inner[data-shape=\"wide\"][data-density=\"compact\"] #appearance-studio [data-as=\"preset-list\"] button";
 const WIDE_COMPACT_SHORT_LIST = WIDE_COMPACT_LIST;
+const ADVANCED_SUMMARY = '#pm-panel-appearance > [data-as="advanced"] > summary';
 
 test("APPEARANCE panel pads so the last studio tile can scroll above BACK", () => {
   assert.equal(decl(rules, PANEL, "padding-bottom"), PAD,
@@ -88,6 +89,11 @@ test("studio buttons keep the --tap / --tap-paint floors", () => {
   assert.equal(decl(rules, "#appearance-studio input, #appearance-studio select", "min-height"), "var(--tap-paint)");
   assert.equal(decl(rules, "#appearance-studio [data-as=\"segment\"] > button", "min-width"), "var(--tap-paint)",
     "HOME / HUD / device chips never shrink below --tap-paint");
+});
+
+test("appearance advanced disclosure keeps a touch-painted target", () => {
+  assert.equal(decl(rules, ADVANCED_SUMMARY, "min-height"), "var(--tap-paint)",
+    "Advanced Visuals must remain a full painted touch target on coarse pointers");
 });
 
 test("layout-audit SCREENS opens #pm-panel-appearance", () => {
