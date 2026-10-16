@@ -27,6 +27,26 @@ from `?three-devtools=1` (`renderer.info`) on TLX.
   resolves (no `/dev/dri`); `diag().env.backend` reads `webgl2 (pick: three)` with no `backendFallback`. Pin
   `apex26.gfxBackend=three` to get TLX.
 
+## Resource counts — TLX circuit rebuild (`renderer.info`, `?three-devtools=1`)
+
+7 builds via `await __apex.race(id)` with `__apex.headless(true)` (drawing suppressed; lazily uploaded
+resources may be uncounted, so this is weak evidence — the 20-circuit run below draws 1.2 s per build):
+
+| circuit | build ms | geometries | textures | scene nodes |
+|---|---|---|---|---|
+| bahrain (first) | 2820 | 11 | 50 | 32 |
+| monaco | 2216 | 11 | 42 | 29 |
+| spa | 2108 | 11 | 42 | 41 |
+| monza | 1967 | 11 | 42 | 40 |
+| suzuka | 1861 | 11 | 42 | 36 |
+| silverstone | 2151 | 11 | 42 | 49 |
+| bahrain (again) | 1540 | 11 | 42 | 32 |
+
+Verdict: flat after the first build (the 8 extra textures on build 1 are warm-up); node count follows the circuit, no
+accumulation. Operator notes (not defects): a drawing build under SwiftShader pins the GPU process (~200 % CPU) and
+the page stops answering CDP for minutes; killing Chrome mid-boot arms the boot canary (`apex26.gfxProbeStrikes`) and
+the next boot lands on GLX with `backendFallback = "boot canary: three never presented a frame last load"` (designed).
+
 ## Findings
 
 ### F1 — TLX never observes its canvas: `ResizeObserver.observe(Proxy)` throws and is swallowed (fixed)
