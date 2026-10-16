@@ -1299,6 +1299,7 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `setup-trial-session.test.mjs` | Fresh solo setup-trial restart ownership, actual starting conditions, configuration drift and asynchronous cancellation. |
 | `battle-earcon.test.mjs` | Finite battle-gap motif selection, readiness, context changes, cancellation and default-off request safety; audio-unit and tooling-fast. |
 | `audio-mix-improvements.test.mjs` | Audio half of #1776's follow-ups: race-mix audition ownership/Stop/deadline, Spotify stale searches, uploaded-track playback health and focused Retry; audio-unit and tooling-fast. |
 | `career-data-audio-improvements.test.mjs` | Career half of #1776's follow-ups: slot-owned MY TEAM identity, contract preview/sign agreement and staleness, winter report deltas (the audio and data halves are split into their own suites with their pieces). |
