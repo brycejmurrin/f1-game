@@ -376,7 +376,11 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/2
+        # --bail (2026-10-16 CI jobs review): stop STARTING files after the first
+        # failure. A red shard ran a mean 5.9 min after its first failure; files
+        # already in flight finish and the log names each. The local
+        # `npm run test:tooling-fast` stays without it so an author sees every red.
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/2 --bail
       - name: Reused draft
         if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED tooling A — draft fast-tier already green on this head SHA"
@@ -410,7 +414,7 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/2
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/2 --bail
       # RATCHETS, AUDIT, COVERAGE AND BEHIND-SHIP (moved from the `Structural
       # guards` aggregator 2026-10-15): the same tree and node_modules, no
       # second checkout + npm ci, and the aggregator needs no runner time.
