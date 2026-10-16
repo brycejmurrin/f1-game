@@ -31,8 +31,11 @@ function load(over = {}) {
   const DebrisWorld = {
     active: () => true,
     rapierReady: () => true,
-    worldGen: () => 1,
-    promoteCarDynamic: (i, lin) => { promoted.push(i); launched[i] = lin; return true; },
+    worldGen: over.worldGen || (() => 1),
+    promoteCarDynamic: (i, lin) => {
+      if (over.promote && !over.promote(i)) return false;
+      promoted.push(i); launched[i] = lin; return true;
+    },
     demoteCarKinematic: () => {},
     carBodyPose: () => pose,
   };
@@ -53,7 +56,7 @@ function load(over = {}) {
   const IncidentSim = vm.runInContext("IncidentSim", ctx);
   const mkCar = (s) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0,
                           yawRateCur: 0, prog: s, finished: false, retired: false, human: false });
-  const cars = [mkCar(100), mkCar(103)];
+  const cars = Array.from({ length: over.count || 2 }, (_, i) => mkCar(100 + 3 * i));
   const G = { cars, player: cars[0], track: { total: 5000 },
               // Promotion thresholds and the rescue floor are pace-scaled now,
               // so the façade stub carries the speed scale like the real G.
@@ -410,3 +413,68 @@ for (const [label, trip] of [
     });
   }
 }
+
+
+function queueCluster(sim, cars, first, end) {
+  for (let i = first; i + 1 < end; i++) sim.notifyCar(cars[i], cars[i + 1], 20);
+}
+
+test("the takeover budget is global across three disjoint clusters of a 22-car field", () => {
+  const { sim, cars, promoted } = load({ count: 22 });
+  const deniedBefore = cars.slice(8).map(c => ({ ...c }));
+  queueCluster(sim, cars, 0, 8);
+  queueCluster(sim, cars, 8, 16);
+  queueCluster(sim, cars, 16, 22);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 8);
+  assert.deepEqual(promoted, [0, 1, 2, 3, 4, 5, 6, 7], "queue order deterministically receives the budget");
+  assert.deepEqual(cars.slice(8), deniedBefore, "denied cars retain their normal driving state");
+  assert.ok(cars.slice(8).every(c => !sim.owns(c)));
+});
+
+test("existing cluster takeovers share the budget with wall strikes and release returns a slot", () => {
+  const { sim, cars, promoted } = load({ count: 10 });
+  queueCluster(sim, cars, 0, 4);
+  sim.preStep(1 / 60);
+  queueCluster(sim, cars, 4, 8);
+  sim.notifyWall(cars[8], 1, 100);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 8);
+  assert.equal(sim.owns(cars[8]), false, "the wall path cannot exceed the cluster budget");
+  assert.equal(sim.release(cars[0]), true);
+  assert.equal(sim.status().owned, 7);
+  sim.notifyWall(cars[8], 1, 100);
+  sim.notifyWall(cars[9], 1, 100);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 8);
+  assert.equal(sim.owns(cars[8]), true, "a released slot is reusable in the same world");
+  assert.equal(sim.owns(cars[9]), false);
+  assert.deepEqual(promoted, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+});
+
+test("failed promotions do not consume slots or hide later cars behind a per-cluster slice", () => {
+  const attempts = [];
+  const { sim, cars, promoted } = load({ count: 12, promote: i => { attempts.push(i); if (i === 1) throw new Error("body unavailable"); return i !== 0; } });
+  queueCluster(sim, cars, 0, 12);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 8);
+  assert.deepEqual(promoted, [2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(attempts, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.ok([0, 1, 10, 11].every(i => !sim.owns(cars[i]) && !cars[i].incidentInvalidLap));
+});
+
+test("a world-generation handback frees the full budget for the replacement world", () => {
+  let generation = 1;
+  const { sim, cars, promoted } = load({ count: 16, worldGen: () => generation });
+  queueCluster(sim, cars, 0, 8);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 8);
+  generation++;
+  sim.postStep(1 / 60);
+  assert.equal(sim.status().owned, 0);
+  assert.equal(sim.status().fallbacks, 8, "old-world cars complete their anomaly handback");
+  queueCluster(sim, cars, 8, 16);
+  sim.preStep(1 / 60);
+  assert.equal(sim.status().owned, 8);
+  assert.deepEqual(promoted, Array.from({ length: 16 }, (_, i) => i));
+});

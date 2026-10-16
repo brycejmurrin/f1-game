@@ -191,7 +191,6 @@ const IncidentSim = (function () {
       if (idxs.length >= C1_MIN_CARS) { if (!_c1) continue; kind = "c1"; }
       else if (relV >= R2_CAR_V * Math.max(G.PACE, 0.05)) { if (!_r2) continue; kind = "r2"; }
       else { if (!_r3) continue; kind = "r3"; }
-      if (idxs.length > MAX_TAKEOVER) idxs = idxs.slice(0, MAX_TAKEOVER);
       startIncident(kind, idxs, relV, dt);
     }
     for (const [i, sev] of wallCand) {
@@ -210,13 +209,16 @@ const IncidentSim = (function () {
   // Promote a set of cars to Rapier dynamic bodies for a bounded window.
   function startIncident(kind, idxs, sev, dt) {
     const cars = G.cars, track = G.track;
-    if (!cars || !track) return;
+    if (!cars || !track || _owned.size >= MAX_TAKEOVER) return;
     let gen = 0; try { gen = DebrisWorld.worldGen(); } catch (e) { return; }
     const snap = new Map(), good = new Map(), settle = new Map();
     const promoted = [];
     for (const i of idxs) {
+      // One budget across every cluster and wall strike, including earlier windows.
+      // Charge only successful promotions; a failed body leaves room for the next car.
+      if (_owned.size >= MAX_TAKEOVER) break;
       const c = cars[i];
-      if (!c) continue;
+      if (!c || _owned.has(i) || c.finished || c.retired) continue;
       // AI cars never write `head` (only the grid, coast and rescue do), so
       // it is the grid's 0 for the whole race and the launch velocity pointed
       // along world +Z whatever the road did — the mirror pose in debrisworld
