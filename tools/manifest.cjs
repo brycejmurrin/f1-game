@@ -307,6 +307,7 @@ const FULL = [
   "js/fx/skidmarks.js",
   "js/fx/car-fx.js",           // CarFx.create(G, { skids }): plank sparks + AI lock-up marks (after skidmarks + particles)
   "js/race/storm.js",          // Storm: the weather above rain — lightning schedule, SC timings, rain/spray scale (pure; before race-control)
+  "js/race/wind.js",           // Wind: per-race seeded wind + gusts on the race clock; head/tail drag, crosswind (game.js calls Wind.setLevel at eval)
   "js/race/race-control.js",
   "js/race/overtake-mode.js",
   "js/race/pace-math.js",      // PaceMath.create(deps): vTop/vStd/aStd + X-mode/ERS/gearHi/rpmFor (game.js wires)
@@ -317,6 +318,7 @@ const FULL = [
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
   "js/race/real-race.js",      // RealRace.create(G): a real Grand Prix replayed from its timing script (after race-control: it holds its flags)
   // flying-start / start-lights / marshal-panels → LAZY_RACE_SESSION
+  "js/race/rain-cells.js",     // RainCells: pure localized-rain maths (a drifting shower over a window of the lap; WeatherArc reads it)
   "js/race/weather-arc.js",
   "js/race/forecast.js",       // Forecast: pure timed + uncertain forecast off a weather arc (engineer speaks it; Forecast.current())
   "js/camera/photo-kit.js",    // free-cam grids / DoF / bookmarks (before free-cam)
@@ -781,6 +783,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
   ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
+  ["js/race/wind.js", "js/game.js"],                     // game.js calls Wind.setLevel at eval
   ["js/core/mat4.js", "js/physics/grip-steer.js"],       // GripSteer binds M4.clamp/lerp at eval
   ["js/physics/grip-steer.js", "js/physics/player-forces.js"], // PlayerForces.step caps via GripSteer.forPlayer
   ["js/core/mat4.js", "js/physics/player-forces.js"],    // PlayerForces binds M4.clamp at eval

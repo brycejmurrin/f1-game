@@ -137,7 +137,21 @@ var VoicePack = (() => {
           .then((r) => { if (!r.ok) throw new Error(f + " " + r.status); return r[t](); }); }
         catch (e) { return Promise.reject(e); }
       };
-      v.loading = Promise.race([timeout, Promise.all([get(id + ".json", "json"), get(id + ".bin", "arrayBuffer")])])
+      // These mutable URLs can come from different deploys: the worker may
+      // return fresh JSON but an older cached binary on a slow/offline link.
+      // Require the manifest's digest even for legacy caches; a missing voice
+      // stays written instead of playing unrelated bytes at the new offsets.
+      const pair = Promise.all([get(id + ".json", "json"), get(id + ".bin", "arrayBuffer")])
+        .then(async ([man, bin]) => {
+          const meta = man && man.binary;
+          if (!meta || !/^[0-9a-f]{64}$/.test(meta.sha256) || meta.bytes !== bin.byteLength || !bin.byteLength) throw new Error("voice binary integrity metadata missing or invalid");
+          if (typeof crypto === "undefined" || !crypto.subtle) throw new Error("voice binary integrity verification unavailable");
+          const digest = await crypto.subtle.digest("SHA-256", bin);
+          const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+          if (hex !== meta.sha256) throw new Error("voice binary integrity mismatch");
+          return [man, bin];
+        });
+      v.loading = Promise.race([timeout, pair])
         .then(([man, bin]) => {
           if (!man || !man.clips || !(bin && bin.byteLength)) throw new Error("empty pack");
           v.man = man; v.bin = bin; v.state = "ready";

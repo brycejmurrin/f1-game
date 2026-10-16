@@ -95,15 +95,16 @@ const retrySave = () => {
     if (G.announce) G.announce("SAVE RESTORED");
   } else showSaveWarning((results.find((r) => r && r.reason) || {}).reason || store.broken);
 };
-let recoveryExportBusy = false;
+let recoveryExporting = false;
 const exportRecovery = async () => {
-  if (recoveryExportBusy) return false;
-  recoveryExportBusy = true;
-  const button = $("save-export"), label = button && button.textContent;
-  if (button) { button.disabled = true; button.textContent = "EXPORTING RECOVERY…"; }
+  if (recoveryExporting) return;
+  recoveryExporting = true;
+  const button = $("save-export");
+  if (button) button.disabled = true;
   try {
     const payload = {
-      format: "apex26-recovery-v1", exportedAt: new Date().toISOString(),
+      format: "apex26-recovery-v1",
+      exportedAt: new Date().toISOString(),
       build: (window.__APEX_BUILD || null),
       career: typeof Career !== "undefined" && Career.data ? Career.data() : null,
       season: G.season || null,
@@ -111,25 +112,27 @@ const exportRecovery = async () => {
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const name = "apex26-recovery-" + Date.now() + ".json";
-    const native = typeof NativeDownload !== "undefined" && NativeDownload.viable();
-    if (native) await NativeDownload.saveBlob(blob, name);
-    else {
-      const url = URL.createObjectURL(blob), a = document.createElement("a");
+    if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+      await NativeDownload.saveBlob(blob, name);
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
       a.href = url; a.download = name;
       document.body.appendChild(a); a.click(); a.remove();
+      // 10 s, matching js/ui/settings-export.js and js/agent/apex.js. A 0 ms revoke
+      // races the browser's own fetch of the blob it was just handed: Safari and
+      // several Android browsers read the href asynchronously after click(), so the
+      // URL can be dead before the save starts. This is SAVE RECOVERY — the one
+      // export path a player whose localStorage has failed still has — so losing
+      // the download here loses the save.
       setTimeout(() => URL.revokeObjectURL(url), 10000);
     }
-    if (G.announce) G.announce(native ? "RECOVERY SHARED" : "RECOVERY DOWNLOAD STARTED");
-    return true;
+    if (G.announce) G.announce("RECOVERY EXPORTED");
   } catch (e) {
-    if (saveWarningDetail) saveWarningDetail.textContent = "Recovery export failed. Your progress is still open here. Try again before closing this page.";
-    if (saveWarning) saveWarning.hidden = false;
-    if (G.announce) G.announce("RECOVERY EXPORT FAILED — TRY AGAIN BEFORE CLOSING");
-    Log.warn("ui", "recovery export failed: " + ((e && e.message) || e));
-    return false;
+    if (G.announce) G.announce(typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "RECOVERY EXPORT CANCELLED" : "RECOVERY EXPORT FAILED");
   } finally {
-    recoveryExportBusy = false;
-    if (button) { button.disabled = false; button.textContent = label; }
+    recoveryExporting = false;
+    if (button) button.disabled = false;
   }
 };
 if ($("save-retry")) $("save-retry").onclick = retrySave;

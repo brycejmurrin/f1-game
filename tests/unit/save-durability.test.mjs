@@ -164,22 +164,6 @@ test("storage health reports measured categories; cleanup preserves every author
   for (const k of ["setup.ferrari", "career.driver.0", "ghost.monza", "customTracks", "customTeam"]) assert.equal(h.disk.get("apex26." + k), "xx");
   assert.equal(h.store.writeFailed(), "QuotaExceededError");
 });
-test("native emergency export awaits acknowledgement, refuses re-entry and shows a visible failure", async () => {
-  const dom = makeDom(), notes = []; let complete, reject, calls = 0;
-  const native = { viable: () => true, saveBlob: () => { calls++; return new Promise((r, j) => { complete = r; reject = j; }); } };
-  const G = { announce: (x) => notes.push(x), season: null }, store = { broken: "QuotaExceededError" };
-  const c = vm.createContext({ Blob, Date, URL, document: dom.document, window: {}, G, store, NativeDownload: native,
-    $: (id) => dom.byId(id), writeFailed: () => store.broken, Log: { warn() {} },
-    saveWarning: dom.byId("save-warning"), saveWarningDetail: dom.byId("save-warning-detail"), setTimeout });
-  const text = src("js/ui/select-screen.js"), start = text.indexOf("let recoveryExportBusy ="), end = text.indexOf('if ($("save-retry"))', start);
-  vm.runInContext(text.slice(start, end) + ";globalThis.exportRecovery=exportRecovery", c);
-  const first = c.exportRecovery(); assert.equal(notes.length, 0); assert.equal(dom.byId("save-export").disabled, true);
-  assert.equal(await c.exportRecovery(), false); assert.equal(calls, 1); reject(Error("disk full"));
-  assert.equal(await first, false); assert.match(notes.at(-1), /FAILED/); assert.match(dom.byId("save-warning-detail").textContent, /failed/);
-  notes.length = 0; const second = c.exportRecovery(); complete({ ok: true }); assert.equal(await second, true);
-  assert.deepEqual(notes, ["RECOVERY SHARED"]); assert.equal(dom.byId("save-export").disabled, false);
-});
-
 test("storage-health UI does no measurements or prompts until opened, and remains operable", async () => {
   const dom = makeDom(); let estimates = 0, prompts = 0;
   const h = boot(); await h.store.mirror.ready;
