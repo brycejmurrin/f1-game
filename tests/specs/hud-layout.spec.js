@@ -1180,7 +1180,11 @@ test.describe("fitHud zoom determinism", () => {
 // and the race() thenable, and leaves the loop unfrozen so LCD frames arrive.
 test.describe("speed readouts", () => {
   test.setTimeout(300_000);
-  test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false });
+  // The claim is two digit strings drawn in one frame, not layout, so the frame
+  // is kept small: SwiftShader frame cost scales with pixels, and the 12-frame
+  // LCD wait is the longest wait in this test (one local repeat spent ~115 s of
+  // its 120 s there at 1280x720; #1956).
+  test.use({ viewport: { width: 640, height: 360 }, hasTouch: false });
 
   // ONE boot, waited on progress (#1956). Last test on the oversize-hud-layout
   // shard (2 workers, 46 cases): the box is hot, and Pages 38660546141 timed
