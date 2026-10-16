@@ -312,6 +312,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/data-standings.test.mjs",
   "tests/unit/day-sky-palette-storm-deck.test.mjs",
   "tests/unit/debris-step-skip.test.mjs",
+  "tests/unit/debug-chrome.test.mjs",
   "tests/unit/deep-link.test.mjs",
   // ...and a third of the same family: two widgets keyed on ONE sign convention
   // were painted opposite colours. Neither half is wrong alone, so only a test

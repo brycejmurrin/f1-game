@@ -261,6 +261,7 @@
     "tests/unit/data-standings.test.mjs",
     "tests/unit/day-sky-palette-storm-deck.test.mjs",
     "tests/unit/debris-step-skip.test.mjs",
+    "tests/unit/debug-chrome.test.mjs",
     "tests/unit/deep-link.test.mjs",
     "// ...and a third of the same family: two widgets keyed on ONE sign convention",
     "// were painted opposite colours. Neither half is wrong alone, so only a test",
@@ -1673,6 +1674,7 @@
     },
     "test:mcp": {
       "files": [
+        "tests/unit/debug-chrome.test.mjs",
         "tests/unit/environment-json.test.mjs",
         "tests/unit/hud-survey.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",

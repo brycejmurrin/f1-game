@@ -1292,6 +1292,7 @@ comment saying why they are not one.
 | `ai-pass-defend-vm.test.mjs` | VM pass/defend behavior: pace-aware overtakes and defensive lane holding remain deterministic under the racecraft harness. |
 | `destructure-usage.test.mjs` | Static guard rejects destructuring names that are absent from script-global provider exports. |
 | `cli-args.test.mjs` | CLI argument parsing and validation behavior for project tooling. |
+| `debug-chrome.test.mjs` | `tools/mcp/debug-chrome.mjs` (no browser): proven Chromium flags, refusal beside a live test run or at loadavg >= 3, `stop` signals only its recorded PIDs and skips a reused one (`test:tooling-fast`). |
 | `js-debugger-mcp.test.mjs` | js-debugger MCP transport and source-debugger contract checks. |
 | `stuck-census.test.mjs` | Stuck-state census tooling and bounded diagnostic output. |
 | `render-final-contracts.test.mjs` | Final render contract invariants across the renderer output surface. |
