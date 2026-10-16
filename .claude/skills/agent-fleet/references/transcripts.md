@@ -18,9 +18,11 @@ and the tool result names that path instead of inlining the page. That file is t
 
 1. Find the session: `list_sessions` (`mine: true`), or `get_session` when you have the id. `get_session` already
    carries the session's own `post_turn_summary` (status, what it needs) — often enough on its own.
-2. Fetch the newest page with `list_events` `session_id: <id>`, `limit: 100`, **no `kinds` filter** (the filter
-   runs after the page is read, so it saves nothing and drops the hook, task and result events the digest uses).
-   It spills to a file; note the path.
+2. Fetch the newest page with `list_events` `session_id: <id>`, `limit: 100`, **no `kinds` filter** for a digest
+   (the filter runs after the page is read, so it saves no rows and drops the hook, task and result events the
+   digest uses). It spills to a file; note the path. For a narrative-only read ("what did it say, what did the user
+   ask") a `kinds: ["user","assistant","result"]` filter does cut page SIZE to 5–20 KB (not rows: keep paging
+   `before_id` while `has_more`); skip the digest script then.
 3. Digest: `node tools/ci/session-transcript.mjs <path>`. Add `--only errors`, `--only tools`, `--only chat`,
    `--only turns`, `--grep '<re>'`, `--width 240`, `--hooks` (successful hooks too) or `--json`.
 4. Older history: the footer prints `= more: … before_id <id>`. Call `list_events` with that `before_id`, then

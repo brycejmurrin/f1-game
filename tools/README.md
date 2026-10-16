@@ -390,6 +390,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **desktop/pack-dry-run.mjs** | Desktop pack dry-run: stage + stamp to a temp dir, check every electron-builder input, build no installer. | check-changes |
 | **desktop/stage-files.mjs** | Shared allow-list of runtime files/dirs staged for Pages and Electron packaging. | check-changes |
 | **desktop/stage.mjs** | Stage the deployable site folder (Pages / Electron) from the shared allow-list; optional content-hash stamp. | check-changes |
 

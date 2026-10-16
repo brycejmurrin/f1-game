@@ -34,6 +34,7 @@ function load(fetchImpl, opts = {}) {
   const session = new Map(opts.session || []);
   const pending = [];   // setTimeout callbacks, in the order they were queued
   const elements = new Map();
+  const scripts = opts.scripts || [];
   const element = (id) => {
     if (!elements.has(id)) elements.set(id, {
       value: "", dataset: {}, addEventListener(event, fn) { this[event] = fn; },
@@ -58,7 +59,15 @@ function load(fetchImpl, opts = {}) {
       readyState: "complete",
       getElementById(id) { return opts.dom && (id === "sp-search" || id === "sp-fwd") ? element(id) : null; },
       addEventListener() {},
-      createElement() { return {}; },
+      createElement(tag) {
+        if (tag === "script") {
+          const script = { onerror: null, src: "" };
+          scripts.push(script);
+          return script;
+        }
+        return {};
+      },
+      head: { appendChild() {} },
     },
     localStorage: {
       getItem: (key) => disk.get(key) || null,
@@ -78,7 +87,7 @@ function load(fetchImpl, opts = {}) {
   seedStore(ctx);   // spotify.js keeps its keys through GameStore.store's raw lane, over the fake localStorage above
   vm.runInContext(SRC, ctx, { filename: "js/audio/spotify.js" });
   const flush = () => { const q = pending.splice(0); for (const fn of q) if (fn) fn(); };
-  return { SpotifyMusic: sandbox.SpotifyMusic, disk, session, flush, element };
+  return { SpotifyMusic: sandbox.SpotifyMusic, disk, session, flush, element, scripts, window: sandbox };
 }
 
 test("a retryable refresh failure preserves the long-lived Spotify session", async () => {
@@ -91,12 +100,97 @@ test("a retryable refresh failure preserves the long-lived Spotify session", asy
     "offline token refresh must not turn into a permanent sign-out");
 });
 
+test("a delayed account check cannot overwrite a replacement Spotify session", async () => {
+  let resolveAccount;
+  const account = new Promise((resolve) => { resolveAccount = resolve; });
+  const { SpotifyMusic, disk } = load((url) => {
+    if (String(url).endsWith("/me")) return account;
+    return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, JSON.stringify({ access_token: "first", refresh_token: "first", expires_at: Date.now() + 3600000, scope: "streaming" })]] });
+
+  const checking = SpotifyMusic.check();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  SpotifyMusic.disconnect();
+  disk.set(TOKEN_KEY, JSON.stringify({ access_token: "replacement", refresh_token: "replacement", expires_at: Date.now() + 3600000, scope: "streaming" }));
+  await SpotifyMusic.connect();
+  assert.equal(SpotifyMusic.status().state, "connected");
+
+  resolveAccount(jsonResponse({ product: "free", display_name: "Old account" }));
+  const result = await checking;
+  assert.equal(result.reason, "stale");
+  assert.equal(SpotifyMusic.status().state, "connected");
+  assert.doesNotMatch(SpotifyMusic.status().message, /Old account|Free/);
+});
+
 test("a malformed token response is retryable and preserves the session", async () => {
   const original = JSON.stringify(token());
   const { SpotifyMusic, disk } = load(() => Promise.resolve(jsonResponse({}, 503)));
   const result = await SpotifyMusic.check();
   assert.equal(result.reason, "refresh-failed");
   assert.equal(disk.get(TOKEN_KEY), original);
+});
+
+test("a token response whose body stalls settles as a retryable refresh failure", async () => {
+  let signal, resolveBody;
+  const body = new Promise((resolve) => { resolveBody = resolve; });
+  const { SpotifyMusic, disk, flush } = load((url, opts) => {
+    if (String(url).includes("/api/token")) {
+      signal = opts.signal;
+      return Promise.resolve({ ok: true, status: 200, json: () => body });
+    }
+    return Promise.resolve(jsonResponse({ product: "premium" }));
+  }, { globals: { AbortController } });
+  const checking = SpotifyMusic.check();
+  await settle();
+  flush();
+  const result = await checking;
+  assert.equal(signal.aborted, true, "the stalled token body must be aborted");
+  assert.equal(result.reason, "refresh-failed");
+  assert.ok(disk.has(TOKEN_KEY), "a body timeout must preserve the refresh token");
+  resolveBody({ access_token: "late", refresh_token: "late", expires_in: 3600 });
+  await Promise.resolve();
+});
+
+test("an account response whose body stalls settles as a network failure", async () => {
+  let signal, resolveBody;
+  const body = new Promise((resolve) => { resolveBody = resolve; });
+  const { SpotifyMusic, flush } = load((url, opts) => {
+    if (String(url).includes("/api/token")) return Promise.resolve(jsonResponse({
+      access_token: "fresh", refresh_token: "fresh", expires_in: 3600,
+    }));
+    if (String(url).includes("/v1/me")) {
+      signal = opts.signal;
+      return Promise.resolve({ ok: true, status: 200, json: () => body });
+    }
+    return Promise.resolve(jsonResponse({ devices: [] }));
+  }, { globals: { AbortController } });
+  const checking = SpotifyMusic.check();
+  await settle();
+  flush();
+  const result = await checking;
+  assert.equal(signal.aborted, true, "the stalled account body must be aborted");
+  assert.equal(result.reason, "network");
+  resolveBody({ product: "premium" });
+  await Promise.resolve();
+});
+
+test("a timed-out SDK load restores a pre-existing ready hook for retry", async () => {
+  const scripts = [];
+  const { SpotifyMusic, flush, window } = load(() => Promise.resolve(jsonResponse({})), {
+    disk: [[TOKEN_KEY, JSON.stringify({ access_token: "live", refresh_token: "r-1", expires_at: Date.now() + 3600000, scope: "streaming" })]],
+    scripts,
+  });
+  const foreign = () => {};
+  window.onSpotifyWebPlaybackSDKReady = foreign;
+
+  const connecting = SpotifyMusic.setMode("browser") && SpotifyMusic.connect();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(scripts.length, 1, "the browser mode boot should append one SDK script");
+  flush();
+  await connecting;
+  assert.equal(window.onSpotifyWebPlaybackSDKReady, foreign,
+    "timeout cleanup must restore the callback that was installed before the attempt");
 });
 
 test("concurrent callers share one rotating refresh request", async () => {
@@ -211,6 +305,32 @@ test("a volume drag sends ONE PUT, carrying the value it ended on", async () => 
   const puts = seen.filter((u) => u.includes("/volume"));
   assert.equal(puts.length, 1, "five slider events sent " + puts.length + " requests");
   assert.match(puts[0], /volume_percent=70/, "the coalesced PUT must carry the LAST value");
+});
+
+test("a debounced volume PUT stays on the device selected when the drag started", async () => {
+  const seen = [];
+  const { SpotifyMusic, flush } = landing((url) => {
+    seen.push(String(url));
+    return Promise.resolve(String(url).includes("/api/token")
+      ? jsonResponse({ access_token: "fresh", refresh_token: "r-1", expires_in: 3600,
+                       scope: "streaming user-modify-playback-state" })
+      : jsonResponse({ devices: [], items: [] }));
+  }, [["apex26.spotify.device", "old-device"]]);
+  await SpotifyMusic.handleRedirect();
+  await settle();
+  seen.length = 0;
+
+  SpotifyMusic.setDevice("old-device");
+  SpotifyMusic.setDeviceVolume(70);
+  SpotifyMusic.setDevice("new-device");
+  flush();
+  await settle();
+
+  const puts = seen.filter((u) => u.includes("/volume"));
+  assert.equal(puts.length, 1);
+  assert.match(puts[0], /volume_percent=70/);
+  assert.match(puts[0], /device_id=old-device/, "the pending drag belongs to the old device");
+  assert.doesNotMatch(puts[0], /device_id=new-device/);
 });
 
 const liveToken = (access) => JSON.stringify({ access_token: access, refresh_token: access,
