@@ -21,7 +21,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ADVISORY = new Set(["baseline-trial"]);
+export const ADVISORY = new Set();
 
 /**
  * @param {Record<string, { result?: string }>} needs

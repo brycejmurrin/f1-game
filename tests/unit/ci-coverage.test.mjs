@@ -66,7 +66,7 @@ test("the ci.yml parse finds SOMETHING — anti-vacuity", () => {
   assert.equal(report.specsInFixedGates + report.specsOutsideFixedGates, report.specsOnDisk);
 });
 
-test("the fixed blocking floor: 2 specs, named, and it may not drift down", () => {
+test("the fixed blocking floor: 3 specs, named, and it may not drift down", () => {
   /* A REPORT WITH NO FLOOR IS A NUMBER NOBODY DEFENDS. ci-coverage.mjs was
      written to describe the gate, not to constrain it, so "3 of 119 specs in
      fixed gates" could have walked to 0 — one `if:` on the smoke job, one
@@ -75,27 +75,21 @@ test("the fixed blocking floor: 2 specs, named, and it may not drift down", () =
      `> 0`, which the driving-model gate alone satisfies.
 
      The floor is taken on the BLOCKING count, not on `specsInFixedGates`: the
-     third spec is menu-baseline, run by the golden-menu trial under
-     `continue-on-error: true`. It is real coverage to read and no coverage at
-     all to ship behind, and counting it made the fixed floor look 50 % larger
-     than it is.
-
      RAISE THIS when a spec genuinely joins a fixed blocking gate. Lowering it
      means the deploy gate got weaker, which is the event this exists to make
      loud — not a number to edit until the test is quiet. */
-  const FIXED_BLOCKING_FLOOR = 2;
+  const FIXED_BLOCKING_FLOOR = 3;
   assert.ok(report.specsInBlockingFixedGates >= FIXED_BLOCKING_FLOOR,
     `only ${report.specsInBlockingFixedGates} spec(s) run in a fixed BLOCKING gate, floor is ` +
     `${FIXED_BLOCKING_FLOOR}. A fixed gate stopped gating: ${report.blocking.join(", ") || "(none)"}`);
   // Named, so "still 2" cannot be satisfied by two different specs after one
   // of these quietly left.
   assert.deepEqual(report.blocking,
-    ["tests/specs/physics-characterization.spec.js", "tests/specs/smoke.spec.js"]);
-  // And the advisory one is still counted, still advisory, and still excluded.
+    ["tests/specs/hud-mirror.spec.js", "tests/specs/image-grade-visual.spec.js", "tests/specs/instanced-draw.spec.js", "tests/specs/lighting-ab.spec.js", "tests/specs/lighting-tuner-grade.spec.js", "tests/specs/menu-baseline.spec.js", "tests/specs/physics-characterization.spec.js", "tests/specs/render-boot.spec.js", "tests/specs/smoke.spec.js", "tests/specs/tlx-probes.spec.js", "tests/specs/track-switch-memory.spec.js", "tests/specs/webgl-probes.spec.js"]);
+  // The golden baseline is now blocking on scheduled/manual runs.
   assert.ok(report.executed.includes("tests/specs/menu-baseline.spec.js"));
-  assert.ok(!report.blocking.includes("tests/specs/menu-baseline.spec.js"),
-    "the golden-menu trial is continue-on-error; it may never count as a blocking gate");
-  assert.equal(report.specsInFixedGates - report.specsInBlockingFixedGates, 1);
+  assert.ok(report.blocking.includes("tests/specs/menu-baseline.spec.js"));
+  assert.equal(report.specsInFixedGates - report.specsInBlockingFixedGates, 0);
 });
 
 test("smoke and the driving-model gate are both seen", () => {
@@ -1130,7 +1124,7 @@ test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
     "an env-gated spec (material-shimmer) must be named, not scheduled");
 });
 
-test("the golden-menu trial is advisory AND never runs on the Pages call", () => {
+test("the golden-menu check is blocking AND never runs on the Pages call", () => {
   // E3 (2026-09-16): its `if:` was `pull_request || workflow_dispatch` under a
   // comment promising "never the Pages call" — but a called workflow sees the
   // CALLER's event, and "deploy now" is a workflow_dispatch of pages.yml, so
@@ -1139,11 +1133,11 @@ test("the golden-menu trial is advisory AND never runs on the Pages call", () =>
   // blocking it, so both halves of the contract are pinned here.
   const trial = (ciWorkflow.split("\n  baseline-trial:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(trial, "baseline-trial job missing");
-  assert.match(trial, /^    continue-on-error: true$/m, "the trial must stay non-blocking");
+  assert.doesNotMatch(trial, /^    continue-on-error: true$/m, "the baseline must fail the scheduled verdict");
   assert.match(trial, /inputs\.concurrency_key == ''/,
     "a Pages call carries a concurrency_key whatever its caller's event; that is the only reliable tell");
-  assert.doesNotMatch(ciWorkflow, /needs: \[?[^\n\]]*baseline-trial/,
-    "nothing may depend on the trial");
+  assert.match(ciWorkflow, /- baseline-trial/,
+    "the required CI aggregator must consume the baseline result");
 });
 
 test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: swiftshader` opts out", () => {
@@ -1185,9 +1179,9 @@ test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: s
 // image with a hardware (Metal) adapter. Three things about it are load-bearing
 // and none of them is enforced by YAML: it must run on the macOS image, it must
 // never carry the one flag that turns that image's GPU into SwiftShader, and it
-// must stay OUT of the deploy gate until it has a measured history (pages.yml
-// consumes the aggregate of every job in ci.yml, so "out" means "skipped on the
-// Pages call", which the tool derives from the `!inputs.concurrency_key` if).
+// runs on the deploy gate when the live diff reaches renderer bytes. Pages
+// consumes the aggregate of every job in ci.yml, so the selector and job
+// condition must agree on that called-workflow path.
 const gpuWorkflow = fs.readFileSync(new URL("../../.github/workflows/gpu-census.yml", import.meta.url), "utf8");
 const rendererJob = ciWorkflow.split("\n  renderer-macos:")[1]?.split("\n  xr:")[0];
 // A step of the `select` plan job since 2026-10-15 (a job of its own before).
@@ -1248,26 +1242,24 @@ test("the renderer job proves the adapter before trusting the run, and uploads i
   assert.doesNotMatch(rendererJob.replace(/^\s*#.*$/gm, ""), /--with-deps/, "--with-deps is apt; the comment may name it, the step may not");
 });
 
-test("the renderer job is path-filtered on a cheap runner and stays out of the deploy gate", () => {
+test("the renderer job is path-filtered on a cheap runner and joins the deploy gate for renderer releases", () => {
   assert.match(selectJob, /^    runs-on: ubuntu-latest$/m, "the filter must not allocate a macOS runner to say no (it is a step of the ubuntu plan job)");
   // 2026-09-02 (Actions minutes): the macOS runner bills at 10x Linux, so
-  // drafts and topic-branch pushes stay off it. Ready (non-draft) PRs that
-  // touch js/render/ MUST allocate it — otherwise a WGX/GLX rewrite can go
+  // drafts and topic-branch pushes stay off it. Ready (non-draft) PRs and Pages
+  // calls that touch js/render/ MUST allocate it — otherwise a WGX/GLX rewrite can go
   // "green" with Metal never running. Nightly + `renderer_macos: true`
-  // dispatch remain. The `!inputs.concurrency_key` term is what
-  // tools/ci/ci-coverage.mjs reads to keep both jobs out of the deploy gate;
-  // it has to stay first.
-  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
+  // dispatch remain, and Pages calls use the live SHA as their comparison base.
+  assert.match(rendererFilter, /if: \$\{\{ inputs\.concurrency_key != '' \|\| github\.event_name == 'schedule'/);
+  assert.match(rendererFilter, /inputs\.concurrency_key != '' && inputs\.before_sha/);
   assert.match(rendererJob, /^    needs: select$/m);
-  // `!inputs.concurrency_key` is on the job itself now (the filter step cannot carry the skip for it).
-  assert.match(rendererJob, /if: \$\{\{ .*!inputs\.concurrency_key && needs\.select\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\).*\}\}/);
+  assert.match(rendererJob, /if: \$\{\{ .*needs\.select\.outputs\.renderer == 'true' && \(inputs\.concurrency_key != '' \|\| github\.event_name == 'schedule'/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      renderer_macos:\n(?:.*\n)*?        type: boolean\n(?:.*\n)*?        default: false\n/,
     "the dispatch must declare the renderer_macos opt-in, default off");
-  assert.equal(report.rendererGate.deployGate, false,
-    "renderer-macos joined the deploy gate — pages.yml aggregates every job in ci.yml, so this must be deliberate");
+  assert.equal(report.rendererGate.deployGate, true,
+    "renderer-macos must gate a Pages release when the selector routes renderer changes");
   assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(),
-    ["renderer-macos", "xr"],
-    "jobs outside the deploy gate: the macOS renderer job and the path-gated xr suite (their filters are steps of select)");
+    ["xr"],
+    "only the path-gated xr suite remains outside the deploy gate");
   // The path filter: every renderer backend plus the lighting modules the
   // gfx specs pin, the spec list DERIVED from package.json, fail-safe to run.
   // js/lighting/ as a DIRECTORY, not the six filenames this listed until
@@ -1282,19 +1274,19 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   assert.match(rendererFilter, /run_all "git diff failed"/);
   assert.match(rendererFilter, /run_all "before-sha \$BEFORE unreachable/);
   assert.doesNotMatch(rendererFilter, /renderer=false"[^\n]*\n[^\n]*exit 0/, "an unresolvable diff must RUN, never skip");
-  // Nothing in pages.yml names it — it reaches the Pages run only as a skip.
+  // Pages calls reach it through ci.yml's selector and renderer condition.
   assert.doesNotMatch(pagesWorkflow, /renderer-macos|renderer-filter/);
 });
 
-test("the deploy-gate count excludes what the renderer job runs", () => {
+test("the deploy-gate count includes what the renderer job runs", () => {
   for (const s of report.rendererGate.specs) {
-    assert.ok(!report.executed.includes(s),
-      `${s} is counted as deploy-gate coverage, but only renderer-macos runs it and that job is skipped on the Pages call`);
+    assert.ok(report.executed.includes(s),
+      `${s} is not counted as deploy-gate coverage even though Pages can run renderer-macos`);
   }
   const gfx = report.viaGroup.find((g) => g.group === "test:gfx");
   assert.ok(gfx, "the tool no longer sees test:gfx at all");
   assert.equal(gfx.job, "renderer-macos");
-  assert.equal(gfx.deployGate, false);
+  assert.equal(gfx.deployGate, true);
 });
 
 test("smoke.spec.js is ONE shard on PRs and the Pages call; the wide nightly/dispatch run keeps four", () => {
