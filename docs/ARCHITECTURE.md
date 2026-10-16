@@ -570,6 +570,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `wgx-shadow.js` | `WGXShadow` | DEFERRED:webgpu | WGX shadow subsystem (split out of js/render/webgpu/wgx.js). |
 | `wgx-chunked.js` | `WGXChunked` | DEFERRED:webgpu | WGX chunked-mesh subsystem (split out of js/render/webgpu/wgx.js). |
 | `wgx-post.js` | `WGXPost` | DEFERRED:webgpu | WGX post-processing subsystem (split out of js/render/webgpu/wgx.js). |
+| `wgx-roadlut.js` | `WGXRoadLut` | DEFERRED:webgpu | WGXRoadLut: the pure, device-free half of WGX's road LUT (the packed (s, lateral x, half-width) table) and the toF32 coercion it shares with the mesh packer. |
 | `wgx.js` | `WGX` | DEFERRED:webgpu | WebGPU renderer backend (WGX). |
 
 **`js/render/three/`**
