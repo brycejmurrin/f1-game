@@ -486,7 +486,11 @@ const DataRealRace = (function () {
    *  freeze an unfinished classification for a week. */
   function forgetRaw(sessionKey) {
     try {
-      for (const path of RAW_PATHS) localStorage.removeItem(API_CACHE_PREFIX + OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey));
+      for (const path of RAW_PATHS) {
+        const url = OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey);
+        if (F1API.forget) F1API.forget(url);   // memory too: a body over 256K never reaches localStorage
+        else localStorage.removeItem(API_CACHE_PREFIX + url);
+      }
     } catch (e) { /* no storage: nothing was cached */ }
   }
 

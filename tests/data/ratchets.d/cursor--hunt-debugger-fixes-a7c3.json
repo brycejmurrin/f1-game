@@ -10,6 +10,9 @@
     "js/game.js": {
       "codeLines": -3,
       "lines": -4
+    },
+    "js/net/lobby.js": {
+      "lines": 2
     }
   }
 }
