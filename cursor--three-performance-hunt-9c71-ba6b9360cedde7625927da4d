@@ -1,0 +1,1 @@
+1792115517	Bryce Murrin	Three.js performance hunt: remove redundant merged-index allocation only in js/render/three/tlx-chunked.js and existing tlx-chunked-lifecycle test; no edits tlx.js or owned renderer lifetime work  [cursor/three-performance-hunt-9c71; session ba6b9360cedde7625927da4d]
