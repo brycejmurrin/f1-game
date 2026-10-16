@@ -47,6 +47,63 @@ test("ScrollFade repaints when a <details> fold toggles (and only for <details>)
   assert.equal(timers.length, 1, "a fold schedules one repaint");
 });
 
+// #2325: Data Hub tab/session picks replace a pane's child subtree with no
+// resize and no screen flip, so only settle() pruned detached watchers and a
+// long visit kept every replaced picker row registered with both observers.
+test("ScrollFade prunes detached panes in the coalesced paint pass and re-observes reattached ones", () => {
+  const timers = [];
+  const observed = new Set();
+  let roCallback, moCallback;
+  class RO { constructor(cb) { roCallback = cb; } observe(el) { observed.add(el); } unobserve(el) { observed.delete(el); } }
+  const moTargets = new Set();
+  class MO {
+    constructor(cb) { if (!moCallback) moCallback = cb; this.cb = cb; }
+    observe(el) { if (this.cb === moCallback) moTargets.add(el); }
+    disconnect() { if (this.cb === moCallback) moTargets.clear(); }
+  }
+  const pane = (name) => ({
+    name, isConnected: true, clientHeight: 0, clientWidth: 0,
+    closest: () => null, classList: { toggle() {} }, style: { removeProperty() {}, setProperty() {} },
+  });
+  let live = [];
+  const context = {
+    Log: { info() {} },
+    window: { addEventListener() {} },
+    ResizeObserver: RO, MutationObserver: MO,
+    document: {
+      readyState: "complete",
+      addEventListener() {},
+      querySelectorAll: (sel) => (/hidden/.test(sel) ? [] : live.slice()),
+    },
+    getComputedStyle: () => ({ overflowY: "auto", overflowX: "visible", paddingRight: "0" }),
+    setTimeout: (fn) => { timers.push(fn); return timers.length; },
+    clearTimeout() {},
+  };
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(rd("js/ui/scroll-fade.js"), context);
+  const drain = () => { while (timers.length) timers.shift()(); };
+  drain();
+  const keep = pane("keep"), row1 = pane("row1");
+  live = [keep, row1];
+  roCallback(); drain();                       // a mutation paints and watches both
+  assert.ok(observed.has(row1) && observed.has(keep));
+  // The picker rebuild: row1 leaves the DOM, row2 replaces it. No resize,
+  // no hidden flip, no explicit refresh: only the content observer fires.
+  row1.isConnected = false;
+  const row2 = pane("row2");
+  live = [keep, row2];
+  moCallback(); drain();
+  assert.equal(observed.has(row1), false, "the detached row is unobserved without a resize or refresh");
+  assert.equal(moTargets.has(row1), false, "the content observer no longer holds the detached row");
+  assert.ok(observed.has(row2) && moTargets.has(row2) && moTargets.has(keep), "survivors and the new row stay observed");
+  // A cached pane that comes back must be picked up again.
+  row1.isConnected = true;
+  live = [keep, row1, row2];
+  moCallback(); drain();
+  assert.ok(observed.has(row1) && moTargets.has(row1), "a reattached pane is observed again");
+});
+
 test("settings HUD checklist floors labels and checkboxes in settings-controls.css", () => {
   const css = rd("css/settings-controls.css");
   assert.match(
