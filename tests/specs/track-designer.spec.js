@@ -50,6 +50,41 @@ async function randomiseGreen(page, seed) {
 test.describe("Track designer", () => {
   test.use({ viewport: LANDSCAPE });
 
+  for (const viewport of [LANDSCAPE, { width: 390, height: 844 }]) {
+    test(`draft recovery and saved identity survive reload at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+      await page.getByRole("button", { name: "SAVE", exact: true }).click();
+      await page.evaluate(() => TrackDesigner.setTheme("alpine"));
+      await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.customTrackDraft") || "null")?.theme)).toBe("alpine");
+      await page.getByRole("button", { name: "SAVE", exact: true }).click();
+      const savedId = await page.evaluate(() => TrackDesigner.state().design.originId);
+      await page.reload();
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.headless(true));
+      await openDesigner(page);
+      expect(await page.evaluate(() => TrackDesigner.state().design.originId)).toBe(savedId);
+      await page.evaluate(() => { TrackDesigner.setTheme("oasis"); TrackDesigner.preview(); });
+      await page.getByRole("button", { name: "SAVE", exact: true }).click();
+      expect(await page.evaluate(() => CustomTracks.list().length)).toBe(1);
+      await page.evaluate(() => {
+        TrackDesigner.setName("Recover Me"); TrackDesigner.setTheme("alpine");
+        const other = CustomTracks.list()[0]; TrackDesigner.load(other, "library", other.id);
+        TrackDesigner.close();
+      });
+      await page.reload();
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.headless(true));
+      await openDesigner(page);
+      await page.getByRole("tab", { name: "MY CIRCUITS", exact: true }).click();
+      await page.getByRole("button", { name: "RECOVER PREVIOUS DRAFT", exact: true }).click();
+      expect(await page.evaluate(() => TrackDesigner.state().design.name)).toBe("RECOVER ME");
+      expect(await page.evaluate(() => TrackDesigner.state().design.theme)).toBe("alpine");
+      await expect(page.getByRole("tab", { name: "DESIGN", exact: true })).toHaveAttribute("aria-selected", "true");
+      await page.screenshot({ path: test.info().outputPath("recovered-draft.png") });
+    });
+  }
+
   test("library collection file imports atomically and preserves the open draft", async ({ page }) => {
     await bootClean(page);
     await openDesigner(page);

@@ -1091,7 +1091,8 @@ test("the champion is the season.pts leader even when that seat is no longer on 
   S.engage("season");
   const season = S.blank();
   Object.assign(season, { round: 3, pts: { "custom:0": 60, "mclaren:0": 40, "ferrari:0": 30 }, driverCodes: { "custom:0": "YOU" } });
-  const mk = (tag) => ({ tagName: tag, children: [], style: {}, className: "", textContent: "",
+  const mk = (tag) => ({ tagName: tag, children: [], style: {}, className: "", textContent: "", attrs: {},
+    setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k] ?? null; },
     append(...c) { this.children.push(...c); }, appendChild(c) { this.children.push(c); return c; } });
   const els = { resultsTitle: mk("h2"), resultsTable: mk("div"), resNext: mk("button") };
   const said = [];
@@ -1107,7 +1108,10 @@ test("the champion is the season.pts leader even when that seat is no longer on 
   vm.runInContext(readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8") + ";this.GameResults = GameResults;", ctx);
   ctx.GameResults.create(G).buildChampion();
   assert.deepEqual(said, ["YOU IS WORLD CHAMPION!"], "the table leader, not the best car on the final grid");
-  const rows = els.resultsTable.children.filter((r) => /res-row/.test(r.className));
+  const ranking = els.resultsTable.children.find((r) => r.getAttribute("role") === "list"
+    && r.getAttribute("aria-label") === "Final driver standings");
+  assert.ok(ranking, "the champion retains a named final standings list");
+  const rows = ranking.children.filter((r) => /res-row/.test(r.className));
   assert.deepEqual(rows.map((r) => r.children[2].textContent), ["YOU", "NOR", "LEC"], "FINAL STANDINGS is every seat that scored");
   assert.deepEqual(rows.map((r) => / you$/.test(r.className)), [false, true, false], "the player's row is marked, as on every other table");
   assert.doesNotMatch(els.resultsTable.children[1].style.cssText, /#aaa/, "the team line reads theme tokens");

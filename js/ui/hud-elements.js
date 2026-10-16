@@ -123,11 +123,20 @@ const HudElements = (function () {
   function isOn(id) { return state[id] !== "off"; }
 
   function set(id, on) {
-    if (!(id in state)) return isOn(id);
-    state[id] = on ? "on" : "off";
-    persist();
-    apply();
+    setMany([id], on);
     return isOn(id);
+  }
+
+  // A grouped piece (the timing tower) is one preference change, not five
+  // intermediate hide lists and storage notifications.
+  function setMany(ids, on) {
+    const value = on ? "on" : "off";
+    let valid = false;
+    for (const id of ids) {
+      if (id in state) { state[id] = value; valid = true; }
+    }
+    if (valid) { persist(); apply(); }
+    return valid;
   }
 
   let contextOf = () => ({}), navigate = null;
@@ -256,7 +265,7 @@ const HudElements = (function () {
   }
 
   return {
-    K, ELEMENTS, isOn, set, apply, hiddenList, initUI, shippedOf, profileOf,
+    K, ELEMENTS, isOn, set, setMany, apply, hiddenList, initUI, shippedOf, profileOf,
     effective, configure, refreshVisibility: syncChecks,
     state: () => Object.assign({}, state),
   };
