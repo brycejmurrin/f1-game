@@ -1496,7 +1496,9 @@ test("job exit code survives the parent (disk-only status) and a huge result is 
     for (const id of [ok.jobId, bad.jobId]) {
       const f = path.join(dir, `${id}.json`);
       const m = JSON.parse(fs.readFileSync(f, "utf8"));
-      Object.assign(m, { state: "running", exit: null, pid: 2 ** 22 + 1, ended: null });
+      // The wrapper's shell may be an unreaped zombie: kill(pid, 0) still
+      // succeeds. A live PID here proves the recorded .exit wins over that.
+      Object.assign(m, { state: "running", exit: null, pid: process.pid, ended: null });
       fs.writeFileSync(f, JSON.stringify(m));
     }
     const second = mk();

@@ -193,6 +193,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
 | **shot/garage-tap.mjs** | GARAGE tap from the title, prebuild ON vs OFF on one tree: tap-to-first-frame ms (__apex.garagePrebuild). | playwright-probe |
+| **shot/gen-scenery-locations.cjs** | Regenerate/check the all-circuit emitted-scenery screenshot location catalog. | — |
 | **shot/hud-live-sample.mjs** | Sample moved HUD pieces every few ms in an unfrozen race after position jumps; report time spent off screen. | survey-ui-matrix |
 | **shot/hud-mock.mjs** | Race-HUD layout shots on black: mocked widgets, labelled boxes, overlaps in red; one boot per pointer type, ~1 s a shot. | survey-ui-matrix |
 | **shot/hud-survey.mjs** | Race-HUD survey: devices x cameras x presets/themes/scale → overlaps, missing, offscreen, tiny text + shots, gallery. | survey-ui-matrix |
@@ -203,6 +204,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
 | **shot/replay-camera-probe.mjs** | Offline-fixture live-render camera discontinuity probe across replay entry, seek, follow, exit and reentry. | f1-animation-cameras |
 | **shot/repro-shot.mjs** | Render a player's exact frame from an `__apex.repro()` blob. Its COCKPIT output is WRONG — read the header. | playwright-probe |
+| **shot/scenery-source-hash.cjs** | Fingerprint all scenery geometry/build inputs used by the named screenshot catalog. | — |
 | **shot/shot-jobs.mjs** | Pure helpers for shot.mjs: CLI/batch job parse, output format, track grouping. | — |
 | **shot/shot-survey.mjs** | Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON. | survey-track |
 | **shot/shot.mjs** | One Chromium session for one or many framed shots (`--batch`); JPEG/raster modes for cheaper sweeps. | playwright-probe |
@@ -457,6 +459,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
+| **shot/scenery-locations.json** | `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/track-shot-survey.test.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |

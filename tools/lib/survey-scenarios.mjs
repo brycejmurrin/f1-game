@@ -14,6 +14,11 @@ export const SURVEY_LOCATIONS = [
 ].map(([id, name, frac]) => ({ id, name, track: 'spa', frac,
   aliases: [name.toLowerCase(), id.split('/')[1]], source: 'docs/tracks/spa.md §3', verification: 'source-located; framing unverified' }));
 const require = createRequire(import.meta.url);
+const sceneryCatalog = JSON.parse(readFileSync(new URL('../shot/scenery-locations.json', import.meta.url), 'utf8'));
+const SCENERY_LOCATIONS = sceneryCatalog.locations.map(l => ({ ...l, kind: 'scenery',
+  aliases: [...new Set([l.id.split('/')[1], l.modelId, l.name.toLowerCase()])],
+  verification: `required scenery model emitted; ${l.stationMethod === 'source-viewpoint' ? 'source-backed viewing station' : 'nearest-road camera candidate'} ${l.viewDistanceM} m from model; framing unverified${l.viewDistanceM > 150 ? `; distant landmark${l.stationMethod === 'source-viewpoint' ? '' : ', road viewpoint uncertain'}` : ''}`,
+}));
 let circuitLocations;
 
 // The authored `turns` are racing-lap fractions. Read the built definitions
@@ -45,7 +50,8 @@ function indexedLocations() {
 export function listSurveyLocations(track) {
   const all = indexedLocations();
   if (!all.has(track)) throw new Error(`Unknown track ${track}; choose ${[...all.keys()].join(', ')}`);
-  return [...SURVEY_LOCATIONS.filter(l => l.track === track).map(l => ({ ...l, kind: 'named' })), ...all.get(track)];
+  return [...SURVEY_LOCATIONS.filter(l => l.track === track).map(l => ({ ...l, kind: 'named' })),
+    ...SCENERY_LOCATIONS.filter(l => l.track === track), ...all.get(track)];
 }
 export const CAMERA_RECIPES = {
   overview: { cam: 'orbit', az: 40, el: 40, dist: 90, h: 1.5, fov: 55 },
@@ -92,7 +98,9 @@ export function scenarioShots(args) {
     const {offset=0,...camera}=CAMERA_RECIPES[angle];
     return { ...camera, name:`${location.id.replace('/','-')}-${angle}-${weather}`, frac:+((location.frac+offset+1)%1).toFixed(6),
       ...(camera.cam==='eye'?{lookFrac:location.frac}:{}), weather, tod:args.tod||'day', location:location.id, angle,
-      verification:location.verification, ...cameraControls({...camera,...args.camera}) };
+      verification:location.verification,
+      ...(location.kind==='scenery' ? { target: location.target } : {}),
+      ...cameraControls({...camera,...args.camera}) };
   }));
 }
 export function captureIdentity(value) {

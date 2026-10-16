@@ -393,7 +393,7 @@ const CATALOG = [
   {
     name: "apex_locations",
     kind: "tree",
-    description: "Tree — list source-located shot targets for one circuit: every authored turn, start/finish, sector boundaries and curated named scenery. Pass an id to apex_shot_survey.location; fractions are racing-lap coordinates and framing needs visual review. No browser.",
+    description: "Tree — list shot targets for one circuit: authored turns, start/finish, sector boundaries, and named scenery models that actually emitted. Scenery shots use source viewing stations where known or a nearest-road candidate, then aim at the model; framing needs visual review. Pass an id to apex_shot_survey.location. No browser.",
     inputSchema: { type: "object", additionalProperties: false, required: ["track"], properties: {
       track: { type: "string" }, search: { type: "string", description: "Optional case-insensitive name/id filter." },
     } },
