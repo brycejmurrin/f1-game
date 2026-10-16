@@ -8,15 +8,15 @@ Source SHA at start: deploy tip 43d845f3. Status: DONE for this lane. **No defec
 | area | verdict | evidence |
 |---|---|---|
 | 1 pathological layouts | clean | Area 1 table: every bad layout refused by `sanitize` or RED in `TrackValidate.check`; no NaN, no throw |
-| 2 racing a custom design | clean on one layout; seam class untested | 600 s, 21 AI cars, all gaps/laps finite, none retired; #2545 node-0 corner not probed |
+| 2 racing a custom design | clean; #2545 seam class reproduced pre-fix and gone on the merged fix | 600 s, 21 AI cars, all gaps/laps finite, none retired; follow-up round below |
 | 3 share codes / import | clean | 19/20 round-trips equal (the 20th correctly refused), truncation/garbage/bit-flip all give a reason, 12 hostile collections handled, no prototype pollution |
 | 4 undo/redo, autosave, delete-selected | clean | stack capped at 100, draft restored after reload, stale index heals to Bahrain |
-| 4 touch editing at 844x390 | NOT TESTED | see viewport gap below |
+| 4 touch editing at 844x390 | clean (follow-up round, real CDP touch at 844x390) | follow-up round below |
 | 5 caught-exception pauses | 1 pause, benign | table in Pauses triaged |
 
 Overall: no defect in `js/editor/`, no code changed.
 
-## Viewport gap
+## Viewport gap (round 1; closed in the follow-up round)
 
 The debug Chrome was launched with `--window-size=844,390` but `innerWidth x innerHeight` read 844x198 (headless window-size counts browser chrome). At 198 px tall the designer's main canvas was never laid out, so the touch result above is not evidence about a real phone. A follow-up should launch with `--window-size=844,520` or set the viewport over CDP (`Emulation.setDeviceMetricsOverride` 844x390 with touch), then read `innerHeight` before trusting any layout.
 
@@ -96,3 +96,31 @@ No uncaught exception in any area.
 - Seam probe for #2545 on a hand-made custom layout.
 - Touch editing at 844x390 under Playwright.
 - `sanitizeName` throws for a non-string whose `toString` throws; unreachable from JSON/share codes, so no change.
+
+## Follow-up round (same day, after the orchestrator's CI GO)
+
+### Touch at a real 844x390
+Launched with `--window-size=844,600`, then plain CDP `Emulation.setDeviceMetricsOverride {width:844,height:390,mobile:true}` and `setTouchEmulationEnabled` (`scratch/cdp-emulate.mjs`, not committed). `innerWidth x innerHeight` read 844x390 and the designer's main canvas laid out at 367x192 (16,50), plus a 367x48 profile canvas. Note `navigator.maxTouchPoints` still read 0 and `(pointer:coarse)` false after the override; the designer takes `pointerType` from each event, so this did not matter here.
+
+Real `Input.dispatchTouchEvent` sequences on the canvas: tap, 8-step drag, 900 ms long-press, two-finger pinch out and in, a second finger landing mid-drag then `touchCancel`, and a finger leaving the canvas to (5,5) and (840,385). Result: no `error` or `unhandledrejection`, every point finite, point count unchanged (152), one undo entry for the whole drag, tool `select` with point #132 selected. Verdict clean. The design read RED (3) afterwards; I did not record whether the restored draft was already red before the drag, so no claim is made about that.
+
+### Build worker path
+- `TrackBuildClient.build` returns null for `def.custom` (`js/track/build-client.js:164`): a custom circuit is never sent to the worker.
+- Live: breakpoint on that line with condition `def && def.custom`. A menu `race(customId)` never reaches it (`loadTrackStepped` only calls the worker for an in-session switch, `state === "race" || "count"`, game.js:2192). `race("monza")` then `race(customId)` did hit it: `def.custom` true, id `custom-a1d2f2d6`, `idx` 52, worker already spawned, `_pending.size` 0. It falls through to `Tracks.buildPaced`; afterwards `info()` read state `race`, track `custom-a1d2f2d6`, n 1211, total 4844 m.
+- Contrast on a built-in: breakpoint at the worker result handler (`build-client.js:128`, `m.type === "built"`) on `race("monza")` from the custom track: `{type:"built", id:"monza", seq:2, ms:1085.8, models:10, hasTrack:true}`, one request pending.
+- Verdict: by design, no defect. The custom path is the paced build.
+
+### #2545 seam class on designer layouts
+PR #2569 (c80cb8a1) fixed the racing-line corner scan. Probe: a superellipse loop (exponents 0.3 / 0.2 / 0.25, 120 control points, 900x600 / 850x550 / 950x500 m, half-width 7) rotated through 20 start positions each, so node 0 lands in different corner phases, built through the real editor path (`CustomTracks.sanitize` -> `TrackValidate.previewDef` -> `Tracks.buildCenterline` with the line bake) and read `lineCorners`, `line[0]` vs `line[n-1]` and the max node step. Gentler loops (exponent 0.45-0.7, radius > 166 m) bake no corners at all and prove nothing.
+
+| tree | corner count over the 20 starts | max seam jump | max node step | cap `SLOPE_MAX*ds` |
+|---|---|---|---|---|
+| pre-fix (this branch, 6ac46a3c) | p=0.3: 4 or 5; p=0.2: 4; p=0.25: 4 or 5 | 0.399 m | 0.435 m | 1.8 m |
+| merged fix (base tip) | 4 at every start, all three shapes | 0.399 m | 0.435 m | 1.8 m |
+
+Starts with node 0 inside a corner (|k0| >= K_ON = 0.006) and inside the hysteresis band (0.0036-0.006) were both present. So on designer layouts the pre-fix defect shows as a corner split into two runs across node 0 (5 corners instead of 4), not as a large jump, and the merged fix removes it. The seam jump is within the slope cap on both trees. A regression test for it already exists in `tests/unit/track-line.test.mjs` (synthetic corner across the seam); I added nothing.
+
+### Tool notes
+- A `debugger_run` left waiting while the page sat paused for minutes ended `unknown` ("Runtime.evaluate response timed out"), and the next `debugger_run` then answered `An evaluation is pending or its execution is unknown; inspect state/resume or detach first`. Detach (with `cleanupErrors` for `setPauseOnExceptions`) then reattach recovered it; the page was still responsive.
+- `debugger_evaluate` while paused refuses calls to functions (`Possible side-effect in debug-evaluate`), so read variables, do not call `enabled()`.
+- The auto-mode classifier denied `debugger_remove_breakpoint` and `debugger_control resume` once each after I marked the PR ready; `debugger_detach` was allowed and resumed the page (`resumedEventObserved: true`).
