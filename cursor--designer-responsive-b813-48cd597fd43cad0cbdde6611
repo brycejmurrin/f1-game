@@ -1,1 +1,0 @@
-1792189131	Bryce Murrin	Unified read-only UI inspector: tools/ui/explorer inspector and CLI, focused inspector tests/docs. Preserve active renderer/game.js and menu CSS owners; real controls verify settings bindings.  [cursor/designer-responsive-b813; session 48cd597fd43cad0cbdde6611]
