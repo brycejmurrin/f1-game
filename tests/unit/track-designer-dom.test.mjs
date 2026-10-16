@@ -1624,15 +1624,23 @@ test("CARD re-entry: a second shareCard while the first is mid-share is refused 
   const b = bootScreen();
   openGreen(b);
   recordingCanvas(b, [], []);
+  // Slow the card render past the old 40-tick poll (#2123): the wait must be on nav.share's signal, not on a tick count.
+  const mkSlow = b.dom.document.createElement;
+  b.dom.document.createElement = (tag) => {
+    const el = mkSlow(tag);
+    if (String(tag).toLowerCase() === "canvas") { const toBlob = el.toBlob; el.toBlob = (cb, type) => setTimeout(() => toBlob(cb, type), 150); }
+    return el;
+  };
   b.ctx.File = File;
-  let release = null;
+  let release = null, entered = null;
+  const shareEntered = new Promise((resolve) => { entered = resolve; });
   b.ctx.navigator = {
     canShare: (d) => Array.isArray(d.files) && d.files.every((f) => f instanceof File),
-    share: () => new Promise((resolve) => { release = resolve; }),
+    share: () => new Promise((resolve) => { release = resolve; entered(); }),
   };
   const first = b.D.shareCard();
-  // cardCanvas is async: wait until nav.share has been entered (cardBusy held).
-  for (let i = 0; i < 40 && typeof release !== "function"; i++) await new Promise((r) => setTimeout(r, 0));
+  // cardCanvas is async: wait on nav.share's own signal (cardBusy held), not a tick count (#2123: 40 ticks ran out under load).
+  await shareEntered;
   assert.equal(typeof release, "function", "first call entered nav.share");
   assert.equal(await b.D.shareCard(), false, "re-entry refused while busy");
   release();
