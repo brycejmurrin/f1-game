@@ -213,6 +213,32 @@ test("a volume drag sends ONE PUT, carrying the value it ended on", async () => 
   assert.match(puts[0], /volume_percent=70/, "the coalesced PUT must carry the LAST value");
 });
 
+test("a debounced volume PUT stays on the device selected when the drag started", async () => {
+  const seen = [];
+  const { SpotifyMusic, flush } = landing((url) => {
+    seen.push(String(url));
+    return Promise.resolve(String(url).includes("/api/token")
+      ? jsonResponse({ access_token: "fresh", refresh_token: "r-1", expires_in: 3600,
+                       scope: "streaming user-modify-playback-state" })
+      : jsonResponse({ devices: [], items: [] }));
+  }, [["apex26.spotify.device", "old-device"]]);
+  await SpotifyMusic.handleRedirect();
+  await settle();
+  seen.length = 0;
+
+  SpotifyMusic.setDevice("old-device");
+  SpotifyMusic.setDeviceVolume(70);
+  SpotifyMusic.setDevice("new-device");
+  flush();
+  await settle();
+
+  const puts = seen.filter((u) => u.includes("/volume"));
+  assert.equal(puts.length, 1);
+  assert.match(puts[0], /volume_percent=70/);
+  assert.match(puts[0], /device_id=old-device/, "the pending drag belongs to the old device");
+  assert.doesNotMatch(puts[0], /device_id=new-device/);
+});
+
 const liveToken = (access) => JSON.stringify({ access_token: access, refresh_token: access,
   expires_at: Date.now() + 3600000, scope: "streaming" });
 
