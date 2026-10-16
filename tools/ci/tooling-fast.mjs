@@ -815,6 +815,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/road-lut-frame.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
+  "tests/unit/save-durability.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/save-schema-registry.test.mjs",
   "tests/unit/scale-defaults.test.mjs",

@@ -1271,6 +1271,7 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `save-durability.test.mjs` | Foreign-write retry ownership, bounded authored mirrors, restore revisions and active-career races, native recovery feedback, cache-only cleanup. |
 | `session-contracts.test.mjs` | Hosted-result error propagation, conflicting plugin metadata, explicit Drive file transport, native document routing and truthful session capability diagnostics; pure local adapters, no service writes. |
 | `bootstrap-doctor.test.mjs` | Real YAML skill headers, helper references, mirror repair, protected shell interval checks, Chromium discovery and read-only environment diagnostics. |
 | `apex-career-delete.test.mjs` | Career slot deletion preserves storage durability and failure results through the agent API. |

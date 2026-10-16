@@ -160,6 +160,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
+| `restore-points.js` | `CareerRestorePoints` | tag | CareerRestorePoints — bounded local history at explicit round/import boundaries. |
 | `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
 | `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
@@ -180,6 +181,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
+| `save-health.js` | `SaveHealth` | tag | SaveHealth — on-demand measurements and cache-only cleanup. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
 | `loading-screen.js` | `LoadingScreen` | tag | PRE-RACE LOADING SCREEN. |
 | `survey-hud.js` | `SurveyHud` | tag | APEX_SURVEY_HUD survey fixture. |

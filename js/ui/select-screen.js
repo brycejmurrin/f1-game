@@ -137,6 +137,7 @@ const exportRecovery = async () => {
 };
 if ($("save-retry")) $("save-retry").onclick = retrySave;
 if ($("save-export")) $("save-export").onclick = exportRecovery;
+if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarning, { store });
 
 // Progressive-enhancement screen swap: run a DOM change inside a native
 // same-document View Transition when the browser supports it (Baseline 2025)

@@ -173,6 +173,7 @@ const FULL = [
   "js/data/garage-defaults.js",
   "js/core/save-schema-registry.js",
   "js/core/store.js",
+  "js/career/restore-points.js",
   "js/career/career-backup.js", // CareerBackup: after store + save-migrate; versioned six-slot export/import
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/ui/title-fx.js",       // <html data-motion> at eval, as early as the store allows: the first menu frame must not animate for a player who said REDUCED
@@ -289,6 +290,7 @@ const FULL = [
   "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
   "js/career/season-ui.js",
   "js/ui/flags.js",
+  "js/ui/save-health.js",
   "js/ui/select-screen.js",
   "js/ui/loading-screen.js",
   "js/ui/survey-hud.js",   // APEX_SURVEY_HUD=1: cockpit HUD fixture without race/scenery warm
@@ -414,7 +416,7 @@ const FULL = [
 // Stylesheet <link> order in index.html.
 const CSS = [
   "css/tokens.css", "css/components.css", "css/dialogs.css", "css/settings.css",
-  "css/settings-controls.css", "css/dialog-platform.css", "css/tuner.css",
+  "css/settings-controls.css", "css/dialog-platform.css", "css/save-health.css", "css/tuner.css",
   "css/title.css", "css/menus.css", "css/select.css", "css/race-setup.css",
   "css/carsetup.css", "css/hud.css", "css/fonts-hud.css", "css/touch-controls.css", "css/overlays.css",
   "css/loading.css", "css/a11y-loading.css", "css/responsive.css",
@@ -448,7 +450,7 @@ const CSS_DEFERRED = [
   "css/career-experience.css", "css/garage-experience.css",
   "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css",
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
-  "css/dialog-platform.css", "css/select.css", "css/race-setup.css",
+  "css/dialog-platform.css", "css/save-health.css", "css/select.css", "css/race-setup.css",
 ];
 // Hand comments gen-shell emits inside the index.html script block, keyed by
 // the tag they sit before/after. Prose only — the tags themselves are FULL.
@@ -559,6 +561,11 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  ["js/core/store.js", "js/career/restore-points.js"],
+  ["js/career/save-migrate.js", "js/career/restore-points.js"],
+  ["js/core/store.js", "js/ui/save-health.js"],
+  ["js/career/restore-points.js", "js/ui/save-health.js"],
+  ["js/ui/save-health.js", "js/ui/select-screen.js"],
   ["js/core/script-loader.js", "js/game.js"],
   ["js/core/lazy-bundles.js", "js/game.js"],
   ["js/core/wake-lock.js", "js/game.js"],
