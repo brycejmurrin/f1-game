@@ -116,7 +116,7 @@ export function loadParts({ shade = false } = {}) {
   // so ctx.Parts is undefined however the file looks. Evaluate the bare name in
   // the same context instead (the pattern in tools/car/cockpit-pale-sweep.mjs).
   const grab = (n) => vm.runInContext(n, ctx);
-  return { Car3D: grab("Car3D"), Parts: grab("Parts"), Teams: grab("Teams"),
+  return { CarMaterials: grab("CarMaterials"), Car3D: grab("Car3D"), Parts: grab("Parts"), Teams: grab("Teams"),
            CarMesh: grab("CarMesh"), LiveryTex: grab("LiveryTex"), CarShade: shade ? grab("CarShade") : null };
 }
 

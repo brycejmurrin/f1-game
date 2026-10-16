@@ -779,8 +779,9 @@ test("A-H3: drawAeroFlaps draws through CarDraw.coOpt — coalesced on TLX, the 
   const gfx = { draw: (mesh, m, o) => draws.push({ mesh, o }) };
   const CarMesh = { getAeroFlapSet: () => ({ set: true }), getAeroFlap: () => ({ flap: true }) };
   const Car3D = { aeroFlaps: () => [{ wing: "front", zAngle: 0, xAngle: 0.3, y: 0.2, z: 1 }, { wing: "rear", zAngle: 0, xAngle: 0.4, y: 0.8, z: -1.5 }] };
-  const run = (CarDraw) => new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarDraw",
-    src + "\nreturn drawAeroFlaps;")(() => [1, 0, 0], (x, a, b) => Math.min(b, Math.max(a, x)), () => ({}), Car3D, CarMesh, gfx, new Float32Array(16), CarDraw);
+  const CarMaterials = vm.runInNewContext(read("js/car/car-materials.js") + "\nCarMaterials");
+  const run = (CarDraw) => new Function("wingColorOf", "clamp", "resolveLivery", "Car3D", "CarMesh", "gfx", "_flapWorld", "CarDraw", "CarMaterials",
+    src + "\nreturn drawAeroFlaps;")(() => [1, 0, 0], (x, a, b) => Math.min(b, Math.max(a, x)), () => ({}), Car3D, CarMesh, gfx, new Float32Array(16), CarDraw, CarMaterials);
   const paint = { roughness: 0.3, metalness: 0.1, specular: 0.5, clearcoat: 0.4, emissive: 0, carPaint: 1, sparkle: 1, doubleSided: true };
   const I = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   // GLX / WGX: no gfx.coalesce — the bag itself, on both branches.

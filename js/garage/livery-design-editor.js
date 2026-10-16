@@ -46,7 +46,7 @@ const GarageLiveryDesignEditor = (function () {
       api.flush(); comparing = !comparing; api.preview(comparing ? h.original() : draft); sync();
       status.textContent = comparing ? "Showing the original paint job. Your edits are kept; the next edit returns to your draft." : "Showing your edited paint job.";
     });
-    const top = document.createElement("div"); top.className = "cs-liv-design-tools"; top.style.gridColumn = "1 / -1"; top.style.minWidth = "0";
+    const top = document.createElement("div"); top.setAttribute("data-liv-design-tools", ""); top.style.gridColumn = "1 / -1"; top.style.minWidth = "0";
     root.insertBefore(top, root.firstChild); top.append(controls, status);
     const tools = document.createElement("details"); tools.open = true;
     const summary = document.createElement("summary"); summary.textContent = "DESIGN TOOLS"; tools.appendChild(summary);
@@ -65,6 +65,10 @@ const GarageLiveryDesignEditor = (function () {
     select("PAINT SURFACE", [["", "Choose a surface…"], ...surfaces.map((input) => [input.dataset.livField, input.getAttribute("aria-label")])], (key) => {
       const input = surfaces.find((item) => item.dataset.livField === key);
       if (!input) return;
+      if (input.disabled) {
+        status.textContent = input.closest(".cs-liv-ed-row")?.title || "This surface is not painted by the current design. Choose a compatible design first.";
+        return;
+      }
       input.scrollIntoView({ block: "nearest" }); input.focus({ preventScroll: true });
       if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.inspect(key);
       status.textContent = input.getAttribute("aria-label") + " selected. Choose a colour or match another colour from this car.";

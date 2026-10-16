@@ -206,3 +206,20 @@ test("sparse pinstripes paint the visible crown and tail centreline", () => {
     assert.equal(paintAt(ctx.ops, r.x + r.w / 2, r.y + r.h / 2), "rgb(255,0,0)");
   }
 });
+
+
+test("surface picker explains inactive paint without moving focus or camera", () => {
+  const dom = makeDom(); let inspections = 0;
+  const { ctx } = load({ document: dom.document, GarageSurfaceInspection: { inspect() { inspections++; } } });
+  vm.runInContext(source("js/garage/livery-design-editor.js"), ctx);
+  const root = dom.document.createElement("div"), row = dom.document.createElement("label"), input = dom.document.createElement("input");
+  row.className = "cs-liv-ed-row"; row.title = "Needs a tail fin — pick a FIN SHAPE other than NONE";
+  input.type = "color"; input.dataset.livField = "fin";
+  input.setAttribute("type", "color"); input.setAttribute("data-liv-field", "fin"); input.setAttribute("aria-label", "TAIL FIN");
+  input.disabled = true; row.appendChild(input); root.appendChild(row);
+  vm.runInContext("GarageLiveryDesignEditor", ctx).attach(root, {}, { presets: () => [], flush() {}, changed() {}, preview() {} });
+  const picker = root.querySelectorAll("select").find((s) => s.getAttribute("aria-label") === "PAINT SURFACE");
+  picker.focus(); picker.value = "fin"; picker.onchange();
+  assert.equal(picker.value, ""); assert.equal(dom.document.activeElement, picker);
+  assert.equal(root.querySelector('[role="status"]').textContent, row.title); assert.equal(inspections, 0);
+});
