@@ -493,3 +493,5 @@ function buildDress(SIDES) {
 
   return { seatDriverAt, boardInfo, boardKey, paintDress, paintBoards, buildDress, resetSpec, releaseDress };
 })();
+
+Object.freeze(GarageDress);
