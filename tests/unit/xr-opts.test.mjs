@@ -118,3 +118,16 @@ test("js/xr/xr-opts.js and apex-xr.js exist for zeroRefModules", () => {
   assert.match(read("js/xr/apex-xr.js"), /ApexXR/);
   assert.match(read("js/xr/xr-opts.js"), /XROpts/);
 });
+
+test("VR driving input applies live and releases only XR-owned samples", () => {
+  const h = bootOpts({}), releases = [];
+  h.ctx.Input = { remoteLost: (source) => releases.push(source) };
+  assert.equal(h.ctx.XROpts.xrInput(), "controllers");
+  assert.equal(h.ctx.XROpts.setXrInput("existing"), "existing");
+  assert.equal(h.ls.getItem("apex26.xrInput"), "existing");
+  assert.deepEqual(releases, ["xr"]);
+  h.ls.setItem("apex26.xrInput", "controllers");
+  assert.equal(h.ctx.XROpts.xrInput(), "controllers", "storage import is visible without a reload");
+  h.ls.setItem("apex26.xrInput", "invalid");
+  assert.equal(h.ctx.XROpts.xrInput(), "controllers");
+});

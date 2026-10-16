@@ -14,6 +14,7 @@
 const XROpts = (function () {
   const KEY_XR = "apex26.xr";
   const KEY_BACKEND = "apex26.xrBackend";
+  const KEY_INPUT = "apex26.xrInput";
   const DEF_XR = "0";
   const DEF_BACKEND = "webgl2";
 
@@ -72,6 +73,15 @@ const XROpts = (function () {
     rawSet(KEY_BACKEND, _backend);
     if (typeof ApexXR !== "undefined" && ApexXR.invalidate) ApexXR.invalidate();
     return _backend;
+  }
+
+  // Live choice; read on every XR frame so imports and another tab take effect.
+  function xrInput() { return rawGet(KEY_INPUT) === "existing" ? "existing" : "controllers"; }
+  function setXrInput(v) {
+    const mode = v === "existing" ? "existing" : "controllers";
+    rawSet(KEY_INPUT, mode);
+    if (mode === "existing" && typeof Input !== "undefined" && Input.remoteLost) Input.remoteLost("xr");
+    return mode;
   }
 
   function inRace() {
@@ -157,6 +167,13 @@ const XROpts = (function () {
     });
     wrap.appendChild(backendRow.row);
 
+    const inputRow = SettingRow.build("pm-xr-input", "VR DRIVING", [
+      ["controllers", "VR CONTROLLERS"], ["existing", "EXISTING CONTROLS"],
+    ]);
+    inputRow.row.title = "Use VR triggers and stick, or keep your wheel, keyboard or paired phone. Pause, recenter and VR menu controls remain available. Applies immediately.";
+    SettingRow.wire(inputRow.row, { read: xrInput, write: setXrInput });
+    wrap.appendChild(inputRow.row);
+
     const hint = document.createElement("p");
     hint.id = "pm-xr-reload";
     hint.className = "tune-label";
@@ -181,7 +198,8 @@ const XROpts = (function () {
   }
 
   return {
-    KEY_XR, KEY_BACKEND, DEF_XR, DEF_BACKEND,
+    KEY_XR, KEY_BACKEND, KEY_INPUT, DEF_XR, DEF_BACKEND,
+    xrInput, setXrInput,
     xr, setXr, xrBackend, setXrBackend, initUI, onCaps, capsVr,
   };
 })();

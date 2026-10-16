@@ -30,6 +30,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -242,3 +243,20 @@ for (const [id, want] of Object.entries(STRIP)) {
     ctxOnce().release(b);
   });
 }
+
+test("the props accumulators start at a per-circuit estimate and spare capacity stays small (M-6)", () => {
+  // The sealed geometry is a VIEW of the accumulator: its buffer is the capacity that stays resident.
+  // Doubling from 8192 left up to 2x of it (vegas: 129.7 MB of buffers for 73.8 MB of data).
+  const ratios = {};
+  for (const id of ["monza", "vegas", "silverstone"]) {
+    const t = build(id);
+    const pos = t.propsGeo.pos;
+    ratios[id] = +(pos.buffer.byteLength / pos.byteLength).toFixed(3);
+    ctxOnce().trim(0);
+  }
+  console.log("M-6 props capacity/data:", JSON.stringify(ratios));
+  for (const id in ratios) assert.ok(ratios[id] < 1.3, `${id}: capacity ${ratios[id]}x the data`);
+  // And the estimate reaches scratch(): the first allocation is the estimate, not 8192.
+  const src = readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
+  assert.match(src, /const out = TrackModels\.scratch\(Math\.round\(track\.total \* \d+\)\)/, "build-props passes a per-circuit estimate");
+});

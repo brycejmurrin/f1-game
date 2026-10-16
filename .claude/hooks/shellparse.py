@@ -775,6 +775,8 @@ def _browser_script(path, args, cwd):
         return None if any(a in ("--fast", "--plan") or a.startswith(("--fast=", "--plan=")) for a in args) else b
     if b == "probe-mcp.py":
         return "probe-mcp.py chrome-start" if "chrome-start" in args else None
+    if b in ("js-debugger-mcp.sh", "js-debugger-cli.mjs", "js-debugger-mcp.mjs", "js-debugger-smoke.mjs"):
+        return None if args and args[0] in ("help", "--help", "-h", "list-tools", "--list-tools", "status") else b
     if b in ("apex-tools-mcp.sh", "apex-tools-mcp.mjs"):
         k = _first_positional(args, set())
         if k + 1 < len(args) and args[k] == "call":
@@ -820,6 +822,10 @@ def browser_starts(text, groups, cwd=None, depth=0):
                 out += browser_starts(body, groups, c, depth + 1)
             k = _first_positional(args, NPM_ARG)
             if k < len(args):
+                why = _browser_script(args[k], args[k + 1:], c)
+        elif b in SHELLS:
+            k = _first_positional(args, set())
+            if k < len(args) and os.path.basename(args[k]) == "js-debugger-mcp.sh":
                 why = _browser_script(args[k], args[k + 1:], c)
         elif b in ("node", "nodejs", "bun", "deno", "python", "python3", "tsx", "ts-node"):
             if "--test" in args or "-e" in args or "-c" in args or "--eval" in args or "-p" in args:

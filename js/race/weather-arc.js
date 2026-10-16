@@ -9,8 +9,7 @@ const WeatherArc = (function () {
   const VALID = ["dry", "wet", "rain", "overcast", "fog", "storm"];
   // What a CHANGEABLE race may be walked TO — the ladder plus the lateral pair.
   // The seed draws from the first five (the pre-storm list, so every existing
-  // seed keeps its target); a drawn RAIN then escalates to STORM 1 in 4 —
-  // never in a friend room, whose lobby does not know the word.
+  // seed keeps its target); a drawn RAIN then escalates to STORM 1 in 4.
   const TARGETS = ["dry", "overcast", "wet", "rain", "fog", "storm"];
   const DRAWN = TARGETS.slice(0, 5);
   const STORM_ODDS = 0.25;
@@ -143,13 +142,12 @@ const WeatherArc = (function () {
       // `base` is the weather the armed race STARTED on: raceWeather itself walks
       // away from it during the arc.
       const from = base != null ? base : G.raceWeather;
-      const room = !!(G.netRoom || (G.netPlay && G.netPlay.active && G.netPlay.active()));
-      const key = [seed, round, from, capLaps(), G.track && G.track.total, room].join("|");
+      const key = [seed, round, from, capLaps(), G.track && G.track.total].join("|");
       if (memo && memo.key === key) return { to: memo.plan.to, dur: memo.plan.dur };
       const r = (k) => Career.hash(seed, round, "wx", k);
       const opts = DRAWN.filter((w) => w !== from);
       let to = opts[Math.floor(r("to") * opts.length)] || "wet";
-      if (to === "rain" && !room && from !== "storm" && r("storm") < STORM_ODDS) to = "storm";
+      if (to === "rain" && from !== "storm" && r("storm") < STORM_ODDS) to = "storm";
       const dur = capPlanDur(120 + Math.floor(r("dur") * 300));
       memo = { key, plan: { to, dur } };
       return { to, dur };
