@@ -695,6 +695,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/onboard.test.mjs",
   // updateCar OT ahead-scan gate: skip the O(n) walk when gapAhead is unused.
   "tests/unit/ot-ahead-scan-gate.test.mjs",
+  "tests/unit/over-road-scan.test.mjs",
   "tests/unit/overtake-mode.test.mjs",
   // PaceMath (js/race/pace-math.js): vTop/vStd/aStd + X-mode/ERS/gearHi pins from pre-extract goldens. ~0.1 s.
   "tests/unit/pace-math.test.mjs",
@@ -827,6 +828,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/ci/remote-group.mjs + browser-group.yml: the group/shard validation
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
+  // Renderer ownership, post health, material detail and particle residency; isolated VM.
+  "tests/unit/render-final-contracts.test.mjs",
   // render() lighting-prep pure-move: renderLightingPrep owns sky/lightning/lamps; call-order pin. ~0.05 s.
   "tests/unit/render-lighting-prep.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
@@ -1017,6 +1020,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.
   "tests/unit/tlx-round2.test.mjs",
   "tests/unit/tlx-texture-release.test.mjs",
+  // tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).
+  "tests/unit/tolerance-diff.test.mjs",
   "tests/unit/tooling-fast-runner.test.mjs",
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",

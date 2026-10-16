@@ -429,6 +429,8 @@ function init(gfx) {
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
   _autoShed = 0;
+  // Two strikes: the phone was killed twice, so boot with the smallest backing store too (TLX reads this after create; GLX has no capDpr).
+  if (_crashStrikes >= 2 && gfx && gfx.isMobile && typeof gfx.capDpr === "function") gfx.capDpr(1);
 }
 
 // ONE owner for the strikes -> floor mapping, shared by init and cleanRace(), so

@@ -54,6 +54,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |
 | **lib/mem-census.mjs** | Page-side memory census (track WeakRefs, decoded audio, render objects, forced GC) for the CLI and its spec. | — |
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |
+| **lib/over-road-scan.cjs** | Pure over-road triangle scan shared by tests/specs/terrain-over-road.spec.js (runs in the page) and its unit test. | — |
 | **lib/pack-assets.cjs** | Node loader for assets/pack: `parseModel` (mirrors assets.js) and `packAssets()` (the `Assets.modelSync` surface). | asset-pack |
 | **lib/proxy-fetch.mjs** | A `fetch` honouring HTTPS_PROXY (curl-backed when Node would bypass the agent proxy) for GitHub API callers in tools/. | — |
 | **lib/session-contracts.mjs** | Normalize hosted tool envelopes and diagnose session capability prerequisites without calling remote services. | check-changes |
@@ -421,6 +422,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **check/html-sink-lint.mjs** | Flags non-constant `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` sinks in js/ outside the audited allowlist. |
 | **check/offline-precache-check.cjs** | Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache. |
 | **check/reject-lint.mjs** | An unhandled rejection paints a full-screen overlay — finds promise-returning API calls that discard theirs. |
+| **check/tolerance-diff.mjs** | Fails a PR that loosens a test tolerance (toBeCloseTo digits, a bound, tol/eps) beside production edits. |
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
 | **ci/assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
 | **ci/base-green.sh** | Was this commit gated green? Prints `green`, `red` or `unknown` for a sha from its ci.yml / pages.yml runs. |

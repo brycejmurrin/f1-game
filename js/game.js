@@ -3762,6 +3762,7 @@ raceSettings = RaceSettings.create(G, {
   GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
   qualiResults: () => quali.results(), openQuali, enableTilt,
   getSteerMode: () => steerMode, buildStandings, raceIntro: raceIntroFromSheet,
+  previewWxPlan: (o) => wxArc.previewPlan(o),   // the MIXED plan WITHOUT caching it (FORECAST line)
 });
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
 // over the world scheduleFlybyTrack() already warmed, and startRaceBody keeps
@@ -5530,7 +5531,7 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // headway never held the car (it hovered at the edge, uncapped), so queue
     // pressure never built and a stuck car never got impatient.
     const followR = blocker ? AiDrive.followGap(aiT, !!track.street, c.speed, c.passOf || c.atkOn || c.towing > 0 ? 1 : c.atkWant ? 0.6 : 0, c.team, c.seat, blocker, c.houseStats, (c.runT || 0) + AiDrive.startGapT(c.calm = AiDrive.startCalm(c.launchOn, c.calmUntil, raceT))) : 0;
-    const qWin = Math.max(16, followR + 6 + AiDrive.startQWinBonus(c.calm, raceT - launchT0));
+    const qWin = AiDrive.queueReach(Math.max(16, followR + 6 + AiDrive.startQWinBonus(c.calm, raceT - launchT0)), c.speed, blocker ? blocker._snapSpeed : 0, BRAKE, vT / VMAX);
     const capBlocks = blocker && blockerGap < qWin &&
       !(blocker === c.passOf && Math.abs(c.x - blocker._snapX) >= 1.8);
     if (blocker && blockerGap < qWin) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)

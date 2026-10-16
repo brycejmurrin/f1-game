@@ -634,3 +634,47 @@ test("rear-ended by a net-owned rival, the local car is punted no further than t
   assert.equal(remote.speed, remoteBefore.speed);
   assert.equal(remote.contactT, remoteBefore.contactT);
 });
+
+// Live debugger hunt 2026-10-16: the rear-end block gated collideFx, the debris
+// hook and IncidentSim.notifyCar on the LAST relaxation pass. The restitution
+// impulse leaves the pair separating after pass 0, so relV > 0 was never true on
+// the last pass: a human closing at 80 m/s on a stationary car fired no hit
+// count, no shake and no incident candidate (hits 0, notifyCar never reached).
+test("a heavy rear-end fires the contact FX and the incident candidate once", async () => {
+  const A = g.apex;
+  await straight(83, 0);
+  const r = A.rivals([{ dProg: 40, dx: 0, speed: 0 }])[0];
+  const c = g.G.cars[r], p = g.G.player;
+  c.tierV = 0.01;   // a stopped car, so it is the player who arrives at ~300 km/h
+  const before = A.incident().rejected.inactive + A.incident().rejected.belowThreshold + A.incident().seq;
+  const hits0 = p.hits | 0;
+  for (let i = 0; i < 90; i++) A.act({ steer: 0, throttle: false, brake: false }, DT, 1);
+  const st = A.incident();
+  A.headless(false);
+  assert.ok(p.speed < 60 && c.speed > 20, `the shunt never happened (player ${p.speed.toFixed(1)}, AI ${c.speed.toFixed(1)})`);
+  assert.equal((p.hits | 0) - hits0, 1, "one shunt is one hit on the player (collideFx fired once)");
+  assert.ok(st.rejected.inactive + st.rejected.belowThreshold + st.seq > before, "IncidentSim.notifyCar was never reached by the shunt");
+});
+
+// #2565, live-verified 2026-10-16: an AI car hitting a PARKED human sheds almost
+// all its closing speed in one tick while the human gains only the capped punt.
+// That is deliberate (the AI behind pays its whole share, the human is never
+// launched); this pins it so a "momentum fix" is a decision, not an accident.
+test("an AI striker into a parked player: the AI pays the whole share, the player is not launched", async () => {
+  const A = g.apex;
+  await straight(0, 0);
+  const r = A.rivals([{ dProg: -90, dx: 0, speed: 54 }])[0];
+  const c = g.G.cars[r], p = g.G.player;
+  c.tierV = 5;
+  let worstDrop = 0, maxHuman = 0;
+  for (let i = 0; i < 240; i++) {
+    const s0 = c.speed;
+    A.act({ steer: 0, throttle: false, brake: false }, DT, 1);
+    worstDrop = Math.max(worstDrop, s0 - c.speed);
+    maxHuman = Math.max(maxHuman, p.speed);
+  }
+  A.headless(false);
+  assert.ok(worstDrop > 40, `the AI never hit the parked car (worst one-tick drop ${worstDrop.toFixed(1)} m/s)`);
+  assert.ok(maxHuman < 10, `the parked player was launched to ${maxHuman.toFixed(1)} m/s`);
+  assert.ok(Number.isFinite(c.speed) && Number.isFinite(p.speed), "non-finite speed after the strike");
+});

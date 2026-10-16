@@ -11,6 +11,7 @@ import {
   buildTrackShotSurveyPlan,
   estimateSurveyMs,
   filterResumeShots,
+  surveyTerminalState,
   normalizeSurveyTracks,
   scoreShotFindings,
   writeCompareIndex,
@@ -150,9 +151,10 @@ for (let ti = 0; ti < tracks.length; ti++) {
   const track = tracks[ti];
   const outDir = tracks.length === 1 ? outRoot : path.join(outRoot, track);
   fs.mkdirSync(outDir, { recursive: true });
-  const { pending, resumed } = filterResumeShots(outDir, plan.shots, resume);
+  const { pending, resumed, invalid } = filterResumeShots(outDir, plan.shots, resume);
+  for (const bad of invalid) console.error(`shot-survey: ${track}/${bad.name}.png is not a valid image (${bad.reason}); recapturing`);
   writeSurveyProgress(outRoot, {
-    state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length,
+    state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, invalid,
     shotsPerTrack: plan.shots.length, estimateMs,
   });
 
@@ -242,7 +244,7 @@ if (tracks.length > 1 && wantIndex) {
 }
 
 writeSurveyProgress(outRoot, {
-  state: hardFail ? "failed" : "done", tracks, trackResults: trackResults.map((t) => ({
+  state: surveyTerminalState(trackResults, hardFail), tracks, trackResults: trackResults.map((t) => ({
     track: t.track, captured: t.captured, failed: t.failed, error: t.error,
   })),
   compareIndex, estimateMs,

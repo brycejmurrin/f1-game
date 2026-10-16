@@ -324,7 +324,7 @@ const SceneryStructures = (function () {
     };
     const gantry = (s, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("gantry", "box");
-      const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
+      const k = ((Math.round(s * n) % n) + n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       const housing = vadd(beam, u, -0.62);   // the lamp housing's centre (below)

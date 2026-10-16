@@ -255,7 +255,7 @@ test("#2150: freeing a coalesced source releases its run's RenderObjects (and qu
   run2.imesh.addEventListener("dispose", () => ob2++); view2.addEventListener("dispose", () => vw2++);
   h.R.warm(Promise.resolve());
   h.R._coDrop(geo2);
-  assert.equal(h.R._dropQueue.includes(run2.imesh), true, "queued while the warm is pending");
+  assert.equal(h.R._dropQueue.some((entry) => entry.mesh === run2.imesh), true, "queued while the warm is pending");
   assert.equal(ob2 + vw2, 0, "nothing disposed under a live compile");
   h.R.warm(null); h.R.flushDropped();
   assert.equal(ob2, 1); assert.equal(vw2, 1); assert.equal(listeners(rec2.mat), before);

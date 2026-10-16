@@ -436,6 +436,7 @@ async function precacheAssetLists() {
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
+    "js/track/scenery/guards.js",
     "js/track/scenery/build-props.js",
     // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
     "js/audio/signal.js",
