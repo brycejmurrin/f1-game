@@ -377,3 +377,16 @@ test("My Team livery adapters stay within the active slot and invalidate cache w
   assert.equal(api.saveLiveryId("ferrari", "red"), true, "other team paint still uses its ordinary GP store");
   assert.equal(global.get("livery.ferrari"), "red");
 });
+
+test("carbon moving flap color overrides hidden wing paint and paint returns when toggled back", () => {
+  const ctx = vm.createContext({ Log: { info() {} } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/car-materials.js"), "utf8"), ctx);
+  vm.runInContext(LIVERIES_SRC, ctx);
+  const Custom = vm.runInContext(CUSTOM_LIV_SRC + ";CustomLiveries", ctx);
+  const liv = Custom.create({ store: { rev: 0, get: (_, fallback) => fallback, set() {} } });
+  const team = { id: "test", color: [0, 0, 1], color2: [1, 0, 0] };
+  liv.livDraftOverride = { teamId: "test", liv: { c1: [0,0,1], c2: [1,0,0], wing: [1,0,0], wingCarbon: "carbon" } };
+  assert.deepEqual(Array.from(liv.wingColorOf(team)), [.055, .056, .062]);
+  liv.livDraftOverride = { teamId: "test", liv: { c1: [0,0,1], c2: [1,0,0], wing: [1,0,0], wingCarbon: "paint" } };
+  assert.deepEqual(Array.from(liv.wingColorOf(team)), [1, 0, 0]);
+});

@@ -2218,6 +2218,8 @@ what it covers.
 | `game-round2-vm.test.mjs` | game.js round 2 (game-vm): BOOST does not deploy or drain in the pit lane, Overtake is not earned in the lane, the lightning bleach restores when the gate closes mid-flash, the ghost car draw waits for lap 1, world-fixed camera rigs are not dragged by the car-frame damper, quitToMenu restores `cars` from `qualiField` and forgets a one-off GP's quali order, a failed quali prepare cancels the lobby, startRace re-applies the landscape lock and attaches the gyro, a transient motion refusal does not claim a switch, pm-calib takes its zero after 300 ms, a refused data/WATCH bundle is announced, a STANDARD daily is prepared once the race session lands, `record()` tolerates a malformed day entry. |
 | `pace-arming-vm.test.mjs` | `otArmed` and `xArmed` arm at the same `vStd` at pace 0.5, 1 and 1.3 (PACE invariance of the arming gates; goes red when a gate reads a raw `c.speed`). |
 
+| `verify-live.test.mjs` | Post-deploy live byte verification: secondary HTML, service-worker bytes, and every lazy asset hash must match the stamped runtime tree. | `test:tooling-fast` |
+
 
 ## See also
 
