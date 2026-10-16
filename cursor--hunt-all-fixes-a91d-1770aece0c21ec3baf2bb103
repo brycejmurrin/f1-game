@@ -1,0 +1,1 @@
+1792155465	Bryce Murrin	#2420 official conflict sync only: js/race/session-records.js, sw.js, tests/unit/key-binds.test.mjs, tests/unit/real-race-script.test.mjs; preserve both regressions. Fresh board d85b45c shows prior 2410 claims stale and no recent push.  [cursor/hunt-all-fixes-a91d; session 1770aece0c21ec3baf2bb103]
