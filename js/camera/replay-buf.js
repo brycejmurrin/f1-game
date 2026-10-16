@@ -69,13 +69,6 @@ const ReplayBuf = (function () {
   // The caller can reserve pose ownership (for example, a recorded WATCH).
   function create(G, eligible) {
     Log.info("game", "ReplayBuf.create");
-    const allowed = () => (!eligible || eligible()) && !(G.netPlay && G.netPlay.active && G.netPlay.active());
-    let nCars = 0, cap = 0, head = 0, count = 0, lastSlot = -1;
-    let times = null, data = null, status = null, brk = null, breakPending = false;
-    let tags = [];
-    let scrubbing = false, liveSnap = null;
-    let scrubT = 0, scrubRate = 1, scrubPlaying = true;
-    let prevStatus = null;
     let audioCars = null;
     const audioOwner = {
       valid: () => !!audioCars && !!G.cars && G.cars.length === audioCars.length && audioCars.every((c, i) => G.cars[i] === c),
@@ -87,6 +80,13 @@ const ReplayBuf = (function () {
         audioCars = null;
       },
     };
+    const allowed = () => (!eligible || eligible()) && !(G.netPlay && G.netPlay.active && G.netPlay.active());
+    let nCars = 0, cap = 0, head = 0, count = 0, lastSlot = -1;
+    let times = null, data = null, status = null, brk = null, breakPending = false;
+    let tags = [];
+    let scrubbing = false, liveSnap = null;
+    let scrubT = 0, scrubRate = 1, scrubPlaying = true;
+    let prevStatus = null;
 
     function alloc(n) {
       nCars = Math.max(1, Math.min(MAX_CARS, n | 0));
@@ -99,10 +99,10 @@ const ReplayBuf = (function () {
       prevStatus = new Uint8Array(nCars);
     }
     function clear() {
-      audioOwner.release();
       head = 0; count = 0; lastSlot = -1; tags = []; breakPending = false;
       scrubbing = false; liveSnap = null; scrubPlaying = true; scrubRate = 1;
       // prevStatus survives: a car already out when the timeline is discarded is not a fresh retirement (alloc() zeroes it).
+      audioOwner.release();
       hideDock();
     }
     function reset(cars) {
@@ -253,6 +253,7 @@ const ReplayBuf = (function () {
         c.yawVis = p.yawVis;
         c.rPrevS = p.s; c.rPrevX = p.x; c.rPrevPx = p.px; c.rPrevPz = p.pz;
         c.rPrevHead = p.head; c.rPrevYawVis = p.yawVis;
+        audioStatus.set(c, { owner: audioOwner, retired: !!(p.status & 1) });
       }
       if (typeof GameAudio !== "undefined" && GameAudio.syncReplayRpms) GameAudio.syncReplayRpms(cars);   // revs follow the replayed speed
     }
@@ -280,13 +281,11 @@ const ReplayBuf = (function () {
       if (!snap || !G.cars) return false;
       scrubT = snap.t;
       applyPose(G.cars, snap.cars);
-      for (let i = 0; i < Math.min(audioCars.length, snap.cars.length); i++)
-        audioStatus.set(audioCars[i], { owner: audioOwner, retired: !!(snap.cars[i].status & 1) });
       return true;
     }
     function endScrub() {
-      audioOwner.release();
       if (!scrubbing) return false;
+      audioOwner.release();
       if (liveSnap && G.cars) restoreLive(G.cars, liveSnap);
       scrubbing = false; liveSnap = null; scrubPlaying = true;
       hideDock();
