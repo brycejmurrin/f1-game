@@ -73,6 +73,38 @@ Same debug Chrome recipe, `debugger_exceptions all` for the whole pass (no pause
 - **Not done:** the stepped physics tick (`into`/`over` through `updateCarBicycle`) and the soak on 3 circuits (monza
   only); the soak needs a driving player to exercise camera/HUD under motion — there is no player autopilot hook.
 
+### Third pass (GLX confirmed, closed-loop driving, tracepoints)
+
+Chrome relaunched at `--window-size=844,600` with `?gfx=glx`: `innerWidth×innerHeight` = 844×408 (the 844×390 launch gave
+a 198 px-tall viewport, per the orchestrator's note). **GLX positively confirmed**: `logs()` has `gfx: GLX context ready`,
+`GLX soft-present on`, `GLX shadow init on=1`.
+
+- **Closed-loop player** (PD on `x` + curvature feed-forward from `scan()` + a `sqrt(22/|k|)` speed target, throttle/brake via
+  `setInput`; `window.__drive` in-page, not committed): monaco 8 000 ticks (reached lap 2, wall-pinned `|x|` 5.1 m many
+  times, `minSpeed` 0), then spa, monza, suzuka 3 000 ticks each. Per tick: non-finite `physState` field, per-tick |Δv|,
+  `prog ≈ (lap−1)·L + s` (held, e.g. monaco lap 2 s 131 → prog 3 426, L ≈ 3 295), HUD gap text. Result: **0 non-finite,
+  0 `NaN|Infinity|undefined` in `#hud-gap-*`, worst player |Δv| 13.4 m/s (a wall hit, under the 15 trap), `LoopHealth` 0
+  faults.**
+- **Tracepoints** (conditional breakpoints whose condition records a non-finite `c.speed|vLat|yawRateCur|x|s|px|pz|accSm|
+  kerbGripSm` into `window.__tpBad` and returns false, so nothing pauses) at `game.js` 5621, 5686, 5761 and 6271 inside the
+  integrate path: the 6271 tracepoint counted 20 943 hits across the run and `__tpBad` stayed empty. This replaces
+  hand-stepping `into`/`over` through a tick, which costs a ~5 KB response per step; no sign flip or saturation was
+  looked for beyond non-finiteness.
+- **Caught-exception triage (the only exception pause of the hunt):** `realPoints` `def.js:70` throws `Tracks: circuit
+  "monaco" has no path` (called with `path: null`) via `paintLive` `scene-live.js:60` → `uploadLive` → `rebuild` →
+  `renderSetupPreview` ← `prebuild.js` ← `game.js render:7422`. **Benign, documented**: `scene-live.js:56-60` catches it ("a
+  raw Tracks.LIST entry that has not hydrated … THROWS on `.points`"). Cost note: it throws once per prebuild frame
+  until the circuit hydrates; I switched to `uncaught` pauses afterwards, so later caught errors in this pass were not
+  looked at.
+- **Limits found:** (a) with `headless(true)` the camera does not update (`camState().eye` constant over 17 000 driven
+  ticks), so the camera-jump trap proves nothing; (b) un-headless `step()` on software GLX at 844×408 queues the GPU
+  process at ~350 % CPU and the page stops answering CDP for minutes (`Debugger.enable` timed out) — an environment
+  property, not a game fault; camera and HUD-under-motion therefore remain unchecked; (c) `debugger_run` cannot be
+  started while a previous `Runtime.evaluate` is "unknown": detach/attach is the only way out (T5 below).
+- T5. After a timed-out evaluation, `debugger_detach` itself reports `cleanupErrors` (three timeouts) and
+  `debugger_attach` fails until the page frees up; fire-and-forget loops that write to `window.*` and are polled with a
+  second short `debugger_run` avoid it.
+
 ### F1 — AI does not brake for a stationary human car; the contact deletes ~48 m/s in one tick (medium confidence)
 
 Filed as issue [#2565](https://github.com/brycejmurrin/f1-game/issues/2565) (`bug`, `ready`).
@@ -97,10 +129,11 @@ slot (s ≈ 5755.6, x +3.0, `rank 22`).
 ### Faults
 
 None in game code beyond F1. Six circuits × the driven scenarios above produced no NaN, no exception pause and no LoopHealth
-fault. The honest gaps are the cells marked **not exercised** (pit entry/stop, WATCH/replay, garage UI open/close, a
-confirmed GLX backend) and prog/lap-inconsistency traps (`c.prog < (c.lap-1)*L - 1`), tyre/fuel/ERS, camera matrix and
-HUD gap-format breakpoints, which were not armed (the deeper pass checked HUD gap text and `prog` regressions
-in-page instead). No fix and no unit test were warranted, so no `tests/unit/**` change; F1 is filed as issue #2565
+fault. The honest gaps are pit entry/stop and WATCH/replay (assigned to other lanes), garage UI open/close (never opened the
+DOM garage), camera and HUD under motion (headless freezes the camera; un-headless software GLX stalls the page — see the
+third pass) and a hand-stepped `into`/`over` tick (replaced by tracepoints). A confirmed GLX backend, the `prog`/`lap`
+invariant and HUD gap text were closed in the later passes; tyre/fuel/ERS fields were covered only by the generic
+non-finite scan of `physState` (`tyreWear`, `tyreGrip`, `ersDeploy`, `energy` …), not by dedicated breakpoints. No fix and no unit test were warranted, so no `tests/unit/**` change; F1 is filed as issue #2565
 (T1–T4 belong to the debugger tool, owned by #2534 — summarised for the orchestrator).
 
 ### Cleanup
