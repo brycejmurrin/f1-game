@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list.
+// @doc Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.
 // @section runner
 /**
  * tooling-fast.mjs — run the structural unit suites with per-file progress.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // verify-change.mjs — ONE command that runs what a change needs, serialized
-// @doc ONE command: fast gate (verify-track, graph-parity, tooling-fast, shell check) + `test-bg` batches → one verdict.
+// @doc ONE diff-aware `--fast` gate plus test batches; full tooling-fast is the pre-push floor; plan JSON reports budget.
 // @section runner
 // correctly, and hands back one verdict.
 //
