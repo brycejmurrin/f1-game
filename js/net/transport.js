@@ -17,6 +17,9 @@ const NetTransport = (function () {
       onMessage(fn) { handlers.message.push(fn); return this; },
       onOpen(fn) { handlers.open.push(fn); return this; },
       onClose(fn) { handlers.close.push(fn); return this; },
+      // How long a transient "disconnected" may last before the wire closes.
+      // Only rtc has one; loopback never disconnects.
+      setDisconnectGrace(ms) { return ms; },
       _emit(kind, a, b, c) {
         // A throwing handler must not take down the transport or stop the
         // remaining handlers — a rendering bug upstream would otherwise read
@@ -93,6 +96,12 @@ const NetTransport = (function () {
         else held.push(m);
       }
       queue = held;
+      // A peer that closed with reliable messages still in flight closes
+      // here, once the last one of them has been handed over (see close()).
+      if (self._closing && !queue.some((m) => m.to === self)) {
+        self._closing = false; self.status = "closed";
+        self._emit("close", "peer");
+      }
       return n;
     }
 
@@ -105,9 +114,15 @@ const NetTransport = (function () {
       self.pump = (localNow) => deliverTo(self, localNow);
       self.close = function () {
         if (self.status === "closed") return;
-        self.status = peer.status = "closed";
-        queue = [];
-        self._emit("close", "local"); peer._emit("close", "peer");
+        self.status = "closed";
+        // The reliable channel delivers what was sent before a close (a
+        // RESULT then BYE in the same tick, #2199): the peer receives those
+        // and only then its close. Unreliable state and anything for us go.
+        queue = queue.filter((m) => m.to === peer && m.channel === EVENT && peer.status !== "closed");
+        self._emit("close", "local");
+        if (peer.status === "closed") return;
+        if (queue.length) { peer._closing = true; return; }
+        peer.status = "closed"; peer._emit("close", "peer");
       };
       self.stats = () => ({ dropped, delivered, queued: queue.length, wire: self._wire || 0 });
     }
@@ -598,7 +613,14 @@ const NetTransport = (function () {
     // its own; only "failed"/"closed" are final. Closing on the blip ended the
     // race for that peer. Give it a grace window instead — the session's own
     // heartbeat timeout still catches a real loss that never recovers.
-    const DISCONNECT_GRACE_MS = 5000;
+    // The lobby keeps 5 s; NetSession.setTimeoutMs forwards a race's longer
+    // grace here, or a 6–25 s outage the race promises to ride out closed the
+    // wire at 5 s and the rival never came back (#2195).
+    let disconnectGraceMs = 5000;
+    ep.setDisconnectGrace = function (ms) {
+      if (Number.isFinite(ms) && ms > 0) disconnectGraceMs = ms;
+      return disconnectGraceMs;
+    };
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
       if (Log.enabled("net", Log.DEBUG)) Log.debug("net", "pc state -> " + s);
@@ -611,10 +633,10 @@ const NetTransport = (function () {
         discTimer = setTimeout(() => {
           discTimer = null;
           if (ep.status !== "closed" && pc.connectionState === "disconnected") {
-            Log.info("net", "connection closed (disconnected " + DISCONNECT_GRACE_MS + " ms)");
+            Log.info("net", "connection closed (disconnected " + disconnectGraceMs + " ms)");
             shutdown("disconnected");
           }
-        }, DISCONNECT_GRACE_MS);
+        }, disconnectGraceMs);
       }
     };
 

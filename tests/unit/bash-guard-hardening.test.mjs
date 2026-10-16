@@ -913,3 +913,26 @@ test("bash-guard: survey images and reports commit on the docs-only path; a code
     }
   } finally { repo.rm(); }
 });
+
+// PostToolUse stdout is debug-log only: "For most events, Claude Code writes stdout to
+// the debug log" — UserPromptSubmit/SessionStart are the exceptions
+// (https://code.claude.com/docs/en/hooks, Exit code 0). The advice must travel as
+// hookSpecificOutput.additionalContext or the model never reads it (#2228 research).
+test("post-edit.sh hands its advice to the model as PostToolUse additionalContext JSON, and stays silent with none", () => {
+  const repo = scratchRepo("hook-postedit-");
+  const run = (rel) => hook("post-edit.sh", { tool_name: "Write", hook_event_name: "PostToolUse",
+    tool_input: { file_path: path.join(repo.dir, rel) }, cwd: repo.dir }, { cwd: repo.dir });
+  try {
+    fs.mkdirSync(path.join(repo.dir, "js/core"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "function (\n");
+    let r = run("js/core/log.js");
+    assert.equal(r.status, 0, r.stderr);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.hookSpecificOutput.hookEventName, "PostToolUse");
+    assert.match(out.hookSpecificOutput.additionalContext, /\[post-edit\] js\/core\/log\.js does not parse/);
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "var ok = 1;\n");
+    r = run("js/core/log.js");
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), "", "no advice, no output");
+  } finally { repo.rm(); }
+});
