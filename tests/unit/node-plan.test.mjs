@@ -117,7 +117,10 @@ test("a game.js diff runs every VM slice, unscoped", () => {
 
 test("fail safe: no diff, an infra path, a unit file, a harness, or an unrouted path runs everything", () => {
   for (const changed of [[], ["package.json"], ["tests/unit/game-vm.test.mjs"], ["tools/lib/game-vm.cjs"],
-                         ["tests/data/physics-baseline.json"], ["some/unknown/file.txt"], [".github/workflows/ci.yml"]]) {
+                         ["tests/data/physics-baseline.json"], ["some/unknown/file.txt"], [".github/workflows/ci.yml"],
+                         ["tools/ci/pick-unit-slices.mjs"], ["tools/ci/node-plan.mjs"],
+                         ["tools/ci/geometry-paths.mjs"], ["tools/ci/twinned-specs.mjs"],
+                         ["tools/ci/ci-select-specs-step.sh"], ["tools/ci/ci-resolve-before.sh"]]) {
     const p = plan(changed);
     assert.equal(p.all, true, `${JSON.stringify(changed)} must run everything (${p.reason})`);
     assert.deepEqual(p.skip, []);
