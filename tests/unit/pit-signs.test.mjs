@@ -363,3 +363,39 @@ test("an upload that throws after the texture landed frees the texture and the m
   assert.deepEqual(freed.sort(), ["mesh1", "tex"], "the texture and the first mesh were released");
   assert.equal(t.meshes.pitSigns, null); assert.equal(t.meshes.pitSignTex, null); assert.equal(t.meshes.pitSignal, null);
 });
+
+test("the garage-bay cache holds typed arrays, places them identically, and a phone keeps none between builds (M-1)", () => {
+  const c = ctxOnce();
+  const Pits = vm.runInContext("SceneryPits", c.sandbox);
+  const teams = [[[0.8, 0.1, 0.1], [0.9, 0.9, 0.9]], [[0.1, 0.3, 0.8], [1, 0.8, 0.1]], [[0.05, 0.5, 0.45], [0.95, 0.95, 0.2]]];
+  let plainBytes = 0, typedBytes = 0, floats = 0, differing = 0;
+  for (const [c1, c2] of teams) {
+    const bay = c.GarageScene.buildStatic({ c1, c2, accent: c2 }, { props: "lite" });
+    const packed = Pits.packBay(bay);
+    assert.equal(packed.pos.BYTES_PER_ELEMENT, 8, "pos stays f64: lossless");   // typed arrays of the VM realm: no instanceof
+    assert.equal(packed.col.BYTES_PER_ELEMENT, 4, "col is f32");
+    assert.equal(packed.idx.BYTES_PER_ELEMENT, 2, "u16 indices");
+    assert.equal(packed.mat.BYTES_PER_ELEMENT, 1, "material ids fit a byte");
+    for (const k of ["pos", "nrm", "col", "mat", "idx"]) { plainBytes += bay[k].length * 8; typedBytes += packed[k].byteLength; }
+    const place = (m) => { const out = { pos: [], nrm: [], col: [], mat: [], idx: [] }; c.TrackGeom.addMesh(out, m, { x: 412.3, y: 3.1, z: -97.7, rotY: 1.234 }); return out; };
+    const a = place(bay), b = place(packed);
+    for (const k of ["mat", "idx"]) assert.deepEqual(Array.from(b[k]), Array.from(a[k]), k + " is lossless");
+    // What the GPU sees is Float32: compare the uploaded bits, not the doubles.
+    for (const k of ["pos", "nrm", "col"]) {
+      const fa = Float32Array.from(a[k]), fb = Float32Array.from(b[k]);
+      floats += fa.length;
+      for (let i = 0; i < fa.length; i++) if (fa[i] !== fb[i]) differing++;
+    }
+  }
+  console.log(`M-1 bay cache: ${plainBytes} B plain -> ${typedBytes} B typed per ${teams.length} bays; ${differing}/${floats} uploaded floats differ`);
+  assert.ok(typedBytes * 1.25 < plainBytes, "typed bays are at least 20% smaller");
+  assert.equal(differing, 0, "the uploaded geometry is bit-identical to the double-array path");
+  // Desktop keeps the cache across the build; a phone empties it.
+  const def = Array.from(c.Tracks.LIST).find((d) => d.id === FULL);
+  c.sandbox.GLX.mobileTier = false;
+  c.Tracks.build(def); c.trim(0);
+  assert.ok(Pits.bayCacheSize() > 0, "desktop caches the bays");
+  c.sandbox.GLX.mobileTier = true;
+  try { c.Tracks.build(def); c.trim(0); assert.equal(Pits.bayCacheSize(), 0, "a phone keeps nothing between builds"); }
+  finally { c.sandbox.GLX.mobileTier = false; }
+});
