@@ -49,6 +49,9 @@ blocker: <one line, or none>
 needs-orchestrator: yes | no
 ```
 
+Quota park: `state: blocked`, `blocker: quota until <reset>`, `needs-orchestrator: no`
+(`references/worker.md` §Quota park).
+
 `state: blocked` plus `needs-orchestrator: yes` is the escalation the
 orchestrator polls for; a Claude worker ALSO messages it directly (worker
 reference §Escalate).

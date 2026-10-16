@@ -8871,7 +8871,7 @@ uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperien
   openSettingsPage: (page, fold) => { openSettings(); settingsNav.show(page, true); const f = fold && $(fold); if (f) { if (f.tagName === "DETAILS") f.open = true; else if (f.parentElement.tagName === "DETAILS") f.parentElement.open = true; f.scrollIntoView({ block: "start" }); f.focus(); } },
 });
 AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: () => openExperiencePhoto(state === "menu" ? "home" : "race"), openDisplay: () => settingsNav.show("display", true),
-  applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
+  applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
 });
 function syncSettingsAvailability() {
   const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }
