@@ -159,7 +159,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
   assert.equal(out[0].result.serverInfo.name, "apex-tools-mcp");
   assert.ok(out[0].result.capabilities.tools);
   const names = (out[1].result.tools || []).map((t) => t.name);
-  // Twenty-seven pinned wrappers: readiness, session checks, track session + shot survey, jobs, UI, audits and the race-HUD survey pair.
+  // Pinned wrappers: readiness, location catalog, session checks, track shots, jobs, UI and audits.
   assert.deepEqual([...names].sort(), [
     "apex_agent",
     "apex_bump_cache_check",
@@ -177,6 +177,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_job_cancel",
     "apex_job_start",
     "apex_job_status",
+    "apex_locations",
     "apex_pick_tests",
     "apex_rotate_markings_check",
     "apex_select_specs",
@@ -1816,6 +1817,16 @@ test("apex_catalog lists the ids the other tools accept, from their own schemas 
   assert.ok(b.uiScreens.includes("settings") && b.uiViewports.includes("ios-iphone-landscape"), "the UI audit's catalogs");
   assert.ok(b.jobKinds.includes("ui_matrix") && b.jobKinds.includes("float_all"));
   assert.ok(!b.uiViewports.includes("phone-landscape-844x390"), "the two viewport families stay distinct");
+});
+test("apex_locations discovers authored turns and scenery names for shot surveys", () => {
+  const list = JSON.parse(callCli("apex_locations", { track: "monaco", search: "turn-1" }).stdout);
+  assert.equal(list.ok, true);
+  assert.deepEqual(list.locations.map(l => l.id), ["monaco/turn-1"]);
+  const named = JSON.parse(callCli("apex_locations", { track: "spa", search: "eau rouge" }).stdout);
+  assert.deepEqual(named.locations.map(l => l.id), ["spa/eau-rouge"]);
+  const plan = JSON.parse(callCli("apex_shot_survey", { track: "monaco", location: "monaco/turn-1",
+    angles: ["apex"], dryRun: true }).stdout);
+  assert.equal(plan.shots[0].location, "monaco/turn-1");
 });
 
 // A misspelled key used to hide behind "tool needs <required>" / the anyOf message; the typo is the likelier mistake.

@@ -24,6 +24,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import { listSurveyLocations } from "../lib/survey-scenarios.mjs";
 import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
 import { aliveRun } from "../ci/test-bg.mjs";
@@ -38,7 +39,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PROTOCOL = "2025-06-18";
 const SERVER_NAME = "apex-tools-mcp";
-const SERVER_VERSION = "1.14.0";
+const SERVER_VERSION = "1.15.0";
 const HTTP_HOST = "127.0.0.1";
 const HTTP_PORT_DEFAULT = 3713;
 const PREFIX = "apex_";
@@ -386,8 +387,16 @@ const CATALOG = [
     name: "apex_catalog",
     week: 8,
     kind: "tree",
-    description: "Tree — every valid id the other apex_* tools accept, in one read: tracks, cams, times of day, shot_survey presets, HUD devices and cams, job kinds, UI screens and UI viewports (the two viewport families differ: apex_ui_* take ios-*/desktop-*, apex_hud_* take phone-*/desktop-*). Read-only, no browser; call it instead of guessing an id and reading the bad_args reply.",
+    description: "Tree — every valid track/camera/UI id the other apex_* tools accept, in one read. For per-track turn and scenery targets call apex_locations. Read-only, no browser.",
     inputSchema: { type: "object", properties: { dryRun: { type: "boolean" }, target: { type: "string", enum: ["local", "deploy"] }, url: { type: "string" } } },
+  },
+  {
+    name: "apex_locations",
+    kind: "tree",
+    description: "Tree — list source-located shot targets for one circuit: every authored turn, start/finish, sector boundaries and curated named scenery. Pass an id to apex_shot_survey.location; fractions are racing-lap coordinates and framing needs visual review. No browser.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["track"], properties: {
+      track: { type: "string" }, search: { type: "string", description: "Optional case-insensitive name/id filter." },
+    } },
   },
   {
     name: "apex_doctor",
@@ -1901,7 +1910,7 @@ async function handleCatalog(args = {}) {
     hudDevices: enumOf("apex_hud_shot", "device"), hudCams: enumOf("apex_hud_shot", "cam"),
     jobKinds: JOB_KINDS,
     uiScreens: ui.screens, uiViewports: ui.viewports, ...(ui.error ? { uiError: ui.error } : {}),
-    hint: "apex_ui_fit / apex_ui_shot take uiScreens × uiViewports; apex_hud_shot takes hudDevices (ios-iphone-landscape-844 aliases phone-landscape-844x390).",
+    hint: "apex_locations {track} lists named shot targets; apex_ui_fit / apex_ui_shot take uiScreens × uiViewports; apex_hud_shot takes hudDevices.",
   });
 }
 /** When this server process started, and the source files it loaded (tools/mcp/*.mjs plus the tools/lib modules they import).
@@ -2321,6 +2330,15 @@ function dispatch(name, args = {}, { signal = null } = {}) {
 
   if (name === "apex_status") return handleStatus(args);
   if (name === "apex_catalog") return handleCatalog(args);
+  if (name === "apex_locations") {
+    const all = listSurveyLocations(args.track);
+    const search = args.search?.trim().toLowerCase();
+    const exact = search && all.filter(l => l.id === search || l.aliases.includes(search));
+    const locations = !search ? all : exact.length ? exact : all.filter(l =>
+      `${l.id} ${l.name}`.toLowerCase().includes(search));
+    return toolResult({ ok: true, track: args.track, locations, count: locations.length,
+      hint: "Use apex_shot_survey {track, location:<id>, angles:[\"entry\",\"apex\",\"exit\"]}; inspect framing before claiming a landmark match." });
+  }
   if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
   if (name === "apex_verify_change_fast" && args.sync !== true && !args.dryRun) {
     // ~10 min against a ~180 s host cap: a background job, not a call that times out (and is killed at 600 s).
@@ -2519,6 +2537,8 @@ const OUTPUT_SCHEMAS = {
   apex_catalog: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), tracks: S("array"), cams: S("array"), tods: S("array"),
     shotPresets: S("array"), hudDevices: S("array"), hudCams: S("array"), jobKinds: S("array"), uiScreens: S("array"), uiViewports: S("array"),
     hint: S("string"), error: S("string"), message: S("string"), fix: S("string") } },
+  apex_locations: { type: "object", additionalProperties: true, properties: { ok: S("boolean"), track: S("string"),
+    locations: S("array"), count: S("number"), hint: S("string") } },
   apex_doctor: cliOut({ ok: S("boolean"), mode: S("string"), checks: S("array"), summary: S("object") }),
   apex_pick_tests: cliOut({ reason: S("string"), receipts: S("array"), unclaimed: S("array"), files: S("array"), groups: S("array") }),
   apex_select_specs: cliOut({ reason: S("string"), changed: S("number"), groups: S("array"), selected: S("array"), skipped: S("array"),

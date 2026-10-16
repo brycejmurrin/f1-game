@@ -3,7 +3,7 @@
 // @doc Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON.
 // @skill survey-track
 import fs from "node:fs";
-import { SURVEY_LOCATIONS, CAMERA_RECIPES, captureIdentity, sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
+import { SURVEY_LOCATIONS, CAMERA_RECIPES, listSurveyLocations, captureIdentity, sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -30,13 +30,19 @@ const has = (n) => argv.includes(n);
 function usage(code = 2) {
   console.error(`usage: node tools/shot/shot-survey.mjs --tracks id[,id…] [--preset scenery|quick|dual_lite|night_pass|lap|dual|inspect|full|custom]
        [--label name] [--out dir] [--resume] [--no-panel] [--no-index] [--gl llvmpipe|swiftshader]
-       [--location spa/eau-rouge --angles overview,reverse,overhead --weathers dry,rain]
+       [--location spa/eau-rouge|monaco/turn-1 --angles overview,reverse,overhead --weathers dry,rain]
        [--profile preview|comparison --seed N --select name,name --plan-file FILE --save-plan FILE --list-locations]
        [--fracs 0,0.5] [--count N] [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog] [--dry-run]`);
   process.exit(code);
 }
 
-if (has("--list-locations")) { console.log(JSON.stringify({ locations: SURVEY_LOCATIONS, cameras: CAMERA_RECIPES }, null, 2)); process.exit(0); }
+if (has("--list-locations")) {
+  const track = flag("--track", flag("--tracks", ""));
+  console.log(JSON.stringify({ locations: track ? listSurveyLocations(track) : SURVEY_LOCATIONS,
+    ...(track ? { track } : { hint: "Pass --track ID to list authored turns and anchors for any circuit." }),
+    cameras: CAMERA_RECIPES }, null, 2));
+  process.exit(0);
+}
 if (has("--help") || has("-h")) usage(0);
 
 const tracksCsv = flag("--tracks", flag("--track", ""));

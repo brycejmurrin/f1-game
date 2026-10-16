@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Thirty `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
+do the work. Thirty-one `apex_*` tools wrap the CLIs (`apex_garage`, `apex_track`, and `apex_shot_survey` are
 
 sessions over one CLI each; `apex_job_*` run the minutes-long ones in the background).
 
@@ -231,7 +231,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Thirty tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
+names the CLI. Thirty-one tools today (`apex_catalog` lists them; the history follows: 30 → 11 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`; 11 → 12 on 2026-09-24 for
@@ -262,12 +262,15 @@ the tool when the 3D frame behind the HUD matters.
 29 → 30 on 2026-10-10 for `apex_catalog` (built-in): every valid id the other tools
 accept (tracks, cams, tods, shot presets, HUD devices/cams, job kinds, UI screens
 and viewports) in one read, sourced from the tools' own schemas so it cannot drift.
+30 → 31 on 2026-10-16 for `apex_locations`: authored turn and sector targets
+on all 52 circuits, plus curated named scenery with source-located fractions.
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
 | `apex_catalog` | built-in | tree | check-changes |
+| `apex_locations` | built-in | tree | survey-track |
 | `apex_doctor` | `check/doctor.mjs` | tree | check-changes |
 | `apex_pick_tests` | `ci/pick-tests.mjs` | tree | check-changes |
 | `apex_select_specs` | `ci/select-specs.mjs` | tree | check-changes |
@@ -324,6 +327,9 @@ Pins the wrap always applies (you cannot override them):
   multi-track runs default to async (`apex_job_start` kind `shot_survey`, returns
   `jobId`); `resume` skips existing PNGs; `gl` prefers `llvmpipe` when Mesa dri
   is present; never spawns N separate `shot.mjs` boots
+- `apex_locations` → read-only per-circuit targets from authored racing-lap
+  turn/sector fractions; a location ID feeds `apex_shot_survey.location`.
+  A target fraction is not proof that a landmark is framed in the raster.
 - `apex_track` → one session per server: `open` takes the browser lock until
   `close` (or the server exits); `op survey` is the same batch as
   `apex_shot_survey`; `cam`/`tod`/`frac` are enum- and range-checked,

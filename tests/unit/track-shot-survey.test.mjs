@@ -129,6 +129,22 @@ test('named scenarios resolve racing-space locations and preserve camera control
  assert.throws(()=>buildTrackShotSurveyPlan({location:'spa/eau-rouge',camera:{fov:Infinity}}),/fov/);
  assert.throws(()=>buildTrackShotSurveyPlan({preset:'custom',shots:[{cam:'orbit',lat:3}]}),/require eye/);
 });
+test('every circuit exposes authored turn locations usable by named shot plans', async () => {
+ const { listSurveyLocations } = await import('../../tools/lib/survey-scenarios.mjs');
+ const { createRequire } = await import('node:module');
+ const require = createRequire(import.meta.url);
+ const defs = require('../../tools/track/verify-track.cjs').buildContext(null, {quiet:true}).LIST;
+ assert.equal(defs.length,52);
+ for (const def of defs) {
+   const locations = listSurveyLocations(def.id);
+   assert.equal(locations.filter(l=>l.kind==='turn').length,def.turns.length,def.id);
+   assert.equal(locations.find(l=>l.id===`${def.id}/turn-1`).frac,def.turns[0],def.id);
+   const plan = buildTrackShotSurveyPlan({track:def.id,location:`${def.id}/turn-1`,angles:['apex']});
+   assert.equal(plan.shots[0].frac,def.turns[0],def.id);
+ }
+ assert.throws(()=>listSurveyLocations('unknown'),/Unknown track/);
+ assert.throws(()=>buildTrackShotSurveyPlan({track:'monaco',location:'spa/turn-1'}),/Unknown or ambiguous/);
+});
 test('resume requires matching receipt identity when a capture context is supplied',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'survey-identity-'));
  try {

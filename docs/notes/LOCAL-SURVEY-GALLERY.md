@@ -109,3 +109,22 @@ to track scenery; this does not add a fake replay or garage scene adapter.
 API references checked during implementation:
 - https://playwright.dev/docs/screenshots
 - https://nodejs.org/api/perf_hooks.html
+
+## Target a turn on any circuit
+
+`apex_locations {"track":"monaco"}` lists authored turn markers, start/finish
+and sector boundaries alongside any curated named scenery. The same catalog is
+available with `shot-survey.mjs --list-locations --track monaco`. All 52 circuit
+definitions supply turn markers in racing-lap coordinates. For example:
+
+```sh
+bash tools/mcp/apex-tools-mcp.sh call apex_locations '{"track":"monaco","search":"turn-1"}'
+bash tools/mcp/apex-tools-mcp.sh call apex_shot_survey '{"track":"monaco","location":"monaco/turn-1","angles":["entry","apex","exit"],"dryRun":true}'
+```
+
+Turn numbers are the game's authored marker indices, not official corner names.
+Selecting a road fraction does not prove that a shot frames a scenery mesh.
+Only curated Spa scenery names have source-located fractions so far. Add others
+after checking their racing-space positions and reviewing rendered frames; a
+landmark registry ID alone has no camera coordinate. The MCP tool format follows
+the [MCP tools specification](https://modelcontextprotocol.io/specification/2025-06-18/server/tools).
