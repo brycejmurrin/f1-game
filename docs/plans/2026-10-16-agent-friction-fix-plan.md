@@ -26,6 +26,7 @@ file was checked on the deploy tip `e50540f0` / `dbc5cfd5`; findings already fix
 | F | **PR plumbing by hand** (body edits, labels, Deferred lines, hand-back, post-merge parents, re-cut races) | 4/14 hit `ready-gate plan-open` on "Deferred:"; 4/14 rebuilt a fix someone pushed first | 3 h duplicate cycles; whole-body rewrites | `pr-body.mjs`, `handback`, `post-merge`, stand-down protocol |
 | G | **Survey toolchain** lives on an unmerged branch and has a destructive flag bug | 25/25 surveys used it; 14+ overwrote tracked `gallery/` | 30–60 % of non-capture survey turns spent re-writing report builders | land and fix the gallery builder; `survey-report.mjs`; brief checklist |
 | H | **Hook and guard friction** (harness Stop hook vs held pushes; ratchet on an unrelated commit; classifier denies read-only calls) | ≥ 30 sessions | a deliverable abandoned (gpu-census step); merges unverifiable | scope ratchets to the staged diff; allow rules; Stop-hook counter-guidance |
+| J | **Screenshots fill the request** until it is too large to send or compact | 2 sessions, both dead | $431 of sessions ended by `Request too large (max 32MB)` | image budget at the tool + skill + hook |
 | I | **CI signal is misleading** (hollow draft tier, external cancel sweeps, stale baselines after sibling merges, sweeps skipped on drafts) | hollow tier in 5+; stale-baseline follow-up PR | a user override merged an unexercised PR | `ci-watch` honest verdict lines; lower-only baseline update |
 
 ## Workstreams
@@ -39,7 +40,7 @@ M ≤ half a day, L more. **Payoff** is the measured cost it removes.
 |---|---|---|---|
 | Launch template hard lines in `agent-fleet/references/orchestrator.md` + `launch-policy.md`: `permission_mode: "auto"`, `source_revision` = deploy branch (or a NAMED integration branch), model stated, who opens the PR and its base, the full deliverable checklist (sections, weathers, merges), push slot | NEW (extends #2380) | S | 3/14 parked fix workers; stale-seed workers cost $5.55–9.50 vs $1.74–2.74; 12 refused relayed PR asks |
 | Pre-launch quota check: read `rate_limit_info` from `get_session` before every `create_session` and every Agent wave > 5; stop at `allowed_warning`; stagger launches ≥ 30 s | #2380 | S | the 50/61 failures; `Sandbox allocation failed … rate_limited` |
-| Quota-park protocol: first limit `api_error` → fleet block `blocked: quota until <reset>`, push dirty worktrees, delete own check-ins, stop replying | #2381 | S | ~550-row api_error tails; stranded worktrees |
+| Quota-park protocol: first limit `api_error` → fleet block `blocked: quota until <reset>`, push dirty worktrees, delete own check-ins, stop replying; one `send_later` at the reset time so the user never types "limit has reset, try again"; workflow-authoring documents `resumeFromRunId` for a `parallel()` that returned nulls on quota | #2381 | S | ~550-row api_error tails; stranded worktrees; hand retries since June |
 | `ListAgents`-free self-check line in worker.md: `SendMessage` is for in-session subagents; a parent `session_…` id needs `send_message` | NEW | S | one failed hand-back call per worker |
 
 ### WS2 — Waiting and CI verdicts (theme D, I) · lane: tools/ci
@@ -70,6 +71,8 @@ M ≤ half a day, L more. **Payoff** is the measured cost it removes.
 | worker.md + AGENTS.md: at a verified checkpoint past ~300 k context, hand off (PR body + `/handoff`) instead of waiting in the big session; watch-only work goes to a fresh small session or Merge Desk | #2385 | S | $10 per ready→live watch at 677 k; $15 of a $50 PR on "keep it mergeable" |
 | Session ledger detectors: cost per user prompt, "turn < 15 s costing > $0.20", context > 400 k, served model ≠ configured, permission_mode_seq outliers | #1714 | M | makes B visible per session |
 | Wave tracker columns `$ so far` / `subagents N`; Sonnet/medium default for carve workers in `.claude/agents/worker.md` | NEW | S | 99 Opus xhigh subagents ≈ $11 each in one wave |
+| **Image budget.** Screenshot tools default to ≤ 800 px JPEG for anything a model will `Read`; playwright-probe / survey-track / mcp-probe say "≤ 8 images, then compact; never re-Read an old shot"; a PostToolUse(Read) counter warns at ~15 image reads | NEW | M | two sessions ($311, $120) died on `Request too large (max 32MB)` and `/compact` itself failed (`Compaction canceled`) — no current rule covers it |
+| `contact-sheet.mjs <track\|all> --frames N`: one montage JPEG per track; capture runs > 20 frames start with a ≤ 10-frame sample shown to the user | NEW | S | "For each track show me all" sent 600 frames as 24 attachments; "Stop it and do 10 shots first" |
 
 ### WS5 — PR plumbing (theme F) · lane: tools/ci + Merge Desk
 
@@ -96,7 +99,7 @@ M ≤ half a day, L more. **Payoff** is the measured cost it removes.
 |---|---|---|---|
 | bash-guard ratchet check fails only for ratchets of files in the staged diff; when the tip itself is over, print the owner/recipe | NEW (near #1686/#2337) | M | an unrelated workflow commit blocked; deliverable abandoned |
 | Allow rules for read-only `git log/rev-parse/show`, `ci-watch.mjs`, and `delete_trigger` of the session's own triggers; verify merge parents via `mcp__github__get_commit` | NEW | S | classifier denied a post-merge parent check and a read-only ci-watch |
-| Stop-hook counter-guidance: the harness `~/.claude/stop-hook-git-check.sh` cannot be changed here, so (a) gitignore every sidecar/raw/jobs path tools write, (b) worker.md says the sanctioned reply when a push is held or a PR merged (`git checkout --detach origin/<deploy>`), (c) stop-guard.sh also checks `git worktree list` for dirty/unpushed worktrees | #2385 + NEW | S | ≥ 14 sessions; 601-commit false counts |
+| Stop-hook counter-guidance: the harness `~/.claude/stop-hook-git-check.sh` cannot be changed here, so (a) gitignore every sidecar/raw/jobs path tools write, (b) worker.md says the sanctioned reply when a push is held or a PR merged (`git checkout --detach origin/<deploy>`), and that a user's "don't commit X" beats the hook (one July session deadlocked between the two), (c) stop-guard.sh also checks `git worktree list` for dirty/unpushed worktrees | #2385 + NEW | S | ≥ 14 sessions; 601-commit false counts |
 | PreToolUse `if:` filters | #1711 (in flight) | S | hook spawns |
 | bash-guard message for split add/commit prints the exact two commands | NEW | S | one denied turn per survey follow-up commit |
 
@@ -118,7 +121,7 @@ M ≤ half a day, L more. **Payoff** is the measured cost it removes.
 ## Order of work
 
 1. **This week, all S, highest payoff first:** WS1 launch template + quota gate + park; WS2 `ci-watch` verdict
-   lines and `queue-depth --wait`; WS3 `/check` and `/handoff`; WS5 `ready-gate` deferred + `run-ci` at creation;
+   lines and `queue-depth --wait`; WS3 `/check` and `/handoff`; WS4 image budget (skill lines first, tool default next); WS5 `ready-gate` deferred + `run-ci` at creation;
    WS6 gallery `--out`/tracked-path fix (on its branch) and the survey-track skill lines; WS7 allow rules.
 2. **Next:** WS6 `survey-report.mjs` and landing the gallery builder; WS3 `/ship`; WS5 `pr-body.mjs`, `handback`,
    `post-merge`; WS2 `deploy.mjs --wait` + `wait-for.mjs` + shot batch done line; WS8 lower-only baselines.
@@ -134,7 +137,7 @@ Version/cache bumps and their merge conflicts (`?v=dev` + pages.yml hashing); di
 hand-rolled deploy loops (protected branch, `deploy.mjs --pr`); squash merges (merge-commit-only guard); load
 oversubscription (test-bg refuses at loadavg ≥ 3); PID kills (bash-guard, `test-bg --stop`); `apex_garage close`
 lock (`lockFree`); `ci-red-triage` partial report; Pages concurrency cancelling runs; `.mcp.json` absolute paths;
-github.io egress (agent `deploy-research`); `who-is-on-it --release` output; split add/commit staging (bash-guard
+github.io egress (agent `deploy-research`); `shot.mjs` leaking Chromium on the error path (cleanup now in `finally`); `who-is-on-it --release` output; split add/commit staging (bash-guard
 ADD_PATHS); `ready-full-cap` curl; `sync-pr` stage timeouts.
 
 ## What worked (make it the default)
