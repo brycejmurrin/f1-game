@@ -40,20 +40,44 @@ Mode `slow` (valid empty payload after 1.5 s, abort-aware). Page-side `unhandled
 | open RESULTS, close at 300 ms, reopen RESULTS at 350 ms | one RESULTS body, no spinner left, 0 errors |
 | open TELEMETRY, close at 500 ms, reopen after the original fetch would have landed | one TELEMETRY body, 0 errors (generation counter drops the stale resolve) |
 
+| RESULTS year pills 2025 → 2024 → 2023 → 2025 within 600 ms, 1.5 s responses | exactly one pill active (the last, 2025), pickers settle, 0 errors |
+
 Caveat: STANDINGS in the first two rows reused a cached `empty` node ("updated 1m ago"), so those prove the tab
 switching and visibility, not a fresh load race; RESULTS/TELEMETRY (dropped on close) did reload.
 
 ## Area 3 — telemetry record / compare / export round-trip
-_pending_
+
+The hub's TELEMETRY tab is an OpenF1 fastest-lap viewer (`fetchDriverTel` → `DataTelemetryModel`), not the in-race
+trace buffer, and EXPORT is gather-and-zip only: there is no import path, so a re-import round-trip does not exist
+(the write side is pinned by `tests/unit/data-export.test.mjs`, 9 pass). Probed `telemetry-model.js` directly with
+synthetic laps of different length (120 x 0.25 s vs 95 x 0.30 s; scratch/data-hunt/telemetry-check.mjs):
+
+- `brakingDuel` with an interval past the shorter lap, an empty lane, duplicate timestamps and a zero-width interval:
+  each answers `available:false` with its reason, or a finite result; no NaN reaches `deltaBefore/After`.
+- `cumDist` with a missing `speed` sample turns everything after it into NaN by design; `brakingDuel` then rejects
+  the lane ("Distance must increase"), and the gauges render "—" (`telemetry-player.js` isFinite guards).
+- `distAtT(cum, NaN)` is NaN and `sampleAt(car, NaN)` returns the first sample; callers never pass NaN (cursor is clamped).
+- Live: gauges/summary paint under `empty`, `null` and `[]` payloads (the NO_TELEM_MSG card); a non-empty lane could not
+  be built without the real OpenF1 feed, so a recorded-lap vs reference-lap compare through the real DOM is **not run**.
 
 ## Area 4 — legends / driver ratings edge cases
-_pending_
 
-## Pause triage (caught-exception pauses)
-_pending_
+Fuzzed in a Node VM (scratch/data-hunt/legends-check.mjs): no duplicate legend ids/codes; every `ratingsFor` finite;
+`byId/byCode/team/parts/seatOf` on `constructor`, `__proto__`, `toString`, `null`, `undefined`, `""`, `0` all answer
+null / -1 (they use `find`, not property lookup); every legend's era has a PERIOD setup and an ERA_YEAR; no code is in
+both `BASE` and `HIRES`; `DriverRatings.get` on prototype keys and on tier `NaN/undefined/"x"/-5/99/Infinity` is
+finite on all seven axes. One defect found (F1 below).
 
 ## Fixes
-_none yet_
+
+- **F1 (low)** `DriverRatings.get(code, tier, deltas)` added a persisted delta with `+`: a string `"5"` concatenated
+  (`82 + "5"` = `"825"`, clamped to 100) and `Infinity` pinned the axis. Career saves are the only source and are
+  validated elsewhere, so reach is a corrupt save. Now only finite numbers apply. Test: appended to
+  `tests/unit/driver-ratings-personality.test.mjs` (fails on the old code, 1 of 8; passes after).
 
 ## Not run
-- Data-hub browser specs (named by `pick-tests`): pending.
+- Browser groups `pick-tests` names for these files: `hooks` (data-lifecycle, telemetry-compare), `lifecycle-unit`, `tiny`.
+  Not run: the diff is a pure-data module plus a unit test, and the debug Chrome owns the one browser slot.
+- Recorded-lap vs reference-lap compare through the real DOM (needs a live OpenF1 lap).
+- Caught-exception pause triage (see above).
+- 30 s delay and 429 modes live.
