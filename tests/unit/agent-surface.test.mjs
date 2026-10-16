@@ -66,9 +66,9 @@ test("every wrap row has a real CLI (or built-in) and a real skill", () => {
   assert.deepEqual(missing, [], "wrap map points at a missing CLI or skill");
 });
 
-test("server table names the three attached servers and the four that left", () => {
+test("server table names the attached servers and the four that left", () => {
   const doc = read("docs/AGENT-SURFACE.md");
-  for (const name of ["apex-tools", "chrome-devtools", "playwright-official"]) {
+  for (const name of ["apex-tools", "chrome-devtools", "js-debugger", "playwright-official"]) {
     assert.match(doc, new RegExp(`\\*\\*${name}\\*\\*`), `AGENT-SURFACE.md must name **${name}**`);
   }
   // Removed 2026-09 — still documented as CLI-only so nobody re-adds them blind.
@@ -83,6 +83,7 @@ test("server table names the three attached servers and the four that left", () 
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
+    "js-debugger",
     "playwright-official",
   ]);
   const cursor = JSON.parse(read(".cursor/mcp.json"));
@@ -160,8 +161,8 @@ test("bootstrap contract is documented for Cloud + desktop", () => {
   const settings = JSON.parse(read(".claude/settings.json"));
   assert.deepEqual(
     [...(settings.enabledMcpjsonServers || [])].sort(),
-    ["apex-tools", "chrome-devtools", "playwright-official"],
-    ".claude/settings.json must approve the three catalog servers",
+    ["apex-tools", "chrome-devtools", "js-debugger", "playwright-official"],
+    ".claude/settings.json must approve the catalog servers",
   );
   assert.match(doc, /enabledMcpjsonServers/);
   // Interactive host-browser MCP → survey-ui-matrix / css-play; batch shots stay playwright-probe (CLI).
@@ -206,7 +207,7 @@ test("Codex .codex/config.toml MCP servers lockstep .mcp.json", () => {
   const toml = read(".codex/config.toml");
   assert.match(toml, /trusted/i);
   const names = Object.keys(cfg.mcpServers).sort();
-  assert.deepEqual(names, ["apex-tools", "chrome-devtools", "playwright-official"]);
+  assert.deepEqual(names, ["apex-tools", "chrome-devtools", "js-debugger", "playwright-official"]);
   for (const name of names) {
     assert.match(toml, new RegExp(`\\[mcp_servers\\.${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\]`),
       `.codex/config.toml missing [mcp_servers.${name}]`);

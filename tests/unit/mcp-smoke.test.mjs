@@ -21,8 +21,8 @@ function run(args, extraEnv = {}) {
 }
 
 test("mcp-smoke --dry-run pokes the two attached shell wrappers and never launches Chromium", () => {
-  // .mcp.json is three servers (apex-tools, playwright-official, chrome-devtools);
-  // only the first and last have a repo shell. probe / playwright / tinyfish
+  // The checkout also registers js-debugger; its separate native smoke owns
+  // debugger validation. This legacy smoke pokes the apex and Chrome shells; probe / playwright / tinyfish
   // wrappers may stay in the plan as CLI probes but are not MCP-attached.
   const r = run(["--dry-run"]);
   assert.equal(r.status, 0, r.stderr + r.stdout);
