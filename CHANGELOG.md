@@ -1,6 +1,8 @@
 # Changelog
 
-Player-facing changes for each shipped build. Add one section per exact `build` number from `version.json` (for example `1695` — not a date range or approximate build).
+Player-facing changes for each shipped build, one section per exact `build` number from `version.json` (for example `1695` — not a date range or approximate build).
+
+Do not edit the build sections in a PR: add a fragment `docs/changelog.d/<slug>.md` (see its README). `node tools/gen/gen-changelog.mjs --fold` writes the sections at release.
 
 Under each build, use only these categories:
 
@@ -38,15 +40,27 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - A malformed settings file shows REFUSED instead of an error overlay; undoing a share code no longer pins the shipped garage setup (#2191).
 - Saving an edited Track Designer circuit on full storage no longer deletes its lap records and ghosts (#2192).
 - A career whose save was restored from backup storage at launch opens again instead of switching to another slot (#2193).
+- Career regulation changes refit cheaper owned parts when the fitted-cost cap falls, preserving research and credits while keeping the car within budget.
 - Track Designer on a landscape phone: the map gets most of the screen and UNDO / FIT VIEW sit beside it instead of covering it (#2152).
 - Touch: sliders, dropdowns and fold-out rows (OVERALL SPEED, Spotify, EXTRA PAINT, EXTRA FUNDS, free-camera FOV) are big enough to tap (#2158).
 - Free camera with the lighting panel open: the camera bar no longer covers the panel's FREE CAMERA button on a phone (#2159).
+- VS FRIEND: a short network outage mid-race (up to the race's 25 s grace) no longer ends the session; your friend's car is driven by AI until their connection comes back (#2195).
+- VS FRIEND room code: INVITE ANOTHER no longer leaves a dead room behind. Closing back to the room brings the same code back for the next friend (#2197).
+- Phone as controller: an expired pairing code takes its QR down and frees the button, and a phone whose link dropped keeps trying to reconnect for about a minute (#2198).
+- VS FRIEND results: the host's finishing order is kept when the host leaves just after the flag (#2199).
+- VS FRIEND lobby: an expired room code is taken down instead of staying shareable, a failed code join frees its connection, and the scan camera turns off when the lobby leaves its step (#2200).
 
 - Returning tabs refuse changed lazy scripts after a release, preventing mixed-version audio, race and multiplayer code.
 - Cached phone-controller links keep their own page offline, and updates preserve working offline Career access when its UI cannot be installed.
 - Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
 
 - Repeated track and lighting warm-ups reuse their renderer probes and release them with their resources, avoiding retained warm-up meshes.
+
+- Restoring a backup keeps a completed sprint's progress even when the sprint awarded no points.
+- Friends who leave qualifying still join the race when the connection's outgoing queue is busy.
+- WATCH restores recorded flags and weather after seeking, and a paused red flag no longer restarts the race.
+- Saving an edited custom circuit preserves its replacement identity across reloads, including a full library.
+- HUD shift and toggle buttons respond to keyboard and assistive activation; inverted wheels navigate menus consistently with driving.
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
