@@ -232,12 +232,14 @@ const SaveMigrate = (function () {
       if (career != null) log("warn", "Career save rejected: not an object type=" + (Array.isArray(career) ? "array" : typeof career));
       return null;
     }
+    const version = Number(career.v);
+    if (version > CAREER_V) {
+      log("warn", "Career save requires a newer build (v" + version + "); update the game to open it. Save preserved.");
+      return null;
+    }
     let v = career.v | 0;
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); log("info", "Career save migrated v" + v + "->v" + (v + 1)); v++; }
-    if (v > CAREER_V) log("warn", "Career save newer than build: v" + v + " > v" + CAREER_V + ", kept as-is");
-    // Never DOWNGRADE: a save from a newer build (a stale cached shell opening
-    // it) keeps its version, so that build's ladder is not re-run on it.
-    career.v = Math.max(v, CAREER_V);
+    career.v = CAREER_V;
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
     career.year = career.year | 0 || 2026;
     career.money = finiteNumber(career.money);
