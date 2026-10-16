@@ -10,6 +10,18 @@ unit test.** Two design gaps are filed below as observations (O1, O2). The stati
 of `sw.js` 255-1075 and `store.js` 395-767 (never read before) found nothing the live
 runs contradicted.
 
+## Verdicts per area
+
+| Area | Verdict | Evidence |
+|---|---|---|
+| 1 Boot / script-loader / lazy bundles | CONFIRMED-LIVE clean degrade; O1 open | failure paths resolve `false` in ~40 ms, tags removed |
+| 2 Service worker | CONFIRMED-LIVE (first install, offline reload, pack-missing); update + two-tab NOT RUN; O2 open | §2 table |
+| 3 Storage / mirror | CONFIRMED-LIVE (corrupt keys, quota refusal, restore); mid-restore `getItem` throw BY-DESIGN edge | §3 table |
+| 4 Asset pack | CONFIRMED-LIVE degrade (`no-pack`); track switch during a pending load NOT RUN | §4 |
+| 5 Caught-exception pauses | BY-DESIGN (`parseStored` x2); remainder not stepped | §1, §5 |
+
+No finding was REFUTED; no defect was CONFIRMED.
+
 ## 1. Boot sequence and script-loader
 
 | Probe | Result |
