@@ -53,8 +53,7 @@ function loadCockpitOpts(disk) {
   return ctx.exported;
 }
 
-function loadCamTune() {
-  const disk = new Map();
+function loadCamTune(disk = new Map()) {
   const ctx = {
     GameStore: {
       store: {
@@ -72,7 +71,7 @@ function loadCamTune() {
 }
 
 // CORNER LEAD is the one knob whose def is NOT 0, and it has to stay that way.
-// set() deletes a knob equal to its def, and "not stored" means "use the shipped
+// "Not stored" means "use the shipped
 // default" — so while def was 0 the two zeroes collided and the slider's whole
 // flat end was unreachable: dragging to 0 deleted the key and the rig went back
 // to 0.54. That shipped, and the help text promised the opposite.
@@ -96,8 +95,10 @@ test("CORNER LEAD's registry default is the shipped lead, so 0 is storable", () 
   assert.equal(CamTune.cornerLead("chase"), 0,
     "0 must reach vantage.js as a real 0 — this is the flat-behind-the-car end of the slider");
 
-  // and setting it back to the shipped amount is what clears it
+  // Setting the shipped amount is an explicit override; RESET clears it.
   CamTune.set("chase", "cornerLead", shipped);
+  assert.equal(CamTune.cornerLead("chase"), shipped);
+  CamTune.reset("chase");
   assert.equal(CamTune.stored("chase", "cornerLead"), false);
   assert.equal(CamTune.cornerLead("chase"), null);
 
@@ -140,6 +141,8 @@ test("CORNER HANG ships at 1 and 0 stays stored", () => {
   assert.equal(CamTune.stored("chase", "cornerHang"), true);
   assert.equal(CamTune.cornerHang("chase"), 0);
   CamTune.set("chase", "cornerHang", 1);
+  assert.equal(CamTune.cornerHang("chase"), 1);
+  CamTune.reset("chase");
   assert.equal(CamTune.stored("chase", "cornerHang"), false);
   assert.equal(CamTune.cornerHang("cockpit"), null);
   const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
@@ -493,4 +496,22 @@ test("broadcast HUD profile keeps two-decimal gaps", () => {
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   assert.match(css, /body\.hud-prof-broadcast \.hud-top/);
   assert.match(css, /body\.hud-prof-broadcast\.hud-bcam \.hud-bottom/);
+});
+
+
+test("explicit camera defaults override global values through export/load until reset", () => {
+  const disk = new Map();
+  let C = loadCamTune(disk);
+  C.setGlobal("fov", 8); C.setGlobal("cornerLead", 1);
+  C.set("chase", "fov", 0); C.set("chase", "cornerLead", 0.54);
+  const edits = C.exportEdits();
+  C.load(edits); C.persist();
+  C = loadCamTune(disk);
+  assert.equal(C.values("chase").fov, 0);
+  assert.equal(C.apply("chase", [0, 2, -8], [0, 1, 0], 60), 60);
+  assert.equal(C.cornerLead("chase"), 0.54);
+  assert.equal(C.values("far").fov, 8);
+  C.reset("chase");
+  assert.equal(C.values("chase").fov, 8);
+  assert.equal(C.cornerLead("chase"), 1);
 });

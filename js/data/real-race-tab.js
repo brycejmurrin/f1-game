@@ -824,7 +824,7 @@ const DataRealRace = (function () {
       const progress = el("progress"); progress.max = script.drivers.length;
       progress.setAttribute("aria-label", "Download real car positions"); progress.hidden = true; row.appendChild(progress);
       const mk = (label, aria, fn) => { const b = el("button", "dh-pill", label); b.type = "button"; b.setAttribute("aria-label", aria); b.addEventListener("click", fn); row.appendChild(b); return b; };
-      const load = mk("LOAD POSITIONS", "Load the real positions of every car", () => loadTraces(script, slot, null));
+      const load = mk("LOAD POSITIONS", "LOAD POSITIONS — real positions of every car", () => loadTraces(script, slot, null));
       const highlights = mk("HIGHLIGHTS", "Watch the highlights of the race, recreated", () => watch(script, slot, 1, true));
       const full = mk("WATCH FROM L" + startLap, "Watch the race recreated from lap " + startLap, () => watch(script, slot, startLap, false));
       const cancel = mk("CANCEL DOWNLOAD", "Cancel the real positions download", () => {
@@ -860,6 +860,7 @@ const DataRealRace = (function () {
       u.progress.hidden = !busy; if (busy) u.progress.value = loading.done;
       u.load.hidden = !!tr && !failed.length; u.load.disabled = !!loading;
       u.load.textContent = traceError || failed.length ? "RETRY POSITIONS" : "LOAD POSITIONS";
+      u.load.setAttribute("aria-label", u.load.textContent + " — real positions of every car");
       u.highlights.disabled = u.full.disabled = !!loading; u.cancel.hidden = !busy;
     }
     function loadTraces(script, slot, then) {
@@ -972,7 +973,7 @@ const DataRealRace = (function () {
         const cell = el("td");
         const go = el("button", "dh-pill", b.lap === 1 ? "START" : "JUMP IN");
         go.type = "button";
-        go.setAttribute("aria-label", "Jump in at lap " + b.lap);
+        go.setAttribute("aria-label", (b.lap === 1 ? "START" : "JUMP IN") + " at lap " + b.lap);
         go.addEventListener("click", (e) => { if (e && e.stopPropagation) e.stopPropagation(); startLap = b.lap; jumpIn(script, seatCode); });
         cell.appendChild(go);
         if (script.t0 && typeof RealRace !== "undefined" && RealRace.replay) {
@@ -1103,7 +1104,7 @@ const DataRealRace = (function () {
         const go = el("button", "dh-pill", seated ? "JUMP IN" : NO_SEAT_MSG);
         go.type = "button";
         go.disabled = !seated;
-        go.setAttribute("aria-label", seated ? "Race as " + d.name : d.name + ": " + NO_SEAT_MSG);
+        go.setAttribute("aria-label", seated ? "JUMP IN — race as " + d.name : d.name + ": " + NO_SEAT_MSG);
         if (seated) go.addEventListener("click", () => { seatCode = d.code; jumpIn(script, d.code); });
         cell.appendChild(go);
         tr.appendChild(cell);

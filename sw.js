@@ -579,10 +579,23 @@ async function precacheAssetLists() {
 // The application shell is still fetched with `no-store` (see
 // precacheAssetLists) because index.html is the one genuinely mutable document
 // here and it is the source of truth for the tag list.
+// A stamped URL is an integrity promise, including fresh network responses.
+async function verifyHashedResponse(url, res) {
+  const key = typeof url === "string" ? url : url.url;
+  const want = /[?&]v=([0-9a-f]{12})(?:&|$)/.exec(key);
+  if (!want) return;
+  const subtle = typeof crypto !== "undefined" && crypto && crypto.subtle;
+  if (!subtle) throw new Error("Cannot verify content hash: " + key);
+  const body = await res.clone().arrayBuffer();
+  const hex = Array.from(new Uint8Array(await subtle.digest("SHA-256", body)), (b) => b.toString(16).padStart(2, "0")).join("");
+  if (hex.slice(0, 12) !== want[1]) throw new Error("Content hash mismatch: " + key);
+}
+
 async function cacheRequiredAsset(cache, url) {
   const mutable = url === "./" || url === "index.html" || url === "version.json";
   const res = await fetch(url, mutable ? { cache: "no-store" } : undefined);
   if (!res || !res.ok) throw new Error("Unable to precache essential asset: " + url);
+  await verifyHashedResponse(url, res);
   await cache.put(url, res);
 }
 
@@ -619,7 +632,7 @@ async function cacheOptionalAsset(cache, url) {
       }, OPTIONAL_ASSET_MS);
     });
     const res = await Promise.race([fetch(url, ctrl ? { signal: ctrl.signal } : undefined), expired]);
-    if (res && res.ok) { await cache.put(url, res); return true; }
+    if (res && res.ok) { await verifyHashedResponse(url, res); await cache.put(url, res); return true; }
     return false;   // 4xx/5xx or timed out: counted by install, one aggregated log line
   } catch (_) { /* optional assets must not invalidate an otherwise healthy install */ }
   finally { if (timeout !== null) clearTimeout(timeout); }
@@ -972,9 +985,10 @@ self.addEventListener("fetch", (event) => {
   // fallback — tools/check/offline-precache-check.cjs still passes because the
   // fallback is the precache.
   let cacheWrite = Promise.resolve();
-  const remember = (res) => {
+  const remember = (res, verified = false) => {
     const copy = res.clone();
     cacheWrite = (async () => {
+      if (!verified) await verifyHashedResponse(req, copy);
       const cache = await openCache(await currentCacheName());
       await cache.put(req, copy);
     })().catch(noteCacheWriteFail);
@@ -997,10 +1011,11 @@ self.addEventListener("fetch", (event) => {
     try {
       const res = await fetch(req);
       if (res && res.ok) {
-        remember(res);
+        await verifyHashedResponse(req, res);
+        remember(res, true);
       }
       return res;
-    } catch (_) { /* network rejected */ }
+    } catch (_) { /* network rejected or content hash mismatched */ }
     return Response.error();
   })();
   // Keep the write alive without delaying a good response on version.json or

@@ -189,6 +189,7 @@ const HudLayout = (function () {
   let prof = null;           // the HUD style apply() last painted (setCam notices a change)
   let preview = null;        // the camera set the settings fold is editing, while it is open
   let previewProf = null;    // …and the style it is editing (pinned when the fold opens)
+  let arrangePreview = false; // ARRANGE temporarily hides the settings fold
   let foldEl = null;         // the MOVE & SIZE <details>, once built
   let selected = null;       // the element the fold has selected (outlined while peeking)
   let onModeChange = null;   // the fold's repaint, while it is built (style / camera changed)
@@ -383,7 +384,7 @@ const HudLayout = (function () {
     // The fold is never collapsed when SETTINGS closes (or a race resumes), so
     // its preview outlived the page and pinned the edited layout over every
     // camera for the session. A fold no longer on screen hands back the camera's.
-    if (preview && !(foldEl && foldEl.open && foldEl.getClientRects && foldEl.getClientRects().length)) {
+    if (preview && !arrangePreview && !(foldEl && foldEl.open && foldEl.getClientRects && foldEl.getClientRects().length)) {
       if (foldEl) foldEl.open = false;
       preview = null; previewProf = null; selected = null; apply();
     }
@@ -1247,6 +1248,7 @@ const HudLayout = (function () {
   return {
     KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS,
     PACK_AIR, PACK_SCALE_MIN, PACK_FIXED, PACK_MOVE,
+    holdArrangePreview: (on) => { arrangePreview = !!on; },
     get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
     hiddenReason, originOf, packPhoneRects, visibilityIds, visibility, setVisibility, screenBounds,

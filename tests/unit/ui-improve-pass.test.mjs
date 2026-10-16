@@ -952,8 +952,9 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
 test("an active career locks team and seat selection in the garage", () => {
   const setup = code("js/garage/setup-sheet.js");
   assert.match(setup, /careerLocked\s*=\s*typeof\s+Career\s*!==\s*"undefined"\s*&&\s*Career\.inCareer\s*&&\s*Career\.inCareer\(\s*\)/);
-  assert.match(setup, /card\.disabled\s*=\s*!!\s*careerLocked\b/);
-  assert.match(setup, /\.disabled\s*=\s*taken\s*\|\|\s*careerLocked\b/);
+  assert.match(setup, /identityLocked\s*=\s*\(\)\s*=>\s*pitLocked\(\)\s*\|\|\s*careerLocked\b/);
+  assert.match(setup, /card\.disabled\s*=\s*!!identityLocked\(\)/);
+  assert.match(setup, /\.disabled\s*=\s*taken\s*\|\|\s*!!identityLocked\(\)/);
   assert.doesNotMatch(gameCode(), /careerActive:/);
 });
 

@@ -1118,3 +1118,42 @@ test("AQUAPLANING: the AI's lift speed sits just past onset, ordered by tread, a
   assert.equal(a, T.aquaplane(70, 1, T.treadFor("rain", 1)), "an unfitted car reads the tread the conditions call for");
   assert.equal(T.aquaInto({ tread: 0 }, 70, "rain", 1).mul, T.aquaplane(70, 1, 0), "a fitted set reads its own");
 });
+
+
+test("red-flag scoring rewinds preserve physical set age and refits reset it", () => {
+  const s = ctxFor(); s.setLevel("real");
+  const c = { lap: 2, prog: 5386 + 200 };
+  s.fit(c, T.optionRecord(TYRES.find((o) => o.id === "soft")));
+  c.lap = 6; c.prog = 5 * 5386 + 200; c.tyreWear = 0.5;
+  const before = s.info(c), lifeBefore = s.lapsLeft(c);
+  for (let i = 0; i < 2; i++) {
+    c.lap--; c.prog -= 5386; c._progGift = (c._progGift || 0) - 5386;
+    assert.equal(s.info(c).lapsOn, before.lapsOn);
+    assert.equal(s.lapsLeft(c), lifeBefore);
+    assert.equal(c.tyreWear, 0.5);
+  }
+  s.fit(c, T.optionRecord(TYRES.find((o) => o.id === "soft")));
+  assert.equal(s.info(c).lapsOn, 0);
+  c.lap++; c.prog += 5386;
+  assert.equal(s.info(c).lapsOn, 1);
+  const grid = { lap: 0, prog: -14 };
+  s.fit(grid, T.optionRecord(TYRES.find((o) => o.id === "soft")));
+  grid.lap = 1; grid.prog = 0;
+  assert.equal(s.info(grid).lapsOn, 0);
+});
+
+
+test("physical tyre clock preserves public historical/network age baseline overrides", () => {
+  const s = ctxFor();
+  const c = { lap: 6, prog: 5 * 5386 + 200 };
+  s.fit(c, T.optionRecord(TYRES.find((o) => o.id === "soft")));
+  assert.equal(s.lapsOn(c), 0);
+  c.tyreLap0 = 2; // RealRace.place / STRATEGY snapshot restores an older set.
+  assert.equal(s.lapsOn(c), 4);
+  c.prog -= 5386; c._progGift = -5386; c.lap--;
+  assert.equal(s.lapsOn(c), 4);
+  s.fit(c, c.tyre);
+  assert.equal(s.lapsOn(c), 0);
+  c.tyreLap0--;
+  assert.equal(s.lapsOn(c), 1, "baseline overrides also work after re-grid fitting");
+});

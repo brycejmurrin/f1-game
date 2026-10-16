@@ -222,3 +222,41 @@ test("the setup turntable gives the Legends slot its own helmet key and a per-le
   assert.match(cam, /helmetKey: team\.legends && seat \? seat\.code : undefined/, "Car3D.build gets the legend's code");
   assert.match(cam, /\(team\.legends && seat \? ":" \+ seat\.code : ""\)/, "ten legends share num 1: the mesh key carries the code");
 });
+
+for (const state of ["race", "menu"]) {
+  test("garage identity is locked only during pit work: " + state, () => {
+    const h = harness({ tab: "team" });
+    let picks = 0, edits = 0;
+    h.G.state = state;
+    h.G.setTeamPicker = () => { picks++; };
+    h.G.openCustomize = () => { edits++; };
+    h.ui.buildSetup();
+    const card = h.dom.byId("cs-team-card"), edit = h.dom.byId("cs-customize");
+    const driver = h.dom.byId("cs-driver").children[1];
+    assert.equal(!!card.disabled, state === "race");
+    assert.equal(!!driver.disabled, state === "race");
+    assert.equal(!!edit.disabled, state === "race");
+    card.onclick(); edit.onclick(); driver.onclick();
+    assert.equal(picks, state === "race" ? 0 : 1);
+    assert.equal(edits, state === "race" ? 0 : 1);
+    assert.equal(h.G.driverIdx, state === "race" ? 0 : 1);
+    h.G.state = "menu";
+    h.ui.buildSetup();
+    assert.equal(!!h.dom.byId("cs-team-card").disabled, false, "return to title unlocks identity");
+  });
+}
+
+
+test("career contract still locks team and driver at the title garage", () => {
+  const h = harness({ career: true, tab: "team" });
+  h.G.state = "menu";
+  let picks = 0;
+  h.G.setTeamPicker = () => { picks++; };
+  h.ui.buildSetup();
+  const card = h.dom.byId("cs-team-card"), driver = h.dom.byId("cs-driver").children[1];
+  assert.equal(card.disabled, true);
+  assert.equal(driver.disabled, true);
+  card.onclick(); driver.onclick();
+  assert.equal(picks, 0);
+  assert.equal(h.G.driverIdx, 0);
+});
