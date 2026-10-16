@@ -236,11 +236,16 @@ function splitTop(s) {
 //                                                        #   (empty output: none needed)
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const a = process.argv.slice(2);
-  if (a[0] === "--ere") process.stdout.write(GEOMETRY_ERE);
+  if (!a.length || a[0] === "--help" || a[0] === "-h") {
+    console.log("usage: node tools/ci/geometry-paths.mjs --ere | --parts-ere | --targeted <changed-files-list>\n"
+      + "  --ere          the fleet-build path pattern, for ci.yml's grep\n"
+      + "  --parts-ere    the parts-census pattern, same shape\n"
+      + "  --targeted F   changed paths (one per line in file F) -> targeted suites, space-separated");
+  } else if (a[0] === "--ere") process.stdout.write(GEOMETRY_ERE);
   else if (a[0] === "--parts-ere") process.stdout.write(PARTS_ERE());
   else if (a[0] === "--targeted") {
     if (!a[1]) { console.error("usage: geometry-paths.mjs --targeted <changed-files-list>"); process.exit(2); }
     const files = fs.readFileSync(a[1], "utf8").split("\n").map((l) => l.trim()).filter(Boolean);
     process.stdout.write(targetedSuites(files).join(" "));
-  }
+  } else { console.error(`geometry-paths: unknown argument ${a[0]} (try --help)`); process.exit(2); }
 }

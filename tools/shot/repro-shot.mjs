@@ -43,8 +43,10 @@
 // mistake this tool exists to stop.
 import { readFileSync } from "node:fs";
 import { startStaticServer, launchChromium, shutdown } from "../lib/harness.mjs";
+import { parseFlags } from "../lib/cli-args.mjs";
 
 const args = process.argv.slice(2);
+parseFlags(args, ["--w", "--h"]);
 const flag = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const positional = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && args[i - 1].startsWith("--")));
 const src = positional[0];

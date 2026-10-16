@@ -185,7 +185,7 @@ export function render(result, { capLine: line } = {}) {
   const head = ["PR", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "SUGGEST"];
   const plan = (p) => (!p || p.state === "none" ? "-" : `${p.items - p.open.length}/${p.items}`);
   const body = rows.map((r) => [
-    `#${r.number}`, clip(r.title, 40), r.draft ? "draft" : "ready", r.sha.slice(0, 7) || "-",
+    `#${r.number}`, clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
     r.mergeableState || "-", r.armed ? (r.mergeMethod || "armed") : "-", r.ci,
     clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
   ]);

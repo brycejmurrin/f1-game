@@ -1,0 +1,38 @@
+[
+  {
+    "query": "Pause in the local game phone decoder and inspect the malformed packet using the js-debugger wrapper.",
+    "expect": "js-debugger"
+  },
+  {
+    "query": "Set a conditional source breakpoint in fitFovY, step into its helper, then inspect aspect and locals.",
+    "expect": "js-debugger"
+  },
+  {
+    "query": "The race state changes on one JavaScript line. Inspect the call frame and step over each column before resuming.",
+    "expect": "js-debugger"
+  },
+  {
+    "query": "Catch a handled JSON parse exception through debugger_exceptions and inspect the parser stack in the current pause.",
+    "expect": "js-debugger"
+  },
+  {
+    "query": "Use the persistent debugger daemon across shell calls to inspect scopes and reproduce a stale pause token after reload.",
+    "expect": "js-debugger"
+  },
+  {
+    "query": "Find why replay interpolation wraps the lap delta: break in the actual JavaScript function, inspect ds, step and resume.",
+    "expect": "js-debugger"
+  },
+  {
+    "query": "Take a heap snapshot and main-thread performance trace while I reproduce a live canvas hitch.",
+    "expect": "mcp-probe"
+  },
+  {
+    "query": "Capture sixty seconds of game-loop CPU profiles and flame charts in a headless batch.",
+    "expect": "playwright-probe"
+  },
+  {
+    "query": "Check whether the live deployed apex-sha contains our merged commit and verify stamped asset bytes.",
+    "expect": "deploy-research"
+  }
+]

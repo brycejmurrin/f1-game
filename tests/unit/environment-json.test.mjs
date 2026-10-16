@@ -29,11 +29,11 @@ test(".cursor/environment.json exists and bootstraps chrome MCP", () => {
   assert.equal(Object.hasOwn(env, "chromeExecutablePath"), false,
     "do not override the host with a machine-specific /opt path; repository launchers discover Chromium at runtime");
   const names = (env.mcpServerAllowlist || []).map((row) => row.name).sort();
-  // Allowlist = the three committed catalog servers only. A stale fourth name
-  // (chrome-devtools-mcp) used to linger after that row left .mcp.json.
+  // Allowlist = committed catalog servers only; removed aliases stay absent.
   assert.deepEqual(names, [
     "apex-tools",
     "chrome-devtools",
+    "js-debugger",
     "playwright-official",
   ]);
 });
@@ -89,7 +89,7 @@ test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.
     assert.ok(row.name.length > 0, "mcpServerAllowlist name must be non-empty");
     assert.equal(typeof row.command, "string", `${row.name} allowlist command must be a string pattern`);
     assert.ok(row.command.includes("*"), `${row.name} allowlist command should use a leading * for resolved bash paths`);
-    assert.notEqual(row.command, "bash", `${row.name} must not use bare bash (collides for all three wrappers)`);
+    assert.notEqual(row.command, "bash", `${row.name} must not use bare bash (collides across wrappers)`);
     patterns.push(row.command);
   }
   assert.equal(new Set(patterns).size, patterns.length, "each allowlist command pattern must be unique");
@@ -112,6 +112,6 @@ test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.
   }
   assert.deepEqual(
     [...allowByName.keys()].sort(),
-    ["apex-tools", "chrome-devtools", "playwright-official"],
+    ["apex-tools", "chrome-devtools", "js-debugger", "playwright-official"],
   );
 });

@@ -13,6 +13,10 @@
     {
       "name": "playwright-official",
       "command": "*bash tools/mcp/playwright-mcp.sh run"
+    },
+    {
+      "name": "js-debugger",
+      "command": "*bash tools/mcp/js-debugger-mcp.sh serve"
     }
   ]
 }

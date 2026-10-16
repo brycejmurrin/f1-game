@@ -1,6 +1,9 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, run or pick the right tests for touched files, validate or pre-push check a change, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging or pushing to the deploy branch, or triaging a Playwright timeout/hang or `--wait` exit 124 (machine load vs real failure). A red Actions run is ci-red-triage; driving a PR to green is steward."
+description: Use when asked did I break anything, run/pick tests for touched files,
+  validate/pre-push check, verify track edits, js/css shell/cache policy (tags stay
+  ?v=dev), merging/pushing to deploy branch, Playwright timeout/hang or `--wait` exit
+  124 (machine load vs real failure). Red Actions → ci-red-triage; PR to green → steward.
 ---
 
 # Validate changes before committing/pushing
@@ -80,3 +83,8 @@ node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wr
   [`references/sync-pr.md`](references/sync-pr.md)
 - Merging with / pushing to the deploy branch, union sweeps, baseline
   grow/shrink rules, Pages concurrency → [`references/deploy.md`](references/deploy.md)
+- Moving a browser spec onto the node gate (vm-portable check, `ADAPTED`/`TWINNED` entry, fidelity mutant,
+  lowering `twinDebt`) → [`references/vm-twin.md`](references/vm-twin.md)
+- Before fixing near a path: list the OPEN `docs/notes/DEFECT-LEDGER.md` entries that touch it without reading the
+  multi-thousand-line file: `rg -n -C2 '\bOPEN\b' docs/notes/DEFECT-LEDGER.md | rg -i -C2 '<path|symbol|test name>'` (drop the
+  second `rg` to list all ~20 OPEN lines). A hit is a known defect: read that entry before re-reporting or "fixing" it.

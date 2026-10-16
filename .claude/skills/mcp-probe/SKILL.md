@@ -1,6 +1,6 @@
 ---
 name: mcp-probe
-description: "Use when driving the LIVE working-tree canvas interactively with the Chrome DevTools MCP (chrome_*) or the probe-mcp.py chrome daemon — poke __apex live, heap/perf/console during an interactive repro. Deployed site / version.json → deploy-research. Batch screenshots / scripted profiles → playwright-probe. Scripted hooks → agent-view. UI-layout matrix → survey-ui-matrix."
+description: "Use when probing the live canvas: Chrome MCP/daemon, __apex, console/network, heap/perf. Batch profiles → playwright-probe; source breakpoints → js-debugger."
 ---
 
 # Probing the live game with the Chrome MCP
@@ -77,6 +77,17 @@ live canvas; `mcp-cli.mjs probe --backend …` for batched renderer recipes;
 `cdmcp-cli.py` for lighting/shot recipes. Do not start a second Chrome client
 beside an active Playwright run. UI matrix → `tools/ui/layout-audit.mjs` (not the archived
 `ui-readable-survey-mcp.py`).
+
+**One tool, three spellings** (the tool is the same; only the prefix differs):
+
+| attached MCP (host tool) | `probe-mcp.py call …` | `cdmcp-cli.py call …` |
+|---|---|---|
+| `mcp__chrome-devtools__click` | `chrome_click` | `click` |
+| `mcp__chrome-devtools__navigate_page` | `chrome_navigate_page` | `navigate_page` |
+| `mcp__chrome-devtools__evaluate_script` | `chrome_evaluate_script` | `evaluate_script` |
+| `mcp__chrome-devtools__take_screenshot` | `chrome_take_screenshot` | `take_screenshot` |
+
+Rule: `probe-mcp` = `chrome_` + the cdmcp name (`tinyfish_` for the TinyFish half); a name that works in one and not the other is a prefix slip.
 
 ## Load on demand
 

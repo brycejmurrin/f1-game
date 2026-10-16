@@ -86,6 +86,14 @@ quoted verbatim with UTC times, and the line `Do not enable auto-merge or
 merge.` Name the archived predecessor's claims as stale so the new worker
 does not stand down for them. Never launch a twin: one live worker per lane.
 
+## Archiving (#2426)
+
+Archive only session ids that appear in this sweep's own report, one
+`archive_session` call per listed id, and never from a `list_sessions` filter
+result (one turn once archived 113 sessions, two of them live orchestrators).
+Only a finished worker whose PR is merged or closed may be archived; a live
+orchestrator or any `[Merge Desk]` session is never archived.
+
 ## Closing
 
 Merge Desk may close a draft that another open PR or the tip fully

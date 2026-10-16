@@ -481,7 +481,7 @@ function create(G, deps) {
       ctx.fillText(["BEFORE", "MOMENT", "AFTER"][i] + " · " + times[i].toFixed(2) + "s", i * 512 + 16, 322);
     }
     const blob = await blobOf(out); if (cancelled()) throw new Error("Contact sheet cancelled");
-    download(blob, "apex26-replay-moment.png"); return true;
+    await download(blob, "apex26-replay-moment.png"); return true;
   }
   const api = { open, close, capture, state, contactSheet, album, background, setBackground, exportPhoto, savePhoto, hasCar };
   live = api; busy(false); return api;

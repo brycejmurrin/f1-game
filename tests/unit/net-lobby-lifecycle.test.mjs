@@ -954,6 +954,80 @@ test("READY is host-relayed with from, and guests key _ready by from||id", () =>
     "guests key _ready by from when present, else the connection id");
 });
 
+test("cancel and fresh open clear READY before the first replacement peer receives catch-up", async () => {
+  const { h, made } = await connectedHost();
+  try {
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().selfReady, true, "the old room really was READY");
+    assert.equal(h.lobby.roomState().peerReady, true, "the old peer really was READY");
+
+    h.lobby.cancel();
+    const afterCancel = h.lobby.roomState().selfReady;
+    assert.equal(h.lobby.open(), true);
+    const afterOpen = h.lobby.roomState().selfReady;
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && made.length < 2; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, 2, "a fresh peer connected on the same lobby instance");
+    // Inspect everything sent during onConnected, including catch-up BEFORE
+    // openRoom resets the local flag: checking only the final flag misses it.
+    const readies = made[1].sent.filter((m) => m.t === "ready" && m.d && m.d.ready);
+    assert.deepEqual(readies, [], "a new room must never announce the previous room's READY");
+    assert.equal(afterCancel, false, "cancel clears local readiness immediately");
+    assert.equal(afterOpen, false, "fresh open starts unready before any connection");
+    assert.equal(h.lobby.roomState().selfReady, false);
+    assert.equal(h.lobby.roomState().peerReady, false);
+  } finally { h.lobby.cancel(); }
+});
+
+test("last guest leaving clears READY before the host invites a replacement directly", async () => {
+  const made = [], wires = [];
+  const h = harness({ teams: TWO_TEAMS, netSession: fakeNetSession(made),
+    scanFactory: () => ({ stop() {}, start() {} }) });
+  h.lobby.setTransportFactory(() => {
+    const closers = [];
+    const wire = {
+      status: "open",
+      onClose(fn) { closers.push(fn); },
+      close() {
+        if (wire.status === "closed") return;
+        wire.status = "closed";
+        for (const fn of closers) fn("peer");
+      },
+    };
+    wires.push(wire);
+    return wire;
+  });
+  const connect = async () => {
+    const want = made.length + 1;
+    assert.equal((await h.lobby.host()).ok, true);
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && made.length < want; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(made.length, want, "the next peer connected");
+  };
+  try {
+    h.lobby.wire();
+    await connect();
+    made[0].deliver("hello", { team: "beta", driver: 0 });
+    made[0].deliver("ready", { ready: true });
+    h.lobby.setReady(true);
+    assert.equal(h.lobby.roomState().selfReady, true);
+    assert.equal(h.lobby.roomState().peerReady, true);
+
+    wires[0].close(); // Natural departure returns to pick, without cancel/open.
+    assert.equal(h.lobby.status().guests, 0);
+    const afterDeparture = h.lobby.roomState().selfReady;
+    await connect();
+    const stale = made[1].sent.filter((m) => m.t === "ready" && m.d && m.d.ready);
+    assert.deepEqual(stale, [], "replacement peer must not inherit the departed room's READY");
+    assert.equal(afterDeparture, false, "empty room clears local readiness immediately");
+    assert.equal(h.lobby.roomState().selfReady, false);
+    assert.equal(h.lobby.roomState().peerReady, false);
+  } finally { h.lobby.cancel(); }
+});
+
 test("host catch-ups READY to a late joiner (same as HELLO catch-up)", async () => {
   // Live repro 2026-10-05 on github.io (apex-sha 5cc9497d): host + guest1
   // READY, invite guest2 — guest2's #vs-them showed both as "choosing".
@@ -1021,6 +1095,20 @@ test("an invalid seed or round rejects the whole payload, as every other field d
       assert.equal(h.G.raceRound, 2, `${JSON.stringify(bad)} must not change the round`);
       assert.equal(h.G.raceLaps, 3, `${JSON.stringify(bad)} must reject the payload whole`);
     }
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest accepts STORM in settings and in a MIXED plan, and still rejects unknown weather", async () => {
+  const { h, s } = await connectedGuest();
+  try {
+    h.G.raceWeather = "dry";
+    s.deliver("settings", { laps: 5, weather: "snow" });
+    assert.equal(h.G.raceWeather, "dry", "an unknown name still rejects the payload whole");
+    s.deliver("settings", initialGuestSettings({ laps: 5, weather: "storm", revision: 1 }));
+    assert.equal(h.G.raceWeather, "storm", "storm is accepted");
+    h.G.raceLaps = 3;
+    s.deliver("settings", initialGuestSettings({ laps: 9, weather: "rain", wxArc: { to: "storm", dur: 200 }, revision: 2 }));
+    assert.equal(h.G.raceLaps, 9, "a MIXED plan drawn toward storm is accepted");
   } finally { h.lobby.cancel(); }
 });
 

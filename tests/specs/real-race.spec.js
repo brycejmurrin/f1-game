@@ -34,6 +34,41 @@ const SCRIPT = {
   cautions: [{ level: 3, from: 2, to: 2, cause: "SAFETY CAR" }],
 };
 
+test("WATCH director buttons expose their visible names and retain keyboard control", async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.addInitScript(() => {
+    localStorage.setItem("apex26.gfxBackend", "three");
+    localStorage.setItem("apex26.tlxForceGL", "1");
+  });
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.goto("/");
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(script => {
+    __apex.headless(true);
+    const line = (p, x) => ({ t: [-5, 0, 120, 600], prog: [p, p, p + 6000, p + 30000], x: [x, x, x, x] });
+    RealRace.launch(script, { seat: "LEC", watch: true, camera: "heli", traces: {
+      frame: "track", cars: { 63: line(-14, 0), 16: line(-22, 1) },
+    } });
+  }, SCRIPT);
+  await page.waitForFunction(() => __apex.info().track === "baku" && __apex.info().state !== "menu", null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => { __apex.go(); __apex.step(1 / 60, 3); });
+  const auto = page.getByRole("button", { name: /^AUTO: let the TV director/ });
+  const lock = page.getByRole("button", { name: /^FOLLOW LOCK: keep following/ });
+  await expect(auto).toBeVisible();
+  await expect(lock).toBeVisible();
+  await lock.focus();
+  await lock.press("Enter");
+  await expect(lock).toHaveAttribute("aria-pressed", "true");
+  await expect(auto).toHaveAttribute("aria-pressed", "false");
+  await auto.focus();
+  await auto.press("Space");
+  await expect(auto).toHaveAttribute("aria-pressed", "true");
+  await expect(lock).toHaveAttribute("aria-pressed", "false");
+  expect(await page.evaluate(() => RealRace.status().watch)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test.describe("real race", () => {
   test("launch() grids the real order, seats the player, lays the plans, and race control holds the scripted flag", async ({ page }) => {
     test.setTimeout(BOOT_MS + 90000);

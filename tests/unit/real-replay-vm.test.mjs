@@ -467,6 +467,19 @@ test("BROADCAST in WATCH (camera AUTO): the tower goes up, the director cuts to 
     assert.equal(RR.status().replay.paused, paused0, "Space presses the focused button, never pauses on top of it");
     key("Equal", inBar("SELECT"));
     assert.equal(RR.status().replay.speed, sp0, "a focused select keeps its keys");
+    // #2101: Ctrl/Cmd/Alt chords are the browser's (Ctrl+Plus zoom): speed unchanged and the default NOT prevented;
+    // the bare key and Shift+Equal ("+") still change speed.
+    let prevented = 0;
+    const chord = (code, mods, target) => g.sandbox.dispatchEvent({ type: "keydown", code, repeat: false, target, ...mods, preventDefault() { prevented++; }, stopPropagation() {} });
+    for (const mods of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      chord("Equal", mods, inBar("BUTTON")); chord("Minus", mods, null);
+    }
+    assert.equal(RR.status().replay.speed, sp0, "modifier chords leave the playback speed alone");
+    assert.equal(prevented, 0, "and leave the browser's zoom default alone");
+    chord("Equal", { shiftKey: true }, inBar("BUTTON"));
+    assert.ok(RR.status().replay.speed > sp0, "Shift+Equal is still the plus key");
+    key("Minus", inBar("BUTTON"));
+    assert.equal(RR.status().replay.speed, sp0);
     // The flag: the results take the tower down with the replay.
     RR.replay().seek(405);
     g.step(60 * 8);

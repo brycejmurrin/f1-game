@@ -20,6 +20,20 @@ const SceneryPits = (function () {
   // custom liveries, MY TEAM and legend fields mint new keys for the whole
   // session, so the oldest entry goes once the cache passes two grids' worth.
   const BAY_CACHE = new Map(), BAY_CACHE_MAX = 48;
+  // The cached bay is TYPED: GarageScene.buildStatic returns plain double arrays. pos/nrm stay f64
+  // (addMesh rotates them, and an f32 round-trip moved 1.4% of the uploaded floats by 1 ulp: desktop
+  // output must not change), col is f32 (copied, never computed on: exact), mat u8 and idx u16/u32 are
+  // lossless. A phone (mobileTier) keeps nothing between builds: the cache empties after each build.
+  const narrow = (a, T) => (a ? T.from(a) : a);
+  function packBay(m) {
+    if (!m || !m.pos || !m.idx || typeof Float32Array === "undefined") return m;
+    let hi = 0, mx = 0;
+    for (let i = 0; i < m.idx.length; i++) if (m.idx[i] > hi) hi = m.idx[i];
+    if (m.mat) for (let i = 0; i < m.mat.length; i++) if (m.mat[i] > mx) mx = m.mat[i];
+    return { pos: narrow(m.pos, Float64Array), nrm: narrow(m.nrm, Float64Array), col: narrow(m.col, Float32Array),
+             mat: narrow(m.mat, mx < 256 ? Uint8Array : Uint16Array), idx: narrow(m.idx, hi < 65536 ? Uint16Array : Uint32Array) };
+  }
+  const lowTier = () => typeof GLX !== "undefined" && !!GLX && !!GLX.mobileTier;
   function bayMesh(rowEntry) {
     if (typeof GarageScene === "undefined" || typeof GarageScene.buildStatic !== "function") return null;
     const key = rowEntry.team + "|" + rowEntry.col.join(",") + "|" + rowEntry.col2.join(",");
@@ -27,7 +41,7 @@ const SceneryPits = (function () {
     if (!m) {
       // `props: "lite"`: the furniture that reads from the lane — tyre stacks
       // in the door corners and out on the apron, tool chests, the jack.
-      m = GarageScene.buildStatic({ c1: rowEntry.col, c2: rowEntry.col2, accent: rowEntry.col2 }, { props: "lite" });
+      m = packBay(GarageScene.buildStatic({ c1: rowEntry.col, c2: rowEntry.col2, accent: rowEntry.col2 }, { props: "lite" }));
       if (BAY_CACHE.size >= BAY_CACHE_MAX) BAY_CACHE.delete(BAY_CACHE.keys().next().value);
       BAY_CACHE.set(key, m);
     }
@@ -767,10 +781,11 @@ const SceneryPits = (function () {
     for (const q of crestsWanted) emitCrest(q[0], q[1], q[2], q[3]);
     if (signs.cells.length || signs.boards.length) track.pitSigns = signs;
     if (signal.quads.length) track.pitSignal = signal;
+    if (lowTier()) BAY_CACHE.clear();
     return { bays, wall: wallBuilt, lamps, entryLamps, signs: signs.cells.length, boards: signs.boards.length,
              panels: signs.panels.length, crests: signs.crests.length, ...(roof ? { roof } : {}) };
   }
 
-  return { build };
+  return { build, packBay, bayCacheSize: () => BAY_CACHE.size };
 })();
 Object.freeze(SceneryPits);

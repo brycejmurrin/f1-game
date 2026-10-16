@@ -34,10 +34,12 @@ import { awaitCaptureReady, mutateCaptureScene, installProbeInit, screenshotPres
 import { parseCaptureOptions, captureContextOptions, captureLaunchOptions, captureScreenshotOptions,
   captureExtension, applyCaptureProfile } from "./capture-options.mjs";
 import { captureBrowserDiagnostics, assertCaptureGpuCapability, startCaptureTrace } from "./capture-diagnostics.mjs";
+import { parseFlags } from "../lib/cli-args.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const options = parseCaptureOptions(process.argv.slice(2));
 const argv = options.positionals;
+parseFlags(argv, ["--serve", "--track", "--out", "--backend"]);
 const flag = (n, d) => { const i = argv.indexOf(n); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : d; };
 const BOOT_MS = 45000, TRACK_MS = 60000, PRESENT_MS = 90000;
 const CAMS = new Set(["park", "eye", "orbit", "cinematic", "trackside"]);

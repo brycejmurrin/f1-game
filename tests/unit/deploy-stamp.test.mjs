@@ -113,3 +113,42 @@ test("staged lazy scripts carry full SHA-256 integrity, including track-build an
     assert.equal(run("--check").status, 0);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+// #2312: the ?v= key is 12 hex chars and Pages serves current bytes for an older key, so initial
+// script/stylesheet tags (index.html and the secondary pages) carry the file's full SRI once staged.
+test("staged initial script and stylesheet tags carry full SHA-256 integrity", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "initial-integrity-"));
+  const sri = (file) => "sha256-" + createHash("sha256").update(fs.readFileSync(path.join(dir, file))).digest("base64");
+  const run = (...args) => spawnSync(process.execPath, ["tools/ci/bump-cache.mjs", ...args, "--root", dir, "--json"], { cwd: ROOT, encoding: "utf8" });
+  try {
+    fs.mkdirSync(path.join(dir, "fx"));
+    fs.writeFileSync(path.join(dir, "fx/a.js"), "console.log('a');\n");
+    fs.writeFileSync(path.join(dir, "fx/a.css"), "body{margin:0}\n");
+    fs.writeFileSync(path.join(dir, "index.html"),
+      `<head><meta name="apex-build" content="1695">\n<link rel="stylesheet" href="fx/a.css?v=dev">\n` +
+      `<script defer crossorigin="anonymous" src="fx/a.js?v=dev"></script></head>`);
+    fs.writeFileSync(path.join(dir, "version.json"), '{"build":1695}');
+    assert.equal(run("--apply").status, 0);
+    const html = () => fs.readFileSync(path.join(dir, "index.html"), "utf8");
+    assert.match(html(), new RegExp(`src="fx/a\\.js\\?v=[0-9a-f]{12}" integrity="${sri("fx/a.js").replace(/[+/=]/g, "\\$&")}"`));
+    assert.match(html(), new RegExp(`href="fx/a\\.css\\?v=[0-9a-f]{12}" integrity="${sri("fx/a.css").replace(/[+/=]/g, "\\$&")}"`));
+    assert.equal(run("--check").status, 0);
+    // Restamping replaces the integrity rather than stacking a second attribute.
+    assert.equal(run("--apply").status, 0);
+    assert.equal((html().match(/integrity=/g) || []).length, 2);
+    // Bytes that no longer match the stamped tag: the integrity attribute is reported stale beside the ?v= key.
+    fs.writeFileSync(path.join(dir, "fx/a.js"), "console.log('newer deploy');\n");
+    const check = run("--check");
+    assert.equal(check.status, 1);
+    const found = JSON.parse(check.stdout).assetMismatches;
+    assert.ok(found.some((m) => m.rel === "fx/a.js" && m.expected === sri("fx/a.js") && /^sha256-/.test(m.actual || "")), "the script tag's integrity is reported stale");
+    assert.equal(run("--apply").status, 0);
+    assert.equal(run("--check").status, 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("the repo shell keeps integrity-free initial tags (dev behaviour is unchanged)", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.doesNotMatch(html, /<script\b[^>]*\bsrc="[^"]*\?v=dev"[^>]*\bintegrity=/);
+  assert.doesNotMatch(html, /<link\b[^>]*rel="stylesheet"[^>]*\bintegrity=/);
+});

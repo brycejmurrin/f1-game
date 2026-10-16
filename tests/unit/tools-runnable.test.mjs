@@ -315,6 +315,63 @@ test("the MCP-facing entry points answer without touching a browser or a network
   assert.deepEqual(failed, [], "an MCP-facing entry point does not answer");
 });
 
+test("CLI clarity (#1702 #1699 #1696 #1694): help paths answer fast without side effects, typos are errors", () => {
+  const at = (rel) => path.join(ROOT, rel);
+  const run = (rel, ...args) => spawnSync(rel.endsWith(".py") ? "python3" : process.execPath, [at(rel), ...args],
+    { encoding: "utf8", cwd: ROOT, timeout: 15000 });
+  const text = (r) => `${r.stdout}\n${r.stderr}`;
+  // --help / bare: usage, exit 0. The 15 s timeout is the "no browser, no replay, no scan" assertion.
+  for (const [rel, args, want] of [
+    ["tools/ci/pick-unit-slices.mjs", ["--help"], /usage:.*pick-unit-slices/],
+    ["tools/ci/geometry-paths.mjs", [], /usage:.*geometry-paths/],
+    ["tools/ci/playwright-occupancy.mjs", [], /usage:.*playwright-occupancy/],
+    ["tools/ci/spec-staleness.mjs", ["--help"], /usage:.*spec-staleness/],
+    ["tools/ci/run-playwright.mjs", ["--help"], /usage:.*run-playwright/],
+    ["tools/shot/baked-scenery.mjs", ["--help"], /--limit/],
+    ["tools/check/scan-globals.mjs", ["--help"], /usage:.*scan-globals/],
+    ["tools/check/font-digits.py", ["--help"], /usage:.*font-digits/],
+    ["tools/check/extract-module.mjs", ["--help"], /usage:.*extract-module/],
+    ["tools/shot/cam-motion.mjs", ["--help"], /usage:/],
+    ["tools/shot/cam-corners.mjs", ["--help"], /usage:/],
+  ]) {
+    const r = run(rel, ...args);
+    assert.equal(r.status, 0, `${rel} ${args.join(" ")}: exit ${r.status} ${r.stderr}`);
+    assert.match(r.stdout, want, rel);
+  }
+  // pick-unit-slices --help must print usage, not a computed plan.
+  assert.doesNotMatch(run("tools/ci/pick-unit-slices.mjs", "--help").stdout, /reason|fail-safe plan/);
+  // scan-globals --help writes no artifact.
+  const graph = at("artifacts/dep-graph.json");
+  const before = fs.existsSync(graph) ? fs.statSync(graph).mtimeMs : null;
+  run("tools/check/scan-globals.mjs", "--help");
+  assert.equal(fs.existsSync(graph) ? fs.statSync(graph).mtimeMs : null, before, "scan-globals --help wrote dep-graph.json");
+  // An unknown flag exits non-zero and says so, before any browser or VM boots.
+  for (const [rel, args] of [
+    ["tools/shot/baked-scenery.mjs", ["--bogus"]],
+    ["tools/shot/repro-shot.mjs", ["x.json", "--bogus"]],
+    ["tools/shot/shot-survey.mjs", ["--tema"]],
+    ["tools/shot/track-session.mjs", ["--serve", "--bogus"]],
+    ["tools/shot/cam-motion.mjs", ["--bogus"]],
+    ["tools/shot/agent.mjs", ["monza", "world", "--tema=x"]],
+    ["tools/shot/shot.mjs", ["monza", "0.1", "--bogus"]],
+    ["tools/shot/garage-tap.mjs", ["--bogus"]],
+    ["tools/check/physics-tune-sweep.mjs", ["--tema"]],
+    ["tools/check/defend-duel.mjs", ["--tema"]],
+    ["tools/check/player-dyn.mjs", ["--tema"]],
+  ]) {
+    const r = run(rel, ...args);
+    assert.ok(r.status === 1 || r.status === 2, `${rel} ${args.join(" ")}: exit ${r.status}`);
+    assert.match(text(r), /unknown flag/, rel);
+  }
+  // A bad extract-module range is a message, not a SyntaxError stack. js/game.js lines 1-3 open a comment.
+  const bad = run("tools/check/extract-module.mjs", "js/game.js", "1", "3");
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /does not parse as a program/);
+  assert.doesNotMatch(bad.stderr, /\n\s+at /);
+  // baked-scenery documents --limit (the cheap smoke).
+  assert.match(fs.readFileSync(at("tools/shot/baked-scenery.mjs"), "utf8"), /--limit=1/);
+});
+
 test("offline-precache-check --help prints usage and does not launch Chromium", () => {
   // Measured 2026-10-01: `--help` was taken as the warm circuit id and the
   // check booted Playwright against warm=--help. A new agent following the

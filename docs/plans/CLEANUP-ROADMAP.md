@@ -19,7 +19,7 @@ no ESM.
 ## Audit coverage
 
 Eighteen parallel read-only bloat-auditor runs (see agent IDs in scratch matrix).
-**Pending:** `js/camera`, `js/fx`.
+**Done 2026-10-16:** `js/camera`, `js/fx` ([notes/BLOAT-AUDIT-CAMERA-FX-2026-10-16.md](../notes/BLOAT-AUDIT-CAMERA-FX-2026-10-16.md)).
 
 | Module | Headline |
 |--------|----------|
