@@ -956,16 +956,14 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
 export const TRACKED = [
   /^package(-lock)?\.json$/,          // scripts + dependency versions
   /^playwright\.config\.js$/,         // projects, timeouts, the reporter
-  // `tools/ci/` ON THE FOUR THAT MOVED. Only manifest.cjs still sits at the
-  // tools/ root; pick-tests, select-specs, select-budget and run-playwright are
-  // all under tools/ci/, so four of these five alternatives matched NOTHING —
-  // editing the selector, the budget model or the Playwright runner never set
-  // reason "infra", never printed SELECTION NARROWER THAN THE CHANGE, and the
-  // gate went on trusting a routing produced by the code in that very diff.
+  // `tools/ci/` selection machinery. Only manifest.cjs still sits at the
+  // tools/ root. Changes to a selector, planner, base resolver or runner must
+  // fail safe to the full gate instead of trusting routing produced by the
+  // same diff.
   // A path inside a regex literal is invisible to a rename; the lint in
   // tests/unit/select-specs.test.mjs now fails on any member that matches no
   // tracked file, which is what pick-tests.mjs's RULES have had all along.
-  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs)$/,
+  /^tools\/(ci\/)?(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs|pick-unit-slices\.mjs|node-plan\.mjs|geometry-paths\.mjs|twinned-specs\.mjs|ci-select-specs-step\.sh|ci-resolve-before\.sh)$/,
   /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,  // EVERY spec's plumbing
   /^\.github\//,                      // the job that runs the selection
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key
