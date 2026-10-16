@@ -967,6 +967,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/telemetry-view-resize.test.mjs",
   "tests/unit/terrain-falloff.test.mjs",
   "tests/unit/terrain-normals.test.mjs",
+  "tests/unit/terrain-y.test.mjs",
   "tests/unit/test-bg-outcome.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
   "tests/unit/test-groups-generated.test.mjs",
