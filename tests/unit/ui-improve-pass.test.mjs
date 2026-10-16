@@ -816,7 +816,7 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   assert.match(menus, /crossing start\/finish/, "a zone past the line names S/F on the wrap");
   assert.match(menus, /z\.wrap \|\| z\.b > 1 \|\| z\.b < z\.a/,
     "wrap is the AeroZones flag, end past 1 lap, or a folded b < a");
-  assert.match(menus, /snapTrackToFilter\(\);\s*\n\s*updateTrackPreview\(\)/,
+  assert.match(menus, /snapTrackToFilter\(id\);\s*\n\s*updateTrackPreview\(\)/,
     "filter snap refreshes the hero before the deferred chip rebuild");
   assert.ok(!/className = "track-group-head"/.test(menus),
     "filter chips name the view; no vertical CLASSICS/SEASON divider");
