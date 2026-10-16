@@ -1166,18 +1166,18 @@ test("I-01: a mapping-\"\" pad's buttons 14/15 do not steer; a standard pad's st
 });
 
 test("wheel menu directions honor steering inversion and the signed calibrated centre", () => {
-  for (const invert of [1, -1]) for (const rest of [-0.2, 0, 0.2]) {
+  for (const mapping of ["", "standard"]) for (const invert of [1, -1]) for (const rest of [-0.1, 0, 0.2]) {
     const { Input, sb, fire, dispatched, tick } = menuRig();
-    const pad = rawPad({ mapping: "", id: "Wheel", axes: [rest * invert, 0, -1, -1] });
+    const pad = rawPad({ mapping, id: mapping ? "Standard pad" : "Wheel", axes: [rest * invert, 0, -1, -1] });
     Input.setPadAxisMap({ steer: 0, steerInvert: invert, throttle: 2, brake: 3 });
     Input.setPadRest(rest);
     sb.navigator.getGamepads = () => [pad];
     fire("gamepadconnected", { gamepad: pad });
     tick();
-    assert.deepEqual(dispatched.map((e) => e.key), [], `centre: invert ${invert}, rest ${rest}`);
-    for (const [offset, key] of [[-0.5, "ArrowLeft"], [0.5, "ArrowRight"]]) {
-      pad.axes[0] = (rest + offset) * invert; tick();
-      assert.deepEqual(dispatched.map((e) => e.key), [key], `invert ${invert}, rest ${rest}`);
+    assert.deepEqual(dispatched.map((e) => e.key), [], `centre: mapping ${mapping}, invert ${invert}, rest ${rest}`);
+    for (const [offset, key] of [[-0.7, "ArrowLeft"], [0.5, "ArrowRight"]]) {
+      pad.axes[0] = +((rest + offset) * invert).toFixed(2); tick();
+      assert.deepEqual(dispatched.map((e) => e.key), [key], `mapping ${mapping}, invert ${invert}, rest ${rest}, raw ${pad.axes[0]}`);
       dispatched.length = 0;
       pad.axes[0] = rest * invert; tick();
       assert.deepEqual(dispatched.map((e) => e.key), [], "returning to calibrated centre stops menu movement");

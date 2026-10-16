@@ -27,6 +27,28 @@ for (const file of [
 }
 const T = vm.runInContext("DataTelemetry", ctx);
 
+test("braking duel aligns distance and refuses clamped or missing feed intervals", () => {
+  const model = vm.runInContext("DataTelemetryModel", ctx);
+  function lane(speed) {
+    const car = Array.from({ length: 41 }, (_, i) => ({ t: i / 4, speed, brake: i < 10 ? 0 : i < 22 ? 50 : 0, throttle: i < 10 ? 100 : i < 28 ? 20 : 100 }));
+    return { car, cum: model.cumDist(car) };
+  }
+  const a = lane(36), b = lane(45), r = model.brakingDuel(a, b, 0, 90);
+  assert.equal(r.available, true); assert.ok(r.lanes[0].brake); assert.ok(r.lanes[0].throttle);
+  assert.ok(r.lanes[0].brake.distance < r.lanes[1].brake.distance);
+  assert.ok(Math.abs(r.change + 1.8) < 1e-9);
+  assert.equal(model.brakingDuel(a, b, 0, 110).available, false);
+  const missing = lane(36); missing.car[12].brake = null;
+  assert.equal(model.brakingDuel(missing, b, 0, 90).available, false);
+  const gap = lane(36); gap.car.splice(10, 10); gap.cum = model.cumDist(gap.car);
+  assert.match(model.brakingDuel(gap, b, 0, 90).reason, /gap/);
+  const flat = lane(36); flat.car.forEach((c) => { c.brake = 0; c.throttle = 100; });
+  const absent = model.brakingDuel(flat, b, 0, 90);
+  assert.equal(absent.available, true); assert.equal(absent.lanes[0].brake, null); assert.equal(absent.lanes[0].throttle, null);
+  flat.car[12].brake = 50;
+  assert.equal(model.brakingDuel(flat, b, 0, 90).lanes[0].brake, null, "one noisy feed sample must not become two grid hits");
+});
+
 // A closed, oval-ish lap in track-local units at ~3.7 Hz, like the real feed.
 function lap(n = 400, dtMs = 270) {
   const out = [];
@@ -234,12 +256,39 @@ test("compare gaps stay at the reference finish while a slower lap keeps playing
     assert.equal(view.g.board[1].dl.textContent, expected.slice(0, -1), `compare board at ${t}s`);
     assert.equal(view.g.board[2].dl.textContent, t < 80 ? "+3.95" : "+4.00", `third lane at ${t}s`);
   }
+  const model = vm.runInContext("DataTelemetryModel", ctx);
+  const missing = Array.from({ length: 81 }, (_, t) => ({ t, speed: t >= 20 && t < 40 ? null : 180 }));
+  primary.cum = model.cumDist(primary.car);
+  compare.car = missing; compare.cum = model.cumDist(missing);
+  third.car = missing; third.cum = model.cumDist(missing);
+  view.cursorT = 55;
+  player.paintFrame(view);
+  assert.equal(view.g.delta.textContent, "—", "unknown travel must not fabricate a gap");
+  assert.equal(view.g.board[1].dl.textContent, "—");
+  assert.equal(view.g.board[2].dl.textContent, "—");
+});
+
+test("integrated distance retains unknown intervals and legitimate stops", () => {
+  const model = vm.runInContext("DataTelemetryModel", ctx);
+  for (const speed of [null, undefined, NaN, Infinity]) {
+    const cum = model.cumDist([{ t: 0, speed: 180 }, { t: 1, speed: 180 },
+      { t: 2, speed }, { t: 3, speed: 180 }]);
+    assert.equal(model.distAtT(cum, 1), 50);
+    assert.ok(Number.isNaN(model.distAtT(cum, 1.5)));
+    assert.ok(Number.isNaN(model.distAtT(cum, 3)));
+    assert.equal(model.timeAtDist(cum, 25), 0.5);
+    assert.ok(Number.isNaN(model.timeAtDist(cum, 75)));
+    assert.ok(Number.isNaN(model.timeAtDist(cum, NaN)));
+  }
+  const stopped = model.cumDist([{ t: 0, speed: 180 }, { t: 1, speed: 0 }, { t: 2, speed: 180 }]);
+  assert.equal(model.distAtT(stopped, 1), 0);
+  assert.equal(model.distAtT(stopped, 2), 50);
 });
 
 // Exercise the real controller -> view -> player -> renderer wiring with a
 // synthetic feed. Canvas methods are inert: this checks state and lifecycle,
 // while the browser telemetry-compare spec owns layout and visible pixels.
-test("telemetry lanes retain their colors and scrub/playback teardown survives a popup close", async () => {
+for (const sampleCount of [8, 9, 801]) test(`telemetry clipping, lane colors and playback teardown (${sampleCount} lap samples)`, async () => {
   const dom = makeDom();
   const timers = new Map(), frames = new Map(), observers = [];
   let nextId = 0;
@@ -247,7 +296,11 @@ test("telemetry lanes retain their colors and scrub/playback teardown survives a
   dom.document.createElement = (tag) => {
     const node = makeElement(tag);
     if (tag === "canvas") {
-      const drawing = new Proxy({}, { get: (target, key) => target[key] || (() => {}) });
+      const drawing = new Proxy({}, { get: (target, key) => target[key] || ((...args) => {
+        if (["moveTo", "lineTo", "arc"].includes(key)) {
+          assert.ok(args.filter((v) => typeof v === "number").every(Number.isFinite), `${key} received an unknown coordinate`);
+        }
+      }) });
       node.getContext = () => drawing;
       node.currentCSSZoom = 2;
       node._rect = { left: 0, top: 0, width: 330, height: 100 };
@@ -275,6 +328,13 @@ test("telemetry lanes retain their colors and scrub/playback teardown survives a
     { num: 3, name: "Comparison Driver", code: "CMP", color: "0000ff" }
   ];
   const trace = driver(80);
+  trace.car = Array.from({ length: sampleCount }, (_, i) => trace.car[Math.round(i * (trace.car.length - 1) / (sampleCount - 1))]);
+  trace.car.push({ ...trace.car[trace.car.length - 1], t: 81.2, date: 1e12 + 81200 });
+  trace.loc.push({ x: 1e6, y: 1e6, date: 1e12 + 81200 });
+  // Exercise the delta renderer with a feed outage as well as a clipped tail.
+  if (sampleCount === 801) trace.car.forEach((sample) => {
+    if (sample.t >= 20 && sample.t < 40) sample.speed = null;
+  });
   trace.car.forEach((sample) => Object.assign(sample, { gear: 7, throttle: 80, brake: 0, rpm: 10000, drs: 12 }));
   const meta = { sessionKey: 7, meetingKey: 1, name: "Race", type: "Race" };
   const context = vm.createContext({
@@ -330,6 +390,9 @@ test("telemetry lanes retain their colors and scrub/playback teardown survives a
   assert.equal(legend[0].style.background, "[1,0,0]");
   assert.equal(legend[1].style.background, "[0,0,1]", "a missing middle lane must not shift the following lane's color");
 
+  dom.dispatch(chart, { type: "pointerdown", pointerId: 99, clientX: 330 });
+  dom.dispatch(chart, { type: "pointerup", pointerId: 99 });
+  assert.match(summary.textContent, /Time 1:20.00/, "next-lap samples must not extend even a sparse lap");
   const play = popup.querySelector(".dh-tplay");
   play.click();
   assert.equal(frames.size, 1);

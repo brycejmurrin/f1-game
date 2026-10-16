@@ -93,9 +93,9 @@ MOCK_TINYFISH = [
     "get_wallet",
 ]
 
-# Upstream chrome-devtools-mcp (1.7+) scopes most tools to a pageId. Only these
-# create or enumerate pages without one. Everything else gets the [selected]
-# page injected when callers omit pageId (the old one-arg navigate URL shape).
+# Page creation/enumeration never needs an injected target. Other tools may
+# use the selected page implicitly (pinned 1.7) or declare pageId explicitly;
+# tools/list inputSchema, rather than a version assumption, decides injection.
 PAGE_ID_OPTIONAL = frozenset({"list_pages", "new_page"})
 
 
@@ -287,7 +287,9 @@ class ChromeBackend:
         if _mock():
             return _mock_tool_result(name, arguments)
         args = _normalize_chrome_args(name, arguments)
-        if name not in PAGE_ID_OPTIONAL and "pageId" not in args:
+        schema = next((t.get("inputSchema") or {} for t in self._tools if t.get("name") == name), {})
+        supports_page_id = "pageId" in (schema.get("properties") or {})
+        if supports_page_id and name not in PAGE_ID_OPTIONAL and "pageId" not in args:
             page_id = self._selected_page_id
             if page_id is None:
                 listed = self._invoke("list_pages", {})

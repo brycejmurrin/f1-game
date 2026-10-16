@@ -25,7 +25,7 @@ const RaceControl = (function () {
       if (!c) continue;
       if (c.finished) { anyFinished = true; if (!c.retired) pend = Math.max(pend, (c.finishT || 0) + (c.penalty || 0)); }
       else if (!c.retired) running = true;
-      if (!c.human) continue;
+      if (!c.human && !c._nHuman) continue;
       anyHuman = true;
       if (!c.finished && !c.retired) allHumansDone = false;
     }
@@ -61,7 +61,8 @@ const RaceControl = (function () {
   function beginLineStep(cars) { lineCars = cars; lineEntries.length = 0; }
   function settleLine(e) {
     const { c, cross, time, target, cars } = e;
-    cross.flagged = target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars, time)));
+    // Temporary AI motion cannot declare a connected owner finished or raise the flag.
+    cross.flagged = !c._nFallback && target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars, time)));
     if (cross.flagged) { c.finished = true; c.finishT = time; }
   }
   function deferLine(c, cross, newS, callback) {

@@ -245,7 +245,7 @@ const DataTelemetryRender = (function () {
       const fill = series.length === 1;
       series.forEach(function (ds, si) {
         const laneCol = cssColor(view.laneCols[si + 1]);
-        if (fill) {
+        if (fill && ds.d.every(function (d) { return isFinite(d); })) {
           g.beginPath(); g.moveTo(X(0), y0);
           for (let i = 0; i < car.length; i++) g.lineTo(X(car[i].t), Y(ds.d[i]));
           g.lineTo(X(view.tMax), y0); g.closePath();
@@ -254,6 +254,7 @@ const DataTelemetryRender = (function () {
         g.beginPath();
         let started = false;
         for (let i = 0; i < car.length; i++) {
+          if (!isFinite(ds.d[i])) { started = false; continue; }
           const x = X(car[i].t), y = Y(ds.d[i]);
           if (!started) { g.moveTo(x, y); started = true; } else g.lineTo(x, y);
         }
