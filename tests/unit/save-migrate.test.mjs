@@ -318,3 +318,13 @@ test("remapPoints leaves season.config alone: the standalone season keeps its fr
   SM.migrateSeasonPoints({ get: () => null, set() {} }, viaStandalone);
   assert.deepEqual(JSON.parse(JSON.stringify(viaStandalone.config)), { drop: 2 }, "migrateSeasonPoints keeps it too");
 });
+
+test("roundMap and finishMap skip a __proto__ key like the sibling maps", () => {
+  const SM = load();
+  const raw = JSON.parse('{"__proto__":[5,6],"AAA":[1,2]}');
+  for (const fn of [SM.roundMap, SM.finishMap]) {
+    const out = fn(raw);
+    assert.equal(Array.isArray(Object.getPrototypeOf(out)), false, "prototype untouched");
+    assert.deepEqual(Object.keys(out), ["AAA"]);
+  }
+});

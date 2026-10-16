@@ -1066,7 +1066,7 @@ test("loading a career file migrates slots and refuses non-career keys", () => {
   const r = b.loadCareer({
     format: "apex26-career-v1",
     careers: {
-      "career.driver.0": { flavour: "driver", money: "not-a-number", driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
+      "career.driver.0": { flavour: "driver", money: 250, driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
       "career.driver.9": CAREER_SAVE,           // out of range — not a career key
       "parts.mercedes": { wing: 9 },            // garage — must not write
       careerSlot: "myteam:2",
@@ -1083,6 +1083,18 @@ test("loading a career file migrates slots and refuses non-career keys", () => {
   assert.equal(b.disk.has("apex26.parts.mercedes"), false, "career loader never writes the garage");
   assert.equal(b.disk.has("apex26.volMusic"), false, "career loader never writes settings");
   assert.equal(b.disk.has("apex26.career.driver.9"), false);
+});
+
+test("a career slot with poisoned money is skipped, not restored as a zero-credit career", () => {
+  const b = boot({ career: true });
+  const r = b.loadCareer({ format: "apex26-career-v1", careers: {
+    "career.driver.0": { flavour: "driver", money: "abc", driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
+    "career.driver.1": { flavour: "driver", money: 250, driver: { name: "Ada", code: "ADA", num: 7 }, team: "mercedes" },
+  } });
+  assert.equal(r.ok, true);
+  assert.equal(b.disk.has("apex26.career.driver.0"), false, "money:'abc' must not become a 0-credit slot");
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.1")).money, 250);
+  assert.ok(r.skipped >= 1);
 });
 
 test("a career file of the wrong shape is refused whole", () => {
@@ -1275,7 +1287,7 @@ test("future final row refuses the entire mixed legacy import before slots or se
       "apex26.career.driver.0": JSON.stringify({ ...CAREER_SAVE, money: 100 }) } });
     const before = [...b.disk.entries()];
     const result = b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
-      "career.driver.0": { ...CAREER_SAVE, v: 0, money: "not-a-number" },
+      "career.driver.0": { ...CAREER_SAVE, v: 0, money: "120" },
       "career.driver.1": CAREER_SAVE,
       careerSlot: "driver:0",
       ["career." + flavour + ".2"]: { ...CAREER_SAVE, flavour, v: version + 1 },
@@ -1290,12 +1302,12 @@ test("future final row refuses the entire mixed legacy import before slots or se
 test("future preflight retains legacy migration, scope and slot/selection revision gates", () => {
   const b = boot({ career: true });
   const result = b.loadCareer({ format: b.SettingsExport.CAREER_FORMAT, careers: {
-    "career.driver.0": { ...CAREER_SAVE, v: 0, money: "not-a-number" },
+    "career.driver.0": { ...CAREER_SAVE, v: 0, money: "120" },
     "career.driver.1": CAREER_SAVE, careerSlot: "driver:0",
     season: { round: 4 }, "daily.v1": { days: {} }, customTeam: { name: "Other" },
   } });
   assert.equal(result.ok, true);
-  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 0);
+  assert.equal(JSON.parse(b.disk.get("apex26.career.driver.0")).money, 120);
   for (const i of [0, 1]) assert.equal(JSON.parse(b.disk.get("apex26.career.driver." + i)).v, b.careerVersion);
   for (const key of ["season", "daily.v1", "customTeam"]) assert.equal(b.disk.has("apex26." + key), false);
   for (const changed of ["career.driver.0", "careerSlot"]) {
