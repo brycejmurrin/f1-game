@@ -1463,6 +1463,11 @@ const NetLobby = (function () {
       (type, data) => broadcast(type, data), () => !!session);
 
     async function finishStart() {
+      if (!session) return;
+      const gen = beginOperation(), startingSessions = new Set(sessions.values());
+      // A peer can leave this room during the build; an empty room still needs
+      // its normal cleanup. Any surviving session must belong to this start.
+      const current = () => operationCurrent(gen) && (!session || startingSessions.has(session));
       say("Starting race…");
       sealRoom();      // idempotent: the quali branch may already have run it
       if (G.setNetRoom) G.setNetRoom(false);
@@ -1480,6 +1485,7 @@ const NetLobby = (function () {
         // and the rival's slot ran as AI while our own pose parked on the
         // old grid.
         const outcome = await G.startRace();
+        if (!current()) return; // cancel/re-entry owns a different room, including failure cleanup
         // Every failed exit ends the lobby's hold on qualifying: left true,
         // Quali.persistOrder skipped saving for the rest of the page session.
         // startRaceBody also resolves `false` (save conflict, build failed, context lost, state changed): the
@@ -1488,6 +1494,7 @@ const NetLobby = (function () {
         if (!sessions.size) { friendQualifying = false; clearInterval(pumpTimer); pumpTimer = null; close(); return; }
         if (role === "host") broadcast(QGO, null);   // guests that backed out of quali are waiting for this
       } catch (e) {
+        if (!current()) return;
         say("Could not start the race: " + (e && e.message), true);
         friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
         // beginRace hid the lobby — quit rather than idle an open session.

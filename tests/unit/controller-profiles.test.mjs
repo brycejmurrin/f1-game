@@ -20,9 +20,31 @@ function boot() {
   const Input = vm.runInContext('Input', ctx), Profiles = vm.runInContext('ControllerProfiles', ctx);
   Input.init(el());
   const drive = (pad) => { state.pads = [pad]; (listeners.gamepadconnected || []).forEach((fn) => fn({ gamepad: pad })); clock.t += 17; Input.poll(); };
-  return { Input, Profiles, drive, storage, clock };
+  return { Input, Profiles, drive, storage, clock, state };
 }
 const pad = (id, mapping = 'standard') => ({ id, index: 0, connected: true, mapping, axes: [0, 0, 0, 0], buttons: Array.from({ length: 20 }, () => ({ pressed: false, value: 0 })) });
+test('empty snapshots neutralize axes without replaying held actions on recovery', () => {
+  const { Input: I, drive, state } = boot(), p = pad('recovering pad');
+  for (const [action, index] of [['camera', 8], ['shiftUp', 5], ['boost', 0]]) I.setPadBinding(action, 0, index);
+  const press = (down) => { for (const i of [8, 5, 0]) p.buttons[i] = { pressed: down, value: down ? 1 : 0 }; };
+  const edges = () => [I.consumeCameraCycle(), I.consumeShiftUp(), I.consumeBoostToggle()];
+  press(true); p.axes[0] = .8; p.axes[2] = .7; drive(p);
+  assert.deepEqual(edges(), [true, true, true], 'first connection retains its wake press');
+  for (let cycle = 0; cycle < 2; cycle++) {
+    state.pads = []; I.poll();
+    assert.equal(I.lookStick().x, 0, 'missing snapshot neutralizes the held look axis');
+    assert.equal(I.debugState().pad.steer, 0);
+    state.pads = [p]; for (let i = 0; i < 60; i++) I.poll();
+    assert.deepEqual(edges(), [false, false, false], 'a held button is not a second press');
+    press(false); I.poll(); press(true); I.poll();
+    assert.deepEqual(edges(), [true, true, true], 'release and repress work after every recovery');
+  }
+  press(false); I.poll(); state.pads = []; I.poll();
+  press(true); state.pads = [p]; for (let i = 0; i < 60; i++) I.poll();
+  assert.deepEqual(edges(), [false, false, false], 'presses hidden by the gap also require a release');
+  const other = pad('replacement'); other.buttons[8] = { pressed: true, value: 1 }; drive(other);
+  assert.equal(I.consumeCameraCycle(), false, 'device changes still seed already-held buttons');
+});
 test('real Input wheel→pad→wheel restores both axes/buttons, and reset changes only current profile', () => {
   const { Input: I, drive, storage } = boot();
   I.setPadAxisMap({ steer: 3, throttle: 2, brake: 1 }); I.setPadBinding('camera', 0, 19);
