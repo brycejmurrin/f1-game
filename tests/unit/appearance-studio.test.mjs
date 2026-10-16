@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const source = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8").replace(/^const AppearanceStudio/m, "var AppearanceStudio");
 function load(initial = {}, durable = true, reduced = false, document, globals = {}) {
@@ -15,6 +16,40 @@ function load(initial = {}, durable = true, reduced = false, document, globals =
   vm.runInContext(source, context); return { studio: context.AppearanceStudio, values, writes, owners };
 }
 const plain = (v) => JSON.parse(JSON.stringify(v));
+
+test("game's Studio integration refreshes touch button size after profile apply, reset and Undo", () => {
+  const dom = makeDom(), values = {};
+  const input = dom.byId("pm-btnscale"), output = dom.byId("pm-btnscale-v");
+  const store = { get: (key, fallback) => key in values ? values[key] : fallback,
+    set: (key, value) => { values[key] = value; return true; }, raw: () => null, rawSet: () => true };
+  // Run the real scale owner and the actual game attachment, rather than a
+  // replacement hook that could accidentally fix the integration under test.
+  const context = vm.createContext({ GameStore: { store }, document: { readyState: "loading", addEventListener() {},
+    documentElement: dom.documentElement }, window: { matchMedia: () => ({ matches: false }) },
+    Log: { info() {}, warn() {} }, setTimeout, clearTimeout, requestAnimationFrame: () => 1,
+    SettingRow: { paint() {}, wire() {}, labels: values => values }, PerfGov: { setAutoRes() {} },
+    G: {}, mirrorPass: { setMode() {} }, paintHudDetailsSummary() {}, syncMetricsOverlayCompact() {},
+    uiExperience: { previewScene() {} }, scaleDeps: { $: id => id === "pm-btnscale" ? input : id === "pm-btnscale-v" ? output : null,
+      els: {}, store, gfx: {} } });
+  vm.runInContext(fs.readFileSync(new URL("../../js/ui/scale.js", import.meta.url), "utf8"), context);
+  vm.runInContext("const uiScale = UiScale.create(scaleDeps);", context);
+  vm.runInContext(source, context);
+  const game = gameSource();
+  const attachment = game.match(/AppearanceStudio\.attach\(\{[\s\S]*?\n\}\);/);
+  assert.ok(attachment, "game must attach the Studio's live visual owners");
+  vm.runInContext(attachment[0], context);
+  const studio = context.AppearanceStudio;
+  const setButtons = value => vm.runInContext(`uiScale.setScale("hudBtnScale", "--hud-btn-scale", ${value});`, context);
+  const assertButtons = (stored, css, displayed) => {
+    assert.equal(values.hudBtnScale, stored);
+    assert.equal(dom.documentElement.style.getPropertyValue("--hud-btn-scale"), css);
+    assert.equal(input.value, displayed);
+  };
+  setButtons(200); studio.saveProfile("Large pedals"); setButtons(100);
+  studio.loadProfile("profile-1"); assertButtons(200, "2", "200");
+  studio.reset(); assertButtons(null, "", "100");
+  studio.undo(); assertButtons(200, "2", "200");
+});
 
 function loadWithControls() {
   const dom = makeDom(), values = {};

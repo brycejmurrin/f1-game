@@ -112,12 +112,15 @@ test("a commitment is made on the ENTRY ROAD and can be aborted there: back on t
   assert.equal(q.inWindow, false, "still before the entry line");
   assert.equal(q.armed, true, "committed on the entry road");
   assert.equal(q.state, "none", "…the limiter waits for the line");
+  // The abandoned call must not become the next stop's place baseline.
+  g.G.player.pitPos0 = 10;
   // Changed my mind: back onto the road, held there.
   aimTo(a, 0, 1.6);
   q = a.pit();
   const ps = a.physState();
   assert.ok(Math.abs(ps.x) < hw - 0.5, `on the road (x ${ps.x.toFixed(2)})`);
   assert.equal(q.armed, false, "the entry was aborted");
+  assert.equal(g.G.player.pitPos0, 0, "aborting drops the old position baseline");
   assert.equal(q.state, "none");
   // …and the limiter does not meet the car at the line.
   drive(a, 4, 0);
