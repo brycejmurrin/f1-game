@@ -7,7 +7,8 @@ source audits, sharp and typescript for tooling — never shipped). Four vendore
 libraries DO ship, under `vendor/`, each loaded only by the feature that needs
 it: three.js r186 (TLX backend), Rapier (`js/physics/debris-world.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
-static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
+static files (GitHub Pages). Every project runtime JS file under `js/` is an IIFE that
+assigns ONE global; vendored addons may use their upstream module format.
 
 > **New here?** Start with [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) (boot path,
 > layer map, where to edit). This file is the module **contract** — what each
@@ -120,7 +121,6 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
 | `puddles.js` | `Puddles` | tag | Puddles: the ONE reference for the standing-water mask the three lit shaders hand-mirror (GLX glsl-lit.js, TLX tsl-lit.js, WGX wgsl-chunks.js). |
-| `compatibility-recovery.js` | `GfxRecovery` | tag | a player-controlled escape from a known failed WebGPU renderer. |
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
 | `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
 
@@ -352,7 +352,6 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `followup-tools.js` | `DesignerFollowup` | LAZY_EDITOR | small designer review tools. |
 | `scenery-panel.js` | `DesignerScenery` | LAZY_EDITOR | DesignerScenery: the track designer's scenery inspector. |
 | `bridge-panel.js` | `DesignerBridges` | LAZY_EDITOR | authored road-overpass controls. |
-| `workspace.js` | `DesignerWorkspace` | LAZY_EDITOR | Track Designer workspace: navigation, disclosure groups and review actions. |
 | `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
 
 **`js/car/`**

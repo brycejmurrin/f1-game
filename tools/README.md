@@ -460,8 +460,8 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/test-honesty.mjs** | Finds tests that pass by not testing: bare `test.skip`/`fixme`/`todo` without a `SKIP-OK:` reason, and empty bodies. |
 | **ci/test-observed.mjs** | Which tests have I never seen run? Declared spec titles (espree) vs every title any `artifacts/logs/` run reported. |
 | **ci/test-solo.mjs** | Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`; refuses (exit 3) while busy (`--max-load`). Foreground. |
-| **ci/tooling-fast.mjs** | Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list. |
-| **ci/verify-change.mjs** | ONE command: fast gate (verify-track, graph-parity, tooling-fast, shell check) + `test-bg` batches → one verdict. |
+| **ci/tooling-fast.mjs** | Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list. |
+| **ci/verify-change.mjs** | ONE diff-aware `--fast` gate plus test batches; full tooling-fast is the pre-push floor; plan JSON reports budget. |
 | **lib/circuit-scope.cjs** | `scope(ids)` keeps the circuits APEX_CIRCUITS names (all when unset); audit `--all` and sweep loops read it. |
 | **lib/stale-rows.mjs** | Which stale baseline rows a fleet sweep fails: all locally, a PR's own circuits on a PR, none on the train (#2183). |
 

@@ -8,18 +8,19 @@ Player-facing change notes live in [changelog.d/](changelog.d/).
 
 ## Read in this order
 
-**If you are an agent**, the path is `AGENTS.md` → `ARCHITECTURE.md` →
-`TESTING.md` §1-2 → the one area doc your change touches → the skill that
+**If you are an agent**, the path is `AGENTS.md` → `ARCHITECTURE-MAP.md` →
+`VERIFICATION.md` → `ARCHITECTURE.md` → `TESTING.md` §1-2 → the one area doc your change touches → the skill that
 drives it.
 
 | # | Read | Why, and how much |
 |---|---|---|
 | 1 | [`../AGENTS.md`](../AGENTS.md) | The rules. Every flat prohibition lives there and nowhere else. Read the whole thing — it is deliberately short. |
 | 2 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | **New contributors start here** — boot path, layer map, data flow, where to edit what. Ten-minute read. |
-| 3 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module **contract**, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
-| 4 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
-| 5 | the area doc | One of the area docs below. Load it only when the task touches its area. |
-| 6 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
+| 3 | [VERIFICATION.md](VERIFICATION.md) | The current edit-loop, pre-push, docs-only, CI and Pages command meanings. |
+| 4 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module **contract**, the `G` façade, the game loop, and the three renderers behind one seam. Skim the generated module index; read the section for the directory you are about to edit. |
+| 5 | [TESTING.md](TESTING.md) §1-2 | How to run tests without burning an hour, and which GROUP your change needs. §5 is a lookup table, not reading. |
+| 6 | the area doc | One of the area docs below. Load it only when the task touches its area. |
+| 7 | the skill | `.claude/skills/README.md` picks it; the skill drives the tools. |
 
 **If you are a person** reading to understand the game: [`../README.md`](../README.md)
 → [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) → [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or
@@ -55,7 +56,7 @@ drives it.
 |---|---|
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs vs wrap — which `apex_*` exists, which stay CLI-only, and why the ones that left, left. |
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (generated), the agent-facing JSON world view (`world`/`field`/`scene`/`rollout`), and the DevTools console recipes. `AGENTS.md` has the short list. |
-| [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 185 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
+| [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 191 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |
 | [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit, committed on `track-survey-assets`, not here); written by `tools/lighting/look-survey-sheet.py`. |
 
@@ -98,7 +99,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) | The open-defect register and the backlog behind it (was `ARCHITECTURE-REVIEW.md` §7-8). |
 | [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md) | The standing assessment: what the no-build-step bet costs, why asserted invariants hold where prose ones drift, and the lessons. |
 | [notes/CI-CAPACITY-2026-09-29.md](notes/CI-CAPACITY-2026-09-29.md) | The 20-concurrent-job jam of 2026-09-29 (200-290 jobs queued for 7 h): where PR runs spent their slots, why the selector over-sharded and excluded the circuit's own spec, what changed, what did not, and how to re-measure. |
-| [notes/CI-CLOG-SURVEY-2026-10-15.md](notes/CI-CLOG-SURVEY-2026-10-15.md) | The 2026-10-15 jam measured: 401 PR runs by 05:30 UTC, 73 % cancelled by sweeps under the owner's account and re-pushed, half the pushes base-merge syncs, 10-14 min queue waits on five serial plumbing hops. What changed: the plumbing jobs folded into `select`, needed-only node rows on drafts, the push hold and the run-cancel refusal enforced in the hooks; what is left to the owner (one required check, Docs guards off the required list, a Support ticket for the 40-job limit). |
+| [notes/CI-CLOG-SURVEY-2026-10-15.md](notes/CI-CLOG-SURVEY-2026-10-15.md) | The 2026-10-15 jam measured: 401 PR runs by 05:30 UTC, 73 % cancelled by sweeps under the owner's account and re-pushed, half the pushes base-merge syncs, 10-14 min queue waits on five serial plumbing hops. What changed: the plumbing jobs folded into `select`, needed-only node rows on drafts, the push hold and the run-cancel refusal enforced in the hooks; what is left to the owner (one required check, Docs guards off the required list, a Support ticket for the 40-job limit was an open support item at survey time). |
 | [notes/CICD-REVIEW-2026-10-16.md](notes/CICD-REVIEW-2026-10-16.md) | Whole-system CI/CD review, 2026-10-16: 1,200 ci.yml runs and 30,400 jobs measured — the pool runs at 39 of 40 slots, 26 % of runner-minutes die in cancelled runs (mostly manual sweeps), the ship-push fast tier reaches 38 % of merges, selected legs wait 63 min on a ready PR's critical path. The pipeline-now table, the ranked findings, the seven fix PRs, the 16 AGENTS.md contradictions and the three owner decisions (organisation + merge queue, cancel sweeps, train on push). |
 | [notes/CICD-JOBS-REVIEW-2026-10-16.md](notes/CICD-JOBS-REVIEW-2026-10-16.md) | Follow-up job-structure review, 2026-10-16: 323 runs / 4,263 jobs (8.8 h) joined to 96 PRs' changed files. Ranked proposals (changelog-fragments into the commit hook, tooling-fast `--bail`, a base-red detector), setup cost 7.9 %, train reuse hit rate 4 %, the new configuration measured where n allows. |
 | [notes/PREPUSH-GATE-LADDER.md](notes/PREPUSH-GATE-LADDER.md) | The pre-push ladder: `test:guards` ⊂ `test:tooling-fast` ⊂ `deploy.mjs --gate-only`, with the measured sizes (`gen-ladder-figures.mjs` regenerates it). Read before judging a green rung as proof of the one above. |
@@ -154,7 +155,6 @@ rather than rewriting the record.
 | [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. | `tools/check/check-gctx.mjs`, `tools/gen/assets.mjs` |
 | [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Design / refuses for the `apex-tools` wrap. Agent map: [AGENT-SURFACE.md](AGENT-SURFACE.md). | `tools/mcp/apex-tools-mcp.mjs`, `tools/gfx/wgx-shot.mjs` |
 | [research/CHROME-DEVTOOLS-MCP.md](research/CHROME-DEVTOOLS-MCP.md) | Playbook for the chrome-devtools MCP tools against Apex: roots/`/tmp` file writes, snapshot uids, cold-boot LCP, clean heap cycles, lighthouse snapshot scores. Companion to `.claude/skills/mcp-probe`. | `tools/mcp/cdmcp-cli.py`, `tools/check/ratchets.mjs` |
-| [research/AGENT-JS-DEBUGGER-MCP.md](research/AGENT-JS-DEBUGGER-MCP.md) | Opt-in agent debugger: local Chrome attachment, breakpoints, stepping, scopes, pause generations and native stdio/CDP validation. | `tools/mcp/js-debugger-mcp.mjs` |
 | [research/STRUCTURE-REDECISION-2026-08.md](research/STRUCTURE-REDECISION-2026-08.md) | Six structural questions re-opened on user request and re-decided from fresh measurement. | `tests/unit/perf-governor.test.mjs` |
 | [research/UI-REDESIGN-2026-08-18.md](research/UI-REDESIGN-2026-08-18.md) | UI redesign implementation plan + acceptance contract: catalogue screens restructured around one dominant scroller; the visual identity kept. | `tests/unit/css-token-adoption.test.mjs` |
 | [research/PAUSE-SETTINGS-IA.md](research/PAUSE-SETTINGS-IA.md) | Pause stays a 1-2-1-1 action sheet; settings is a home → CONTROLS / DISPLAY stack. Tabs and MORE are gone. | `js/ui/settings-tabs.js` |

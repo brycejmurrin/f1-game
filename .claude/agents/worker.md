@@ -99,10 +99,13 @@ Never: progress narration, acks, "starting now", thanks.
 
 ## The loop
 
+The command ladder is defined in [`docs/VERIFICATION.md`](../../docs/VERIFICATION.md);
+the worker loop below only supplies the scoped handoff behavior.
+
 1. Orient: `git log --oneline -1`, `node tools/ci/who-is-on-it.mjs`, and the
    domain skill the change matches (`.claude/skills/README.md`).
 2. Make every edit, then verify once (AGENTS.md rule 2): `node --test <files>`;
-   `node tools/ci/tooling-fast.mjs --jobs=3` for tools or tests;
+   `node tools/ci/tooling-fast.mjs --changed --jobs=3` for tools or tests during the edit loop;
    `node tools/track/verify-track.cjs <id>` for a circuit;
    `node tools/ci/pick-tests.mjs` names the browser groups you report as not
    run. Anything over ~2 min goes in a background Bash task with a `Monitor`

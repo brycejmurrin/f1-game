@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list.
+// @doc Full structural floor or `--changed` diff-aware edit-loop runner; timing, buffered output, `--jobs=N`; exports the list.
 // @section runner
 /**
  * tooling-fast.mjs — run the structural unit suites with per-file progress.
@@ -239,8 +239,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // but-unapplied. This is the mirror — a class the markup wears that no rule
   // matches, which reads as styled and is not. Pure source scan, ~0.3 s.
   "tests/unit/class-usage.test.mjs",
-  // tools/lib/cli-args.mjs: unknown flag is an error with the near miss, =/space forms agree, --help (#1697).
-  "tests/unit/cli-args.test.mjs",
   // ApexClipboard.write/read + preferSync order (clipboard carve). Pure VM,
   // well under a second; must run where the helper or a call-site is edited.
   "tests/unit/clipboard.test.mjs",
@@ -571,7 +569,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
   "tests/unit/input-ghost.test.mjs",
-  "tests/unit/js-debugger-mcp.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/keyboard-first-audio-vm.test.mjs",
   // knob-ab.mjs fails a visual knob whose ON vs OFF frame does not beat the noise floor (#1885 puddles). Pure.
@@ -826,8 +823,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // tools/ci/remote-group.mjs + browser-group.yml: the group/shard validation
   // that stands between a dispatch input and a shell, and the run pick. Pure, instant.
   "tests/unit/remote-group.test.mjs",
-  // Renderer ownership, post health, material detail and particle residency; isolated VM.
-  "tests/unit/render-final-contracts.test.mjs",
   // render() lighting-prep pure-move: renderLightingPrep owns sky/lightning/lamps; call-order pin. ~0.05 s.
   "tests/unit/render-lighting-prep.test.mjs",
   "tests/unit/renderer-boot-timeout.test.mjs",
@@ -958,7 +953,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // STORM (js/race/storm.js): above rain on the arc ladder, rain's grip and tread, heavier rain,
   // a seeded frame-rate-independent lightning schedule, the storm safety car, no STORM chip in rooms. VM, < 1 s.
   "tests/unit/storm-weather.test.mjs",
-  "tests/unit/stuck-census.test.mjs",
   // SubagentStop report-contract hook (.claude/hooks/subagent-contract.py): spawns it on fake payloads, < 1 s.
   "tests/unit/subagent-contract-hook.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
@@ -1018,8 +1012,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Round-2 TLX: post chain retries after death, shadowStr 0 when the sun pass failed, DPR cap on mobileTier, caster geometry clone, warm-guarded releaseGeometry, true-LRU materials, pack CPU copy dropped, devtools-gated globals.
   "tests/unit/tlx-round2.test.mjs",
   "tests/unit/tlx-texture-release.test.mjs",
-  // tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).
-  "tests/unit/tolerance-diff.test.mjs",
   "tests/unit/tooling-fast-runner.test.mjs",
   // Round-2 tooling: dup-keys scans js/render/three, stage/garage-angles refuse unsafe --out, wait-polling-lint parses scripts, generators reject unknown flags, Chromium cache key carries the runner image, pages.yml fast_tier_run expression.
   "tests/unit/tools-a12-guards.test.mjs",
