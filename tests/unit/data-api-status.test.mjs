@@ -796,7 +796,8 @@ test("export gather waits 90 s when fastestLap returns HTTP 429", async () => {
       },
       locationData: async () => {
         const pts = [];
-        for (let i = 0; i < 40; i++) pts.push({ x: i, y: i * 2, date: Date.parse("2026-07-26T14:00:00.000Z") + i * 100 });
+        // This successful candidate covers its declared 80 s lap, including both boundaries.
+        for (let i = 0; i < 40; i++) pts.push({ x: i, y: i * 2, date: Date.parse("2026-07-26T14:00:00.000Z") + i * 80000 / 39 });
         return pts;
       },
     },
@@ -869,7 +870,10 @@ test("export Download: the ZIP holds the JSON then one map per circuit, with CRC
       sessionsForMeeting: async () => [{ sessionKey: 9, name: "Qualifying" }],
       sessionDrivers: async () => [{ num: 16, code: "LEC" }],
       fastestLap: async () => ({ dateStart: "2026-07-26T14:00:00.000Z", lapDuration: 80 }),
-      locationData: async () => Array.from({ length: 40 }, (_, i) => ({ x: i, y: i * 2, date: 0 })),
+      // ZIP coverage needs complete candidate laps; epoch-zero dates are outside this lap.
+      locationData: async () => Array.from({ length: 40 }, (_, i) => ({
+        x: i, y: i * 2, date: Date.parse("2026-07-26T14:00:00.000Z") + i * 80000 / 39
+      })),
     },
   });
   vm.runInContext(exportSrc + ";globalThis.DataExport=DataExport", context);

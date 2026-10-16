@@ -315,7 +315,7 @@ export function costs(selected) {
 /** Matrix rows + flags for ci.yml GITHUB_OUTPUT.
  *
  * On a deploy push and the train the matrix lists every NODE_SLICE (needed
- * true|false): pages-train.mjs's reuse check wants expanded node rows, and
+ * true|false): the Pages reuse check wanted expanded node rows, and
  * until 2026-10-15 branch protection also required the six fixed names
  * `Pure-node unit suites (<slice>)` — a subset left them unreported and the
  * PR BLOCKED with a green `CI` (#454 35e66e231: vm-b1/b2/page/slow ran,

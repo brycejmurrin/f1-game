@@ -35,7 +35,7 @@ What changed underneath it, and why the old steps are gone:
    `version.json`, and `curl` reaches github.io too (see below) — never the
    in-repo wrapper.
 4. **`--pr` is the path that lands work** — since 2026-09-30 the deploy
-   branch is protected (a PR with the twelve fast-tier checks green; admin
+   branch is protected (a PR with its one required check `CI` green; admin
    tokens bypass, `enforcement_level: non_admins`), so the default mode's direct push fails with GH006. GitHub
    creates the merge commit, so the PR is a real record — a local
    fast-forward auto-closes the PR instead (#67). `deploy.mjs` never arms
@@ -77,7 +77,7 @@ Live `version.json`: subagent **deploy-research**, or
 or `curl`, which reaches github.io from this container. For "is MY commit
 live?" curl is the only option that works, because the answer is a `<meta
 name="apex-sha">` in the shell and the fetch tool drops every meta tag:
-`curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. Pages runs take up to ~25 min. A NEWER push to the
+`curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. A gated publish is median 23 min, p90 73 (AGENTS.md §Git branch & deploy). A NEWER push to the
 deploy branch CANCELS the pending run (concurrency group) —
 `gh run list --workflow pages.yml` when a build seems missing. A user reporting
 a just-fixed bug is usually on the previous build: check live version FIRST.
@@ -85,7 +85,7 @@ a just-fixed bug is usually on the previous build: check live version FIRST.
 ### Sharp edges
 
 - A PR into the deploy branch does NOT deploy until merged; a push there
-  gets ci.yml's fast tier and, if green, pokes `pages.yml`.
+  starts `pages.yml` (the train gates the tip; its `ci / …` rows are the verdict).
 - After the deploy lands, clients may need one reload for the service worker to
   drop the old shell (`pwa-cache-service-worker`).
 - If `git push` is rejected (non-fast-forward), a session landed while you

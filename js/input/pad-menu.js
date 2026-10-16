@@ -133,11 +133,11 @@ const InputPadMenu = (function () {
       const ax = (pad.axes || []).map((v, i) => (ped(i) ? 0 : v));
       // CALIBRATE STICK lets a worn pad rest anywhere up to ±0.5 on the steer
       // axis; read raw, a rest past the dead zone auto-repeated one direction
-      // forever. Same sign convention as calibratePad (the offset is taken after
-      // steerInvert), so undo the invert, subtract, and put it back.
+      // forever. CalibratePad stores the offset after steerInvert, so keep the
+      // corrected axis in the same left/right convention as driving.
       const sx = axisMap.steer;
       if (Number.isInteger(sx) && sx >= 0 && sx < ax.length && !ped(sx)) {
-        ax[sx] = ((ax[sx] || 0) * axisMap.steerInvert - padRest()) * axisMap.steerInvert;
+        ax[sx] = (ax[sx] || 0) * axisMap.steerInvert - padRest();
       }
       const stick = (x, y) => {
         const mx = Math.abs(x) >= PAD_NAV_DEADZONE ? Math.abs(x) : 0;
@@ -230,6 +230,11 @@ const InputPadMenu = (function () {
       if (top !== padNavSeedLayer) {
         padNavSeedLayer = top || null;
         padNavSeeded = false;
+        // A held direction belongs to the layer it first navigated. Re-arm it
+        // when a child sheet/dialog opens so the new layer gets an immediate
+        // arrow instead of inheriting the old layer's repeat deadline.
+        padNavDir = null;
+        padNavNextT = 0;
       }
       const dir = padNavDirOf(pad);
       // Nintendo's confirm is the physical A, which the standard mapping numbers 1.

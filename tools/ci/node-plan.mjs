@@ -15,7 +15,7 @@
 // This gives it one, on PULL REQUESTS ONLY: the PR's base is the whole change,
 // so a script that replays a browser group's assertions runs when pick-tests
 // routes the diff to that group, and is skipped — BY NAME, in the log — when
-// it does not. The deploy-branch push (the fast tier that pokes the train) and
+// it does not. The deploy-branch push (the fast tier that poked the train, until 2026-10-16) and
 // the Pages call still run every script: a merge is gated whole before it
 // ships, and the `fast_tier_run` reuse contract ("tree-only") is untouched.
 //

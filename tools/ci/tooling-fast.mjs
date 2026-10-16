@@ -334,6 +334,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-builder-config.test.mjs",
   "tests/unit/desktop-native.test.mjs",
   "tests/unit/desktop-notices.test.mjs",
+  "tests/unit/desktop-pack-dry-run.test.mjs",
   // Electron desktop spike: stage allow-list + stamp, native SW/Spotify gates,
   // app:// Range/MIME/traversal (Electron #38749), unpacked-bin helper,
   // ship-filter staged path list (stage-files.mjs).
@@ -848,6 +849,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-entry-vm.test.mjs",
   "tests/unit/session-status.test.mjs",
   "tests/unit/session-stub-surface.test.mjs",
+  "tests/unit/session-transcript.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
   "tests/unit/settings-search.test.mjs",
