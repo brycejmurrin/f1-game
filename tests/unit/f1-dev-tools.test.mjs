@@ -138,3 +138,27 @@ test('comparison detects mismatches, rejects non-rendering and non-finite traces
   assert.throws(()=>summarize(repeated),/advancing render frames/);
   assert.throws(()=>main(['compare','a','b','--out','/workspace/escape.json']),/artifacts/);
 });
+
+
+test('plugin advertises the checkout MCP catalog without owning server startup', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'plugins/f1-dev-tools/plugin.json'), 'utf8'));
+  const advertised = manifest.extensions?.['com.openai']?.interface?.capabilities;
+  assert.deepEqual(advertised, ['apex-tools', 'playwright-official', 'chrome-devtools']);
+  assert.equal(manifest.version, '0.2.0');
+
+  const checkout = JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8'));
+  assert.deepEqual(Object.keys(checkout.mcpServers).sort(), [...advertised].sort());
+  const cursor = JSON.parse(fs.readFileSync(path.join(root, '.cursor/mcp.json'), 'utf8'));
+  assert.deepEqual(Object.keys(cursor.mcpServers).sort(), [...advertised].sort());
+  const codex = fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8');
+  for (const server of advertised) assert.match(codex, new RegExp(`\\[mcp_servers\\.${server.replace('-', '\\-')}\\]`));
+
+  const readme = fs.readFileSync(path.join(root, 'plugins/f1-dev-tools/README.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(root, 'plugins/f1-dev-tools/skills/f1-dev-tools/SKILL.md'), 'utf8');
+  for (const server of advertised) {
+    assert.match(readme, new RegExp('`' + server + '`'));
+    assert.match(skill, new RegExp('`' + server + '`'));
+  }
+  assert.match(readme, /does not start a second copy/);
+  assert.match(skill, /one browser MCP/);
+});
