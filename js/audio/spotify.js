@@ -56,7 +56,7 @@ window.SpotifyMusic = (function () {
     const body = Promise.resolve().then(() => r.json()).catch(() => null);
     const timeout = new Promise((resolve) => {
       timer = setTimeout(() => {
-        if (ac) { try { ac.abort(); } catch (_) {} }
+        if (ac) { try { ac.abort(); } catch (e) { /* abort may already be settled */ } }
         resolve(null);
       }, FETCH_TIMEOUT_MS);
     });
@@ -1033,9 +1033,11 @@ window.SpotifyMusic = (function () {
   }
 
   function check() {
+    const gen = sessionGen;
     const d = debug();
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve({ ok: false, reason: "no-client-id" }); }
     return validToken().then((t) => {
+      if (gen !== sessionGen) return { ok: false, reason: "stale", debug: d };
       if (!t) {
         const retained = !!readToken();
         const msg = retained
@@ -1055,6 +1057,7 @@ window.SpotifyMusic = (function () {
       return fetch(API + "/me", o)
         .then((r) => { done(); return readJson(r, ac).then((j) => ({ code: r.status, j: j || {} })); })
         .then(({ code, j }) => {
+          if (gen !== sessionGen) return { ok: false, reason: "stale", debug: d };
           if (!j || !Object.keys(j).length) {
             setStatus("error", "Could not read Spotify's account response — offline, or blocked.");
             return { ok: false, httpStatus: code, reason: "network", debug: debug() };
@@ -1092,6 +1095,7 @@ window.SpotifyMusic = (function () {
         })
         .catch((e) => {
           done();
+          if (gen !== sessionGen) return { ok: false, reason: "stale", debug: d };
           Log.warn("audio", "Spotify account check failed:", e && (e.name + ": " + e.message));
           setStatus("error", "Could not reach Spotify's API — offline, or blocked.");
           return { ok: false, reason: "network", debug: d };

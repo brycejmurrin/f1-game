@@ -91,6 +91,28 @@ test("a retryable refresh failure preserves the long-lived Spotify session", asy
     "offline token refresh must not turn into a permanent sign-out");
 });
 
+test("a delayed account check cannot overwrite a replacement Spotify session", async () => {
+  let resolveAccount;
+  const account = new Promise((resolve) => { resolveAccount = resolve; });
+  const { SpotifyMusic, disk } = load((url) => {
+    if (String(url).endsWith("/me")) return account;
+    return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, JSON.stringify({ access_token: "first", refresh_token: "first", expires_at: Date.now() + 3600000, scope: "streaming" })]] });
+
+  const checking = SpotifyMusic.check();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  SpotifyMusic.disconnect();
+  disk.set(TOKEN_KEY, JSON.stringify({ access_token: "replacement", refresh_token: "replacement", expires_at: Date.now() + 3600000, scope: "streaming" }));
+  await SpotifyMusic.connect();
+  assert.equal(SpotifyMusic.status().state, "connected");
+
+  resolveAccount(jsonResponse({ product: "free", display_name: "Old account" }));
+  const result = await checking;
+  assert.equal(result.reason, "stale");
+  assert.equal(SpotifyMusic.status().state, "connected");
+  assert.doesNotMatch(SpotifyMusic.status().message, /Old account|Free/);
+});
+
 test("a malformed token response is retryable and preserves the session", async () => {
   const original = JSON.stringify(token());
   const { SpotifyMusic, disk } = load(() => Promise.resolve(jsonResponse({}, 503)));
