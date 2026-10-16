@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { shotErrors } from "../gen/bake-flyby.mjs";
 import { emptyPlaywright, scanPlaywrightLines } from "../ci/playwright-occupancy.mjs";
+import { aliveRun } from "../ci/test-bg.mjs";
 import { createExtras, JOB_KINDS, HUD_JOB_ARGV, processTree, killTreeAndWait } from "./apex-extras.mjs";
 import {
   CellError, ELEMENT_TOGGLES as HUD_TOGGLES, ENUMS as HUD_ENUMS, PRESETS as HUD_PRESETS, SCALES as HUD_SCALES,
@@ -225,7 +226,10 @@ function testBgStatus() {
     return { recorded: true, running: [], browserRunning: [], runs: [], error: "unreadable" };
   }
   const runs = Array.isArray(state.runs) ? state.runs : [];
-  const running = runs.filter((run) => alive(run.pid));
+  // Match test-bg's zombie and PID-reuse checks. kill(pid, 0) succeeds for
+  // an exited supervisor awaiting its parent's reap and used to block every
+  // browser tool after an otherwise completed run in containers.
+  const running = runs.filter((run) => aliveRun(run));
   // Missing metadata is treated as browser-active for old state files. New
   // test-bg records distinguish Node-only groups so they do not block a dry
   // browser-tool plan or make tooling-fast fail while testing this guard.
