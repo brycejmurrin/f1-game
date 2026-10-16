@@ -10,24 +10,37 @@ const DataTelemetryModel = (function () {
     for (let i = 0; i < car.length; i++) {
       if (i > 0) {
         const dt = car[i].t - car[i - 1].t;
-        const v = (car[i].speed || 0) / 3.6;   // km/h -> m/s
-        acc += v * dt;
+        // An absent speed is unknown travel, never a stationary interval.
+        const speed = car[i].speed;
+        const previous = car[i - 1].speed;
+        const valid = typeof speed === "number" && isFinite(speed) &&
+          typeof previous === "number" && isFinite(previous);
+        acc = valid ? acc + speed / 3.6 * dt : NaN;
       }
       t.push(car[i].t); d.push(acc);
     }
     return { t: t, d: d };
   }
   function interp(xs, ys, x) {
-    if (!xs.length) return 0;
+    if (!xs.length || !isFinite(x)) return NaN;
     if (x <= xs[0]) return ys[0];
     if (x >= xs[xs.length - 1]) return ys[ys.length - 1];
     let lo = 0, hi = xs.length - 1;
     while (lo < hi) { const m = (lo + hi) >> 1; if (xs[m] < x) lo = m + 1; else hi = m; }
+    if (xs[lo] === x) return ys[lo];
     const x0 = xs[lo - 1], x1 = xs[lo], f = (x - x0) / ((x1 - x0) || 1);
     return ys[lo - 1] + (ys[lo] - ys[lo - 1]) * f;
   }
   function distAtT(cum, t) { return interp(cum.t, cum.d, t); }
-  function timeAtDist(cum, dist) { return interp(cum.d, cum.t, dist); }
+  function timeAtDist(cum, dist) {
+    // Only the prefix before the first unknown interval can be inverted.
+    const end = cum.d.findIndex(function (d) { return !isFinite(d); });
+    if (end !== -1) {
+      if (!end || dist > cum.d[end - 1]) return NaN;
+      return interp(cum.d.slice(0, end), cum.t.slice(0, end), dist);
+    }
+    return interp(cum.d, cum.t, dist);
+  }
 
   function lerpLoc(a, b, f) {
     if (!b) return a;
