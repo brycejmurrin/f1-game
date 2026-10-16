@@ -161,41 +161,61 @@ test("design fields survive draft, stored livery and live resolver round-trips",
   for (const key of Object.keys(result)) assert.deepEqual(plain(resolved[key]), plain(result[key]), key);
 });
 
-test("editor undo/redo and preset loading restore the full draft without writing storage", () => {
-  const dom = makeDom(), { ctx } = load({ document: dom.document });
+function editorFixture() {
+  const dom = makeDom(), { ctx, D } = load({ document: dom.document });
   vm.runInContext(source("js/garage/livery-design-editor.js"), ctx);
   const E = vm.runInContext("GarageLiveryDesignEditor", ctx), root = dom.document.createElement("div");
   const draft = { name: "Mine", c1: "#000000", c2: "#ffffff", spineLogo: "stripe", patternWidth: "70", patternRepeat: "6", patternOffset: "0", patternTaper: "20", patternOpacity: "100", patternPlacement: "crown", patternSide: "both" };
   const previews = []; let editor;
-  const preset = { ...draft, spineLogo: "honeycomb", coverFinish: "matte", patternWidth: "40" };
-  editor = E.attach(root, draft, { flush() {}, changed(drag) { editor.changed(drag); previews.push(plain(draft)); },
-    preview(value) { previews.push(plain(value)); }, presets: () => [preset], fromLivery: (p, name) => ({ ...p, name }) });
-  const select = (label) => root.querySelectorAll("select").find((s) => s.getAttribute("aria-label") === label);
-  const click = (text) => root.querySelectorAll("button").find((b) => b.textContent === text).onclick();
-  const patterns = select("SPINE DESIGN"); patterns.value = "contours"; patterns.onchange();
-  assert.equal(draft.spineLogo, "contours"); click("UNDO"); assert.equal(draft.spineLogo, "stripe");
+  const changed = (drag) => { editor?.changed(drag); previews.push(plain(draft)); };
+  Object.assign(ctx, { d: draft, wrap: root, LIV_ROW_HINT: {}, applyPreview: changed });
+  const sheet = source("js/garage/setup-sheet.js");
+  vm.runInContext(sheet.slice(sheet.indexOf("  const pillRow ="), sheet.indexOf('  pillRow("FINISH"')), ctx);
+  const pillRow = vm.runInContext("pillRow", ctx);
+  // mini-dom omits sibling accessors and insertBefore's move semantics.
+  const insertBefore = root.insertBefore;
+  root.insertBefore = (node, before) => { if (node.parentNode === root) node.remove(); return insertBefore(node, before); };
+  const bodyRow = dom.document.createElement("label"); root.appendChild(bodyRow);
+  const spineRow = pillRow("SPINE TOP", "spineLogo", ["stripe", ...D.PATTERNS], "stripe");
+  const nextRow = pillRow("COVER BIND", "coverBind", ["independent", "saddleWrap", "spineOnly"], "independent");
+  Object.defineProperty(spineRow, "nextSibling", { get: () => root.children[root.children.indexOf(spineRow) + 1] });
+  const nameRow = dom.document.createElement("label"); root.appendChild(nameRow);
+  editor = E.attach(root, draft, { flush() {}, changed, preview(value) { previews.push(plain(value)); },
+    pillRow, spineRow, bodyRow, nameRow });
+  const click = (text) => { const b = root.querySelectorAll("button").find((b) => b.textContent === text); assert.ok(b, text); assert.ok(!b.disabled, text + " enabled"); b.onclick(); };
+  return { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow };
+}
+
+test("existing SPINE TOP controls drive undo, palettes and pattern adjustments without duplicate menus", () => {
+  const { root, draft, editor, previews, click, spineRow, nextRow, bodyRow, nameRow } = editorFixture();
+  assert.equal(root.querySelectorAll("select, details").length, 0, "no parallel design, surface or preset menus");
+  assert.equal(root.querySelectorAll('[data-liv-design-tools]').length, 0);
+  assert.equal(spineRow.querySelectorAll("button").length, 14, "thirteen additions share the existing SPINE TOP row");
+  const rows = Array.from(root.children), width = root.querySelectorAll("input").find((input) => input.dataset.livField === "patternWidth");
+  assert.ok(rows.indexOf(width.parentNode) > rows.indexOf(spineRow));
+  assert.ok(rows.indexOf(width.parentNode) < rows.indexOf(nextRow), "adjustments immediately follow SPINE TOP");
+  assert.equal(rows[rows.indexOf(bodyRow) - 1].querySelector('.cs-liv-ed-lbl').textContent, "PALETTE");
+  assert.equal(rows[rows.indexOf(nameRow) - 1].getAttribute("role"), "status");
+  assert.equal(width.disabled, true, "legacy patterns retain their existing controls");
+  click("CONTOUR LINES");
+  assert.equal(draft.spineLogo, "contours"); assert.equal(width.disabled, false);
+  click("UNDO"); assert.equal(draft.spineLogo, "stripe"); assert.equal(width.disabled, true);
   click("REDO"); assert.equal(draft.spineLogo, "contours");
   click("COMPARE ORIGINAL"); assert.equal(previews.at(-1).spineLogo, "stripe"); assert.equal(draft.spineLogo, "contours");
   click("SHOW EDITED"); assert.equal(previews.at(-1).spineLogo, "contours");
   click("COMPARE ORIGINAL"); draft.name = "Renamed"; editor.changed(true);
   assert.equal(previews.at(-1).spineLogo, "contours", "metadata edits also leave comparison with the edited preview");
-  assert.ok(root.querySelectorAll("button").some((b) => b.textContent === "COMPARE ORIGINAL"));
-  const presets = select("VISUAL PRESET"); presets.value = "0"; presets.onchange();
-  assert.equal(draft.coverFinish, "matte"); assert.equal(draft.patternWidth, "40");
-  assert.equal(presets.value, "", "preset command can be selected again");
-  click("UNDO"); assert.equal(draft.patternWidth, "70"); assert.equal(draft.coverFinish, undefined);
-  presets.value = "0"; presets.onchange(); assert.equal(draft.patternWidth, "40");
-  const palette = select("PALETTE"); palette.value = "0"; palette.onchange();
-  assert.equal(palette.value, ""); const paletteColor = draft.c1;
-  draft.c1 = "#010101"; editor.changed(); palette.value = "0"; palette.onchange();
+  click("MIDNIGHT ELECTRIC"); const paletteColor = draft.c1;
+  draft.c1 = "#010101"; editor.changed(); click("MIDNIGHT ELECTRIC");
   assert.equal(draft.c1, paletteColor, "same palette reapplies after manual edits");
+  click("CHECKERED FLAG");
   const first = draft.patternTint, second = draft.patternSecond;
-  click("SWAP DESIGN COLOURS"); assert.equal(draft.patternTint, second); assert.equal(draft.patternSecond, first);
+  click("SWAP COLOURS"); assert.equal(draft.patternTint, second); assert.equal(draft.patternSecond, first);
   click("UNDO"); assert.equal(draft.patternTint, first);
-  draft.patternWidth = "90"; draft.patternPlacement = "wrap"; editor.changed();
-  click("RESET DESIGN SETTINGS"); assert.equal(draft.patternWidth, "70"); assert.equal(draft.patternPlacement, "crown");
+  width.value = "90"; width.oninput(); width.onchange(); click("WRAP"); click("LEFT");
+  assert.equal(draft.patternSide, "left");
+  click("RESET SETTINGS"); assert.equal(draft.patternWidth, "70"); assert.equal(draft.patternPlacement, "crown");
   click("UNDO"); assert.equal(draft.patternWidth, "90"); assert.equal(draft.patternPlacement, "wrap");
-  assert.equal(patterns.children.length, 14, "all thirteen designs are available");
 });
 
 
@@ -208,18 +228,13 @@ test("sparse pinstripes paint the visible crown and tail centreline", () => {
 });
 
 
-test("surface picker explains inactive paint without moving focus or camera", () => {
-  const dom = makeDom(); let inspections = 0;
-  const { ctx } = load({ document: dom.document, GarageSurfaceInspection: { inspect() { inspections++; } } });
-  vm.runInContext(source("js/garage/livery-design-editor.js"), ctx);
-  const root = dom.document.createElement("div"), row = dom.document.createElement("label"), input = dom.document.createElement("input");
-  row.className = "cs-liv-ed-row"; row.title = "Needs a tail fin — pick a FIN SHAPE other than NONE";
-  input.type = "color"; input.dataset.livField = "fin";
-  input.setAttribute("type", "color"); input.setAttribute("data-liv-field", "fin"); input.setAttribute("aria-label", "TAIL FIN");
-  input.disabled = true; row.appendChild(input); root.appendChild(row);
-  vm.runInContext("GarageLiveryDesignEditor", ctx).attach(root, {}, { presets: () => [], flush() {}, changed() {}, preview() {} });
-  const picker = root.querySelectorAll("select").find((s) => s.getAttribute("aria-label") === "PAINT SURFACE");
-  picker.focus(); picker.value = "fin"; picker.onchange();
-  assert.equal(picker.value, ""); assert.equal(dom.document.activeElement, picker);
-  assert.equal(root.querySelector('[role="status"]').textContent, row.title); assert.equal(inspections, 0);
+test("integrated adjustments disable only controls unused by the current spine design", () => {
+  const { root, click } = editorFixture();
+  const repeat = root.querySelectorAll("input").find((input) => input.dataset.livField === "patternRepeat");
+  const left = root.querySelectorAll("button").find((b) => b.textContent === "LEFT");
+  click("GRADIENT"); assert.equal(repeat.disabled, true); assert.equal(left.disabled, true);
+  click("WRAP"); assert.equal(left.disabled, false);
+  click("HONEYCOMB"); assert.equal(repeat.disabled, false);
+  click("STRIPE"); assert.equal(repeat.disabled, true); assert.equal(left.disabled, true);
+  assert.ok(repeat.parentNode.title.includes("SPINE TOP"));
 });

@@ -1058,7 +1058,7 @@ function buildLiveryCreator(container, team) {
     return r;
   };
   wrap.appendChild(section("BODY"));
-  wrap.appendChild(colorRow("PRIMARY", "c1", false));
+  const bodyRow = colorRow("PRIMARY", "c1", false); wrap.appendChild(bodyRow);
   wrap.appendChild(colorRow("ACCENT", "c2", false));
   wrap.appendChild(colorRow("BODY STRIPE", "stripe", true));      // full spine: nose → engine cover
   wrap.appendChild(colorRow("NOSE STRIPE", "noseStripe", true));  // nose crown only: tip → bulkhead
@@ -1148,7 +1148,7 @@ function buildLiveryCreator(container, team) {
       b.type = "button";
       b.className = "cs-liv-ed-none" + ((d[key] || dflt) === f ? " active" : "");
       if (key === "finish") b.dataset.csFinish = f; else b.dataset.csPill = key + ":" + f;
-      b.textContent = f.toUpperCase();
+      b.textContent = (typeof GarageLiveryDesignEditor !== "undefined" ? GarageLiveryDesignEditor.label(f) : f).toUpperCase();
       b.setAttribute("aria-pressed", String((d[key] || dflt) === f));
       b.onclick = () => {
         d[key] = f;
@@ -1179,7 +1179,7 @@ function buildLiveryCreator(container, team) {
   pillRow("FIN SHAPE", "finShape", Car3D.FIN_SHAPE_IDS || ["standard"], "standard");
   deps.push({ row: pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team"), when: needFin, why: NO_FIN });
   deps.push({ row: pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo"), when: needFin, why: NO_FIN });
-  pillRow("SPINE TOP", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
+  const spineRow = pillRow("SPINE TOP", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
   pillRow("COVER BIND", "coverBind", ["independent", "saddleWrap", "spineOnly"], "independent");
   pillRow("FIN HANDOFF", "finHandoff", ["match", "contrast", "hardCut"], "match");
   // Body details: the T-cam housing colour (the real car-1 / car-2 code) and
@@ -1235,7 +1235,7 @@ function buildLiveryCreator(container, team) {
 
   if (typeof GarageLiveryDesignEditor !== "undefined") designTools = GarageLiveryDesignEditor.attach(wrap, d, {
     changed: applyPreview, flush: flushLivPreview, preview: (value) => livePreviewDraft(team, value),
-    presets: () => getLiveries(team), fromLivery: livDraftFrom,
+    pillRow, spineRow, bodyRow, nameRow,
   });
   container.appendChild(wrap);
   applyPreview();
