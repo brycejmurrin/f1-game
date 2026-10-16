@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
 import path from 'node:path';
+import {webcrypto} from 'node:crypto';
 import {compare, summarize, main} from '../../plugins/f1-dev-tools/skills/f1-dev-tools/scripts/compare.mjs';
 const require = createRequire(import.meta.url);
 const root = path.resolve(import.meta.dirname, '../..');
@@ -25,6 +26,17 @@ test('real game API: capture/restore, raw preset inheritance, invalid inputs and
     assert.equal(diagnostic.inspection.info.track,'monza');
     assert.ok(diagnostic.manifest && typeof diagnostic.manifest === 'object');
     assert.ok(['visible','hidden',null].includes(diagnostic.page.visibility));
+    g.ctx.crypto = webcrypto;
+    g.ctx.fetch = async url => ({ ok:true, status:200,
+      headers:{get(name){ return name === 'content-type' ? 'application/javascript' : null; }},
+      async arrayBuffer(){ return Uint8Array.from([114,101,108,101,97,115,101,45,98,121,116,101]).buffer; } });
+    const assets = await dev.checkAssets(['/version.json']);
+    assert.equal(assets.schema,'f1-dev-assets/v1');
+    assert.equal(assets.results[0].bytes,12);
+    assert.equal(assets.results[0].sha256,'eee72d707e993fd13d8d85ac1d29e252be7b283f561fce296eed019a1ed4c9cd');
+    const storageReport = await dev.storageReport();
+    assert.equal(storageReport.schema,'f1-dev-storage/v1');
+    assert.ok(Array.isArray(storageReport.localStorage));
     const originalDiag=g.apex.diag,originalTimer=g.apex.gpuTimer;
     g.apex.diag=()=>({env:{backend:'webgl2',backendState:{api:'webgl2'},renderScale:0.5},gl:{renderer:'ANGLE (Google, Vulkan SwiftShader Device)'},perf:{tier:4}});
     g.apex.gpuTimer=()=>({software:false});

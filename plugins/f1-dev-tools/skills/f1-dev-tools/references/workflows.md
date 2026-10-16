@@ -16,6 +16,8 @@ For cockpit evidence, read the header of `tools/shot/repro-shot.mjs`: its frozen
 
 `F1Dev.diagnose()` should be the first call on a page. It records the exact URL, document visibility/readiness, service-worker controller, `__apex.agentHelp()` manifest and the `F1Dev.inspect()` report in a `f1-dev-diagnostic/v1` document. It is read-only and is useful for proving which deployed shell and worker controlled a reproduction. `F1Dev.inspect()` reports the active track, camera mode, eye/target/FOV, damping anchors, simulation/render clocks, renderer/software information, viewport, reduced motion, and WATCH replay status where available. Optional unsupported diagnostics report an `unavailable` reason.
 
+For release evidence, `await F1Dev.checkAssets(["/version.json", "/index.html", "/js/game.js?v=..."])` fetches each URL with `cache: "no-store"` and records the final URL, status, cache headers, byte count, elapsed time and SHA-256 of the response bytes. It performs no writes and continues after an individual timeout or HTTP error so a partial deployment is visible in one report. `await F1Dev.storageReport()` records localStorage key names and character counts plus `navigator.storage.estimate()`; it deliberately omits saved values and does not clear caches.
+
 `await F1Dev.trace({label:"watch-seek", frames:12, timeoutMs:30000})` records distinct rendered frame numbers through requestAnimationFrame. Hidden tabs and a non-rendering page time out; never replace that with `step()` and claim smoothness. For screenshots await `__apex.awaitPresent()` using the repo's current renderer guidance and capture the visible canvas, including `#game-soft` where used. Inspect console errors as well.
 
 ## 3. Before/after comparison

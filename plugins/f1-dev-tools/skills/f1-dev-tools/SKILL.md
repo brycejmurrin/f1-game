@@ -21,6 +21,8 @@ Use the game's existing Apex tools and camera tuner. This plugin supplies a work
 |---|---|
 | Reproduce a scene | `F1Dev.capture()` and `await F1Dev.restore(scene)`; team/halo require the documented boot setup |
 | Identify the page and release | `F1Dev.diagnose()` before `F1Dev.inspect()` and `await F1Dev.trace({frames:12})` |
+| Verify published assets | `await F1Dev.checkAssets(["/version.json", "/js/game.js?v=..."])` and compare returned byte hashes with the claimed manifest |
+| Check storage pressure | `await F1Dev.storageReport()`; record the estimate and key sizes, never saved values |
 | Inspect game state | `F1Dev.inspect()` and `await F1Dev.trace({frames:12})` |
 | Compare a change | Matching traces and opening/middle/end PNGs; `scripts/compare.mjs` produces metrics and an HTML comparison |
 | Check WATCH transitions | Start the real Data Hub WATCH flow, then `await F1Dev.replayCheck(actions)`; also exercise a real user control and exit/re-entry |
