@@ -66,6 +66,14 @@ const Native = (function () {
     } catch (e) { return null; }
   }
 
-  return { isNative, platform, canonicalOrigin, plugins };
+  // Cross-device links must open the hosted game, never another device's
+  // localhost or Electron-only scheme. Keep ordinary web/dev deployments local.
+  function shareBase() {
+    if (isNative()) return "https://brycejmurrin.github.io/f1-game/";
+    const w = win();
+    return w && w.location ? w.location.origin + w.location.pathname : "";
+  }
+
+  return { isNative, platform, canonicalOrigin, plugins, shareBase };
 })();
 Object.freeze(Native);

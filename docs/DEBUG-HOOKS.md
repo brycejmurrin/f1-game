@@ -2848,6 +2848,10 @@ load and is not saved. Add a row when you add a reader.
 | `b=<build>` | `index.html` (shell) | cache-buster the version guard appends when it reloads onto a new build; stripped from the address bar at boot |
 | `code`, `state`, `error` | `js/audio/spotify.js` | the Spotify OAuth redirect's answer, consumed once |
 
+Hand-set store flags with no UI writer: `apex26.wind` (`"real"` default | `"off"`) — WIND (`js/race/wind.js`, read once at
+boot by `js/game.js`); `"off"` is calm air and a true physics no-op, the test fixtures' pin (as `apex26.tyreWear` is).
+`Wind.state()` reads the live wind (direction, km/h, gust).
+
 ## Misc
 
 ### `loadCarModel(url) → Promise<bool>`
