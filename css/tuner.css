@@ -1029,7 +1029,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
      fits two actions, then grows the final DONE action across the last line. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] > .sheet-foot {
     grid-column: 1; grid-row: 2;
-    display: flex; flex-wrap: wrap;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     --balance-basis: 5.5rem; --balance-min: 5rem;
     margin-top: 0; gap: 5px; padding: 6px 0 0;
   }
@@ -1042,6 +1042,7 @@ body:not(.photo-mode):has(#flyby:not([hidden]) > #flyby-inner[data-density="comp
        intent of the 0 was to let the buttons shrink in the rail, and they still
        do: --tap-min only floors the axis a thumb needs. */
     padding: 5px 6px; font-size: var(--fs-micro); min-height: var(--tap-min);
+    white-space: normal; line-height: 1.1;
   }
   /* chips wrap as a block in the rail rather than the short-panel scroll strip */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] .lt-tabs {
@@ -1431,4 +1432,20 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
 /* GARAGE ANGLE's plan of the bay (js/garage/arrival.js angleMap): under the
    selector, the chosen eye lit. currentColor so it follows the panel's ink. */
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
+}
+
+/* Short phone landscape: the docked tuner foot has only a narrow rail column.
+   At normal scale the shared flex row still squeezes four camera actions into
+   unreadable cells, even though every button's box remains technically inside
+   the sheet. Two columns preserve the tap floor and let the labels wrap. */
+@media (max-width: 900px) and (max-height: 500px) {
+  :is(#lighting-inner, #camtune-inner) > .sheet-foot {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :is(#lighting-inner, #camtune-inner) > .sheet-foot button {
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.1;
+  }
 }
