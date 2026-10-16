@@ -14,7 +14,7 @@ import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.m
 import { gameSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/workspace.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -81,6 +81,40 @@ function bootPersistedScreen(disk = new Map()) {
     },
   });
 }
+
+test("workspace remembers each mode and tab, reveals stamp controls, and routes persistent checks", async () => {
+  const b = bootScreen(); openGreen(b);
+  const rail = b.root.querySelector(".td-rail");
+  const fold = walk(b.root).find((e) => e.tagName === "DETAILS" && e._label && e._label.textContent === "CORNERS");
+  assert.equal(fold.open, false, "unused stamp parameters begin collapsed");
+  b.D.setTool("corner"); assert.equal(fold.open, true, "choosing a stamp reveals its parameters");
+  rail.scrollTop = 180;
+  b.D.setMode("elevation"); rail.scrollTop = 85;
+  b.D.showPane("library"); rail.scrollTop = 20;
+  b.D.showPane("design"); assert.equal(rail.scrollTop, 85);
+  b.D.setMode("edit"); assert.equal(rail.scrollTop, 180);
+  const before = plain(b.D.state().design);
+  const checks = walk(b.root).find((e) => e.dataset.role === "checks-summary");
+  assert.match(checks.textContent, /CHECKS/);
+  checks.click(); await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(b.D.state().mode, "test");
+  assert.deepEqual(plain(b.D.state().design), before, "navigation never edits the circuit");
+  const menu = walk(b.root).find((e) => e.dataset.role === "file-menu");
+  menu.open = true;
+  menu.dispatchEvent({ type: "keydown", key: "Escape" });
+  assert.equal(menu.open, false); assert.equal(b.D.isOpen(), true, "Escape closes just the file menu");
+});
+
+test("workspace keeps validation failures reachable when save is blocked", () => {
+  const b = bootScreen(); shortLoop(b);
+  b.D.setMode("edit");
+  const checks = walk(b.root).find((e) => e.dataset.role === "checks-summary");
+  assert.equal(checks.disabled, false, "blocked save must not disable the review action");
+  assert.match(checks.textContent, /TO FIX/);
+  checks.click();
+  assert.equal(b.D.state().mode, "test");
+  assert.equal(b.root.querySelector('[aria-label="Design checks"]').parentNode.hidden, false);
+});
 
 test("init() builds the rail before any design exists; open() randomises a green loop; close() hides", async () => {
   const b = bootScreen();
@@ -598,7 +632,7 @@ test("arrow nudges coalesce into one UNDO; arrows pass to MenuNav with nothing s
   assert.equal(sb.MenuNav.ownsArrows(canvas, "ArrowDown", { isTrusted: false }), true, "a selected point: the pad's arrows nudge it");
   // B on a pad arrives as `cancel` on the dialog; Escape as a keydown. Window capture runs first.
   const back = win.filter((l) => l.cap && (l.type === "cancel" || l.type === "keydown"));
-  assert.equal(back.length, 2, "Escape and cancel are both claimed in the capture phase");
+  assert.equal(back.length, 3, "file-menu Escape plus canvas Escape/cancel are captured before modal dismissal");
   const cancel = { type: "cancel", defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
   back.find((l) => l.type === "cancel").fn(cancel);
   assert.equal(cancel.defaultPrevented, true); assert.equal(cancel.stopped, true, "the screen's close door never sees it");
@@ -872,7 +906,7 @@ test("HOW TO: a third tab lists every HOWTO step, every input and the limits; th
   assert.equal(b.dom.document.activeElement, tabs[0]);
   const H = b.D.HOWTO;
   const tasks = walk(how).filter(e => e.dataset.helpTask);
-  assert.deepEqual(tasks.map(e => e.dataset.helpTask), ["selection", "height", "scenery"]);
+  assert.deepEqual(tasks.map(e => e.dataset.helpTask), ["selection", "height", "scenery", "draw", "test"]);
   assert.equal(tasks[0].open, true);
   const history = b.D.state().undo;
   chipsIn(how, "OPEN SCENERY")[0].click();
@@ -2862,7 +2896,7 @@ test("authored road bridge adds, refuses overlap/unsafe inputs, edits, undoes an
 });
 
 test("share clipboard fallback opens the workspace containing its copy field", async () => {
-  const b = bootScreen(); openGreen(b); b.D.setMode("scenery");
+  const b = bootScreen(); openGreen(b); b.D.setMode("scenery"); b.D.showPane("library");
   b.ctx.ApexClipboard = { write: async () => false };
   const url = await b.D.share();
   assert.ok(url && url.includes("#track="));
@@ -2870,4 +2904,7 @@ test("share clipboard fallback opens the workspace containing its copy field", a
   const field = b.root.querySelector('[aria-label="Share code or link"]');
   assert.equal(field.value, url);
   assert.equal(field.parentNode.hidden, false);
+  assert.equal(b.root.dataset.pane, "design");
+  assert.equal(field.parentNode.open, true, "fallback expands the copy field's disclosure");
+  assert.equal(b.dom.document.activeElement, field);
 });

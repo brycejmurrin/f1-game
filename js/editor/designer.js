@@ -57,6 +57,15 @@ const TrackDesigner = (function () {
         "Open OBJECTS, choose an object, then tap a map point or enter its number; for a section, enter the start and end points.",
         "Choose LEFT, RIGHT or BOTH, set the roadside gap, then PLACE; the map updates and UNDO removes the placement.",
       ], note: "The live overhead view simplifies terrain and small scenery. RACE or TIME TRIAL opens the full 3D circuit." },
+      { id: "draw", title: "Start a new loop", mode: "draw", steps: [
+        "Use RANDOMISE, TRACK OF THE DAY or START FROM… for a starting circuit, or draw one closed loop on the map.",
+        "Open EDIT to reshape points and corners. UNDO restores the previous circuit if you replace an unsaved design.",
+      ], note: "The map, elevation profile and undo history belong to the same working circuit across all modes." },
+      { id: "test", title: "Check, save and test drive", mode: "test", steps: [
+        "Use the footer CHECKS button to review validation. Fix red issues before saving or racing; FIX and FIX ALL offer repairs when available.",
+        "Enter a name and country, then SAVE. RACE and TIME TRIAL open the full circuit; TEST HERE starts from a selected point.",
+        "Open SHARE & FILES for a link, picture card, export or import. MY CIRCUITS contains the saved collection.",
+      ], note: "Warnings are advice. Red checks block saving and racing; navigation and UNDO remain available." },
     ]),
     GESTURES: Object.freeze([
       { input: "Touch", text: "Tap a point to select · RANGE then tap or drag to an end point on either view for a SPAN · drag a selected point or span to move · tap the road to add / double-tap to delete · press and hold for DELETE / START HERE · pinch to zoom, drag empty space to pan · on the elevation strip, tap then drag vertically (≥44 px)." },
@@ -77,7 +86,7 @@ const TrackDesigner = (function () {
   let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand", scenery = null, sceneryView = false, repair = null, bridges = null;
+  let propKind = "stand", scenery = null, sceneryView = false, repair = null, bridges = null, workspace = null;
   const undo = [], redo = [];
   let replacementGeneration = 0, lifecycleWired = false;
   let libraryImportGeneration = 0, libraryImportPlan = null;
@@ -340,6 +349,7 @@ const TrackDesigner = (function () {
     if (cv) { cv.setBuilt(verdict.tr); cv.setIssues(verdict.issues); }
     refreshMapView();
     renderIssues(); renderStats(); announceChecks();
+    if (workspace) workspace.review(verdict);
     renderInsight();
     renderProfile();
     const blocked = !verdict.ok;
@@ -685,6 +695,7 @@ const TrackDesigner = (function () {
     if (TrackStamps.KINDS[tool]) cv.setTool(tool, ghost); else cv.setTool(tool);
   }
   function setTool(name) {
+    if (workspace) workspace.remember();
     const was = tool;
     tool = TOOLS.some((t) => t[0] === name) ? name : "select";
     if (tool !== "select") selectionMode = "point";
@@ -697,13 +708,13 @@ const TrackDesigner = (function () {
     if (tool !== was && built && design) message(toolHint());
   }
   function setMode(name) {
+    if (workspace) workspace.remember();
     const next = MODES.some((m) => m[0] === name) ? name : "edit";
     if (next === "scenery") sceneryView = true;
     if (next === mode) { refreshControls(); return mode; }
     hideCtx();
     mode = next;
     if (mode === "elevation") toggleElevationHeat(true);
-    if (ui.rail) ui.rail.scrollTop = 0;
     if (mode === "draw") tool = "draw";
     else if (mode === "edit" && tool === "draw") tool = "select";
     else if (mode !== "edit" && mode !== "draw") tool = "select";
@@ -901,6 +912,15 @@ const TrackDesigner = (function () {
     files.append(ui.share, ui.card, ui.export, ui.import);
     foot.append(ui.save, ui.race, ui.tt, files, ui.file, ui.msg);
     root.append(body, foot);
+    workspace = DesignerWorkspace.create({ root, ui, files, el, btn,
+      onTest: () => { showPane("design"); setMode("test"); },
+      onHelp: () => {
+        const task = mode === "edit" ? "selection" : mode === "elevation" ? "height" : mode;
+        for (const d of ui.paneHow.querySelectorAll("details")) d.open = d.dataset.helpTask === task;
+        showPane("howto");
+        const active = ui.paneHow.querySelector('[data-help-task="' + task + '"]');
+        if (active) requestAnimationFrame(() => { active.querySelector("summary").focus(); active.scrollIntoView({ block: "nearest" }); });
+      } });
 
     cv = DesignerCanvas.create(canvas, {
       rangeSelect: () => selectionMode === "range" && (mode === "edit" || mode === "elevation"),
@@ -968,6 +988,7 @@ const TrackDesigner = (function () {
     return b;
   }
   function showPane(pane) {
+    if (workspace) workspace.remember();
     if (pane !== "library" && pane !== "howto") pane = "design";
     if (root) root.dataset.pane = pane;
     for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
@@ -979,8 +1000,9 @@ const TrackDesigner = (function () {
       p.setAttribute("aria-labelledby", b.id);
     }
     if (pane === "library") renderLibrary();
+    if (workspace) workspace.navigate(pane === "design" ? "design:" + mode : pane);
   }
-  function group(label) { const g = el("div", "td-group"); g._label = el("div", "td-label", label); g.appendChild(g._label); return g; }
+  function group(label) { return DesignerWorkspace.group(el, label); }
   /** HOW TO: flat info rows (the CHECKS row recipe) under .td-label headings, from HOWTO. */
   function buildHowTo(pane) {
     pane.appendChild(el("p", "td-hint", "Start with a task below. Selection is shared between the main map and elevation strip; UNDO reverses your edits."));
@@ -1260,7 +1282,10 @@ const TrackDesigner = (function () {
     if (ui.code) ui.code.value = url;
     let copied = false;
     try { if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) copied = !!(await ApexClipboard.write(url)); } catch (_) { copied = false; }
-    if (!copied) setMode("test");
+    if (!copied) {
+      showPane("design"); setMode("test"); ui.sharingGroup.open = true;
+      ui.code.focus(); ui.code.select(); ui.code.scrollIntoView({ block: "nearest" });
+    }
     message(copied ? "Share link copied" : "Share link is in the SHARE CODE field — copy it from there", !copied);
     Log.info("track", "designer share " + (design.id || "(unsaved)") + " " + code.length + " chars" + (copied ? " copied" : ""));
     return url;
@@ -1488,6 +1513,7 @@ const TrackDesigner = (function () {
     if (ui.checksGroup) ui.checksGroup.hidden = mode !== "test";
     if (ui.sharingGroup) ui.sharingGroup.hidden = mode !== "test";
     if (root) root.dataset.mode = mode;
+    if (workspace) { workspace.refresh(mode, tool); workspace.navigate(root.dataset.pane === "design" ? "design:" + mode : root.dataset.pane); }
     refreshAuthoring();
     syncProfile();
     if (ui.testHere) ui.testHere.setAttribute("aria-disabled", sel >= 0 ? "false" : "true");
@@ -1557,7 +1583,7 @@ const TrackDesigner = (function () {
     if (ui.recoverDraft) ui.recoverDraft.hidden = !draftItem(true);
     while (ui.lib.firstChild) ui.lib.removeChild(ui.lib.firstChild);
     const items = custom.list();
-    if (!items.length) { ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — SAVE the design on the left and it appears here. Saved circuits also show under MY CIRCUITS in the RACE picker.")); return; }
+    if (!items.length) { ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — open DESIGN, then SAVE your circuit. Saved circuits also show under MY CIRCUITS in the RACE picker.")); return; }
     for (const it of items) {
       const card = el("div", "td-card");
       const c = el("canvas"); c.width = 320; c.height = 220; c.setAttribute("aria-hidden", "true");
