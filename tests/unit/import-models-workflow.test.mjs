@@ -9,6 +9,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const workflow = fs.readFileSync(
   path.join(ROOT, ".github/workflows/import-models.yml"), "utf8");
 
+test("imports serialize by their output branch across source refs", () => {
+  assert.match(workflow,
+    /group: import-models-\$\{\{ github\.repository \}\}-\$\{\{ inputs\.commit_branch \|\| 'bot\/model-import' \}\}/,
+    "dispatches targeting one bot branch must not race just because they came from different refs");
+  assert.doesNotMatch(workflow, /group: import-models-\$\{\{ github\.ref \}\}/,
+    "source-ref concurrency permits two runs to overwrite one output branch");
+});
+
 function executableShell() {
   const lines = workflow.split("\n");
   const scripts = [];
