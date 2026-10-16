@@ -395,6 +395,17 @@ function main(argv = process.argv.slice(2)) {
     return;
   }
 
+  // `--costs` is a documented planning mode. Keep it machine-readable enough
+  // for shell reports while making the per-slice estimate visible without
+  // requiring callers to know about the normal human summary format.
+  if (argv.includes("--costs")) {
+    for (const row of c.rows) {
+      console.log(`${row.slice}\t${row.selected ? "selected" : "skipped"}\tp50=${row.p50_sec}s`);
+    }
+    console.log(`selected=${c.selected_sec}s all=${c.all_sec}s saved=${c.saved_sec}s (~${c.saved_min} min)`);
+    return;
+  }
+
   if (result.reason === "empty") {
     console.log("nothing changed — no node slices selected");
     return;
