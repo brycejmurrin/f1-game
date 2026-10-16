@@ -24,7 +24,7 @@ DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Concurrent PRs, 2026-10
                "are cancelled by the close. APEX_RUN_CANCEL_OK=1 only when the user asked for this cancel.")
 ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra error (AGENTS.md §Concurrent PRs). A re-run "
              "of a SUPERSEDED run joins the branch's ci-<head.ref> group and cancels the live run; prefer "
-             "`node tools/ci/ci-rerun.mjs` when it exists. Confirm by hand.")
+             "`node tools/ci/ci-rerun.mjs`. Confirm by hand.")
 
 
 def squash_or_rebase(method):
