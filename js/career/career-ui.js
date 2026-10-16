@@ -219,12 +219,15 @@ function create(G) {
       exp.setAttribute("data-cr-act", "export");
       exp.setAttribute("aria-label", `Export all career saves (backup from ${modeName} slot ${s.i + 1})`);
       exp.onclick = (ev) => {
+        if (exp.disabled) return;
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
         armedDelete = "";
+        exp.disabled = true;
         CareerBackup.exportAll().then((r) => {
           announce(r && r.ok === false ? "EXPORT FAILED" : "CAREER BACKUP SAVED");
-        }).catch(() => announce("EXPORT FAILED"));
+        }).catch((e) => announce(typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "EXPORT CANCELLED" : "EXPORT FAILED"))
+          .finally(() => { exp.disabled = false; });
       };
       card.appendChild(exp);
     }

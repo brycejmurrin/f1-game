@@ -873,7 +873,7 @@ function create(G) {
         flash(b, label, `SAVED (${n})`);
         Log.info("ui", "file saved", { id, n });
       } catch (e) {
-        flash(b, label, "FAILED");
+        flash(b, label, typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "CANCELLED" : "FAILED");
         Log.warn("ui", "file save failed", e && e.message);
       } finally {
         b.disabled = false;

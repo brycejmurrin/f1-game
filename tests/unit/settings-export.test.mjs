@@ -213,13 +213,14 @@ test("ensureMounted remounts after the files panel was emptied", () => {
   }
 });
 
-for (const fail of [false, true]) test(`native backup waits for sharing and reports ${fail ? "failure" : "success"}`, async () => {
+for (const outcome of ["success", "failure", "cancelled"]) test(`native backup waits for sharing and reports ${outcome}`, async () => {
   let finish, calls = 0, saved;
-  const held = new Promise((resolve, reject) => { finish = () => fail ? reject(new Error("disk full")) : resolve(); });
+  const held = new Promise((resolve, reject) => { finish = () => outcome === "success" ? resolve() : reject(new Error(outcome === "cancelled" ? "Share canceled" : "disk full")); });
   const b = bootImportUI({ globals: {
     Blob,
     URL: { createObjectURL() { throw new Error("native backup must not use an anchor"); } },
-    NativeDownload: { viable: () => true, saveBlob: (blob, name) => { calls++; saved = { blob, name }; return held; } },
+    NativeDownload: { viable: () => true, saveBlob: (blob, name) => { calls++; saved = { blob, name }; return held; },
+      isCancelled: (e) => e.message === "Share canceled" },
   } });
   const button = b.dom.byId("pm-settings-all");
   const pending = button.onclick();
@@ -235,7 +236,7 @@ for (const fail of [false, true]) test(`native backup waits for sharing and repo
   finish();
   await pending;
   assert.equal(button.disabled, false);
-  assert.match(button.textContent, fail ? /FAILED/ : /SAVED/);
+  assert.match(button.textContent, outcome === "success" ? /SAVED/ : outcome === "cancelled" ? /CANCELLED/ : /FAILED/);
   assert.equal(calls, 1);
 });
 
