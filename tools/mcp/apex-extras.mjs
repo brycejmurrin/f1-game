@@ -20,6 +20,7 @@ import {
   buildTrackShotSurveyPlan,
   estimateSurveyMs,
   filterResumeShots,
+  surveyTerminalState,
   normalizeSurveyTracks,
   scoreShotFindings,
   shouldSurveyAsync,
@@ -247,9 +248,9 @@ export function createExtras(ctx) {
         const track = tracks[ti];
         const out = tracks.length === 1 ? outRoot : assertSafeOut(path.join(outRoot, track));
         fs.mkdirSync(out, { recursive: true });
-        const { pending, resumed } = filterResumeShots(out, plan.shots, resume);
+        const { pending, resumed, invalid } = filterResumeShots(out, plan.shots, resume);
         writeSurveyProgress(outRoot, {
-          state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, estimateMs,
+          state: "running", track, tracks, trackIndex: ti, pending: pending.length, resumed: resumed.length, invalid, estimateMs,
         });
 
         if (!sess || sess.track !== track || sess.out !== out) {
@@ -324,7 +325,10 @@ export function createExtras(ctx) {
           })),
         });
       }
-      writeSurveyProgress(outRoot, { state: "done", tracks, estimateMs, compareIndex });
+      writeSurveyProgress(outRoot, {
+        state: surveyTerminalState(trackResults), tracks, estimateMs, compareIndex,
+        trackResults: trackResults.map((t) => ({ track: t.track, captured: t.captured, failed: t.failed, error: t.error })),
+      });
 
       const captured = trackResults.reduce((n, t) => n + t.captured, 0);
       const failed = trackResults.reduce((n, t) => n + t.failed, 0);

@@ -709,7 +709,9 @@ async function tlxPackRig(mock, { nullAsync = false, ls = {} } = {}) {
   // eslint-disable-next-line no-new-func
   const gfx = new Function("THREE", "Assets", "localStorage", "lit", "OffscreenCanvas", `"use strict";
     let matPlaceAlbedo = null, matPlaceNormal = null, matOwnedAlbedo = null, matOwnedNormal = null;
+    let materialArrayDetail = null; const renderer = {};   // materialArrayAnisotropy(): no renderer cap here -> 1
     ${TLX.slice(a, b)}
+    ${fnSource(TLX, "function materialArrayAnisotropy() {")}
     return { ${fnSource(TLX, "createTextureArray(size, images, layers) {")}, ${fnSource(TLX, "setMaterialMaps(maps) {")} };`)(
     THREE, A, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, twoD);
   return { gfx, calls };
@@ -1667,4 +1669,114 @@ test("verify refuses model files outside the pack, unhashed, or with out-of-rang
     assert.equal(r.status, 1, `${name}: verify must fail\n${r.out}`);
     assert.match(r.out, want, `${name}: names the defect`);
   }
+});
+
+test("glTF supplied normals match transformed triangle normals for rotations, nonuniform scale and parents", () => {
+  const ctx = vm.createContext({ ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, Log: { enabled: () => false } });
+  const gltf = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/gltf.js"), "utf8") + ";GLTF", ctx);
+  const glb = (nodes, supplied) => {
+    const bin = Buffer.from(new Float32Array([0,0,0, 1,0,0, 0,1,1, 0,-Math.SQRT1_2,Math.SQRT1_2, 0,-Math.SQRT1_2,Math.SQRT1_2, 0,-Math.SQRT1_2,Math.SQRT1_2]).buffer);
+    const json = { asset: { version: "2.0" }, buffers: [{ byteLength: bin.length }],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36 }, { buffer: 0, byteOffset: 36, byteLength: 36 }],
+      accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: "VEC3" }, { bufferView: 1, componentType: 5126, count: 3, type: "VEC3" }],
+      meshes: [{ primitives: [{ attributes: supplied ? { POSITION: 0, NORMAL: 1 } : { POSITION: 0 } }] }], nodes, scenes: [{ nodes: [0] }], scene: 0 };
+    const j = Buffer.from(JSON.stringify(json)), padded = Buffer.concat([j, Buffer.alloc((4 - j.length % 4) % 4, 32)]);
+    const out = Buffer.alloc(28 + padded.length + bin.length);
+    out.writeUInt32LE(0x46546c67, 0); out.writeUInt32LE(2, 4); out.writeUInt32LE(out.length, 8);
+    out.writeUInt32LE(padded.length, 12); out.writeUInt32LE(0x4e4f534a, 16); padded.copy(out, 20);
+    out.writeUInt32LE(bin.length, 20 + padded.length); out.writeUInt32LE(0x004e4942, 24 + padded.length); bin.copy(out, 28 + padded.length);
+    return out.buffer.slice(out.byteOffset, out.byteOffset + out.length);
+  };
+  const cases = [
+    [{ mesh: 0, rotation: [0, 0, Math.SQRT1_2, Math.SQRT1_2] }],
+    [{ mesh: 0, rotation: [0, Math.sin(.3), 0, Math.cos(.3)], scale: [2, .5, 3] }],
+    [{ rotation: [0, 0, Math.sin(.35), Math.cos(.35)], scale: [1, 2, .7], children: [1] },
+      { mesh: 0, rotation: [Math.sin(.2), 0, 0, Math.cos(.2)], scale: [2, .5, 3] }],
+  ];
+  for (const nodes of cases) {
+    const supplied = gltf.toMesh(glb(nodes, true)), geometric = gltf.toMesh(glb(nodes, false));
+    assert.deepEqual(Array.from(supplied.pos), Array.from(geometric.pos));
+    for (let i = 0; i < supplied.nrm.length; i += 3) {
+      const dot = supplied.nrm[i] * geometric.nrm[i] + supplied.nrm[i+1] * geometric.nrm[i+1] + supplied.nrm[i+2] * geometric.nrm[i+2];
+      assert.ok(dot > .999999, "supplied normal must face the transformed triangle: " + dot);
+    }
+  }
+});
+
+test("asset decode fallback yields a task between layers and unload during the yield cannot upload", async () => {
+  for (const cancel of [false, true]) {
+    const tasks = [], events = [], closed = []; let uploads = 0, microtasks = 0;
+    const assets = assetLoader({
+      queueMicrotask(fn) { microtasks++; queueMicrotask(fn); },
+      setTimeout(fn) { tasks.push(fn); return tasks.length; },
+      fetch: async (url) => url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 1, albedo: "albedo.png", layers: [{ mat: 1, scale: 1 }, { mat: 2, scale: 1 }] } }) }
+        : { ok: true, blob: async () => ({ size: 2 }) },
+      createImageBitmap: async (_, x, y) => { events.push("decode" + y); return { close() { closed.push(y); } }; },
+    });
+    assets.init({ createTextureArray() { uploads++; return {}; }, setMaterialMaps() {} });
+    const pending = assets.load();
+    await new Promise(setImmediate);
+    assert.deepEqual(events, ["decode1"]);
+    assert.equal(tasks.length, 1, "the next decode waits on a future task, even with queueMicrotask present");
+    if (cancel) assets.unload();
+    tasks.shift()();
+    assert.equal(await pending, !cancel);
+    assert.deepEqual(events, cancel ? ["decode1"] : ["decode1", "decode2"], "obsolete layers are not decoded");
+    assert.equal(microtasks, 0, "microtasks cannot give rendering a turn");
+    assert.equal(uploads, cancel ? 0 : 1);
+    assert.deepEqual(closed.sort(), cancel ? [1] : [1, 2], "all decoded bitmap owners are released once");
+  }
+});
+
+
+test("readback destination ownership is local across sync, overlapping async, failure and unload", async () => {
+  for (const waitFails of [false, true]) {
+    const tasks = [], mock = makeAsyncGl({ busyPolls: 2, waitFails });
+    const sandbox = { setTimeout(fn) { tasks.push(fn); }, OffscreenCanvas: class { getContext() { return mock.gl; } } };
+    sandbox.window = sandbox; vm.createContext(sandbox); seedLog(sandbox);
+    // Inspect module roots without exporting a production diagnostic surface.
+    const src = fs.readFileSync(path.join(ROOT,"js/render/shared/assets.js"),"utf8");
+    vm.runInContext(src.replace("return { init, supported,", "return { scratchForTest: () => _scratchGl, init, supported,"),sandbox);
+    const a = sandbox.Assets, n = 17, size = 2, data = new Uint8Array(size*size*4*n);
+    const images = []; images[1] = layerImage(1,size);
+    assert.deepEqual([...a.readLayerBytes(size,images,n,data)],[1]);
+    const owns = (buffer) => Object.values(a.scratchForTest()).some((v) => ArrayBuffer.isView(v) && v.buffer === buffer);
+    assert.equal(owns(data.buffer),false,"session scratch context must not root a completed sync destination");
+    const x = new Uint8Array(data.length), y = new Uint8Array(data.length);
+    const first = a.readLayerBytesAsync(size,images,n,x);
+    const images2 = []; images2[1] = layerImage(2,size);
+    const second = a.readLayerBytesAsync(size,images2,n,y);
+    a.unload();
+    assert.equal(owns(x.buffer),false); assert.equal(owns(y.buffer),false,"in-flight local views are not session roots");
+    while(tasks.length) tasks.shift()();
+    assert.deepEqual([...await first],waitFails?[]:[1]); assert.deepEqual([...await second],waitFails?[]:[1]);
+    if (!waitFails) {
+      assert.deepEqual([...x.slice(size*size*4,size*size*8)],[...layerImage(1,size).pixels(size,size)]);
+      assert.deepEqual([...y.slice(size*size*4,size*size*8)],[...layerImage(2,size).pixels(size,size)],"concurrent readback must not redirect earlier output");
+    }
+    assert.equal(owns(x.buffer),false);assert.equal(owns(y.buffer),false);
+    assert.equal(mock.ops.filter(([op])=>op==="deleteBuffer").length,2);
+    assert.equal(mock.ops.filter(([op])=>op==="deleteSync").length,2);
+  }
+});
+
+test("obsolete Safari fallback stops at a layer task and closes both crop and full-strip owners", async () => {
+  const tasks=[], bitmaps=[], calls=[]; const blob={size:1}; let maps=0, uploads=0;
+  const assets=assetLoader({
+    setTimeout(fn){tasks.push(fn);},
+    fetch:async(url)=>url.endsWith("manifest.json")?{ok:true,json:async()=>({materials:{size:1,albedo:"a",layers:[{mat:1,scale:1},{mat:2,scale:1},{mat:3,scale:1}]}})}:{ok:true,blob:async()=>blob},
+    async createImageBitmap(source,...args){
+      calls.push(source===blob?(args.length>1?"blob-crop":"full"):"fallback-crop");
+      if(source===blob&&args.length>1)throw Error("Safari crop unsupported");
+      const b={closed:0,close(){this.closed++;}};bitmaps.push(b);return b;
+    },
+  });
+  assets.init({createTextureArray(){uploads++;return{};},setMaterialMaps(v){if(v)maps++;}});
+  const pending=assets.load();await new Promise(setImmediate);
+  assert.deepEqual(calls,["blob-crop","full","fallback-crop"]);
+  assets.unload();tasks.shift()();
+  assert.equal(await pending,false);assert.equal(uploads,0);assert.equal(maps,0);
+  assert.deepEqual(calls,["blob-crop","full","fallback-crop"],"cancellation neither decodes another layer nor retries the full strip");
+  assert.deepEqual(bitmaps.map(b=>b.closed),[1,1]);
 });

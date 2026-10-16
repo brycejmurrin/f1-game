@@ -450,6 +450,8 @@ let _fitPending = false;   // invalidateFit mid-tick: do not publish --hud-fit-s
 // _fitStamped: a stamp is published and no clash has voided it since.
 // _fitClashRun: consecutive same-key ticks that re-opened the fit for a clash.
 let _fitStamped = false, _fitClashRun = 0;
+// The post-write clash probe's skip key (#2240): what decides a clash, read without layout.
+let _stampKey = "", _stampWait = 0;
 const FIT_CLASH_TRIES = 5;
 // Per moved piece: hidden, or visible + the LENGTH of its words. A moved piece's
 // width is part of what HudLayout.fit clamps, and the AERO chip's words change
@@ -987,6 +989,12 @@ function phoneFitStampSync(scale, force) {
   // REL's own tick already re-fit it if its key moved; fitRows writes then reads,
   // so an unconditional call here forced a layout every phone tick (#2151).
   if (typeof HudRelative !== "undefined") { if (HudRelative.refit) HudRelative.refit(force); else if (HudRelative.fitRows) HudRelative.fitRows(); }
+  // A steady tick (nothing that places a readout moved since the last clear verdict) skips the
+  // probe: its rect reads were one forced layout per tick after this tick's writes (#2240). Any key
+  // change, a forced sync, a voided stamp or the 3 s backstop probes as before.
+  const sk = radioPaintedKey(root) + "|" + _fitKey + "|" + (typeof HudRelative !== "undefined" && HudRelative.fitKey ? HudRelative.fitKey() : "")
+    + "|" + (els.hudSectors ? (els.hudSectors.hidden ? "h" : "v") : "-");
+  if (!force && _fitStamped && !_fitPending && sk === _stampKey && --_stampWait > 0) return;
   // One probe per pass: the verdict after the last pass feeds the stamp below.
   let clash = phonePaintedClash();
   for (let pass = 0; pass < 8 && clash; pass++, clash = phonePaintedClash()) {
@@ -1006,6 +1014,7 @@ function phoneFitStampSync(scale, force) {
       _fitStamped = true;
     }
   } else { hStyle(root, "--hud-fit-stamp", ""); _fitStamped = false; }
+  _stampKey = clash ? "" : sk; _stampWait = 30;
 }
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
@@ -1096,7 +1105,7 @@ function fitHud() {
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
   // tick ≈ 3 s between forced layout reads while nothing changed.
   if (key !== _fitKey) _fitClashRun = 0;
-  _fitKey = key; _fitWait = 30;
+  _fitKey = key; _fitWait = 30; _stampKey = "";   // a full fit ran: the next stamp tick probes
   _fitPending = false;
   // The dock paints at max(--hud-btn-floor, BUTTON SIZE) (css/touch-controls.css:
   // 0.82, 0.92 on the narrow tier), so the base the cap is judged against and

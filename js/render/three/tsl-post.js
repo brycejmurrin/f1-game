@@ -492,7 +492,7 @@
       reflSkyLo: uniform(new THREE.Vector3(0.02, 0.025, 0.05)),
       ssrTopUV: uniform(0.62), ssrNear: uniform(-2.5),
       ssrThick: uniform(0.20), chromAb: uniform(0), grain: uniform(0),
-      grainTime: uniform(0), sharpen: uniform(0), blackLift: uniform(0.005),
+      grainTime: uniform(0), sharpen: uniform(0), sharpenLimit: uniform(0), blackLift: uniform(0.005),
       whitePoint: uniform(1.0),
       acesA: uniform(2.51), acesB: uniform(0.03), acesC: uniform(2.43),
       acesD: uniform(0.59), acesE: uniform(0.14),
@@ -607,11 +607,18 @@
 
         // SHARPEN js/render/glx/shaders/glsl-post.js: unsharp mask, caScene domain.
         If(C.sharpen.greaterThan(0.001), () => {
-          const bl = caScene(vUV.add(vec2(C.reflTexel.x, 0.0)))
-            .add(caScene(vUV.sub(vec2(C.reflTexel.x, 0.0))))
-            .add(caScene(vUV.add(vec2(0.0, C.reflTexel.y))))
-            .add(caScene(vUV.sub(vec2(0.0, C.reflTexel.y)))).mul(0.25);
-          c.addAssign(c.sub(bl).mul(C.sharpen).mul(0.9));
+          const left = caScene(vUV.sub(vec2(C.reflTexel.x, 0.0)));
+          const right = caScene(vUV.add(vec2(C.reflTexel.x, 0.0)));
+          const down = caScene(vUV.sub(vec2(0.0, C.reflTexel.y)));
+          const up = caScene(vUV.add(vec2(0.0, C.reflTexel.y)));
+          const bl = right.add(left).add(up).add(down).mul(0.25);
+          const candidate = c.add(c.sub(bl).mul(C.sharpen).mul(0.9));
+          // Default-off experiment: do not create new local colour extrema.
+          If(C.sharpenLimit.greaterThan(0.5), () => {
+            const lo = min(c, min(min(left, right), min(down, up)));
+            const hi = max(c, max(max(left, right), max(down, up)));
+            c.assign(clamp(candidate, lo, hi));
+          }).Else(() => { c.assign(candidate); });
         });
 
         const aoV = float(1.0).toVar();
