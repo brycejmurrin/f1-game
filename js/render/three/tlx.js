@@ -3572,6 +3572,8 @@ const TLX = (function () {
        * WebGL2 readback could not write (better a colour-shifted pack than
        * none). Returns the number of layers written. */
       function readbackTextureLayers(size, images, n, data) {
+        const expected = [];
+        for (let i = 0; i < n; i++) if (images[i]) expected.push(i);
         let done = [];
         try {
           if (typeof Assets !== "undefined" && Assets.readLayerBytes) done = Assets.readLayerBytes(size, images, n, data);
@@ -3584,7 +3586,11 @@ const TLX = (function () {
           if (r < 0) return filled;
           filled += r;
         }
-        return filled;
+        // A partially readable pack is not a usable pack.  Returning a
+        // texture with zero-filled pages makes missing materials look valid
+        // and prevents Assets.load() from clearing its in-flight promise so a
+        // later retry can recover after a transient readback failure.
+        return filled === expected.length ? filled : 0;
       }
       // The 2d round-trip for one layer the WebGL2 readback refused: 1 written, 0 a bad layer, -1 no 2d context.
       function fill2dLayer(c2d, size, img, i, data) {

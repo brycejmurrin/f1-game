@@ -758,6 +758,16 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
   assert.match(wgx, /_releaseOwnedMatMaps/);
 });
 
+test("TLX rejects partial material readbacks so Assets can retry", () => {
+  const tlx = read("js/render/three/tlx.js");
+  const at = tlx.indexOf("function readbackTextureLayers(size, images, n, data)");
+  assert.ok(at > 0, "TLX material readback helper moved");
+  const body = tlx.slice(at, tlx.indexOf("\n      }", at));
+  assert.match(body, /const expected = \[\]/);
+  assert.match(body, /filled === expected\.length \? filled : 0/,
+    "a missing layer must reject the whole array instead of binding a zero-filled page");
+});
+
 test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
   const src = read("js/perf/renderer-picker.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
