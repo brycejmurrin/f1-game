@@ -19,8 +19,10 @@ const FieldLod = (function () {
     WHEEL_EXTRAS_M: 50,   // beyond: drop spin discs; keep the fixed disc/caliper + compound stripe (open-rim fill) until NO_DECAL_M
     FLAPS_M: 80,          // MOVING active-aero flaps within (was 150); beyond, one static set (never none)
     FLAME_M: 60,          // throttle-lift exhaust flame within (was ungated)
-    NO_DECAL_M: 120,      // beyond: no livery decal (body + the 4 rotating wheels). Not a whole-car
-                          // mesh: pre-building one per rival cost ~5 s of CPU at track build (game-vm)
+    NO_DECAL_M: 120,      // beyond: no livery decal (body + the 4 rotating wheels). Past here rivals
+                          // also draw ONE shared low-poly body mesh (CarDraw.sharedRivalBodyMesh),
+                          // not a per-seat teamBodyMesh — pre-building a whole car per rival cost
+                          // ~5 s of CPU at track build (game-vm).
     SHADOW_CAST_M: 50,    // sun / lamp shadow-map caster within (blob shadow unchanged)
     MIRROR_CARS: 6,       // nearest rivals the rear-view mirror / PiP redraws
     LEGACY_FLAPS_M: 150,  // the off-switch's flap gate
@@ -106,7 +108,7 @@ const FieldLod = (function () {
     const t = isPlayer ? 0 : tier(dist2), lite = !isPlayer && wheelsLite(dist2);
     const keepFixed = isPlayer || t < 2;   // tiers 0+1; far (2) = rotating wheels only
     return {
-      tier: t, body: true, decal: t < 2, wheels: true,
+      tier: t, body: true, cheapBody: !isPlayer && on && t >= 2, decal: t < 2, wheels: true,
       fixedWheels: keepFixed,
       spinDisc: !lite && (isPlayer || dist2 < sq(120)),
       // Near (tier 0): compound within 60 m (long-lens near can sit past 50 m).

@@ -16,7 +16,7 @@ function element(tag) {
     addEventListener(k, fn) { listeners[k] = fn; }, dispatch(k) { if (listeners[k]) listeners[k](); } };
 }
 
-function setup({ raf }) {
+function setup({ raf, startT }) {
   const body = element("body"), frames = [];
   const sandbox = { document: { body, createElement: element, activeElement: null }, RealReplay: { LEAD_S: 8 } };
   if (raf) sandbox.requestAnimationFrame = (fn) => frames.push(fn);
@@ -24,7 +24,7 @@ function setup({ raf }) {
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/watch-transport.js", import.meta.url), "utf8"), ctx);
   const W = vm.runInContext("WatchTransport", ctx);
   const seeks = [], state = { T: 0, duration: 100, paused: true, speed: 1, follow: "AAA", broadcast: { auto: true, locked: false, manual: false } };
-  const api = { describe: () => ({ name: "GP", drivers: [{ code: "AAA", name: "Alpha" }], events: [], speeds: [1] }), status: () => state,
+  const api = { describe: () => ({ name: "GP", startT, drivers: [{ code: "AAA", name: "Alpha" }], events: [], speeds: [1] }), status: () => state,
     setPaused() {}, setSpeed() {}, follow() {}, setLocked() {}, setAuto() {}, eventStep() {},
     seek: (v) => { seeks.push(v); state.T = v; } };
   const ui = W.create({ camMode: 0 }, api); ui.start();
@@ -63,4 +63,15 @@ test("without requestAnimationFrame the scrub still seeks (no lost input)", () =
   seek.value = "12"; seek.dispatch("input");
   assert.deepEqual(t.seeks, [12]);
   t.ui.stop();
+});
+
+test("the timeline reaches footage before lights-out (#2202)", () => {
+  const t = setup({ raf: false, startT: -10 });
+  const seek = t.find("seek");
+  assert.equal(seek.min, "-10");
+  seek.value = "-10"; seek.dispatch("change");
+  assert.deepEqual(t.seeks, [-10]);
+  assert.equal(seek.value, "-10", "the slider is not clamped at 0");
+  t.ui.stop();
+  assert.equal(setup({ raf: false }).find("seek").min, "0", "no pre-start footage: the timeline starts at 0");
 });

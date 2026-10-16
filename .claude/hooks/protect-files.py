@@ -51,6 +51,7 @@ GENERATED = {
     "js/roster.js": "node tools/gen/gen-shell.mjs writes it from tools/manifest.cjs",
     "tools/carview.html": "node tools/gen/gen-shell.mjs writes it from tools/manifest.cjs",
     "tools/README.md": "node tools/gen/gen-tools-readme.mjs writes it from the tools' @doc headers",
+    "CHANGELOG.md": "a PR adds a fragment docs/changelog.d/<slug>.md; node tools/gen/gen-changelog.mjs --fold writes it",
     # Not generated, but never hand-edited: a ceiling moves through the tool
     # (--auto-raise in the commit hook, --update with a reason in the commit),
     # so the number in the diff is a measurement, not a wish (AGENTS.md
@@ -197,6 +198,12 @@ def check(file, tool, ti, proposed=None, how=""):
     # scoped-agent rules above already ran (2026-10-15).
     if how == "git-resolve":
         return
+
+    # The per-branch ratchet raise fragments are tool-written like ratchets.json
+    # (tools/check/ratchets.mjs --auto-raise; #2291).
+    if not allow and rel.replace(os.sep, "/").startswith("tests/data/ratchets.d/") and rel.endswith(".json"):
+        block(f"{rel}{via} is GENERATED — the commit hook's ratchets.mjs --auto-raise writes it (a delta for this "
+              "branch); --fold / --update sum it into tests/data/ratchets.json. Edit the source and re-commit.", root)
 
     if rel in GENERATED and not allow:
         block(f"{rel}{via} is GENERATED — {GENERATED[rel]}. Edit the source and run the generator.", root)
