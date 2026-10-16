@@ -22,7 +22,7 @@
  *   queued jobs, any OS                     ≥ QUEUED_HOLD (10) — runner-queued only; a `pending`
  *                                             job waits in a CI concurrency lane and drives no hold
  *   macOS jobs in flight                    ≥ MACOS_SLOTS (5)
- *   the oldest queued Linux job's age       ≥ STARVED_AGE_MIN (10 min; #2266)
+ *   the oldest queued Linux job's age       ≥ STARVED_AGE_MIN (10 min; #2266) while < LINUX_SLOTS/2 run
  * The line also prints the OBSERVED Linux running count and the oldest queued
  * age (#2266): on 2026-10-15 ~17:30Z only 7–12 Linux jobs ran while 25–36 sat
  * queued for up to 14 min, so the account had far fewer runners than the 40
@@ -147,8 +147,13 @@ export function evaluate(c, meta = {}) {
   if (macInFlight >= MACOS_SLOTS) reasons.push(`macOS jobs in flight ${n(macInFlight)} ≥ ${MACOS_SLOTS}`);
   // #2266: the 40-slot model assumes runners; a queue that does not move says
   // the pool is smaller than that, whatever the counts.
-  if (linuxAge !== null && linuxAge >= STARVED_AGE_MIN)
-    reasons.push(`oldest queued Linux job ${linuxAge} min ≥ ${STARVED_AGE_MIN} (${c.linux.running} running${c.linux.running < LINUX_SLOTS / 2 ? ": runners starved" : ""})`);
+  // The age is from the job's created_at, which includes any time it waited
+  // `pending` in a CI lane: a leg released after a long lane wait reads as old
+  // for the seconds before a runner takes it. So age alone is not starvation;
+  // it holds only while fewer than half the slots run (2026-10-15 23:27Z: hold
+  // on one 115-min "queued" job with 36 running).
+  if (linuxAge !== null && linuxAge >= STARVED_AGE_MIN && c.linux.running < LINUX_SLOTS / 2)
+    reasons.push(`oldest queued Linux job ${linuxAge} min ≥ ${STARVED_AGE_MIN} (${c.linux.running} running: runners starved)`);
   return {
     verdict: reasons.length ? "hold" : "ok",
     hold: reasons.length > 0,
