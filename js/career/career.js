@@ -76,7 +76,7 @@ const driverRec = (d) => ({ name: d.name, code: d.code, num: d.num });
 
 let career = null;        // the loaded save, or null
 let engaged = false;
-function engage(on) { engaged = !!on; applyRegs(); }
+function engage(on) { engaged = !!on; if (applyRegs()) save({ migration: true }); }
 function inCareer() { return engaged && career != null; }
 
 // Career draws never touch simRnd(): consuming that stream here would make a
@@ -201,8 +201,8 @@ function load(options) {
   // the key it was migrated FROM), so persisting the climbed shape is this
   // function's job — otherwise a v0 save would migrate in memory on every boot
   // and never on disk, and the next build's ladder would start from v0 again.
-  if (persist) save({ migration: true });
   applyRegs();
+  if (persist) save({ migration: true });
   return career;
 }
 function setLive(options) { pointerHeld = false; store.set("careerSlot", `${slotFlavour}:${slotIdx}`, options); }
@@ -317,7 +317,7 @@ function useSlot(flavour, i) {
   setLive();
   career = adoptCalendar(readSlot(f, n));
   armRevision();
-  applyRegs();      // a different save can be a different era
+  if (applyRegs()) save({ migration: true });   // a different save can have a lower cap
   return career;
 }
 function deleteSlot(flavour, i, expectedRevision) {
@@ -822,6 +822,36 @@ function applyRegs() {
   const e = inCareer() ? era() : null;
   if (!e || !Regulations) { Parts.setLegality(null, ""); return; }
   Parts.setLegality(Regulations.legalityFor(e.id), e.id);
+  return !careerConflict && refitBudget();
+}
+
+// An era can lower the works-based cap even when every fitted part stays legal.
+// Refit only OWNED legal options, preserving research and banned stored ids that
+// resolve freely. Prefer the smallest single-category saving covering the excess;
+// otherwise take the largest available saving and repeat. No automatic upgrades.
+function refitBudget() {
+  if (!Parts.resolveSetup) return false;   // rules-only harnesses may omit the catalog resolver
+  const team = teamOf(career.team), cap = budget(), have = owned(career.team);
+  let fit = Parts.resolveSetup(career.fitted, team), changed = false;
+  while (fit.cost > cap) {
+    const excess = fit.cost - cap;
+    let best = null;
+    for (const cat of Parts.CATALOG) for (const opt of cat.options) {
+      if (!Parts.isOptionAvailable(opt, team, have)) continue;
+      const saving = (fit.options[cat.id].cost || 0) - (opt.cost || 0);
+      if (saving <= 0) continue;
+      const covers = saving >= excess, distance = Math.abs(saving - excess);
+      const id = cat.id + ":" + opt.id;
+      if (!best || (covers && !best.covers) || (covers === best.covers &&
+          (distance < best.distance || (distance === best.distance && id < best.id))))
+        best = { cat: cat.id, opt: opt.id, covers, distance, id };
+    }
+    if (!best) break;   // every real category has a free default; defensive for incomplete catalogs
+    career.fitted[best.cat] = best.opt;
+    fit = Parts.resolveSetup(career.fitted, team);
+    changed = true;
+  }
+  return changed;
 }
 
 // The ceiling every career budget obeys: the whole top shelf minus its dearest
