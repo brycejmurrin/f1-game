@@ -2409,5 +2409,3 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 #pausemenu .input-review { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }
 .input-review-canvas { display: block; width: 100%; max-width: 100%; height: auto; }
 } /* @layer hud */
-/* The pause setup-trial panel spans the sheet like the input review. */
-#pausemenu .sheet-body > .player-tool-panel { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }
