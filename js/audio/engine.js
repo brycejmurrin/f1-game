@@ -2237,10 +2237,9 @@ var GameAudio = (function () {
   function pitGun(tighten) {
     pitGunFired++;
     if (!sfxOk()) return;
-    const t0 = now();
     const lag = [0, 0.05, 0.11, 0.08];
     for (let i = 0; i < 4; i++) {
-      const w = t0 + lag[i] + Math.random() * 0.03;
+      const w = lag[i] + Math.random() * 0.03;   // noise() takes a delay from the current audio clock
       const n = tighten ? 3 : 4;
       for (let k = 0; k < n; k++) noise(0.07, 0.03, (tighten ? 3200 : 2600) + i * 140, w + k * 0.045);
     }

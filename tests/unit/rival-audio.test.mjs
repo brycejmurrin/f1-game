@@ -40,6 +40,74 @@ function make(cars) {
   return { collect: (p) => [...R.collect(p)] };
 }
 
+function replayAudio() {
+  const sb = { console, Log: { info() {} } }; sb.window = sb;
+  const ctx = vm.createContext(sb);
+  for (const file of ["js/core/mat4.js", "js/physics/consts.js", "js/audio/rivals.js", "js/camera/replay-buf.js"])
+    vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8"), ctx, { filename: file });
+  const { ReplayBuf, RivalAudio } = vm.runInContext("({ ReplayBuf, RivalAudio })", ctx);
+  const me = car({ s: 100 }), rival = car({ s: 110, finished: false, dnf: "mechanical", finishT: 17 });
+  const G = { cars: [me, rival], player: me, track: { total: LAP }, raceT: 2 };
+  const ring = ReplayBuf.create(G), audio = RivalAudio.create(G);
+  ring.sample(0, G.cars); rival.finished = true; ring.sample(1, G.cars);
+  rival.retired = true; ring.sample(2, G.cars);
+  return { G, me, rival, ring, audio, ReplayBuf };
+}
+
+test("replay rival retirement follows footage without changing lifecycle authority", () => {
+  const { G, me, rival, ring, audio } = replayAudio();
+  const authority = () => [rival.retired, rival.finished, rival.dnf, rival.finishT];
+  const live = authority();
+  assert.equal(audio.collect(me).length, 0);
+  assert.equal(ring.beginScrub(false), true);
+  for (const [time, voices] of [[0, 1], [0.5, 1], [1, 1], [1.9, 1], [2, 0], [0, 1]]) {
+    ring.apply(time);
+    assert.equal(audio.collect(me).length, voices, `voices at ${time}`);
+    assert.deepEqual(authority(), live);
+  }
+  ring.endScrub();
+  assert.equal(audio.collect(me).length, 0);
+  assert.deepEqual(authority(), live);
+  assert.equal(G.cars[1], rival);
+});
+
+test("replay audio cleanup handles clear, reset and changed field identities", () => {
+  for (const action of ["endScrub", "clear", "reset", "replace", "reorder", "partial", "same-array"]) {
+    const { G, me, rival, ring, audio, ReplayBuf } = replayAudio();
+    ring.beginScrub(false); ring.apply(0);
+    assert.equal(audio.collect(me).length, 1);
+    if (["endScrub", "clear", "reset"].includes(action)) ring[action]();
+    else {
+      const fresh = car({ s: 110, retired: true });
+      if (action === "replace") G.cars = [me, fresh];
+      if (action === "reorder") G.cars = [rival, me];
+      if (action === "partial") G.cars = [me];
+      if (action === "same-array") G.cars[1] = fresh;
+      // A lazy read must release stale ownership even before another seek.
+      assert.equal(ReplayBuf.audioRetired(rival), true, action);
+      assert.equal(ring.apply(0), false, action);
+      assert.equal(fresh.retired, true);
+    }
+    assert.equal(ReplayBuf.audioRetired(rival), true, action);
+    assert.equal(audio.collect(me).length, 0, action);
+    assert.equal(rival.retired, true);
+    assert.equal(rival.finished, true);
+  }
+});
+
+test("replay audio ownership cleanup does not erase a newer instance", () => {
+  const { G, me, rival, ring, audio, ReplayBuf } = replayAudio();
+  const other = ReplayBuf.create(G);
+  other.sample(0, G.cars); other.sample(1, G.cars);
+  ring.beginScrub(false); ring.apply(0);
+  other.beginScrub(false); other.apply(0);
+  ring.clear();
+  assert.equal(audio.collect(me).length, 0, "newer retired footage survives older cleanup");
+  other.endScrub();
+  assert.equal(ReplayBuf.audioRetired(rival), true);
+  assert.equal(ReplayBuf.audioRetired(car({ retired: false })), false, "unowned live fallback");
+});
+
 test("a car alongside on your LEFT reads negative lateral, and on your right positive", () => {
   const me = car({ s: 500, x: 0 });
   const left = car({ s: 500, x: -3 });

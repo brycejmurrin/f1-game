@@ -21,8 +21,8 @@
  * picker).
  *
  * Not covered (declared): writes made to a stub instance before its bundle
- * lands (pits.setPinnedStops, raceRadio.setChat) still vanish when the ready
- * hook recreates the instance — a write-recording stub is a follow-up.
+ * lands (e.g. raceRadio.setChat) may vanish when the ready hook recreates the
+ * instance. Pit pins use the persistent store; race-settings-pitplan-key covers them.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
