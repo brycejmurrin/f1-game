@@ -463,8 +463,9 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#pm-coach-prev'); await expect(page.locator('#pm-coach-sel')).toHaveValue('off');
         await expect(page.locator('#pm-coach-status')).toContainText(/coach off/i);
         await expect(page.locator('#pm-coach-tip')).toContainText(/next tip.*after you drive/i);
+        // Practice, Pit and Review are their own Pause pages now, so none of them shows on Driving.
         for (const id of ['pm-practice-panel','pm-pit-panel','pm-session-review'])
-          await expect(page.locator('#'+id)).not.toHaveAttribute('open','');
+          await expect(page.locator('#'+id)).toBeHidden();
         await expect(page.locator('#pm-practice-set')).toBeHidden();
         await expect(page.locator('#pm-pit-choice-sel')).toBeHidden();
         const measure = async root => page.evaluate(selector => {
@@ -489,49 +490,9 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         expect(m.docOverflow).toBeLessThanOrEqual(1); expect(m.paneOverflow).toBeLessThanOrEqual(1);
         expect(m.paneHeight).toBeGreaterThan(70);
         if ([100,150,200].includes(pct)) await page.screenshot({path:info.outputPath(`driving-${pct}.png`)});
-        // Open the simplified sections by touch, so hidden content cannot make
-        // an overflow measurement or disabled-control assertion pass vacuously.
-        for (const id of ['pm-practice-panel','pm-pit-panel']) {
-          await press('#'+id+' > summary');
-          await expect(page.locator('#'+id)).toHaveAttribute('open','');
-          if (id === 'pm-practice-panel') {
-            await expect(page.locator('#pm-practice-set')).toBeVisible();
-            await expect(page.locator('#pm-practice-set')).toBeDisabled();
-            // NOT the exact wording. This is a LAYOUT cell — the assertions here
-            // exist so an overflow measurement cannot pass on hidden content —
-            // and the sentence itself belongs to the practice feature, which
-            // rewrote it when checkpoints stopped being Time-Trial-only ("solo
-            // Time Trial" became "a Time Trial, or … armed for practice"). What
-            // this test needs is that the DISABLED case still explains itself,
-            // so match the branch, not the prose.
-            await expect(page.locator('#pm-practice-state')).toContainText(/checkpoints are available/i);
-            await page.locator('#pm-practice-state').scrollIntoViewIfNeeded();
-          } else {
-            await expect(page.locator('#pm-pit-choice-sel')).toBeVisible();
-            await expect(page.locator('#pm-pit-choice-sel')).toBeDisabled();
-            await page.locator('#pm-pit-help').scrollIntoViewIfNeeded();
-          }
-          const expanded=await measure('#pmsettings');
-          expect(expanded.overflow,`${id} at ${pct}%`).toEqual([]);
-          expect(expanded.smallTargets,`${id} at ${pct}%`).toEqual([]);
-          expect(expanded.paneOverflow).toBeLessThanOrEqual(1);
-          await press('#'+id+' > summary');
-          await expect(page.locator('#'+id)).not.toHaveAttribute('open','');
-        }
-        await press('#pm-session-review > summary');
-        await expect(page.locator('#pm-coach-summary')).toContainText(/no tips|0 tips/i);
-        await expect(page.locator('#pm-session-review')).toHaveAttribute('open','');
-        await expect(page.locator('#pm-driving-trace')).toBeHidden();
-        await expect(page.locator('#pm-technical-data')).not.toHaveAttribute('open','');
-        await press('#pm-technical-data > summary');
-        await expect(page.locator('#pm-driving-trace')).toBeVisible();
-        await page.locator('#pm-driving-trace').scrollIntoViewIfNeeded();
-        const action=await page.locator('#pm-driving-trace').evaluate(e=>({w:e.clientWidth,sw:e.scrollWidth,h:e.clientHeight,sh:e.scrollHeight}));
-        expect(action.sw).toBeLessThanOrEqual(action.w+1); expect(action.sh).toBeLessThanOrEqual(action.h+1);
-        await press('#pm-technical-data > summary');
-        await expect(page.locator('#pm-driving-trace')).toBeHidden();
-        await press('#pm-session-review > summary');
-        await expect(page.locator('#pm-driving-trace')).toBeHidden();
+        // Practice, Pit and Review are pages of their own (opened from Pause), so the old
+        // expand-in-place sections no longer exist on Driving; those pages are walked by the
+        // Practice/Pit/Review test above.
         await press('#pm-settings-close'); await expect(page.locator('#pm-settings-index')).toBeVisible();
         await press('#pm-settings-close'); await expect(page.locator('#pmsettings')).toBeHidden();
         // phone-browser-landscape + UI SIZE 200%: #mb-help can resolve while its
