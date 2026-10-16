@@ -111,8 +111,8 @@ tables: `docs/ARCHITECTURE.md`.
   `node tools/gen/gen-shell.mjs`.
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules — pay for every added line. The commit hook
-  absorbs ≤ 40 lines of growth (the raise lands in your diff); more blocks until you extract or raise it with a reason
-  (`tools/check/ratchets.mjs --update`; also lowers).
+  absorbs ≤ 40 lines of growth (the raise lands in your diff as `tests/data/ratchets.d/<branch>.json`, a conflict-free
+  delta); more blocks until you extract or raise it with a reason (`tools/check/ratchets.mjs --update`; also lowers).
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log` (`js/core/log.js`), never bare `console.*`.
 - Coordinates: +Y up, metres, radians, arc `s`, lateral `x` +right; +k = LEFT turn (measured). Never flip a curvature
   sign without a rendered lap.
