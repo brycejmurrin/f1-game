@@ -20,6 +20,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { NetworkAdversary } from "../helpers/network-adversary.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
@@ -29,6 +30,55 @@ const load = (rel, name) =>
 globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");   // both bind it at call time
 const NetTransport = load("js/net/transport.js", "NetTransport");
 const NetHandshake = load("js/net/handshake.js", "NetHandshake");
+
+test("network adversary can reorder headers and stall each response body", async () => {
+  const net = new NetworkAdversary();
+  const first = net.fetch("/telemetry?lap=1");
+  const second = net.fetch("/telemetry?lap=2");
+  assert.deepEqual(net.requests().map(r => r.url), ["/telemetry?lap=1", "/telemetry?lap=2"]);
+
+  // Headers for the newer request arrive first. Neither body is readable until
+  // the test explicitly releases bytes, so a consumer cannot accidentally pass
+  // because Node completed a fast local response.
+  net.respondHeaders(2);
+  const secondResponse = await second;
+  let secondDone = false;
+  const secondBody = secondResponse.text().then(value => { secondDone = true; return value; });
+  await Promise.resolve();
+  assert.equal(secondDone, false, "body must remain stalled after headers");
+  net.push(2, "new");
+  net.end(2);
+  assert.equal(await secondBody, "new");
+
+  net.respondHeaders(1);
+  net.push(1, "old");
+  net.end(1);
+  assert.equal(await (await first).text(), "old");
+});
+
+test("network adversary distinguishes request failure from a mid-body disconnect", async () => {
+  const net = new NetworkAdversary();
+  const failed = net.fetch("/retry");
+  net.fail(1, new TypeError("offline"));
+  await assert.rejects(failed, /offline/);
+
+  const dropped = net.fetch("/retry");
+  net.respondHeaders(2, { headers: { "content-type": "application/json" } });
+  net.push(2, "{\"partial\":");
+  const body = (await dropped).text();
+  net.errorBody(2, new Error("socket closed"));
+  await assert.rejects(body, /socket closed/);
+});
+
+test("network adversary aborts a pending response without leaving a delivery path", async () => {
+  const net = new NetworkAdversary();
+  const controller = new AbortController();
+  const pending = net.fetch("/slow", { signal: controller.signal });
+  controller.abort(new Error("selection changed"));
+  await assert.rejects(pending, /selection changed/);
+  assert.equal(net.request(1).aborted, true);
+  assert.throws(() => net.respondHeaders(1), /already settled/);
+});
 
 // A seeded uniform, so a loss pattern is a fact rather than a coin flip.
 function seededRnd(seed) {

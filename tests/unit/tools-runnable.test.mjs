@@ -21,6 +21,7 @@ import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { makeClosedDbFaults, makeStorageFaults } from "../helpers/storage-faults.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TOOLS = path.join(ROOT, "tools");
@@ -42,6 +43,23 @@ function toolFiles() {
 }
 
 const FILES = toolFiles();
+
+test("storage fault fixtures deterministically model denial, quota, corruption and closed IDB", () => {
+  const f = makeStorageFaults({ initial: { "apex26.save": '{"v":1}' }, quotaBytes: 20 });
+  assert.equal(f.storage.getItem("apex26.save"), '{"v":1}');
+  f.set({ read: true });
+  assert.throws(() => f.storage.getItem("apex26.save"), { name: "SecurityError" });
+  f.set({ read: false, write: true });
+  assert.throws(() => f.storage.setItem("apex26.save", "x"), { name: "SecurityError" });
+  f.set({ write: false, quotaBytes: 1 });
+  assert.throws(() => f.storage.setItem("apex26.save", "too large"), { name: "QuotaExceededError" });
+  f.set({ quotaBytes: Infinity }).corrupt("apex26.save", "not-json");
+  assert.equal(f.storage.getItem("apex26.save"), "not-json");
+  const closed = makeClosedDbFaults();
+  closed.close();
+  assert.throws(() => closed.db.transaction("kv"), { name: "InvalidStateError" });
+  assert.deepEqual(closed.events.map((e) => e.fault || e.op), ["close", "InvalidStateError"]);
+});
 
 /** Absolute path of a tool by BASENAME. tools/ is grouped into subdirectories
  *  (lib, ci, check, gen, shot, gfx, track, car, ui, lighting, mcp, net, env)
