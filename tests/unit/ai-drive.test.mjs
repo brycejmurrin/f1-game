@@ -799,18 +799,13 @@ test("updateCar does not allocate AiDrive ctx literals", () => {
   console.log("[ai-drive] inline literal at call sites:", hits ? hits[0] : "none (good)");
   assert.equal(hits, null, `updateCar still passes an object literal: ${hits && hits[0]}`);
   const scratches = ["_aiBoost", "_aiOtFire", "_aiBr", "_aiLane", "_aiWantX", "_aiOtPull", "_aiDefend", "_aiBoxed"];
+  // A pooled literal, optionally wrapped in CarFields.warmDoubles (PERF-HUNT-5: its integer fields born Double).
+  const decl = (s) => new RegExp(`const ${s} = (?:CarFields\\.warmDoubles\\()?\\{`);
   for (const s of scratches) {
-    const found = src.includes(`const ${s} = {`);
+    const found = decl(s).test(src);
     console.log(`[ai-drive] scratch ${s} declared:`, found);
+    assert.ok(found, s + " is a pooled literal");
   }
-  assert.match(src, /const _aiBoost = \{/);
-  assert.match(src, /const _aiOtFire = \{/);
-  assert.match(src, /const _aiBr = \{/);
-  assert.match(src, /const _aiLane = \{/);
-  assert.match(src, /const _aiWantX = \{/);
-  assert.match(src, /const _aiOtPull = \{/);
-  assert.match(src, /const _aiDefend = \{/);
-  assert.match(src, /const _aiBoxed = \{/);
 });
 
 test("launchPlan: awareness reads the lights, hands manage the getaway, the roll is the day", () => {

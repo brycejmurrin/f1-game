@@ -625,6 +625,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/camera/photo-kit.js"],  // PhotoKit aliases M4.clamp at eval
   ["js/core/mat4.js", "js/camera/free-cam.js"],   // FreeCam aliases M4.clamp at eval
   ["js/roster.js", "js/game.js"],                          // game.js reads ApexRoster's rosters at eval
+  ["js/race/car-fields.js", "js/game.js"],                 // game.js wraps its pooled AI/scratch literals in CarFields.warmDoubles at eval
   ["js/core/mat4.js", "js/track/core/spline.js"],
   ["js/core/mat4.js", "js/track/core/line.js"],                    // TrackLine aliases M4.clamp/lerp at eval
   // ["js/core/mat4.js", "js/track/scenery/structures.js"] was here. structures.js
