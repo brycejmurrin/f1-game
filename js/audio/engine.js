@@ -1919,7 +1919,7 @@ var GameAudio = (function () {
     // Never a pitch trim — rain must not retune the engine note.
     if (sprayGain) {
       const own = wet ? Math.min(0.045, 0.055 * s * s) : 0;
-      const wake = wet ? sprayAhead * 0.018 * Math.min(1, 0.35 + s) : 0;
+      const wake = wet && layers.rivals ? sprayAhead * 0.018 * Math.min(1, 0.35 + s) * tune.rivals : 0;
       aimGain(sprayGain, own + wake, t, 0.08);
       if ((own + wake) > 0 && sprayFilter) {
         const shz = 1600 + 1400 * s;
