@@ -246,7 +246,7 @@ const RealReplay = (function () {
       if (reel && reel.length) T = reel[0].t - LEAD_S;
       T = clamp(T, startT, duration);
       run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
-      run.startT = startT; run.duration = duration; run.events = events;
+      run.startT = startT; run.duration = duration; run.events = events; run.onTimeline = o.onTimeline;
       run.savedCamera = G.camMode;
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
       const auto = o.camera === "auto";   // the TV director cuts the shots (Broadcast)
@@ -254,6 +254,7 @@ const RealReplay = (function () {
       if (camera >= 0 && G.setCamMode) G.setCamMode(camera, { persist: false });
       // Pose before snapping: a mid-race start must frame the new position, not the grid.
       pose(true);
+      if (run.onTimeline) run.onTimeline(run.T);
       // Every car is a puppet — the seat too: the camera and HUD follow it, nobody drives it.
       let follow = null;
       for (const [c, f] of cars) if (f.tr && f.d && f.d.code === o.follow) follow = c;
@@ -342,6 +343,7 @@ const RealReplay = (function () {
       stopRadioClip();
       pose(true);
       if (G.raceT != null) G.raceT = Math.max(0, run.T);
+      if (run.onTimeline) run.onTimeline(run.T);
       if (bc) bc.resetTiming();
       if (highlight) {
         const c = carOfNum(highlight.num);
@@ -582,6 +584,7 @@ const RealReplay = (function () {
       if (run.paused) { for (const [c, f] of run.cars) if (f.tr && !c.retired) c.speed = 0; return; }
       if (G.state === "race") run.T += dt * run.speed;
       pose();
+      if (run.onTimeline) run.onTimeline(run.T);
       if (G.state !== "race") return;
       fire();
       if (bc) bc.tick(dt, bcState);
