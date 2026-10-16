@@ -196,7 +196,8 @@ var RivalAudio = (() => {
       const lapLen = track.total, half = lapLen * 0.5;
       let n = 0;
       for (const c of cars) {
-        if (c === player || c.retired || c.s == null) continue;
+        const retired = typeof ReplayBuf !== "undefined" && ReplayBuf.audioRetired ? ReplayBuf.audioRetired(c) : c.retired;
+        if (c === player || retired || c.s == null) continue;
         let arc = c.s - player.s;
         if (arc > half) arc -= lapLen; else if (arc < -half) arc += lapLen;
         if (arc > RANGE || arc < -RANGE) continue;
