@@ -693,6 +693,7 @@
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
+    "js/track/scenery/guards.js",
     "js/track/scenery/build-props.js"
   ],
     LAZY_TRACK_BUILD_EDGES: [
@@ -722,6 +723,10 @@
     ],
     [
       "js/track/scenery/venue.js",
+      "js/track/scenery/build-props.js"
+    ],
+    [
+      "js/track/scenery/guards.js",
       "js/track/scenery/build-props.js"
     ],
     [
@@ -770,6 +775,7 @@
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
+    "js/track/scenery/guards.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
     "js/garage/experience.js",

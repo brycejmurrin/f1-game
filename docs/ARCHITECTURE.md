@@ -271,6 +271,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `identity.js` | `SceneryIdentity` | LAZY_TRACK_BUILD | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `pits.js` | `SceneryPits` | LAZY_TRACK_BUILD | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
 | `venue.js` | `SceneryVenue` | LAZY_TRACK_BUILD | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
+| `guards.js` | `SceneryGuards` | LAZY_TRACK_BUILD | SceneryGuards: the road / pit-complex guards of TrackBuildProps (onRoadHit, rejBox, rejRad, onTrack). |
 | `build-props.js` | `TrackBuildProps` | LAZY_TRACK_BUILD | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/track/`**

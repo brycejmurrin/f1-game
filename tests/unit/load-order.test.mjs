@@ -449,15 +449,16 @@ test("LAZY_RACE_SESSION is tagless; FULL keeps the session stub", () => {
   }
 });
 
-test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the twelve build files", () => {
+test("LAZY_TRACK_BUILD is tagless; TRACK_VM keeps the thirteen build files", () => {
   const tagged = new Set(scriptSrcs.map(stripV));
   const want = [
     "js/track/scenery/build-props.js", "js/track/scenery/nature.js", "js/track/scenery/city.js",
     "js/track/scenery/structures.js", "js/track/scenery/identity.js", "js/track/scenery/pits.js",
     "js/track/scenery/venue.js", "js/track/scenery/circuit-kit.js", "js/track/scenery/landmark-kit.js",
     "js/track/scenery/models.js", "js/track/core/hidden-faces.js", "js/track/scenery/themes.js",
+    "js/track/scenery/guards.js",
   ];
-  assert.equal((MANIFEST.LAZY_TRACK_BUILD || []).length, 12);
+  assert.equal((MANIFEST.LAZY_TRACK_BUILD || []).length, 13);
   for (const f of want) {
     assert.ok((MANIFEST.LAZY_TRACK_BUILD || []).includes(f), `${f} must be in LAZY_TRACK_BUILD`);
     assert.ok((MANIFEST.TRACK_VM || []).includes(f), `${f} must stay on TRACK_VM for harnesses`);
