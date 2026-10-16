@@ -61,6 +61,78 @@
     "addons/webxr/WebGLXRFallback.js": {
       "sha256": "73d71e8c4aff1c3173d0ba20147311ee8cfb66e7e7203185c677559d00eeb1d0",
       "bytes": 2162
+    },
+    "addons/inspector/Inspector.js": {
+      "sha256": "ad63105e97f6f3f746632588036645ea6ada233cdc2d0758ffbb015599a9d4f1",
+      "bytes": 12054
+    },
+    "addons/inspector/RendererInspector.js": {
+      "sha256": "4252223601805bb32df911328e1626c3161284b5211d95ad399865d880dbeeae",
+      "bytes": 10602
+    },
+    "addons/inspector/Extension.js": {
+      "sha256": "04e555a52e240a52e3eda76fbc7ec3d19bb28207a41ac1f8d43fe4cf24fddba2",
+      "bytes": 2026
+    },
+    "addons/inspector/tabs/Console.js": {
+      "sha256": "7cfaf8456722acdd98877e085861601b8e03dd19b71c6e04bafe8cad06bb593e",
+      "bytes": 9861
+    },
+    "addons/inspector/tabs/Memory.js": {
+      "sha256": "d0033867fbb34c62df64b0201b27a6ded163bdef2016d28db8dc27ff8ea08567",
+      "bytes": 4700
+    },
+    "addons/inspector/tabs/Parameters.js": {
+      "sha256": "2eb3aa11c8c067c3f64d8680b991f44d6de2deb700529aaefd77c5bc46cb36c9",
+      "bytes": 8703
+    },
+    "addons/inspector/tabs/Performance.js": {
+      "sha256": "d312db4453d35681f23baccdae42716c07325d18d1c7b82e9d6c0d38715c79bc",
+      "bytes": 6301
+    },
+    "addons/inspector/tabs/Settings.js": {
+      "sha256": "6f5926044e50465c596159b007bc399887f83bc9b7d0d38016f0eea56341ca09",
+      "bytes": 5904
+    },
+    "addons/inspector/tabs/Timeline.js": {
+      "sha256": "2d752424bbb461da80cc8218c3348991c73a29f02467fb7866532e8e92ae02bb",
+      "bytes": 44504
+    },
+    "addons/inspector/tabs/Viewer.js": {
+      "sha256": "ceae13e74498b1b2c9730c3d311c657c5e462477db30c2d7b0b4e5788a0887d7",
+      "bytes": 32869
+    },
+    "addons/inspector/ui/Graph.js": {
+      "sha256": "a472d2bff6191da471159eee9ebb08616581ad7a138841bc03c01d158688f904",
+      "bytes": 4199
+    },
+    "addons/inspector/ui/Item.js": {
+      "sha256": "dff0df175e734575102093a9b4e6fe90ad1b67131a44ef9b33061aa368d9f452",
+      "bytes": 4186
+    },
+    "addons/inspector/ui/List.js": {
+      "sha256": "47358b131fdadb488226e74c513a32ee3fb2e68ec177b612645b0f900b5b73b3",
+      "bytes": 1528
+    },
+    "addons/inspector/ui/Profiler.js": {
+      "sha256": "54e498ae37a8ecc519ed5d366030e3b6616490882af3aff949b4b18daf3b6771",
+      "bytes": 55172
+    },
+    "addons/inspector/ui/Style.js": {
+      "sha256": "766b31871eeca311823c61e6d6dd0362da16ad1076c93f32c7798e7a99640352",
+      "bytes": 50211
+    },
+    "addons/inspector/ui/Tab.js": {
+      "sha256": "8e5de0319aa154cd1650bb733dfd11f5d36bdbb355453f9038d24b1e4dad35d5",
+      "bytes": 6088
+    },
+    "addons/inspector/ui/Values.js": {
+      "sha256": "c583befa8c9d321ee1b151619ae58bd3e3de3753d9961720ce300d7ce491993b",
+      "bytes": 8811
+    },
+    "addons/inspector/ui/utils.js": {
+      "sha256": "c533e48658cf18063c6b79e500470fc10f63ff9a8c9e9c7f2afd75d1df8c5e97",
+      "bytes": 3871
     }
   }
 }
