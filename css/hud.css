@@ -2406,3 +2406,5 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 }
 :root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
 } /* @layer hud */
+/* The pause setup-trial panel spans the sheet like the input review. */
+#pausemenu .sheet-body > .player-tool-panel { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }
