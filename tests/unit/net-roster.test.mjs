@@ -590,7 +590,7 @@ test("retireCar clears the car's skid intensity so a parked car does not screech
   const car = { x: 1, s: 100, lap: 1, code: "YOU", speed: 55, skidIntensity: 0.8, local: false, human: false };
   vm.runInNewContext(symbolSource("function retireCar(c, reason)") + ";retireCar(car, 'engine');", {
     car, netPlay: { active: () => false, ownsRaceControl: () => false }, incidentSim: { release() {} }, track: { total: 5000 },
-    smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 },
+    smp: { hw: 8, t: [0, 0, 1] }, Tracks: { sample() {}, wallAt: () => 10 }, Collide: { WCAR: 2 },
     clamp: M4.clamp, worldFromTrack: (s, x) => ({ x, z: s }), IDLE_RPM: 4000,
     OvertakeMode: { reset() {} }, announce() {}, soundOn: false, pits: { clearArm() {} },   // retireCar clears a stale pit arm (bug-hunt 7.3)
   });
