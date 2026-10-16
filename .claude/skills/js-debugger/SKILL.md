@@ -50,6 +50,12 @@ Not an MCP tool: the debugger still never launches Chrome.
 `allowSideEffects`; only `debugger_evaluate` has it) and a new run abandons a hung one.
 `debugger_scripts` hides anonymous scripts and reports `total`/`truncated`.
 
+Long runs: chunk long loops (a `race()` loop or minutes of `headless(false)` blocks the page;
+`debugger_state` then shows `pageUnresponsive`; `debugger_control cancel` ends the script, then reload).
+A `timeoutMs` deadline leaves the op `timedOut` but tracked; page JS is not cancelled and its late
+result still lands. `debugger_targets targetType:"service_worker"|"worker"` reaches `sw.js` and workers.
+`debug-chrome start --device phone-landscape|desktop` guarantees the viewport (see `status`).
+
 ## Reproduce → pause → inspect → resume
 
 1. Call `debugger_targets` with the real CDP `endpoint`; attach its exact

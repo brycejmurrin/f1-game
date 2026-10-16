@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chromeArgs, refusal, stop, owns } from "../../tools/mcp/debug-chrome.mjs";
+import { chromeArgs, refusal, stop, owns, DEVICES } from "../../tools/mcp/debug-chrome.mjs";
 
 test("chromeArgs carries the proven flags, the loopback-only address and optional WebGPU", () => {
   const a = chromeArgs({});
@@ -32,4 +32,11 @@ test("CLI help and unknown command do not touch processes", () => {
   assert.equal(spawnSync(process.execPath, ["tools/mcp/debug-chrome.mjs", "nope"], { encoding: "utf8" }).status, 1);
   const s = spawnSync(process.execPath, ["tools/mcp/debug-chrome.mjs", "status"], { encoding: "utf8" });
   assert.equal(s.status, 0);
+});
+test("--device picks the window and the emulated viewport (phone-landscape 844x390 + touch, desktop 1280x720)", () => {
+  assert.deepEqual([DEVICES["phone-landscape"].width, DEVICES["phone-landscape"].height, DEVICES["phone-landscape"].mobile, DEVICES["phone-landscape"].touch], [844, 390, true, true]);
+  assert.deepEqual([DEVICES.desktop.width, DEVICES.desktop.height, DEVICES.desktop.touch], [1280, 720, false]);
+  assert.ok(chromeArgs({ device: "desktop" }).includes("--window-size=1280,720"));
+  const r = spawnSync(process.execPath, ["tools/mcp/debug-chrome.mjs", "start", "--device", "tablet"], { encoding: "utf8" });
+  assert.equal(r.status, 1); assert.match(r.stderr, /--device must be/);
 });

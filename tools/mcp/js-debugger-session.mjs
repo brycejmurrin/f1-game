@@ -17,13 +17,17 @@ export class DebugSession {
     this.cdp = null; this.pause = null; this.sequence = 0;
     this.scripts = new Map(); this.objects = new Set(); this.breakpoints = new Map();
     this.operations = new Map(); this.operationSequence = 0; this.connecting = false;
-    this.logpoints = new Map(); this.logpointSequence = 0; this.exceptionLog = null;
+    this.logpoints = new Map(); this.logpointSequence = 0; this.exceptionLog = null; this.lost = null;
     this.generation = randomUUID();
   }
   resetPause() {
     const token = this.pause?.token;
     this.pause = null; this.objects.clear();
     if (token && this.cdp && !this.cdp.closed) this.cdp.send("Runtime.releaseObjectGroup", { objectGroup: token }).catch(() => {});
+  }
+  // T8/T11: a run whose context or target is gone can never finish; say so instead of staying pending.
+  abortOperations(reason, status = "aborted") {
+    for (const o of this.operations.values()) if (["pending", "paused", "unknown"].includes(o.status)) Object.assign(o, { status, error: reason });
   }
   markOperations(from, to) { for (const o of this.operations.values()) if (o.status === from) o.status = to; }
   connected() { if (!this.cdp || this.cdp.closed) throw Error("Attach a target first"); return this.cdp; }
@@ -63,27 +67,37 @@ export class DebugSession {
   state(withResults = false) {
     const ops = [...this.operations.values()];
     return { connected: !!this.cdp && !this.cdp.closed, target: this.target || null,
+      ...(this.lost && !this.cdp ? { detached: `target gone: ${this.lost}` } : {}),
       paused: !!this.pause, pause: this.pause,
       breakpointCount: this.breakpoints.size, breakpoints: [...this.breakpoints.values()].slice(0, 20).map(b => ({ ...b, url: clip(b.url, 300) })),
-      operations: withResults ? ops.map((o, i) => i === ops.length - 1 ? o : { id: o.id, status: o.status }) : ops.map(o => ({ id: o.id, status: o.status })) };
+      operations: withResults ? ops.map((o, i) => i === ops.length - 1 ? o : { id: o.id, status: o.status, ...(o.timedOut ? { timedOut: true } : {}) }) : ops.map(o => ({ id: o.id, status: o.status, ...(o.timedOut ? { timedOut: true } : {}) })) };
   }
-  async listTargets(endpoint) {
-    return { targets: (await this.discover(endpoint)).map(({ webSocketDebuggerUrl, ...t }) => t) };
+  // T11 + T9/T10: report the loss reason, and probe the page when a run has been pending a while.
+  async stateWithHealth(probeMs = 1500) {
+    const st = this.state(true), now = Date.now();
+    if (st.connected && !st.paused && [...this.operations.values()].some(o => o.status === "pending" && now - o.startedAt > 2000)) {
+      try { await this.cdp.send("Runtime.evaluate", { expression: "1", silent: true }, probeMs); st.pageUnresponsive = false; }
+      catch { st.pageUnresponsive = true; st.pageNote = `Page did not answer Runtime.evaluate within ${probeMs} ms: a long loop is running. Wait, or debugger_control {action:"cancel"} (terminateExecution); chunk long loops.`; }
+    }
+    return st;
+  }
+  async listTargets(endpoint, kind = "page") {
+    return { targets: (await this.discover(endpoint, kind)).map(({ webSocketDebuggerUrl, ...t }) => t) };
   }
   async attach(endpoint, targetId) {
     if (this.connecting || this.cdp) throw Error("Already attached or attaching; detach first");
     this.connecting = true;
     let client;
     try {
-      const rows = await this.discover(endpoint);
+      const rows = await this.discover(endpoint, "all");
       const target = rows.find(t => t.id === targetId);
       if (!target) throw Error("Unknown page targetId; use debugger_targets");
       // The repository's debugger works on local repros, never the deployed site.
-      if (target.url !== "about:blank") localUrl(target.url.split(/[?#]/)[0]);
+      if (target.url !== "about:blank") localUrl(target.url.replace(/^blob:/, "").split(/[?#]/)[0]);
       const ws = localUrl(target.webSocketDebuggerUrl, true), origin = localUrl(endpoint);
       if (ws.host !== origin.host) throw Error("Target WebSocket must use the discovery host and port");
       client = await this.open(ws.href); this.cdp = client;
-      this.target = { id: target.id, url: clip(target.url, 1000), title: clip(target.title, 200) };
+      this.lost = null; this.target = { id: target.id, type: target.type, url: clip(target.url, 1000), title: clip(target.title, 200) };
       this.generation = randomUUID(); this.operations.clear(); this.scripts.clear();
       client.on("Debugger.scriptParsed", s => {
         if (this.scripts.size >= 2000 && !this.scripts.has(s.scriptId)) this.forgetScript(this.evictable());
@@ -104,7 +118,8 @@ export class DebugSession {
             scopes: f.scopeChain.slice(0, 6).map(s => ({ type: s.type, name: clip(s.name, 100), object: this.remember(s.object) })) })) };
       });
       client.on("Debugger.resumed", () => { this.resetPause(); this.markOperations("paused", "pending"); });
-      client.on("Runtime.executionContextsCleared", () => { this.resetPause(); this.clearScripts(); });
+      client.on("Runtime.executionContextsCleared", () => { this.resetPause(); this.clearScripts(); this.abortOperations("aborted: context destroyed (page reload or navigation)"); });
+      client.on("Inspector.detached", e => { this.lost = e?.reason || "inspector detached"; });
       client.on("Runtime.executionContextDestroyed", event => {
         const wasPaused = !!this.pause;
         this.resetPause();
@@ -115,10 +130,10 @@ export class DebugSession {
         if (wasPaused) this.pause = { token: `${this.generation}:${++this.sequence}`,
           reason: "executionContextDestroyed", hitBreakpoints: [], frames: [] };
       });
-      client.on("Debugger.globalObjectCleared", () => { this.resetPause(); this.clearScripts(); });
+      client.on("Debugger.globalObjectCleared", () => { this.resetPause(); this.clearScripts(); this.abortOperations("aborted: context destroyed (page reload or navigation)"); });
       client.on("disconnect", () => {
         this.resetPause(); this.scripts.clear(); this.breakpoints.clear(); this.logpoints.clear(); this.exceptionLog = null;
-        if (this.cdp === client) { this.cdp = null; this.target = null; }
+        if (this.cdp === client) { if (!this.deliberate) this.lost = this.lost || "CDP connection closed (Chrome exited, the page closed, or the container resumed)"; this.abortOperations("aborted: target disconnected"); this.cdp = null; this.target = null; }
       });
       await client.send("Runtime.enable");
       await client.send("Debugger.enable");
@@ -151,7 +166,7 @@ export class DebugSession {
         (method === "Debugger.disable" ? cleanupWarnings : cleanupErrors).push(`${method}: ${clip(e.message)}`);
       }
     }
-    client.close(); this.cdp = null; this.target = null; this.resetPause();
+    this.deliberate = true; client.close(); this.deliberate = false; this.cdp = null; this.target = null; this.resetPause();
     client.removeListener("Debugger.resumed", observed);
     this.breakpoints.clear(); this.logpoints.clear(); this.scripts.clear();
     return { detached: true, cleanupErrors, cleanupWarnings, cleanupAcknowledged: cleanupErrors.length === 0, resumedEventObserved };
@@ -208,6 +223,12 @@ export class DebugSession {
   }
   async control(action, token) {
     const methods = { pause: "Debugger.pause", resume: "Debugger.resume", over: "Debugger.stepOver", into: "Debugger.stepInto", out: "Debugger.stepOut" };
+    if (action === "cancel") {
+      // Runtime.terminateExecution ends the running script with an uncatchable termination.
+      await this.connected().send("Runtime.terminateExecution");
+      this.abortOperations("cancelled by debugger_control cancel", "cancelled");
+      return this.state();
+    }
     if (action !== "pause") this.paused(token);
     else if (this.pause) return this.state();
     const before = this.pause?.token;
@@ -236,7 +257,7 @@ export class DebugSession {
       .map(p => ({ name: clip(p.name), enumerable: p.enumerable, configurable: p.configurable,
         value: this.remember(p.value), get: this.remember(p.get), set: this.remember(p.set) })), exceptionDetails: r.exceptionDetails };
   }
-  run(expression, awaitPromise = false) {
+  run(expression, awaitPromise = false, timeoutMs = 600000) {
     const client = this.connected();
     if (this.pause) throw Error("Use debugger_evaluate while paused");
     // T5: a pending/unknown run no longer blocks. It is marked abandoned (its late result is
@@ -244,15 +265,20 @@ export class DebugSession {
     const abandoned = [];
     for (const o of this.operations.values()) if (["pending", "unknown"].includes(o.status)) { o.status = "abandoned"; abandoned.push(o.id); }
     const id = ++this.operationSequence, generation = this.generation;
-    const operation = { id, status: "pending" }; this.operations.set(id, operation);
+    const operation = { id, status: "pending", startedAt: Date.now() }; this.operations.set(id, operation);
     if (this.operations.size > 10) this.operations.delete(this.operations.keys().next().value);
+    // T9: a response past timeoutMs marks the op timedOut/unknown but stays tracked; a late
+    // response (the page finished after the deadline) still lands here.
+    const settle = (err, r) => {
+      if (this.generation !== generation || !["pending", "paused", "unknown"].includes(operation.status)) return;
+      if (err) Object.assign(operation, { status: "unknown", error: clip(err.message), ...(/timed out/.test(err.message) ? { timedOut: true } : {}) });
+      else Object.assign(operation, { status: r.exceptionDetails ? "exception" : "completed", result: operationResult(r), ...(operation.timedOut ? { late: true } : {}) });
+    };
     // Deliberately not awaited: a breakpoint inside the expression must not
     // prevent a later MCP request from inspecting and resuming it.
     client.send("Runtime.evaluate", { expression, awaitPromise, returnByValue: true,
-      generatePreview: false, objectGroup: generation }, 600000).then(r => {
-      if (this.generation === generation && operation.status !== "abandoned") Object.assign(operation, { status: r.exceptionDetails ? "exception" : "completed", result: operationResult(r) });
-    }, e => { if (this.generation === generation && operation.status !== "abandoned") Object.assign(operation, { status: "unknown", error: clip(e.message) }); });
-    return { operationId: id, status: "pending", ...(abandoned.length ? { abandoned } : {}), note: "Inspect debugger_state; a response timeout does not cancel JavaScript execution." };
+      generatePreview: false, objectGroup: generation }, timeoutMs, settle).then(r => settle(null, r), e => settle(e));
+    return { operationId: id, status: "pending", timeoutMs, ...(abandoned.length ? { abandoned } : {}), note: "Inspect debugger_state; a response timeout does not cancel JavaScript execution (timedOut ops still report a late result)." };
   }
 }
 Object.assign(DebugSession.prototype, traceMethods());

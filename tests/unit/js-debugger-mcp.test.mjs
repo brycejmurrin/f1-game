@@ -460,3 +460,87 @@ test("daemon shutdown drops incomplete uploads before cleaning up a paused targe
     assert.ok(c.calls.some(x => x.method === "Debugger.resume"));
   } finally { req.destroy(); await daemon.close(); }
 });
+
+test("T7: targets lists worker/service_worker rows on request, attach accepts them (including blob: workers)", async () => {
+  const rows = [{ type: "page", id: "p", url: "http://127.0.0.1:3456/", title: "g", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/p" },
+    { type: "service_worker", id: "sw", url: "http://127.0.0.1:3456/sw.js", title: "sw", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/sw" },
+    { type: "worker", id: "w", url: "blob:http://127.0.0.1:3456/abc", title: "", webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/w" },
+    { type: "iframe", id: "f", url: "http://127.0.0.1:3456/f", title: "" }];
+  const srv = http.createServer((q, r) => r.end(JSON.stringify(rows.map(x => ({ ...x, webSocketDebuggerUrl: x.webSocketDebuggerUrl?.replace(":9222", ":" + srv.address().port) })))));
+  await new Promise(r => srv.listen(0, "127.0.0.1", r));
+  const endpoint = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const { targets: t } = await import("../../tools/mcp/js-debugger-cdp.mjs");
+    assert.deepEqual((await t(endpoint)).map(x => x.id), ["p"]);
+    assert.deepEqual((await t(endpoint, "service_worker")).map(x => [x.id, x.type]), [["sw", "service_worker"]]);
+    assert.deepEqual((await t(endpoint, "all")).map(x => x.id), ["p", "sw", "w"]);
+    await assert.rejects(t(endpoint, "browser"), /targetType/);
+    const c = new FakeCdp();
+    const s = new DebugSession({ open: async () => c });
+    await s.attach(endpoint, "w"); assert.equal(s.state().target.type, "worker");
+    await s.detach(); await s.attach(endpoint, "sw"); assert.equal(s.state().target.id, "sw");
+    const r = await callTool(s, "debugger_targets", { endpoint, targetType: "worker" });
+    assert.deepEqual(r.structuredContent.targets.map(x => x.id), ["w"]);
+  } finally { srv.close(); }
+});
+test("T8: a run pending across a reload/navigation (or a lost target) fails as aborted instead of staying pending", async () => {
+  const { s, c } = await attached(); c.reply = () => new Promise(() => {});
+  s.run("longAsync()", true);
+  c.emit("Runtime.executionContextsCleared");
+  const op = s.state().operations[0]; assert.equal(op.status, "aborted");
+  assert.match(s.operations.get(1).error, /aborted: context destroyed/);
+  const next = s.run("again()"); assert.equal(next.abandoned, undefined, "aborted run must not block or count as abandoned");
+  c.close(); assert.equal(s.operations.get(2).status, "aborted"); assert.match(s.operations.get(2).error, /target disconnected/);
+});
+test("T9: a timed-out run stays tracked as timedOut; its late result is recorded; timeoutMs is per call", async () => {
+  const { s, c } = await attached(); let lateCb;
+  c.send = async function (method, params, timeout, late) { this.calls.push({ method, params, timeout }); if (method === "Runtime.evaluate") { lateCb = late; throw Error("Runtime.evaluate response timed out; execution may still be active"); } return {}; };
+  const r = await callTool(s, "debugger_run", { expression: "slow()", awaitPromise: true, timeoutMs: 3000 });
+  assert.equal(r.structuredContent.timeoutMs, 3000); await new Promise(setImmediate);
+  assert.equal(c.calls.at(-1).timeout, 3000);
+  assert.deepEqual([s.state().operations[0].status, s.state().operations[0].timedOut], ["unknown", true]);
+  lateCb(null, { result: { type: "number", value: 5 } });
+  const op = s.state(true).operations[0]; assert.equal(op.status, "completed"); assert.equal(op.late, true); assert.equal(op.result.result.value, 5);
+  assert.equal((await callTool(s, "debugger_run", { expression: "x", timeoutMs: 5 })).isError, true, "below 1000 ms is out of range");
+});
+test("T9: Cdp keeps a timed-out call's id so the late response reaches the handler", async () => {
+  const socket = new EventTarget(); socket.readyState = 1; socket.send = () => {}; socket.close = () => {};
+  const c = new Cdp(socket, 5); let got;
+  await assert.rejects(c.send("Runtime.evaluate", {}, 5, (e, r) => { got = [e, r]; }), /timed out/);
+  assert.equal(c.pending.size, 1);
+  socket.dispatchEvent(Object.assign(new Event("message"), { data: JSON.stringify({ id: 1, result: { result: { value: 9 } } }) }));
+  assert.deepEqual(got, [null, { result: { value: 9 } }]); assert.equal(c.pending.size, 0);
+});
+test("T10: state reports pageUnresponsive when a long run blocks Runtime.evaluate; cancel terminates the script", async () => {
+  const { s, c } = await attached();
+  c.send = async function (method, params, timeout) {
+    this.calls.push({ method, params, timeout });
+    if (method === "Runtime.evaluate" && params.expression === "1") throw Error("Runtime.evaluate response timed out");
+    if (method === "Runtime.evaluate") return new Promise(() => {});
+    return {};
+  };
+  s.run("for(;;){}"); s.operations.get(1).startedAt -= 5000;
+  const st = (await callTool(s, "debugger_state")).structuredContent;
+  assert.equal(st.pageUnresponsive, true); assert.match(st.pageNote, /cancel/);
+  const cancelled = await callTool(s, "debugger_control", { action: "cancel" });
+  assert.equal(c.calls.at(-1).method, "Runtime.terminateExecution"); assert.equal(cancelled.isError, false);
+  assert.equal(s.operations.get(1).status, "cancelled");
+  s.run("quick()"); // fresh pending op younger than 2 s is not probed
+  c.send = async () => { throw Error("must not probe"); };
+  assert.equal((await callTool(s, "debugger_state")).structuredContent.pageUnresponsive, undefined);
+});
+test("T11: a lost target reads detached: target gone; a deliberate detach does not", async () => {
+  const { s, c } = await attached(); c.close();
+  const st = s.state(); assert.equal(st.connected, false); assert.match(st.detached, /^target gone: CDP connection closed/);
+  const b = await attached(); await b.s.detach(); assert.equal(b.s.state().detached, undefined);
+  const d = await attached(); d.c.emit("Inspector.detached", { reason: "target_closed" }); d.c.close();
+  assert.equal(d.s.state().detached, "target gone: target_closed");
+  await d.s.attach("http://127.0.0.1:9222", "t").catch(() => {});
+});
+test("T2: debugger_state carries only the latest operation's result, however many ran (fixed in #2535)", async () => {
+  const { s, c } = await attached(); c.reply = async () => ({ result: { type: "string", value: "x".repeat(3000) } });
+  for (let i = 0; i < 12; i++) { s.run("r" + i); await new Promise(setImmediate); }
+  const ops = s.state(true).operations; assert.equal(ops.length, 10);
+  assert.equal(ops.filter(o => o.result).length, 1); assert.ok(ops.at(-1).result);
+  assert.ok(JSON.stringify(ops).length < 6000, "response size must not grow with the number of past runs");
+});

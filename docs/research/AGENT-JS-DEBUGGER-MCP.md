@@ -117,14 +117,14 @@ mode, pass the same name and a JSON argument object to the wrapper's `call`.
 
 | Tool | Use |
 | --- | --- |
-| `debugger_targets` | List page IDs in an existing loopback Chrome debugging endpoint. |
+| `debugger_targets` | List page IDs in an existing loopback Chrome debugging endpoint. `targetType: service_worker\|worker\|all` also lists `sw.js` and worker targets (each has its own WebSocket; attach works the same, `blob:` worker URLs included). |
 | `debugger_attach` | Attach the exact selected page ID; does not launch Chrome. |
-| `debugger_state` | Read attachment, current pause token/stack/scopes and background operation status. |
+| `debugger_state` | Read attachment, current pause token/stack/scopes and background operation status. Adds `detached: "target gone: …"` after a lost target and `pageUnresponsive` (+`pageNote`) when a run pending > 2 s blocks the page. |
 | `debugger_scripts` | Find parsed script IDs. Named URLs first; anonymous/eval scripts hidden unless `includeAnonymous:true`; `filter` is a substring (`regex:true` for a regex). Reports `total` and `truncated` (200-row cap). |
 | `debugger_source` | Read a bounded source excerpt using one-based line numbers. Needs a `scriptId` (from `debugger_scripts`, or a stack frame in `pause.frames[].scriptId`), never a URL. |
 | `debugger_breakpoint` | Set an exact-URL breakpoint with one-based line/column and optional condition. Setting the same location again removes the old CDP breakpoint by id first. `locations:[]` returns a `warning` with the exact parsed URLs to try. |
 | `debugger_remove_breakpoint` | Remove a breakpoint owned by this debugger session. |
-| `debugger_control` | Request pause, resume, step over, step into or step out; inspect state afterward. |
+| `debugger_control` | Request pause, resume, step over/into/out, or `cancel` (`Runtime.terminateExecution`: ends the running script, marks pending ops `cancelled`); inspect state afterward. |
 | `debugger_exceptions` | Set exception pauses to `none`, `uncaught` or `all`. |
 | `debugger_evaluate` | Inspect an expression in a paused frame; side effects require explicit opt-in. |
 | `debugger_properties` | Read current-pause object property descriptors without invoking getters. |
@@ -260,7 +260,7 @@ were read for parameters):
 The debugger never launches Chrome. The parent can use a CLI (not an MCP tool):
 
 ```sh
-node tools/mcp/debug-chrome.mjs start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu]
+node tools/mcp/debug-chrome.mjs start [--port 9222] [--url http://127.0.0.1:3456/] [--webgpu] [--device phone-landscape|desktop]
 node tools/mcp/debug-chrome.mjs status   # endpoint, PIDs, page targets
 node tools/mcp/debug-chrome.mjs stop     # kills exactly the PIDs it recorded
 ```
@@ -297,6 +297,34 @@ launch marker before signalling its process group, so a reused PID is skipped.
 - JS heap/profiling remains in Chrome DevTools MCP. This debugger does not
   measure GPU performance. Hardware timing requires a real GPU; software
   renderer stalls are not player-performance conclusions.
+
+## Field notes 2026-10-16
+
+Defects the live-debugger fleet hit (issue #2534 and the lane reports), each with its fix and the
+test that fails on the #2535 head and passes now (`tests/unit/js-debugger-mcp.test.mjs` unless noted;
+`smoke` = `bash tools/mcp/js-debugger-mcp.sh smoke`).
+
+| # | Problem | Fix | Test |
+|---|---|---|---|
+| T1 | The 200-row `debugger_scripts` cap filled with anonymous scripts and dropped `game.js`; breakpoint `locations` came back `[]` | `filter` (+`regex`), `includeAnonymous:false` default, named URLs first, `total`/`truncated`; anonymous scripts evicted first from the 2000-row table; empty `locations` returns a `warning` with the exact parsed URLs | `T1:` ×2, smoke |
+| T2 | `debugger_state` replayed every past result | Fixed in #2535 (latest op only); confirmed, size pinned | `T2:` |
+| T4 | Remove, then set again left the old condition armed | A same-location set removes the old CDP breakpoint by id first (also when unresolved) and refuses if that fails. The exact Chrome trigger was not reproduced; this is defensive | `T4:` |
+| T5 | A timed-out/unknown run blocked every run until detach | A new run marks it `abandoned` (late result dropped). There is no cancel of the *abandoned* op; see `cancel` below | `T5:`, smoke |
+| T6 | `allowSideEffects` only on `debugger_evaluate`; asymmetry easy to trip on | Documented in both descriptions; `debugger_run` is always mutating and rejects the flag with a pointer | `T6:` |
+| T7 | Service-worker and worker targets were invisible | `targetType` on `debugger_targets`; attach accepts them | `T7:`, smoke |
+| T8 | A run pending across a reload never completed | `executionContextsCleared`/`globalObjectCleared`/disconnect mark it `aborted: context destroyed` | `T8:`, smoke |
+| T9 | `awaitPromise` past the deadline read `unknown`, result lost | `timeoutMs` per call; the op stays tracked with `timedOut:true`, and a late result is recorded (`late:true`). Page JS is **not** cancelled by a timeout or detach | `T9:` ×2, smoke |
+| T10 | A long loop wedged the page and the tool | `debugger_state` probes the page when a run is pending > 2 s and reports `pageUnresponsive`; `debugger_control cancel` ends the script | `T10:`, smoke |
+| T11 | Attachment lost when Chrome died/the container resumed, silently | `detached: "target gone: <reason>"` in state; `debug-chrome status` reports `chromeAlive`, `cdpResponding`, `viewport` | `T11:`, smoke |
+| V | `--window-size=844,390` gave an 844x198 viewport | `debug-chrome start --device phone-landscape\|desktop` runs a holder holding `Emulation.setDeviceMetricsOverride` + touch emulation, and prints the measured `innerWidth x innerHeight` | `tests/unit/debug-chrome.test.mjs` |
+
+**Chunk long loops.** A run that holds the main thread (a `race()` loop, `headless(false)` for
+minutes) blocks every `Runtime.evaluate`, so state reads show `pageUnresponsive`. Run work in bounded
+chunks (one `debugger_run` per few seconds of simulation, `awaitPromise` for each), and use `cancel` as
+the escape hatch; it can leave game state half-updated, so reload after it.
+
+**Emulation lifetime.** CDP emulation overrides end with the session that set them. The holder process
+keeps one session open for that reason; `stop` ends it with the browser.
 
 ## Validation
 
