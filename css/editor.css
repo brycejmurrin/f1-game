@@ -543,7 +543,7 @@
 #trackdesigner [data-role="profile-view"] .td-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #trackdesigner [data-role="profile-view"] button { padding-inline: calc(var(--gap) / 3); }
 @media (min-width: 761px) and (min-height: 600px) {
-  #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: calc(var(--chip-h) * 4.5); }
+  #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: clamp(72px, 40%, calc(var(--chip-h) * 4.5)); }
 }
 
 @container (max-width: 320px) {

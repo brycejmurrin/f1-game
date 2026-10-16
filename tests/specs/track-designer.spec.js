@@ -88,7 +88,7 @@ test("workspace organization preserves controls and scroll across modes and libr
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
-  for (const viewport of [{ ...LANDSCAPE, scale: 1 }, { width: 390, height: 844, scale: 1 }, { width: 734, height: 343, scale: 1 }, { ...LANDSCAPE, scale: 1.5 }, { width: 1280, height: 800, scale: 2 }, { width: 1920, height: 937, scale: 2 }]) {
+  for (const viewport of [{ ...LANDSCAPE, scale: 1 }, { width: 390, height: 844, scale: 1 }, { width: 734, height: 343, scale: 1 }, { ...LANDSCAPE, scale: 1.5 }, { width: 1280, height: 800, scale: 2 }, { width: 1920, height: 937, scale: 2 }, { width: 1920, height: 1080, scale: 2 }]) {
     await page.setViewportSize(viewport);
     const root = page.locator("#trackdesigner"), rail = root.locator(".td-rail");
     await root.evaluate((e, scale) => e.style.setProperty("--ui-scale", String(scale)), viewport.scale || 1);
@@ -98,8 +98,8 @@ test("workspace organization preserves controls and scroll across modes and libr
       await rail.evaluate((e) => { e.scrollTop = 0; });
       await expect(root.locator('[data-role="checks-summary"]')).toBeVisible();
       expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
-      if (id === "edit") {
-        await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.scale || 1}-edit.jpg`) });
+      if (id === "edit" || id === "elevation") {
+        await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.height}-${viewport.scale || 1}-${id}.jpg`) });
         const toolbar = root.locator('[data-role="toolbar"]'), map = root.locator('.td-stage > canvas:not([data-role="profile"])');
         const t = await toolbar.boundingBox(), m = await map.boundingBox();
         expect(t.y + t.height <= m.y + 1 || t.x >= m.x + m.width - 1).toBe(true);
