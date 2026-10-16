@@ -16,6 +16,8 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 ## 1695
 
 ### Fixed
+- WATCH HIGHLIGHTS: scrubbing or pressing NEXT now cuts to the right car for the coming highlight, and the replay clock no longer jumps back (#2196).
+- WATCH: the timeline reaches the formation and start footage before lights-out (#2202).
 - Phone-controller reconnect diagnostics no longer include the pairing code.
 - VS FRIEND: running into the back of your friend's car is one clean bump, so you no longer stay glued to their gearbox for several frames (#2164).
 - A rival's pass-by whoosh no longer keeps hissing under the pause menu, the results sheet or the title screen (#2187).
