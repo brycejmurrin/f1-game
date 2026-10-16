@@ -58,7 +58,7 @@ Recipe and the Lap-1 / Turn-1 melee case: `references/tactics.md`. STREETS (`tra
 Discriminator: `__apex.caution().level` 0 with `speed < 7` and `stuckT` growing is this skill; level != 0 or `caution().sinceT` growing is **race-incidents-control**. Timers, rescue rules and checks: `references/stuck.md`.
 
 ```sh
-node --test tests/unit/ai-drive.test.mjs      # ~100 tests, ~1 s
+node --test tests/unit/ai-drive.test.mjs      # ai-drive unit pins, ~1 s
 node --test tests/unit/ai-band.test.mjs       # scripted vs catch-up factor pins
 node --test tests/unit/ai-racecraft-vm.test.mjs   # VM shape gate (jitter/approach/line); read its header first
 node tools/ci/test-bg.mjs collisions   # BROWSER group, optional behaviour evidence (background, AGENTS rule 4/5)

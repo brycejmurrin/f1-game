@@ -808,3 +808,42 @@ test("bash-guard's `if:` filters parse, and every policed command shape still re
   for (const cmd of ["ls -la", "cat README.md", "grep -n foo file", "head -5 x", "sed -n 1,5p x"])
     assert.ok(!reaches(cmd), `read-only command should skip bash-guard: ${cmd}`);
 });
+
+// Skill hygiene pins from the 2026-10-16 issue burn-down (#1693 #1688 #1687 #1700).
+{
+  const skillsDir = path.join(ROOT, ".claude/skills");
+  const skillText = (rel) => fs.readFileSync(path.join(skillsDir, rel), "utf8");
+
+  test("no SKILL.md quotes a suite size ('~100 tests'): a count drifts, the command does not (#1693)", () => {
+    const hits = [];
+    for (const d of fs.readdirSync(skillsDir)) {
+      const f = path.join(skillsDir, d, "SKILL.md");
+      if (!fs.existsSync(f)) continue;
+      fs.readFileSync(f, "utf8").split("\n").forEach((l, i) => {
+        if (/~?\d+\+? tests\b/.test(l)) hits.push(`${d}/SKILL.md:${i + 1}: ${l.trim()}`);
+      });
+    }
+    assert.deepEqual(hits, []);
+  });
+
+  test("check-changes routes the add-a-VM-twin recipe and the scoped DEFECT-LEDGER grep (#1688 #1687)", () => {
+    const body = skillText("check-changes/SKILL.md");
+    assert.match(body, /references\/vm-twin\.md/);
+    assert.match(body, /DEFECT-LEDGER\.md/);
+    const ref = skillText("check-changes/references/vm-twin.md");
+    for (const needle of ["vm-portable.mjs", "ADAPTED", "TWINNED", "mutants.json", "twin-fidelity.mjs", "twinDebt"])
+      assert.ok(ref.includes(needle), `vm-twin.md must name ${needle}`);
+    // the recipe names real files
+    for (const rel of ["tools/check/vm-portable.mjs", "tools/check/twin-fidelity.mjs", "tools/ci/twinned-specs.mjs",
+      "tests/data/mutants.json", "tests/helpers/vm-page.js", "docs/notes/DEFECT-LEDGER.md"])
+      assert.ok(fs.existsSync(path.join(ROOT, rel)), `${rel} must exist`);
+  });
+
+  test("mcp-probe carries the tool-naming table; renderer-debug carries all_dark and the webgpu smoke (#1700)", () => {
+    const probe = skillText("mcp-probe/SKILL.md");
+    assert.match(probe, /`chrome_click`.*`click`/);
+    const wgx = skillText("renderer-debug/references/wgx.md");
+    assert.match(wgx, /all_dark/);
+    assert.match(wgx, /apex-eval\.mjs monza .* --backend webgpu/);
+  });
+}
