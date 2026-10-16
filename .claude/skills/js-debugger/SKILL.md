@@ -1,6 +1,6 @@
 ---
 name: js-debugger
-description: "Use when JS breakpoints, stepping, paused locals, or exception pauses are needed; heap/CPU → mcp-probe."
+description: "Use for JS debugging; heap/CPU → mcp-probe."
 ---
 
 # Source debugging with the separate debugger MCP

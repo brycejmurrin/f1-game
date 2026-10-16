@@ -1,6 +1,6 @@
 ---
 name: compound-debug
-description: Use when invoking compound-debug.
+description: Use when compound-debug.
 disable-model-invocation: true
 ---
 ## F1 project integration
