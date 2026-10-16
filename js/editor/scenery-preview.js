@@ -63,7 +63,7 @@ const DesignerSceneryPreview = (function () {
       waterSurface(k, s, g, size, c) {
         const a = anchor(k, s, g + size[0] / 2);
         if (onTrack(a.c[0], a.c[2], size[0] / 2 + 4)) return false;
-        return add("water", a, size[0], size[2], c, ground);
+        return add("water", a, size[0], size[2], c, ground, { angle: 0 });
       },
       ridge: (x, z, y, a, len, w, h, c) => add("hill", { c: [x, y, z], r: [Math.cos(a), 0, Math.sin(a)] }, len, w * 2, c, ground),
       mountain: (x, z, y, w, h, o = {}) => add("hill", { c: [x, y, z], r: [1, 0, 0] }, w, w * 0.7, o.rock || [0.4, 0.42, 0.4], ground, { snow: o.snowline < 1 }),
