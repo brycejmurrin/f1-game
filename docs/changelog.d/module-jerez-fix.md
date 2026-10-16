@@ -1,0 +1,1 @@
+- Correct Jerez's scenery seat check to compare terrain with the anchor before its intentional 0.3 m embed, allowing the eight road-clear main paddock candidates to reach the motorhome placement helper. Road clearance, terrain mismatch rejection, and the helper's own placement guards remain active.

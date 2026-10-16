@@ -244,12 +244,12 @@
       // rest of this block (raw fracs park them half a lap away, in the T4
       // infield). Both rows sit INSIDE the perimeter fence: past ~46 m the
       // guard eats them. Skip any pad where terrain disagrees with the
-      // road-follow anchor (it buries up to 1.8 m on the paddock grade).
+      // unembedded anchor baseline; anchor() deliberately sinks props 0.3 m.
       const seatOk = (k, side, gap) => {
         const a = anchor(k, side, gap);
         if (!a || onTrack(a.c[0], a.c[2], 10)) return false;
         const gy = terrainYAt(a.c[0], a.c[2]);
-        return !(gy != null && Math.abs(gy - a.c[1]) > 0.1);
+        return !(gy != null && Math.abs(gy - (a.c[1] + 0.3)) > 0.1);
       };
       for (let i = 0; i < 8; i++) {                         // paddock motorhomes
         const kk = K(sl(0.9730 + i * 0.0068));

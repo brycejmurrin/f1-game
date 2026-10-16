@@ -154,3 +154,40 @@ test("baseline has no stale entries — a cap below the measured count is a lie"
   }
   assert.deepEqual(slack, [], "stale baseline entries:\n  " + slack.join("\n  "));
 });
+
+// Exercise the authored filter with the real anchor (including its 0.3 m
+// embed), while leaving motorhome's own footprint/support guards in place.
+for (const guard of ["clear", "road", "unsupported"]) {
+  test(`Jerez paddock seats account for anchor embed and retain ${guard} guard`, () => {
+    const { buildContext } = createRequire(import.meta.url)("../../tools/lib/track-build-vm.cjs");
+    const h = buildContext();
+    const original = h.sandbox.TrackScenery.jerez;
+    const calls = [];
+    h.sandbox.TrackScenery.jerez = (api) => {
+      const sl = (f) => (f + Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4) % 1;
+      const seats = Array.from({ length: 8 }, (_, i) => {
+        const k = api.K(sl(0.973 + i * 0.0068));
+        const a = api.anchor(k, 1, 27);
+        assert.equal(api.onTrack(a.c[0], a.c[2], 10), false);
+        assert.ok(Math.abs(api.terrainYAt(a.c[0], a.c[2]) - a.c[1] - 0.3) < 1e-8);
+        return { k, c: a.c };
+      });
+      const isSeat = (x, z) => seats.some(({ c }) => c[0] === x && c[2] === z);
+      original({ ...api,
+        onTrack(x, z, margin) {
+          return guard === "road" && isSeat(x, z) || api.onTrack(x, z, margin);
+        },
+        terrainYAt(x, z) {
+          const y = api.terrainYAt(x, z);
+          return guard === "unsupported" && isSeat(x, z) ? y + 1 : y;
+        },
+        motorhome(...args) {
+          if (args[1] === 1 && args[2] === 27) calls.push(args[0]);
+          return api.motorhome(...args);
+        },
+      });
+      assert.deepEqual(calls, guard === "clear" ? seats.map(({ k }) => k) : []);
+    };
+    h.Tracks.build(h.Tracks.LIST.find(({ id }) => id === "jerez"));
+  });
+}
