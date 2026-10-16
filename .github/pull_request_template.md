@@ -1,4 +1,4 @@
-CHANGELOG: add a player-facing entry under the current `build` in CHANGELOG.md, or write `no player-facing change`.
+CHANGELOG: add a fragment `docs/changelog.d/<slug>.md` (lines `Fixed: …`; never edit CHANGELOG.md), or write `no player-facing change`.
 
 ## Goal
 <!-- Written when the PR opens, before the work is done; edit only if the ask changes.

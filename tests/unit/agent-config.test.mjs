@@ -462,6 +462,9 @@ test("the edit guard treats tests/data/ratchets.json as tool-written", () => {
   const file = path.join(ROOT, "tests/data/ratchets.json");
   assert.equal(run({ tool_name: "Edit", tool_input: { file_path: file, old_string: "a", new_string: "b" } }).status, 2);
   assert.equal(run({ tool_name: "Write", tool_input: { file_path: file, content: "{}" } }).status, 2);
+  // ...and so is a per-branch raise fragment (#2291): the hook's --auto-raise writes it.
+  const frag = path.join(ROOT, "tests/data/ratchets.d", "cursor--x-1234.json");
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: frag, content: "{}" } }).status, 2);
   assert.equal(run({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, "docs/PHYSICS.md"), old_string: "a", new_string: "b" } }).status, 0);
 });
 
