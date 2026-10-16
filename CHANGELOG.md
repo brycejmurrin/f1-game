@@ -37,6 +37,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Overtake stays off after a red flag that ends once a car has taken the chequered flag, until the leader next crosses the line (#2166).
 - A car handed back after a heavy shunt never drives backwards at speed (#2167).
 - AI cars hold their line under the Safety Car and VSC instead of weaving to defend (#2175).
+- The PIT WALL camera no longer films from inside grandstands and pit buildings; it moves in toward the wall until the view is clear (#2252).
 - HUD editing restores hidden readouts and keeps its toolbar within the screen.
 - Garage category buttons follow the list’s scroll direction on touch screens.
 - The game still opens when the browser blocks access to saved data at startup.
