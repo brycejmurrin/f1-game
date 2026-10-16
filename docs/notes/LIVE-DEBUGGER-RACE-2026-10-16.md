@@ -19,12 +19,16 @@ Design notes: R1 fix = `arcFrac()` decays the blend as `exp(-(t - cell.life) / 3
 `wxHeld` itself is not captured by a rewind (practice-only; left).
 
 ## Clean areas
+Short scenarios, second pass (Node VM `tools/lib/game-vm.cjs`, real modules, 22-car field, tyre wear `real`; the page was too slow, ~0.4 s/tick):
+- **Pit stress, 5 AI armed on the same lap** (`A.pit({car, arm:true})`), monza green flag; and under a REAL safety car (`G.holdCaution(3)`, `cautionInfo().level === 3` checked before arming) on monaco, spa (420 s window to reach the pit entry at SC pace) and monza: all five `none > lane > box > out > none`, no skipped state, no box overlap (< 3 m), no car under 0.5 m/s for 8 s outside a box, no prog going backwards, no non-finite values; shared boxes (RUS/ANT, LEC/HAM) are served in sequence. (A first "under SC" pass used a hold call that did nothing, SC level 0; it was discarded and redone.)
+- **AI stuck/rescue, 3 cars wedged 2.5 m beyond the edge on monaco** (x = ±(hw+2.5), speed 0): all three back on track within 1-4 s, landing inside the half-width, speed restored, `prog` strictly forward, no NaN. Observation, not a defect: the car placed at x +7.5 (hw 5.0) kept driving at x 8.2 for ~6 s at up to 28 m/s before steering in; the synthetic start is outside the wall clamp, `rescueT` decayed once speed rose, so the `js/game.js:6589` x-clamp never fired. Not reachable without a hand-placed car.
+- **Classification** (`RaceControl.classify`/`finishOrder`, hand-built cars, 10-lap race): red flag with runners only (A > B > C > D*, 90 % cut works), same-lap tie with a penalty (`finishT + penalty` order, stable ties) correct. A final-lap retiree (9 done) ranks ahead of a finisher a lap down (9 done): `lapsAt` adds 1 for any unfinished car, so it equals the equal-laps FIA rule only if the retiree crossed the line first; left as BY-DESIGN/ambiguous. A retired car with `lap = N+1` and no `finished` flag would out-rank the winner (`lapsAt` 12 vs 11): only reachable when a car retires on the very tick it crosses the final line; not fixed.
 - 22-car monaco field, 600 ticks (20 s of race time) through a dry -> rain arc with every exception paused: no exception, no lap counter going backwards, no NaN tyre temperature, max |Δ tempS| 2.4 °C per 30 ticks.
 - `tooling-fast` 639/639 on 86419660; `physics-core` (incl. `physics-characterization`) 4/4 llvmpipe shards pass on 2a19cad8 (CI run 38966118025).
 
 ## Not run, and why
 - Full multi-lap races on monaco/spa/vegas/singapore under dry, MIXED, rain, storm: SwiftShader here is ~5 min wall per 20 s of sim with 22 cars.
-- Forced SC / red flag / jump start / practice rewind live, pit-lane stress (5+ AI same lap, pit under SC, final lap), AI rescue teleport, classification edge cases (final-lap retirements, red flag at 75 %, lap ties): same limit; need `/dev/dri` or an llvmpipe runner.
+- Forced red flag / jump start / practice rewind live, and a pit on the FINAL lap: not driven. (Pit stress under SC, AI rescue and classification were done in the Node VM, see Clean areas; none of them in the live debugger.)
 - R2 live; `modes` and `state-unit` groups.
 
 ## js-debugger tool problems hit
