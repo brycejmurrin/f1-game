@@ -4038,7 +4038,12 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
   assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
-  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, ""), /m\.geometry = null; m\.material = null;/,
+  const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
+  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
+    "warm probes dispose before clearing references, after pending compilation settles");
+  assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
+    "a retired probe releases when its last compiler settles");
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
@@ -6340,7 +6345,7 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
   assert.ok(mrt.length < 200, "the scene MRT is set right before the glass compiles");
   assert.match(warm, /renderer\.setRenderTarget\(usePost \? post\.sceneTarget\(\) : softOutRT\(\)\)/,
     "the glass compiles under the scene pass's target, where it draws");
-  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileAsync\(m, camera, scene\)/,
+  assert.match(warm, /fx\.mirrorGlassMaterial\(mirRT\.texture\)[\s\S]*for \(const sx of \[1, -1\]\)[\s\S]*compileWarmProbe\(_glassProbeGeo, gm, sx\)/,
     "both winding signs of the real material");
   assert.match(warm, /"uv", new THREE\.BufferAttribute/, "on createTexMesh's layout (position / normal / uv)");
   const glass = fnBody(code("js/render/three/tsl-fx.js"), "mirrorGlassMaterial");

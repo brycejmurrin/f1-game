@@ -302,7 +302,7 @@ const Collide = (() => {
       out.vx = speed * cs - (c.vLat || 0) * sn;
       out.vy = speed * sn + (c.vLat || 0) * cs;
       out.omega = c.human ? (c.yawRateCur || 0) : 0;
-      out.invMass = netPlay.owns(c) ? 0 : c.human ? AiDrive.humanInvMass(!!track.street) : 1;
+      out.invMass = netPlay.owns(c) || c.retired ? 0 : c.human ? AiDrive.humanInvMass(!!track.street) : 1;
       out.invInertia = c.human ? out.invMass / ContactGeometry.INERTIA : 0;
       return out;
     }
@@ -314,7 +314,7 @@ const Collide = (() => {
     // A scrub is a loss of MAGNITUDE, whichever way the car is rolling.
     function scrub(v, d) { return v > 0 ? Math.max(0, v - d) : Math.min(0, v + d); }
     function pushVelocity(c, state, dx, dy, dw) {
-      if (netPlay.owns(c)) return;
+      if (netPlay.owns(c) || c.retired) return;
       const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
       const vx = state.vx + dx, vy = state.vy + dy;
       c.speed = floorFwd(c, vx * cs + vy * sn);
@@ -336,7 +336,7 @@ const Collide = (() => {
         if (last) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
         // The first impulse carries severity; later relaxation passes have
         // already removed closing velocity. Both worlds retain their own gates.
-        if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b)) {
+        if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
           if (DebrisWorld.active()) DebrisWorld.carImpact(a, b, j.closing);
           incidentSim.notifyCar(a, b, j.closing);
         }
@@ -450,7 +450,10 @@ const Collide = (() => {
     }
     function sepShares(a, b) {
       const hum = AiDrive.humanInvMass(!!track.street);
-      const netA = netPlay.owns(a), netB = netPlay.owns(b);
+      // Static bodies take no momentum or positional share, so the moving car
+      // takes the whole correction and impulse: a net-owned rival (#2164) and a
+      // PARKED RETIREMENT (#2162).
+      const netA = netPlay.owns(a) || !!a.retired, netB = netPlay.owns(b) || !!b.retired;
       const iA = netA ? 0 : a.human ? hum : 1, iB = netB ? 0 : b.human ? hum : 1;
       _sep.iA = iA; _sep.iB = iB; _sep.iSum = iA + iB;
       _sep.sA = netA ? 0 : (netB ? 1 : iA / _sep.iSum);
@@ -472,6 +475,7 @@ const Collide = (() => {
       // Trace-owned replay cars keep their recorded pose and speed, including
       // overlaps and pit-lane positions. They are never local contact bodies.
       if (ownsPose(a) || ownsPose(b)) return null;
+      if ((a.retired || netPlay.owns(a)) && (b.retired || netPlay.owns(b))) return null;   // two static bodies (sepShares): nothing can move, and iSum would be 0
       // Net remotes draw from delayed sample() but contact must use predict()
       // (netplay tick writes _nOk/_nProg/_nX/_nSpd). Local cars keep prog/x/speed.
       const aProg = a._nOk ? a._nProg : a.prog;
@@ -632,7 +636,7 @@ const Collide = (() => {
           // candidate. Only clears the R3 threshold for a real shunt (see
           // incidentsim); below it the cheap (prog,x) plane above stays the
           // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
-          if (last && !netPlay.owns(a) && !netPlay.owns(b)) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
+          if (last && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
         }
       }
     }
@@ -819,5 +823,17 @@ const Collide = (() => {
     return { resolveCollisions, pairContact };
   }
 
-  return { create, LCAR, WCAR, fillArcBuckets, forArcNear, scanTraffic, scanOtAhead, scanTow };
+  // The nearest PARKED retirement (#2162) ahead of (or still beside) `c` on
+  // the road, within `reach` metres of arc, or null. `parked` is game.js's short per-step list.
+  function parkedAhead(c, parked, L, reach) {
+    let best = null, bestD = reach;
+    for (let i = 0; i < parked.length; i++) {
+      const o = parked[i];
+      const d = ((o.s - c.s + L / 2) % L + L) % L - L / 2;   // signed: still alongside until a car length past
+      if (d > -LCAR && d < bestD) { best = o; bestD = d; }
+    }
+    return best;
+  }
+
+  return { create, LCAR, WCAR, fillArcBuckets, forArcNear, scanTraffic, scanOtAhead, scanTow, parkedAhead };
 })();
