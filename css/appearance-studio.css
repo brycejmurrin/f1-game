@@ -221,6 +221,15 @@
   min-height: var(--tap-paint);
   min-width: var(--tap-paint);
 }
+/* High UI scales on short phone landscapes leave each five-column tile too
+   narrow for the preset names (CLASSIC becomes CLASS / SIC). Keep the dense
+   five-up desktop treatment, but give the phone landscape sheet three columns
+   so labels remain readable without changing tap floors. */
+@media (max-width: 900px) and (max-height: 500px) {
+  #pmsettings-inner[data-shape="wide"][data-density="compact"] #appearance-studio [data-as="preset-list"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 #appearance-studio input,
 #appearance-studio select {
   min-height: var(--tap-paint);

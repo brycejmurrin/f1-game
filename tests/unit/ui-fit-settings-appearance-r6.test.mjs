@@ -24,6 +24,7 @@ const TALL_TILE = "#pmsettings-inner[data-shape=\"tall\"] #appearance-studio [da
 const WIDE = "#pmsettings-inner[data-shape=\"wide\"] #appearance-studio";
 const WIDE_COMPACT_LIST = "#pmsettings-inner[data-shape=\"wide\"][data-density=\"compact\"] #appearance-studio [data-as=\"preset-list\"]";
 const WIDE_COMPACT_TILE = "#pmsettings-inner[data-shape=\"wide\"][data-density=\"compact\"] #appearance-studio [data-as=\"preset-list\"] button";
+const WIDE_COMPACT_SHORT_LIST = WIDE_COMPACT_LIST;
 
 test("APPEARANCE panel pads so the last studio tile can scroll above BACK", () => {
   assert.equal(decl(rules, PANEL, "padding-bottom"), PAD,
@@ -55,11 +56,21 @@ test("wide studio keeps two columns (scale 200 landscape still uses data-shape)"
   assert.equal(decl(rules, WIDE, "grid-template-columns"), "minmax(0, 1.15fr) minmax(0, 0.95fr)");
 });
 
-test("wide compact studio is one 5-tile preset row at --tap-paint", () => {
+test("wide compact studio keeps a 5-tile desktop row at --tap-paint", () => {
   assert.equal(decl(rules, WIDE_COMPACT_LIST, "grid-template-columns"), "repeat(5, minmax(0, 1fr))",
     "short landscape: one row of five, not a 3-row stack under BACK");
   assert.equal(decl(rules, WIDE_COMPACT_TILE, "min-height"), "var(--tap-paint)");
   assert.equal(decl(rules, WIDE_COMPACT_TILE, "min-width"), "var(--tap-paint)");
+});
+
+test("short wide compact studio widens preset tiles at high-scale phone landscape", () => {
+  assert.equal(
+    decl(rules, WIDE_COMPACT_SHORT_LIST, "grid-template-columns", {
+      context: /@media \(max-width: 900px\) and \(max-height: 500px\)/,
+    }),
+    "repeat(3, minmax(0, 1fr))",
+    "short phone landscapes need readable preset names at 130–200% UI scale",
+  );
 });
 
 test("studio buttons keep the --tap / --tap-paint floors", () => {
