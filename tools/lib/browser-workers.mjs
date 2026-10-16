@@ -66,12 +66,13 @@ export function captureGpuOptions({ env = process.env, gpu = glStack(env),
 export const RENDER_HEAVY_SPEC_IDS = [
   "dev-tools", "f1-track-accuracy", "hud-audit", "image-grade-visual",
   "lighting-ab", "lighting-tuner-grade",
+  "garage-first-frame",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
   "parts-liveries",
   "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard", "photo-studio",
   "webgl-probes", "camera", "smoke", "season", "time-trial",
   "material-shimmer", "instanced-draw",
-  "menu-baseline", "garage-first-frame",
+  "menu-baseline", "track-designer",
 ];
 
 /** Which software GL stack env asks for. */
