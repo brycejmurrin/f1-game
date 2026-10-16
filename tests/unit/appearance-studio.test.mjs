@@ -322,3 +322,18 @@ test("mounted Studio exposes percentage units and explains system reduced motion
   assert.equal(note.hidden, true); assert.equal(values.motion, "reduce");
   for (const input of ranges) assert.equal(input.getAttribute("aria-valuetext"), input.value + "%");
 });
+
+test("Studio range controls keep Undo working for keyboard adjustments", () => {
+  const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const { studio, values } = load({}, true, false, dom.document);
+  const descendants = el => [el, ...el.children.flatMap(descendants)];
+  const input = descendants(panel).find(el => el.getAttribute("aria-label") === "UI size");
+  assert.ok(input);
+  dom.dispatch(input, { type: "keydown", key: "ArrowRight" });
+  input.value = "125";
+  dom.dispatch(input, { type: "input" });
+  dom.dispatch(input, { type: "change" });
+  assert.equal(values.uiScale, 125);
+  assert.equal(studio.undo(), true);
+  assert.equal(values.uiScale, null, "Undo restores the unset shipped default after a keyboard edit");
+});

@@ -167,6 +167,12 @@ const AppearanceStudio = (function () {
   function range(host, label, key, lo, hi) {
     const row = node("label", "as-row"), name = node("span", "as-label", label), input = node("input"), out = node("output"); input.type = "range"; input.min = lo; input.max = hi; input.step = .25; input.setAttribute("aria-label", label);
     let before = null; input.addEventListener("pointerdown", () => { before = snapshot(); });
+    input.addEventListener("keydown", (e) => {
+      // Keyboard and assistive-tech changes do not produce pointerdown. Keep
+      // the same undo boundary as a drag when a native range is adjusted with
+      // arrows, Home/End or PageUp/PageDown.
+      if (!before && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) before = snapshot();
+    });
     input.addEventListener("input", () => { if (!before) before = snapshot(); const v = snapshot(); v[key] = Number(input.value); applySnapshot(v, { history: false }); });
     input.addEventListener("change", () => { if (before) { remember(before); before = null; } }); row.append(name, input, out); host.appendChild(row); ui.ranges.push({ key, input, out });
   }
