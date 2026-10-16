@@ -17,7 +17,8 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createHash, webcrypto } from "node:crypto";
-import { binaryIntegrity, stampIntegrity, fullPhrases } from "../../tools/gen/voicepack.mjs";
+import { spawnSync } from "node:child_process";
+import { binaryIntegrity, stampIntegrity, fullPhrases, phrases, recordClips } from "../../tools/gen/voicepack.mjs";
 import { SAMPLES, requestFor } from "../../tools/gen/voice-audition.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -104,6 +105,94 @@ test("integrity-only generation is deterministic and leaves recorded bytes uncha
     stampIntegrity(dir);
     assert.equal(fs.readFileSync(path.join(dir, "test.json"), "utf8"), generated);
     assert.deepEqual(fs.readFileSync(path.join(dir, "test.bin")), bin);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Author-time cache tests use text-bearing fake audio and an offline encoder.
+// No Kokoro package, weights, network access or real audio generation is needed.
+function recordingFixture() {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-recording-"));
+  const encoder = path.join(dir, "encoder.cjs"), calls = path.join(dir, "encoder-calls.jsonl");
+  fs.writeFileSync(encoder, `#!${process.execPath}
+const fs = require("node:fs"), args = process.argv.slice(2);
+fs.appendFileSync(${JSON.stringify(calls)}, JSON.stringify(args) + "\\n");
+if (args.length === 2) process.stderr.write("Duration: 00:00:01.25");
+else fs.writeFileSync(args.at(-1), "encoded:" + fs.readFileSync(args[args.indexOf("-i") + 1], "utf8"));
+`, { mode: 0o755 });
+  let loads = 0, generations = 0;
+  const opts = { cache: dir, voice: "bm_george", dtype: "q4", speed: 1.12,
+    getFFmpeg: () => encoder,
+    loadTTS: async () => {
+      loads++;
+      return { generate: async (text, options) => {
+        generations++;
+        return { save: async (wav) => fs.writeFileSync(wav, JSON.stringify({ text, ...options })) };
+      } };
+    },
+  };
+  return { dir, opts, counts: () => ({ loads, generations }),
+    calls: () => fs.readFileSync(calls, "utf8").trim().split("\n").map(JSON.parse),
+    close: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("author-time cache distinguishes channel text and synthesis inputs while warm rebuilds preserve clips", async () => {
+  const f = recordingFixture();
+  try {
+    const radio = phrases("george", "radio").find((p) => p.key === "m");
+    const coach = phrases("george", "coach").find((p) => p.key === "m");
+    assert.equal(radio.text, "Mediums"); assert.equal(coach.text, "M");
+    const build = (list, extra = {}) => recordClips({ ...f.opts, list, ...extra });
+    const first = await build([radio]);
+    const second = await build([coach]);
+    const decode = (result) => JSON.parse(result.binary.toString().slice("encoded:".length));
+    assert.equal(decode(first).text, "Mediums");
+    assert.equal(decode(second).text, "M", "same key/speed/voice must never reuse another channel's speech");
+    assert.notDeepEqual(first.binary, second.binary);
+    assert.deepEqual(second.clips.m, [0, second.binary.length, 1.25]);
+    const warm = await build([coach], { loadTTS: () => { throw new Error("warm build imported Kokoro"); } });
+    assert.deepEqual(warm, second, "identical input preserves publishable bytes and clip offsets/durations");
+    assert.deepEqual(f.counts(), { loads: 2, generations: 2 });
+    for (const extra of [{ voice: "am_michael" }, { dtype: "fp32" }, { speed: 1.2 }]) await build([coach], extra);
+    assert.deepEqual(f.counts(), { loads: 5, generations: 5 }, "each changed synthesis input invalidates the encode");
+    const encodes = f.calls().filter((args) => args.length > 2);
+    assert.equal(encodes.length, 5);
+    assert.ok(encodes.every((args) => args.includes("24000") && args.includes("libmp3lame") && args.includes("32k")));
+    assert.match(encodes[0][encodes[0].indexOf("-af") + 1], /silenceremove=.*areverse/);
+    assert.equal(fs.readdirSync(f.dir).filter((name) => name.endsWith(".mp3")).length, 5);
+  } finally { f.close(); }
+});
+
+test("multiple cache misses load one model, and a no-op append touches neither model nor encoder", async () => {
+  const f = recordingFixture();
+  try {
+    const list = [{ key: "box", text: "Box" }, { key: "@line:box now", text: "Box now." }];
+    const first = await recordClips({ ...f.opts, list });
+    assert.deepEqual(f.counts(), { loads: 1, generations: 2 });
+    const noOp = await recordClips({ ...f.opts, list, clips: { ...first.clips }, chunks: [first.binary],
+      loadTTS: () => { throw new Error("no-op append imported Kokoro"); },
+      getFFmpeg: () => { throw new Error("no-op append resolved encoder"); } });
+    assert.deepEqual(noOp, first);
+    assert.deepEqual(f.counts(), { loads: 1, generations: 2 });
+    assert.equal(f.calls().length, 4, "only initial encodes and duration probes ran");
+  } finally { f.close(); }
+});
+
+test("CLI no-op append succeeds without an installed Kokoro package and preserves the published pack", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-append-"));
+  try {
+    const binary = Buffer.from("existing recorded bytes");
+    const clips = Object.fromEntries(fullPhrases("george", "radio").map(({ key }) => [key, [0, binary.length, 1.25]]));
+    const man = { v: 1, id: "george", voice: "bm_george", speaker: "radio", model: "Kokoro-82M v1.0 (ONNX q4)",
+      licence: "Apache-2.0", speed: 1.12, clips, binary: binaryIntegrity(binary) };
+    fs.writeFileSync(path.join(dir, "george.json"), JSON.stringify(man) + "\n");
+    fs.writeFileSync(path.join(dir, "george.bin"), binary);
+    const result = spawnSync(process.execPath, ["tools/gen/voicepack.mjs", "--append", "--id", "george", "--out", dir,
+      "--kokoro", path.join(dir, "missing-dependencies")], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(fs.readFileSync(path.join(dir, "george.bin")), binary);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, "george.json"))), man);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
