@@ -20,6 +20,41 @@ const LANDSCAPE = { width: 1180, height: 720 };
 
 test.describe("Touch designer workspace", () => {
   test.use({ hasTouch: true, isMobile: true });
+  test("short and scaled phones keep both views and every workspace reachable", async ({ page }, testInfo) => {
+    await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+    await page.evaluate(() => TrackDesigner.save());
+    const root = page.locator("#trackdesigner");
+    const cells = [[393, 659, 100], [734, 343, 100], [852, 344, 100], [393, 659, 150],
+      [844, 390, 150], [393, 659, 200], [844, 390, 200], [390, 844, 100], [844, 390, 100]];
+    for (const [width, height, scale] of cells) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(({ width, height, scale }) => {
+        const d = document.documentElement.style, portrait = height > width, side = width === 844 ? 47 : 59;
+        for (const [key, value] of Object.entries(portrait ? { t: 59, r: 0, b: 34, l: 0 } : { t: 0, r: side, b: 21, l: side })) d.setProperty("--sa" + key, value + "px");
+        window.__apex.uiScale(scale);
+      }, { width, height, scale });
+      await root.getByRole("tab", { name: "DESIGN", exact: true }).tap();
+      for (const mode of ["edit", "elevation"]) {
+        await root.locator(`[data-role="mode-bar"] [data-mode="${mode}"]`).tap();
+        await expect.poll(() => root.evaluate((e) => {
+          const stage = e.querySelector(".td-stage").getBoundingClientRect();
+          const profile = e.querySelector('canvas[data-role="profile"]').getBoundingClientRect();
+          return profile.bottom - stage.bottom;
+        }), { message: `${width}x${height}@${scale} ${mode}: profile must fit its stage` }).toBeLessThanOrEqual(1);
+      }
+      await root.locator('[data-role="mode-bar"] [data-mode="scenery"]').tap();
+      for (const section of ["themes", "atmosphere", "objects"]) {
+        await root.locator(`[data-scenery-section="${section}"]`).tap({ timeout: 10_000 });
+        await expect(root.locator(`#td-scenery-panel-${section}`)).toBeVisible();
+      }
+      for (const name of ["MY CIRCUITS", "HOW TO", "DESIGN"]) await root.getByRole("tab", { name, exact: true }).tap();
+      await root.locator('[data-role="file-menu"] > summary').tap();
+      await root.getByRole("button", { name: "EXPORT", exact: true }).click({ trial: true });
+      await page.keyboard.press("Escape");
+      expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), `${width}x${height}@${scale}: no horizontal escape`).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`responsive-${width}x${height}-${scale}.jpg`) });
+    }
+  });
   test("touch scrolling keeps the map, profile and scenery sections reachable", async ({ page }) => {
     await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
     const root = page.locator("#trackdesigner");
