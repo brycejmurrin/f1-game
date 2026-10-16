@@ -1197,16 +1197,16 @@ test("the host stops relaying a rival that has gone quiet instead of stamping it
     ss.c.feed(t - 50, 3, lapPose(300 + k), t - 10);
     G.netNow = t; net.tick(t);
   }
-  // c goes silent; a and b keep talking. 1 s later (< STALE_MS 2 s) c is not yet
-  // handed to the local AI, but its frozen pose must not ride the relay.
+  // c goes silent; a and b keep talking. Its frozen pose must not ride
+  // the relay, even after fallback AI crosses and claims the target lap.
   const last = t;
-  for (let k = 0; k < 24; k++, t += 50) {
+  for (let k = 0; k < 64; k++, t += 50) {
     ss.a.feed(t - 30, 1, lapPose(120 + k), t - 10);
     ss.b.feed(t - 70, 2, lapPose(220 + k), t - 10);
     for (const s of Object.values(ss)) s.states.length = 0;
     G.netNow = t; net.tick(t);
     if (t - last >= 700) {
-      assert.ok(t - last < 2000);
+      if (t - last > 2100) { G.cars[3].lap = G.lapsTarget + 1; G.cars[3].s = 5; }
       assert.deepEqual(relayedIds(ss.a), [2], "a hears b, never the silent c");
       assert.deepEqual(relayedIds(ss.b), [1], "b hears a, never the silent c");
     }

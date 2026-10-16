@@ -1257,9 +1257,9 @@ const NetPlay = (function () {
         // in a four-player room, ~75 % of each SCTP/DTLS/UDP datagram overhead.
         // An aged packet (NetSnapshot.encodeAged) keeps each car's own
         // presentedAt stamp, which is why it was split in the first place.
-        // …and, every AI_EVERY-th publish, the host's AI field (plus any human
-        // slot the local AI is covering through a silence): guests pose these
-        // instead of simulating their own (docs/notes/MULTIPLAYER-AI-REPLICATION.md).
+        // …and, every AI_EVERY-th publish, the host's AI field. A connected
+        // human's fallback pose is speculative: relaying it as fresh owner
+        // evidence could finish that human on another guest.
         const withAi = role === "host" && (++publishN % AI_EVERY) === 0;
         if (role === "host" && (sessions.size > 1 || withAi)) {
           _relay.length = 0;
@@ -1272,7 +1272,7 @@ const NetPlay = (function () {
           if (withAi) for (const c of G.cars || []) {
             if (c === localCar) continue;
             const id = G.wireId(c), r = id >= 0 ? remotes.get(id) : null;
-            if (id < 0 || (r && !r.stale)) continue;   // a live human rival is relayed above
+            if (id < 0 || r) continue;   // human owner poses are relayed above; never fallback motion
             _relay.push({ id, car: c, at });
           }
           if (_relay.length) {
