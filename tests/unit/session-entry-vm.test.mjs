@@ -11,6 +11,35 @@ let g;
 before(async () => { g = await createGame({ track: "monza" }); });
 after(() => { if (g) g.close(); });
 const tick = () => new Promise((r) => setImmediate(r));
+
+test("cold-menu setup trials use the real solo standing grid; ordinary TT still gets a flying start", async () => {
+  const h = await createGame();
+  try {
+    h.apex.headless(true);
+    const G = h.G;
+    assert.equal(G.records._stub, true, "cold menu has not loaded race-session records yet");
+    G.flow = "gp"; G.session = "race"; G.raceChangeable = false; G.duel = false;
+    const team = h.sandbox.Teams.LIST[G.teamIdx].id;
+    const tune = vm.runInContext(`SetupTune.get(${JSON.stringify(team)})`, h.ctx);
+    const result = await G.setupTrialRestart({ teamId: team, tune, mode: "launch", isCurrent: () => true });
+    assert.equal(result.ok, true, result.reason);
+    assert.equal(G.cars.length, 1);
+    assert.equal(G.player.speed, 0);
+    assert.equal(result.context.unscored, true);
+    assert.equal(result.context.stableWeather, true);
+    assert.equal(G.coach.practiceGoal(), "launch");
+    G.update(1 / 60);
+    assert.equal(G.flyingStart.active(), false, "owned trial suppresses the rolling start");
+    assert.equal(G.player.speed, 0);
+    G.quitToMenu();
+    assert.equal(G.setupTrialContext(), null);
+    G.session = "tt";
+    await G.startRace();
+    G.update(1 / 60);
+    assert.equal(G.flyingStart.active(), true, "ordinary TT retains its original behavior");
+    assert.ok(G.player.speed > 0);
+  } finally { h.close(); }
+});
 function holdScenery(id) {
   delete g.sandbox.TrackScenery[id];
   const head = g.sandbox.document.head, append = head.appendChild;
@@ -313,4 +342,19 @@ test("paced track completion abandons canceled and superseded worlds before adop
     assert.equal(freed.length, mode === "accepted" ? 0 : 1);
     if (freed.length) assert.equal(freed[0], built);
   }
+});
+
+test("custom-track production observer runs only once the committed entry still owns the generation", async () => {
+  const source = gameSource();
+  const observer = source.slice(source.indexOf("  if (!_customTrackStarts.has(request))"), source.indexOf("  request.catch", source.indexOf("  if (!_customTrackStarts.has(request))")));
+  const entry = vm.runInContext("SessionEntry", g.ctx).create();
+  let hooks = 0;
+  const ctx = vm.createContext({ sessionEntry: entry, _customTrackStarts: new WeakSet(), CustomTracks: { afterStart() { hooks++; } } });
+  vm.runInContext("this.observe = (request) => { " + observer + "\n };", ctx);
+  const good = entry.begin("race", "a", () => {}, () => undefined, () => true);
+  ctx.observe(good); ctx.observe(good); await good; await tick(); assert.equal(hooks, 1);
+  const no = entry.begin("race", "b", () => {}, () => false, () => true);
+  ctx.observe(no); await no; await tick(); assert.equal(hooks, 1);
+  const canceled = entry.begin("race", "c", () => {}, () => undefined, () => true);
+  entry.cancel(); ctx.observe(canceled); await canceled; await tick(); assert.equal(hooks, 1);
 });

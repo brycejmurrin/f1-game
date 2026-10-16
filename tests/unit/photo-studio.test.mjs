@@ -25,7 +25,8 @@ function boot(options = {}) {
     return el;
   };
   let closed = 0, restored = null, overlays = true, current = options.priorCamera || { open: false };
-  const G = { $: dom.byId, canvas: dom.byId("game"), track: { name: "Monza" }, photoMode: !!options.priorPhoto,
+  const G = { $: dom.byId, canvas: dom.byId("game"), track: { name: "Monza", total: 1000 }, photoMode: !!options.priorPhoto,
+    player: options.player || null,
     photoCam: { pos: [1, 2, 3], yaw: 1, pitch: 0.3, fov: 60 },
     gfx: { capturePixels: () => { order.push("read"); return options.readback || Promise.resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4).fill(123) }); } } };
   const freeCam = {
@@ -40,14 +41,47 @@ function boot(options = {}) {
   const ctx = vm.createContext({ document: dom.document, window: { dispatchEvent: () => {}, addEventListener: () => {}, removeEventListener: () => {} },
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
-    Log: { warn: () => {} }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
+    Log: { warn: () => {} }, Tracks: { sample: (_t, s, out) => {
+      out.p = [s, 2, 0]; out.t = [1, 0, 0]; out.r = [0, .6, .8]; // the right vector after banking
+    } }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
+    NativeDownload: options.nativeDownload,
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
   vm.runInContext(source, ctx);
-  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw") });
+  const PS = ctx.PhotoStudio, api = PS.create(G, { freeCam, garage, renderFrame: () => order.push("draw"),
+    borrowCar: options.borrowCar ? () => options.borrowCar(G) : undefined });
   return { api, PS, dom, order, downloads, canvasOps, G, storage, closed: () => closed, restored: () => restored, overlays: () => overlays };
 }
+
+test("Home circuit photo borrows a subject, places its complete pose, and returns ownership", () => {
+  const prior = { px: 88 }, subject = {};
+  let released = 0;
+  const { api, G, dom, restored } = boot({ player: prior, borrowCar: (G) => {
+    G.player = subject;
+    return () => { G.player = prior; released++; };
+  } });
+  api.open({ source: "home-track" });
+  assert.equal(api.hasCar(), true);
+  const values = [["ps-car-position", "25"], ["ps-car-offset", "3"], ["ps-car-rotation", "90"]];
+  for (const [id, value] of values) {
+    const view = JSON.stringify(restored());
+    dom.byId(id).value = value;
+    dom.byId(id).dispatchEvent({ type: "input" });
+    if (id === "ps-car-rotation") assert.equal(JSON.stringify(restored()), view, "rotating the car preserves the composed camera");
+  }
+  assert.equal(subject.s, 250); assert.equal(subject.x, 3);
+  assert.equal(subject.px, 250); assert.equal(subject.pz, 3);
+  assert.equal(subject.head, 0); assert.equal(subject.yawVis, Math.PI / 2);
+  for (const [a, b] of [["rPrevS", "s"], ["rPrevX", "x"], ["rPrevPx", "px"], ["rPrevPz", "pz"], ["rPrevYawVis", "yawVis"], ["rPrevHead", "head"]]) {
+    assert.equal(subject[a], subject[b], "no interpolation from a stale " + b);
+  }
+  api.close(false); api.close(false);
+  assert.equal(released, 1); assert.equal(G.player, prior); assert.equal(api.hasCar(), false);
+  assert.deepEqual(prior, { px: 88 });
+  api.open({ source: "race" });
+  assert.equal(api.hasCar(), false); assert.equal(G.player, prior);
+});
 // One shared object store, with serialized transactions and staged writes. A
 // request's success is distinct from commit, and abort discards every staged
 // mutation, so these tests exercise isolation and rollback rather than callbacks
@@ -124,6 +158,64 @@ test("capture draws before reading a live backbuffer, omits DOM overlays and dow
   assert.equal(b.api.state().captured, true);
   await b.api.exportPhoto(); assert.deepEqual(b.downloads, ["apex26-photo.png"]);
   b.api.close(true); assert.equal(b.closed(), 1); assert.equal(b.G.photoMode, false);
+});
+test("native photo export awaits the share outcome and reports a cancelled or failed download", async () => {
+  for (const outcome of ["success", "cancel", "failure"]) {
+    let resolve, reject, saved, calls = 0;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const b = boot({ nativeDownload: { viable: () => true, saveBlob: (blob, name) => { calls++; saved = { blob, name }; return calls === 1 ? held : Promise.resolve(); } } });
+    b.api.open(); await b.api.capture();
+    const pending = b.api.exportPhoto();
+    await b.api.exportPhoto();
+    await new Promise(setImmediate);
+    assert.equal(saved.name, "apex26-photo.png");
+    assert.equal(await saved.blob.text(), "photo");
+    assert.doesNotMatch(b.dom.byId("ps-message").textContent, /download requested/i);
+    assert.deepEqual(b.downloads, []);
+    assert.equal(calls, 1, "a second tap must not overlap the native chooser");
+    assert.equal(b.api.state().busy, false, "download does not take ownership of capture/close busy state");
+    assert.equal(b.dom.byId("ps-close").disabled, false);
+    if (outcome === "success") resolve(); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await pending;
+    assert.match(b.dom.byId("ps-message").textContent, outcome === "success" ? /PNG download requested/ : outcome === "cancel" ? /Download failed: Share canceled/ : /Download failed: disk full/);
+    await b.api.exportPhoto();
+    assert.equal(calls, 2, "settlement allows a later export after success, cancellation, or failure");
+  }
+});
+
+test("library DOWNLOAD shares the in-flight guard with PNG export and permits retry after a cancelled share", async () => {
+  let reject, calls = 0;
+  const held = new Promise((resolve, no) => { reject = no; });
+  const b = boot({ nativeDownload: { viable: () => true, saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
+  b.api.open({ source: "garage" }); await b.api.capture(); await b.api.savePhoto();
+  const row = b.dom.byId("ps-library").children[0];
+  const download = row.children.find((child) => child.textContent === "DOWNLOAD");
+  download.click(); download.click();
+  await b.api.exportPhoto();
+  assert.equal(calls, 1, "library double taps and the PNG action cannot overlap native sharing");
+  assert.equal(b.dom.byId("ps-close").disabled, false);
+  reject(new Error("Share canceled")); await turn();
+  assert.match(b.dom.byId("ps-message").textContent, /Download failed: Share canceled/);
+  download.click(); await turn();
+  assert.equal(calls, 2);
+  assert.match(b.dom.byId("ps-message").textContent, /Photo download requested/);
+});
+
+test("closing and reopening during a photo export stays usable and ignores stale completion feedback", async () => {
+  let finish, calls = 0;
+  const held = new Promise((resolve) => { finish = resolve; });
+  const b = boot({ nativeDownload: { viable: () => true, saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
+  b.api.open({ source: "garage" }); await b.api.capture();
+  const pending = b.api.exportPhoto(); await turn();
+  b.api.close(false); b.api.open({ source: "garage" }); await b.api.capture();
+  const message = b.dom.byId("ps-message").textContent;
+  await b.api.exportPhoto();
+  assert.equal(calls, 1, "the original chooser remains the in-flight download across reopen");
+  finish(); await pending;
+  assert.equal(b.dom.byId("ps-message").textContent, message);
+  assert.equal(b.api.state().busy, false);
+  await b.api.exportPhoto();
+  assert.equal(calls, 2);
 });
 test("software presentation is awaited while raw pixels are captured before compositing", async () => {
   const b = boot(); let present;
@@ -363,4 +455,68 @@ test("leaks #1: closing the studio releases the composed canvas and its preview 
   assert.equal(b.api.state().captured, false, "`last` canvas is dropped");
   assert.deepEqual(removed, ["src"], "the ~640x360 JPEG data URL is dropped"); assert.equal(preview.hidden, true);
   await b.api.exportPhoto(); assert.deepEqual(b.downloads, [], "nothing left to export after close");
+});
+
+test("deferred capture keeps its requested composition; recrop retains the uncropped frame", async () => {
+  let resolve; const b = boot({ readback: new Promise((r) => { resolve = r; }) });
+  b.api.open({ metadata: { title: "Requested moment" } });
+  const pending = b.api.capture();
+  for (const [id, value] of [["ps-aspect", "portrait"], ["ps-postcard", "on"]]) {
+    const el = b.dom.byId(id); el.value = value; el.dispatchEvent({ type: "change", target: el });
+  }
+  resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
+  assert.equal(await pending, true);
+  assert.match(b.dom.byId("ps-message").textContent, /160 × 90/);
+  assert.equal(b.canvasOps.some((op) => op[0] === "caption"), false);
+  const aspect = b.dom.byId("ps-aspect"); aspect.value = "square"; aspect.dispatchEvent({ type: "change", target: aspect }); aspect.value = "portrait"; aspect.dispatchEvent({ type: "change", target: aspect });
+  assert.ok(b.canvasOps.some((op) => op[0] === "draw" && op[1] === 44 && op[3] === 72));
+  aspect.value = "wide"; aspect.dispatchEvent({ type: "change", target: aspect });
+  assert.ok(b.canvasOps.some((op) => op[0] === "draw" && op[1] === 0 && op[3] === 160), "wide recrop recovers both clipped sides");
+  b.api.close(false); const count = b.canvasOps.length;
+  aspect.value = "square"; aspect.dispatchEvent({ type: "change", target: aspect });
+  assert.equal(b.canvasOps.length, count, "close releases the recrop source");
+});
+
+test("coaching is optional DOM content; presets cannot move a pending capture", async () => {
+  let resolve; const b = boot({ readback: new Promise((r) => { resolve = r; }) });
+  b.api.open({ source: "garage" }); const pending = b.api.capture();
+  b.dom.byId("ps-shots").children[1].click();
+  assert.equal(b.order.some((s) => s.startsWith("shot:")), false);
+  const coach = b.dom.byId("ps-coach"); coach.children[coach.children.length - 1].click();
+  assert.equal(coach.hidden, true);
+  resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await pending;
+  b.api.close(false); b.api.open({ source: "garage" }); assert.equal(coach.hidden, true);
+});
+
+test("contact sheet captures three sequential renderer frames and labels one bounded PNG", async () => {
+  const b = boot(); const times = [], captureTimes = [1, 2, 3];
+  assert.equal(await b.api.contactSheet(captureTimes, (t) => times.push(t), () => false), true);
+  assert.deepEqual(times, captureTimes); assert.equal(b.order.filter((s) => s === "read").length, 3);
+  assert.deepEqual(b.downloads, ["apex26-replay-moment.png"]);
+  assert.equal(b.canvasOps.filter((op) => op[0] === "caption").length, 3);
+  assert.equal(await b.api.contactSheet(captureTimes, () => {}, () => true).catch(() => false), false);
+  assert.equal(b.downloads.length, 1, "cancel does not download");
+});
+
+test("album exposes bounded safe read-only thumbnails and recovers with visit photos", async () => {
+  const db = photoDb(seededPhotos(8)); const b = boot({ indexedDB: { open: () => db.open() } });
+  const rows = await b.PS.album(); assert.equal(rows.length, 6);
+  assert.deepEqual(Object.keys(rows[0]).sort(), ["at", "id", "thumb", "title"]);
+  assert.equal(Object.isFrozen(rows[0]), true);
+  const fallback = boot(); await assert.rejects(fallback.PS.album(), /storage unavailable/);
+  fallback.api.open(); await fallback.api.capture(); await fallback.api.savePhoto();
+  assert.equal((await fallback.PS.album()).length, 1);
+});
+
+test("Studio state exposes monotonic session generation across same-open reentry", () => {
+  const b = boot(); b.api.open(); const first = b.PS.state();
+  assert.equal(first.open, true); assert.equal(typeof first.generation, "number");
+  b.api.close(false); b.api.open(); const next = b.PS.state();
+  assert.equal(next.open, first.open); assert.ok(next.generation > first.generation);
+});
+
+test("#1895: the Home title art does not paint over a live Photo Studio subject", () => {
+  const css = fs.readFileSync(new URL("../../css/experience.css", import.meta.url), "utf8");
+  assert.match(css, /body\.photo-studio-open #overlay\[data-home-ready="1"\] #title-car \{ display: none; \}/,
+    "once the garage/track subject has painted, #title-car must be hidden while the studio is open");
 });

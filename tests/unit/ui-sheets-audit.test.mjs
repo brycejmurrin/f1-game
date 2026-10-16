@@ -101,7 +101,7 @@ function tiedSeason() {
 // mini-dom's textContent setter does not drop children (it is not a DOM), so
 // each build starts from an emptied container here, as the browser would.
 const clear = (el) => { el.children.length = 0; };
-const rowsOf = (el) => el.children.filter((c) => c.classList.contains("res-row"));
+const rowsOf = (el) => el.children.flatMap((c) => c.classList.contains("res-row") ? [c] : c.getAttribute("data-results-part") === "ranking" ? rowsOf(c) : []);
 const nameOf = (row) => row.children.find((c) => c.classList.contains("res-name")).textContent;
 
 test("unscored practice results suppress points in every classification row while scored races retain them", () => {
@@ -575,9 +575,9 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-review", "pm-practice", "pm-photo", "pm-howto", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-standings", "pm-skip-results", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"],
+  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-advanced", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files"],
     "SETTINGS has the seven top-level doors in task order");
-  assert.match(settingsIndex, /id="pm-advanced"[^>]*>STEERING &amp; ASSISTS/);
+  assert.match(settingsIndex, /id="pm-advanced"[^>]*>DRIVING AIDS/);
   const driving = html.slice(html.indexOf('id="pm-panel-driving"'), html.indexOf("</section>", html.indexOf('id="pm-panel-driving"')));
   const practiceIds = ["pm-coach", "pm-practice-panel", "pm-practice-set", "pm-practice-retry", "pm-session-review"];
   for (const id of practiceIds) {
@@ -774,7 +774,7 @@ test("the TIME TRIAL sheet prints YOUR BEST and the board to the thousandth", ()
     teamById: () => null,
   });
   h.api.buildTTResults();
-  const pts = h.els.resultsTable.children.flatMap((r) => r.children || []).filter((c) => c.classList.contains("res-pts")).map((c) => c.textContent);
+  const pts = rowsOf(h.els.resultsTable).flatMap((r) => r.children || []).filter((c) => c.classList.contains("res-pts")).map((c) => c.textContent);
   assert.deepEqual(pts, ["1:21.163", "1:21.163", "1:21.167"], "two laps 0.004 s apart must not print alike");
 });
 
@@ -880,4 +880,57 @@ test("finishRace does not stamp the go() 0.5s floor as official winner elapsed",
   const apex = read("js/agent/apex.js");
   assert.match(apex, /clock = ran > 0\.5 \? ran : 0/);
   assert.match(apex, /c\.finishT = clock/);
+});
+
+
+test("classification and championship lists are named and separate from result stories", () => {
+  const { season, cars } = tiedSeason(), h = bootResults({ season, cars });
+  h.api.buildResults(cars.slice());
+  const lists = h.els.resultsTable.children.filter(e => e.getAttribute("role") === "list");
+  assert.deepEqual(lists.map(e => e.getAttribute("aria-label")), ["Race classification", "Driver standings", "Constructor standings"]);
+  for (const list of lists) for (const row of list.children) {
+    assert.equal(row.getAttribute("role"), "listitem");
+    assert.equal(row.children.find(e => e.classList.contains("res-swatch")).getAttribute("aria-hidden"), "true");
+  }
+  assert.equal(lists[0].children.length, cars.length);
+  assert.ok(h.els.resultsTable.children.find(e => e.getAttribute("data-results-part") === "story"));
+  h.api.buildStandings();
+  assert.deepEqual(h.dom.byId("standings-body").children.filter(e => e.getAttribute("role") === "list").map(e => e.getAttribute("aria-label")), ["Driver standings", "Constructor standings"]);
+});
+
+test("tyre stint details expose the same compound names and completed ranges as the strip", () => {
+  const { cars } = tiedSeason(), h = bootResults({ season: null, cars, seasonMode: false });
+  let stints = [{ code: "S", lap0: 0, lap1: 8, laps: 8, colour: [1, 0, 0] }, { code: "M", lap0: 8, lap1: 20, laps: 12, colour: [1, 1, 0] }], wear = true;
+  h.G.tyres = { on: () => wear, stints: () => stints };
+  const build = () => { clear(h.els.resultsTable); h.api.buildResults(cars.slice()); return rowsOf(h.els.resultsTable)[0]; };
+  let row = build();
+  const strip = () => row.children.find(e => e.classList.contains("res-stints"));
+  const details = () => row.children.find(e => e.classList.contains("res-name")).children.find(e => e.getAttribute("data-stint-details") != null);
+  assert.equal(details().tagName, "DETAILS"); assert.equal(details().children[0].tagName, "SUMMARY");
+  assert.equal(details().children[1].textContent, "Soft — completed laps 0-8; Medium — completed laps 8-20");
+  assert.equal(strip().getAttribute("aria-label"), "Tyre stints: " + details().children[1].textContent);
+  stints = [{ code: "S", lap0: 0, lap1: 0, laps: 0, colour: [1, 0, 0] }]; row = build();
+  assert.equal(strip().children[0].style.flex, "1"); assert.match(details().children[1].textContent, /0-0/);
+  wear = false; row = build(); assert.equal(strip(), undefined); assert.equal(details(), undefined);
+});
+
+
+test("career settlement displays final sponsor target, MET/MISSED and reason without changing legacy payouts", () => {
+  const { cars } = tiedSeason();
+  const build = (verdict) => {
+    const h = bootResults({ season: null, cars, seasonMode: false });
+    h.G.careerSettlement = { pos: 1, pts: 25, money: 500, rep: 50, sponsorPay: verdict && verdict.met ? verdict.pay : 0,
+      ...(verdict === undefined ? {} : { sponsorVerdict: verdict }) };
+    h.api.buildResults(cars.slice());
+    const box = h.els.resultsTable.children.find(e => e.classList.contains("res-settle"));
+    return box.children.map(row => row.children.map(cell => cell.textContent).join(" | "));
+  };
+  const target = "Score 3 points in the final 1 round";
+  const missed = build({ met: false, label: target, reason: "Target missed", pay: 0 });
+  assert.ok(missed.includes("Sponsor target — " + target + " | MISSED · Target missed"));
+  assert.equal(missed.some(text => text.startsWith("Sponsor bonus")), false);
+  const met = build({ met: true, label: target, reason: "Target met", pay: 125 });
+  assert.ok(met.includes("Sponsor target — " + target + " | MET · Target met"));
+  assert.equal(met.filter(text => text === "Sponsor bonus | +125 cr").length, 1);
+  assert.deepEqual(build(null), build(undefined), "legacy and absent verdict keep the existing debrief");
 });

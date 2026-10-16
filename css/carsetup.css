@@ -1142,7 +1142,12 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   grid-auto-rows: min-content;
   align-content: start;
 }
-#cs-inner[data-pair="on"] #cs-tabs .cs-tab-row { display: contents; }
+#cs-inner[data-pair="on"] #cs-tabs .cs-tab-row {
+  display: contents;
+  /* These groups are horizontal strips only in the stacked layout. Their
+     pan-x restriction can block vertical swipes starting on a rail tab. */
+  touch-action: pan-y;
+}
 #cs-inner[data-pair="on"] #cs-tabs .cs-tab {
   flex: initial; white-space: normal;
 }
@@ -1329,7 +1334,23 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    way to aim at it. The portrait placement is with the other portrait rules
    at the end of this file. */
 @media (max-width: 700px) and (orientation: landscape) {
-  #cs-stack { display: none; }
+  #cs-stack {
+    display: flex;
+    left: calc(var(--safe-l) + var(--gap));
+    right: auto;
+    top: calc(var(--safe-t) + var(--gap));
+    bottom: auto;
+    width: min(46vw, 220px);
+    max-width: calc(100vw - var(--safe-l) - var(--safe-r) - var(--gap) * 2);
+    z-index: 4;
+  }
+  #cs-stack #cs-bar,
+  #cs-stack #cs-aero-bar,
+  #cs-stack #cs-cam,
+  #cs-stack #cs-aero { width: 100%; max-width: 100%; }
+  #cs-stack #cs-bar { flex-direction: column; align-items: stretch; }
+  #cs-stack #cs-cam { justify-content: space-between; }
+  #cs-stack #cs-aero { flex-direction: column; align-items: flex-start; }
 }
 /* CAMERA / ACTIVE AERO / Z-MODE sit over the garage canvas, outside #hud.
    A dim sheet (teampicker, customize) must stand them down — they painted

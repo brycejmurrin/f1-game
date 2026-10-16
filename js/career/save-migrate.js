@@ -5,10 +5,12 @@
 
 const SaveMigrate = (function () {
 
-  const CAREER_V = 1;
+  const CAREER_V = 2;
   const CAREER_MIGRATIONS = [
     // v0 -> v1: the first shipped shape. A v0 save predates `v` entirely.
     (c) => { c.season = c.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; },
+    // v1 -> v2: legacy Standard brief and original sponsor. No economy changes.
+    (c) => { c.briefStake = null; c.sponsorPicks = {}; },
   ];
 
   // Guarded: the node VM harnesses load this file without js/core/log.js.
@@ -222,6 +224,41 @@ const SaveMigrate = (function () {
     return Math.max(0, Math.min(n - 1, i));
   }
 
+  // Part ownership and fitted setup entries are player input too.  Keeping an
+  // arbitrary string here used to be harmless until a catalog lookup changed:
+  // an imported `owned: ["future-part"]` could never be bought again, while a
+  // fitted `category: "future-part"` was handed to Parts.resolveSetup as if it
+  // were a real option.  Normalize against the live catalog once it is loaded;
+  // early schema validation can run before Parts, so leave the arrays alone in
+  // that narrow case and let the boot-time Career.load pass do the filtering.
+  function cleanParts(career) {
+    if (typeof Parts === "undefined" || !Array.isArray(Parts.CATALOG) || !Parts.CATALOG.length) return;
+    const byCategory = new Map();
+    const all = new Set();
+    for (const cat of Parts.CATALOG) {
+      if (!cat || typeof cat.id !== "string" || !Array.isArray(cat.options)) continue;
+      const ids = new Set();
+      for (const opt of cat.options) {
+        if (!opt || typeof opt.id !== "string") continue;
+        ids.add(opt.id); all.add(opt.id);
+      }
+      byCategory.set(cat.id, ids);
+    }
+    if (Array.isArray(career.owned)) {
+      career.owned = career.owned.filter((id, i, a) =>
+        typeof id === "string" && all.has(id) && a.indexOf(id) === i);
+    } else career.owned = [];
+    const fitted = {};
+    if (career.fitted && typeof career.fitted === "object" && !Array.isArray(career.fitted)) {
+      for (const cat of Object.keys(career.fitted)) {
+        if (cat === "__proto__" || !byCategory.has(cat)) continue;
+        const id = career.fitted[cat];
+        if (typeof id === "string" && byCategory.get(cat).has(id)) fitted[cat] = id;
+      }
+    }
+    career.fitted = fitted;
+  }
+
   // Fill in every optional key so the rest of the code never guards for undefined,
   // and climb the migration ladder.
   //
@@ -232,18 +269,29 @@ const SaveMigrate = (function () {
       if (career != null) log("warn", "Career save rejected: not an object type=" + (Array.isArray(career) ? "array" : typeof career));
       return null;
     }
-    let v = career.v | 0;
+    const version = Number(career.v);
+    if (version > CAREER_V) {
+      log("warn", "Career save requires a newer build (v" + version + "); update the game to open it. Save preserved.");
+      return null;
+    }
+    let v = Number.isSafeInteger(career.v) && career.v >= 0 ? career.v : 0;
     while (v < CAREER_V && CAREER_MIGRATIONS[v]) { CAREER_MIGRATIONS[v](career); log("info", "Career save migrated v" + v + "->v" + (v + 1)); v++; }
-    if (v > CAREER_V) log("warn", "Career save newer than build: v" + v + " > v" + CAREER_V + ", kept as-is");
-    // Never DOWNGRADE: a save from a newer build (a stale cached shell opening
-    // it) keeps its version, so that build's ladder is not re-run on it.
-    career.v = Math.max(v, CAREER_V);
+    career.v = CAREER_V;
     career.flavour = career.flavour === "myteam" ? "myteam" : "driver";
     career.year = career.year | 0 || 2026;
     career.money = finiteNumber(career.money);
     career.rep = Math.max(0, Math.min(100, Number(career.rep) || 0));
-    career.driver = career.driver && typeof career.driver === "object"
-      ? career.driver : { name: "Your Name", code: "YOU", num: 99 };
+    // Driver identity is read by title/cards and by rating lookups. Keep a
+    // malformed existing slot recoverable: JSON can persist objects/functions'
+    // JSON-safe cousins in these leaves, and a later template interpolation
+    // would throw before the player could reach the import/recovery controls.
+    const driver = career.driver && typeof career.driver === "object" && !Array.isArray(career.driver)
+      ? career.driver : {};
+    driver.name = typeof driver.name === "string" && driver.name ? driver.name : "Your Name";
+    driver.code = typeof driver.code === "string" && driver.code ? driver.code : "YOU";
+    driver.num = typeof driver.num === "number" && Number.isFinite(driver.num)
+      ? Math.max(0, Math.min(999, Math.trunc(driver.num))) : 99;
+    career.driver = driver;
     // A missing team defaults as Career.start does: a null here threw on the title
     // screen's `.toUpperCase()` at boot, from an imported row like {"money":100}
     // (slotPayloadOk does not look at the team).
@@ -266,6 +314,7 @@ const SaveMigrate = (function () {
     delete career.season.config;
     career.owned = Array.isArray(career.owned) ? career.owned : [];
     career.fitted = career.fitted && typeof career.fitted === "object" ? career.fitted : {};
+    cleanParts(career);
     // Only object rows: a null or a number in the ledger threw on the first
     // `r.round` read in the history screen (and history on the title screen's
     // Career.slots(); offers and moves the same way).
@@ -298,7 +347,25 @@ const SaveMigrate = (function () {
       else d.pending = null;
       return d;
     }) : null;
+    const stake = career.briefStake;
+    career.briefStake = stake && Number.isInteger(stake.year) && Number.isInteger(stake.round) && stake.round >= 0
+      ? { year: stake.year, round: stake.round, committed: stake.committed === true, escrow: stake.escrow === 50 ? 50 : 0 } : null;
+    const picks = career.sponsorPicks;
+    career.sponsorPicks = {};
+    if (picks && typeof picks === "object" && !Array.isArray(picks))
+      for (const key of Object.keys(picks).slice(0, 1024))
+        if (/^\d{4,8}:\d{1,3}$/.test(key) && (picks[key] === 0 || picks[key] === 1)) career.sponsorPicks[key] = picks[key];
     career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
+    if (career.myTeamIdentity && typeof CareerTeamIdentity !== "undefined") career.myTeamIdentity = CareerTeamIdentity.sanitize(career.myTeamIdentity);
+    const winter = career.winterReport;
+    if (winter && typeof winter === "object" && Number.isInteger(winter.year)) {
+      const text = (v) => typeof v === "string" ? v.replace(/[\u0000-\u001f]/g, "").slice(0, 120) : "";
+      const stat = (v) => typeof v === "number" && Number.isFinite(v) ? Math.max(-100, Math.min(100, v)) : 0;
+      career.winterReport = { year: winter.year, eraChanged: winter.eraChanged === true, explanation: typeof winter.explanation === "string" ? winter.explanation.slice(0, 500) : "", carBuildsChanged: winter.carBuildsChanged === true,
+        team: winter.team && typeof winter.team === "object" ? { id: text(winter.team.id), before: stat(winter.team.before), after: stat(winter.team.after) } : null,
+        drivers: rows(winter.drivers).slice(0, 2).map((d) => { const axes = {}; for (const key of ["pace", "craft", "awareness", "consistency", "experience"]) { const a = d.axes && d.axes[key] || {}; const before = stat(a.before), after = stat(a.after); axes[key] = { before, after, delta: after - before }; } return { code: text(d.code), name: text(d.name), player: d.player === true, axes }; }),
+        teams: rows(winter.teams).slice(0, 3).map((t) => { const before = stat(t.before), after = stat(t.after); return { id: text(t.id), name: text(t.name), before, after, delta: after - before, rankBefore: Math.max(1, Math.min(30, t.rankBefore | 0)), rankAfter: Math.max(1, Math.min(30, t.rankAfter | 0)) }; }) };
+    } else delete career.winterReport;
     return career;
   }
 

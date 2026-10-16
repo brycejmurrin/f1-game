@@ -462,6 +462,9 @@ test("the edit guard treats tests/data/ratchets.json as tool-written", () => {
   const file = path.join(ROOT, "tests/data/ratchets.json");
   assert.equal(run({ tool_name: "Edit", tool_input: { file_path: file, old_string: "a", new_string: "b" } }).status, 2);
   assert.equal(run({ tool_name: "Write", tool_input: { file_path: file, content: "{}" } }).status, 2);
+  // ...and so is a per-branch raise fragment (#2291): the hook's --auto-raise writes it.
+  const frag = path.join(ROOT, "tests/data/ratchets.d", "cursor--x-1234.json");
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: frag, content: "{}" } }).status, 2);
   assert.equal(run({ tool_name: "Edit", tool_input: { file_path: path.join(ROOT, "docs/PHYSICS.md"), old_string: "a", new_string: "b" } }).status, 0);
 });
 
@@ -778,4 +781,30 @@ test("no agent-facing file tells an agent to arm or merge with SQUASH", () => {
   const bad = [];
   for (const f of files) read(f).split("\n").forEach((l, i) => { if (STALE.test(l) && !/retired/i.test(l)) bad.push(`${f}:${i + 1}: ${l.trim()}`); });
   assert.deepEqual(bad, [], "squash is retired — Merge Desk arms MERGE (merge commit) only");
+});
+
+test("bash-guard's `if:` filters parse, and every policed command shape still reaches it (#1711)", () => {
+  /* Hook handlers take ONE permission rule in `if` (https://code.claude.com/docs/en/hooks);
+     a subcommand of a compound is matched on its own, and an unparseable command runs the
+     hook regardless. Matching here: `*` = any text, whole command. protect-files.sh on Bash
+     stays unfiltered on purpose: it polices writes (redirects, any interpreter), which no
+     verb list covers. */
+  const settings = JSON.parse(read(".claude/settings.json"));
+  const group = settings.hooks.PreToolUse.find((g) => g.matcher === "Bash");
+  const guards = group.hooks.filter((h) => h.command.includes("bash-guard.sh"));
+  assert.ok(guards.length > 0 && guards.every((h) => typeof h.if === "string"), "every bash-guard handler needs an `if`");
+  assert.ok(group.hooks.some((h) => h.command.includes("protect-files.sh") && !h.if), "protect-files keeps polling every Bash write");
+  const res = guards.map((h) => {
+    const m = /^Bash\((.+)\)$/.exec(h.if);
+    assert.ok(m, `unparseable if: ${h.if}`);
+    return new RegExp("^" + m[1].replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$");
+  });
+  const reaches = (cmd) => cmd.split(/&&|\|\||;|\|/).some((sub) => res.some((r) => r.test(sub.trim())));
+  for (const cmd of ["git commit -m x", "foo && git commit -m x", "FOO=1 git push -u origin b", "pkill -f chrome", "kill 123",
+    "killall node", "gh pr merge 1", "curl -X POST x/runs/1/cancel", "node tools/ci/test-bg.mjs g", "npm run test:guards",
+    "npx playwright test", "playwright test", "bash -c 'git commit'", "timeout 5 pkill -f x", "python3 x.py", "eval 'git commit'",
+    "ls | xargs rm", "/usr/bin/chromium --headless"])
+    assert.ok(reaches(cmd), `bash-guard must still run for: ${cmd}`);
+  for (const cmd of ["ls -la", "cat README.md", "grep -n foo file", "head -5 x", "sed -n 1,5p x"])
+    assert.ok(!reaches(cmd), `read-only command should skip bash-guard: ${cmd}`);
 });

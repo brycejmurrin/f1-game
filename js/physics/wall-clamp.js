@@ -185,6 +185,41 @@ const WallClamp = (function () {
       } else {
         // AI has no world-space heading to slide; clamp + gentle scrub.
         c.speed = Math.max(0, c.speed - AiDrive.wallAiScrub(!!track.street) * dt);
+        // Offline AI wall SFX (#2212). The VS FRIEND path above needs c.human
+        // (heading incidence); offline AI is human:false and never reached it.
+        // Incidence proxy: |vLat|/speed, steer-into-wall, and a first-pin
+        // speed stand-in. Cooldown / range / voice-cap live in GameAudio —
+        // do not touch c.collideT (AI patience / contact give reads it).
+        if (soundOn && typeof GameAudio !== "undefined" && GameAudio.fieldContact) {
+          const spd = Math.abs(c.speed) || 0;
+          const slipInc = spd > 1e-3 ? Math.min(1, Math.abs(c.vLat || 0) / spd) : 0;
+          const pushIn = Math.max(0, into * (steer || 0));
+          let incidence = Math.max(slipInc, pushIn > 0.02 ? Math.min(1, pushIn) : 0);
+          if (!c.wasOnWall) {
+            // Soft first-contact floor from ground speed (~0.12 at ~10 m/s).
+            incidence = Math.max(incidence, Math.min(0.55, spd / 80));
+          }
+          const firstStrike = !c.wasOnWall && incidence > 0.12;
+          const grindScrape = c.wasOnWall && incidence > 0.08;
+          if (firstStrike || grindScrape) {
+            const fxInc = firstStrike ? incidence : Math.max(incidence, 0.2);
+            const kind = firstStrike && incidence >= 0.45 ? "bump" : "scrape";
+            let wx = c.px, wz = c.pz;
+            if ((wx == null || wz == null) && worldFromTrack) {
+              const w = worldFromTrack(c.s, c.x, smp);
+              if (w) { wx = w.x; wz = w.z; }
+            }
+            let key = c._wireId;
+            if (key == null) {
+              const id = c.team && c.team.id;
+              const list = typeof Teams !== "undefined" ? Teams.LIST : [];
+              const ti = list.findIndex((t) => t.id === id);
+              key = (ti < 0 ? list.length : ti) * 4 + (c.seat | 0);
+            }
+            key = (key | 0) + 10000;
+            GameAudio.fieldContact(kind, fxInc, wx, wz, key);
+          }
+        }
       }
       c.wasOnWall = true;
     } else {

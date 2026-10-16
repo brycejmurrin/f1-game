@@ -27,14 +27,14 @@ test("a failed or cancelled needed job fails the aggregator", () => {
   assert.match(verdict({ smoke: { result: "cancelled" } }).bad[0], /cancelled/);
 });
 
-test("selected cancelled is deferred when selected-verdict succeeded (clean-junit infra-retry)", () => {
+test("a green selected-verdict cannot waive a cancelled selected job", () => {
   const v = verdict({
     selected: { result: "cancelled" },
     "selected-verdict": { result: "success" },
     guards: { result: "success" },
   });
-  assert.equal(v.ok, true);
-  assert.ok(v.skipped.some((s) => /selected: deferred to selected-verdict/.test(s)));
+  assert.equal(v.ok, false);
+  assert.ok(v.bad.some((s) => /selected: cancelled/.test(s)));
 });
 
 test("selected cancelled still fails when selected-verdict also failed", () => {
@@ -46,13 +46,13 @@ test("selected cancelled still fails when selected-verdict also failed", () => {
   assert.ok(v.bad.some((b) => /selected-verdict/.test(b)));
 });
 
-test("baseline-trial is advisory: failure does not fail CI", () => {
-  assert.ok(ADVISORY.has("baseline-trial"));
+test("baseline-trial is blocking: failure fails CI", () => {
+  assert.ok(!ADVISORY.has("baseline-trial"));
   const v = verdict({
     guards: { result: "success" },
     "baseline-trial": { result: "failure" },
   });
-  assert.equal(v.ok, true);
+  assert.equal(v.ok, false);
 });
 
 test("advisory cancelled still fails (run was interrupted)", () => {
@@ -86,8 +86,8 @@ test("an empty needs payload, or one with no success at all, fails", () => {
   const allSkipped = verdict({ guards: { result: "skipped" }, smoke: { result: "skipped" }, "selected-verdict": { result: "skipped" } });
   assert.equal(allSkipped.ok, false);
   assert.match(allSkipped.bad[0], /no needed job succeeded/);
-  // advisory success is not verification either
-  assert.equal(verdict({ "baseline-trial": { result: "success" } }).ok, false);
+  // A baseline success is a real verification now.
+  assert.equal(verdict({ "baseline-trial": { result: "success" } }).ok, true);
   // one real success among skips is still fine (path-filtered jobs)
   assert.equal(verdict({ guards: { result: "success" }, smoke: { result: "skipped" } }).ok, true);
 });

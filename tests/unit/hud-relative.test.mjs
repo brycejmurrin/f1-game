@@ -346,7 +346,8 @@ test("fitRows is stable across frozen rechecks and releases its fit when control
   brake.getBoundingClientRect = () => ({ left: brakeLeft, right: brakeLeft + 104.5,
     top: 180, bottom: 260, width: 104.5, height: 80 });
   const els = { "hud-rel": root, "btn-brake": brake };
-  const doc = { body: { classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  let desktop = false;
+  const doc = { body: { get className() { return desktop ? "desktop" : ""; }, classList: { contains: (k) => k === "desktop" && desktop } }, getElementById: (id) => els[id] || null, createElement: mk };
   const R = load({ document: doc, HudElements: { isOn: () => true } });
   const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
   const ahead = car("A1", 1100, 3, { rank: 1 });
@@ -370,6 +371,17 @@ test("fitRows is stable across frozen rechecks and releases its fit when control
     R.fitRows(); // syncPhoneFit's inner retries, with no intervening HUD tick
     assert.deepEqual(fit(), solved, "the same selected cars and controls produce the same solved fit");
   }
+  desktop = true; brake.hidden = true;
+  R.tick(G, p);
+  assert.ok(root.children.every((r) => !r.hidden), "switching to fine pointer restores occupied rows immediately");
+  assert.equal(root.style.left, "", "desktop releases the phone offset");
+  assert.equal(root.style.maxHeight, "", "desktop releases the phone height cap");
+  for (let i = 0; i < 25; i++) R.tick(G, p);
+  R.refit(true);
+  assert.ok(root.children.every((r) => !r.hidden), "desktop rechecks preserve restored rows");
+  desktop = false; brake.hidden = false;
+  R.tick(G, p);
+  assert.deepEqual(fit(), solved, "switching back to coarse pointer reapplies phone clearance");
   brakeLeft = 900;
   R.fitRows();
   assert.equal(root.style.left, "", "a moved control releases the old horizontal offset");

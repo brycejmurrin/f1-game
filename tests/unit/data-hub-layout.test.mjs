@@ -29,6 +29,14 @@ test(".dh-content hides native scrollbar; ScrollFade owns the thumb", () => {
   assert.match(DATA_CSS, /\.dh-content::-webkit-scrollbar\s*\{\s*display:\s*none/);
 });
 
+test("narrow dashboard metric labels wrap inside auto-fit cells", () => {
+  const label = ruleFor(rules, /body\[data-width="narrow"\]\s+\.dh-glabel/);
+  assert.ok(label, "narrow metric label rule");
+  assert.equal(label.decls.get("white-space"), "normal");
+  assert.equal(label.decls.get("overflow-wrap"), "anywhere");
+  assert.equal(label.decls.get("line-height"), "1.15");
+});
+
 test("session/GP selects meet the card tap-paint floor", () => {
   assert.equal(decl(rules, ".dh-pick-select", "min-height"), "var(--tap-paint)");
 });
@@ -54,8 +62,10 @@ test(".dh-content cancels sf-thumb width (no dead horizontal scroll)", () => {
   assert.equal(decl(rules, ".dh-content.sf-scroll::before", "margin-right"), "-6px");
   assert.match(
     decl(rules, ".dh-content.sf-scroll::before", "transform") || "",
-    /translateX\(calc\(var\(--gap\) \/ 6 - var\(--sf-pr/,
+    /translateX\(calc\(var\(--sf-pr,\s*0px\)\s*-\s*var\(--gap\)\s*\/\s*6\)\)/,
   );
+  assert.match(DATA_CSS,
+    /body\[data-width="wide"\]\s+\.dh-content\s*\{[^}]*padding-inline-end:\s*calc\(var\(--gap\) \* 2 \+ 6px\)/);
 });
 
 test("narrow standings names wrap with a floor (no 0px constructor collapse)", () => {

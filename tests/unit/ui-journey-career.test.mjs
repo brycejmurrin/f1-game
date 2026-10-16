@@ -70,6 +70,9 @@ test("guide and history contents rail keys on wide sheet shape, strip when compa
 test("compact overlay rows wrap names instead of ellipsizing titles and points", () => {
   const css = read("css/career.css");
   assert.match(css,
+    /#career-offers \.sheet\[data-density="compact"\] \.co-offer\s*\{[^}]*min-height:\s*var\(--tap-paint\)/s,
+    "career offer choices must keep the painted touch floor in compact mode");
+  assert.match(css,
     /#career-offers \.sheet\[data-density="compact"\] \.co-offer-team\s*\{[\s\S]*?white-space:\s*normal/);
   assert.match(css,
     /#career-history \.sheet\[data-density="compact"\] \.res-name\s*,[\s\S]*?white-space:\s*normal/);
@@ -121,6 +124,25 @@ test("NEW CAREER START is gated on name / 3-letter code / number 1–99", () => 
   assert.match(js, /Number must be 1–99/);
   assert.match(js, /\/\^\[A-Z\]\{3\}\$\//);
   assert.match(js, /draftFieldErr = errs/);
+});
+
+test("NEW CAREER NUMBER validates the complete input value before starting", () => {
+  const source = read("js/career/career-ui.js");
+  // Execute the form's actual number input callback and its START gate together.
+  const field = source.slice(source.indexOf('    const numIn = addField("NUMBER"'), source.indexOf('    numIn.min ='));
+  const gate = source.slice(source.indexOf("  function draftErrors(d)"), source.indexOf('  $("cr-back").onclick'));
+  const ctx = { draft: { name: "Test Driver", code: "TST", num: 99 }, onInput: null,
+    addField(_label, _value, _max, onInput) { ctx.onInput = onInput; return {}; } };
+  vm.runInNewContext(field + gate + ";globalThis.errors = draftErrors;", ctx);
+  for (const value of ["1e2", "1.5", "100", "0", "-1", "", " ", "1e309", "not a number"]) {
+    ctx.onInput(value);
+    assert.equal(ctx.errors(ctx.draft).num, "Number must be 1–99", `reject ${JSON.stringify(value)}`);
+  }
+  for (const [value, expected] of [["1", 1], ["42", 42], ["99", 99], ["1e1", 10]]) {
+    ctx.onInput(value);
+    assert.equal(ctx.draft.num, expected, `preserve complete numeric value ${value}`);
+    assert.deepEqual(Object.keys(ctx.errors(ctx.draft)), [], `accept ${value}`);
+  }
 });
 
 test("save retry explicitly persists the career before reading its status", () => {

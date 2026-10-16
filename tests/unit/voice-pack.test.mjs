@@ -16,16 +16,18 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { fullPhrases } from "../../tools/gen/voicepack.mjs";
+import { createHash, webcrypto } from "node:crypto";
+import { binaryIntegrity, stampIntegrity, fullPhrases } from "../../tools/gen/voicepack.mjs";
 import { SAMPLES, requestFor } from "../../tools/gen/voice-audition.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const integrity = (bytes) => ({ sha256: createHash("sha256").update(new Uint8Array(bytes)).digest("hex"), bytes });
 const unrefTimeout = (fn, ms, ...a) => { const t = setTimeout(fn, ms, ...a); t.unref?.(); return t; };
 
 function sandbox(files, extra) {
   const sb = Object.assign({ Math, Object, Array, Number, String, JSON, Map, Set, Promise, console, Error,
-    setTimeout: unrefTimeout, clearTimeout, Log: { info() {}, warn() {}, debug() {} } }, extra || {});
+    crypto: webcrypto, setTimeout: unrefTimeout, clearTimeout, Log: { info() {}, warn() {}, debug() {} } }, extra || {});
   sb.window = sb.window || sb;
   vm.createContext(sb);
   for (const f of files) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: f });
@@ -88,9 +90,45 @@ const hasIn = (id) => (k) => Object.prototype.hasOwnProperty.call(PACKS[id].man.
 const MAN = PACKS.george.man;
 const hasKey = hasIn("george");
 
+test("integrity-only generation is deterministic and leaves recorded bytes unchanged", () => {
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "voice-integrity-"));
+  try {
+    const bin = Buffer.from("recorded bytes");
+    const man = { clips: { hello: [0, bin.length, 1] } };
+    fs.writeFileSync(path.join(dir, "test.bin"), bin);
+    fs.writeFileSync(path.join(dir, "test.json"), JSON.stringify(man));
+    assert.equal(stampIntegrity(dir), 1);
+    const generated = fs.readFileSync(path.join(dir, "test.json"), "utf8");
+    assert.deepEqual(JSON.parse(generated).binary, { bytes: bin.length, sha256: createHash("sha256").update(bin).digest("hex") });
+    stampIntegrity(dir);
+    assert.equal(fs.readFileSync(path.join(dir, "test.json"), "utf8"), generated);
+    assert.deepEqual(fs.readFileSync(path.join(dir, "test.bin")), bin);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a recorded pack rejects mixed, truncated, legacy, or unverifiable binary bytes", async () => {
+  const bin = new Uint8Array([1, 2, 3, 4]);
+  const binary = binaryIntegrity(bin);
+  for (const scenario of ["valid", "wrong bytes", "truncated", "legacy", "no crypto", "hash failure"]) {
+    const man = { clips: { hello: [0, 4, 1] }, ...(scenario === "legacy" ? {} : { binary }) };
+    const body = scenario === "wrong bytes" ? new Uint8Array([4, 3, 2, 1]).buffer : scenario === "truncated" ? bin.slice(0, 3).buffer : bin.buffer;
+    const sb = sandbox(["js/audio/voice-pack.js"], {
+      ...(scenario === "no crypto" ? { crypto: undefined } : {}),
+      ...(scenario === "hash failure" ? { crypto: { subtle: { digest: async () => { throw new Error("hash failed"); } } } } : {}),
+      fetch: async () => ({ ok: true, json: async () => man, arrayBuffer: async () => body }),
+    });
+    const pack = sb.VoicePack.create({});
+    assert.equal(await pack.load("george"), scenario === "valid", scenario);
+    assert.equal(pack.ready("george"), scenario === "valid", scenario);
+    if (scenario !== "valid") assert.equal(pack.plan("george", "hello"), null, scenario + " never becomes playable");
+  }
+});
+
 test("every pack is one contiguous, licensed, small file", () => {
   let total = 0;
   for (const [id, { man, bin }] of Object.entries(PACKS)) {
+    assert.deepEqual(man.binary, binaryIntegrity(fs.readFileSync(path.join(ROOT, `assets/voice/${id}.bin`))), `${id}: digest and byte length bind the index to its recorded bytes`);
     assert.equal(man.licence, "Apache-2.0", `${id}: Kokoro-82M's weights and voices are Apache-2.0`);
     let off = 0;
     // By offset, not by key order: JS walks integer-like keys ("0"-"60") first.
@@ -452,7 +490,7 @@ test("the spotter is silent while paused and once the player has taken the flag"
 });
 
 test("VoicePack keeps one transmission per channel: the engineer never cuts the spotter off", async () => {
-  const man = { clips: { "car left": [0, 4, 0.5], "box box box": [4, 4, 0.6] } };
+  const man = { binary: integrity(8), clips: { "car left": [0, 4, 0.5], "box box box": [4, 4, 0.6] } };
   const handles = [];
   const GA = {
     now: () => 0, ctxGen: () => 1,
@@ -464,9 +502,7 @@ test("VoicePack keeps one transmission per channel: the engineer never cuts the 
     fetch: (u) => Promise.resolve({ ok: true, json: () => Promise.resolve(man), arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
   });
   const P = sb.VoicePack.create({});
-  P.ensure("george");
-  await new Promise((r) => setImmediate(r));
-  await new Promise((r) => setImmediate(r));
+  await P.load("george");
   assert.equal(P.ready("george"), true);
   assert.equal(P.speak("george", "car left", { channel: "spotter" }), true);
   await new Promise((r) => setImmediate(r));
@@ -516,7 +552,7 @@ test("an engineer line waits for a spotter call on the air, and RadioVoice repor
 });
 
 test("an AudioContext rebuilt while a line decodes drops the line instead of scheduling it on the old clock", async () => {
-  const man = { clips: { "car left": [0, 4, 0.5] } };
+  const man = { binary: integrity(8), clips: { "car left": [0, 4, 0.5] } };
   let gen = 1, played = 0, decodeRes;
   const GA = {
     now: () => 0, ctxGen: () => gen,
@@ -528,8 +564,7 @@ test("an AudioContext rebuilt while a line decodes drops the line instead of sch
     fetch: () => Promise.resolve({ ok: true, json: () => Promise.resolve(man), arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }),
   });
   const P = sb.VoicePack.create({});
-  P.ensure("george");
-  await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r));
+  await P.load("george");
   assert.equal(P.speak("george", "car left", { channel: "spotter" }), true);
   gen = 2;                                   // GameAudio.rebuildCtx() mid-decode
   decodeRes({ duration: 0.5 });
@@ -620,7 +655,7 @@ test("recorded engineer and spotter packs do not depend on speechSynthesis exist
 test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announcer on a cold cache", async () => {
   const order = [];
   const pending = new Map();
-  const man = { clips: { hello: [0, 4, 0.5] } };
+  const man = { binary: integrity(4), clips: { hello: [0, 4, 0.5] } };
   const packResponse = () => ({
     ok: true,
     json: async () => man,
@@ -639,7 +674,7 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
     pending.delete(url);
     go();
   };
-  const drain = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+  const drain = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); await new Promise(setImmediate); };
   const sb = sandbox(["js/audio/voice-pack.js"], {
     GameAudio: { now: () => 0 },
     fetch: deferFetch,
@@ -651,14 +686,8 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
   assert.ok(order.every((u) => u.includes("george.")), "only engineer fetches started");
   resolveFetch("assets/voice/george.json");
   resolveFetch("assets/voice/george.bin");
-  // ready(george) flips ~4 microtasks before ensureStaged starts tier-1 fetches.
-  // Waiting on ready alone then asserting order.length===6 races that gap under
-  // interleaved await checkpoints (each await Promise.resolve() continuation is
-  // queued beside the pack's own .then chain). Wait until tier-1 URLs appear.
-  for (let i = 0; i < 40; i++) {
-    await drain();
-    if (order.length >= 6 && P.ready("george")) break;
-  }
+  await P.load("george");
+  await drain();
   assert.equal(order.length, 6, "every pack fetch started once engineer tier settled");
   const idx = (id, ext) => order.findIndex((u) => u.endsWith(`${id}.${ext}`));
   assert.ok(idx("george", "json") >= 0 && idx("george", "bin") >= 0, "engineer pack started");
@@ -671,35 +700,46 @@ test("ensureStaged fetches lap-1 engineer/spotter packs before coach and announc
   assert.equal(P.ready("fable"), false, "announcer still pending when engineer is ready");
   assert.equal(pending.size, 4, "tier-1 fetches still in flight");
   for (const url of [...pending.keys()]) resolveFetch(url);
-  for (let i = 0; i < 40; i++) {
-    await drain();
-    if (P.ready("heart") && P.ready("fable")) break;
-  }
+  await Promise.all([P.load("heart"), P.load("fable")]);
   assert.equal(P.ready("heart"), true, "coach ready after tier 1 settles");
   assert.equal(P.ready("fable"), true, "announcer ready after tier 1 settles");
   assert.deepEqual([...new Set(order)].sort(), ["assets/voice/fable.bin", "assets/voice/fable.json",
     "assets/voice/george.bin", "assets/voice/george.json", "assets/voice/heart.bin", "assets/voice/heart.json"]);
 });
 
+// #2319: `ready()` awaits a real async SubtleCrypto SHA-256 since #2271, so a
+// fixed count of setImmediate ticks is not a bound — under load (loadavg ~7)
+// 20 ticks was short in 1 of 3 runs. Poll the condition against the wall
+// clock instead (the shape tools/check/wait-polling-lint.mjs asks of browser
+// waits): a generous bound, a timer between probes, and a verdict.
+async function until(cond, { timeoutMs = 2000, stepMs = 5 } = {}) {
+  const t0 = Date.now();
+  while (!cond()) {
+    if (Date.now() - t0 > timeoutMs) return false;
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+  return true;
+}
+
 test("ensureStaged does not refetch a pack that is already ready", async () => {
   let calls = 0;
   const sb = sandbox(["js/audio/voice-pack.js"], {
     GameAudio: { now: () => 0 },
-    fetch: () => { calls++; return Promise.resolve({ ok: true, json: async () => ({ clips: { a: [0, 4, 1] } }), arrayBuffer: async () => new ArrayBuffer(4) }); },
+    fetch: () => { calls++; return Promise.resolve({ ok: true, json: async () => ({ binary: integrity(4), clips: { a: [0, 4, 1] } }), arrayBuffer: async () => new ArrayBuffer(4) }); },
   });
   const P = sb.VoicePack.create({});
   P.ensureStaged([["george"]]);
-  for (let i = 0; i < 20; i++) { await new Promise((r) => setImmediate(r)); if (P.ready("george")) break; }
+  assert.ok(await until(() => P.ready("george")), "george is ready within the wall-clock bound");
   assert.equal(calls, 2);
   P.ensureStaged([["george"], ["heart"]]);
-  for (let i = 0; i < 20; i++) { await new Promise((r) => setImmediate(r)); if (P.ready("heart")) break; }
+  assert.ok(await until(() => P.ready("heart")), "heart is ready within the wall-clock bound");
   assert.equal(calls, 4, "only the not-yet-loaded pack is fetched");
 });
 
 test("RadioVoice ensureVoices stages the engineer pack ahead of coach and announcer", async () => {
   const order = [];
   const delay = (ms) => new Promise((r) => setTimeout(r, ms));
-  const man = { clips: { hello: [0, 4, 0.5] } };
+  const man = { binary: integrity(4), clips: { hello: [0, 4, 0.5] } };
   const sb = sandbox(["js/core/mat4.js", "js/audio/voice-pack.js", "js/audio/radio-voice.js"], {
     window: { speechSynthesis: { speak() {}, cancel() {}, resume() {}, getVoices: () => [] }, SpeechSynthesisUtterance: function (t) { this.text = t; } },
     GameAudio: { setRadioDuck() {}, radioStingStop() {} },
@@ -726,7 +766,7 @@ test("loading a selected pack is shared and never fetches the alternatives", asy
   const requested = [];
   const sb = sandbox(["js/audio/voice-pack.js"], { fetch: (url) => {
     requested.push(url);
-    return Promise.resolve({ ok: true, json: async () => ({ clips: { hello: [0, 4, 1] } }),
+    return Promise.resolve({ ok: true, json: async () => ({ binary: integrity(4), clips: { hello: [0, 4, 1] } }),
       arrayBuffer: async () => new ArrayBuffer(4) });
   } });
   const pack = sb.VoicePack.create({});
@@ -741,10 +781,9 @@ test("VoicePack drops a spotter warning whose situation changed during decoding"
   const sb = sandbox(['js/audio/voice-pack.js'], {
     GameAudio: { now: () => 0, ctxGen: () => 1, decodeClip: () => new Promise(r => { decode = r; }),
       radioVoice: () => { plays++; return { end: .5, stop() {} }; } },
-    fetch: () => Promise.resolve({ ok: true, json: async () => ({ clips: { 'car left': [0, 4, .5] } }), arrayBuffer: async () => new ArrayBuffer(4) }),
+    fetch: () => Promise.resolve({ ok: true, json: async () => ({ binary: integrity(4), clips: { 'car left': [0, 4, .5] } }), arrayBuffer: async () => new ArrayBuffer(4) }),
   });
-  const pack = sb.VoicePack.create({}); pack.ensure('george');
-  await new Promise(r => setImmediate(r));
+  const pack = sb.VoicePack.create({}); await pack.load('george');
   assert.equal(pack.speak('george', 'car left', { channel: 'spotter', valid: () => relevant }), true);
   relevant = false; decode({ duration: .5 });
   await new Promise(r => setImmediate(r));
@@ -784,10 +823,9 @@ test('recorded decoding consumes the card budget and pending clips have no known
       GameAudio: { now: () => now, ctxGen: () => 1,
         decodeClip: () => new Promise(r => { resolve = r; }),
         radioVoice: (parts, at) => { plays.push(at); return {end:at + 0.5, stop(){}}; } },
-      fetch: () => Promise.resolve({ok:true, json:async()=>({clips:{'car left':[0,4,0.5]}}), arrayBuffer:async()=>new ArrayBuffer(4)}),
+      fetch: () => Promise.resolve({ok:true, json:async()=>({binary:integrity(4),clips:{'car left':[0,4,0.5]}}), arrayBuffer:async()=>new ArrayBuffer(4)}),
     });
-    const pack = sb.VoicePack.create({}); pack.ensure('george');
-    await new Promise(r => setImmediate(r));
+    const pack = sb.VoicePack.create({}); await pack.load('george');
     assert.equal(pack.speak('george','car left',{channel:'spotter',budgetS:1,onEnd(){ends++;}}),true);
     assert.equal(pack.remaining('spotter'),Infinity,'decoding cannot promise an end time');
     now = delay; resolve({duration:0.5}); await new Promise(r => setImmediate(r));
@@ -810,7 +848,7 @@ test("the decoded clip cache is bounded by SECONDS per voice, oldest out first (
       GameAudio: { now: () => 0, ctxGen: () => 1,
         decodeClip: (ab) => { decoded.push(ab.byteLength); return Promise.resolve({ duration: 4 }); },
         radioVoice: (parts, at) => ({ end: at, stop() {} }) },
-      fetch: (u) => Promise.resolve({ ok: true, json: () => Promise.resolve({ clips }), arrayBuffer: () => Promise.resolve(new ArrayBuffer(160)) }),
+      fetch: (u) => Promise.resolve({ ok: true, json: () => Promise.resolve({ binary: integrity(160), clips }), arrayBuffer: () => Promise.resolve(new ArrayBuffer(160)) }),
     });
     const P = sb.VoicePack.create({});
     assert.equal(await P.load("george"), true);
@@ -904,15 +942,17 @@ test("a stalled pack body times out, releases staged tiers, and respects retry d
     setTimeout: (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; },
     clearTimeout: (id) => timers.delete(id),
     fetch: async (url) => { calls.push(url); return { ok: true,
-      json: async () => ({ clips: { hello: [0, 4, 1] } }),
+      json: async () => ({ binary: integrity(4), clips: { hello: [0, 4, 1] } }),
       arrayBuffer: () => url.includes("george") ? new Promise((res) => { late = res; }) : Promise.resolve(new ArrayBuffer(4)),
     }; },
   });
-  const drain = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
+  const drain = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); await new Promise(setImmediate); };
   const P = sb.VoicePack.create({}); P.ensureStaged([["george"], ["heart"]]); await drain();
   assert.equal(calls.length, 2);
   const timeout = [...timers.values()].find((t) => t.ms === 15000); assert.ok(timeout);
   timeout.fn(); await drain();
+  assert.ok(calls.some((url) => url.includes("heart")), "lower tier starts when the failed tier settles");
+  await P.load("heart");
   assert.equal(P.ready("heart"), true, "lower tiers proceed after fetch or body timeout");
   late(new ArrayBuffer(4)); await drain();
   assert.equal(P.ready("george"), false, "late body cannot revive a failed attempt");

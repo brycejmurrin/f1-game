@@ -263,7 +263,7 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
    lane (--sf-pr from ScrollFade) so the thumb still clears row text. */
 .dh-content.sf-scroll::before {
   margin-right: -6px;
-  transform: translateX(calc(var(--gap) / 6 - var(--sf-pr, 0px)));
+  transform: translateX(calc(var(--sf-pr, 0px) - var(--gap) / 6));
 }
 /* MORE-BELOW CUE. ScrollFade already toggles .sf-b when content continues, but
    the shared mask fade is near the noise floor on the translucent hub panel
@@ -280,6 +280,7 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
 }
 .dh-content::-webkit-scrollbar { display: none; }
 body[data-width="narrow"] .dh-content { padding: var(--gap) calc(var(--gap) * 7 / 6); }
+body[data-width="wide"] .dh-content { padding-inline-end: calc(var(--gap) * 2 + 6px); }
 body[data-width="wide"][data-density="normal"] .dh-content {
   /* Pinned desktop card height: extra bottom pad so the last schedule row is
      not half-clipped at scrollTop max (1280×800 walkthrough 2026-10-06). */
@@ -901,6 +902,15 @@ body[data-width="narrow"] .dh-pick-field { width: 100%; }
 body[data-width="narrow"] .dh-pick-select { max-width: none; width: 100%; }
 
 body[data-width="narrow"] .dh-tab { font-size: var(--fs-1); padding: calc(var(--gap) * 0.5) 10px; }
+
+/* Dashboard metric cells can shrink below a label's min-content width on
+   split-view phones. Let MAX SPEED / DISTANCE wrap inside their auto-fit cell
+   instead of spilling into the neighbouring metric. */
+body[data-width="narrow"] .dh-glabel {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
 
 /* Last Race: hide secondary columns before they can overflow. Driver, position,
    time/status, and points remain. Compact landscape is often still "wide" in

@@ -95,31 +95,49 @@ const retrySave = () => {
     if (G.announce) G.announce("SAVE RESTORED");
   } else showSaveWarning((results.find((r) => r && r.reason) || {}).reason || store.broken);
 };
-const exportRecovery = () => {
-  const payload = {
-    format: "apex26-recovery-v1",
-    exportedAt: new Date().toISOString(),
-    build: (window.__APEX_BUILD || null),
-    career: typeof Career !== "undefined" && Career.data ? Career.data() : null,
-    season: G.season || null,
-    persistence: { durable: false, reason: writeFailed() || store.broken || "unknown" },
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = "apex26-recovery-" + Date.now() + ".json";
-  document.body.appendChild(a); a.click(); a.remove();
-  // 10 s, matching js/ui/settings-export.js and js/agent/apex.js. A 0 ms revoke
-  // races the browser's own fetch of the blob it was just handed: Safari and
-  // several Android browsers read the href asynchronously after click(), so the
-  // URL can be dead before the save starts. This is SAVE RECOVERY — the one
-  // export path a player whose localStorage has failed still has — so losing
-  // the download here loses the save.
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-  if (G.announce) G.announce("RECOVERY EXPORTED");
+let recoveryExporting = false;
+const exportRecovery = async () => {
+  if (recoveryExporting) return;
+  recoveryExporting = true;
+  const button = $("save-export");
+  if (button) button.disabled = true;
+  try {
+    const payload = {
+      format: "apex26-recovery-v1",
+      exportedAt: new Date().toISOString(),
+      build: (window.__APEX_BUILD || null),
+      career: typeof Career !== "undefined" && Career.data ? Career.data() : null,
+      season: G.season || null,
+      persistence: { durable: false, reason: writeFailed() || store.broken || "unknown" },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const name = "apex26-recovery-" + Date.now() + ".json";
+    if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
+      await NativeDownload.saveBlob(blob, name);
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      // 10 s, matching js/ui/settings-export.js and js/agent/apex.js. A 0 ms revoke
+      // races the browser's own fetch of the blob it was just handed: Safari and
+      // several Android browsers read the href asynchronously after click(), so the
+      // URL can be dead before the save starts. This is SAVE RECOVERY — the one
+      // export path a player whose localStorage has failed still has — so losing
+      // the download here loses the save.
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
+    if (G.announce) G.announce("RECOVERY EXPORTED");
+  } catch (e) {
+    if (G.announce) G.announce(typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "RECOVERY EXPORT CANCELLED" : "RECOVERY EXPORT FAILED");
+  } finally {
+    recoveryExporting = false;
+    if (button) button.disabled = false;
+  }
 };
 if ($("save-retry")) $("save-retry").onclick = retrySave;
 if ($("save-export")) $("save-export").onclick = exportRecovery;
+if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarning, { store });
 
 // Progressive-enhancement screen swap: run a DOM change inside a native
 // same-document View Transition when the browser supports it (Baseline 2025)
@@ -290,6 +308,12 @@ function buildTeamPicker() {
       // The team-accent skin (--accent) was only ever written by the HUD's
       // first race tick, so the garage kept the LAST race's colours.
       try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
+      // TEAM menu accents are concrete on :root (rather than a CSS var) so
+      // they also work before the HUD exists. Repaint that cached value when
+      // the player changes team in the garage picker; otherwise MENU ACCENT =
+      // TEAM stays on the previously selected team's colour until another
+      // appearance setting is touched.
+      try { if (typeof AppearanceOpts !== "undefined" && AppearanceOpts.applyAll) AppearanceOpts.applyAll(); } catch (_) { /* appearance is optional */ }
       store.set("driver", seat);
       setTeamPicker(false);
       // The garage (the one host) repaints its own 3D car for free —
@@ -445,8 +469,7 @@ function trackInFilter(t, filter, favs) {
 // hero still read Tracks.LIST[G.trackIdx], so Bahrain stayed in the detail
 // panel with nothing highlighted (apex10). Snap to the first tile that the
 // chip actually shows.
-function snapTrackToFilter() {
-  const filter = visibleTrackFilter();
+function snapTrackToFilter(filter = visibleTrackFilter()) {
   const favs = favList();
   const cur = Tracks.LIST[G.trackIdx];
   if (keepActiveId && !pinnedActive(cur)) keepActiveId = null;
@@ -464,7 +487,9 @@ function setTrackFilter(id, focus, keepDaily) {
   if (id !== "daily-open") store.set("trackFilter", id);
   if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
-  snapTrackToFilter();
+  // Explicit choices leave a custom circuit too. The passive-entry fallback
+  // keeps a designer's custom pick visible, but must not override this click.
+  snapTrackToFilter(id);
   // The chip rebuild is deferred through view transitions; the hero must not
   // keep describing the circuit the filter just hid (FINDINGS tracks-ui #1).
   updateTrackPreview();
@@ -1110,6 +1135,13 @@ function openTrackDetail() {
   if (!modal) return;
   const crns = TrackMaps.corners(t);
   document.getElementById("track-detail-name").textContent = t.name + (t.gp ? "  ·  " + t.gp : "");
+  // The canvas labels are part of the modal's accessible reading order. Keep
+  // them tied to the selected circuit rather than making every map sound like
+  // the same generic diagram when a player moves between tracks.
+  const mapCanvas = document.getElementById("track-detail-canvas");
+  if (mapCanvas) mapCanvas.setAttribute("aria-label", t.name + " circuit layout diagram");
+  const elevCanvas = document.getElementById("track-detail-elev");
+  if (elevCanvas) elevCanvas.setAttribute("aria-label", t.name + " elevation profile");
   const dz = TrackMaps.drsZones(t);
   const dir = TrackMaps.direction(t);
   const elev = TrackMaps.elevRange(t);

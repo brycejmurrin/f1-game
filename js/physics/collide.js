@@ -161,6 +161,8 @@ const Collide = (() => {
     chaser: null, chaserGap: Infinity,
     alongO: null, alongDx: 0, alongDprog: 0, alongAdx: Infinity,
   };
+  // Born Double, values kept: a 0 literal is a Smi field, and the first fractional store split the map mid-race (PERF-HUNT-5).
+  _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0.5; _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0;
   function _onTrafO(o) {
     const s = _traf, c = s.c;
     // A finisher coasting past the line is still a car on the road: it blocks,
@@ -202,6 +204,7 @@ const Collide = (() => {
     return s;
   }
   const _ot = { c: null, L: 0, W: 0, ahead: null, gapAhead: Infinity, skip: null };
+  _ot.L = _ot.W = 0.5; _ot.L = _ot.W = 0;   // born Double, like _traf
   function _onOtO(o) {
     const s = _ot, c = s.c;
     if (o.finished || o.retired || (s.skip && s.skip(o))) return;
@@ -239,6 +242,7 @@ const Collide = (() => {
   const CORR_EPS = 1e-3;
 
   const _lim = { r: 0, l: 0, laneMin: 0, side: 0 }, _postLim = { r: 0, l: 0, minOut: 0, side: 0 };
+  _lim.laneMin = 0.5; _lim.laneMin = 0;   // born Double, like _traf
 
   function create(G, collideFx, ownsPose = () => false) {
     Log.info("game", "Collide.create");
@@ -272,7 +276,7 @@ const Collide = (() => {
       out.vx = speed * cs - (c.vLat || 0) * sn;
       out.vy = speed * sn + (c.vLat || 0) * cs;
       out.omega = c.human ? (c.yawRateCur || 0) : 0;
-      out.invMass = netPlay.owns(c) ? 0 : c.human ? AiDrive.humanInvMass(!!track.street) : 1;
+      out.invMass = netPlay.owns(c) || c.retired ? 0 : c.human ? AiDrive.humanInvMass(!!track.street) : 1;
       out.invInertia = c.human ? out.invMass / ContactGeometry.INERTIA : 0;
       return out;
     }
@@ -284,7 +288,7 @@ const Collide = (() => {
     // A scrub is a loss of MAGNITUDE, whichever way the car is rolling.
     function scrub(v, d) { return v > 0 ? Math.max(0, v - d) : Math.min(0, v + d); }
     function pushVelocity(c, state, dx, dy, dw) {
-      if (netPlay.owns(c)) return;
+      if (netPlay.owns(c) || c.retired) return;
       const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
       const vx = state.vx + dx, vy = state.vy + dy;
       c.speed = floorFwd(c, vx * cs + vy * sn);
@@ -306,7 +310,7 @@ const Collide = (() => {
         if (last) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
         // The first impulse carries severity; later relaxation passes have
         // already removed closing velocity. Both worlds retain their own gates.
-        if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b)) {
+        if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) {
           if (DebrisWorld.active()) DebrisWorld.carImpact(a, b, j.closing);
           incidentSim.notifyCar(a, b, j.closing);
         }
@@ -341,7 +345,14 @@ const Collide = (() => {
           // per-generation cache of live state: computed later, it is the same.
           // A NaN sweep (non-finite prog or NaN x skips that hypot gate) never rejects here.
           const sx = b.x - pb.x, sd = b.prog - pb.prog;
-          if (sx === sx && sd - sd === 0 && Math.abs(deltaS(pa.prog - pb.prog)) > reachA + Math.max(6, Math.abs(b.speed) * dt * 2 + 1)) continue;
+          if (sx === sx && sd - sd === 0) {
+            // Unwrapped first (hunt-2 P6): inside one lap, |d| clear of both reach
+            // bands by 1 mm is far apart without deltaS's two `%`; the 1 mm dwarfs
+            // its rounding, and anything nearer takes the exact test below.
+            const reach = reachA + Math.max(6, Math.abs(b.speed) * dt * 2 + 1), dp = pa.prog - pb.prog, ad = dp < 0 ? -dp : dp;
+            if (ad > reach + 1e-3 && ad < track.total - reach - 1e-3) continue;
+            if (Math.abs(deltaS(dp)) > reach) continue;
+          }
           if (ownsPose(b) || incidentSim.owns(b) || netPlay.owns(b)) continue;
           sweepMotion(b, pb, dt);
           if (!pb.sweepEligible) continue;
@@ -399,6 +410,7 @@ const Collide = (() => {
     // so nothing aliases across a pair and the relaxation loop stays allocation-free.
     const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
     const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, aSp: 0, bSp: 0, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
+    _ct.dProg = _ct.dX = _ct.penLong = _ct.penLat = _ct.aSp = _ct.bSp = 0.5; _ct.dProg = _ct.dX = _ct.penLong = _ct.penLat = _ct.aSp = _ct.bSp = 0;   // born Double, like _traf
     // Reused AiDrive ctxs — not a fresh object literal to wantBoost /
     // otShouldFire / brakeDecision / wantX / adaptLane / otPull / defendPull /
     // isBoxed every physics step (~8 × 20 cars × 60 Hz). Same
@@ -413,7 +425,10 @@ const Collide = (() => {
     }
     function sepShares(a, b) {
       const hum = AiDrive.humanInvMass(!!track.street);
-      const netA = netPlay.owns(a), netB = netPlay.owns(b);
+      // Static bodies take no momentum or positional share, so the moving car
+      // takes the whole correction and impulse: a net-owned rival (#2164) and a
+      // PARKED RETIREMENT (#2162).
+      const netA = netPlay.owns(a) || !!a.retired, netB = netPlay.owns(b) || !!b.retired;
       const iA = netA ? 0 : a.human ? hum : 1, iB = netB ? 0 : b.human ? hum : 1;
       _sep.iA = iA; _sep.iB = iB; _sep.iSum = iA + iB;
       _sep.sA = netA ? 0 : (netB ? 1 : iA / _sep.iSum);
@@ -423,6 +438,7 @@ const Collide = (() => {
 
     // Bucket-pair callbacks + per-pass inputs in module state — no closure per pass.
     let _colCbLast = false, _colCbRub = 1;
+    let _colTouched = false;   // a relaxation pass reached a contact (hunt-2 P6)
     const COL_SLOP = 0.05;   // separation slop — small, avoids a hard per-frame snap
     function _colResolveCB(a, b) { _colResolvePair(a, b, _colCbLast, _colCbRub); }
     function _colSepCB(a, b) { _colSepPair(a, b, COL_SLOP); }
@@ -434,6 +450,7 @@ const Collide = (() => {
       // Trace-owned replay cars keep their recorded pose and speed, including
       // overlaps and pit-lane positions. They are never local contact bodies.
       if (ownsPose(a) || ownsPose(b)) return null;
+      if ((a.retired || netPlay.owns(a)) && (b.retired || netPlay.owns(b))) return null;   // two static bodies (sepShares): nothing can move, and iSum would be 0
       // Net remotes draw from delayed sample() but contact must use predict()
       // (netplay tick writes _nOk/_nProg/_nX/_nSpd). Local cars keep prog/x/speed.
       const aProg = a._nOk ? a._nProg : a.prog;
@@ -499,6 +516,7 @@ const Collide = (() => {
       if (a.finished && b.finished) return;   // coasting home: kinematic, and never racing each other
       const ct = pairContact(a, b);
       if (!ct) return;
+      _colTouched = true;
       if (ct.oriented) { orientedResponse(a, b, ct, last); return; }
       const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
       if (sideContact) {
@@ -593,7 +611,7 @@ const Collide = (() => {
           // candidate. Only clears the R3 threshold for a real shunt (see
           // incidentsim); below it the cheap (prog,x) plane above stays the
           // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
-          if (last && !netPlay.owns(a) && !netPlay.owns(b)) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
+          if (last && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
         }
       }
     }
@@ -603,6 +621,7 @@ const Collide = (() => {
       if (a.finished && b.finished) return;   // coasting home: kinematic, and never racing each other
       const ct = pairContact(a, b);
       if (!ct) return;
+      _colTouched = true;
       if (ct.oriented) {
         const corr = Math.max(0, ct.depth - SLOP);
         shiftLong(a, ct.nx * corr * ct.sA); shiftLong(b, -ct.nx * corr * ct.sB);
@@ -700,6 +719,10 @@ const Collide = (() => {
         Log.debug("game", "resolveCollisions all-pairs n=" + ranked.length);
       }
       for (let pass = 0; pass < PASSES; pass++) {
+        // A pass that reached no contact moved nothing, so every later pass would
+        // read the same poses and reach none either (hunt-2 P6): stop there.
+        if (pass > 0 && !_colTouched) break;
+        _colTouched = false;
         const last = pass === PASSES - 1;
         if (useBuckets) {
           // Re-bucket only when shiftLong moved someone — idle passes keep the grid.
@@ -775,5 +798,17 @@ const Collide = (() => {
     return { resolveCollisions, pairContact };
   }
 
-  return { create, LCAR, WCAR, fillArcBuckets, forArcNear, scanTraffic, scanOtAhead, scanTow };
+  // The nearest PARKED retirement (#2162) ahead of (or still beside) `c` on
+  // the road, within `reach` metres of arc, or null. `parked` is game.js's short per-step list.
+  function parkedAhead(c, parked, L, reach) {
+    let best = null, bestD = reach;
+    for (let i = 0; i < parked.length; i++) {
+      const o = parked[i];
+      const d = ((o.s - c.s + L / 2) % L + L) % L - L / 2;   // signed: still alongside until a car length past
+      if (d > -LCAR && d < bestD) { best = o; bestD = d; }
+    }
+    return best;
+  }
+
+  return { create, LCAR, WCAR, fillArcBuckets, forArcNear, scanTraffic, scanOtAhead, scanTow, parkedAhead };
 })();

@@ -19,7 +19,10 @@
  *      pit stop: no car field widens its value kind (integer -> fraction, undefined/null -> number ...) unless WARM
  *      names it, the simulation digest is identical with warmShape a no-op, and the cars stay in one fast map;
  *   7. MUTABLE (B-F1b: fields whose V8 constness, not representation, a late rewrite flips) is a small table of keys
- *      every car has at the grid, and a race run to results adds no car key and leaves every car in fast mode.
+ *      every car has at the grid, and a race run to results adds no car key and leaves every car in fast mode;
+ *   8. warmDoubles (PERF-HUNT-5) changes no value or key, the scratch/context objects' named fields are born Double
+ *      (%HaveSameMap across a fractional store, with a Smi control that re-maps), and the sim is identical with the
+ *      game.js calls a no-op.
  * Plus the module's own contract (idempotent, never overwrites, one key list) and the manifest entry.
  *
  * Run: node --test tests/unit/car-fields-vm.test.mjs   (npm run test:game-vm)
@@ -348,4 +351,140 @@ test("a race to the flag and results adds no car key and leaves every car in fas
     const fast = nativeFast();
     if (fast) assert.deepEqual([...G.cars].filter((c) => !fast(c)).map((c) => c.code), [], "cars fell into dictionary mode by results");
   } finally { g.close(); }
+});
+
+// ---- scratch / context objects (PERF-HUNT-5) --------------------------------------------------------------------
+// updateCar's scratch (_ucS), the AiDrive ctxs game.js fills per AI per step, and the per-step records of collide,
+// race-facts, damage, pit-lane, car-sfx, ai-drive and TrackLine were born with integer 0s (Smi fields). The first
+// fraction stored into one mid-race split the object's map and deopted every optimized reader ("wrong map" at steps
+// 191, 995, 1,286, 8,357, 8,849, 37,502 ... of monza 12 laps seed 1). The named fields are now born Double.
+
+test("warmDoubles: every value and sentinel back exactly, no key added, key order kept, returns its object", () => {
+  const o = { a: 0, b: 1, c: -0, d: NaN, e: null, f: undefined, g: "x", h: 2.5 };
+  const before = Object.keys(o).map((k) => [k, o[k]]);
+  assert.equal(CarFieldsStandalone.warmDoubles(o, ["a", "b", "c", "d", "e", "f", "g", "h", "missing"]), o);
+  assert.deepEqual(Object.keys(o), before.map((e) => e[0]), "no key added, order kept");
+  for (const [k, v] of before) assert.ok(Object.is(o[k], v), k + " changed");
+});
+
+/** The game.js scratch literals and the fields the trace saw split (each must stay in its warmDoubles list). */
+const GAME_SCRATCH = {
+  _ucS: ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl"],
+  _aiBr: ["errMul"],
+  _aiDefend: ["speed", "chaserGap", "chaserSpeed", "kA", "roomL", "roomR", "x", "vTop", "blockerGap", "kTurn", "toTurnIn", "roadL", "roadR"],
+  _aiOtPull: ["freeSpeed", "queueT", "kTurn"],
+  _aiOtFire: ["blockerGap", "gapAhead", "roomL", "roomR", "speed", "aheadSpeed", "kAhead", "vTop"],
+  _aiLane: ["queueT"],
+  _aiBoost: ["chaserSpeed"],
+};
+/** The AiDrive entry point (and argument) each game.js ctx is handed to: where the sim has called it, the test holds
+ * the real object. */
+const CTX_ENTRY = { _aiBr: ["brakeDecision", 0], _aiLane: ["adaptLane", 1], _aiBoost: ["wantBoost", 0],
+  _aiDefend: ["defendPull", 0], _aiOtPull: ["otPull", 0], _aiOtFire: ["otShouldFire", 2] };
+
+/** The game.js literals live inside its async IIFE, out of reach. V8 shares a literal's hidden-class chain (and so each
+ * field's representation) between every literal with the same keys in one realm, so a TWIN — the source literal,
+ * evaluated un-warmed in the game's realm — shows what the game's own object carries. The real ctxs the sim hands
+ * AiDrive are probed too, and the no-op run below proves a twin reads Smi when game.js does not warm. */
+function gameTwins(g) {
+  const out = {};
+  for (const m of gameSource().matchAll(/^const (\w+) = CarFields\.warmDoubles\((\{.*\}), (\[[^\]]*\])\);/gm))
+    out[m[1]] = { twin: vm.runInContext("(" + m[2] + ")", g.ctx), keys: JSON.parse(m[3]) };
+  return out;
+}
+
+/** The module scratch objects and the fields that must be born Double, reached the way the sim reaches them. */
+function scratchTable(g) {
+  const C = g.ctx, G = g.G, c = G.cars[1];
+  return [
+    ["TrackLine.at", C.TrackLine.at({ line: null }, 0), ["w"]],
+    ["Collide.scanTraffic", C.Collide.scanTraffic(c, G.track.total, 30, 60, 2, false, 5, 5), ["sep", "alongDx", "alongDprog", "BACK"]],
+    ["Collide.scanOtAhead", C.Collide.scanOtAhead(c, G.track.total, 80), ["L", "W"]],
+    ["AiDrive.defendOnce", C.AiDrive.defendOnce(0, 0), ["defend"]],
+    ["RaceFacts observe().f", C.RaceFacts.create().observe(G, 0).f, ["lastLap", "best"]],
+  ];
+}
+
+/** %HaveSameMap, compiled with natives syntax switched on for that one compile; null when unavailable. */
+function nativeSameMap() {
+  v8.setFlagsFromString("--allow-natives-syntax");
+  let f = null;
+  try { f = new Function("a", "b", "return %HaveSameMap(a, b)"); } catch { f = null; }
+  v8.setFlagsFromString("--no-allow-natives-syntax");
+  return f;
+}
+
+/** True when a fractional NAMED store into field `k` keeps `o`'s map (the field is already Double, or Tagged); null
+ * when this runtime cannot tell. Probed on a spread clone made in the game's realm (CloneObjectIC gives it `o`'s own
+ * map), so `o` is never written; a Smi field fails by re-mapping the clone. */
+function fracKeepsMap(g, o, k) {
+  const same = nativeSameMap();
+  if (!same) return null;
+  const twin = vm.runInContext("(o) => ({ ...o })", g.ctx)(o);
+  if (!same(twin, o)) return null;
+  vm.runInContext("(k) => new Function('x', 'x.' + k + ' = 0.25')", g.ctx)(k)(twin);
+  return same(twin, o);
+}
+
+test("scratch objects: the named fields are born Double (a fractional store keeps the map); a Smi control re-maps", async () => {
+  const g = await boot();
+  try {
+    const real = {}, A = g.ctx.AiDrive;   // AiDrive is a mutable test seam (tests/data/frozen-globals.json)
+    for (const [name, [fn, arg]] of Object.entries(CTX_ENTRY)) {
+      const orig = A[fn];
+      A[fn] = function () { real[name] = arguments[arg]; return orig.apply(this, arguments); };
+    }
+    g.apex.setInput({ throttle: true, steer: 0 });
+    for (let i = 0; i < 120; i++) g.step(1, 1 / 60);
+    const probe = fracKeepsMap(g, vm.runInContext("({ hunt5Control: 1, sep: 0 })", g.ctx), "sep");
+    if (probe === null) return;   // natives or map-cloning unavailable on this runtime
+    assert.equal(probe, false, "a Smi field must re-map on a fractional store, or this probe proves nothing");
+    const twins = gameTwins(g), table = [];
+    assert.deepEqual(Object.keys(twins).sort(), Object.keys(GAME_SCRATCH).sort(), "the game.js warmDoubles declarations");
+    assert.ok(real._aiBr && real._aiLane, "the AI brake and lane ctxs were captured");
+    for (const [name, { twin, keys }] of Object.entries(twins)) {
+      for (const k of GAME_SCRATCH[name]) assert.ok(keys.includes(k), `game.js ${name}: "${k}" left its warmDoubles list`);
+      table.push(["game.js " + name + " (source twin)", twin, keys]);
+      if (real[name]) table.push(["game.js " + name, real[name], keys]);
+    }
+    const bad = [];
+    for (const [label, o, keys] of table.concat(scratchTable(g))) {
+      assert.ok(o && typeof o === "object", label + " is reachable");
+      for (const k of keys) {
+        assert.ok(k in o, `${label}.${k} exists (renamed? update its warm list and this table)`);
+        if (fracKeepsMap(g, o, k) !== true) bad.push(label + "." + k);
+      }
+    }
+    assert.deepEqual(bad, [], "still Smi: a mid-race fraction splits these objects' maps (warm them at the declaration)");
+  } finally { g.close(); }
+});
+
+test("game.js declares its scratch literals through CarFields.warmDoubles, and the sim is identical with it a no-op", async () => {
+  const src = gameSource();
+  for (const name of ["_ucS", "_aiBr", "_aiDefend", "_aiOtPull", "_aiOtFire", "_aiLane", "_aiBoost"])
+    assert.ok(new RegExp("^const " + name + " = CarFields\\.warmDoubles\\(\\{", "m").test(src), name + " is declared through warmDoubles");
+  // off: warmDoubles is swapped for a no-op the moment car-fields.js assigns CarFields (game.js calls it at its eval).
+  const run = async (off) => {
+    const g = await createGame({
+      onSandbox(sandbox) {
+        let cf;
+        Object.defineProperty(sandbox, "CarFields", { configurable: true, enumerable: true, get: () => cf,
+          set: (v) => { cf = v; if (off) cf.warmDoubles = (o) => o; } });
+      },
+    });
+    try {
+      g.ctx.GLX.makeFrustumPlanes = undefined;
+      await g.race("monza");
+      assert.equal(g.ctx.CarFields.warmDoubles.length, off ? 1 : 2, off ? "the no-op is installed" : "the real warmDoubles runs");
+      g.apex.setInput({ throttle: true, steer: 0.15 });
+      for (let i = 0; i < 900; i++) g.step(1, 1 / 60);
+      // _ucS.pitV takes its first fraction at the first pit window (step ~37,500 of monza): 900 steps in, only the
+      // warm can have made it Double — so the twin probe must read Smi here with the warm off.
+      return { hash: stateHash(g), pitV: fracKeepsMap(g, gameTwins(g)._ucS.twin, "pitV") };
+    } finally { g.close(); }
+  };
+  const on = await run(false), off = await run(true);
+  assert.ok(Number.isFinite(on.hash) && on.hash !== 0);
+  assert.equal(on.hash, off.hash, "warmDoubles changed the simulation");
+  if (on.pitV !== null) assert.deepEqual([on.pitV, off.pitV], [true, false], "the source-twin probe sees the warm (and its absence)");
 });

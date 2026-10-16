@@ -343,10 +343,14 @@ test("setup sheet: a swap on an over-cap shipped build is accepted only while G.
       GameAudio: { uiTick() {}, uiSelect() {}, uiReject() {}, init() {} }, ScrollFade: { refresh() {} },
       Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
       GarageExperience: { partSummary: () => () => {}, statsOf: (t) => t.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 } },
-      SetupTune: { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 },
       LiveryTex: { NUM_FONT_IDS: ["default", "block"], SPONSOR_PACK_IDS: ["default", "clean"] },
       PhysicsConsts: ctx.PhysicsConsts || { WET_GRIP: { rain: [1, 1.2, 1.4] } },
     });
+    const tuneStore = new Map();
+    ctx.GameStore = { store: { get: (key, fallback) => tuneStore.has(key) ? tuneStore.get(key) : fallback,
+      set: (key, value) => value === undefined ? tuneStore.delete(key) : tuneStore.set(key, value) } };
+    for (const file of ["js/garage/setup-tune.js", "js/garage/setup-experiments.js"])
+      vm.runInContext(fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: file });
     const SetupUI = vm.runInContext(fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8").replace(/^const\b/gm, "var")
       + "\n;SetupUI", ctx, { filename: "js/garage/setup-sheet.js" });
     const ui = SetupUI.create(G);

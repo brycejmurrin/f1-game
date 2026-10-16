@@ -90,6 +90,31 @@ test('trace export attaches its anchor so the native document download listener 
   assert.equal(JSON.parse(await exported.text()).physics, 'test');
 });
 
+test('native trace export awaits sharing and reports failure without opening an anchor fallback', async () => {
+  for (const cancelled of [false, true]) {
+    const { ctx, nodes, announcements } = fixture();
+    let reject, saved, calls = 0;
+    const held = new Promise((resolve, fail) => { reject = fail; });
+    Object.assign(ctx, { Blob, NativeDownload: {
+      viable: () => true,
+      saveBlob: (blob, name) => { calls++; saved = { blob, name }; return calls === 1 ? held : Promise.resolve(); },
+      isCancelled: (e) => e.message === 'Share canceled',
+    } });
+    nodes.get('pm-driving-trace').onclick();
+    nodes.get('pm-driving-trace').onclick();
+    assert.equal(calls, 1, 'a second tap cannot open an overlapping native share request');
+    assert.equal(saved.name, 'apex26-driving-trace.json');
+    assert.equal(JSON.parse(await saved.blob.text()).physics, 'test');
+    assert.equal(announcements.length, 0);
+    reject(new Error(cancelled ? 'Share canceled' : 'disk full'));
+    await new Promise(setImmediate);
+    assert.equal(announcements.at(-1)[0], cancelled ? 'TRACE EXPORT CANCELLED' : 'TRACE EXPORT FAILED');
+    nodes.get('pm-driving-trace').onclick();
+    await new Promise(setImmediate);
+    assert.equal(calls, 2, 'the guard releases after cancellation or failure');
+  }
+});
+
 test('every real practice drill has readable help and canonical goal state survives a session reset', () => {
   const { coach, nodes, drills } = fixture({ realInsights: true });
   assert.equal(coach.practiceGoal(), 'free');
@@ -592,4 +617,13 @@ test('WATCH pause hides pit strategy and cannot choose tyres; driving restores i
   assert.equal(nodes.get('pm-pit-panel').hidden, false);
   assert.equal(nodes.get('pm-pit-choice').disabled, false);
   assert.equal(picked, 1);
+});
+
+test('setup trial hook arms real unscored launch, samples equivalence and settles once through the comparison owner', () => {
+  const h=fixture({realInsights:true}),{G,c,coach,ctx,tick}=h,received=[],observed=[];
+  ctx.SetupTrials={active:()=>true,observe:x=>observed.push(x),record:r=>{if(!received.length)received.push(r);},invalidate(){}};
+  G.records.key=()=> 'trial-test';G.setupTrialContext=()=>({unscored:true,stableWeather:true});G.practice=true;Object.assign(c,{speed:0,prog:0,lap:1,s:0,throttleDemand:0});
+  assert.equal(coach.beginSetupTrial(),true);assert.equal(coach.practiceGoal(),'launch');tick(.2);tick(.3,{throttleDemand:1,speed:10,prog:5});tick(.3,{speed:51,prog:25});
+  assert.equal(received.length,1);assert.equal(received[0].mode,'launch');assert.equal(received[0].clean,true);assert.ok(Number.isFinite(received[0].score));assert.ok(observed.length>0);
+  G.practice=false;assert.equal(coach.beginSetupTrial(),false,'refuses a scored session');
 });

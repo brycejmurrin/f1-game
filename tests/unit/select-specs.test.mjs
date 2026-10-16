@@ -9,10 +9,10 @@
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
-import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
+import { cssSpecs, specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
   DOCS_ONLY, isDocsOnly, shards, shardCapMin, TARGET_SHARD_SEC, MAX_FAILURES, MAX_OVERSIZE_SHARDS,
   MAX_OVER_BUDGET_SHARDS, MAX_OVERFLOW_SHARDS, MAX_SPILL_SHARDS, MAX_SELECTED_JOB_MIN, MAX_TESTS_PER_JOB,
-  FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST, FAT_UI_MIN_PIECES,
+  FAT_UI_SELECTED_JOB_MIN, FAT_UI_SEC_PER_TEST, FAT_UI_MIN_PIECES, HUD_LAYOUT_MIN_PIECES,
   SOLO_OWN_TIMEOUT_SEC, SELECTED_SETUP_MIN, SELECTED_WRAP_MIN, piecesToFitCap,
   partitionMegaSweepArgs, megasForThisShard, megaShardPlan, megaSoloFlags, playwrightShard, isMegaSweepSpec,
   expectedSec, measuredCheap, circuitsTouched, dataCircuits, racingCircuitIds, foundationSpec, CIRCUIT_FILTERED_TESTS, CIRCUIT_DEF,
@@ -958,14 +958,16 @@ test("a docs-only change is 'nothing to select', never 'unmatched'", () => {
   assert.equal(isDocsOnly([]), false);
 });
 
-test("DOCS_ONLY still mirrors ci.yml's paths-ignore", () => {
+test("DOCS_ONLY still mirrors the deploy push's paths-ignore (pages.yml since 2026-10-16)", () => {
   // The comment on DOCS_ONLY says these two lists move together. If someone
   // adds a path to the workflow's ignore list and not here, a deploy touching
-  // only that path fails closed again — which is the whole defect.
-  const ci = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
-  const ignored = [...ci.matchAll(/^\s*-\s+"([^"]+)"\s*$/gm)].map((m) => m[1]);
+  // only that path fails closed again — which is the whole defect. The list
+  // moved from ci.yml's push to pages.yml's push on 2026-10-16 (the train
+  // runs on push; ci.yml has no push trigger).
+  const pages = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
+  const ignored = [...pages.matchAll(/^\s*-\s+"([^"]+)"\s*$/gm)].map((m) => m[1]);
   for (const pat of ["docs/**", "**/*.md", ".claude/**", ".cursor/**"]) {
-    assert.ok(ignored.includes(pat), `ci.yml no longer ignores ${pat} — re-derive DOCS_ONLY`);
+    assert.ok(ignored.includes(pat), `pages.yml no longer ignores ${pat} — re-derive DOCS_ONLY`);
   }
   assert.equal(DOCS_ONLY.length, 4, "a pattern was added or removed without updating this pin");
 });
@@ -1215,8 +1217,7 @@ test("the browser legs do not wait on the guards aggregator, and a guards red st
   };
   assert.deepEqual(needsOf("selected"), ["select"], "the matrix starts as soon as the plan exists");
   assert.doesNotMatch(job("selected").match(/^    if: .*$/m)?.[0] || "", /needs\.guards/, "its if: must not read a job it does not need");
-  for (const j of ["selected-verdict", "ci-verdict", "poke-train"]) assert.ok(needsOf(j).includes("guards"), `${j} must still need guards`);
-  assert.match(job("poke-train"), /needs\.guards\.result == 'success'/, "a guards red pokes no train");
+  for (const j of ["selected-verdict", "ci-verdict"]) assert.ok(needsOf(j).includes("guards"), `${j} must still need guards`);
   const verdictSrc = fs.readFileSync(path.join(ROOT, "tools/ci/selected-gate-verdict.mjs"), "utf8");
   assert.match(verdictSrc, /if \(guards !== "success" && guards !== "skipped"\)/, "selected-verdict reds on a guards red");
   assert.match(job("selected-verdict"), /GUARDS: \$\{\{ needs\.guards\.result \}\}/);
@@ -1358,7 +1359,8 @@ test("career / hud-layout run as ≥2 native --shard pieces of ONE worker each (
     const billed = jobs.reduce((t, j) => t + j.sec, 0);
     assert.ok(billed >= n * FAT_UI_SEC_PER_TEST - jobs.length,
       `${f} billed ${billed}s must floor at ~${FAT_UI_SEC_PER_TEST}s/test (PR #1075 37446472987), one worker`);
-    assert.ok(jobs.length >= FAT_UI_MIN_PIECES, `${f} runs as at least ${FAT_UI_MIN_PIECES} pieces (${jobs.length})`);
+    const minPieces = f.endsWith("hud-layout.spec.js") ? HUD_LAYOUT_MIN_PIECES : FAT_UI_MIN_PIECES;
+    assert.ok(jobs.length >= minPieces, `${f} runs as at least ${minPieces} pieces (${jobs.length})`);
     assert.deepEqual(jobs.map((j) => j.shard), jobs.map((_, i) => `${i + 1}/${jobs.length}`), `${f} pieces are native shards`);
     for (const j of jobs) {
       assert.equal(j.workers, 1, `${f} runs ONE worker per piece: two Chromiums starve each other on a 2-vCPU runner`);
@@ -1369,10 +1371,10 @@ test("career / hud-layout run as ≥2 native --shard pieces of ONE worker each (
       assert.ok(j.sec / 60 + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN <= j.timeout,
         `${j.name}: ${j.sec}s of work + setup + wrap-up must fit its ${j.timeout} min cap`);
     }
-    // Exactly the pieces the cap needs, never fewer than FAT_UI_MIN_PIECES
+    // Exactly the pieces the cap needs, never fewer than the file's floor
     // (one worker each, so the whole spec is billed at FAT_UI_SEC_PER_TEST).
-    assert.equal(jobs.length, Math.max(FAT_UI_MIN_PIECES, piecesToFitCap(n * FAT_UI_SEC_PER_TEST, n, FAT_UI_SELECTED_JOB_MIN)),
-      `${f}: no more pieces than the cap needs, and never fewer than ${FAT_UI_MIN_PIECES}`);
+    assert.equal(jobs.length, Math.max(minPieces, piecesToFitCap(n * FAT_UI_SEC_PER_TEST, n, FAT_UI_SELECTED_JOB_MIN)),
+      `${f}: no more pieces than the cap needs, and never fewer than ${minPieces}`);
   }
   const terrain = "tests/specs/terrain-over-road.spec.js";
   const tJobs = shards(fit([terrain], 30, { rank: () => 0, db: EMPTY }), EMPTY)
@@ -1382,7 +1384,7 @@ test("career / hud-layout run as ≥2 native --shard pieces of ONE worker each (
     `terrain job cap ${tJobs.map((j) => j.timeout)} exceeds ${MAX_SELECTED_JOB_MIN}`);
 });
 
-test("C4: a fat-UI leg that cannot fit its cap splits into more native --shard pieces; one that fits stays at FAT_UI_MIN_PIECES", () => {
+test("C4: a fat-UI leg that cannot fit its cap splits into more native --shard pieces; one that fits stays at its file floor", () => {
   // Ship 38525816649 / 38522250272: oversize-hud-layout expected 945 / 923 s
   // and was killed by the then-18 min job cap (39/42 and still running, 0
   // failed); the verdict then read "left no junit". ff0e80e9d later raised
@@ -1397,11 +1399,11 @@ test("C4: a fat-UI leg that cannot fit its cap splits into more native --shard p
     const db = { specs: { [hud]: { s: [1, 2, 3].map((i) => [`2026-10-1${i}T00:00:00Z`, "llvmpipe", billedSec, n]) } } };
     return shards({ selected: [], oversize: [{ file: hud, tests: n, rank: 0 }] }, db, new Set());
   };
-  // The measured 945 s leg: fits the current cap, so exactly FAT_UI_MIN_PIECES
-  // one-worker pieces (2026-10-15; it was one two-worker leg).
+  // The measured 945 s leg fits the current cap. hud-layout still gets its
+  // measured three-piece floor because recent Actions halves are ~700 s.
   if (945 / 60 <= room) {
     const one = plan(945);
-    assert.equal(one.length, FAT_UI_MIN_PIECES, `945 s fits ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: the minimum pieces`);
+    assert.equal(one.length, HUD_LAYOUT_MIN_PIECES, `945 s fits ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: the HUD minimum pieces`);
     assert.deepEqual(one.map((j) => j.shard), one.map((_, i) => `${i + 1}/${one.length}`), "native shards");
   }
   // A leg ~2.2x the room cannot fit: it splits, bills the whole spec, every piece fits.
@@ -1410,7 +1412,7 @@ test("C4: a fat-UI leg that cannot fit its cap splits into more native --shard p
   const total = jobs.reduce((t, j) => t + j.sec, 0);
   assert.ok(total >= big - jobs.length, `the plan still bills the whole spec (${total}s of ${big}s)`);
   assert.ok(jobs.length >= 2, `a ${big} s fat leg cannot fit ${FAT_UI_SELECTED_JOB_MIN} min with setup and wrap-up: ${jobs.length} leg(s)`);
-  assert.equal(jobs.length, Math.max(FAT_UI_MIN_PIECES, piecesToFitCap(big, n, FAT_UI_SELECTED_JOB_MIN)), "no more pieces than the cap needs (and never fewer than FAT_UI_MIN_PIECES)");
+  assert.equal(jobs.length, Math.max(HUD_LAYOUT_MIN_PIECES, piecesToFitCap(big, n, FAT_UI_SELECTED_JOB_MIN)), "no more pieces than the cap needs (and never fewer than the HUD minimum");
   for (const j of jobs) {
     assert.ok(Math.ceil(j.sec / 60) + SELECTED_SETUP_MIN + SELECTED_WRAP_MIN <= j.timeout, `${j.name}: ${j.sec}s + setup + wrap > ${j.timeout} min`);
     assert.ok(j.timeout <= FAT_UI_SELECTED_JOB_MIN, `${j.name}: cap ${j.timeout} above the fat-UI ceiling`);
@@ -1698,4 +1700,44 @@ test("helper imports and reexports propagate transitively with cycles", () => {
   const consumers = specsImporting(["tests/helpers/await-track-build.js"]);
   assert.ok(consumers.includes("tests/specs/props-over-road.spec.js"));
   assert.ok(consumers.length > 5, "fixtures reexport reaches indirect consumers");
+});
+
+test("CSS-only changes retain bounded relevant player layout coverage", () => {
+  assert.deepEqual(cssSpecs(["docs/README.md"]), []);
+  const menu = cssSpecs(["css/menus.css", "docs/README.md"]);
+  assert.ok(menu.includes("tests/specs/css-player-smoke.spec.js"));
+  assert.ok(menu.includes("tests/specs/menu-baseline.spec.js"));
+  assert.ok(!menu.includes("tests/specs/hud-layout.spec.js"));
+  for (const name of ["title", "fonts-hud", "components", "responsive", "dialogs", "dialog-platform", "overlays", "garage-experience"]) {
+    assert.ok(cssSpecs([`css/${name}.css`]).includes("tests/specs/menu-baseline.spec.js"),
+      `${name} changes the title/selector/garage identity`);
+  }
+  const hud = cssSpecs(["css/hud.css"]);
+  assert.deepEqual(hud, ["tests/specs/css-player-smoke.spec.js"]);
+  assert.ok(!hud.includes("tests/specs/menu-baseline.spec.js"));
+  assert.equal(menu.length, 2);
+  assert.equal(hud.length, 1);
+  for (const specs of [menu, hud, cssSpecs(["css/tokens.css"])]) {
+    const plan = fit(specs, DEFAULT_BUDGET_MIN);
+    assert.deepEqual(plan.skipped, [], "bounded CSS coverage fits existing shard pools");
+    assert.deepEqual(plan.overBudgetSpecs, []);
+    assert.ok(shards(plan).length > 0, "CSS coverage produces runnable jobs");
+  }
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
+  assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
+  assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
+});
+
+test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
+  const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(laneBase({}), 0, "no run number (local, tests): lane 0 first");
+  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633" }), 12633 % LANES);
+  const specs = ["tests/specs/multiplayer-seats.spec.js", "tests/specs/multiplayer-npeer.spec.js",
+    "tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
+  const base = LANES - 1;
+  const lanes = shards(fit(specs, 1, { db: EMPTY }), EMPTY, new Set(), base).map((j) => j.lane);
+  assert.ok(lanes.length >= 2, `two legs to wrap: ${lanes}`);
+  assert.ok(lanes.includes(base) && lanes.includes(0), `starts at the rotated lane and wraps: ${lanes}`);
+  assert.equal(new Set(lanes).size, lanes.length, "a run's own legs never share a lane");
+  assert.ok(lanes.every((l) => Number.isInteger(l) && l >= 0 && l < LANES), "every lane is in range");
 });

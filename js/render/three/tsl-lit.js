@@ -212,6 +212,7 @@
       mistHeight:     uniform(0.30),  // MIST HEIGHT BAND
       shadowTintAmt:  uniform(0.0),   // SHADOW COOLNESS
       wetDark:        uniform(1.0),   // WET ROAD DARKEN
+      puddles:        uniform(1.0),   // PUDDLES (standing-water growth; js/render/shared/puddles.js). GLX uPuddles.
       cloudShadowDim: uniform(0.80),  // CLOUD SHADOW DEPTH
       carSunGlint:    uniform(12.0),  // PAINT SUN GLINT
       carSparkle:     uniform(1.6),   // METALLIC SPARKLE
@@ -341,7 +342,7 @@
     function updateFrame(frame, mirror) {
       const T = (frame && frame.tune) || null;
       const k = (id, def) => (T && T[id] != null ? T[id] : def);
-      const s3 = (u, a, m) => { if (a) u.value.set(a[0] * (m || 1), a[1] * (m || 1), a[2] * (m || 1)); };
+      const s3 = (u, a, m) => { if (a) u.value.set(a[0] * (m ?? 1), a[1] * (m ?? 1), a[2] * (m ?? 1)); };
       s3(U.sunDir, frame.sunDir);
       s3(U.sunColor, frame.sunColor);
       setLampBake(frame.lampBake, frame.lampBakeScale);
@@ -382,6 +383,7 @@
       uf1(U.mistHeight, k("mistHeight", 0.30));
       uf1(U.shadowTintAmt, k("shadowTintAmt", 0.0));
       uf1(U.wetDark, k("wetDark", 1.0));
+      uf1(U.puddles, k("puddles", 1.0));
       uf1(U.matTexMix, k("matTexMix", 1.0));   // TUNE_DEFS def (was 0.0 — see the declaration)
       uf1(U.cloudShadowDim, k("cloudShadowDim", 0.80));
       uf1(U.carSunGlint, k("carSunGlint", 12.0));
@@ -1618,9 +1620,12 @@
               .or(wmid.equal(8.0)).or(wmid.equal(11.0)),
             float(1.0), float(0.0));
           wet.assign(U.wetness.mul(upFace));
-          const pn = vnoise(wp.xz.mul(0.13).add(4.7));
+          // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
+          // reference; GLX glsl-lit.js constant for constant: two octaves of
+          // world-space surface noise (~7.7 m, ~3.4 m), fixed real locations.
+          const pn = vnoise(wp.xz.mul(0.13).add(4.7)).mul(0.70).add(vnoise(wp.xz.mul(0.29).add(11.3)).mul(0.30));
           // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: the
-          // crown drains to the gutters (0.7 centre → 1.2 edge) and the low side
+          // crown drains to the gutters (0.75 centre → 1.25 edge) and the low side
           // of a banked turn holds the water (lateral downhill from the screen
           // derivatives of trk.y and wp.xz against Ngeo). trkA is null only on the
           // chunked (city prop) variant, which has no road.
@@ -1630,10 +1635,15 @@
               const lat = clamp(trkA.y.div(trkA.z), -1.0, 1.0);
               const rl = length(trkRightXZ);   // hoisted next to vd (uniform control flow)
               const downhill = select(rl.greaterThan(1e-6), dot(trkRightXZ.div(rl), Ngeo.xz).negate(), float(0.0));
-              pool.assign(mix(float(0.7), float(1.2), abs(lat)).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
+              // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
+              pool.assign(mix(float(0.75), float(1.25), smoothstep(0.35, 0.95, abs(lat))).mul(clamp(float(1.0).add(downhill.mul(lat).mul(4.0)), 0.5, 1.5)));
             });
           }
-          puddle.assign(smoothstep(0.48, 0.88, pn.mul(pool)).mul(wet).mul(porous.oneMinus()));
+          // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows,
+          // so drying shrinks the pools to their deepest spots first.
+          const pg = clamp(smoothstep(0.6, 1.0, U.wetness).mul(U.puddles), 0.0, 1.0);
+          const plo = pg.mul(0.38).oneMinus();
+          puddle.assign(smoothstep(plo, plo.add(0.20), pn.mul(pool)).mul(pg).mul(upFace).mul(porous.oneMinus()));
           // RAIN RIPPLES — js/render/glx/shaders/glsl-lit.js, constant for constant:
           // two cell grids of impact rings, a normal tilt on the pooled water that
           // the GGX lobes and the sky reflection below read (N is a toVar).
@@ -1660,10 +1670,10 @@
           const absorbRoad = clamp(U.wetDark.mul(0.58).oneMinus(), 0.0, 1.0);
           const absorb = mix(absorbRoad, absorbRoad.mul(0.66), porous);
           albedo.mulAssign(mix(float(1.0), absorb, wet));
-          albedo.mulAssign(mix(float(1.0), float(0.50), puddle));
+          albedo.mulAssign(mix(float(1.0), float(0.40), puddle));   // standing water: darker than the sheet
           wetSheen.assign(wet.mul(porous.oneMinus()));
           rough.assign(mix(rough, 0.30, wetSheen));
-          rough.assign(mix(rough, 0.06, puddle));
+          rough.assign(mix(rough, 0.02, puddle));   // near-mirror inside the pool
           a.assign(rough.mul(rough));
           f0.assign(mix(f0, vec3(0.04), wetSheen.mul(0.6)));   // thin water film dielectric
         });
@@ -2021,7 +2031,7 @@
         const envBlend = clamp(float(0.40).sub(rough).div(0.30), 0.0, 1.0).mul(specular).toVar();
         // The probe tap below (rgb) and its weight (w > 0 once taken), reused by the metal block (same R + LOD).
         const envCubeTap = envCubeNode ? vec4(0.0).toVar() : null;
-        envBlend.assign(max(envBlend, wetSheen.mul(0.55)));
+        envBlend.assign(max(envBlend, max(wetSheen.mul(0.55), puddle.mul(0.90))));   // PUDDLES: strong mirror even with SSR shed
         If(envBlend.greaterThan(0.001), () => {
           const R = reflect(V.negate(), N).toVar();
           const skyT = pow(max(R.y, 1e-4), 0.40);
@@ -2050,7 +2060,7 @@
           const roughDamp = rough.mul(0.7).oneMinus();
           const envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), float(1.0)).x.toVar();
           envFresnel.assign(mix(envFresnel, envFresnel.mul(envFresnel), wetSheen.mul(0.35)));
-          const envWet = envColor.mul(wetSheen.mul(0.45).oneMinus());
+          const envWet = envColor.mul(wetSheen.mul(0.45).mul(puddle.mul(0.5).oneMinus()).oneMinus());   // a puddle keeps more sky
           const envAdd = envWet.mul(envFresnel).mul(envBlend).mul(roughDamp).mul(metalness.oneMinus()).toVar();
           const envM = max(max(envAdd.r, envAdd.g), envAdd.b);
           color.addAssign(envAdd.div(envM.add(1.0)));           // Reinhard shoulder

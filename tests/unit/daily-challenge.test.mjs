@@ -177,6 +177,24 @@ test("a damaged save normalises instead of throwing", () => {
   assert.deepEqual(host(d.data().streak), { count: 0, last: null });
 });
 
+test("an array-shaped day history recovers and persists the next completed lap", () => {
+  const { D, d, G, stored } = load();
+  const day = "2026-10-16";
+  stored.set("daily.v1", JSON.stringify({ days: [], streak: { count: 0, last: null } }));
+  d.select(day, "open");
+  d.record(81.345);
+
+  const saved = JSON.parse(stored.get("daily.v1"));
+  assert.equal(Array.isArray(saved.days), false, "date-keyed entries must survive JSON serialization");
+  assert.deepEqual(saved.days[day], { best: 81.345, laps: 1 });
+  const reloaded = D.create(G);
+  reloaded.select(day, "open");
+  assert.equal(reloaded.shareText(null), "APEX 26 DAILY " + day + " · " + reloaded.current().trackName
+    + " · 81.345 · STREAK 1");
+  reloaded.record(82);
+  assert.deepEqual(JSON.parse(stored.get("daily.v1")).days[day], { best: 81.345, laps: 2 });
+});
+
 test("with no medal passed, the share line carries TODAY's — from today's best, not the stored ghost's", () => {
   // results-sheet.js passed Ghost.medal(), whose records context has no day in
   // it: a later Daily on the same circuit and conditions read another day's GOLD

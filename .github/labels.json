@@ -4,6 +4,8 @@
   { "name": "blocked", "color": "b60205", "description": "Backlog: waits on another issue (say which: Blocked by #n)" },
   { "name": "epic", "color": "5319e7", "description": "Parent issue: the work is in its sub-issues" },
   { "name": "fleet-board", "color": "1d76db", "description": "The pinned board issue, rewritten hourly by fleet.yml" },
+  { "name": "flaky", "color": "e99695", "description": "A test that passes on retry or fails across branches; the daily flake-tally issue (AGENTS.md rule 9)" },
+  { "name": "base-red", "color": "b60205", "description": "A spec failing first-try on unrelated branches: a red on the base (flake-tally.yml, advisory)" },
   { "name": "run-ci", "color": "0052cc", "description": "Draft PR: run CI fast tier (guards, node suites, parts census, driving-model; no browser specs)" },
   { "name": "bug", "color": "d73a4a", "description": "Something isn't working" },
   { "name": "area:physics", "color": "c5def5", "description": "Handling, grip, pace (skill tune-physics)" },

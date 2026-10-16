@@ -1795,6 +1795,32 @@ test("setCarSfx and pitGun are safe with the engine off, and drive their layers 
   assert.equal(A.carSfx().pitGuns, before + 1);
 });
 
+test("pit wheel guns keep their immediate stagger at fresh and long-running audio clocks", () => {
+  for (const clock of [0, 120, 3600.25]) {
+    for (const tighten of [false, true]) {
+      const { GameAudio, ctx } = boot();
+      GameAudio.init();
+      ctx.currentTime = clock;
+      const before = new Set(live);
+      GameAudio.pitGun(tighten);
+      const sources = [...live].filter((n) => !before.has(n) && n.kind === "src");
+      const rattles = tighten ? 3 : 4;
+      assert.equal(sources.length, 4 * rattles, "all four wheel guns fire");
+      for (const [wheel, lag] of [0, 0.05, 0.11, 0.08].entries()) {
+        const first = sources[wheel * rattles].startAt;
+        const jitter = first - clock - lag;
+        assert.ok(jitter >= -1e-9 && jitter <= 0.03 + 1e-9,
+          `clock=${clock} tighten=${tighten} wheel=${wheel}: starts within its immediate jitter window`);
+        for (let k = 0; k < rattles; k++) {
+          const src = sources[wheel * rattles + k];
+          assert.ok(Math.abs(src.startAt - first - k * 0.045) < 1e-9, "rattle spacing stays 45 ms");
+          assert.ok(Math.abs(src.stopAt - src.startAt - 0.13) < 1e-9, "each burst retains its lifetime");
+        }
+      }
+    }
+  }
+});
+
 test("recorded radio voice: clips play back to back through the radio band; a line's nodes are released, the band is built once per sound", async () => {
   const { GameAudio, release, ctx, liveNodes } = boot();
   GameAudio.init();
@@ -2399,6 +2425,16 @@ test("wet spray is 0 dry, rises with speed when wet, and rivals-ahead only adds 
   const withWake = A.kerbSpray();
   assert.ok(withWake.sprayAhead > 0, "rival ahead within 40 m sets sprayAhead");
   assert.ok(withWake.spray > alone, "rivals-ahead wake adds quieter spray only when wet");
+  A.setLayer("rivals", false);
+  A.setEngine(0.6, 0, false, 0.9, 5, wetPh);
+  assert.equal(A.kerbSpray().spray, alone, "Rivals OFF removes only the rival wake");
+  assert.ok(A.kerbSpray().sprayAhead > 0, "mute does not discard wake geometry");
+  A.setLayer("rivals", true); A.setTune({ rivals: 0 });
+  A.setEngine(0.6, 0, false, 0.9, 5, wetPh);
+  assert.equal(A.kerbSpray().spray, alone, "zero Rivals level preserves only own spray");
+  A.setTune({ rivals: 1 });
+  A.setEngine(0.6, 0, false, 0.9, 5, wetPh);
+  assert.equal(A.kerbSpray().spray, withWake.spray, "restoring Rivals restores the wake");
   A.setRivals([{ lat: 0, arc: -8, dist: 8, rev: 0.5, approach: 0 }]);
   A.setEngine(0.6, 0, false, 0.9, 5, wetPh);
   assert.equal(A.kerbSpray().sprayAhead, 0, "a rival behind is not a spray wake");
@@ -2422,4 +2458,15 @@ test("SFX off silences kerb rumble and wet spray (and unmutes the one-shot gate)
   A.setEngine(0.7, 0, false, 0.8, 5, ph);
   assert.equal(A.kerbSpray().kerb, 0, "SFX off: setEngine does not open the kerb layer");
   assert.equal(A.kerbSpray().spray, 0, "SFX off: setEngine does not open the spray layer");
+});
+
+
+test("boost activation is quiet when ERS is muted or its trim is zero", async () => {
+  const A = await neutralEngine();
+  A.setLayer("ers", false); A.deployBoost();
+  assert.equal(A.boostState().peak, 0);
+  A.setLayer("ers", true); A.setTune({ boost: 0 }); A.deployBoost();
+  assert.equal(A.boostState().peak, 0);
+  A.setTune({ boost: 1 }); A.deployBoost();
+  assert.ok(A.boostState().peak > 0 && A.boostState().peak <= 0.15, "stock whoosh is below the old 0.3 peak");
 });

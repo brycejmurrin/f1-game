@@ -391,3 +391,52 @@ test("factory SIGNATURE wings stay heavier than a stripped low-drag kit", () => 
   assert.ok(factory("ferrari") > factory("haas"),
     "Maranello kit should out-triangle Kannapolis low-drag");
 });
+
+
+test("beam cross-section scales linearly on both axes in every orientation", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(GEOMETRY_SRC + "\nthis.geometry = CarGeometry;", ctx);
+  const geom = ctx.geometry.create({ SURFACES: { paint: 20 } });
+  for (const end of [[0, 0, 1], [0, 1, 0], [1, 2, 3]]) {
+    const len = Math.hypot(...end), d = end.map(v => v / len);
+    let u = [-d[2], 0, d[0]], ul = Math.hypot(...u);
+    if (ul < 1e-5) { u = [1, 0, 0]; ul = 1; }
+    u = u.map(v => v / ul);
+    const v = [d[1]*u[2]-d[2]*u[1], d[2]*u[0]-d[0]*u[2], d[0]*u[1]-d[1]*u[0]];
+    for (const th of [0.016, 0.032]) {
+      const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+      geom.addBeamBetween(out, [0, 0, 0], end, th, C1);
+      assert.ok(out.pos.every(Number.isFinite));
+      for (const axis of [u, v]) {
+        const projected = [];
+        for (let i = 0; i < out.pos.length; i += 3)
+          projected.push(axis.reduce((sum, a, j) => sum + a*out.pos[i+j], 0));
+        assert.ok(Math.abs(Math.max(...projected)-Math.min(...projected)-th) < 1e-10,
+          `beam ${end}: both section dimensions must equal thickness ${th}`);
+      }
+    }
+  }
+});
+
+test("fixed front deflectors occur once in both full and split race cars", () => {
+  const team = Teams.LIST.find(t => t.id === "mclaren");
+  const stock = Parts.getVisualTiers(Parts.getFactorySetup(team), team);
+  const variants = [0, 1, 2].map(deflector => ({ ...stock,
+    _visual: { ...stock._visual, wheels: { ...stock._visual.wheels, deflector } } }));
+  const build = (parts, noWheels) => Car3D.build(team.color, team.color2,
+    { teamId: team.id, num: 1, parts, noWheels, noDriver: true, smooth: false });
+  const bodies = variants.map(p => build(p, true));
+  const full = variants.map(p => build(p, false));
+  const layers = variants.map(p => Car3D.buildWheelLayers(.32, null, null, null,
+    false, p._visual.tyres, p._visual.brakes, p._visual.wheels));
+  for (const level of [1, 2]) {
+    const extra = bodies[level].pos.length - bodies[0].pos.length;
+    assert.ok(extra > 0, `deflector ${level} must stay on the stationary body`);
+    assert.equal(full[level].pos.length - full[0].pos.length, extra,
+      "full car and body must contain the same single deflector pair");
+    assert.deepEqual(layers[level], layers[0], "deflectors must not rotate with wheels");
+    // The appended fixed geometry is identical in both composition paths.
+    assert.deepEqual(bodies[level].pos.slice(-extra), full[level].pos.slice(-extra));
+  }
+  assert.ok(bodies[2].pos.length > bodies[1].pos.length, "biplane adds its upper plane and endplate");
+});

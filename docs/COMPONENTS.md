@@ -124,6 +124,7 @@ not.
 | `sel-` | 35 | `select.css` | `career.css`, `components.css`, `carsetup.css`, `overlays.css`, `race-setup.css`, `tokens.css` |
 | `res-` | 44 | `components.css` | `career.css`, `overlays.css`, `tokens.css` |
 | `hud-` | 83 | `hud.css` | `touch-controls.css`, `responsive.css`, `tokens.css` |
+| `input-` | 2 | `hud.css` | Pause input review and its responsive static chart. |
 | `adv-` | 31 | `tuner.css` | `settings-controls.css`, `components.css`, `carsetup.css`, `overlays.css`, `race-setup.css` |
 | `as-` | 23 | `tuner.css` | `components.css`, `dialogs.css`, `settings.css` |
 | `opt-` | 19 | `tuner.css` | `components.css`, `settings-controls.css`, `settings.css` |
@@ -142,8 +143,10 @@ not.
 | `pane-` | 9 | `components.css` | — |
 | `music-` | 9 | `tuner.css` | — |
 | `set-` | 17 | `settings-controls.css` | `race-setup.css`, `tuner.css` |
+| `player-` | 5 | `player-tools.css` | — |
 | `settings-` | 5 | `player-tools.css` | — |
 | `race-` | 2 | `player-tools.css` | — |
+| `save-` | 8 | `save-health.css` | — |
 The long tail (`fb-`, `sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
@@ -519,7 +522,7 @@ Also measured, added when the gaps above were closed: `datastandings`,
 than a Grand Prix classification), `hudtouch` and `hudbuttons` (the two remaining
 steering modes — "touch" hides the gas pedal, "buttons" adds an explicit GAS), and
 `garagewheels`; later, the Settings pages (`settingscontrols`, `settingsdriving`,
-`settingsdisplay`), `duelpicker`, `loading`, `flybyeditor`, `lightingtunerfly` and
+`settingsdisplay`, `settingsappearance`, `settingsa11y`), `duelpicker`, `loading`, `flybyeditor`, `lightingtunerfly` and
 `photocontrols`.
 
 **`garagewheels` exists to MEASURE a claim rather than assert it.** The line used

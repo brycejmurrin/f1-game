@@ -40,6 +40,9 @@
     lengthKm: 4.426,
     baseHW: 7.5,
     sceneryCoordinates: "racing",
+    // The main stand is authored in scenery/jerez.js (block 2, 0.005 -1 20 terracing). Without
+    // this the generic 7-box shells also stand at nodes 0-24, where the line curves and they overlap.
+    ownPitStraight: true,
     terrainOuter: 110,
     pal: {
       zenith:        [0.34, 0.46, 0.64],

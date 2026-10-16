@@ -58,7 +58,8 @@ const CareerExperience = (function () {
     if (!t) return card;
     if (team) card.style.setProperty("--career-team", G.cssCol(team.color));
     const image = el("img");
-    image.src = "assets/stills/" + t.id + ".webp"; image.alt = "";
+    image.src = "assets/stills/" + t.id + ".webp";
+    image.alt = (t.name || t.id || "Next race") + " circuit";
     image.loading = "lazy"; image.decoding = "async";
     image.onerror = () => { image.hidden = true; };
     card.appendChild(image);

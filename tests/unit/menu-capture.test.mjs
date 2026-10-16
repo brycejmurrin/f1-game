@@ -66,3 +66,12 @@ test("layout-audit --help names gallery and survey", () => {
   assert.match(r.stdout, /--survey/);
   assert.match(r.stdout, /--screen=/);
 });
+
+test("gallery index exposes screen and viewport filters", () => {
+  const source = fs.readFileSync(path.join(ROOT, "tools/ui/menu-capture.mjs"), "utf8");
+  assert.match(source, /id="filter-screen"/);
+  assert.match(source, /id="filter-viewport"/);
+  assert.match(source, /id="filter-search"/);
+  assert.match(source, /data-screen=/);
+  assert.match(source, /SKIPPED/);
+});

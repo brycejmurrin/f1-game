@@ -21,7 +21,7 @@ function loadNative(opts = {}) {
   const sandbox = {
     console,
     Promise,
-    Date: opts.fixedClock ? { now: () => 1234 } : Date,
+    Date: opts.clock || (opts.fixedClock ? { now: () => 1234 } : Date),
     Math: opts.fixedClock ? { random: () => 0.5 } : Math,
     JSON,
     Object,
@@ -101,7 +101,7 @@ test("NativeDownload.saveBlob writes CACHE then Share.share", async () => {
   assert.equal(out.ok, true);
   assert.equal(writes.length, 1);
   assert.equal(writes[0].directory, "CACHE");
-  assert.match(writes[0].path, /^apex26-downloads\/[^/]+\/trace\.json$/);
+  assert.match(writes[0].path, /^apex26-downloads\/v2\/export-[^/]+\/trace\.json$/);
   assert.equal(writes[0].recursive, true);
   assert.ok(writes[0].data);
   assert.equal(shares.length, 1);
@@ -179,7 +179,7 @@ test("getUri is only a fallback for writeFile implementations without a URI", as
   let lookup;
   fs.getUri = async (args) => { lookup = args; return { uri: "file:///resolved/cache/trace.json" }; };
   const out = await sandbox.NativeDownload.saveBlob(bytesBlob([1]), "trace.json");
-  assert.match(lookup.path, /^apex26-downloads\/[^/]+\/trace\.json$/);
+  assert.match(lookup.path, /^apex26-downloads\/v2\/export-[^/]+\/trace\.json$/);
   assert.equal(lookup.directory, "CACHE");
   assert.equal(shares[0].url, out.uri);
   assert.equal(out.uri, "file:///resolved/cache/trace.json");
@@ -220,6 +220,123 @@ test("conversion, write, URI lookup and share failures remain rejected promises"
   }
 });
 
+test("native Share cancellation is distinct from storage and other share failures", () => {
+  const { sandbox } = loadNative({ capacitor: true });
+  for (const error of [new Error("Share canceled"), new Error("Share cancelled"), { name: "AbortError" }]) {
+    assert.equal(sandbox.NativeDownload.isCancelled(error), true);
+  }
+  for (const error of [new Error("disk full"), new Error("Can't share while sharing is in progress"), null]) {
+    assert.equal(sandbox.NativeDownload.isCancelled(error), false);
+  }
+});
+
+test("career export awaits native I/O and never retries a failed or cancelled share through an anchor", async () => {
+  const source = readFileSync(join(ROOT, "js/career/career-backup.js"), "utf8");
+  for (const stage of ["write", "share", "cancel"]) {
+    const { sandbox, writes } = loadNative({ capacitor: true });
+    sandbox.Blob = Blob;
+    sandbox.document.createElement = () => { assert.fail("a native failure must not fall back to an anchor"); };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(source.replace(/^const\b/gm, "var"), ctx);
+    const error = new Error(stage === "cancel" ? "Share canceled" : stage + " failed");
+    let fail, attempts = 0, settled = false;
+    const held = new Promise((resolve, reject) => { fail = reject; });
+    const plugin = stage === "write" ? sandbox.Capacitor.Plugins.Filesystem : sandbox.Capacitor.Plugins.Share;
+    plugin[stage === "write" ? "writeFile" : "share"] = () => { attempts++; return held; };
+    const result = sandbox.CareerBackup.download("{}", "career.json");
+    const rejected = assert.rejects(result, (e) => e === error);
+    result.then(() => { settled = true; }, () => { settled = true; });
+    await new Promise(setImmediate);
+    assert.equal(settled, false);
+    assert.equal(attempts, 1);
+    fail(error);
+    await rejected;
+    await new Promise(setImmediate);
+    assert.equal(attempts, 1, "dismissal and failure are final outcomes, not a second share request");
+    assert.equal(writes.length, stage === "write" ? 0 : 1);
+  }
+});
+
+test("career export button never announces success for a cancelled or failed native backup", async () => {
+  const source = readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8");
+  const start = source.indexOf("exp.onclick = (ev)");
+  const handler = source.slice(start, source.indexOf("\n      };", start) + 9);
+  for (const outcome of ["success", "failure", "cancel"]) {
+    const { sandbox } = loadNative({ capacitor: true });
+    const notices = [], button = { disabled: false };
+    let resolve, reject, calls = 0;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    Object.assign(sandbox, { exp: button, G: { soundOn: false }, announce: (msg) => notices.push(msg),
+      CareerBackup: { exportAll: () => { calls++; return held; } } });
+    vm.runInContext("let armedDelete = '';\n" + handler, vm.createContext(sandbox));
+    const event = { stopPropagation() {} };
+    button.onclick(event); button.onclick(event);
+    assert.equal(calls, 1);
+    assert.equal(button.disabled, true);
+    assert.deepEqual(notices, []);
+    if (outcome === "success") resolve({ ok: true }); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await new Promise(setImmediate);
+    assert.equal(button.disabled, false);
+    assert.deepEqual(notices, [outcome === "success" ? "CAREER BACKUP SAVED" : outcome === "cancel" ? "EXPORT CANCELLED" : "EXPORT FAILED"]);
+  }
+});
+
+test("recovery export waits for native saving, guards duplicate taps, and reports failure or cancellation", async () => {
+  const source = readFileSync(join(ROOT, "js/ui/select-screen.js"), "utf8");
+  const handler = source.slice(source.indexOf("let recoveryExporting ="), source.indexOf('if ($("save-retry"))'));
+  for (const outcome of ["success", "write", "share", "cancel"]) {
+    const { sandbox } = loadNative({ capacitor: true });
+    const notices = [], button = { disabled: false };
+    Object.assign(sandbox, { Blob, $: () => button, G: { season: { round: 2 }, announce: (msg) => notices.push(msg) },
+      store: { broken: "quota" }, writeFailed: () => "quota" });
+    sandbox.document.createElement = () => { assert.fail("recovery export must use the awaited native path"); };
+    let resolve, reject, calls = 0;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const plugin = outcome === "write" ? sandbox.Capacitor.Plugins.Filesystem : sandbox.Capacitor.Plugins.Share;
+    plugin[outcome === "write" ? "writeFile" : "share"] = () => { calls++; return held; };
+    const ctx = vm.createContext(sandbox);
+    vm.runInContext(handler + "\nvar runRecovery = exportRecovery;", ctx);
+    const pending = sandbox.runRecovery();
+    await new Promise(setImmediate);
+    assert.equal(button.disabled, true);
+    assert.deepEqual(notices, []);
+    await sandbox.runRecovery();
+    assert.equal(calls, 1);
+    if (outcome === "success") resolve({}); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await pending;
+    assert.equal(button.disabled, false);
+    assert.deepEqual(notices, [outcome === "success" ? "RECOVERY EXPORTED" : outcome === "cancel" ? "RECOVERY EXPORT CANCELLED" : "RECOVERY EXPORT FAILED"]);
+  }
+});
+
+test("ghost download reflects the awaited native result and re-enables its button after cancellation or failure", async () => {
+  const source = readFileSync(join(ROOT, "js/ui/results-sheet.js"), "utf8");
+  const start = source.indexOf("download.onclick = async");
+  const handler = source.slice(start, source.indexOf("\n    };", start) + 7);
+  for (const outcome of ["success", "write", "share", "cancel"]) {
+    const { sandbox } = loadNative({ capacitor: true });
+    const button = { textContent: "DOWNLOAD", disabled: false };
+    Object.assign(sandbox, { Blob, download: button, shareGhost: {}, shareOpts: {},
+      GhostShare: { fileExport: () => ({ ok: true, text: "{}", name: "lap.apexghost.json" }) } });
+    sandbox.document.createElement = () => { assert.fail("ghost download must await native saving"); };
+    let resolve, reject, calls = 0;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const plugin = outcome === "write" ? sandbox.Capacitor.Plugins.Filesystem : sandbox.Capacitor.Plugins.Share;
+    plugin[outcome === "write" ? "writeFile" : "share"] = () => { calls++; return held; };
+    vm.runInContext(handler, vm.createContext(sandbox));
+    const pending = button.onclick();
+    await new Promise(setImmediate);
+    assert.equal(button.textContent, "SAVING…");
+    assert.equal(button.disabled, true);
+    await button.onclick();
+    assert.equal(calls, 1);
+    if (outcome === "success") resolve({}); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await pending;
+    assert.equal(button.textContent, outcome === "success" ? "DOWNLOADED" : outcome === "cancel" ? "CANCELLED" : "DOWNLOAD FAILED");
+    assert.equal(button.disabled, false);
+  }
+});
+
 test("SettingsExport.download awaits the real native helper and surfaces write/share failures", async () => {
   const src = readFileSync(join(ROOT, "js/ui/settings-export.js"), "utf8");
   const download = src.slice(src.indexOf("async function download("), src.indexOf("function stamp()"));
@@ -243,14 +360,14 @@ test("SettingsExport.download awaits the real native helper and surfaces write/s
   }
 });
 
-test("UUID cache directories keep screenshot names and base64 bytes intact", async () => {
+test("generated cache directories preserve screenshot basenames and base64 bytes intact", async () => {
   const { sandbox, writes, shares } = loadNative({ capacitor: true });
   sandbox.crypto = { randomUUID: () => "test-uuid" };
   for (const bytes of [[], [0, 127, 128, 255]]) {
     const out = await sandbox.NativeDownload.saveBlob(bytesBlob(bytes), "apex26-tlx.png");
     assert.equal(out.name, "apex26-tlx.png");
     assert.equal(writes.at(-1).data, Buffer.from(bytes).toString("base64"));
-    assert.match(writes.at(-1).path, /^apex26-downloads\/test-uuid-\d+\/apex26-tlx\.png$/);
+    assert.match(writes.at(-1).path, /^apex26-downloads\/v2\/export-[^/]+\/apex26-tlx\.png$/);
     assert.equal(shares.at(-1).url, out.uri);
   }
   assert.notEqual(writes[0].path, writes[1].path);
@@ -407,4 +524,72 @@ test("Spotify available() is false under Capacitor even with a client id", () =>
   const sp = loadSpotify();
   assert.equal(sp.available(), false);
   assert.equal(sp.status().state, "off");
+});
+
+
+test("retention prunes exact owned old leaves and empty folders, preserving basenames", async () => {
+  let now = 100000;
+  const disk = new Map();
+  const deleted = [], removed = [], cleanups = [];
+  const wire = (sandbox) => {
+    const fs = sandbox.Capacitor.Plugins.Filesystem;
+    fs.writeFile = async ({ path, data }) => {
+      const folder = path.slice(0, path.lastIndexOf("/"));
+      disk.set(folder, { name: folder.split("/").at(-1), type: "directory" });
+      disk.set(path, { name: path.split("/").at(-1), type: "file", data });
+      return { uri: "file://" + path };
+    };
+    fs.readdir = async ({ path, directory }) => {
+      assert.equal(directory, "CACHE");
+      const files = [...disk.entries()].filter(([p]) => p.slice(0, p.lastIndexOf("/")) === path).map(([, e]) => e);
+      cleanups.push(path); return { files };
+    };
+    fs.deleteFile = async ({ path, directory }) => { assert.equal(directory, "CACHE"); deleted.push(path); disk.delete(path); };
+    fs.rmdir = async ({ path, directory, recursive }) => {
+      assert.equal(directory, "CACHE"); assert.equal(recursive, false);
+      assert.equal([...disk.keys()].some((p) => p.startsWith(path + "/")), false);
+      removed.push(path); disk.delete(path);
+    };
+  };
+  const first = loadNative({ capacitor: true, clock: { now: () => now } }); wire(first.sandbox);
+  const old = await first.sandbox.NativeDownload.saveBlob(bytesBlob([1]), "backup.json");
+  const oldPath = old.uri.slice(7), oldFolder = oldPath.slice(0, oldPath.lastIndexOf("/"));
+  assert.equal(oldPath.split("/").at(-1), "backup.json");
+  const mixedFolder = "apex26-downloads/v2/export-100000-255s-i-99--mixed.json";
+  disk.set(mixedFolder, { name: mixedFolder.split("/").at(-1), type: "directory" });
+  disk.set(mixedFolder + "/mixed.json", { name: "mixed.json", type: "file" });
+  disk.set(mixedFolder + "/user.json", { name: "user.json", type: "file" });
+  disk.set("apex26-downloads/legacy/backup.json", { name: "backup.json", type: "file" });
+  for (const name of ["user", "export-100000-255s-i-2--..", "export-100000-255s-i-3--%2Fsecret", "../export-100000-255s-i-5--file.json"]) {
+    disk.set("apex26-downloads/v2/" + name, { name, type: "directory" });
+  }
+  now += 8 * 24 * 60 * 60 * 1000;
+  await first.sandbox.NativeDownload.saveBlob(bytesBlob([2]), "current.json");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(disk.has(oldPath), "current-session files remain protected past grace");
+  assert.ok(disk.has(mixedFolder + "/user.json"));
+  const second = loadNative({ capacitor: true, clock: { now: () => now } }); wire(second.sandbox);
+  await second.sandbox.NativeDownload.saveBlob(bytesBlob([3]), "new.json");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(new Set(deleted), new Set([oldPath, mixedFolder + "/mixed.json"]));
+  assert.deepEqual(removed, [oldFolder]);
+  assert.ok(disk.has(mixedFolder + "/user.json"));
+  assert.ok(disk.has("apex26-downloads/legacy/backup.json"));
+  assert.equal(cleanups.some((p) => p.includes("%2Fsecret") || p.includes("/legacy/")), false);
+});
+
+test("missing or failing retention operations cannot block sharing", async () => {
+  for (const stage of ["readdir", "deleteFile", "malformed"]) {
+    const { sandbox, shares } = loadNative({ capacitor: true });
+    const fs = sandbox.Capacitor.Plugins.Filesystem;
+    fs.readdir = async ({ path }) => {
+      if (path !== "apex26-downloads/v2") return { files: [{ name: "backup.json", type: "file" }] };
+      if (stage === "readdir") throw new Error("cache denied");
+      if (stage === "malformed") return { files: null };
+      return { files: [{ name: "export-100000-255s-i-1--backup.json", type: "directory" }] };
+    };
+    fs.deleteFile = async () => { throw new Error("delete denied"); };
+    assert.equal((await sandbox.NativeDownload.saveBlob(bytesBlob([1]), "backup.json")).ok, true);
+    assert.equal(shares.length, 1);
+  }
 });

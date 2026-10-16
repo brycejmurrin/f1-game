@@ -290,10 +290,57 @@ function ensureCamEditor() {
   return _camEdLoad;
 }
 
+// Both editor doors share one lazy bundle and one Settings route. Loading may
+// finish after BACK, resume or a newer door; only that visit may reveal a dock.
+let _pendingUiOpen = null;
+function createEditorOpener(G, buttonId, ensure, method) {
+  let pending = null;
+  function cancel() {
+    const request = pending;
+    pending = null;
+    if (request && request.observer) request.observer.disconnect();
+    if (_pendingUiOpen === request) _pendingUiOpen = null;
+  }
+  function bind() {
+    const button = G.$(buttonId);
+    if (button) button.onclick = () => open(true);
+  }
+  function open(fromUi) {
+    cancel();
+    const settings = G.$("pmsettings"), display = G.$("pm-panel-display");
+    const visible = () => !!(settings && !settings.hidden && display && !display.hidden);
+    if (fromUi && !visible()) return Promise.resolve();
+    if (fromUi && _pendingUiOpen) _pendingUiOpen.cancel();
+    const request = { cancel, state: G.state, paused: G.paused, observer: null };
+    pending = request;
+    if (fromUi) {
+      _pendingUiOpen = request;
+      if (typeof MutationObserver !== "undefined") {
+        request.observer = new MutationObserver(() => { if (pending === request) cancel(); });
+        // Even hide-then-reopen ends the old visit. Observe only while waiting.
+        request.observer.observe(settings, { attributes: true, attributeFilter: ["hidden"] });
+        request.observer.observe(display, { attributes: true, attributeFilter: ["hidden"] });
+      }
+    }
+    return Promise.resolve().then(ensure).then((real) => {
+      if (pending !== request) return;
+      const changed = request.observer && request.observer.takeRecords().length > 0;
+      const allowed = !fromUi || (!changed && visible() && G.state === request.state && G.paused === request.paused);
+      cancel(); // real.open hides Settings itself; release its observer first.
+      if (allowed && real && typeof real[method] === "function") real[method]();
+    }, (error) => {
+      if (pending === request) cancel();
+      Log.warn("game", "camera editor did not open", error);
+    });
+  }
+  bind();
+  return { open: () => open(false), cancel, bind };
+}
+
 let _refresh = null;
 function create(G) {
   Log.info("game", "FlybyPanel.create");
-  const { $, store } = G;
+  const { store } = G;
   let real = null, _apiLoader = null;
   function loadSaved() {
     let saved = null;
@@ -311,15 +358,16 @@ function create(G) {
       if (!ok) return null;
       if (!real) {
         real = FlybyEditor.create(G);
+        opener.bind(); // create() wires a direct handler; keep the guarded door.
         if (_apiLoader && real.setApiLoader) real.setApiLoader(_apiLoader);
       }
       return real;
     });
   }
-  if ($("pm-flyby")) $("pm-flyby").onclick = () => { ensure().then((r) => { if (r) r.openFlyby(); }); };
+  const opener = createEditorOpener(G, "pm-flyby", ensure, "openFlyby");
   return {
-    openFlyby: () => ensure().then((r) => { if (r) r.openFlyby(); }),
-    closeFlyby: (show) => { if (real) real.closeFlyby(show); },
+    openFlyby: opener.open,
+    closeFlyby: (show) => { opener.cancel(); if (real) real.closeFlyby(show); },
     isOpen: () => !!(real && real.isOpen && real.isOpen()),
     setApiLoader: (fn) => { _apiLoader = fn; if (real && real.setApiLoader) real.setApiLoader(fn); },
     loadSaved,
@@ -327,6 +375,6 @@ function create(G) {
   };
 }
 
-return Object.assign({ create, ensureCamEditor, refresh: () => { if (_refresh) _refresh(); } }, ops);
+return Object.assign({ create, ensureCamEditor, createEditorOpener, refresh: () => { if (_refresh) _refresh(); } }, ops);
 })();
 Object.freeze(FlybyPanel);

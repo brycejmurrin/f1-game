@@ -30,6 +30,8 @@ const INSTALL_COMPLETE_URL = "__apex_install_complete__";
 // build install-precaches (not runtime-only opt-ins). Every sweep (fetch path
 // and activate) waits for it; install calls skipWaiting only after writing it.
 const INSTALL_SETTLED_URL = "__apex_install_settled__";
+const OFFLINE_STATUS_URL = "__apex_offline_status__";
+const offlineRetries = new Map();
 
 // Default chosen backend at install: TLX (three) is the shipped picker default.
 // GLX stays in the required pool separately. Scenery + data/net are the
@@ -438,6 +440,7 @@ async function precacheAssetLists() {
     // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
     "js/audio/signal.js",
     "js/audio/soundtrack.js",
+    "js/audio/race-mix-audition.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
@@ -445,8 +448,10 @@ async function precacheAssetLists() {
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
     "js/audio/rivals.js",
+    "js/audio/crowd.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
+    "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
@@ -499,7 +504,9 @@ async function precacheAssetLists() {
     "js/editor/elev-presets.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
+    "js/editor/followup-tools.js",
     "js/editor/scenery-panel.js",
+    "js/editor/bridge-panel.js",
     "js/editor/designer.js",
     // LAZY_XR — WebXR session behind navigator.xr / ENTER VR
     "js/xr/xr-plan.js",
@@ -512,6 +519,7 @@ async function precacheAssetLists() {
     "js/camera/tuner-panel.js",
     "js/camera/flyby-editor.js",
     // LAZY_CAREER_UI — CAREER screen behind the title CAREER door
+    "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
     // /@gen-shell:sw-optional
   ]);
@@ -606,7 +614,7 @@ async function reuseHashed(cache, url) {
   } catch (_) { return false; }   // the network path below still runs
 }
 
-async function cacheOptionalAsset(cache, url) {
+async function cacheOptionalAsset(cache, url, verifyGeneration = false) {
   let timeout = null;
   const ctrl = typeof AbortController === "function" ? new AbortController() : null;
   try {
@@ -617,7 +625,23 @@ async function cacheOptionalAsset(cache, url) {
       }, OPTIONAL_ASSET_MS);
     });
     const res = await Promise.race([fetch(url, ctrl ? { signal: ctrl.signal } : undefined), expired]);
-    if (res && res.ok) { await cache.put(url, res); return true; }
+    if (res && res.ok) {
+      if (verifyGeneration) {
+        const hash = /\?v=([0-9a-f]{12})$/.exec(url);
+        // Pages ignores query strings. A retry after a deploy must never put
+        // newer script bytes into an older generation's executable namespace.
+        if (!hash && /^js\//.test(url)) return false;
+        if (hash) {
+          if (typeof crypto === "undefined" || !crypto.subtle) return false;
+          const checked = await Promise.race([res.clone().arrayBuffer().then(async (body) => {
+            const bytes = await crypto.subtle.digest("SHA-256", body);
+            return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 12) === hash[1];
+          }), expired]);
+          if (!checked) return false;
+        }
+      }
+      await cache.put(url, res); return true;
+    }
     return false;   // 4xx/5xx or timed out: counted by install, one aggregated log line
   } catch (_) { /* optional assets must not invalidate an otherwise healthy install */ }
   finally { if (timeout !== null) clearTimeout(timeout); }
@@ -649,13 +673,15 @@ self.addEventListener("install", (event) => {
     const cache = await openCache(name);
     // GLX is the fallback renderer every device can run: when TLX/WGX are not
     // cached (or fail), an offline boot without it is "graphics unavailable".
-    // So its deferred files are ESSENTIAL, stamped as loadBackendScripts asks.
-    const isGlx = (u) => /^js\/render\/glx\//.test(u);
+    // Career UI is also required: an update must not replace working offline
+    // career access with a shell whose lazy entry point was never cached.
+    // Stamp these files exactly as ScriptLoader requests them.
+    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || u === "js/career/career-ui.js";
     const isShell = (u) => u === "./" || u === "index.html";
     // A lazy file's key: its content hash from the shell's map, else the build.
     const lazyV = urls.lazyV || new Map();
     const stampKey = (u) => u + "?v=" + (lazyV.get(u) || build);
-    const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isGlx).map(stampKey));
+    const required = urls.essential.filter((u) => !isShell(u)).concat(urls.optional.filter(isRequiredLazy).map(stampKey));
     await Promise.all(["./", "index.html"].map((u) => cache.put(u, urls.shellResponse())));
     await pooled(required, 6, async (u) => { if (!(await reuseHashed(cache, u))) await cacheRequiredAsset(cache, u); });
     await cache.put(INSTALL_COMPLETE_URL, new Response("complete"));
@@ -679,11 +705,11 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-ui\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
-          // GLX went in `required` above; WGX is runtime-only (opt-in).
-          return !isGlx(bare) && !isRuntimeOnlyOptional(bare);
+          // GLX and career UI went in `required`; WGX is runtime-only (opt-in).
+          return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
         });
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
     // BACKGROUND pool (scenery / data / net — not WGX), then SETTLED, then
@@ -702,6 +728,9 @@ self.addEventListener("install", (event) => {
       });
     }
     if (optionalMissed) swLog("warn", "precache: " + optionalMissed + " of " + stamped.length + " optional assets not cached (first: " + firstMissed + ")");
+    await cache.put(OFFLINE_STATUS_URL, new Response(JSON.stringify({
+      build: Number(build), required: ["./", "index.html", ...required], optional: stamped,
+    }), { headers: { "Content-Type": "application/json" } }));
     await cache.put(INSTALL_SETTLED_URL, new Response("settled"));
     invalidateCacheOrder();
     await self.skipWaiting();
@@ -763,6 +792,28 @@ async function servedGeneration() {
 // updates can execute new bytes at that SAME URL.
 self.addEventListener("message", (event) => {
   const port = event.ports && event.ports[0];
+  if (event.data && ["apex-offline-status", "apex-offline-retry"].includes(event.data.type) && port) {
+    event.waitUntil((async () => {
+      try {
+        const status = await offlineStatus();
+        if (event.data.type === "apex-offline-retry" && status._cache && status.coreReady && status._missing.length) {
+          const name = CACHE_PREFIX + status.build;
+          if (!offlineRetries.has(name)) {
+            const retry = pooled(status._missing, 4, (u) => cacheOptionalAsset(status._cache, u, true))
+              .catch((e) => swLog("warn", "offline retry: " + e.message))
+              .finally(() => offlineRetries.delete(name));
+            offlineRetries.set(name, retry);
+            event.waitUntil(retry);
+          }
+          status.retrying = true;
+        }
+        const { _cache, _missing, ...reply } = status;
+        port.postMessage({ type: "apex-offline-status", ...reply });
+      } catch (_) { port.postMessage({ type: "apex-offline-status", known: false }); }
+      finally { port.close(); }
+    })());
+    return;
+  }
   if (!event.data || event.data.type !== "apex-cache-generation" || !port) return;
   event.waitUntil((async () => {
     try {
@@ -771,6 +822,23 @@ self.addEventListener("message", (event) => {
     finally { port.close(); }
   })());
 });
+
+async function offlineStatus() {
+  const build = await servedGeneration();
+  const name = CACHE_PREFIX + build;
+  if (!build || !(await caches.keys()).includes(name)) return { known: false };
+  const cache = await openCache(name), hit = await cache.match(OFFLINE_STATUS_URL);
+  if (!hit) return { known: false, build };
+  const record = await hit.json();
+  if (record.build !== build || !Array.isArray(record.required) || !Array.isArray(record.optional)
+    || record.required.length + record.optional.length > 2000
+    || [...record.required, ...record.optional].some((u) => typeof u !== "string" || u.startsWith("/") || u.includes(":") || u.includes(".."))) return { known: false, build };
+  const requiredHits = await Promise.all(record.required.map((u) => cache.match(u)));
+  const optionalHits = await Promise.all(record.optional.map((u) => cache.match(u)));
+  const missing = record.optional.filter((_, i) => !optionalHits[i]);
+  return { known: true, build, coreReady: requiredHits.every(Boolean), optionalTotal: record.optional.length,
+    optionalMissing: missing.length, retrying: offlineRetries.has(name), _missing: missing, _cache: cache };
+}
 
 // Unversioned same-origin assets (no ?v= on the wire): network-first with cache
 // fallback. Used for assets/pack/ (MAT layer index) and assets/voice/ (.json +
@@ -847,7 +915,7 @@ self.addEventListener("fetch", (event) => {
   // Shell bust navigations (?b= from index.html's version guard) must never
   // fall back to precached index.html — a slow/dead network would serve the
   // stale shell, and the one-shot sessionStorage guard blocks a second try.
-  const isShellBust = req.mode === "navigate" && url.searchParams.has("b");
+  const isShellBust = req.mode === "navigate" && isShellDocument(url) && url.searchParams.has("b");
   if (req.mode === "navigate" || isVersion) {
     // version.json is NEVER written to the cache here. index.html fetches it as
     // "version.json?_=<Date.now()>", so every launch would put one more entry
@@ -918,7 +986,10 @@ self.addEventListener("fetch", (event) => {
       // guard swallows the parse error).
       if (isVersion) return (await matchPreferCurrent("version.json")) || Response.error();
       if (isShellBust) return bustShell || Response.error();
-      const own = await matchPreferCurrent(req);
+      const ownURL = new URL(url.href);
+      ownURL.search = "";
+      ownURL.hash = "";
+      const own = (await matchPreferCurrent(req)) || (url.search && await matchPreferCurrent(ownURL.href));
       if (own) return own;
       // The GAME shell answers only the game's own address ("/", a directory
       // URL, "/index.html", or an extensionless deep link). Another root page
@@ -946,8 +1017,9 @@ self.addEventListener("fetch", (event) => {
 
   // RECORDED RADIO VOICES ARE NETWORK-FIRST. assets/voice/*.json and *.bin are
   // fetched as unversioned pairs (js/audio/voice-pack.js); cache-first could
-  // serve a stale index with a fresh bin (or the reverse) after a deploy and
-  // corrupt clip offsets for the whole cache generation. Same strategy as pack.
+  // keep a rebaked voice stale for the whole cache generation. Same strategy
+  // as pack. Each response races independently; voice-pack.js verifies the
+  // manifest's binary digest before accepting a pair (including old bare keys).
   if (url.pathname.includes("/assets/voice/") && !DEV_HOST) {
     packNetworkFirst(event, req);
     return;

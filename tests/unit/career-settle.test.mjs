@@ -66,6 +66,7 @@ function load(seasonLen, raceRules = false, onWrite = () => {}) {
       vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: file });
     }
   }
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
   return vm.runInContext(raceRules
@@ -326,8 +327,9 @@ function loadDriver(ratings, opts = {}) {
     // RUNGS, not the cap, are what this test measures.
     Parts: {
       getFactorySetup: () => ({}), getCost: () => opts.worksCost || 600,
+      DEFAULTS: Object.fromEntries(Array.from({ length: 6 }, (_, i) => ["c" + i, "base" + i])),
       CATALOG: Array.from({ length: 6 }, (_, i) => ({
-        id: "c" + i, options: [{ cost: 0 }, { cost: 500 }],
+        id: "c" + i, options: [{ id: "base" + i, cost: 0 }, { id: "top" + i, cost: 500 }],
       })),
     },
     // An EMPTY calendar by default, which makes seasonDone() true at round 0 —
@@ -352,6 +354,7 @@ function loadDriver(ratings, opts = {}) {
   // suite. It reads Parts.CATALOG at call time and the stub supplies one.
   vm.runInContext(readFileSync(join(ROOT, "js/career/regulations.js"), "utf8"), ctx,
     { filename: "js/career/regulations.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
@@ -511,6 +514,7 @@ function loadWithSeason(n) {
   // stub instead — its market tests pin overall() per code on purpose.
   vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx,
     { filename: "js/data/driver-ratings.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
@@ -1305,11 +1309,13 @@ test("a move takes the player's DEVELOPMENT along (it is keyed by seat); the old
   assert.fail("no seed drew an offer from another team");
 });
 
-test("a move resolves the new team's WORKS build outside the current era's bans (like start())", () => {
+test("a move consumes the pure reviewed works snapshot without temporarily changing the installed era", () => {
   const src = readFileSync(join(ROOT, "js/career/career.js"), "utf8");
-  const fn = src.slice(src.indexOf("function acceptOffer("), src.indexOf("\n}\n", src.indexOf("function acceptOffer(")));
-  const clear = fn.indexOf('Parts.setLegality(null, "")'), fac = fn.indexOf("Parts.getFactorySetup(team)"), re = fn.indexOf("applyRegs()");
-  assert.ok(clear > 0 && fac > clear && re > fac, "clear the ruleset, read the factory, re-install the era");
+  const factory = src.slice(src.indexOf("function worksSnapshot("), src.indexOf("function offerPreview("));
+  assert.ok(factory.includes("Parts.FACTORY_PRESETS"), "snapshot reads the unrestricted authored works build");
+  assert.ok(!factory.includes("setLegality"), "preview never changes the live era while browsing");
+  const accept = src.slice(src.indexOf("function acceptOffer("), src.indexOf("\n}\n", src.indexOf("function acceptOffer(")));
+  assert.ok(accept.includes("career.fitted = Object.assign({}, preview.fitted)"), "signing consumes the same reviewed works snapshot");
 });
 
 // ── a hostile offer / tdev that slipped past the importer ───────────────────
@@ -1366,4 +1372,59 @@ test("settlement persists once and saveStatus only reads the last result", () =>
   assert.deepEqual(Career.saveStatus(), result.save);
   Career.saveStatus(); Career.saveStatus();
   assert.equal(writes, 1);
+});
+
+test("Committed brief escrows only 50 credits once, locks at weekend start, settles once", () => {
+  const Career = hub(); const p = Career.planning();
+  assert.equal(p.chooseStake(true), true);
+  const before = Career.data().money;
+  Career.markWeekendStarted(); Career.markWeekendStarted();
+  assert.equal(Career.data().money, before - 50);
+  assert.equal(p.chooseStake(false), false);
+  const player = { team: { id: "haas" }, seat: 1, retired: true, cuts: 1, penalty: 5, gridPos: 20 };
+  Career.data().season.round = 1;
+  const settled = Career.settleRound([player], player);
+  assert.equal(settled.stake, 50);
+  assert.equal(Career.data().briefStake.escrow, 50);
+  const after = Career.data().money;
+  assert.equal(Career.settleRound([player], player), null);
+  assert.equal(Career.data().money, after);
+});
+
+test("sponsor offers stay deterministic, share window and lock after first weekend", () => {
+  const Career = load(8); Career.start({ flavour: "myteam", seed: 7 }); Career.engage(true);
+  const p = Career.planning(); const before = JSON.stringify(p.sponsorOffers());
+  assert.equal(JSON.stringify(p.sponsorOffers()), before);
+  const offers = p.sponsorOffers(); assert.equal(offers[0].window, offers[1].window);
+  assert.equal(p.chooseSponsor(1), true);
+  assert.equal(Career.sponsor().type, offers[1].type);
+  assert.equal(Career.sponsor().pay, offers[1].pay);
+  assert.equal(Career.sponsor().need, offers[1].value);
+  Career.markWeekendStarted(); assert.equal(p.chooseSponsor(0), false);
+});
+
+test("clean sponsor reports mathematically lost without inventing a points maximum", () => {
+  let Career;
+  for (let seed = 1; seed < 100; seed++) {
+    const candidate = load(8); candidate.start({ flavour: "myteam", seed }); candidate.engage(true);
+    if (candidate.sponsor().type === "clean") { Career = candidate; break; }
+  }
+  assert.ok(Career);
+  Career.data().results.push({ r: 0, pts: 0, clean: false }); Career.data().season.round = 1;
+  assert.equal(Career.sponsor().possible, false);
+  assert.equal(Career.sponsor().roundsLeft + 1, 3);
+});
+
+test("factory savings uses rounded quotes, owned-all zero and cash forecast owner wages", () => {
+  const source = readFileSync(join(ROOT, "js/career/career-planning.js"), "utf8");
+  const ctx = vm.createContext({ Parts: { CATALOG: [{ options: [{ id: "one", cost: 7 }, { id: "two", cost: 11 }] }] }, Teams: { LIST: [] } });
+  vm.runInContext(source, ctx);
+  const Planning = vm.runInContext("CareerPlanning", ctx);
+  const data = { year: 2026, team: "custom", flavour: "myteam", money: 100, owned: [], roster: [{ salary: 95 }] };
+  const api = { facility: () => 1, facilityCost: () => 4800, isOwned: (id) => data.owned.includes(id), freeMoney: () => false, prizeFor: () => 900 };
+  const p = Planning.create({ data: () => data, api: () => api });
+  assert.equal(p.factory().savings, (Math.round(21 * .95) - Math.round(21 * .9)) + (Math.round(33 * .95) - Math.round(33 * .9)));
+  assert.equal(p.cash(50).afterPurchase, 50); assert.equal(p.cash(50).wages, 95); assert.equal(p.cash(50).low, 0);
+  data.owned = ["one", "two"]; assert.equal(p.factory().savings, 0);
+  data.flavour = "driver"; assert.equal(p.cash(50).wages, 0);
 });

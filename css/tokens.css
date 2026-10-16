@@ -205,6 +205,7 @@
 /* Apex 26 — layout, HUD, menus. Data hub styles live in css/data.css */
 
 :root {
+  color-scheme: dark;
   --red: #e10600;
   /* Official F1 Carbon Black (~#15151E) cooled into a deeper stage black so
      sheets still float over the live circuit; --carbon is the steely tint for
@@ -978,10 +979,9 @@ body:not(.desktop) {
 :root[data-menu-accent="lime"]   { --red: #b7e11b; }
 
 /* ---- APPEARANCE: light / system theme ----------------------------------
-   Dark stays the :root default. Light rewrites the surface ladder so every
-   consumer of --bg/--text/--panel/--plate* adapts without per-sheet edits.
-   SYSTEM copies light when prefers-color-scheme: light. */
+   Light rewrites the surface ladder; SYSTEM follows the OS preference. */
 :root[data-ui-theme="light"] {
+  color-scheme: light;
   --bg: #f0f0f4;
   --carbon: #e6e6ec;
   --text: #14141c;
@@ -1030,6 +1030,7 @@ body:not(.desktop) {
     --gold: #7a5600;
   }
 }
+:root[data-ui-theme="system"] { color-scheme: dark light; }
 /* ---- APPEARANCE: text size + high contrast (js/ui/appearance-opts.js) ----
    TEXT SIZE re-states the --fs-* ladder, so every token consumer grows and the
    bare-px HUD (its own HUD SIZE) does not. --fs-micro stays the floor the
@@ -1114,6 +1115,7 @@ body:not(.desktop) {
    on its plate under LIGHT, SYSTEM-light and LIGHT + HIGH CONTRAST. Same move
    as .touchbtn in css/touch-controls.css. */
 :is(#hud, #announce, #game-metrics) {
+  color-scheme: dark;
   --bg: #0c0c14;
   --carbon: #15151E;
   --text: #f6f6f9;
@@ -1203,6 +1205,9 @@ html, body {
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;
 }
+/* Visor rain (js/fx/droplets.js): above #game/#game-soft (1), below the HUD (10). */
+#fx-droplets { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+#fx-droplets[hidden] { display: none; }
 
 body.in-race .touchbtn,
 body.in-race #hud,

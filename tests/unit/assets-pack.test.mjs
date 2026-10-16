@@ -15,7 +15,8 @@ import assert from "node:assert/strict";
 import { readAX26, ax26Version } from "../helpers/ax26.mjs";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { fnSource } from "../helpers/fn-source.mjs";
 import { createRequire } from "node:module";
 import cp from "node:child_process";
 import vm from "node:vm";
@@ -300,7 +301,39 @@ test("unload during parallel downloads rejects the stale generation before any d
   assert.deepEqual(maps, [null]);
   assert.equal(assets.state().tier, "off");
   assert.equal(assets.state().uploaded, false);
-  assert.equal(assets.state().bytes, 32, "finished downloads still count as fetched bytes");
+  assert.equal(assets.state().bytes, 0, "unload releases the pack byte accounting");
+});
+
+test("unload drops cached models and rejects late manifest/model responses", async () => {
+  const manifests = [deferredAssetDownload(), deferredAssetDownload()];
+  const modelDownload = deferredAssetDownload();
+  let manifestGets = 0;
+  const assets = assetLoader({
+    fetch(url) {
+      if (url.endsWith("manifest.json")) return manifests[manifestGets++].promise;
+      return modelDownload.promise;
+    },
+  });
+  assets.init({ createTextureArray() {}, setMaterialMaps() {} });
+
+  const oldManifest = assets.manifest();
+  assets.unload();
+  const nextManifest = assets.manifest();
+  manifests[0].resolve({ ok: true, json: async () => ({ models: { old: { file: "old.ax26" } } }) });
+  assert.equal(await oldManifest, false, "a response from before unload cannot become the active pack");
+  manifests[1].resolve({ ok: true, json: async () => ({ models: { fresh: { file: "fresh.ax26" } } }) });
+  assert.deepEqual(await nextManifest, { models: { fresh: { file: "fresh.ax26" } } });
+  assert.equal(assets.models().length, 1);
+  assert.equal(assets.models()[0], "fresh");
+
+  const staleModel = assets.model("fresh");
+  await new Promise(setImmediate);
+  assets.unload();
+  modelDownload.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) });
+  assert.equal(await staleModel, null);
+  assert.equal(assets.modelSync("fresh"), null, "a late model decode cannot repopulate the cache");
+  assert.equal(assets.models().length, 0);
+  assert.equal(assets.state().bytes, 0);
 });
 
 test("material and model loads recover after a temporarily unavailable pack", async () => {
@@ -653,6 +686,128 @@ test("WGX and TLX take pack bytes from Assets.readLayerBytes, not a 2D-canvas ge
   assert.doesNotMatch(wgxBytes, /getImageData|getContext\("2d"/, "WGX layer bytes must not round-trip a premultiplied canvas");
   assert.match(wgx, /premultipliedAlpha: false \}/, "the no-WebGL2 copyExternalImageToTexture keeps straight alpha");
   assert.match(tlx, /Assets\.readLayerBytes\(size, images, n, data\)/);
+});
+
+// P4 for TLX (#2149): tlx.js createTextureArray / setMaterialMaps, lifted verbatim, against the real Assets
+// loader on the async mock GL and three r186's real DataArrayTexture. Pins the token (pending + ready, no upload
+// scheduled until every layer has landed), the bind held back while pending, byte parity with the sync path, and the
+// fallback to readbackTextureLayers when the async call returns null (or apex26.tlxPackAsync=0).
+async function tlxPackRig(mock, { nullAsync = false, ls = {} } = {}) {
+  const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.core.min.js")).href);
+  const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  const a = TLX.indexOf("      function readbackTextureLayers(size, images, n, data) {");
+  const b = TLX.indexOf("      // CSS-box observation is shared", a);
+  assert.ok(a > 0 && b > a, "tlx.js readback block moved — update this test");
+  const assets = assetLoader({ setTimeout, OffscreenCanvas: class { getContext(kind) { return kind === "webgl2" ? mock.gl : null; } } });
+  if (nullAsync) assets.readLayerBytesAsync = () => null;
+  const calls = { async: 0, sync: 0, bound: [] };
+  const A = { readLayerBytes: (...x) => { calls.sync++; return assets.readLayerBytes(...x); },
+    readLayerBytesAsync: (...x) => { calls.async++; return assets.readLayerBytesAsync(...x); } };
+  const lit = { setMaterialMaps: (m) => calls.bound.push(m) };
+  const twoD = class { constructor(w, h) { this.w = w; this.h = h; }
+    getContext() { const w = this.w, h = this.h; return { clearRect() {}, drawImage() {}, getImageData: () => ({ data: new Uint8Array(w * h * 4).fill(201) }) }; } };
+  // eslint-disable-next-line no-new-func
+  const gfx = new Function("THREE", "Assets", "localStorage", "lit", "OffscreenCanvas", `"use strict";
+    let matPlaceAlbedo = null, matPlaceNormal = null, matOwnedAlbedo = null, matOwnedNormal = null;
+    ${TLX.slice(a, b)}
+    return { ${fnSource(TLX, "createTextureArray(size, images, layers) {")}, ${fnSource(TLX, "setMaterialMaps(maps) {")} };`)(
+    THREE, A, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, twoD);
+  return { gfx, calls };
+}
+const tlxImages = (size, refusedAt = -1) => {
+  const im = []; for (const i of [1, 5, 9, 16]) im[i] = layerImage(i, size, i === refusedAt); im[2] = new Uint8Array(size * size * 4).fill(77); return im;
+};
+
+test("P4 (TLX #2149): createTextureArray returns a pending token, uploads only once every layer landed, bytes = the sync path", async () => {
+  const size = 4, n = 17;
+  const sync = await tlxPackRig(makeAsyncGl(), { nullAsync: true });
+  const st = sync.gfx.createTextureArray(size, tlxImages(size), n);
+  assert.equal(st.pending, undefined, "the sync path returns a plain texture"); assert.equal(st.ready, undefined);
+  assert.ok(st.version > 0, "sync: upload scheduled at once"); assert.equal(sync.calls.sync, 1);
+
+  const mock = makeAsyncGl({ busyPolls: 3 });
+  const r = await tlxPackRig(mock);
+  const t = r.gfx.createTextureArray(size, tlxImages(size), n);
+  assert.equal(r.calls.async, 1, "Assets.readLayerBytesAsync has a TLX caller"); assert.equal(r.calls.sync, 0);
+  assert.equal(t.pending, true); assert.equal(typeof t.ready.then, "function");
+  assert.equal(t.version, 0, "no upload scheduled while layers are in flight (a half-filled array never reaches the GPU)");
+  assert.equal(mock.ops.filter((o) => o[0] === "readSync").length, 0, "no blocking readPixels");
+  assert.equal(await t.ready, true);
+  assert.equal(t.pending, false); assert.ok(t.version > 0, "needsUpdate once ready");
+  assert.ok(Buffer.from(t.image.data).equals(Buffer.from(st.image.data)), "byte parity with the sync path, every layer");
+});
+
+test("P4 (TLX #2149): setMaterialMaps holds a pending token back, binds it when ready, and a newer call supersedes it", async () => {
+  const size = 2, n = 17;
+  {
+    const r = await tlxPackRig(makeAsyncGl({ busyPolls: 2 }));
+    const al = r.gfx.createTextureArray(size, tlxImages(size), n), nm = r.gfx.createTextureArray(size, tlxImages(size), n);
+    r.gfx.setMaterialMaps({ albedo: al, normal: nm, scales: [1] });
+    assert.equal(r.calls.bound.length, 0, "nothing bound while pending: the procedural look stays");
+    await Promise.all([al.ready, nm.ready]); await new Promise((res) => setTimeout(res, 0));
+    assert.equal(r.calls.bound.length, 1);
+    assert.equal(r.calls.bound[0].albedo, al); assert.equal(r.calls.bound[0].normal, nm); assert.deepEqual(r.calls.bound[0].scales, [1]);
+  }
+  {
+    const r = await tlxPackRig(makeAsyncGl({ busyPolls: 2 }));
+    const al = r.gfx.createTextureArray(size, tlxImages(size), n);
+    let disposed = 0; al.addEventListener("dispose", () => disposed++);
+    r.gfx.setMaterialMaps({ albedo: al, normal: null });
+    r.gfx.setMaterialMaps(null);   // unload while the fill is in flight
+    await al.ready; await new Promise((res) => setTimeout(res, 0));
+    assert.deepEqual(r.calls.bound, [null], "only the unload bound; the superseded token never was");
+    assert.equal(disposed, 1, "the superseded token is freed");
+  }
+  {
+    // Freed in flight (a superseded Assets.load): ready resolves false and no upload is ever scheduled.
+    const r = await tlxPackRig(makeAsyncGl({ busyPolls: 2 }));
+    const al = r.gfx.createTextureArray(size, tlxImages(size), n);
+    al.dispose();
+    assert.equal(await al.ready, false); assert.equal(al.version, 0);
+  }
+});
+
+test("TLX repeated pending material adoption keeps shared tokens alive for the latest request", async () => {
+  for (const replacement of ["same", "partial", "different", "unload"]) {
+    const r = await tlxPackRig(makeAsyncGl({ busyPolls: 2 }));
+    const make = () => r.gfx.createTextureArray(2, tlxImages(2), 17);
+    const a = make(), n = make(), other = make();
+    const disposed = new Map();
+    for (const t of [a, n, other]) t.addEventListener("dispose", () => disposed.set(t, (disposed.get(t) || 0) + 1));
+    r.gfx.setMaterialMaps({ albedo: a, normal: n, scales: [1] });
+    const latest = replacement === "unload" ? null : { albedo: replacement === "different" ? other : a, normal: replacement === "same" ? n : other, scales: [2] };
+    r.gfx.setMaterialMaps(latest);
+    await Promise.all([a.ready, n.ready, other.ready]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const bound = r.calls.bound.at(-1);
+    assert.equal(bound && bound.albedo, latest && latest.albedo, replacement);
+    if (latest) {
+      assert.equal(bound.normal, latest.normal, replacement);
+      for (const t of new Set([latest.albedo, latest.normal])) assert.equal(disposed.get(t) || 0, 0, "latest tokens remain alive");
+    }
+    for (const t of new Set([a, n])) if (!latest || (t !== latest.albedo && t !== latest.normal)) assert.equal(disposed.get(t), 1, "old unshared token freed once");
+    r.gfx.setMaterialMaps(null);
+    for (const t of new Set([a, n])) assert.equal(disposed.get(t), 1, "unload frees every adopted token exactly once");
+  }
+});
+
+test("P4 (TLX #2149): the fallbacks — async null and apex26.tlxPackAsync=0 take the sync path; a refused layer takes the 2d copy", async () => {
+  const size = 2, n = 17, page = size * size * 4;
+  for (const [label, opts] of [["readLayerBytesAsync → null", { nullAsync: true }], ["apex26.tlxPackAsync=0", { ls: { "apex26.tlxPackAsync": "0" } }]]) {
+    const r = await tlxPackRig(makeAsyncGl(), opts);
+    const t = r.gfx.createTextureArray(size, tlxImages(size), n);
+    assert.equal(t.pending, undefined, label); assert.ok(t.version > 0, label); assert.equal(r.calls.sync, 1, label);
+  }
+  const r = await tlxPackRig(makeAsyncGl());
+  const t = r.gfx.createTextureArray(size, tlxImages(size, 5), n);
+  assert.equal(await t.ready, true);
+  assert.equal(t.image.data[5 * page], 201, "the layer the scratch FBO refused came from the 2d round-trip");
+  assert.equal(t.image.data[0], 128, "an absent layer keeps the neutral grey");
+  // Nothing landed at all: ready false and the token freed — assets.js reads that as an upload failure.
+  const none = await tlxPackRig(makeAsyncGl({ waitFails: true }));
+  const e = none.gfx.createTextureArray(size, [, layerImage(1, size)], n);
+  let disposed = 0; e.addEventListener("dispose", () => disposed++);
+  assert.equal(await e.ready, false); assert.equal(disposed, 1);
 });
 
 test("unload invalidates an in-flight pack upload and frees its partial texture", async () => {

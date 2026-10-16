@@ -229,11 +229,17 @@ export async function runMenuShot(opts = {}) {
   }
 }
 
-function writeCaptureIndex(outDir, rows) {
+export function writeCaptureIndex(outDir, rows) {
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  const items = rows.filter((r) => !r.skipped && r.shot).map((r) => {
+  const values = (key) => [...new Set(rows.map((r) => r[key]).filter(Boolean))].sort();
+  const options = (key) => values(key).map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+  const items = rows.map((r) => {
+    if (r.skipped || !r.shot) {
+      return `<tr data-screen="${esc(r.screen)}" data-viewport="${esc(r.viewport)}" class="skipped"><td>${esc(r.screen)}</td><td>${esc(r.viewport)}</td>` +
+        `<td colspan="2"><strong>SKIPPED</strong>${r.skipped ? ` — ${esc(r.skipped)}` : ""}</td></tr>`;
+    }
     const dom = r.dom ? `<a href="${esc(r.dom)}">dom</a>` : "";
-    return `<tr><td>${esc(r.screen)}</td><td>${esc(r.viewport)}</td>` +
+    return `<tr data-screen="${esc(r.screen)}" data-viewport="${esc(r.viewport)}"><td>${esc(r.screen)}</td><td>${esc(r.viewport)}</td>` +
       `<td><a href="${esc(r.shot)}"><img src="${esc(r.shot)}" alt="" style="max-width:280px;border:1px solid #333"></a></td>` +
       `<td>${dom}</td></tr>`;
   }).join("\n");
@@ -244,12 +250,29 @@ function writeCaptureIndex(outDir, rows) {
  h1{font-size:18px} table{border-collapse:collapse;margin-top:16px;width:100%}
  th,td{border:1px solid #26262e;padding:8px 10px;vertical-align:top}
  th{font-weight:600;color:#a9a9b6;font-size:11px;text-align:left}
- a{color:#7fd89a}
+ a{color:#7fd89a} img{display:block} .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:16px 0}
+ label{display:grid;gap:3px;color:#a9a9b6;font-size:11px} select,input,button{background:#171720;color:#e8e8ee;border:1px solid #454553;border-radius:4px;padding:6px}
+ .skipped{color:#ffb27d}.skipped strong{color:#ff6b3d}
 </style>
 <h1>APEX 26 — MENU SCREENSHOT + DOM GALLERY</h1>
 <p>Fast capture: one boot per viewport, resumable shards, parallel <code>--jobs</code>.</p>
-<table><thead><tr><th>Screen</th><th>Viewport</th><th>Screenshot</th><th>DOM</th></tr></thead>
-<tbody>${items}</tbody></table>`);
+<div class="filters">
+ <label>Screen <select id="filter-screen"><option value="">All screens</option>${options("screen")}</select></label>
+ <label>Viewport <select id="filter-viewport"><option value="">All viewports</option>${options("viewport")}</select></label>
+ <label>Search <input id="filter-search" type="search" placeholder="screen or viewport"></label>
+ <button id="filter-reset" type="button">Reset</button>
+ <output id="filter-count" aria-live="polite"></output>
+</div>
+<table><thead><tr><th>Screen</th><th>Viewport</th><th>Screenshot</th><th>DOM / status</th></tr></thead>
+<tbody id="gallery-rows">${items}</tbody></table>
+<script>
+(() => {
+ const rows=[...document.querySelectorAll('#gallery-rows tr')], screen=document.querySelector('#filter-screen'), viewport=document.querySelector('#filter-viewport'), search=document.querySelector('#filter-search'), count=document.querySelector('#filter-count');
+ const apply=()=>{const q=search.value.trim().toLowerCase(), shown=rows.filter(row=>{const ok=(!screen.value||row.dataset.screen===screen.value)&&(!viewport.value||row.dataset.viewport===viewport.value)&&(!q||row.textContent.toLowerCase().includes(q)); row.hidden=!ok; return ok;}); count.textContent=shown.length+' of '+rows.length+' cells';};
+ [screen,viewport,search].forEach(el=>el.addEventListener('input',apply));
+ document.querySelector('#filter-reset').addEventListener('click',()=>{screen.value='';viewport.value='';search.value='';apply();}); apply();
+})();
+</script>`);
 }
 
 /**
