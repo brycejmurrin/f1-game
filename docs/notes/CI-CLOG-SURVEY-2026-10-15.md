@@ -205,7 +205,7 @@ Landed in the same change as this note (stacked on #1758, which carried the audi
   `queue: max` admission control for ready-tier browser legs is a follow-up once the required-check change frees
   the job names.
 
-Later the same day Bryce moved the deploy branch's protection to the single `CI` check, dropped `Docs guards` from it and turned off squash and rebase merging; `.github/workflows/docs-guards.yml` was then deleted (one job start per PR event, 615 runs on 2026-10-14; `test:docs-guards` stays as the local alias). The job names are free to change now, so the `queue: max` browser lanes and a node-slice rebalance need no further settings round.
+Later the same day Bryce moved the deploy branch's protection to the single `CI` check, dropped `Docs guards` from it and turned off squash merging (rebase merging was still allowed when the repository settings were read at 07:58 UTC — §8); `.github/workflows/docs-guards.yml` was then deleted (one job start per PR event, 615 runs on 2026-10-14; `test:docs-guards` stays as the local alias). The job names are free to change now, so the `queue: max` browser lanes and a node-slice rebalance need no further settings round.
 
 Then (same day, once `CI` was the one required check): every pull request's node plan lists only the needed slices (`--needed-only` on ready PRs too; a deploy push and the train keep all six rows for the train's reuse check), and the ready tier's browser legs queue per lane in GitHub — `selected` legs on 12 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a field of every matrix row, `select-specs.mjs` LANES) and smoke on one lane per shard index — so at most 12 selected legs and 1 smoke run fleet-wide at once and the rest wait FIFO without a runner; the train, the nightly and a dispatch get a group of their own per leg. `ready-full-cap.mjs` still bounds ready RUNS at the desk; the lanes bound LEGS in GitHub.
 
@@ -258,3 +258,29 @@ What changed (this PR):
   The only lever below 8.7 min is splitting `adapted-specs.test.mjs` across two rows.
 
 Re-measure the six job medians after a day of deploy pushes; `SLICE_COST_P50_SEC` carries the projection until then.
+
+First measurement (the ship push on the merge, caf37bd6, run 38700490935, 07:42 UTC, every row in full; job seconds
+with setup): vm-a1 236, vm-a2 278, vm-b1 286, vm-b2 361, page 422, slow 220. Wall 422 s (7.0 min) against 638 s
+before; vm-b2 came in ~40 s over its projection (car-fields-vm's 190 s single file is that row's floor, and the
+±10 s per adjacent pair adds up), vm-b1 under. `SLICE_COST_P50_SEC` carries these six until a day of runs gives a
+median. The run itself was cancelled at its last two jobs by the owner-account sweeper once 5bc46eb6 became the tip
+(0 failed), so the train for the rebalance rides the next tip's run.
+
+## 8. Repository settings record (read 2026-10-15 07:58 UTC)
+
+The settings are owner-set and live outside git, so this is the committed record agents read; re-read the API before
+trusting it a week on. Repository (`GET /repos/brycejmurrin/f1-game`, 200): `allow_merge_commit` **true**,
+`allow_squash_merge` **false**, `allow_rebase_merge` **true** (still on — AGENTS.md §Concurrent PRs says merge commits
+only, and both MCP/`gh` doors refuse a rebase merge, so the hooks cover the gap until the owner unticks "Allow rebase
+merging" under Settings → General → Pull Requests), `allow_auto_merge` true, `delete_branch_on_merge` **true** (GitHub
+retargets a stacked PR to the deploy branch when its base branch is deleted on merge; the 2026-10-02 hand-retarget note
+predates this), `merge_commit_title` MERGE_MESSAGE / `merge_commit_message` PR_TITLE, default branch
+`claude/f1-game-project-26h3ng`. Ruleset `Deploy Ruleset` (id 22828280, active, no bypass actors) on
+`refs/heads/claude/f1-game-project-26h3ng`: `non_fast_forward` and `deletion` — no required checks live there.
+Classic branch protection on the deploy branch holds the required status check; its endpoint answers 403 to the
+agents' token (admin scope), so the required-check list is the owner's statement plus the PR UI: **`CI`** alone since
+2026-10-15 (twelve names before: the six `Pure-node unit suites (<slice>)`, `Structural guards`, `Selected specs
+(verdict)`, `Docs guards (prose-tree unit files)` and three more; `Docs guards` was removed first, then its workflow
+deleted). What the repo derives from this: `tests/unit/ci-coverage.test.mjs` pins that every job feeds `CI` and that
+`pull_request` is unfiltered; `tools/ci/ready-gate.mjs` still reads `Structural guards` by name for the draft→ready
+gate; the six slice names stay stable for `pages-train.mjs` and the tests, not for protection.

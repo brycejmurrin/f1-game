@@ -20,7 +20,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
+import { circuitsTouched } from "../../tools/ci/select-specs.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -148,6 +149,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // re-key (Sepang's final hairpin) and the hairpin fold clamp moved the road off
 // two props that used to clip it. Lowered to the measured tree.
 
+mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );
@@ -178,8 +180,70 @@ test("prop interpenetration stays within the per-circuit baseline", () => {
   assert.deepEqual(grown, [], `prop interpenetration grew:\n  ${grown.join("\n  ")}`);
 });
 
-test("baseline has no stale entries — a cap below the measured count is a lie", () => {
+// WHICH stale rows fail (#2183). A cap above the measurement is a lie, but the
+// lie is usually someone ELSE's improvement — a shared scenery fix merged
+// elsewhere — and failing it on every PR reddened every geometry PR's full
+// tier for a row it never touched (2026-10-15, #2138). So on a pull request a
+// stale row fails only for a circuit THIS diff touches (circuitsTouched, the
+// sweeps job's own scoping source) or when the diff edits the baseline itself
+// (then the whole file must be true: `clip-audit --all --lower`). Every other
+// stale row is an advisory. Local runs stay strict for every row, and non-PR CI
+// (train, nightly) is advisory, the ratchets.json LOOSE precedent: an
+// improvement never blocks shipping. "Grown" (the test above) fails everywhere,
+// and nothing here can raise a cap.
+// Returns null = every row strict, else the Set of strict ids.
+export function staleStrictIds(env = process.env, changed = () => prChangedFiles(env)) {
+  if (!env.GITHUB_EVENT_NAME) return null;
+  if (env.GITHUB_EVENT_NAME !== "pull_request") return new Set();
+  const diff = changed();
+  if (!diff) return null;                 // cannot read the diff: fail safe, strict
+  if (diff.files.includes("tools/track/clip-baseline.json")) return null;
+  return new Set(circuitsTouched(diff.files, diff.ref).ids);
+}
+function prChangedFiles(env) {
+  try {
+    const git = (...a) => execFileSync("git", a, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const ref = git("merge-base", `origin/${env.GITHUB_BASE_REF}`, "HEAD");
+    return { ref, files: git("diff", "--name-only", ref, "HEAD").split("\n").filter(Boolean) };
+  } catch { return null; }
+}
+
+test("stale-row policy: strict locally, scoped to the diff on a PR, advisory on the train", () => {
+  const pr = { GITHUB_EVENT_NAME: "pull_request", GITHUB_BASE_REF: "ship" };
+  assert.equal(staleStrictIds({}), null, "a local run checks every row");
+  assert.deepEqual([...staleStrictIds(pr, () => ({ ref: "HEAD", files: ["js/circuits/monza.js", "js/track/scenery/build-props.js"] }))], ["monza"]);
+  assert.deepEqual([...staleStrictIds(pr, () => ({ ref: "HEAD", files: ["js/track/scenery/build-props.js"] }))], [],
+    "a shared-engine diff hard-fails no unrelated stale row");
+  assert.equal(staleStrictIds(pr, () => ({ ref: "HEAD", files: ["tools/track/clip-baseline.json"] })), null,
+    "editing the baseline makes the whole file answerable");
+  assert.equal(staleStrictIds(pr, () => null), null, "an unreadable diff fails safe");
+  for (const ev of ["push", "schedule", "workflow_dispatch", "workflow_call"])
+    assert.equal(staleStrictIds({ GITHUB_EVENT_NAME: ev }).size, 0, ev);
+});
+
+test("clip-audit --lower ratchets one row down and is idempotent", () => {
+  // APEX_CIRCUITS narrows this to the scoped circuit; one build, a few seconds.
+  const { scope } = createRequire(import.meta.url)("../../tools/lib/circuit-scope.cjs");
+  const id = scope(Object.keys(BASELINE))[0];
+  const dir = mkdtempSync(path.join(ROOT, "scratch", "clip-lower-"));
+  try {
+    const file = path.join(dir, "baseline.json");
+    writeFileSync(file, JSON.stringify({ ...BASELINE, [id]: BASELINE[id] + 3 }, null, 2) + "\n");
+    const run = () => execFileSync(process.execPath, [path.join(ROOT, "tools", "track", "clip-audit.cjs"), id, "--json", "--lower", "--baseline", file],
+      { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    const measured = JSON.parse(run())[0].severe;
+    const once = JSON.parse(readFileSync(file, "utf8"));
+    assert.equal(once[id], Math.min(measured, BASELINE[id] + 3), "the slack row drops to the measurement");
+    for (const [k, v] of Object.entries(BASELINE)) if (k !== id) assert.equal(once[k], v, `${k} untouched`);
+    const before = readFileSync(file, "utf8");
+    run();
+    assert.equal(readFileSync(file, "utf8"), before, "a second --lower changes nothing");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("baseline has no stale entries — a cap below the measured count is a lie", (t) => {
   const measured = new Map(sweep().map((r) => [r.id, r.severe]));
+  const strict = staleStrictIds();
   // A cap far above the real number silently permits regressions up to it.
   const slack = [];
   // Only the SCOPED baseline rows: under APEX_CIRCUITS the sweep measured that subset.
@@ -187,7 +251,10 @@ test("baseline has no stale entries — a cap below the measured count is a lie"
   for (const [id, cap] of Object.entries(BASELINE).filter(([id]) => scope([id]).length)) {
     const now = measured.get(id);
     assert.notEqual(now, undefined, `BASELINE names unknown circuit "${id}"`);
-    if (now < cap) slack.push(`${id}: baseline ${cap} but measured ${now} — lower it`);
+    if (!(now < cap)) continue;
+    const line = `${id}: baseline ${cap} but measured ${now} — lower it with node tools/track/clip-audit.cjs --all --lower`;
+    if (strict === null || strict.has(id)) slack.push(line);
+    else t.diagnostic(`STALE (advisory: not in this diff) ${line}`);
   }
   assert.deepEqual(slack, [], `stale baseline entries:\n  ${slack.join("\n  ")}`);
 });

@@ -1,4 +1,7 @@
 [
+{"query":"The Merge Desk session has been sitting on a send_later approval prompt for two hours in default permission mode. How do I stop siblings stalling like that?","expect":"agent-fleet"},
+{"query":"Thirty fix lanes all pushed the minute queue-depth said ok and the queue exploded. How should workers pace their pushes?","expect":"agent-fleet"},
+{"query":"How should I word the user's grant in a worker's launch brief so it can open a follow-up PR without being relaunched?","expect":"agent-fleet"},
 {"query":"Spin up three worker agents, one per circuit (Monza, Spa, Suzuka), each in its own branch with disjoint OWNED globs, and keep me posted on which one is blocked.","expect":"agent-fleet"},
 {"query":"write me a launch prompt for a cursor cloud worker that fixes the garage css, with owned/forbidden paths and the done-when line","expect":"agent-fleet"},
 {"query":"One of my Grok workers put state: blocked and needs-orchestrator: yes in its PR body. Read the fleet and answer its escalation.","expect":"agent-fleet"},

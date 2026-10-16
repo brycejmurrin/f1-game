@@ -3,6 +3,7 @@
 // Nothing consumes this report automatically. A broken parse could claim zero
 // fixed specs or a non-blocking/push-only selector and still look plausible.
 // These tests pin the mechanism and event/base semantics, never the count.
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -18,7 +19,6 @@ import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverag
 // moved on, which is the drift it exists to catch pointing the wrong way. The
 // selector owns the value; this file checks ci.yml agrees with the selector.
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
-import * as selectSpecs from "../../tools/ci/select-specs.mjs";
 import { pickFastTier, treeOnlyGreen, rearmDecision, parseJobPages } from "../../tools/ci/pages-train.mjs";
 
 const SELECTED_TIMEOUT_MS = SELECTED_GATE.perTestTimeoutSec * 1000;
@@ -141,6 +141,8 @@ const selectStep = fs.readFileSync(new URL("../../tools/ci/ci-select-specs-step.
 // The ship filter is a STEP of the `select` plan job since 2026-10-15 (it was a job of its own
 // from 2026-09-22): one runner answers it with the slice plan and the two other path filters.
 const shipFilter = (ciWorkflow.split("      - name: Does this diff change anything that ships?\n")[1] || "").split("\n      - name: ")[0];
+const PR_ACTIVE =
+  "(github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci'))";
 
 test("every path a ci.yml change filter names still exists", () => {
   // The job filters are `grep -qE` alternations over the changed-file list, and
@@ -192,7 +194,7 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // of merges routed; tools/ci/ci-resolve-before.sh).
   // 2026-10-15: the job also plans the node slices (was unit-plan), so it runs whenever the node
   // matrix does (`fast_tier_run == ''`); the spec selection keeps its own event test on the step.
-  assert.match(selectJob, /if: \$\{\{ inputs\.fast_tier_run == '' \|\| github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| inputs\.concurrency_key != '' \}\}/);
+  assert.match(selectJob, /if: \$\{\{ \(github\.event_name != 'pull_request' \|\| !github\.event\.pull_request\.draft \|\| contains\(github\.event\.pull_request\.labels\.\*\.name, 'run-ci'\)\) && \(github\.event\.action != 'labeled' \|\| \(github\.event\.label\.name == 'run-ci' && github\.event\.pull_request\.draft\)\) && \(inputs\.fast_tier_run == '' \|\| github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| github\.event_name == 'schedule' \|\| inputs\.concurrency_key != ''\) \}\}/);
   // The JOB and the selection STEP never exclude the deploy gate; the ship
   // filter step inside the same job legitimately sits out the fast tier.
   const selectJobIf = (selectJob.match(/^    if: (.*)$/m) || [])[1] || "";
@@ -281,15 +283,14 @@ test("the base resolver: a Pages call with no usable base selects everything, ne
  * ci.yml run, while tooling-fast holds guards over exactly those trees.
  * docs-guards.yml closed it (2026-09-25..2026-10-15) by triggering on the SAME list as `paths:` — so the
  * two lists must stay one list, and the job must run the group that holds them. */
-/* EVERY REQUIRED CHECK REPORTS ON EVERY PR (2026-09-30). Branch protection on
- * the deploy branch requires the fast-tier jobs and docs-guards; a required
- * check that never reports blocks the merge for good. So neither workflow may
- * path-filter its pull_request trigger: ci.yml runs the fast tier on a prose
- * PR too (the node plan keeps it to guards plus seconds), and docs-guards runs
- * on every PR and exits before `npm ci` unless the diff is prose-only — a
- * list it READS from ci.yml's push paths-ignore, the one filter that stays. */
+/* THE REQUIRED CHECK REPORTS ON EVERY PR (2026-09-30; one check, `CI`, since
+ * 2026-10-15 — before that the fast-tier jobs and docs-guards by name). A
+ * required check that never reports blocks the merge for good, so ci.yml may
+ * not path-filter its pull_request trigger: it runs the fast tier on a prose
+ * PR too (the node plan keeps it to guards plus seconds). docs-guards.yml,
+ * which read ci.yml's push paths-ignore to exit early on code PRs, is gone. */
 test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and test:docs-guards is a local alias inside tooling-fast", () => {
-  // RETIRED 2026-10-15 (Actions audit finding 5; docs/notes/CI-CLOG-SURVEY-2026-10-15.md):
+  // RETIRED 2026-10-15 (Actions audit finding 5; CI clog survey 2026-10-15):
   // tooling-fast held every file of the group, so the workflow ran 615 times
   // on 2026-10-14 to test nothing new, one job start per PR event. Its required
   // status context was removed from the deploy branch's protection first (a
@@ -313,7 +314,7 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   assert.ok(pushIgnore.list.length >= 3, `ci.yml push paths-ignore parsed to ${pushIgnore.list.length} entries`);
   assert.ok(pushIgnore.at < onBlock.indexOf("  pull_request:"), "the one paths-ignore list must be the push one");
   const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
-  assert.ok(prBlock.includes("types: [opened, synchronize, reopened, ready_for_review]"), "the pull_request block was sliced whole");
+  assert.ok(prBlock.includes("types: [opened, synchronize, reopened, ready_for_review, labeled]"), "the pull_request block was sliced whole");
   assert.doesNotMatch(prBlock, /paths(-ignore)?:/,
     "ci.yml's pull_request must not be path-filtered: a prose-only PR that starts no run can never satisfy the required check");
 
@@ -329,16 +330,20 @@ test("docs-guards.yml is retired; ci.yml's pull_request stays unfiltered and tes
   const notFast = files.filter((f) => !fast.has(f) && f !== "tests/unit/environment-json.test.mjs");
   assert.deepEqual(notFast, [], "test:docs-guards is an alias over tooling-fast's prose guards, not a new home for files");
   // No other workflow may quietly take its place.
-  const others = fs.readdirSync(workflowsDir).filter((n) => /\.ya?ml$/.test(n) && n !== "ci.yml")
-    .filter((n) => /npm run test:docs-guards/.test(fs.readFileSync(new URL(n, workflowsDir), "utf8")));
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  const others = fs.readdirSync(dir).filter((n) => /\.ya?ml$/.test(n) && n !== "ci.yml")
+    .filter((n) => /npm run test:docs-guards/.test(fs.readFileSync(new URL(n, dir), "utf8")));
   assert.deepEqual(others, [], "no workflow but ci.yml's guards runs the prose group on PRs");
 });
 
 test("ci-verdict is the always-run aggregator every other job feeds", () => {
   const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(body, "ci-verdict job missing");
-  assert.match(body, /^    name: CI$/m, "the required-check display name must be the stable `CI`");
-  assert.match(body, /if: \$\{\{ !cancelled\(\) \}\}/);
+  // The required-check display name stays the stable `CI` on every real run;
+  // only a label-noise run (all jobs skipped, #2184) is named otherwise.
+  assert.match(body, /^    name: \$\{\{ \(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && [^\n]* && 'CI label event \(ignored\)' \|\| [^\n]*'CI draft \(opted out\)' \|\| 'CI' \}\}$/m,
+    "the required-check display name must be the stable `CI`");
+  assert.match(body, /if: \$\{\{ .*!cancelled\(\).*\}\}/);
   assert.match(body, /run: node tools\/ci\/ci-verdict\.mjs/);
   assert.match(body, /NEEDS: \$\{\{ toJSON\(needs\) \}\}/);
   for (const j of ["guards", "node-suites", "smoke", "selected", "baseline-trial"]) {
@@ -357,7 +362,7 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   // deploy-branch push (whose CI check gates no merge) and itself needs the
   // verdict jobs; CI waiting on it delayed the run's `completed` that the
   // poked train's reuse check looks for. Its red still fails the RUN.
-  const NOT_A_VERDICT = new Set(["poke-train"]);
+  const NOT_A_VERDICT = new Set(["poke-train", "draft-ci-skipped"]);
   for (const [id, job] of Object.entries(parsed.jobs)) {
     if (id === "ci-verdict") continue;
     if (NOT_A_VERDICT.has(id)) {
@@ -406,7 +411,7 @@ test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once
   assert.ok(names.length >= 2 && names.every((n) => n.includes("${{ strategy.job-index }}")),
     `every selected artifact name carries the job index: ${names.join(", ")}`);
   // The poke must not outrun a dropped-spec red.
-  assert.match(parseYAML(ciWorkflow).jobs["poke-train"].if, /&& needs\.select\.outputs\.dropped == '0' \}\}$/);
+  assert.match(parseYAML(ciWorkflow).jobs["poke-train"].if, /needs\.select\.outputs\.dropped == '0'\) \}\}$/);
 });
 
 test("select plans the node-suites matrix and can skip unused slices (unit-plan folded in, 2026-10-15)", () => {
@@ -415,9 +420,8 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.match(plan.run, /node tools\/ci\/pick-unit-slices\.mjs/);
   assert.match(plan.run, /--github-output/);
   assert.equal(plan.if, "${{ inputs.fast_tier_run == '' }}", "the plan runs exactly when the node matrix does");
-  // A pull request asks for the needed rows only (ready or draft: `CI` is the one required
-  // check since 2026-10-15); a deploy push and the train keep all six rows.
-  assert.equal(String(plan.env.NEEDED_ONLY), "${{ github.event_name == 'pull_request' }}");
+  // A draft asks for the needed rows only; every other event keeps all six.
+  assert.match(String(plan.env.NEEDED_ONLY), /github\.event_name == 'pull_request'/);
   assert.match(plan.run, /FLAG="--needed-only"/);
   assert.match(plan.run, /pick-unit-slices\.mjs --since "\$BASE" \$FLAG --github-output/);
   assert.match(selectJob, /^      any_node: \$\{\{ steps\.plan\.outputs\.any_node \}\}$/m);
@@ -425,12 +429,11 @@ test("select plans the node-suites matrix and can skip unused slices (unit-plan 
   assert.match(selectJob, /^      slices: \$\{\{ steps\.plan\.outputs\.slices \}\}$/m);
   const node = (ciWorkflow.split("\n  node-suites:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.match(node, /^    needs: \[select\]$/m);
-  // The six "Pure-node unit suites (<slice>)" names were REQUIRED checks until
-  // 2026-10-15 (a job-level skip never expands the matrix, so they never
-  // reported and the PR sat BLOCKED green, #522). `CI` is the one required
-  // check now: a pull request's plan lists only the needed rows and the job
-  // skips when there are none; a deploy push and the train keep all six so
-  // pages-train.mjs's reuse check still sees expanded node rows.
+  // The six "Pure-node unit suites (<slice>)" names are REQUIRED checks: a
+  // job-level skip on any_node=false never expands the matrix, so they never
+  // report and the PR sits BLOCKED green (#522). The job always runs on every
+  // event but a pull request — its plan lists only the needed rows and the job
+  // skips when there are none (2026-10-15).
   const nodeIf = (node.match(/^    if: (.*)$/m) || [])[1] || "";
   assert.match(nodeIf, /needs\.select\.outputs\.any_node == 'true' \|\| github\.event_name != 'pull_request'/,
     "node-suites may skip at the job level only on a pull request with no needed slice");
@@ -470,7 +473,7 @@ test("test:xr is path-gated (a filter step of select → xr) and feeds ci-verdic
   const xr = (ciWorkflow.split("\n  xr:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(xr, "xr job missing");
   assert.match(xr, /^    needs: select$/m);
-  assert.match(xr, /if: \$\{\{ !inputs\.concurrency_key && needs\.select\.outputs\.xr == 'true' \}\}/,
+  assert.match(xr, /if: \$\{\{ .*!inputs\.concurrency_key && needs\.select\.outputs\.xr == 'true'.*\}\}/,
     "the deploy-gate opt-out sits on the job now that the filter is a step");
   assert.match(xr, /npm run test:xr/);
   const body = (ciWorkflow.split("\n  ci-verdict:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
@@ -502,7 +505,7 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // unique run_id group (the nightly must not share the tip's group —
   // run 2758). The train is not in this group: pages.yml passes a unique
   // concurrency_key. PR branches keep newest-wins cancel on pull_request.
-  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| \(github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && 'ship-fast'\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
+  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'pull_request' && github\.event\.action == 'labeled' && \(github\.event\.label\.name != 'run-ci' \|\| !github\.event\.pull_request\.draft\)\) && format\('label-\{0\}', github\.run_id\)\) \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| \(github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && 'ship-fast'\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
     "PR runs of one branch share a group; dispatched/scheduled runs keep run_id; deploy-branch pushes share ship-fast");
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/,
     "newest wins on PR only; ship pushes must not cancel each other");
@@ -1004,7 +1007,12 @@ test("the timings merge is its own workflow, and never pushes to the deploy bran
   // Same refusal import-models.yml carries: the deploy branch by name.
   assert.match(timings, /claude\/f1-game-project-26h3ng\|""\|\*\[!a-z0-9\._\/-\]\*\)/,
     "the push must refuse the deploy branch by name, as import-models.yml does");
-  assert.match(timings, /git push -f origin "\$TIMINGS_BRANCH"/);
+  // The bot's own hooks must not refuse the bot (2026-10-15, #2084): package.json
+  // `prepare` activates .githooks on the runner, and pre-push calls every
+  // non-fast-forward push "a force push". The rolling record IS a force push.
+  assert.match(timings, /git -c core\.hooksPath=\/dev\/null push -f origin "\$TIMINGS_BRANCH"/,
+    "the record push bypasses the prepare-installed pre-push hook (it blocked the bot on 18cb8f37 and c23ad312)");
+  assert.doesNotMatch(timings, /^\s+git push -f origin/m, "no bare force push left that the hook can refuse");
   // FORCE-PUSHED, so the namespace matters as much as the name: `claude/*` is
   // where sessions branch, and a bot that force-pushes there lands on an open
   // PR's head sooner or later. `bot/` is import-models.yml's convention.
@@ -1064,7 +1072,7 @@ test("the ship filter is ONE job whose answer every smoke shard reads", () => {
   // before it was skipped, and which must stay reachable when one of them fails.
   const steps = smoke.split(/\n      - /).slice(1);
   const ungated = steps.filter((st) => !/needs\.select\.outputs\.ships != 'false'/.test(st)
-    && !/^\s*if: failure\(\)\s*$/m.test(st));
+    && !/^\s*if: failure\(\)(?: \|\| cancelled\(\))?\s*$/m.test(st));
   assert.deepEqual(ungated.map((st) => st.split("\n")[0].trim()), [],
     "a smoke step runs even when nothing ships; the install steps are most of the cost");
   // NOT a job-level `if:` on the filter's output: that would SKIP smoke, and a
@@ -1251,7 +1259,7 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch' \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
   assert.match(rendererJob, /^    needs: select$/m);
   // `!inputs.concurrency_key` is on the job itself now (the filter step cannot carry the skip for it).
-  assert.match(rendererJob, /if: \$\{\{ !inputs\.concurrency_key && needs\.select\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\) \}\}/);
+  assert.match(rendererJob, /if: \$\{\{ .*!inputs\.concurrency_key && needs\.select\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true \|\| \(github\.event_name == 'pull_request' && !github\.event\.pull_request\.draft\)\).*\}\}/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      renderer_macos:\n(?:.*\n)*?        type: boolean\n(?:.*\n)*?        default: false\n/,
     "the dispatch must declare the renderer_macos opt-in, default off");
   assert.equal(report.rendererGate.deployGate, false,
@@ -1340,7 +1348,7 @@ test("gpu-census runs nightly staggered from the boot group, with the full check
   // check on the default images and track — not census_only.
   // Plan job resolves inputs → outputs; census gates on those.
   assert.match(gpuWorkflow, /if: \$\{\{ needs\.plan\.outputs\.census_only != 'true' \}\}/);
-  assert.match(gpuWorkflow, /if: \$\{\{ always\(\) && needs\.plan\.outputs\.census_only != 'true' \}\}/,
+  assert.match(gpuWorkflow, /if: \$\{\{ !cancelled\(\) && needs\.plan\.outputs\.census_only != 'true' \}\}/,
     "the Verdict must still gate a scheduled run");
   // macos-latest is the default for the nightly (2026-09-29) AND a dispatch
   // (2026-10-14): ubuntu/windows have no hardware adapter and their software
@@ -1631,23 +1639,25 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   // this workflow, and the two heavy browser jobs must opt out of that tier by
   // the one shared expression.
   assert.doesNotMatch(pushBlock, /branches-ignore/, "deploy-branch pushes must reach ci.yml for the fast tier");
-  // A DRAFT PR is the fast tier too (2026-09-24, decision 1c): the heavy jobs
-  // wait for `ready_for_review`, which must therefore be a trigger type.
+  // Draft synchronize is CI-free unless label run-ci (2026-10-15 fast-track); heavy
+  // jobs still wait for `ready_for_review`, which must therefore be a trigger type.
   const fastTier = "!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))";
-  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review\]/,
-    "marking a draft ready must start the full tier");
+  assert.match(prBlock, /types: \[opened, synchronize, reopened, ready_for_review, labeled\]/,
+    "labeled run-ci must be able to opt draft PRs into CI");
+  assert.match(ciWorkflow, /draft-ci-skipped:/, "draft pushes without run-ci report a skip job");
   // Only the deploy branch pushes start a run; a topic branch runs through its PR.
   assert.match(pushBlock, /branches:\n\s+- claude\/f1-game-project-26h3ng\n/, "push must be scoped to the deploy branch");
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
   const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  sweeps-roll-up:\n"));
-  assert.ok(smokeJob.includes(`    if: \${{ ${fastTier} }}`), "smoke must sit out the deploy branch's fast tier with the shared expression");
-  assert.ok(shipFilter.includes(`        if: \${{ ${fastTier} }}`), "the ship filter step sits out the fast tier with the same expression");
+  assert.ok(smokeJob.includes(fastTier), "smoke must sit out the deploy branch's fast tier with the shared expression");
+  assert.ok(shipFilter.includes(fastTier), "the ship filter step sits out the fast tier with the same expression");
   assert.ok(sweepsJob.includes(fastTier), "sweeps sit out the fast tier");
   assert.doesNotMatch(ciWorkflow, /smoke_only/, "the always-false smoke_only input and its guards are gone (2026-10-14)");
-  for (const name of ["guards", "node-suites", "sweeps-parts", "driving-model", "select"]) {
+  for (const name of ["guards-a", "guards-b", "guards", "node-suites", "driving-model", "select"]) {
     const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
     const head = job.slice(0, job.indexOf("\n    steps:"));
-    assert.ok(!head.includes(fastTier), `${name} is part of the fast tier and must not opt out`);
+    assert.ok(head.includes(PR_ACTIVE), `${name} must skip draft synchronize unless run-ci`);
+    assert.ok(!head.includes(fastTier), `${name} is part of the fast tier and must not opt out of ship/draft heavy skip`);
   }
 });
 
@@ -1670,7 +1680,7 @@ test("a green fast-tier run pokes the train; a red or called one never does", ()
   assert.match(poke, /needs: \[guards, node-suites, sweeps-parts, driving-model, select, selected\]/,
     "the poke waits for every fast-tier job (select carries the node plan since 2026-10-15)");
   const cond = poke.match(/^    if: \$\{\{ (.*) \}\}$/m)?.[1] || "";
-  assert.match(cond, /^!cancelled\(\) && github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && inputs\.concurrency_key == ''/,
+  assert.match(cond, /!cancelled\(\) && github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && inputs\.concurrency_key == ''/,
     "fast tier only: a deploy-branch push, never a Pages call");
   for (const j of ["guards", "sweeps-parts", "select"]) {
     assert.ok(cond.includes(`needs.${j}.result == 'success'`), `${j} must be green before the poke`);
@@ -1756,7 +1766,7 @@ test("ci.yml treats a Pages call as the gate it is, whatever the caller's event"
   // group instead of smoke. concurrency_key is the one signal a Pages call
   // always carries, and it must decide all four places.
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
-  const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  sweeps-roll-up:\n"));
+  const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("      - name: Does this diff touch the geometry?"), ciWorkflow.indexOf("      # WHICH NODE SLICES DOES THIS DIFF NEED?"));
   assert.match(smokeJob, /timeout-minutes: \$\{\{ \(inputs\.concurrency_key == '' && \(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\)\) && 120 \|\| 20 \}\}/,
     "a Pages call takes the smoke cap, never the wide run's 120");
   assert.match(smokeJob, /- name: Smoke\n(?:\s+#.*\n)*\s+if: needs\.select\.outputs\.ships != 'false' && \(inputs\.concurrency_key != '' \|\| \(github\.event_name != 'schedule' && github\.event_name != 'workflow_dispatch'\)\)/,
@@ -1935,7 +1945,7 @@ test("selected-verdict: one fixed-name check that always judges the change-aware
   assert.match(job, /^    needs: \[select, selected, guards\]$/m);
   // Every event that runs `select` — push, pull_request, the Pages call — gets
   // the verdict (no merge_group since 2026-10-14; no smoke_only either).
-  assert.match(job, /^    if: \$\{\{ !cancelled\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\) \}\}$/m,
+  assert.match(job, /^    if: \$\{\{ .*!cancelled\(\) && \(github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != ''\).*\}\}$/m,
     "the required name reports on every push, PR and Pages call");
   assert.doesNotMatch(job, /^    if: \$\{\{ always\(\)/m, "always() turned a superseded run's cancelled `selected` into a red verdict");
   // The reading: select must pass; selected passes or is skipped; and (since
@@ -2073,34 +2083,129 @@ test("ship-filter: a ready PR skips smoke only when neither its own diff nor its
   }
 });
 
-test("browser-leg LANES (2026-10-15): selected legs and smoke queue per lane on pull requests, never on the train", () => {
-  // GitHub's `concurrency.queue: max` holds up to 100 jobs per group in FIFO
-  // order without a runner (workflow-syntax reference, read 2026-10-15), and
-  // a job-level group may read `matrix` and `strategy` (contexts reference).
+// #2179 / #2184 (2026-10-15): the two triggers that queued CI for nothing.
+test("ci.yml runs on PRs into the deploy branch only, and a label event other than run-ci on a draft runs nothing", () => {
+  const wf = parseYAML(ciWorkflow);
+  // #2179: `branches` on pull_request filters the BASE. Survey PRs into
+  // track-survey-assets started the full ready tier seconds before merging.
+  assert.deepEqual(wf.on.pull_request.branches, ["claude/f1-game-project-26h3ng"],
+    "pull_request must be scoped to PRs whose base is the deploy branch");
+  assert.equal(wf.on.pull_request["branches-ignore"], undefined);
+  assert.ok(wf.on.pull_request.types.includes("labeled"), "run-ci on a draft still needs the labeled trigger");
+  // #2184: the label-noise predicate, written once per place it is used.
+  const NOISE = "(github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft))";
+  const LABEL_OK = "(github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft))";
+  // 1. Its own group, BEFORE the head-ref term: it can never cancel the PR's live run.
+  const group = wf.concurrency.group;
+  assert.ok(group.includes(`${NOISE} && format('label-{0}', github.run_id))`), "a label-noise run gets a throwaway group");
+  assert.ok(group.indexOf(NOISE) < group.indexOf("github.event.pull_request.head.ref"), "the throwaway group must win over the head ref");
+  assert.ok(group.indexOf("inputs.concurrency_key") < group.indexOf(NOISE), "a Pages call's key still comes first");
+  // 2. Every job skips on it (skipped jobs take no runner), so the run ends in seconds.
+  for (const [id, job] of Object.entries(wf.jobs)) {
+    const cond = String(job.if || "");
+    if (id === "draft-ci-skipped") assert.ok(cond.includes("github.event.action != 'labeled'"), "the skip notice is not re-posted by a label event");
+    else assert.ok(cond.includes(LABEL_OK), `job ${id} must skip a label event other than run-ci on a draft`);
+  }
+  // 3. A skipped job reports SUCCESS, so the noise run's verdict must not carry the required name.
+  assert.ok(wf.jobs["ci-verdict"].name.startsWith(`\${{ ${NOISE} && 'CI label event (ignored)' || `));
+  assert.ok(wf.jobs["ci-verdict"].name.endsWith("|| 'CI' }}"));
+  // 4. Tools drop it by title (ci-watch.mjs labelNoiseRun, reuse-draft-fast.sh).
+  assert.equal(wf["run-name"], `\${{ ${NOISE} && format('CI ignored: label {0}', github.event.label.name) || '' }}`);
+  const reuse = fs.readFileSync(new URL("../../tools/ci/reuse-draft-fast.sh", import.meta.url), "utf8");
+  assert.ok(reuse.includes("^CI ignored: label ") && reuse.includes('"Structural guards (tooling A)"'),
+    "a green run whose tooling A did not run is never reused as the fast tier");
+  // run-ci is a documented label, and the docs say what it buys (no selected browser specs on a draft).
+  const labels = JSON.parse(fs.readFileSync(new URL("../../.github/labels.json", import.meta.url), "utf8"));
+  assert.ok(labels.some((l) => l.name === "run-ci"), ".github/labels.json documents run-ci");
+  assert.match(String(wf.jobs.selected.if), /!\(github\.event_name == 'pull_request' && github\.event\.pull_request\.draft\)/,
+    "the selected legs skip every draft; the header and docs/TESTING.md say so");
+});
+
+test("geometry planning avoids empty fanout without guessing an unknown diff is empty", () => {
   const jobs = parseYAML(ciWorkflow).jobs;
-  for (const id of ["selected", "smoke"]) {
-    const c = jobs[id].concurrency;
-    assert.ok(c && c.queue === "max", `${id}: legs must queue per lane, never cancel-replace`);
-    assert.equal(c["cancel-in-progress"], undefined, `${id}: queue: max cannot be combined with cancel-in-progress`);
-    assert.match(String(c.group), /github\.event_name == 'pull_request' && inputs\.concurrency_key == ''/, `${id}: only a PR shares a lane`);
-    assert.match(String(c.group), /github\.run_id/, `${id}: the train / nightly / dispatch get a group of their own`);
+  const filter = jobs.select.steps.find((s) => s.id === "geometry");
+  assert.ok(filter, "the shared planner must compute geometry even when fast-tier work is reused");
+  assert.equal(filter.if, undefined, "geometry planning cannot sit behind fast_tier_run reuse");
+  assert.deepEqual(jobs.sweeps.needs, ["select"]);
+  assert.match(jobs.sweeps.if, /needs\.select\.outputs\.geometry != 'false' \|\| needs\.select\.outputs\.geometry_targeted != ''/);
+  assert.ok(!jobs.sweeps.steps.some((s) => s.name === filter.name), "shards must consume the shared decision");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "geometry-workflow-"));
+  try {
+    // Run the workflow's actual shell with a controlled changed-path list,
+    // retaining the real package suite list and real geometry routing module.
+    fs.writeFileSync(path.join(dir, "git"), '#!/bin/sh\ncase "$1" in\ncat-file) exit 0;;\ndiff) printf "%s\\n" "$FIXTURE_CHANGED";;\n*) exit 1;;\nesac\n', { mode: 0o755 });
+    const run = (changed, before = "known-base", event = "push", called = "false") => {
+      const output = path.join(dir, "outputs");
+      fs.writeFileSync(output, "");
+      const result = cp.spawnSync("bash", ["-e", "-c", filter.run], {
+        cwd: new URL("../..", import.meta.url), encoding: "utf8",
+        env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, FIXTURE_CHANGED: changed,
+          BEFORE: before, GITHUB_SHA: "head", EVENT: event, CALLED: called,
+          RUNNER_TEMP: dir, GITHUB_OUTPUT: output }
+      });
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      return Object.fromEntries(fs.readFileSync(output, "utf8").trim().split("\n").filter(Boolean).map((l) => {
+        const i = l.indexOf("="); return [l.slice(0, i), l.slice(i + 1)];
+      }));
+    };
+    assert.deepEqual(run("README.md"), { geometry: "false", targeted: "" });
+    assert.equal(run("js/track/tracks.js").geometry, "true");
+    const targeted = run("js/lighting/lighting.js");
+    assert.equal(targeted.geometry, "false");
+    assert.match(targeted.targeted, /tests\/unit\//, "a targeted change still runs its sweep suites");
+    assert.equal(run("README.md", "").geometry, "true", "missing base must run the full fleet");
+    assert.equal(run("README.md", "live", "schedule", "true").geometry, "false", "a Pages call uses its live base rather than becoming the nightly");
+    assert.equal(run("README.md", "base", "workflow_dispatch").geometry, "true", "direct dispatch stays fail-safe full");
+    assert.equal(run("README.md", "base", "schedule").geometry, "true", "direct nightly stays fail-safe full");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("geometry rollup accepts only successful shards or a proven empty plan", () => {
+  const job = parseYAML(ciWorkflow).jobs["sweeps-roll-up"];
+  const run = job.steps[0].run;
+  for (const [result, geometry, targeted, ok] of [
+    ["success", "true", "", true], ["skipped", "false", "", true],
+    ["skipped", "", "", false], ["skipped", "true", "", false],
+    ["skipped", "false", "tests/unit/car-front-wing-width.test.mjs", false],
+    ["failure", "false", "", false], ["cancelled", "false", "", false]
+  ]) {
+    const r = cp.spawnSync("bash", ["-e", "-c", run], { env: { ...process.env,
+      SWEEPS_RESULT: result, GEOMETRY: geometry, TARGETED: targeted } });
+    assert.equal(r.status === 0, ok, `${result}/${geometry}/${targeted}`);
   }
-  assert.match(String(jobs.selected.concurrency.group), /format\('selected-lane-\{0\}', matrix\.lane\)/);
-  assert.match(String(jobs.selected.concurrency.group), /strategy\.job-index/, "a run's own legs never share a fallback group");
-  assert.match(String(jobs.smoke.concurrency.group), /format\('smoke-lane-\{0\}', matrix\.shard\)/);
-  // The lane is part of every selected matrix row, cycling through LANES.
-  const { fit, shards, LANES } = selectSpecs;
-  assert.ok(Number.isInteger(LANES) && LANES >= 4 && LANES <= 40, `LANES is ${LANES}`);
-  const specsDir = new URL("../specs/", import.meta.url);
-  const some = fs.readdirSync(specsDir).filter((f) => f.endsWith(".spec.js")).sort().slice(0, 16).map((f) => `tests/specs/${f}`);
-  const EMPTY = { specs: {} };
-  const rows = shards(fit(some, 10, { db: EMPTY }), EMPTY);
-  assert.ok(rows.length >= 2, `fixture: ${rows.length} legs planned`);
-  for (const [i, row] of rows.entries()) assert.equal(row.lane, i % LANES, `row ${i} (${row.name}) lane`);
-  // No other job in the file queues on a shared group: a deploy push's fast
-  // tier and the train must never wait behind PR work.
-  for (const [id, job] of Object.entries(jobs)) {
-    if (id === "selected" || id === "smoke") continue;
-    assert.equal(job.concurrency, undefined, `${id} must not carry a job-level concurrency group`);
+  assert.match(job.if, /needs\.select\.result == 'success'/, "a broken planner must not bless skipped shards");
+});
+
+test("draft opt-out and cancellation diagnostics preserve truthful checks and evidence", () => {
+  const jobs = parseYAML(ciWorkflow).jobs;
+  assert.match(jobs["sweeps-parts"].if, /!github\.event\.pull_request\.draft \|\| contains\(github\.event\.pull_request\.labels\.\*\.name, 'run-ci'\)/);
+  assert.match(jobs["ci-verdict"].name, /CI draft \(opted out\)/);
+  for (const id of ["smoke", "driving-model", "xr"]) {
+    const upload = jobs[id].steps.find((s) => s.name === "Failure artifacts");
+    assert.equal(upload.if, "failure() || cancelled()", `${id} must keep cancellation diagnostics`);
+    assert.equal(upload.with["if-no-files-found"], "ignore");
   }
+  const browser = parseYAML(fs.readFileSync(new URL("../../.github/workflows/browser-group.yml", import.meta.url), "utf8"));
+  assert.ok(browser.jobs.group.steps.some((s) => s.if === "failure() || cancelled()" && s.uses?.startsWith("actions/upload-artifact@")));
+  const marker = jobs.selected.steps.find((s) => s.name === "Upload the run-step marker");
+  assert.equal(marker.with["retention-days"], 7, "verdict evidence must last as long as junit");
+  const gpu = parseYAML(fs.readFileSync(new URL("../../.github/workflows/gpu-census.yml", import.meta.url), "utf8"));
+  const verdict = Object.values(gpu.jobs).flatMap((j) => j.steps || []).find((s) => s.name?.startsWith("Verdict —"));
+  assert.match(verdict.if, /!cancelled\(\)/);
+});
+
+// #2169: five tools/ci/*.sh copies of inline ci.yml steps sat unused (one had
+// drifted from its step) until someone noticed. A step script lives only while
+// a workflow, another tool or a test cites it; delete it or wire it in.
+test("every tools/ci/*.sh is cited by a workflow, another tool or a test", () => {
+  const root = new URL("../../", import.meta.url).pathname;
+  const self = path.relative(root, new URL(import.meta.url).pathname);
+  const scripts = fs.readdirSync(path.join(root, "tools/ci")).filter((f) => f.endsWith(".sh"));
+  assert.ok(scripts.length > 0, "no tools/ci/*.sh found — the scan is broken");
+  const orphans = scripts.filter((f) => {
+    const out = cp.spawnSync("git", ["grep", "-l", "-F", f, "--", ".github/workflows", "tools", "tests",
+      `:!tools/ci/${f}`, ":!tools/README.md", `:!${self}`], { cwd: root, encoding: "utf8" });
+    return !out.stdout.trim();
+  });
+  assert.deepEqual(orphans, [], `orphan step scripts (nothing runs them): ${orphans.join(", ")}`);
 });

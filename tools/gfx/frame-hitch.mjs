@@ -39,11 +39,30 @@ import {
   startStaticServer, launchChromium, shutdown, sleep, WEBGPU_CHROMIUM_ARGS,
 } from "../lib/harness.mjs";
 
+import { exitIfHelp, parseFlags } from "../lib/cli-args.mjs";
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
-function parseArgs(argv) {
+// Every flag parseArgs reads. The CLI entry checks argv against these through
+// the shared parser (#1708); parseArgs itself stays module-scope and lenient
+// because gpu-game-check and the unit tests import the analysers from here.
+const VALUED = ["--backend", "--seconds", "--settle", "--steer-hz", "--ls", "--json", "--selftest-kb", "--ablate", "--cpu-profile"];
+const KNOWN = [...VALUED, "--tlx-webgpu", "--capture", "--quiet"];
+const USAGE = `usage: node tools/gfx/frame-hitch.mjs [track=montreal] [--backend three|webgpu|webgl2]
+       [--tlx-webgpu] [--capture] [--seconds N] [--settle N] [--steer-hz N] [--ls k=v]
+       [--json PATH] [--quiet] [--selftest-kb N] [--ablate NAME] [--cpu-profile N]
+  Launches Chromium, records every rAF callback's main-thread cost and reports
+  periodic hitches (spike train + autocorrelation). Summary on stderr, JSON on stdout.`;
+
+function parseArgs(argvIn) {
   const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false, capture: false, selftestKb: 0, ablate: "", cpuProfile: 0 };
   const skip = new Set();
+  // The loop below reads the space form only; split `--seconds=10` so the
+  // `=` form the shared parser accepts is not silently dropped.
+  const argv = argvIn.flatMap((a) => {
+    const eq = a.indexOf("=");
+    return eq > 2 && a.startsWith("--") && VALUED.includes(a.slice(0, eq)) ? [a.slice(0, eq), a.slice(eq + 1)] : [a];
+  });
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const next = () => argv[++i];
     if (a === "--backend") { o.backend = next(); skip.add(o.backend); }
@@ -1017,7 +1036,12 @@ export function analysePasses(passes, t0, dur, threshMs) {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  // --help and a typo'd flag answer before the server binds or Chromium launches.
+  exitIfHelp(process.argv.slice(2), USAGE);
+  parseFlags(process.argv.slice(2), KNOWN);
+  await main();
+}
 
 async function main() {
   const srv = await startStaticServer(ROOT);

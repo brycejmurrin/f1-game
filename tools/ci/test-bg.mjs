@@ -101,11 +101,20 @@ export function procStart(pid) {
   try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim().split(/\s+/)[19] || null; }
   catch (_) { return null; }
 }
+/* A ZOMBIE IS NOT A RUN (#1921). A finished wrapper its parent has not reaped
+ * stays in /proc as Z with the same start time, and kill(pid, 0) still
+ * succeeds — the run read as live although its log ended `= bg exit 0`. Field
+ * 3 of /proc/<pid>/stat is the state; Z/X/x are dead. */
+export function procState(pid) {
+  try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim()[0] || null; }
+  catch (_) { return null; }
+}
 const BOOT_ID = (() => { try { return fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim(); } catch (_) { return null; } })();
-export function aliveRun(run, { kill = (p) => process.kill(p, 0), start = procStart, boot = BOOT_ID } = {}) {
+export function aliveRun(run, { kill = (p) => process.kill(p, 0), start = procStart, boot = BOOT_ID, state = procState } = {}) {
   const pid = run && +run.pid;
   if (!(pid > 0)) return false;
   try { kill(pid); } catch (_) { return false; }
+  if (/^[ZXx]$/.test(state(pid) || "")) return false;
   if (run.bootId && boot && run.bootId !== boot) return false;
   if (run.starttime && start(pid) !== String(run.starttime)) return false;
   return true;

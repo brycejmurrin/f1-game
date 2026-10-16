@@ -192,12 +192,12 @@ test('capture parsers reject nonfinite dimensions, scales and unknown flags; see
   assert.equal(parseCssPlayArgs(['--scale', '130']).scale, 130);
   assert.deepEqual(screenClicks({ clicks: ['#extra'] }, SCREENS.settings), [...SCREENS.settings.clicks, '#extra']);
   assert.deepEqual(screenClicks({ root: '#custom', clicks: ['#extra'] }, SCREENS.settings), ['#extra']);
-  assert.equal(parseCaptureArgs(['--seed=0', '--plan'], 'capture-bundle').seed, 0);
-  assert.throws(() => parseCaptureArgs(['--out', '/tmp/capture'], 'capture-bundle'), /out/);
-  assert.throws(() => parseCaptureArgs(['--track', 'unknown-track'], 'capture-bundle'), /unknown track/);
+  assert.equal(parseCaptureArgs(['--seed=0', '--plan'], 'lifecycle-census').seed, 0);
+  assert.throws(() => parseCaptureArgs(['--out', '/tmp/capture'], 'lifecycle-census'), /out/);
+  assert.throws(() => parseCaptureArgs(['--track', 'unknown-track'], 'lifecycle-census'), /unknown track/);
   mkdirSync(resolve(ROOT, 'scratch'), { recursive: true });
   const dir = mkdtempSync(resolve(ROOT, 'scratch/capture-path-test-'));
-  try { symlinkSync(resolve(ROOT, 'js'), resolve(dir, 'source-link')); assert.throws(() => parseCaptureArgs(['--out', resolve(dir, 'source-link', 'bad')], 'capture-bundle'), /out real/); }
+  try { symlinkSync(resolve(ROOT, 'js'), resolve(dir, 'source-link')); assert.throws(() => parseCaptureArgs(['--out', resolve(dir, 'source-link', 'bad')], 'lifecycle-census'), /out real/); }
   finally { rmSync(dir, { recursive: true, force: true }); }
   for (const argv of [['monza', '--wat'], ['monza', 'before', 'NaN'], ['monza', 'before', '0,2'], ['monza', 'before', '0,,1']]) assert.throws(() => parseSurveyTrackArgs(argv));
 });
@@ -742,7 +742,8 @@ test('Chromium capture trace rejects oversized or absent streams and removes par
         return {};
       };
       const output = resolve(dir, mode + '.json');
-      const trace = await startCaptureTrace({ newBrowserCDPSession: async () => session }, { path: output, maxBytes: 3, stopTimeoutMs: 10 });
+      // Only the timeout mode needs a tiny budget: the other modes run mkdir/open inside it, which a loaded runner can stretch past 10 ms.
+      const trace = await startCaptureTrace({ newBrowserCDPSession: async () => session }, { path: output, maxBytes: 3, stopTimeoutMs: mode === 'timeout' ? 10 : 5000 });
       await assert.rejects(trace.stop(), mode === 'oversized' ? /exceeded 3 bytes/ : mode === 'no-stream' ? /without an IO stream/ : /timed out/);
       assert.equal(existsSync(output), false);
       assert.equal(detached, 1);
@@ -841,6 +842,15 @@ test('atomic WGX mutations invalidate exactly once and a renderer reset rebases 
   await mutateCaptureScene(page, () => null);
   state.seq = state.shown = 1; state.epoch = 2;
   assert.equal((await awaitCaptureReady(page)).required, 2); assert.equal(invalidated, 3); assert.equal(waits, 1);
+});
+
+test('an env-chosen GPU stack is explicit, so a SwiftShader fallback fails fast', () => {
+  assert.equal(parseCaptureOptions([], {}).gpuExplicit, false);
+  assert.equal(parseCaptureOptions([], { APEX_GL: 'llvmpipe' }).gpuExplicit, true);
+  assert.equal(parseCaptureOptions([], { APEX_GPU: 'hardware' }).gpuExplicit, true);
+  assert.equal(parseCaptureOptions(['--gpu', 'swiftshader'], {}).gpuExplicit, true);
+  const opts = parseCaptureOptions([], { APEX_GL: 'llvmpipe' });
+  assert.throws(() => assertCaptureGpuCapability({ actual: { renderer: 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))' } }, opts), /requested GPU profile llvmpipe, actual renderer is .*SwiftShader/);
 });
 
 test('WebGPU capture launch uses the verified software adapter pins and refuses WebGL-only llvmpipe', () => {

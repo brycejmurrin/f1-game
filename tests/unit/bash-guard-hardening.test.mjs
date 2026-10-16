@@ -10,12 +10,13 @@
 // agent-config.test.mjs runs the plain forms.
 //
 // Run: node --test tests/unit/bash-guard-hardening.test.mjs   (npm run test:tooling-fast)
+import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HOOK = path.join(ROOT, ".claude/hooks/bash-guard.sh");
@@ -105,6 +106,35 @@ test("the pkill guard blocks -f however the flags are spelled (M36)", () => {
     "kill -9 $(pgrep -u root -f chrome)", "pgrep -9f chrome | xargs kill",
   ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
   for (const cmd of ["pkill -x firefox", "pkill -u root sleep", "echo 'pkill -9f node'", "pgrep -u root bash"])
+    assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});
+
+test("settings.json turns the merge prompts off for every session, and squash/rebase stay denied (Bryce 2026-10-15)", () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  assert.equal(settings.env.APEX_MERGE_DESK, "1", "merging, arming and draft→ready run without a tap");
+  const run = (tool_name, tool_input) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/github-mcp-guard.sh")], {
+    input: JSON.stringify({ tool_name, tool_input }), encoding: "utf8",
+    env: { ...process.env, APEX_MERGE_DESK: settings.env.APEX_MERGE_DESK },
+  }).stdout.trim();
+  assert.equal(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge" }), "", "a merge-commit merge passes silently");
+  assert.equal(run("mcp__github__update_pull_request", { pullNumber: 1, draft: false }), "", "draft→ready passes silently");
+  for (const m of ["squash", "rebase"])
+    assert.match(run("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: m }), /"deny"/, `${m} stays denied`);
+});
+
+test("pkill -f blocks whatever its pattern names: it always matches its own shell (#2125)", () => {
+  // `pkill -f "serve -l 3456"` passed the old browser-word filter and killed its
+  // own shell (exit 144) in two census siblings on 2026-10-15.
+  const run = (command) => spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  for (const cmd of [
+    'pkill -f "serve -l 3456"', "pkill -f serve ; sleep 1", "pkill -f 'http.server'",
+    "pkill -f zzz-census-nonexistent-pattern", "timeout 5 pkill --full apex-tools-mcp",
+  ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
+  // killall matches process names, not command lines: unrelated names stay allowed
+  for (const cmd of ["killall sleep", "pkill -x serve", 'echo "pkill -f serve"'])
     assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
 });
 
@@ -616,7 +646,7 @@ test("a PASSING commit tells the model which guard path ran: additionalContext +
     fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "import { test } from 'node:test'; test('ok', () => {});\n");
     repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
     const commit = (command = "git commit -m x") => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }),
-      { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
+      { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_MERGE_DESK: "" } });   // the gh ask below needs a non-desk session
     const out = (r) => { assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout); };
     fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note ctx\n");
     repo.g("add", "docs/PHYSICS.md");
@@ -639,6 +669,44 @@ test("a PASSING commit tells the model which guard path ran: additionalContext +
   } finally { repo.rm(); }
 });
 
+test("a commit in a linked worktree borrows the main checkout's node_modules instead of blocking (2026-10-15)", () => {
+  // EnterWorktree, `isolation: worktree` workers and `git worktree add` make a tree with no
+  // node_modules; every worker commit blocked on it (census session_01CgCjzTvy729SeWsHzuv8eh).
+  const repo = scratchRepo("hook-wt-");
+  const wt = repo.dir + "-wt";
+  try {
+    fs.mkdirSync(path.join(repo.dir, "tools/check"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "tests/unit"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, ".gitignore"), "node_modules\n");
+    fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), "process.exit(0);\n");
+    fs.writeFileSync(path.join(repo.dir, "package.json"), JSON.stringify({ scripts: { "test:guards": "true" } }));
+    fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "import { test } from 'node:test'; test('ok', () => {});\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
+    fs.mkdirSync(path.join(repo.dir, "node_modules/.bin"), { recursive: true });
+    repo.g("worktree", "add", "-q", wt, "-b", "wt-branch");
+    assert.equal(fs.existsSync(path.join(wt, "node_modules")), false, "a fresh worktree has no node_modules");
+    fs.writeFileSync(path.join(wt, "docs/PHYSICS.md"), "note from the worktree\n");
+    spawnSync("git", ["add", "docs/PHYSICS.md"], { cwd: wt });
+    const r = hook("bash-guard.sh", bashCall("git commit -m x", { cwd: wt }), { cwd: wt, env: { APEX_GUARD_PROBE: "" } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stderr, /node_modules is missing/);
+    assert.equal(fs.realpathSync(path.join(wt, "node_modules")), fs.realpathSync(path.join(repo.dir, "node_modules")));
+    assert.equal(spawnSync("git", ["status", "--porcelain"], { cwd: wt, encoding: "utf8" }).stdout.includes("node_modules"), false,
+      "the borrowed link is git-ignored");
+    // the main checkout itself is never linked to anything
+    fs.rmSync(path.join(repo.dir, "node_modules"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note main\n");
+    repo.g("add", "docs/PHYSICS.md");
+    const m = hook("bash-guard.sh", bashCall("git commit -m x", { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
+    assert.equal(m.status, 2, "a main checkout with no install still blocks");
+    assert.match(m.stderr, /node_modules is missing/);
+  } finally {
+    spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: repo.dir });
+    fs.rmSync(wt, { recursive: true, force: true });
+    repo.rm();
+  }
+});
+
 // ── THE CLOG OF 2026-10-15 (docs/notes/CI-CLOG-SURVEY-2026-10-15.md) ────────
 // 306 of 401 PR runs that day ended cancelled, 142 of them in 17 one-minute
 // sweeps under the owner's account, and every sweep was followed by a
@@ -649,7 +717,8 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command), { env });
   for (const c of ["gh run cancel 38683549544", "gh run cancel 1 --repo o/r", "gh api -X POST repos/o/r/actions/runs/123/cancel",
     "curl -X POST -H 'Authorization: Bearer x' https://api.github.com/repos/o/r/actions/runs/123/cancel",
-    "curl -X POST \"https://api.github.com/repos/o/r/actions/runs/123/cancel\"", "bash -c 'gh run cancel 5'"]) {
+    "curl -X POST \"https://api.github.com/repos/o/r/actions/runs/123/cancel\"", "bash -c 'gh run cancel 5'",
+    "gh api -X POST repos/o/r/actions/runs/123/force-cancel", "gh api -X POST \"repos/o/r/actions/runs/$id/cancel\""]) {
     const r = run(c);
     assert.equal(r.status, 2, `must block: ${c} (${r.stderr})`);
     assert.match(r.stderr, /BLOCKED: cancelling an Actions run/);
@@ -661,13 +730,58 @@ test("2026-10-15: an Actions run cancel is refused at both doors; a re-run asks"
   assert.equal(run("APEX_RUN_CANCEL_OK=1 gh run cancel 1").status, 0, "the user asked: command override");
   const mcp = (tool_input, env = {}) => decisionOf(hook("github-mcp-guard.sh", { tool_name: "mcp__github__actions_run_trigger", tool_input }, { env }));
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }), "deny");
+  assert.equal(mcp({ method: "force_cancel_workflow_run", run_id: 1 }), "deny");
   assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_RUN_CANCEL_OK: "1" }), null, "the user asked");
-  assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }), "ask", "a re-run is at most once, infra only");
-  assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }), "ask");
+  const noDesk = { APEX_MERGE_DESK: "" };
+  assert.equal(mcp({ method: "rerun_failed_jobs", run_id: 1 }, noDesk), "ask", "a re-run is at most once, infra only");
+  assert.equal(mcp({ method: "rerun_workflow_run", run_id: 1 }, noDesk), "ask");
+  // Bryce 2026-10-15 ("all tools and mcps enabled", "Fix for me"): settings.json sets
+  // APEX_MERGE_DESK=1 for every session, so a re-run passes silently; cancels stay denied.
+  for (const method of ["rerun_failed_jobs", "rerun_workflow_run"])
+    assert.equal(mcp({ method, run_id: 1 }, { APEX_MERGE_DESK: "1" }), null, `desk passes ${method}`);
+  assert.equal(mcp({ method: "cancel_workflow_run", run_id: 1 }, { APEX_MERGE_DESK: "1" }), "deny", "the desk never cancels");
   assert.equal(mcp({ method: "run_workflow", workflow_id: "ci.yml", ref: "x" }), null, "a dispatch passes");
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
   assert.ok(new RegExp(g.matcher).test("mcp__github__actions_run_trigger"), "the matcher must route actions_run_trigger through the guard");
+});
+
+// #2182: the hold refused handoff pushes that start no CI (a topic branch with
+// no PR, a draft without run-ci) while the queue was jammed, so a reclaimed
+// container could lose unpushed work. The fake gauge runs the REAL pushVerdict
+// with a faked PR lookup and holds otherwise.
+test("#2182: the push hold lets a push that starts no CI through; a ready PR or run-ci draft still holds", () => {
+  const repo = scratchRepo("hook-push-noci-");
+  try {
+    repo.g("remote", "add", "origin", "https://github.com/brycejmurrin/f1-game.git");
+    repo.g("checkout", "-qb", "cursor/no-pr-1");
+    fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });
+    const real = pathToFileURL(path.join(ROOT, "tools/ci/queue-depth.mjs")).href;
+    fs.writeFileSync(path.join(repo.dir, "tools/ci/queue-depth.mjs"), `import { execSync } from "node:child_process";
+import { pushVerdict } from ${JSON.stringify(real)};
+const PRS = { "cursor/draft-1": [{ number: 1, draft: true, labels: [] }], "cursor/runci-1": [{ number: 2, draft: true, labels: [{ name: "run-ci" }] }],
+  "cursor/ready-1": [{ number: 3, draft: false, labels: [] }] };
+const req = (q) => ({ json: PRS[decodeURIComponent(q).match(/head=brycejmurrin:([^&]+)/)[1]] || [] });
+const i = process.argv.indexOf("--push");
+if (i >= 0) {
+  const p = pushVerdict(process.argv[i + 1], execSync("git branch --show-current", { encoding: "utf8" }).trim(), req);
+  if (p.skip) { console.log(p.line); process.exit(0); }
+}
+console.log("= queue hold (99 Linux jobs in flight / 40, 50 queued, 0 macOS / 5)"); process.exit(1);
+`);
+    const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_PUSH_HOLD: "" } });
+    for (const c of ["git push -u origin cursor/no-pr-1", "git push", "git push origin HEAD", "git push -u origin cursor/draft-1"]) {
+      const r = run(c);
+      assert.equal(r.status, 0, `starts no CI, must pass: ${c} (${r.stderr})`);
+      assert.match(r.stderr, /bash-guard: = queue skip — push starts no CI \((cursor\/no-pr-1: no open PR|cursor\/draft-1: PR #1 is a draft without run-ci)\)/, c);
+    }
+    for (const c of ["git push -u origin cursor/ready-1", "git push origin HEAD:cursor/runci-1", "git push --tags origin",
+      "git push origin cursor/no-pr-1 cursor/ready-1"]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `starts CI or unknown, must hold: ${c} (${r.stderr})`);
+      assert.match(r.stderr, /BLOCKED: = queue hold/);
+    }
+  } finally { repo.rm(); }
 });
 
 test("2026-10-15: git push holds while queue-depth says hold; a silent gauge or APEX_PUSH_HOLD=0 lets it through", () => {
@@ -701,5 +815,124 @@ test("2026-10-15: git push holds while queue-depth says hold; a silent gauge or 
     repo.g("remote", "set-url", "origin", "https://github.com/someone/else.git");
     gauge(1, "= queue hold");
     assert.equal(run("git push -u origin cursor/topic-1234").status, 0, "another origin is not held");
+  } finally { repo.rm(); }
+});
+
+// ── BLOCKER CENSUS (2026-10-15, docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md §Blocker census) ──
+test("protect-files: a git conflict-side or committed-source restore of a generated file passes; any other ref still blocks", () => {
+  const repo = scratchRepo("hook-resolve-");
+  const run = (command) => hook("protect-files.sh", { tool_name: "Bash", tool_input: { command }, cwd: repo.dir }, { cwd: repo.dir });
+  try {
+    fs.mkdirSync(path.join(repo.dir, "tests/data"), { recursive: true });
+    fs.mkdirSync(path.join(repo.dir, "js"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "tests/data/ratchets.json"), "{}\n");
+    fs.writeFileSync(path.join(repo.dir, "js/roster.js"), "x\n");
+    fs.writeFileSync(path.join(repo.dir, "version.json"), "{}\n");
+    // Outside a merge --ours/--theirs restore from the INDEX, which can hold a
+    // staged hand edit: the side flags are only conflict resolution mid-merge.
+    const SIDES = ["git checkout --theirs tests/data/ratchets.json", "git checkout --ours -- js/roster.js",
+      "git checkout -m version.json", "git restore --theirs tests/data/ratchets.json"];
+    for (const c of SIDES) {
+      const r = run(c);
+      assert.equal(r.status, 2, `no merge in progress, so not a resolution: ${c}`);
+      assert.match(r.stderr, /GENERATED/, c);
+    }
+    fs.writeFileSync(path.join(repo.dir, ".git/MERGE_HEAD"), repo.g("rev-parse", "HEAD").stdout);
+    for (const c of [...SIDES,
+      "git checkout --theirs docs/PHYSICS.md tests/data/ratchets.json",
+      "git checkout MERGE_HEAD -- tests/data/ratchets.json",
+      "git checkout origin/claude/f1-game-project-26h3ng -- js/roster.js",
+      "git restore --source=MERGE_HEAD version.json",
+      "git restore -s origin/claude/f1-game-project-26h3ng tests/data/ratchets.json",
+      "git restore -sMERGE_HEAD js/roster.js"]) {
+      const r = run(c);
+      assert.equal(r.status, 0, `conflict resolution is not a hand edit: ${c} (${r.stderr})`);
+    }
+    // R4-SUPPLY-4 holds: content from an arbitrary ref is still a write the generated rule refuses
+    for (const c of ["git checkout origin/x -- version.json", "git restore --source=evil tests/data/ratchets.json",
+      "git checkout HEAD -- version.json", "git restore --source=HEAD~3 js/roster.js",
+      "git restore -sfeature js/roster.js", "cp /tmp/r.json tests/data/ratchets.json"]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `must still block: ${c}`);
+      assert.match(r.stderr, /GENERATED/, c);
+    }
+  } finally { repo.rm(); }
+});
+
+test("bash-guard: `git add X && git commit` in one command counts X as staged (census: 7 false blocks)", () => {
+  const repo = scratchRepo("hook-addcommit-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+  try {
+    fs.mkdirSync(path.join(repo.dir, "js/core"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "1\n");
+    repo.g("add", "-A"); repo.g("commit", "-qm", "code");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
+    let r = run("git add docs/PHYSICS.md && git commit -m x");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /probe: commit docs-only/, "the added doc is the whole commit");
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "2\n");
+    r = run("git add js/core/log.js && git commit -m x");
+    assert.equal(r.status, 2, "docs/PHYSICS.md is still unstaged");
+    assert.match(r.stderr, /unstaged changes[\s\S]*docs\/PHYSICS\.md/);
+    assert.doesNotMatch(r.stderr, /^\s+js\/core\/log\.js$/m, "the added file is not reported as unstaged");
+    r = run("git add js/core/log.js docs/PHYSICS.md && git commit -m x");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /probe: commit code/, "a code path in the add makes it a code commit");
+    for (const c of ["git add -A && git commit -m x", "git add . && git commit -m x", "git add -u; git commit -m x"]) {
+      r = run(c);
+      assert.equal(r.status, 0, `${c}: ${r.stderr}`);
+      assert.match(r.stderr, /probe: commit code/, `${c} stages everything, so it is never docs-only`);
+    }
+    // no add in the command: the unstaged rule is unchanged
+    assert.equal(run("git commit -m x").status, 2);
+    assert.equal(run("echo 'git add js/core/log.js' && git commit -m x").status, 2, "a quoted add is prose");
+  } finally { repo.rm(); }
+});
+
+test("bash-guard: survey images and reports commit on the docs-only path; a code file or an image elsewhere does not", () => {
+  const repo = scratchRepo("hook-survey-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+  const put = (rel, body = "x") => { fs.mkdirSync(path.dirname(path.join(repo.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(repo.dir, rel), body); };
+  try {
+    put("artifacts/shots/tracks/spa/t1.png"); put("artifacts/shots/gallery/index.html");
+    put("artifacts/track-survey/spa-report/report.json"); put("docs/PHYSICS.md", "survey prose\n");
+    repo.g("add", "-f", "artifacts", "docs");
+    let r = run("git commit -m survey");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /probe: commit docs-only/, "survey images, reports and prose are the docs-only path");
+    put("js/core/log.js");
+    repo.g("add", "js/core/log.js");
+    r = run("git commit -m survey");
+    assert.match(r.stderr, /probe: commit code/, "a code file in the commit runs the full guards");
+    repo.g("reset", "-q", "js/core/log.js"); fs.rmSync(path.join(repo.dir, "js"), { recursive: true });
+    for (const rel of ["assets/pack/x.png", "artifacts/shots/other/x.png", "artifacts/track-survey/spa-report/run.js"]) {
+      put(rel); repo.g("add", "-f", rel);
+      r = run("git commit -m x");
+      assert.match(r.stderr, /probe: commit code/, `${rel} is not a survey asset`);
+      repo.g("reset", "-q", rel); fs.rmSync(path.join(repo.dir, rel));
+    }
+  } finally { repo.rm(); }
+});
+
+// PostToolUse stdout is debug-log only: "For most events, Claude Code writes stdout to
+// the debug log" — UserPromptSubmit/SessionStart are the exceptions
+// (https://code.claude.com/docs/en/hooks, Exit code 0). The advice must travel as
+// hookSpecificOutput.additionalContext or the model never reads it (#2228 research).
+test("post-edit.sh hands its advice to the model as PostToolUse additionalContext JSON, and stays silent with none", () => {
+  const repo = scratchRepo("hook-postedit-");
+  const run = (rel) => hook("post-edit.sh", { tool_name: "Write", hook_event_name: "PostToolUse",
+    tool_input: { file_path: path.join(repo.dir, rel) }, cwd: repo.dir }, { cwd: repo.dir });
+  try {
+    fs.mkdirSync(path.join(repo.dir, "js/core"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "function (\n");
+    let r = run("js/core/log.js");
+    assert.equal(r.status, 0, r.stderr);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.hookSpecificOutput.hookEventName, "PostToolUse");
+    assert.match(out.hookSpecificOutput.additionalContext, /\[post-edit\] js\/core\/log\.js does not parse/);
+    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "var ok = 1;\n");
+    r = run("js/core/log.js");
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(r.stdout.trim(), "", "no advice, no output");
   } finally { repo.rm(); }
 });

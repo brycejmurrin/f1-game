@@ -61,11 +61,10 @@
      behind the published cap under CI load → fitHud flipped caps. */
   transition-property: opacity, color, background-color, box-shadow, filter, text-shadow;
 }
-/* CAM / PAUSE follow BUTTON SIZE independently of HUD fitting. Cap the
-   top-row buttons at 150% so their own requested size cannot consume the
-   full timing lane; readouts clear their measured rectangles. */
+/* CAM / PAUSE share the dock's effective BUTTON SIZE, capped at 150%.
+   Readouts clear their measured rectangles independently of HUD scale. */
 :root {
-  --hud-btn-z: clamp(1, var(--hud-btn-scale, 1), 1.5);
+  --hud-btn-z: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5);
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
@@ -1664,11 +1663,11 @@ body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top
    already carry; --hl-o keeps a corner piece growing away from its corner. */
 /* These rectangles are read immediately after fit() writes clearance. Geometry
    must never transition, including when reduced motion is not selected. */
-:is(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs) {
+:is(#minimap, #hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs) {
   transition-property: opacity, color, background-color, border-color, box-shadow, filter, text-shadow;
 }
 /* fit() publishes screen-pixel clearance independently of the saved layout. */
-:is(#hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs), [data-hl] {
+:is(#minimap, #hud-speed, #hud-limits, #announce, #hud-damage, #hud-rel, #hud-strat, #hud-inputs), [data-hl] {
   translate: calc((var(--hl-x, 0) * 1vw + var(--hud-clear-x, 0px)) / var(--hud-z, 1)) calc((var(--hl-y, 0) * 1svh + var(--hud-clear-y, 0px)) / var(--hud-z, 1));
   scale: var(--hl-s, 1);
   transform-origin: var(--hl-o, center);
@@ -1832,8 +1831,12 @@ body.lt-open:not(.pc-nopanel) #pc-bar {
   /* Every term in this element's own space: viewport units through --vwz, and
      --dock-px (a screen measurement) divided back down — see the note on the
      .pc-altcol offsets above. --sal is hardware, so it divides too. */
+  /* `--dock-w + 8px + --sar` IS `--dock-px / --ui-scale`, written without the
+     round trip: Chromium resolved `calc(1000px - var(--dock-px) / var(--ui-scale))`
+     110px short (min() inside the product), so at 844x390 + insets the bar
+     ran 59px into the panel and EXIT sat on FREE CAMERA (#2159). */
   max-width: max(160px, min(calc(70 * var(--vwz)), 720px,
-    calc(100 * var(--vwz) - var(--dock-px) / var(--ui-scale) - 40px - var(--sal) / var(--ui-scale))));
+    calc(100 * var(--vwz) - var(--dock-w) - 8px - var(--sar) - 40px - var(--sal) / var(--ui-scale))));
   gap: calc(var(--gap) * 2 / 3); padding: calc(var(--gap) * 0.5) 10px;
 }
 /* Same context: the tuner panel already carries plenty of on-screen text, so
@@ -1859,6 +1862,13 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
      (~32 local px, ~26 in the lt-open variant above) they painted ~12.8px /
      ~10.4px at UI SIZE 40%. Same floor as #pc-toggle two rules up. */
   min-height: var(--tap-min);
+}
+/* Compact, but not under the touch floor (#2158): the padding above painted
+   the three buttons (lt-open) 40 tall and the FOV track 32 at 844x390. */
+@media (pointer: coarse) {
+  body.lt-open:not(.pc-nopanel) :is(#pc-exit, #pc-panel, #pc-hud),
+  .pc-fovlab input[type="range"] { min-height: var(--tap-paint); }
+  .pc-fovlab input[type="range"] { height: var(--tap-paint); }
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
 #pc-panel, #pc-hud { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
@@ -2212,7 +2222,7 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 /* Optional panels retain their text size when space only holds one row. */
 #hud-rel[data-col-compact] > div:not([data-col-row]),
 #hud-strat[data-col-compact] > div:not([data-k="next"]) { display: none; }
-:is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop] { display: none !important; }
+body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop] { display: none !important; }
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }

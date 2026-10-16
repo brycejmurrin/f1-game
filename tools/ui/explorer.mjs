@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc UI exploration: player missions, navigation atlas, filmstrips, phone/fault/a11y probes, replay reduction and scene reports.
+// @doc UI exploration: missions, navigation atlas, filmstrips, phone/fault/a11y probes, replay reduction, scene reports.
 // @skill survey-ui-matrix
 import fs from "node:fs";
 import path from "node:path";
