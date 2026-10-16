@@ -1062,13 +1062,14 @@ const LAZY_EDITOR = [
   "js/editor/followup-tools.js", // review proposals, scenery recipes and learning cards
   "js/editor/scenery-panel.js", // DesignerScenery: theme discovery, atmosphere and prop inspector
   "js/editor/bridge-panel.js", // DesignerBridges: authored road-overpass controls
+  "js/editor/workspace.js",  // DesignerWorkspace: inspector disclosures and navigation state
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
 ];
 // stamps / randomise / validate / insight / fixes / canvas / profile destructure TrackShape at eval — the
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 // elev-presets is pure (optional CustomTracks.LIMITS at call time) — no shape edge.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/followup-tools.js" && f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/bridge-panel.js" && f !== "js/editor/designer.js")
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/followup-tools.js" && f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/bridge-panel.js" && f !== "js/editor/workspace.js" && f !== "js/editor/designer.js")
   .map((f) => ["js/editor/shape.js", f])
   .concat([["js/editor/followup-tools.js", "js/editor/scenery-panel.js"]])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
