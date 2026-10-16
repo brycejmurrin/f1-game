@@ -517,7 +517,7 @@ Also measured, added when the gaps above were closed: `datastandings`,
 than a Grand Prix classification), `hudtouch` and `hudbuttons` (the two remaining
 steering modes — "touch" hides the gas pedal, "buttons" adds an explicit GAS), and
 `garagewheels`; later, the Settings pages (`settingscontrols`, `settingsdriving`,
-`settingsdisplay`), `duelpicker`, `loading`, `flybyeditor`, `lightingtunerfly` and
+`settingsdisplay`, `settingsappearance`, `settingsa11y`), `duelpicker`, `loading`, `flybyeditor`, `lightingtunerfly` and
 `photocontrols`.
 
 **`garagewheels` exists to MEASURE a claim rather than assert it.** The line used

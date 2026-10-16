@@ -1072,6 +1072,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (survey rank 1; 26×26 vs 52, 82 soft taps) and SATIN/CHROME tags do
   // not ellipsis (20 trunc). css/carsetup.css #cs-options.cs-liv-grid only.
   "tests/unit/ui-fit-garage-livery-r6.test.mjs",
+  // ui-fit r6 rank 5: lighting over flyby stacked dock — side-by-side on
+  // wide short, #lt-rows 3-row floor; camera / #fb-* tap floors untouched.
+  "tests/unit/ui-fit-lighting-flyby-stack.test.mjs",
   // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
   // floors (#lighting-inner / #lt-* only; camera untouched).
   "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
@@ -1081,6 +1084,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: Settings ACCESSIBILITY #pm-panel-a11y pad / scroll-pad
   // so the last colourblind help clears BACK (survey rank 8; 844×390).
   "tests/unit/ui-fit-settings-a11y-r6.test.mjs",
+  // ui-fit round 6: Settings APPEARANCE studio reflow + pad above BACK
+  // (survey rank 7; 300×3604 @ 390×844, 222×5059 @ scale 200).
+  "tests/unit/ui-fit-settings-appearance-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
