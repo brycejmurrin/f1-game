@@ -756,6 +756,14 @@ function futureCareerSlot(raw, flavour) {
   return CareerBackup.validate({ format: CareerBackup.FORMAT,
     slots: [{ flavour, i: 0, data: { v: raw && raw.v } }] }).reason === "newer-version";
 }
+// migrateSlot coerces money:"abc" to 0, which would restore a poisoned file as
+// a zero-credit career; ask the backup gate about the RAW money first.
+function poisonedCareerMoney(raw, flavour) {
+  if (typeof CareerBackup === "undefined" || !raw || typeof raw !== "object"
+      || !Object.prototype.hasOwnProperty.call(raw, "money")) return false;
+  return CareerBackup.validate({ format: CareerBackup.FORMAT,
+    slots: [{ flavour, i: 0, data: { money: raw.money } }] }).reason === "nan-money";
+}
 function collectCareer() {
   const out = {};
   let n = 0;
@@ -821,6 +829,7 @@ function applyCareer(file, revisions) {
     }
     const match = CAREER_SLOT_RE.exec(k);
     if (futureCareerSlot(bag[k], match[1])) return refused("newer-version");
+    if (poisonedCareerMoney(bag[k], match[1])) { skipped++; continue; }
     const c = migrateSlot(bag[k]);
     if (!c) { skipped++; continue; }
     slots.push({ flavour: match[1], i: Number(match[2]), data: c });
