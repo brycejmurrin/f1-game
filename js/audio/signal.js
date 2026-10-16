@@ -71,7 +71,15 @@ var GameAudioSignal = (function () {
     return { start: bi * 0.1, end: (bi + w) * 0.1 };
   }
 
+  // Last create() host — CrowdAudio (LAZY_AUDIO, after engine) reads this so
+  // it can share context/bus/sfxOk without a game.js or engine.js hookup.
+  let lastHostRef = null;
+
   function create(host) {
+    lastHostRef = host || null;
+    if (typeof CrowdAudio !== "undefined" && CrowdAudio && CrowdAudio.bindHost) {
+      try { CrowdAudio.bindHost(host); } catch (e) { /* optional leaf */ }
+    }
     function env(gainNode, t0, peak, attack, decay) {
       const g = gainNode.gain;
       g.cancelScheduledValues(t0);
@@ -228,6 +236,7 @@ var GameAudioSignal = (function () {
   return {
     create, detectPeriod, findStableLoop,
     blipFireTotal() { return blipFireTotal; },
+    lastHost() { return lastHostRef; },
   };
 })();
 Object.freeze(GameAudioSignal);

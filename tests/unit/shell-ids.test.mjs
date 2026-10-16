@@ -17,6 +17,7 @@
 // id on demand (it must, or game.js could not boot headlessly), so the 248 VM
 // tests are blind to this class by construction.
 import { test } from "node:test";
+import { load as loadRatchets } from "../../tools/check/ratchets.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -102,7 +103,7 @@ test("the ratcheted dynamic-read count matches the tree", () => {
   // Lookups whose id is built from a variable cannot be checked, only counted.
   // Same report-don't-guess contract tools/gen/move-tree.mjs uses for paths
   // assembled from separate segments.
-  const data = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/ratchets.json"), "utf8"));
+  const data = loadRatchets() // ratchets.json + the per-branch ratchets.d fragments;
   const entry = data.tree.dynamicIdReads;
   assert.ok(entry, "dynamicIdReads must be a tree ratchet in tests/data/ratchets.json");
   const { counts } = scan();

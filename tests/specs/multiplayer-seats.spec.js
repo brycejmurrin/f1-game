@@ -110,7 +110,7 @@ test.describe("seat exclusivity — resolving a clash", () => {
     await enterRoom(page, "host");
     await peerSays(page, EV.HELLO, { team: "redbull", driver: 0 });
     // Give the (absent) move a chance to happen before declaring it didn't.
-    await expect(page.locator("#vs-them")).toContainText("RBR", { timeout: 5000 });
+    await expect(page.locator("#vs-roster")).toContainText("RBR", { timeout: 5000 });
     expect(await mySeat(page)).toEqual({ team: "redbull", driver: 0 });
   });
 
@@ -134,7 +134,7 @@ test.describe("seat exclusivity — resolving a clash", () => {
     await seatedAs(page, RBR, 1);
     await enterRoom(page, "guest");
     await peerSays(page, EV.HELLO, { team: "redbull", driver: 0 });
-    await expect(page.locator("#vs-them")).toContainText("RBR", { timeout: 5000 });
+    await expect(page.locator("#vs-roster")).toContainText("RBR", { timeout: 5000 });
     expect(await mySeat(page)).toEqual({ team: "redbull", driver: 1 });
     await expect(page.locator("#vs-status")).not.toContainText("taken");
   });

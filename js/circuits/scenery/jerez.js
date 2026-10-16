@@ -159,7 +159,7 @@
             if (h < 0.22) continue;                 // a car park is never full
             if (!clear(k, side, d, 11)) continue;
             const c = anchor(k, side, d).c;
-            if (parked.some((q) => Math.hypot(q[0] - c[0], q[2] - c[2]) < 5)) continue;
+            if (parked.some((q) => Math.hypot(q[0] - c[0], q[2] - c[2]) < (q[3] || 5))) continue;
             parked.push(c);
             place(k, side, d, [4.6, 2.25, 2.2], CAR[(i + r * 2 + seed) % 6]);   // 1.45 m showing (place sinks 0.8)
           }
@@ -267,6 +267,9 @@
       for (let i = 0; i < 9; i++) {                        // freight containers
         const k = K(sl(0.9660 + i * 0.0060));
         if (!clear(k, 1, 20, 10)) continue;
+        // The T3 car park (carPark 0.156 -1 110) folds back into this paddock:
+        // register each container so no car lands in one (was a 1.04 m clip).
+        parked.push(anchor(k, 1, 20).c.concat(6.5));
         place(k, 1, 20, [2.6, 2.6, 6.0],
           hash(i * 7) < 0.5 ? [0.72, 0.70, 0.66] : [0.64, 0.62, 0.58]);
       }
