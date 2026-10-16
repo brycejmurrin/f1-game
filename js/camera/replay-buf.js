@@ -9,6 +9,13 @@
  * nearer real sample instead. */
 "use strict";
 const ReplayBuf = (function () {
+  // Audio presentation only: live retirement/classification remains authoritative.
+  const audioStatus = new WeakMap();
+  function audioRetired(car) {
+    let entry = audioStatus.get(car);
+    if (entry && !entry.owner.valid()) { entry.owner.release(); entry = audioStatus.get(car); }
+    return entry ? entry.retired : !!car.retired;
+  }
   const HZ = 30;
   const WINDOW_S = 20;
   const MAX_FRAMES = HZ * WINDOW_S;           // 600
@@ -62,6 +69,17 @@ const ReplayBuf = (function () {
   // The caller can reserve pose ownership (for example, a recorded WATCH).
   function create(G, eligible) {
     Log.info("game", "ReplayBuf.create");
+    let audioCars = null;
+    const audioOwner = {
+      valid: () => !!audioCars && !!G.cars && G.cars.length === audioCars.length && audioCars.every((c, i) => G.cars[i] === c),
+      release: () => {
+        if (audioCars) for (const c of audioCars) {
+          const entry = audioStatus.get(c);
+          if (entry && entry.owner === audioOwner) audioStatus.delete(c);
+        }
+        audioCars = null;
+      },
+    };
     const allowed = () => (!eligible || eligible()) && !(G.netPlay && G.netPlay.active && G.netPlay.active());
     let nCars = 0, cap = 0, head = 0, count = 0, lastSlot = -1;
     let times = null, data = null, status = null, brk = null, breakPending = false;
@@ -85,6 +103,7 @@ const ReplayBuf = (function () {
       head = 0; count = 0; lastSlot = -1; tags = []; breakPending = false;
       scrubbing = false; liveSnap = null; scrubPlaying = true; scrubRate = 1;
       // prevStatus survives: a car already out when the timeline is discarded is not a fresh retirement (alloc() zeroes it).
+      audioOwner.release();
       hideDock();
     }
     function reset(cars) {
@@ -235,6 +254,7 @@ const ReplayBuf = (function () {
         c.yawVis = p.yawVis;
         c.rPrevS = p.s; c.rPrevX = p.x; c.rPrevPx = p.px; c.rPrevPz = p.pz;
         c.rPrevHead = p.head; c.rPrevYawVis = p.yawVis;
+        audioStatus.set(c, { owner: audioOwner, retired: !!(p.status & 1) });
       }
       if (typeof GameAudio !== "undefined" && GameAudio.syncReplayRpms) GameAudio.syncReplayRpms(cars);   // revs follow the replayed speed
     }
@@ -243,6 +263,7 @@ const ReplayBuf = (function () {
       if (!scrubbing) discardTimeline(G.raceT);   // a paused clock jump can precede the next sample
       if (scrubbing || count < 2) return false;
       liveSnap = snapLive(G.cars);
+      audioCars = G.cars.slice();
       scrubbing = true;
       scrubPlaying = true;
       scrubRate = 1;
@@ -261,6 +282,8 @@ const ReplayBuf = (function () {
     }
     function apply(t, continuous = false) {
       if (!scrubbing) return false;
+      // Indexed footage belongs to the captured field, never replacement cars.
+      if (!audioOwner.valid()) { audioOwner.release(); return false; }
       const snap = at(t);
       if (!snap || !G.cars) return false;
       scrubT = snap.t;
@@ -297,6 +320,7 @@ const ReplayBuf = (function () {
     function endScrub() {
       sheetGeneration++; sheetBusy = false;
       if (!scrubbing) return false;
+      audioOwner.release();
       if (liveSnap && G.cars) restoreLive(G.cars, liveSnap);
       scrubbing = false; liveSnap = null; scrubPlaying = true;
       snapCamera();   // restore the live timeline before the next rendered frame
@@ -518,7 +542,7 @@ const ReplayBuf = (function () {
   }
 
   return {
-    create, HZ, WINDOW_S, FLOATS, MAX_CARS, MAX_FRAMES, MAX_BYTES,
+    create, audioRetired, HZ, WINDOW_S, FLOATS, MAX_CARS, MAX_FRAMES, MAX_BYTES,
     frameBytes, budgetOk, capacityFor, lerpCar,
   };
 })();

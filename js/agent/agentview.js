@@ -208,7 +208,9 @@ const AgentView = (function () {
     }
 
     let cornerCache = null;     // { key, corners: [...] }
-    let seq = 0;
+    let seq = 0, episodeId = 0;
+    // IDs are local to this view; reset starts a new delta baseline, not a new physics seed.
+    function beginEpisode() { episodeId++; lastPayload = null; lastSeq = 0; return episodeId; }
     let lastPayload = null;     // for detail-agnostic delta mode
     let lastSeq = 0;
 
@@ -910,7 +912,7 @@ const AgentView = (function () {
 
       const payload = {
         apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
-        seq: ++seq, t: r2(G.raceT || 0), detail,
+        seq: ++seq, episodeId, t: r2(G.raceT || 0), detail,
         conventions: CONVENTIONS,
         raceState: G.state,
         track: { id: G.track.def.id, name: G.track.def.name, lengthM: r1(total) },
@@ -984,7 +986,7 @@ const AgentView = (function () {
           lastPayload = applyDelta(lastPayload, d);
           lastPayload.seq = payload.seq;
           lastSeq = payload.seq;
-          d.apiVersion = API_VERSION; d.seq = payload.seq;
+          d.apiVersion = API_VERSION; d.seq = payload.seq; d.episodeId = episodeId;
           d.deltaBase = o.since;
           return d;
         }
@@ -2026,6 +2028,7 @@ const AgentView = (function () {
       return {
         apiVersion: API_VERSION, physicsVersion: PHYSICS_VERSION,
         conventions: CONVENTIONS,
+        episodeId,
         ran: { ticks: ran, requestedTicks: ticks, dt: +dt.toFixed(5), seconds: r2(elapsed),
                stoppedEarly,
                policy: policy ? "closed-loop at " + r1(1 / (policyEvery * dt)) + " Hz"
@@ -2205,6 +2208,7 @@ const AgentView = (function () {
           "rivals[].closingMps": "+ = the gap is shrinking, whichever side they are on",
           "rivals[].pace": "AI skill ~0.92-1.02; a slower car will not hold the position",
           "terminal.reason": "why the episode ended — retired vs finished vs wrong_way vs rescued",
+          "episodeId": "view-local episode counter; reset increments it and clears the delta baseline",
           "session.seed": "replay this exact episode with reset(frac, speed, x, seed)",
         },
         read: {
@@ -2573,7 +2577,7 @@ const AgentView = (function () {
       return base;
     }
 
-    return { world, field, trackInfo, scene, describe, query, atmosphere, objective,
+    return { beginEpisode, world, field, trackInfo, scene, describe, query, atmosphere, objective,
              carView, render, survey, rollout, agentHelp, corners, terminal,
              API_VERSION, PHYSICS_VERSION };
   }

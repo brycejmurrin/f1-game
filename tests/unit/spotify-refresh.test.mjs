@@ -38,7 +38,12 @@ function load(fetchImpl, opts = {}) {
   const element = (id) => {
     if (!elements.has(id)) elements.set(id, {
       value: "", dataset: {}, addEventListener(event, fn) { this[event] = fn; },
-      appendChild() {},
+      appendChild(child) { this.childElementCount = (this.childElementCount || 0) + 1; this.children = (this.children || []).concat(child); },
+      childElementCount: 0, children: [], hidden: false, textContent: "", style: {}, disabled: false,
+      classList: { toggle() {}, add() {}, remove() {} },
+      setAttribute(name, value) { this[name] = String(value); if (name === "src") this.src = String(value); },
+      getAttribute(name) { return this[name] == null ? null : String(this[name]); },
+      removeAttribute(name) { delete this[name]; },
     });
     return elements.get(id);
   };
@@ -57,7 +62,9 @@ function load(fetchImpl, opts = {}) {
     history: { replaceState() {} },
     document: {
       readyState: "complete",
-      getElementById(id) { return opts.dom && (id === "sp-search" || id === "sp-fwd") ? element(id) : null; },
+      getElementById(id) {
+        return opts.dom && (opts.dom === "art" || id === "sp-search" || id === "sp-fwd") ? element(id) : null;
+      },
       addEventListener() {},
       createElement(tag) {
         if (tag === "script") {
@@ -65,7 +72,7 @@ function load(fetchImpl, opts = {}) {
           scripts.push(script);
           return script;
         }
-        return {};
+        return element("created-" + tag + "-" + scripts.length);
       },
       head: { appendChild() {} },
     },
@@ -103,7 +110,29 @@ test("a retryable refresh failure preserves the long-lived Spotify session", asy
 test("album art hides a failed CDN image and does not resurrect it on refresh", () => {
   assert.match(SRC, /dataset\.apexArtFailed/);
   assert.match(SRC, /img\.onerror\s*=\s*next \? \(\) =>/);
-  assert.match(SRC, /img\.hidden = !art \|\| img\.dataset\.apexArtFailed === art/);
+  assert.match(SRC, /img\.removeAttribute\("src"\)/);
+  assert.match(SRC, /img\.hidden = false/);
+});
+
+test("failed current artwork keeps the neutral swatch visible in the player DOM", async () => {
+  const { SpotifyMusic, element } = load((url) => {
+    const u = String(url);
+    if (u.endsWith("/me/player")) return Promise.resolve(jsonResponse({
+      item: { name: "Fallback Track", artists: [{ name: "Artist" }], duration_ms: 120000,
+        album: { images: [{ url: "https://cdn.test/expired-art.jpg" }] } },
+      is_playing: true, progress_ms: 0, device: { name: "Test device", volume_percent: 50 },
+    }));
+    return Promise.resolve(jsonResponse({ devices: [], items: [] }));
+  }, { disk: [[TOKEN_KEY, liveToken("live-art")]], dom: "art" });
+
+  await SpotifyMusic.connect();
+  const img = element("sp-art");
+  assert.equal(img.hidden, false, "loaded artwork is visible");
+  const staleFailure = img.onerror;
+  assert.equal(typeof staleFailure, "function");
+  staleFailure();
+  assert.equal(img.hidden, false, "a failed current image leaves its neutral background visible");
+  assert.equal(img.getAttribute("src"), null, "the failed URL is removed so Chromium cannot paint a broken glyph");
 });
 
 test("a delayed account check cannot overwrite a replacement Spotify session", async () => {

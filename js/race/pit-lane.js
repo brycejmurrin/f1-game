@@ -702,8 +702,8 @@ var PitLane = (function () {
         // the limit into traffic at racing speed. GO for a moment
         // after the release; MERGE, naming the car, while one is closing on
         // the track side; otherwise the metres to the end of the road.
-        if ((c.pitOutT || 0) > 0) return { phase: "served", text: "GO GO GO", dist: 0, frac: 1 };
         const o = closingCar(c);
+        if ((c.pitOutT || 0) > 0) return { phase: "served", text: o ? "GO — " + (o.code || "CAR") + " CLOSING" : "GO GO GO", dist: 0, frac: 1 };
         if (o) return { phase: "merge", text: "MERGE — " + (o.code || "CAR") + " CLOSING", dist: 0, frac: 1 };
         const m = toExit(c);
         return m > 0 ? { phase: "out", text: "EXIT " + Math.round(m) + "m", dist: m, frac: clamp(1 - m / exitLen(c), 0, 1) } : null;
@@ -1537,12 +1537,12 @@ var PitLane = (function () {
       return lapsToFlag(c) <= COMPOUND_WARN_LAPS && SportingRegs.compoundShort(c.tyreLog);
     }
     /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
-    function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
-    function pinnedStops() {
-      const v = G.store && G.store.get ? G.store.get(pinKey(), "auto") : "auto";
+    function pinKey(id) { const t = G.track, d = t && t.def; return "pitPlan." + ((typeof id === "string" && id.trim() ? id : null) || (d && d.id) || (t && t.id) || "track"); }
+    function pinnedStops(id) {
+      const v = G.store && G.store.get ? G.store.get(pinKey(id), "auto") : "auto";
       return v == null || v === "auto" ? null : Math.max(0, Math.min(2, v | 0));
     }
-    function setPinnedStops(v) { if (G.store && G.store.set) G.store.set(pinKey(), v == null ? "auto" : (v | 0)); }
+    function setPinnedStops(v, id) { if (G.store && G.store.set) G.store.set(pinKey(id), v == null ? "auto" : (v | 0)); }
     /** The lane's net cost in seconds at racing speed — the number that makes
      *  a 2-stop at Monaco read as the mistake it is. `estimate` refines it
      *  under a caution; this is the plain figure the STRATEGY row shows. */

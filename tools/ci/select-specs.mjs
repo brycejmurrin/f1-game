@@ -338,6 +338,11 @@ export const FAT_UI_SELECTED_JOB_MIN = 50;
 // 2-vCPU llvmpipe runner starve each other's boots (Pages 38695272346,
 // oversize-career: 45 s boot timeout while the sibling worker built three tracks).
 export const FAT_UI_MIN_PIECES = 2;
+// hud-layout has stayed above 11 minutes per native half in recent Actions
+// runs (p50 ~700 s per half). Keep each runner below the 50-minute fat-UI
+// ceiling with three pieces while the smaller career specs retain the two
+// piece floor. This is a bounded fan-out increase for the measured outlier.
+export const HUD_LAYOUT_MIN_PIECES = 3;
 // Over-budget / high-timeout specs with NO CI measurement: Playwright --shard
 // so each leg has this many tests, not one 30-minute packed file. A spec with
 // a measured median is split by its measured TIME instead (shards(),
@@ -864,7 +869,9 @@ export function shards(r, db = timings(), quarantine = loadQuarantine(), base = 
       // cost one more job start per fat spec — bounded fleet-wide by the lanes.
       const workers = 1;
       const secFat = Math.max(1, sec, s.tests * FAT_UI_SEC_PER_TEST);
-      const nFat = Math.max(FAT_UI_MIN_PIECES, piecesToFitCap(secFat, s.tests, FAT_UI_SELECTED_JOB_MIN));
+      const minPieces = /(?:^|\/)hud-layout\.spec\.js$/.test(s.file)
+        ? HUD_LAYOUT_MIN_PIECES : FAT_UI_MIN_PIECES;
+      const nFat = Math.max(minPieces, piecesToFitCap(secFat, s.tests, FAT_UI_SELECTED_JOB_MIN));
       for (let i = 1; i <= nFat; i++) {
         items.push({ solo: true, name: `oversize-${base}-${i}of${nFat}`, files: [s.file],
           shard: `${i}/${nFat}`, tests: Math.ceil(s.tests / nFat),

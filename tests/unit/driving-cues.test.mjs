@@ -381,3 +381,14 @@ test("injected AUDIO DRIVING CUES slider is painted from the store and wired (H1
   assert.equal(byId["pm-audiocues-v"].textContent, "OFF");
   assert.equal(ctx.DrivingCues.on(), false);
 });
+
+
+test("condition mode delegates to the shared capacity estimate only while cues are ON", () => {
+  const ctx = load(); let estimates = 0;
+  ctx.BrakeCue.conditionCapacity = (p, pc, state, dt) => { estimates++; assert.ok(dt > 0); return { lat: 11, brake: 11 }; };
+  const cue = ctx.DrivingCues.create({ state: "race", paused: false, soundOn: false, player: { s: 10, speed: 40 }, track: { total: 200 }, vTop: () => 72 });
+  cue.setLevel(6); cue.tick(); assert.equal(estimates, 0, "default timing remains unchanged");
+  cue.setConditionAware(true); cue.tick(); assert.equal(estimates, 1);
+  cue.setLevel(1); const reads = ctx.curvatureCalls.length; cue.tick();
+  assert.equal(estimates, 1); assert.equal(ctx.curvatureCalls.length, reads);
+});
