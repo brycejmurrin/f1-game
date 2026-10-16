@@ -239,6 +239,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `update-check.js` | `UpdateCheck` | tag | UpdateCheck: an in-session "a newer build is live" check and its UPDATE READY chip. index.html's shell version guard runs ONCE, at boot; an installed PWA or a… |
 | `race-message-history.js` | `RaceMessageHistory` | tag | Delivered cards only: showAnnounce calls delivered after painting its card. |
 | `controller-profile-controls.js` | `ControllerProfileControls` | tag | Explicit current-device reset; Input owns automatic per-device selection. |
+| `condition-cue-controls.js` | `ConditionCueControls` | tag | Explicit opt-in for cue targets that account for current driving conditions. |
 | `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
 
 **`js/track/core/`**
@@ -290,6 +291,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `session-entry.js` | `SessionEntry` | tag | One owner for the asynchronous gap before a race or qualifying sheet commits. |
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
 | `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
+| `setup-trial-session.js` | `SetupTrialSession` | tag | Fresh solo setup trials use normal race construction; never restore a world checkpoint. |
 | `storm.js` | `Storm` | tag | STORM (⛈): the weather above RAIN. |
 | `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
@@ -433,7 +435,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
 | `debris-world.js` | `DebrisWorld` | tag | Rapier side-world for render-only debris (adoption phases R0+R1, see spike/ADOPTION-PLAN.md Part 2). |
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
-| `contact-geometry.js` | `ContactGeometry` | tag | Oriented boxes in the local (along-road, right) plane. |
+| `contact-geometry.js` | `ContactGeometry` | tag | Physical road boundaries and oriented boxes in the local road plane. |
 | `collide.js` | `Collide` | tag | Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket broadphase, the mass-weighted relaxation passes, the hard separation pass, the… |
 | `wall-clamp.js` | `WallClamp` | tag | WALL CLAMP: per-side barrier / pit-wall / gantry limits, human slide-along + scrub, lane-side pit clamp, and the conditional road→world writeback when xPinned. |
 
@@ -467,6 +469,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `prebuild.js` | `GaragePrebuild` | tag | the GARAGE pre-built while the title or race settings sits idle. |
 | `pit-signs.js` | `PitSigns` | tag | PitSigns: each team's identity on the OUTSIDE of its pit garage. |
 | `setup-tune.js` | `SetupTune` | tag | the SETUP SHEET: the car's mechanical set-up — anti-roll bars, ride height / rake, brake bias — per team, persisted, folded into the parts contract… |
+| `setup-trials.js` | `SetupTrials` | tag | Deliberate unscored launch comparisons. |
 | `setup-presets.js` | `SetupPresets` | tag | Named, bounded mechanical sheets. |
 | `setup-experiments.js` | `SetupExperiments` | tag | reversible garage setup experiments and the active-aero bench. |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |

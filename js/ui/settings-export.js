@@ -190,6 +190,7 @@ const SPEC = [
       const clean = ControllerProfiles.clean(raw);
       return clean.devices.length === raw.devices.length ? clean : undefined;
     } },
+  { k: "conditionCues", lane: "json", group: "driving", def: false, src: "js/ui/condition-cue-controls.js" },
   { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
   { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },
@@ -607,6 +608,13 @@ function cleanLivery(l) {
 // Returns the value to WRITE, or undefined to skip the key. A partly-corrupt
 // custom-livery array keeps the paint jobs that are sound instead of losing
 // the lot: the player's other work is not the file's fault.
+function validSetupContext(v) {
+  if (v == null) return true;
+  if (!isObj(v) || v.v !== 1 || Object.keys(v).some((k) => !["v", "physics", "parts", "track", "note"].includes(k))
+      || !isObj(v.parts) || Object.keys(v.parts).length > 32 || typeof v.note !== "string" || v.note.length > 160) return false;
+  if (!["physics", "track"].every((k) => v[k] === null || (typeof v[k] === "string" && v[k].length <= (k === "track" ? 128 : 96)))) return false;
+  return Object.entries(v.parts).every(([k, value]) => /^[a-z0-9_-]{1,48}$/i.test(k) && typeof value === "string" && value.length <= 96);
+}
 function garageValue(k, v) {
   if (v === undefined || v === null) return undefined;
   if (k.indexOf("setupPresets.") === 0) {
@@ -615,7 +623,7 @@ function garageValue(k, v) {
         || Object.keys(v).some((key) => key !== "v" && key !== "items")) return undefined;
     if (v.items.some((row) => !isObj(row) || typeof row.name !== "string" || row.name.trim().length > 32
         || !(row.trackId === null || typeof row.trackId === "string" && row.trackId.length <= 128) || !Number.isFinite(row.at)
-        || Object.keys(row).some((key) => !["id", "name", "tune", "trackId", "at"].includes(key))
+        || Object.keys(row).some((key) => !["id", "name", "tune", "trackId", "at", "context"].includes(key)) || !validSetupContext(row.context)
         || !isObj(row.tune) || Object.keys(row.tune).length !== SetupTune.FIELDS.length
         || Object.keys(row.tune).some((field) => !SetupTune.FIELDS.includes(field)))) return undefined;
     const clean = SetupPresets.normalize(v);

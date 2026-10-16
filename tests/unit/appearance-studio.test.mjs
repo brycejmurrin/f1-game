@@ -178,6 +178,22 @@ test("HUD screen scope does not rewrite the global HUD profile", () => {
   assert.equal(studioForScope().includes("hudProfile"), false);
 });
 
+test("every ScreenLooks page has a screen scope and a preview entry", () => {
+  const { studio } = load();
+  const keys = id => Array.from(studio.SCREEN_KEYS[id]);
+  assert.deepEqual(keys("pause"), ["lookPause"]);
+  assert.deepEqual(keys("datahub"), ["lookDatahub"]);
+  assert.deepEqual(keys("select"), ["lookSelect"]);
+  assert.deepEqual(keys("race"), ["lookRace"]);
+  assert.deepEqual(keys("career"), ["lookCareer"]);
+  assert.deepEqual(keys("garage"), ["lookGarage"]);
+  assert.deepEqual(keys("popups"), ["lookPopups"]);
+  const sourceText = fs.readFileSync(new URL("../../js/ui/appearance-studio.js", import.meta.url), "utf8");
+  for (const id of ["pause", "datahub", "select", "career", "race", "garage", "hud", "popups"]) {
+    assert.match(sourceText, new RegExp('\\[\\"' + id + '\\",'), id + " preview button");
+  }
+});
+
 function studioForScope() {
   return load({ hudProfile: "minimal" }).studio.SCREEN_KEYS.hud;
 }

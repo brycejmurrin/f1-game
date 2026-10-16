@@ -1243,13 +1243,14 @@ window.SpotifyMusic = (function () {
         img.dataset.apexArt = next;
         img.dataset.apexArtFailed = "";
         img.onerror = next ? () => {
-          // Album art URLs are short-lived CDN links. Hide a failed image and
-          // leave the panel's neutral swatch visible instead of showing a
-          // broken-image glyph. The token prevents a late failure from hiding
-          // newer artwork.
+          // Album art URLs are short-lived CDN links. Remove the failed source
+          // so the element's neutral background remains visible instead of
+          // showing a broken-image glyph. The token prevents a late failure
+          // from changing newer artwork.
           if (img.dataset.apexArt === next) {
             img.dataset.apexArtFailed = next;
-            img.hidden = true;
+            img.removeAttribute("src");
+            img.hidden = false;
           }
         } : null;
         if (next) {
@@ -1260,7 +1261,10 @@ window.SpotifyMusic = (function () {
           img.hidden = true;
         }
       } else {
-        img.hidden = !art || img.dataset.apexArtFailed === art;
+        // A failed current image is intentionally represented by the visible
+        // neutral swatch, while no artwork at all keeps the decorative element
+        // out of the layout.
+        img.hidden = !art;
       }
     }
     txt("sp-title", title || (live ? "Nothing playing" : "Not connected"));

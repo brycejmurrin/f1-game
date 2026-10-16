@@ -5,16 +5,19 @@ const SetupExperiments = (function () {
   "use strict";
   function create(G, refreshStats) {
     const { $, getTeamParts } = G;
+    if (typeof SetupTrials !== "undefined") SetupTrials.mountPause(G);
+    let trialUi = null;
     let csVisitTunes = new Map();
     let csTuneExperiments = new Map();
     function capture(team) {
       if (team && !csVisitTunes.has(team.id)) csVisitTunes.set(team.id, SetupTune.get(team.id));
     }
     function visit(team) { csVisitTunes = new Map(); csTuneExperiments = new Map(); capture(team); }
-    function close() { csTuneExperiments.clear(); }
+    function close() { csTuneExperiments.clear(); if (trialUi) { trialUi.dispose(); trialUi = null; } }
     // RESET TO WORKS. Every slider writes the store on input; the stat bars and
     // the player's mods follow through recomputePlayerMods on the next race.
     function build(container, team) {
+      if (trialUi) { trialUi.dispose(); trialUi = null; }
       const wrap = document.createElement("div");
       // Not cs-liv-editor: that class widens the car reserve and translucents the
       // sheet for the PAINT editor. SETUP only needs the compact-density help hide.
@@ -62,6 +65,8 @@ const SetupExperiments = (function () {
       if (typeof SetupPresets !== "undefined") SetupPresets.mount(wrap, {
         teamId: team.id, store: G.store,
         trackId: (typeof Tracks !== "undefined" && Tracks.LIST[G.trackIdx]?.id) || G.track?.def?.id || null,
+        context: () => ({ v: 1, physics: typeof PhysicsConsts !== "undefined" ? String(PhysicsConsts.REVISION || "") : null,
+          track: (typeof Tracks !== "undefined" && Tracks.LIST[G.trackIdx]?.id) || null, parts: getTeamParts(team.id) }),
         refresh,
       });
       const note = document.createElement("p"); note.className = "adv-help";
@@ -127,6 +132,10 @@ const SetupExperiments = (function () {
         csTuneExperiments.delete(team.id); refresh();
       };
       wrap.append(coach, advice, apply, undo);
+      if (typeof SetupTrials !== "undefined" && G.setupTrialRestart) trialUi = SetupTrials.mount(wrap, {
+        teamId: team.id, store: G.store, baseline: previous, candidateNow: () => SetupTune.get(team.id),
+        launch: options => G.setupTrialRestart(options), cancelRuntime: () => { if (G.setupTrialCancel) G.setupTrialCancel(); }, refresh,
+      });
 
       const bench = document.createElement("p"); bench.className = "adv-help"; bench.setAttribute("data-help", "keep");
       const mode = document.createElement("div"); mode.className = "chip-row";

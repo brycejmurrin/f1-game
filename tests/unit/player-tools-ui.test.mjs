@@ -52,6 +52,20 @@ test("setting search recognizes player terms and never changes target values", (
   const fold = h.el("details", "fold"), control = h.el("select", "pm-gears-sel", fold); control.value = "auto";
   assert.equal(api.reveal(control), true); assert.equal(fold.open, true); assert.equal(h.dom.document.activeElement, control); assert.equal(control.value, "auto");
 });
+test("setting search exposes the lazily-built appearance and screen layout controls", () => {
+  const source = read("js/ui/appearance-studio.js");
+  assert.match(source, /controls\.id\s*=\s*"as-" \+ key/);
+  assert.match(source, /input\.id\s*=\s*"as-" \+ key/);
+  assert.match(source, /SettingsSearch\.register\("appearance-studio"/);
+  const looks = read("js/ui/screen-looks.js");
+  assert.match(looks, /SettingsSearch\.register\("screen-looks"/);
+  assert.match(looks, /target:\s*"pm-look-" \+ s\.id \+ "-" \+ n\.k/);
+  const h = host(), api = h.run("js/ui/settings-search.js", "SettingsSearch");
+  api.register("appearance-studio", [{ id: "appearance-theme", label: "Theme", page: "appearance", target: "as-uiTheme", aliases: "dark light" }]);
+  api.register("screen-looks", [{ id: "look-career-width", label: "CAREER width", page: "appearance", target: "pm-look-career-w", aliases: "layout screen" }]);
+  assert.equal(api.find("dark theme")[0].target, "as-uiTheme");
+  assert.equal(api.find("career width")[0].target, "pm-look-career-w");
+});
 test("settings result navigation and BACK restore the query and selected result focus", () => {
   const h = host(), index = h.el("div", "pm-settings-index"), page = h.el("section", "pm-panel-driving");
   const fold = h.el("details", "", page), target = h.el("select", "pm-gears-sel", fold); target.value = "auto";
@@ -61,6 +75,40 @@ test("settings result navigation and BACK restore the query and selected result 
   const button = index.querySelector("button"); button.focus(); button.onclick();
   assert.deepEqual(calls, ["driving"]); assert.equal(h.dom.document.activeElement, target); assert.equal(target.value, "auto");
   index.hidden = false; page.hidden = true; assert.equal(ui.restore(), true); assert.equal(h.dom.document.activeElement, button); assert.equal(ui.input.value, "manual gears");
+});
+test("rivals and boost searches reveal their audio controls without changing the sound", () => {
+  const h = host(), index = h.el("div", "pm-settings-index"), panel = h.el("section", "audioset");
+  const outer = h.el("details", "audio-fold", panel), engine = h.el("details", "as-engine-details", outer);
+  const cases = [
+    { query: "rivals mute", alias: "other cars mute", id: "as-l-rivals", tag: "button", value: "" },
+    { query: "rivals level", alias: "opponents volume", id: "as-t-rivals", tag: "input", value: "3" },
+    { query: "boost level", alias: "ers whine", id: "as-t-boost", tag: "input", value: "20" },
+    { query: "boost pitch", alias: "rev lift", id: "as-t-boostlift", tag: "input", value: "2" },
+  ];
+  let changed = 0;
+  for (const row of cases) {
+    assert.match(read("index.html"), new RegExp('<' + row.tag + ' id="' + row.id + '"'), "targets an existing control");
+    row.control = h.el(row.tag, row.id, engine); row.control.value = row.value;
+    if (row.tag === "button") row.control.setAttribute("aria-pressed", "true");
+    row.control.onclick = row.control.oninput = row.control.onchange = () => changed++;
+  }
+  const api = h.run("js/ui/settings-search.js", "SettingsSearch");
+  assert.equal(api.find("rivals").length, 2); assert.equal(api.find("boost").length, 2);
+  const ui = api.create({ host: index, show(page, _focus, after) {
+    assert.equal(page, "audio"); index.hidden = true; panel.hidden = false; assert.equal(after(), true);
+  } });
+  for (const row of cases) {
+    assert.equal(api.find(row.alias)[0].target, row.id);
+    outer.open = engine.open = false; panel.hidden = true;
+    ui.input.value = row.query; ui.input.oninput();
+    const result = index.querySelector("button"); result.onclick();
+    assert.equal(outer.open, true); assert.equal(engine.open, true);
+    assert.equal(h.dom.document.activeElement, row.control);
+    for (const state of cases) assert.equal(state.control.value, state.value);
+    assert.equal(cases[0].control.getAttribute("aria-pressed"), "true"); assert.equal(changed, 0);
+    index.hidden = false; panel.hidden = true;
+    assert.equal(ui.restore(), true); assert.equal(h.dom.document.activeElement, result); assert.equal(ui.input.value, row.query);
+  }
 });
 test("named presets are per team, bounded, full validated tunes, and non-applying on save", () => {
   const h = presets(), original = h.tune.get("mercedes");
@@ -145,6 +193,14 @@ test("quiet card refreshes update one history card and preserve its actual initi
   assert.equal(history.rows().length, 1); assert.equal(history.rows()[0].text, "PIT STOP 99"); assert.equal(history.rows()[0].time, 52.3);
   assert.equal(history.delivered("Wrong speaker", { kind: "race", who: "Race control", quiet: true }), false);
   history.delivered("GO GO GO", { kind: "race", who: "Engineer" }); assert.equal(history.rows().length, 2);
+});
+test("condition-aware cues remain opt-in and change advice toggles only", () => {
+  const h = host(), state = storage(), calls = [];
+  h.sb.BrakeCue = { setConditionAware: (v) => calls.push(["brake", v]) }; h.sb.DrivingCues = { setConditionAware: (v) => calls.push(["drive", v]) };
+  const api = h.run("js/ui/condition-cue-controls.js", "ConditionCueControls"), panel = h.el("section", "driving");
+  api.create(state.store, panel); assert.deepEqual(calls, [["brake", false], ["drive", false]]);
+  const box = panel.querySelector("input"); box.checked = true; box.onchange();
+  assert.equal(state.store.get("conditionCues"), true); assert.deepEqual(state.changes, ["conditionCues"]); assert.deepEqual(calls.slice(-2), [["brake", true], ["drive", true]]);
 });
 test("SettingsNav page lifecycle fires after lazy audio settles for programmatic routes without selection sounds", async () => {
   const h = host(), settings = h.el("section", "pmsettings"), index = h.el("div", "pm-settings-index", settings), panel = h.el("section", "audioset", settings);
