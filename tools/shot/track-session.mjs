@@ -126,7 +126,7 @@ async function shot(op) {
     else a.snapCam();
     if (a.step) a.step(1 / 60, 4);
     const vs = a.viewState ? a.viewState() : null, cs = a.camState ? a.camState() : null;
-    return { dbgCamActive: !!(vs && vs.dbgCamActive) || !!(cs && cs.debug), camState: cs };
+    return { track: a.info().track, dbgCamActive: !!(vs && vs.dbgCamActive) || !!(cs && cs.debug), camState: cs };
   }, args);
   const readiness = await awaitCaptureReady(page, { timeoutMs: PRESENT_MS });
   const png = join(outDir, `${name}.${captureExtension(options)}`);
@@ -142,9 +142,9 @@ async function shot(op) {
     throw new Error(`frame is blank (pixel spread ${spread.toFixed(2)})`);
   }
   const prev = shots.findIndex((s) => s.name === name);
-  const rec = { name, png, frac, cam, tod, weather, track };
+  const rec = { name, png, frac, cam, tod, weather, track: frame.track || track };
   if (prev >= 0) shots[prev] = rec; else shots.push(rec);
-  return { png, spread: +spread.toFixed(1), kb: +(cap.buf.length / 1024).toFixed(1), frame, readiness, pixels, scope: scope === "page" || args.hud ? "page" : "scene", profile: options.profile };
+  return { track: rec.track, png, spread: +spread.toFixed(1), kb: +(cap.buf.length / 1024).toFixed(1), frame, readiness, pixels, scope: scope === "page" || args.hud ? "page" : "scene", profile: options.profile };
 }
 
 const pngOf = (ref) => {
