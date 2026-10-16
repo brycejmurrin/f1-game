@@ -30,7 +30,7 @@ const DEG = Math.PI / 180;
 test("16:9 landscape: bit-identical to the old HFOV_MAX cap", () => {
   const F = load();
   const aspect = 16 / 9;
-  for (const deg of [48, 62, 64, 78, 90]) {
+  for (const deg of [18, 20, 30, 48, 62, 64, 78, 90]) {
     const inY = deg * DEG;
     const got = F.fitFovY(inY, aspect, { cine: false });
     const legacy = oldCapOnly(inY, aspect, false);
@@ -41,13 +41,33 @@ test("16:9 landscape: bit-identical to the old HFOV_MAX cap", () => {
 test("21:9 ultrawide: cap unchanged vs old formula", () => {
   const F = load();
   const aspect = 21 / 9;
-  for (const deg of [62, 64, 78]) {
+  for (const deg of [18, 20, 30, 62, 64, 78]) {
     const inY = deg * DEG;
     assert.equal(F.fitFovY(inY, aspect, {}), oldCapOnly(inY, aspect, false));
   }
   // Cap binds: resulting HFOV equals HFOV_MAX.
   const fitted = F.fitFovY(78 * DEG, aspect, {});
   assert.ok(Math.abs(F.hfovFromVfov(fitted, aspect) - F.HFOV_MAX) < 1e-12);
+});
+
+test("square and near-landscape keep authored telephoto framing", () => {
+  const F = load();
+  for (const aspect of [1, 1.0001, 4 / 3]) {
+    for (const deg of [18, 20, 30, 64, 90]) {
+      const inY = deg * DEG;
+      assert.equal(F.fitFovY(inY, aspect), oldCapOnly(inY, aspect, false),
+        `${deg}° @${aspect} must use the cap-only policy`);
+    }
+  }
+});
+
+test("portrait floor remains active up to the square boundary", () => {
+  const F = load();
+  for (const aspect of [0.46, 9 / 16, 0.8, 0.9999]) {
+    const got = F.fitFovY(20 * DEG, aspect);
+    const expected = Math.min(2 * Math.atan(Math.tan(F.HFOV_MIN / 2) / aspect), F.FOVY_MAX);
+    assert.equal(got, expected, `portrait @${aspect} must retain the floor and ceiling`);
+  }
 });
 
 test("0.46 portrait: HFOV floor widens VFOV (chase / cockpit range)", () => {
@@ -70,10 +90,12 @@ test("0.46 portrait: HFOV floor widens VFOV (chase / cockpit range)", () => {
 
 test("cine passthrough: authored VFOV untouched on every aspect", () => {
   const F = load();
-  const inY = 60 * DEG;
-  for (const aspect of [16 / 9, 21 / 9, 0.46, 1]) {
-    assert.equal(F.fitFovY(inY, aspect, { cine: true }), inY);
-    assert.equal(F.fitFovY(inY, aspect, { cine: true }), oldCapOnly(inY, aspect, true));
+  for (const deg of [18, 60, 120]) {
+    const inY = deg * DEG;
+    for (const aspect of [16 / 9, 21 / 9, 0.46, 1]) {
+      assert.equal(F.fitFovY(inY, aspect, { cine: true }), inY);
+      assert.equal(F.fitFovY(inY, aspect, { cine: true }), oldCapOnly(inY, aspect, true));
+    }
   }
 });
 

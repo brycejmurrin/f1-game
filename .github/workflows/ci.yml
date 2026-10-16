@@ -376,7 +376,11 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/2
+        # --bail (2026-10-16 CI jobs review): stop STARTING files after the first
+        # failure. A red shard ran a mean 5.9 min after its first failure; files
+        # already in flight finish and the log names each. The local
+        # `npm run test:tooling-fast` stays without it so an author sees every red.
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/2 --bail
       - name: Reused draft
         if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED tooling A — draft fast-tier already green on this head SHA"
@@ -410,7 +414,7 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/2
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/2 --bail
       # RATCHETS, AUDIT, COVERAGE AND BEHIND-SHIP (moved from the `Structural
       # guards` aggregator 2026-10-15): the same tree and node_modules, no
       # second checkout + npm ci, and the aggregator needs no runner time.
@@ -522,7 +526,7 @@ jobs:
         # SIX SLICES (2026-09-30, #508). Pro plan (40 slots) made wall the cost
         # again: vm-a was last to finish in 42 of 56 runs. It now runs as two
         # shards (APEX_CIRCUIT_SHARD=i/2), game-vm-b is two time-balanced
-        # partitions, and vm-page / node-slow stand alone. The ≈ 3 min wall that
+        # partitions, and vm-page-a / vm-page-b / node-slow stand alone. The ≈ 3 min wall that
         # split promised no longer holds: vm-b1 and page are the floor now.
         # The slice names ("Pure-node unit suites (<slice>)") were the deploy
         # branch's REQUIRED CHECKS until 2026-10-15; `CI` alone is required
@@ -706,9 +710,14 @@ jobs:
               npm run test:garage-unit
               fi
               ;;
-            page)
-              if planned test:vm-page; then
-              npm run test:vm-page
+            page-a)
+              if planned test:vm-page-a; then
+              npm run test:vm-page-a
+              fi
+              ;;
+            page-b)
+              if planned test:vm-page-b; then
+              npm run test:vm-page-b
               fi
               ;;
             slow)
@@ -808,8 +817,6 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-        if: steps.reuse.outputs.reuse != 'true'
       # DOES THIS DIFF TOUCH THE CAR THE CENSUS PHOTOGRAPHS?
       #
       # This census builds the CAR and never a circuit, so it has nothing to do
@@ -868,6 +875,12 @@ jobs:
             echo "parts=false" >> "$GITHUB_OUTPUT"
             echo "SKIPPING THE PARTS CENSUS: nothing in this diff reaches the car the sweep photographs"
           fi
+      # The filter needs only git, bash and the checked-out geometry-paths
+      # module. Delay Node/npm setup until the census is actually applicable;
+      # the job still runs and reports success on an unrelated diff so Pages
+      # and the aggregate verdict retain their existing semantics.
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+        if: steps.reuse.outputs.reuse != 'true' && steps.filter.outputs.parts == 'true'
       - if: steps.reuse.outputs.reuse != 'true' && steps.filter.outputs.parts == 'true'
         run: npm run test:sweeps-parts
       - name: Reused draft
@@ -928,8 +941,8 @@ jobs:
           fetch-depth: 0
           filter: blob:none
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-      # STATIC SUITE SLICE (no planner). Contiguous chunk i/N of the same
-      # test:sweeps list the filter just derived. Rewrites package.json's
+      # STATIC SUITE SLICE. Deterministic measured-time packing keeps expensive
+      # fleet checks off the same runner. Rewrites package.json's
       # script ON THE RUNNER ONLY so the pinned `run: npm run test:sweeps`
       # line (circuit-scope.test.mjs) still holds while each matrix leg owns
       # a disjoint slice. Union of the four slices == the committed list.
@@ -951,13 +964,14 @@ jobs:
             console.error("package.json test:sweeps names ZERO suites");
             process.exit(1);
           }
-          const start = Math.floor((shard - 1) * all.length / shards);
-          const end = Math.floor(shard * all.length / shards);
-          const slice = all.slice(start, end);
+          const { execFileSync } = require("child_process");
+          const plan = JSON.parse(execFileSync(process.execPath, [
+            "tools/ci/sweep-shards.mjs", "--shard", String(shard), "--shards", String(shards), "--json",
+          ], { encoding: "utf8" }));
+          const slice = plan.files;
           const temp = process.env.RUNNER_TEMP || ".";
           fs.writeFileSync(`${temp}/sweep-shard-slice.txt`, slice.length ? `${slice.join("\n")}\n` : "");
-          const last = end > start ? end - 1 : start;
-          console.log(`--- suite shard ${shard}of${shards}: ${slice.length}/${all.length} suites (indices ${start}..${last}) ---`);
+          console.log(`--- suite shard ${shard}of${shards}: ${slice.length}/${all.length} suites (~${plan.seconds}s measured) ---`);
           for (const s of slice) console.log(s);
           console.log("--------------------");
           pkg.scripts["test:sweeps"] = "node --test --test-concurrency=1" + (slice.length ? ` ${slice.join(" ")}` : "");

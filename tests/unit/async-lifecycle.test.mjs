@@ -299,6 +299,107 @@ test("an IndexedDB open that succeeds after timeout closes its orphan handle", a
   assert.equal(context.MusicLib.available(), false);
 });
 
+function musicLibraryFixture({ failReads = 0, failWrites = 0, deferWrites = false } = {}) {
+  const rows = [], connections = [], pending = [], playlist = new Map(), revoked = [];
+  let reads = 0, urlCount = 0, nextId = 1;
+  const context = vm.createContext({
+    document: { readyState: "loading", addEventListener() {}, getElementById: () => null },
+    indexedDB: { open() {
+      const request = {};
+      const db = { closed: false, close() { this.closed = true; }, transaction(_store, mode) {
+        if (this.closed) throw new Error("InvalidStateError: closed connection");
+        const transaction = {};
+        transaction.objectStore = () => ({
+          getAll() {
+            const result = {}; reads++;
+            queueMicrotask(() => {
+              if (failReads-- > 0) { result.error = new Error("temporary read failure"); result.onerror(); }
+              else { result.result = rows.slice(); result.onsuccess(); }
+            });
+            return result;
+          },
+          add(record) {
+            const result = {};
+            const finish = () => {
+              if (failWrites-- > 0) {
+                transaction.error = Object.assign(new Error("quota exceeded"), { name: "QuotaExceededError" });
+                transaction.onabort(); return;
+              }
+              const id = nextId++; rows.push({ ...record, id });
+              result.result = id; result.onsuccess(); transaction.oncomplete();
+            };
+            if (deferWrites) pending.push(finish); else queueMicrotask(finish);
+            return result;
+          },
+        });
+        assert.ok(mode === "readonly" || mode === "readwrite");
+        return transaction;
+      } };
+      connections.push(db);
+      queueMicrotask(() => { request.result = db; request.onsuccess(); });
+      return request;
+    } },
+    GameAudio: { addTracks(entries) { for (const entry of entries) playlist.set(entry.id, entry); }, tracks: () => [...playlist.values()] },
+    URL: { createObjectURL: () => `blob:music-${++urlCount}`, revokeObjectURL: (url) => revoked.push(url) },
+    setTimeout, clearTimeout,
+  });
+  context.window = context; seedLog(context); vm.runInContext(musicSource, context);
+  return { lib: context.MusicLib, rows, connections, pending, playlist, revoked, reads: () => reads, urls: () => urlCount };
+}
+
+test("music imports serialize across calls until their transactions commit", async () => {
+  const f = musicLibraryFixture({ deferWrites: true });
+  await f.lib.init();
+  const file = { name: "My_song.mp3", type: "audio/mpeg", size: 123 };
+  const first = f.lib.add([file]), second = f.lib.add([file]);
+  await new Promise(setImmediate);
+  assert.equal(f.pending.length, 1, "only the first cross-call write may start before commit");
+  assert.equal(f.lib.count(), 0, "pending writes are not reported as persisted tracks");
+  f.pending.shift()();
+  const results = await Promise.all([first, second]);
+  assert.equal(results[0].added, 1); assert.equal(results[1].added, 0); assert.equal(results[1].skipped, 1);
+  assert.equal(f.rows.length, 1); assert.equal(f.lib.count(), 1); assert.equal(f.playlist.size, 1); assert.equal(f.urls(), 1);
+});
+
+test("music library retries a failed initial read and restores saved tracks", async () => {
+  const f = musicLibraryFixture({ failReads: 1 });
+  f.rows.push({ id: 7, name: "Saved music", size: 123, added: 1, blob: {} });
+  await f.lib.init();
+  assert.equal(f.lib.available(), false, "read failure must not masquerade as an empty working library");
+  assert.equal(f.lib.count(), 0);
+  const restored = await f.lib.list();
+  assert.equal(f.reads(), 2); assert.equal(restored.length, 1); assert.equal(restored[0].name, "Saved music");
+  assert.equal(f.lib.available(), true); assert.equal(f.playlist.size, 1);
+});
+
+test("a successful empty music library stays available and does not reread on every panel entry", async () => {
+  const f = musicLibraryFixture();
+  await f.lib.init();
+  assert.equal((await f.lib.list()).length, 0);
+  await f.lib.init();
+  assert.equal(f.lib.available(), true); assert.equal(f.reads(), 1); assert.equal(f.connections.length, 1);
+});
+
+test("a quota-aborted music import releases its duplicate reservation for a queued retry", async () => {
+  const f = musicLibraryFixture({ failWrites: 1 });
+  const file = { name: "Retry.mp3", type: "audio/mpeg", size: 123 };
+  const [failed, recovered] = await Promise.all([f.lib.add([file]), f.lib.add([file])]);
+  assert.equal(failed.added, 0); assert.equal(failed.skipped, 1);
+  assert.match(failed.errors[0], /no room left/);
+  assert.equal(recovered.added, 1); assert.equal(recovered.skipped, 0);
+  assert.equal(f.rows.length, 1); assert.equal(f.lib.count(), 1); assert.equal(f.urls(), 1); assert.equal(f.playlist.size, 1);
+});
+
+test("music library invalidates a version-changed connection and reopens for the next import", async () => {
+  const f = musicLibraryFixture(); await f.lib.init();
+  f.connections[0].onversionchange();
+  assert.equal(f.connections[0].closed, true);
+  assert.equal(f.lib.available(), false, "a closed handle is unavailable until reopen succeeds");
+  const result = await f.lib.add([{ name: "Recovered.mp3", type: "audio/mpeg", size: 123 }]);
+  assert.equal(f.connections.length, 2); assert.equal(result.added, 1); assert.equal(result.errors.length, 0);
+  assert.equal(f.lib.available(), true); assert.equal(f.rows.length, 1); assert.equal(f.playlist.size, 1);
+});
+
 test("a timed-out API fetch releases the shared queue", async () => {
   const timers = [];
   const calls = [];

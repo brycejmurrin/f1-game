@@ -26,12 +26,26 @@ surface without hand-wiring:
 | Claude stub | `CLAUDE.md` | Must stay a one-line import; never duplicate rules. |
 | Skills (canonical) | `.claude/skills/*/SKILL.md` | Yes for Claude Code + Cursor (compat). Do **not** copy into `.cursor/skills/`. |
 | Skills (Codex mirror) | `.agents/skills/<name>` → `../../.claude/skills/<name>` | Yes. Codex scans `.agents/skills` (symlinks OK — OpenAI docs). Keep lockstep; never fork bodies. |
-| Subagents | `.claude/agents/*.md` | Yes for Claude / Cursor. Codex has no parallel path — use AGENTS.md routes. |
+| Personas / subagents | `.claude/agents/*.md` | Claude and Cursor load these directly. Codex hosts may expose collaboration agents; when they do not, use the same persona contracts through launch prompts and `AGENTS.md`. Never create a second Codex persona tree. |
 | MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop Cursor loads them; Cloud often does not. |
 | Codex MCP | `.codex/config.toml` | Project `[mcp_servers.*]` lockstepped to `.mcp.json`. Loads only when the project is **trusted**; user overrides may live in `~/.codex/config.toml`. |
 | Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the three catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
 | Cloud VM | `.cursor/environment.json` | `install` + shared runtime Chromium discovery + allowlist of the three catalog commands. |
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
+
+**Codex collaboration adapter.** When the Codex host exposes collaboration
+agents, read the named `.claude/agents/<persona>.md` and its skill, then launch
+the task with an explicit persona label, OWNED paths, forbidden actions,
+allowed tools, and the required hand-back format. Claude frontmatter such as
+`readonly`, `tools`, `background` and `model` is reference metadata in Codex;
+repeat the safety limits in the launch prompt. Keep Merge Desk authority with
+the explicitly designated parent session. Delegate bounded read-only evidence
+work (for example `release-auditor`), never ready/arm/merge authority.
+
+The doctor catalog warning is host metadata, not a repository failure. If the
+host provides a redacted JSON snapshot, inspect it with
+`node tools/check/doctor.mjs --catalog <snapshot.json> --json`; the doctor
+does not discover, install or validate hosted tools.
 
 **Layout principles (Claude + Codex + Cursor, 2026):**
 

@@ -51,7 +51,10 @@ permissions:
 # branch, and two runs racing on the same `commit_branch` would each try to
 # fast-forward over the other. A later dispatch queues behind the running one.
 concurrency:
-  group: import-models-${{ github.ref }}
+  # Serialize by the bot branch being written, not by the source ref. Two
+  # dispatches from different refs may target the same commit_branch; keyed by
+  # github.ref they can race and each replace the other's baked pack.
+  group: import-models-${{ github.repository }}-${{ inputs.commit_branch || 'bot/model-import' }}
   cancel-in-progress: false
 
 jobs:
@@ -79,13 +82,27 @@ jobs:
             *) echo "::error::model URL must use HTTPS"; exit 2 ;;
           esac
           mkdir -p _dl _extract
-          echo "fetching $MODEL_URL"
+          MODEL_SOURCE="$(node -e 'const u = new URL(process.env.MODEL_URL); process.stdout.write(u.origin + u.pathname)' )"
+          echo "fetching $MODEL_SOURCE"
           # -L follows redirects (itch/Kenney bounce through several); fail loudly.
           curl -fL --retry 3 -o _dl/pack.bin -- "$MODEL_URL"
           ls -la _dl
           # Sniff the magic bytes: PK -> zip, glTF -> glb, { -> gltf json.
           head -c 4 _dl/pack.bin | xxd
           if head -c 2 _dl/pack.bin | grep -q "PK"; then
+            python3 - <<'PY'
+            import stat
+            import zipfile
+            from pathlib import PurePosixPath
+
+            with zipfile.ZipFile("_dl/pack.bin") as zf:
+                for info in zf.infolist():
+                    name = info.filename.replace("\\", "/")
+                    parts = PurePosixPath(name).parts
+                    mode = (info.external_attr >> 16) & 0o170000
+                    if name.startswith("/") or ".." in parts or stat.S_ISLNK(mode):
+                        raise SystemExit(f"unsafe archive entry: {info.filename!r}")
+            PY
             unzip -q _dl/pack.bin -d _extract
           else
             # A single model file; keep its extension so the importer routes it.
@@ -108,13 +125,14 @@ jobs:
           MODEL_PREFIX: ${{ inputs.prefix }}
           MODEL_AUTHOR: ${{ inputs.author }}
         run: |
+          MODEL_SOURCE="$(node -e 'const u = new URL(process.env.MODEL_URL); process.stdout.write(u.origin + u.pathname)' )"
           node tools/gen/import-models.mjs _extract \
             --mat "$MODEL_MAT" \
             --height "$MODEL_HEIGHT" \
             --scale "$MODEL_SCALE" \
             --prefix "$MODEL_PREFIX" \
             --author "$MODEL_AUTHOR" \
-            --source "$MODEL_URL"
+            --source "$MODEL_SOURCE"
           node tools/gen/assets.mjs credits || true
           node tools/gen/assets.mjs verify || echo "::warning::verify reported issues (often the budget — review the size report above)"
 
@@ -136,6 +154,7 @@ jobs:
           COMMIT_BRANCH: ${{ inputs.commit_branch }}
         run: |
           set -euo pipefail
+          MODEL_SOURCE="$(node -e 'const u = new URL(process.env.MODEL_URL); process.stdout.write(u.origin + u.pathname)' )"
           case "$COMMIT_BRANCH" in
             claude/f1-game-project-26h3ng|""|[!a-z0-9]*|*[!a-z0-9._/-]*)
               echo "::error::unsafe commit branch"; exit 2 ;;
@@ -171,7 +190,7 @@ jobs:
           # so existing installs drop the old cache on the next deploy without a
           # committed bump. The shell is generated; just confirm it is in step.
           node tools/gen/gen-shell.mjs --check
-          git commit -m "chore(assets): import CC0 models from $MODEL_URL
+          git commit -m "chore(assets): import CC0 models from $MODEL_SOURCE
 
           Baked on the runner by tools/gen/import-models.mjs — mat=$MODEL_MAT,
           height=${MODEL_HEIGHT}m scale=${MODEL_SCALE}. Merge this branch into the deploy branch

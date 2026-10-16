@@ -421,6 +421,12 @@ const Tracks = (function () {
       // livery painter exist (feature-detected inside; the VM builds skip it).
       if (typeof PitSigns !== "undefined") PitSigns.upload(G, track);
       lap("pitSigns", "up"); yield track; _t = _now();
+      // The CPU copies of the prop / glass / water geometry are read only by the dev surface
+      // (__apex.trackGeometry); the meshes are already uploaded. A player build frees them, as it
+      // does the graph. A page that wants them (agent surface, trackGeometry(true)) says so.
+      if (opts && opts.retainGraph === false && !opts.retainGeometry && !keepGeometry) {
+        track.propsGeo = track.glassGeo = track.waterGeo = null;
+      }
     }
     Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;
@@ -742,6 +748,11 @@ const Tracks = (function () {
     return best === null || y > best ? y : best;
   }
 
+  function diagnosticBuild() {
+    if (!compactProps) return true;
+    try { return localStorage.getItem("apex26.propsUnchunked") === "1"; } catch (_) { return false; }
+  }
+
   function setCompactProps(value) { compactProps = !!value; return compactProps; }
 
   function setKeepGeometry(value) {
@@ -752,5 +763,5 @@ const Tracks = (function () {
   // page's keepGeometry flag, so replay must stamp _keepPositions itself.
   function getKeepGeometry() { return keepGeometry; }
 
-  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident };
+  return { LIST, SEASON, seasonIndex, build, buildSteps, buildPaced, building, free, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, postLimits, terrainY, setKeepGeometry, keepGeometry: getKeepGeometry, setCompactProps, diagnosticBuild, pitWindow, pitLaneAt, pitLaneSpan, inPitLane, hydrate, circuitPayloadResident };
 })();

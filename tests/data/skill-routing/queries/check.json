@@ -1,0 +1,10 @@
+[
+{"query": "check", "expect": "check"},
+{"query": "status?", "expect": "check"},
+{"query": "Is my PR green yet and is it live on the site?", "expect": "check"},
+{"query": "check where the CI run is at, and whether the test-bg group finished", "expect": "check"},
+{"query": "what's the state of this branch? green, still running, deployed?", "expect": "check"},
+{"query": "Which tests should I run before I push this js/game.js edit?", "expect": "check-changes"},
+{"query": "The PR went red after my push; find the failing test and fix it.", "expect": "steward"},
+{"query": "Sweep all open PRs and arm what is ready, I designated you Merge Desk.", "expect": "ci-watch"}
+]

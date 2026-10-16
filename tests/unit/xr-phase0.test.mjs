@@ -599,6 +599,86 @@ test('XR ended during pending reference or renderer attachment cannot resume pre
   }
 });
 
+for (const phase of ['reference', 'attach']) for (const outcome of ['resolve', 'reject']) for (const presenting of [false, true]) {
+  test(`XR immediate retry survives stale ${phase} ${outcome} while replacement ${presenting ? 'presents' : 'starts'}`, async () => {
+    const pending = deferred(), entered = deferred(), replacementAttach = deferred();
+    let references = 0, attachments = 0;
+    const h = xrHarness({
+      reference: (_type, base) => {
+        if (phase === 'reference' && references++ === 0) { entered.resolve(base); return pending.promise; }
+        return Promise.resolve(base);
+      },
+      attach: () => {
+        if (phase === 'attach' && attachments++ === 0) { entered.resolve(); return pending.promise; }
+        return replacementAttach.promise;
+      },
+    });
+    const xr = h.ctx.XrSession, old = xr.start();
+    const base = await entered.promise;
+    await xr.end();
+    const replacement = xr.start();
+    assert.notEqual(replacement, old, 'retry owns a new startup immediately');
+    await new Promise((r) => setImmediate(r));
+    assert.equal(h.stats().requestCount, 2, 'retry requested a new immersive session before old work settled');
+    const newer = h.sessions[1], detachments = h.stats().detachments;
+    if (presenting) { replacementAttach.resolve(); assert.equal(await replacement, newer); }
+    if (outcome === 'reject') pending.reject(new Error('old startup failed'));
+    else pending.resolve(base);
+    assert.equal(await old, null);
+    if (!presenting) assert.equal(xr.start(), replacement, 'old finally must not clear the replacement startup promise');
+    assert.equal(xr.getSession(), newer, 'late completion/error cannot end the newer session');
+    assert.equal(h.stats().detachments, detachments, 'late cleanup cannot detach the newer renderer session');
+    assert.equal(xr.lastError(), null, 'stale error is not reported against a fresh attempt');
+    replacementAttach.resolve();
+    assert.equal(await replacement, newer);
+    assert.equal(xr.isPresenting(), true);
+    assert.equal(newer.frames.size, 1);
+    h.fire(newer);
+    assert.equal(xr.frameCount(), 1, 'new XR frame clock still advances');
+    await xr.end();
+  });
+}
+
+for (const phase of ['compatible', 'renderState']) {
+  test(`TLX late XR ${phase} completion cannot overwrite or detach a replacement renderer session`, async () => {
+    const pending = deferred(), entered = deferred();
+    let calls = 0;
+    const source = read('js/render/three/tlx.js');
+    // Execute the shipped ownership methods, with only native GL/XR operations replaced by controlled promises.
+    const begin = source.indexOf('async attachXrSession(session) {');
+    const end = source.indexOf('/** XRWebGLLayer.fixedFoveation', begin);
+    assert.ok(begin > 0 && end > begin, 'actual TLX attach/detach methods found');
+    const ctx = vm.createContext({
+      ownGL: { makeXRCompatible() {
+        if (phase === 'compatible' && calls++ === 0) { entered.resolve(); return pending.promise; }
+        return Promise.resolve();
+      } },
+      renderer: {}, canvas: {}, _xrActive: false,
+      XRWebGLLayer: class { constructor(session) { this.session = session; this.framebuffer = {}; } },
+    });
+    seedLog(ctx);
+    const gfx = vm.runInContext(`({ ${source.slice(begin, end)} })`, ctx);
+    const first = { updateRenderState() {
+      if (phase === 'renderState') { entered.resolve(); return pending.promise; }
+      return Promise.resolve();
+    } };
+    const old = gfx.attachXrSession(first);
+    await entered.promise;
+    gfx.detachXrSession();
+    const newer = { updateRenderState: async () => {} };
+    const layer = await gfx.attachXrSession(newer);
+    assert.equal(gfx._xrSession, newer);
+    pending.resolve();
+    assert.equal(await old, null, 'canceled renderer attach reports no adoption');
+    assert.equal(gfx._xrSession, newer, 'late attach cannot install the old native session');
+    assert.equal(gfx._xrLayer, layer, 'new session retains its own base layer');
+    assert.equal(ctx._xrActive, true);
+    gfx.detachXrSession();
+    assert.equal(gfx._xrSession, null);
+    assert.equal(ctx._xrActive, false);
+  });
+}
+
 test('XR reference, attachment and frame-request failures release ownership and keep one window loop', async () => {
   for (const options of [
     { reference: () => Promise.reject(new Error('no reference')) },

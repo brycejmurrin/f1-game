@@ -19,9 +19,13 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function createHarness(opts = {}) {
   const store = opts.store || new Map(Object.entries(opts.disk || {}));
+  const listeners = new Map();
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
-    setItem(k, v) { store.set(k, String(v)); },
+    setItem(k, v) {
+      if (opts.failWrites && opts.failWrites()) throw new Error("dummy storage unavailable");
+      store.set(k, String(v));
+    },
     removeItem(k) { store.delete(k); },
     clear() { store.clear(); },
   };
@@ -30,9 +34,13 @@ function createHarness(opts = {}) {
     module: { exports: {} },
     TextEncoder,
     console,
-    window: { __APEX_BUILD: opts.build != null ? opts.build : 42 },
+    window: {
+      __APEX_BUILD: opts.build != null ? opts.build : 42,
+      addEventListener(type, listener) { listeners.set(type, listener); },
+    },
     PhysicsConsts: { REVISION: opts.physRev || "test-rev-1", FIXED_DT: 1 / 60 },
   };
+  if (opts.deferWrites) sandbox.requestIdleCallback = () => {};
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
   seedSaveMigrate(ctx);
@@ -44,6 +52,7 @@ function createHarness(opts = {}) {
     GameStore: vm.runInContext("GameStore", ctx),
     disk: store,
     sandbox,
+    storageEvent(key) { listeners.get("storage")({ key }); },
   };
 }
 
@@ -195,6 +204,45 @@ test("a foreign tab's input ghost survives this tab's save (two harnesses, one d
   assert.equal(B.InputGhost.hasGhost(), false, "a foreign storage.clear() drops the cached ghost");
 });
 
+test("flush preserves a faster foreign PB over a pending local lap through reload", () => {
+  const disk = new Map();
+  const A = createHarness({ store: disk, deferWrites: true });
+  const B = createHarness({ store: disk, deferWrites: true });
+  for (const h of [A, B]) h.InputGhost.setTrack("monza", "dummy-class");
+  assert.equal(driveLap(A.InputGhost, 1200, 20), true);
+  assert.equal(driveLap(B.InputGhost, 1140, 19), true);
+  B.InputGhost.flush();
+  A.storageEvent("apex26.inputGhost.v1");
+  assert.equal(A.InputGhost.bestTime(), 19);
+  A.InputGhost.flush();
+  const reloaded = createHarness({ store: disk });
+  reloaded.InputGhost.setTrack("monza", "dummy-class");
+  assert.equal(reloaded.InputGhost.bestTime(), 19);
+  assert.equal(reloaded.InputGhost.steps(), 1140);
+});
+
+test("a failed flush retains pending laps across a foreign write for a later retry", () => {
+  const disk = new Map();
+  let refuse = true;
+  const A = createHarness({ store: disk, deferWrites: true, failWrites: () => refuse });
+  A.InputGhost.setTrack("monza");
+  driveLap(A.InputGhost, 1200, 20);
+  A.InputGhost.flush();
+  assert.equal(disk.has("apex26.inputGhost.v1"), false);
+  const B = createHarness({ store: disk });
+  B.InputGhost.setTrack("spa");
+  driveLap(B.InputGhost, 1260, 21);
+  A.storageEvent("apex26.inputGhost.v1");
+  assert.equal(A.InputGhost.bestTime(), 20, "unsaved PB survives foreign cache invalidation");
+  refuse = false;
+  A.InputGhost.flush();
+  const reloaded = createHarness({ store: disk });
+  reloaded.InputGhost.setTrack("monza");
+  assert.equal(reloaded.InputGhost.bestTime(), 20);
+  reloaded.InputGhost.setTrack("spa");
+  assert.equal(reloaded.InputGhost.bestTime(), 21);
+});
+
 test("quantizeSteer / packFlags are stable helpers", () => {
   const { InputGhost: IG } = createHarness();
   assert.equal(IG.quantizeSteer(1), 127);
@@ -213,7 +261,7 @@ test("game.js and session-records wire InputGhost beside pose Ghost", () => {
   const game = readFileSync(join(ROOT, "js", "game.js"), "utf8");
   const rec = readFileSync(join(ROOT, "js", "race", "session-records.js"), "utf8");
   assert.match(game, /restartTTRecorders/);
-  assert.match(game, /records\.sample\(c, inp\)/);
+  assert.match(game, /records\.sample\(c, inp, true\)/);
   assert.match(rec, /InputGhost\.setTrack/);
   assert.match(rec, /InputGhost\.record\(inp\)/);
   assert.match(rec, /InputGhost\.finishLap/);
@@ -238,4 +286,88 @@ test("game.js and session-records wire InputGhost beside pose Ghost", () => {
   assert.equal(IG.atStep(0).brakeLevel, 1);
   assert.equal(IG.snapshot().throttle, undefined, "legacy extra fields are ignored on export");
   assert.equal(IG.snapshot().brake, undefined);
+});
+
+
+function nativeTape(IG, n, seconds, varyingPedals = false) {
+  IG.startLap({ seed: 7, physRev: "test-rev-1", build: 42, dt: 1 / 60 });
+  for (let i = 0; i < n; i++) IG.record({ native: true, steer: Math.sin(i / 17) * 0.017321,
+    throttle: true, brake: false,
+    throttleLevel: varyingPedals ? (Math.sin(i / 13) + 1) / 2 : 0.37123456,
+    brakeLevel: varyingPedals ? (Math.cos(i / 11) + 1) / 2 : 0,
+    ...(i === 0 ? { initialState: { car: { s: 10, x: 0, speed: 55 }, seed: 7, rngState: 7, raceT: 0 } } : {}) });
+  return IG.finishLap(seconds);
+}
+
+test("150-second native v3 tape persists losslessly inside unchanged 256KiB budget", (t) => {
+  const { InputGhost: IG, disk } = createHarness(); IG.setTrack("monza", "native-persistence");
+  assert.equal(nativeTape(IG, 9000, 150), true);
+  assert.equal(IG.persistence().durable, true);
+  const saved = disk.get("apex26.inputGhost.v1");
+  t.diagnostic(`native9000 snapshot=${Buffer.byteLength(JSON.stringify(IG.snapshot()))} bytes; durableStore=${Buffer.byteLength(saved)} bytes; budget=${256 * 1024}`);
+  assert.ok(Buffer.byteLength(saved) < 256 * 1024, `compact storage bytes ${Buffer.byteLength(saved)}`);
+  const loaded = createHarness({ store: disk }).InputGhost; loaded.setTrack("monza", "native-persistence");
+  assert.equal(loaded.hasGhost(), true); assert.equal(loaded.steps(), 9000);
+  const roundTrip = loaded.snapshot();
+  assert.deepEqual(Array.from(roundTrip.rawSteer), Array.from(IG.snapshot().rawSteer));
+  assert.deepEqual(Array.from(roundTrip.rawThrottle), Array.from(IG.snapshot().rawThrottle));
+  assert.deepEqual(Array.from(roundTrip.rawBrake), Array.from(IG.snapshot().rawBrake));
+  for (const i of [0, 4512, 8999]) {
+    assert.equal(loaded.atStep(i).steer, Math.sin(i / 17) * 0.017321);
+    assert.equal(loaded.atStep(i).throttleLevel, 0.37123456); assert.equal(loaded.atStep(i).brakeLevel, 0);
+  }
+  const corrupt = JSON.parse(saved); Object.values(corrupt)[0].packedV3.steer = "AAAA";
+  const brokenDisk = new Map([["apex26.inputGhost.v1", JSON.stringify(corrupt)]]);
+  const bad = createHarness({ store: brokenDisk }).InputGhost; bad.setTrack("monza", "native-persistence");
+  assert.equal(bad.hasGhost(), false, "malformed packed channel rejected");
+});
+
+test("oversize native tape is refused before evicting a persisted best; quota is explicitly session-only", () => {
+  const { InputGhost: IG, disk } = createHarness(); IG.setTrack("monza", "bounded-native");
+  assert.equal(nativeTape(IG, 60, 2), true); const previous = disk.get("apex26.inputGhost.v1");
+  assert.equal(nativeTape(IG, 18000, 1, true), false, "encoded single entry exceeds supported disk budget");
+  assert.equal(IG.bestTime(), 2); assert.equal(disk.get("apex26.inputGhost.v1"), previous);
+  assert.equal(IG.persistence().reason, "recording exceeds storage budget");
+  const quotaDisk = new Map();
+  const set = quotaDisk.set.bind(quotaDisk);
+  quotaDisk.set = (key, value) => { if (key === "apex26.inputGhost.v1") throw new Error("quota"); return set(key, value); };
+  const q = createHarness({ store: quotaDisk }).InputGhost; q.setTrack("monza", "quota-native");
+  assert.equal(nativeTape(q, 60, 1), true); assert.equal(q.hasGhost(), true);
+  assert.equal(q.persistence().durable, false); assert.match(q.persistence().reason, /quota|unavailable/);
+  const reload = createHarness({ store: quotaDisk }).InputGhost; reload.setTrack("monza", "quota-native");
+  assert.equal(reload.hasGhost(), false);
+});
+
+
+test("150-second mixed analog lap keeps all channels exact with sparse braking/coast storage", (t) => {
+  const { InputGhost: IG, disk } = createHarness(); IG.setTrack("monza", "mixed-native");
+  IG.startLap({ seed: 7, physRev: "test-rev-1", build: 42, dt: 1 / 60 });
+  const expected = { steer: [], throttle: [], brake: [] };
+  for (let i = 0; i < 9000; i++) {
+    const phase = i % 600;
+    const steer = Math.sin(i / 17) * 0.017321;
+    const throttle = phase < 360 ? 0.5 + 0.5 * Math.sin(i / 17) : 0;
+    const brake = phase >= 420 && phase < 540 ? 0.3 + 0.2 * Math.sin(i / 11) : 0;
+    expected.steer.push(steer); expected.throttle.push(throttle); expected.brake.push(brake);
+    IG.record({ native: true, steer, throttle: throttle > 0, brake: brake > 0, throttleLevel: throttle, brakeLevel: brake,
+      ...(i === 0 ? { initialState: { car: { s: 10, x: 0, speed: 55 }, seed: 7, rngState: 7, raceT: 0 } } : {}) });
+  }
+  assert.equal(IG.finishLap(150), true); assert.equal(IG.persistence().durable, true);
+  const saved = disk.get("apex26.inputGhost.v1"), bytes = Buffer.byteLength(saved);
+  t.diagnostic(`mixedNative9000 durableStore=${bytes} bytes; budget=${256 * 1024}`);
+  assert.ok(bytes < 256 * 1024);
+  const loaded = createHarness({ store: disk }).InputGhost; loaded.setTrack("monza", "mixed-native");
+  assert.equal(loaded.hasGhost(), true); const tape = loaded.snapshot();
+  assert.deepEqual(Array.from(tape.rawSteer), expected.steer);
+  assert.deepEqual(Array.from(tape.rawThrottle), expected.throttle);
+  assert.deepEqual(Array.from(tape.rawBrake), expected.brake);
+  // Signed zero stays in a binary literal, including adjacent positive zeros.
+  IG.setTrack("monza", "signed-zero");
+  IG.startLap({ seed: 7, physRev: "test-rev-1", build: 42, dt: 1 / 60 });
+  for (let i = 0; i < 60; i++) IG.record({ native: true, steer: i < 30 ? -0 : 0, throttle: false, brake: false, throttleLevel: -0, brakeLevel: 0,
+    ...(i === 0 ? { initialState: { car: { s: 10, x: 0, speed: 55 }, seed: 7, rngState: 7, raceT: 0 } } : {}) });
+  assert.equal(IG.finishLap(1), true);
+  const signed = createHarness({ store: disk }).InputGhost; signed.setTrack("monza", "signed-zero");
+  assert.ok(Object.is(signed.atStep(0).steer, -0)); assert.ok(Object.is(signed.atStep(30).steer, 0));
+  assert.ok(Object.is(signed.atStep(0).throttleLevel, -0));
 });

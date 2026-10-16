@@ -63,6 +63,7 @@ const SaveSchemaRegistry = (function () {
     "devApi": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "driver": entry("js/garage/setup-sheet.js", "json", 1, "json"),
     "envProbeOff": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
+    "incidentLog": entry("js/race/race-insights.js", "json", 1, "json"),
     "fieldLod": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "raw", 1, "rawScalar"),
     "flySkips": entry("js/ui/loading-screen.js", "json", 1, "json"),
     "forceMobileTier": entry("docs/DEBUG-HOOKS.md (hand-set dev / perf flag)", "json", 1, "json"),

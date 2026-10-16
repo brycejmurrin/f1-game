@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
+import { estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS }
   from "../../tools/ci/tooling-fast.mjs";
@@ -28,6 +28,15 @@ test("longest recorded duration first; unmeasured files ahead of all, in list or
     "c has no timing (first), b and d tie at the top (list order kept), then descending");
   assert.deepEqual(scheduleLongestFirst(files, {}), files, "no timings at all is list order");
   assert.deepEqual(files, ["a", "b", "c", "d", "e"], "the input list is not mutated");
+});
+
+test("timing estimate reports total and worker critical path", () => {
+  const e = estimateToolingFast(["a", "b", "c"], { a: 100, b: 500, c: 200 }, 2);
+  assert.equal(e.totalMs, 800);
+  assert.equal(e.criticalPathMs, 500);
+  assert.deepEqual(e.workerMs, [500, 300]);
+  const unknown = estimateToolingFast(["a", "missing"], { a: 100 }, 2);
+  assert.deepEqual(unknown.unmeasured, ["missing"]);
 });
 
 test("local measurements override the committed table", () => {
@@ -213,12 +222,60 @@ test("--changed selects pinned unit tests for a tool edit, not the full suite", 
   assert.deepEqual(shardsCoveringFiles(r.files, all), ["2/2"]);
 });
 
+test("a file pin does not inherit a generic top-level tree pin", () => {
+  const exact = "tests/unit/" + "exact.test.mjs";
+  const dir = "tests/unit/" + "dir.test.mjs";
+  const tree = "tests/unit/" + "tree.test.mjs";
+  const all = [exact, dir, tree];
+  const pinIndex = new Map([
+    ["js/ui/hud.js", new Set([exact])],
+    ["js/ui", new Set([dir])],
+    ["js", new Set([tree])],
+  ]);
+  const r = selectToolingFastChanged(["js/ui/hud.js"], { allFiles: all, pinIndex,
+    scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
+  assert.deepEqual(r.files.sort(), [dir, exact].sort());
+});
+
 test("--changed fail-safes to the full list on infra paths", () => {
   const all = ["tests/unit/behind-ship.test.mjs", "tests/unit/agent-config.test.mjs"];
   const r = selectToolingFastChanged(["tests/groups.json"], { allFiles: all,
     scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
   assert.equal(r.reason, "run-all-path");
   assert.deepEqual(r.files, all);
+});
+
+test("--bail stops STARTING files after the first failure and says how many it skipped", async () => {
+  const dir = tmp();
+  try {
+    const mk = (n, body) => { const f = path.join(dir, `${n}.test.mjs`); fs.writeFileSync(f, `import test from "node:test"; import assert from "node:assert/strict"; import fs from "node:fs";\n${body}\n`); return f; };
+    const marker = path.join(dir, "third-ran");
+    const files = [
+      mk("a-fails", `test("a", () => assert.equal(1, 2));`),
+      mk("b-passes", `test("b", () => {});`),
+      mk("c-marks", `test("c", () => fs.writeFileSync(${JSON.stringify(marker)}, "x"));`),
+    ];
+    const logPath = path.join(dir, "suite.log");
+    const r = await runToolingFast(files, { jobs: 1, order: "list", bail: true, logPath, localTimingsPath: null });
+    assert.equal(r.ok, false);
+    assert.equal(r.failed, 1);
+    assert.equal(r.notStarted, 2, "the two files after the failure never started");
+    assert.equal(fs.existsSync(marker), false, "a file after the first failure must not run under --bail");
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.match(log, /bail: stopped starting files after the first failure; 2 of 3 file\(s\) not started/);
+    assert.match(log, /= run failed \(0 passed, 1 failed\)/, "the verdict line keeps its shape (test-bg and session-status anchor on it)");
+    // Without --bail the same list runs to the end.
+    const full = await runToolingFast(files, { jobs: 1, order: "list", logPath: path.join(dir, "full.log"), localTimingsPath: null });
+    assert.equal(full.notStarted, 0);
+    assert.equal(full.passed + full.failed, 3);
+    assert.equal(fs.existsSync(marker), true);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CLI: --bail is a first-class flag and defaults off", () => {
+  assert.equal(parseToolingFastArgv([]).bail, false);
+  assert.equal(parseToolingFastArgv(["--bail", "--shard=1/2"]).bail, true);
+  assert.match(TOOLING_FAST_USAGE, /--bail/);
 });
 
 test("CLI: --help and unknown flags never start the suite", () => {

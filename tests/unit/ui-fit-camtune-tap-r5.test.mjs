@@ -22,6 +22,27 @@ test("camera tuner compact foot buttons floor at --tap-paint (rail off and on)",
   );
 });
 
+test("compact rail-on tuner actions use a readable two-column foot", () => {
+  assert.match(
+    css,
+    /\[data-density="compact"\]\[data-rail="on"\]\s*>\s*\.sheet-foot\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+    "short landscape rails must not crush RESET/COPY/DONE labels into one row",
+  );
+  assert.match(
+    css,
+    /\[data-density="compact"\]\[data-rail="on"\][^}]*\.sheet-foot\s+button\s*\{[^}]*white-space:\s*normal;[^}]*line-height:\s*1\.1/s,
+    "rail actions may wrap inside their readable grid cells",
+  );
+});
+
+test("short phone landscape tuner rails keep action labels readable at normal scale", () => {
+  assert.match(
+    css,
+    /@media \(max-width: 900px\) and \(max-height: 500px\)[\s\S]*?:is\(#lighting-inner, #camtune-inner\)\s*>\s*\.sheet-foot\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s,
+    "short landscape tuner feet need two action columns regardless of rail state or UI scale",
+  );
+});
+
 test("camera tuner compact preview chips and copy-from select floor at --tap-paint", () => {
   assert.match(
     css,

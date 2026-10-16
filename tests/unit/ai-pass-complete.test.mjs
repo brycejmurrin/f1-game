@@ -31,7 +31,7 @@ const vTop = 72;
 // ~1.2 % pace edge (matches LEC<BOT baseline stuck pair)
 const us = 72 * 1.0;
 const them = 72 * (1 - 0.012);
-// Scripted pace on game.js's real scale: scriptPace() = tierV × skill, a
+// Scripted pace on the simulation's real scale: scriptPace() = tierV × skill, a
 // unitless multiplier near 1 (NOT m/s) — the same ~1.2 % edge.
 const usP = 1.0 * 0.97;
 const themP = usP * (1 - 0.012);

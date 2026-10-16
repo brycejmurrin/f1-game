@@ -86,12 +86,29 @@ quoted verbatim with UTC times, and the line `Do not enable auto-merge or
 merge.` Name the archived predecessor's claims as stale so the new worker
 does not stand down for them. Never launch a twin: one live worker per lane.
 
+## Archiving (#2426)
+
+Archive only session ids that appear in this sweep's own report, one
+`archive_session` call per listed id, and never from a `list_sessions` filter
+result (one turn once archived 113 sessions, two of them live orchestrators).
+Only a finished worker whose PR is merged or closed may be archived; a live
+orchestrator or any `[Merge Desk]` session is never archived.
+
 ## Closing
 
 Merge Desk may close a draft that another open PR or the tip fully
 supersedes, after checking it with git (byte-identical circuit files, or
 `git log --no-merges A ^B ^tip` empty). Comment the evidence and that the
 branch is kept, then close. Anything short of that proof goes to Bryce.
+
+## Stand down (re-cut, supersede, close)
+
+Whenever a PR is re-cut, superseded or closed in favour of another, in the
+same sweep: `send_message` the original owner (`list_sessions`, or the PR's
+fleet block `worker:`) `STAND DOWN <old PR> superseded by <new PR>`, and add a
+line `Superseded by #<new>` to the old PR body (`update_pull_request`). The
+owner stops pushing; no owner found → say so in the summary. Evidence: #2144
+ran 3 CI cycles as a duplicate of #2027; #2276 ran ~3 h before it was closed.
 
 ## Cadence
 

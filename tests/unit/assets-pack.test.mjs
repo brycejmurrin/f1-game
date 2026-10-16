@@ -301,7 +301,39 @@ test("unload during parallel downloads rejects the stale generation before any d
   assert.deepEqual(maps, [null]);
   assert.equal(assets.state().tier, "off");
   assert.equal(assets.state().uploaded, false);
-  assert.equal(assets.state().bytes, 32, "finished downloads still count as fetched bytes");
+  assert.equal(assets.state().bytes, 0, "unload releases the pack byte accounting");
+});
+
+test("unload drops cached models and rejects late manifest/model responses", async () => {
+  const manifests = [deferredAssetDownload(), deferredAssetDownload()];
+  const modelDownload = deferredAssetDownload();
+  let manifestGets = 0;
+  const assets = assetLoader({
+    fetch(url) {
+      if (url.endsWith("manifest.json")) return manifests[manifestGets++].promise;
+      return modelDownload.promise;
+    },
+  });
+  assets.init({ createTextureArray() {}, setMaterialMaps() {} });
+
+  const oldManifest = assets.manifest();
+  assets.unload();
+  const nextManifest = assets.manifest();
+  manifests[0].resolve({ ok: true, json: async () => ({ models: { old: { file: "old.ax26" } } }) });
+  assert.equal(await oldManifest, false, "a response from before unload cannot become the active pack");
+  manifests[1].resolve({ ok: true, json: async () => ({ models: { fresh: { file: "fresh.ax26" } } }) });
+  assert.deepEqual(await nextManifest, { models: { fresh: { file: "fresh.ax26" } } });
+  assert.equal(assets.models().length, 1);
+  assert.equal(assets.models()[0], "fresh");
+
+  const staleModel = assets.model("fresh");
+  await new Promise(setImmediate);
+  assets.unload();
+  modelDownload.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) });
+  assert.equal(await staleModel, null);
+  assert.equal(assets.modelSync("fresh"), null, "a late model decode cannot repopulate the cache");
+  assert.equal(assets.models().length, 0);
+  assert.equal(assets.state().bytes, 0);
 });
 
 test("material and model loads recover after a temporarily unavailable pack", async () => {
@@ -734,6 +766,30 @@ test("P4 (TLX #2149): setMaterialMaps holds a pending token back, binds it when 
     const al = r.gfx.createTextureArray(size, tlxImages(size), n);
     al.dispose();
     assert.equal(await al.ready, false); assert.equal(al.version, 0);
+  }
+});
+
+test("TLX repeated pending material adoption keeps shared tokens alive for the latest request", async () => {
+  for (const replacement of ["same", "partial", "different", "unload"]) {
+    const r = await tlxPackRig(makeAsyncGl({ busyPolls: 2 }));
+    const make = () => r.gfx.createTextureArray(2, tlxImages(2), 17);
+    const a = make(), n = make(), other = make();
+    const disposed = new Map();
+    for (const t of [a, n, other]) t.addEventListener("dispose", () => disposed.set(t, (disposed.get(t) || 0) + 1));
+    r.gfx.setMaterialMaps({ albedo: a, normal: n, scales: [1] });
+    const latest = replacement === "unload" ? null : { albedo: replacement === "different" ? other : a, normal: replacement === "same" ? n : other, scales: [2] };
+    r.gfx.setMaterialMaps(latest);
+    await Promise.all([a.ready, n.ready, other.ready]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const bound = r.calls.bound.at(-1);
+    assert.equal(bound && bound.albedo, latest && latest.albedo, replacement);
+    if (latest) {
+      assert.equal(bound.normal, latest.normal, replacement);
+      for (const t of new Set([latest.albedo, latest.normal])) assert.equal(disposed.get(t) || 0, 0, "latest tokens remain alive");
+    }
+    for (const t of new Set([a, n])) if (!latest || (t !== latest.albedo && t !== latest.normal)) assert.equal(disposed.get(t), 1, "old unshared token freed once");
+    r.gfx.setMaterialMaps(null);
+    for (const t of new Set([a, n])) assert.equal(disposed.get(t), 1, "unload frees every adopted token exactly once");
   }
 });
 

@@ -271,6 +271,20 @@ test("indirect writers require a lexical path to a real storage write", () => {
     assert.ok(got.some((r) => r.key === key && WRITE.has(r.op) && r.proof), key + " has a storage-write proof");
 });
 
+test("production helper/config writers are independently discovered at their actual call sites", () => {
+  const cases = [
+    ["js/ui/condition-cue-controls.js", "conditionCues", /store\.set\(KEY,/],
+    ["js/ui/key-binds.js", "pad", /key: "pad"/],
+  ];
+  for (const [file, key, expected] of cases) {
+    const source = fs.readFileSync(path.join(ROOT, file), "utf8"), lines = source.split("\n");
+    const proof = indirectWriters(source, file).find((r) => r.key === key);
+    assert.ok(proof, file + " supplies an actual writer proof for " + key);
+    assert.match(lines[Number(proof.at.split(":").at(-1)) - 1], key === "pad" ? /section\(\{/ : expected);
+    assert.match(source, expected);
+  }
+});
+
 test("lookalike helpers, unused configs, comments and shadowing cannot hide unknown developer flags", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "sr-indirect-"));
   try {

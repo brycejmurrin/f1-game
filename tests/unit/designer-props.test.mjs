@@ -2,9 +2,10 @@
 // (slice H). Sanitize, caps, place/remove, and codec/CustomTracks round-trip.
 //
 // Run: node --test tests/unit/designer-props.test.mjs
+import vm from "node:vm";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bootEditor, design, plain, ellipse } from "../helpers/editor-vm.mjs";
+import { bootEditor, design, plain, ellipse, read } from "../helpers/editor-vm.mjs";
 
 test("KINDS / CAPS / sanitize: known kinds only, per-kind and total caps", () => {
   const { P } = bootEditor();
@@ -209,6 +210,36 @@ test("flood prop dress: default side +1 when omitted (codec stores 0/1 only)", (
 });
 
 
+test("effective clearance preserves imported stored gaps and uses every kind floor", () => {
+  const { P } = bootEditor();
+  for (const kind of P.KINDS) {
+    const list = P.sanitize([{ kind, s: 0.1, gap: 0 }]);
+    assert.equal(list[0].gap, 0);
+    assert.equal(P.effectiveGap(kind, list[0].gap), P.MIN_GAP[kind]);
+    assert.equal(P.effectiveGap(kind, 100), kind === "gantry" ? 0 : 100);
+  }
+  assert.equal(P.effectiveGap("stand", 0), 14);
+  assert.equal(P.effectiveGap("unknown", 0), null);
+});
+
+test("mixed recipes give exact immutable proposals and refuse kind/total limits atomically", () => {
+  const b = bootEditor();
+  vm.runInContext(read("js/editor/followup-tools.js").replace(/^const\b/gm, "var"), b.ctx);
+  const R = b.ctx.DesignerFollowup.recipe, state = { design: design(), sel: 2, span: 6 };
+  const before = JSON.stringify(state), corner = R(state, "corner"), hedge = R(state, "hedge");
+  assert.equal(corner.ok, true); assert.deepEqual(plain(corner.added.map(p => p.kind)), ["marshal", "camera"]);
+  assert.equal(hedge.added.length, 3); assert.equal(new Set(hedge.added.map(p => p.s)).size, 3);
+  assert.equal(JSON.stringify(state), before);
+  for (const kind of ["marshal", "camera", "hedge"]) {
+    const full = { ...state, design: design({ props: Array.from({ length: b.P.CAPS[kind] }, (_,i) => ({kind,s:i/10,side:1,gap:20})) }) };
+    const snap = JSON.stringify(full); assert.equal(R(full, kind === "hedge" ? "hedge" : "corner").ok, false); assert.equal(JSON.stringify(full), snap);
+  }
+  const full = []; for (const kind of b.P.KINDS) for(let i=0;i<b.P.CAPS[kind] && full.length<b.P.TOTAL;i++) full.push({kind,s:i/10,side:1,gap:20});
+  assert.equal(R({...state,design:design({props:full})}, "corner").ok, false);
+  assert.equal(R({...state,sel:-1}, "corner").ok, false);
+  assert.equal(R({...state,span:-1}, "hedge").ok, false);
+});
+
 test("water palette: four distinct bodies dress through waterSurface and preserve old water", async () => {
   const { P, C, CD } = bootEditor(), calls = [];
   const kinds = ["water", "pond", "lake", "river"];
@@ -254,5 +285,5 @@ test("new water bodies reject full-footprint road crossings including river tips
   assert.equal(P.dress(api, tr, [prop]), 0, "road width and four metre margin protect the bank");
   tr.pz[2] = tr.pz[3] = 20;
   for (const kind of ["pond", "lake"]) assert.equal(P.dress(api, tr, [{ ...prop, kind }]), 0, kind + " uses the same full-footprint guard");
-  assert.equal(P.dress(api, tr, [{ ...prop, kind: "water" }]), 1, "legacy water keeps its existing native clearance behavior");
+  assert.equal(P.dress(api, tr, [{ ...prop, kind: "water" }]), 0, "legacy water uses the same full-footprint road guard as newer water bodies");
 });

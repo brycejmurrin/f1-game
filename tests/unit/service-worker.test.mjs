@@ -1366,10 +1366,64 @@ test("the broken-install repair deletes only apex26- caches", async () => {
   const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
   const at = html.indexOf("caches.keys()");
   assert.ok(at > 0, "the repair still enumerates caches");
-  const body = html.slice(at, html.indexOf("fetch(el.src", at));
+  const body = html.slice(at, html.indexOf("}, true);", at));
   const filter = body.indexOf('indexOf("apex26-") === 0');
   const del = body.indexOf("caches.delete");
   assert.ok(filter > 0 && del > filter, "names are filtered to the apex26- prefix before any delete");
+});
+
+// #2424: offline (or an unreachable edge) a missing shell tag is a cache miss, not a broken install:
+// the repair must not delete apex26-* caches until a network answer proves the edge is up.
+async function runRepair({ onLine, fetchImpl }) {
+  const html = await readFile(new URL("../../index.html", import.meta.url), "utf8");
+  const at = html.indexOf('var RETRY_KEY = "apex26.scriptRetry"');
+  const end = html.indexOf("  // A CLEAN load clears the one-shot", at);
+  assert.ok(at > 0 && end > at, "the repair block is still locatable");
+  const listeners = {};
+  const caches = new Map([["apex26-320", 1], ["other-proj", 1]]);
+  const calls = { reload: 0, shown: [] };
+  const store = new Map();
+  const ctx = vm.createContext({
+    window: { caches: {
+      keys: async () => [...caches.keys()],
+      delete: async (n) => caches.delete(n),
+    }, addEventListener: (type, fn) => { if (type === "error") listeners.error = fn; } },
+    location: { origin: "https://x.test", reload: () => { calls.reload++; } },
+    navigator: { onLine },
+    sessionStorage: { getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
+    caches: { keys: async () => [...caches.keys()], delete: async (n) => caches.delete(n) },
+    fetch: fetchImpl,
+    show: (...a) => calls.shown.push(a),
+    recordError: () => {},
+    Promise,
+  });
+  ctx.window.caches = ctx.caches;
+  vm.runInContext(html.slice(at, end), ctx);
+  listeners.error({ target: { tagName: "SCRIPT", src: "https://x.test/js/a.js?v=1", dataset: {} } });
+  await new Promise((r) => setTimeout(r, 20));
+  return { caches: [...caches.keys()], calls };
+}
+
+test("the broken-install repair leaves apex26- caches alone while offline", async () => {
+  let fetched = 0;
+  const r = await runRepair({ onLine: false, fetchImpl: () => { fetched++; return Promise.resolve({}); } });
+  assert.deepEqual(r.caches, ["apex26-320", "other-proj"]);
+  assert.equal(r.calls.reload, 0);
+  assert.equal(r.calls.shown.length, 1, "overlay shown");
+  assert.equal(fetched, 0);
+});
+
+test("the broken-install repair leaves apex26- caches alone when the probe rejects", async () => {
+  const r = await runRepair({ onLine: true, fetchImpl: () => Promise.reject(new TypeError("Failed to fetch")) });
+  assert.deepEqual(r.caches, ["apex26-320", "other-proj"]);
+  assert.equal(r.calls.reload, 0);
+  assert.equal(r.calls.shown.length, 1);
+});
+
+test("the broken-install repair sweeps apex26- caches and reloads once a network answer arrives", async () => {
+  const r = await runRepair({ onLine: true, fetchImpl: () => Promise.resolve({ status: 404 }) });
+  assert.deepEqual(r.caches, ["other-proj"]);
+  assert.equal(r.calls.reload, 1);
 });
 
 // R3-ASYNC-1: the generation query is a LOCAL fact. Answered from a no-store

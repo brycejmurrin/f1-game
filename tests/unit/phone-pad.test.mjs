@@ -584,6 +584,7 @@ test("menu pad: the phone's nav events land on the gamepad's menu seam (arrows, 
 function fakeEl() {
   const listeners = {};
   const el = {
+    children: [], append(...nodes) { this.children.push(...nodes); }, setAttribute() {},
     textContent: "", disabled: false, value: "", style: { setProperty(k, v) { this[k] = v; } },
     classes: new Set(),
     addEventListener(t, f) { (listeners[t] ||= []).push(f); },
@@ -1220,9 +1221,9 @@ test("PlatformSession: out of a race (no player) the dash still goes out, so the
   // phone paired from the title menu never left the wheel's placeholder LCD.
   const elements = new Map();
   const G = { player: null, paused: false, state: "menu", els: {}, store: {},
-    $(id) { if (!elements.has(id)) elements.set(id, {}); return elements.get(id); } };
+    $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
   let sample;
-  const context = vm.createContext({ G,
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() },
     PhysicsConsts: { MAX_RPM: 15000, IDLE_RPM: 3000 },
     CamModes: { CAM_MODES: [{ id: "visor" }] },
     PhonePad: { ...PhonePad, padUrl: () => "https://apex.test/controller.html",
@@ -1337,8 +1338,8 @@ test("wheel pedal axes never feed onboard free-look; an ordinary right stick sti
 test("PlatformSession: STOP cancels a pending phone load and a fresh attempt owns its host", async () => {
   const elements = new Map(), loads = [], hosts = [];
   const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
-    $(id) { if (!elements.has(id)) elements.set(id, {}); return elements.get(id); } };
-  const context = vm.createContext({ G, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
+    $(id) { if (!elements.has(id)) elements.set(id, fakeEl()); return elements.get(id); } };
+  const context = vm.createContext({ G, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: "visor" }] },
     ensureNet: () => new Promise((resolve) => loads.push(resolve)),
     PhonePad: { padUrl: () => "https://apex.test/controller.html", host(options) {
       const h = { cancelled: 0, options, cancel() { h.cancelled++; } }; hosts.push(h); return h;
@@ -1399,6 +1400,32 @@ test("host(): cancelling a private exchange ignores a late answer and closes the
   assert.ok(request.token.cancelled); assert.equal(h.hostEnd.status, "closed");
   resolve({ ok: true, payload: "LATE ANSWER" }); await settle();
   assert.equal(accepted, 0); assert.equal(h.ui.linkedN, 0); assert.equal(h.ctl.state().phase, "cancelled");
+});
+
+test("host(): expired private pairing clears the QR and frees a fresh attempt", async () => {
+  let finish, request;
+  const deps = { usingPrivateRelay: () => true,
+    swap: (o) => { request = o; return new Promise((r) => { finish = r; }); } };
+  const h = hostHarness(deps);
+  h.ui.failedN = 0; h.ui.failed = () => h.ui.failedN++;
+  await settle();
+  assert.equal(h.ctl.state().phase, "waiting");
+  assert.ok(h.ui.qrs.at(-1).url);
+  finish({ ok: false, error: "expired", message: "Room expired" });
+  await settle();
+  assert.equal(h.ctl.state().phase, "failed");
+  assert.equal(h.hostEnd.status, "closed");
+  assert.equal(request.token.cancelled, true);
+  assert.equal(h.ui.qrs.at(-1).url, null, "the expired QR is removed");
+  assert.equal(h.ui.failedN, 1, "the platform restores its pairing button exactly once");
+  assert.match(h.ui.said.at(-1), /code expired.*STEER THIS GAME WITH A PHONE/);
+  h.ctl.cancel();
+  const fresh = hostHarness(deps);
+  await settle();
+  assert.equal(fresh.ctl.state().phase, "waiting");
+  assert.ok(fresh.ui.qrs.at(-1).url, "a fresh attempt publishes a new live QR");
+  assert.equal(request.token.cancelled, false);
+  fresh.ctl.cancel(); finish({ ok: false, error: "cancelled" }); await settle();
 });
 
 test("host(): private exchange and unreadable-answer failures release their transport", async () => {
@@ -1542,6 +1569,39 @@ test("a transport closing during controller session setup cannot strand its wake
   assert.equal(lock.releases, 1); assert.equal(h.ctl.state().linked, false);
   assert.equal(h.dom.connect.disabled, false);
   assert.equal((await h.ctl.connect("ABC234")).error, "cancelled", "a second attempt is not stuck busy");
+});
+
+test('host recovery timing comes only from actual public subscription and clears on cancel', async () => {
+  let roomOptions;
+  const h = hostHarness({ hostRoom: async o => { roomOptions = o; return { ok: true, startedAt: 1234, deadlineAt: 7777, stop() {} }; } });
+  const updates = []; h.ui.recovery = r => updates.push(r);
+  await settle();
+  assert.deepEqual(h.ctl.state().recovery, { phase: 'waiting', reconnecting: false, publicRelay: true, startedAt: 1234, deadlineAt: 7777 });
+  roomOptions.onTick(); assert.equal(updates.at(-1).deadlineAt, 7777);
+  roomOptions.onFail({ error: 'expired', message: 'expired' });
+  assert.equal(h.ctl.state().recovery.deadlineAt, null); assert.equal(h.ctl.state().recovery.reconnecting, false);
+  h.ctl.cancel(); assert.equal(h.ctl.state().recovery.deadlineAt, null); assert.equal(updates.at(-1).phase, 'cancelled');
+  const legacy = hostHarness(); await settle(); assert.equal(legacy.ctl.state().recovery.deadlineAt, null, 'missing transport timing never invents a countdown'); legacy.ctl.cancel();
+  const privateHost = hostHarness({ usingPrivateRelay: () => true, swap: async () => ({ ok: false, error: 'expired' }) });
+  await settle(); assert.equal(privateHost.ctl.state().recovery.publicRelay, false); assert.equal(privateHost.ctl.state().recovery.deadlineAt, null); privateHost.ctl.cancel();
+});
+
+test('PlatformSession MAKE NEW CODE cancels the current owner before replacement and private relay has no countdown', async () => {
+  const nodes = new Map(), hosts = [], order = [];
+  const G = { els: {}, store: {}, camMode: 1, announce() {}, setCamMode(i) { this.camMode = i; },
+    $(id) { if (!nodes.has(id)) nodes.set(id, fakeEl()); return nodes.get(id); } };
+  const context = vm.createContext({ G, Date, document: { createElement: () => fakeEl() }, PhysicsConsts: {}, CamModes: { CAM_MODES: [{ id: 'visor' }] },
+    PhonePad: { padUrl: () => 'https://apex.test/controller.html', host(options) { const id = hosts.length; order.push('host' + id); const h = { options, cancel() { order.push('cancel' + id); options.recovery({ phase: 'cancelled', publicRelay: true }); } }; hosts.push(h); return h; } } });
+  vm.runInContext(read('js/ui/platform-session.js'), context);
+  vm.runInContext('PlatformSession.create(G, { ensureNet: async () => true }).wirePhone()', context);
+  G.$('pm-phonepad').onclick(); await settle();
+  const [note, button] = G.$('pm-phonepad-box').children;
+  hosts[0].options.recovery({ phase: 'waiting', reconnecting: true, publicRelay: true, deadlineAt: Date.now() + 5000 });
+  assert.match(note.textContent, /same code available for up to [45] seconds/); assert.equal(button.hidden, false);
+  button.onclick(); await settle(); assert.deepEqual(order, ['host0', 'cancel0', 'host1']);
+  hosts[1].options.recovery({ phase: 'waiting', reconnecting: true, publicRelay: false, deadlineAt: Date.now() + 5000 });
+  assert.equal(note.textContent, '', 'private relay never claims same-code automatic recovery');
+  G.$('pm-phonepad').onclick();
 });
 
 // #2198: an expired desktop room left its dead QR up under VS FRIEND copy, with

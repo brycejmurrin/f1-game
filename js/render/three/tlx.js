@@ -624,6 +624,7 @@ const TLX = (function () {
         }
       }
       _abortRenderer = renderer;
+      try { setTimeout(function () { if (/^apex26\\.ctxLostReloads=\\d+$/.test(String(window.name || ""))) window.name = ""; }, 5000); } catch (_) { /* harness */ }
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -931,6 +932,11 @@ const TLX = (function () {
       const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
       let _shownAt = -1e9;
       let _sessLostN = 0;   // two-reload budget when sessionStorage throws (GLX _sessLostN)
+      const _fallbackLossCount = () => {
+        try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); return m ? parseInt(m[1], 10) || 0 : 0; }
+        catch (_) { return 0; }
+      };
+      const _rememberFallbackLoss = (n) => { try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ } };
       try {
         document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
         window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
@@ -973,7 +979,7 @@ const TLX = (function () {
           try {
             n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
             sessionStorage.setItem(rk, String(n));
-          } catch (_) { n = ++_sessLostN; }
+          } catch (_) { n = Math.max(++_sessLostN, _fallbackLossCount() + 1); _rememberFallbackLoss(n); }
           if (n <= 2) setTimeout(function () { try { location.reload(); } catch (_) { /* no location (harness/worker): the latches above still took effect for the next real boot */ } }, 1200);
           else {
             // Third loss in one tab. GLX's identical 2-cap ends in a frozen
@@ -1027,7 +1033,7 @@ const TLX = (function () {
             // reload looped on a device that loses the context every boot.
             // Storage failure must not skip the reload (GLX: dead canvas).
             var n = 0;
-            try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = _sessLostN; }
+            try { n = parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0; } catch (_) { n = Math.max(_sessLostN, _fallbackLossCount()); }
             if (n > 2) return;
             try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ }
           }, false);
@@ -3647,6 +3653,7 @@ const TLX = (function () {
       let _packAsync = true;
       try { _packAsync = localStorage.getItem("apex26.tlxPackAsync") !== "0"; } catch (_) { /* no storage: async */ }
       let _matBindGen = 0;
+      let _matRequested = new Set();
 
       // CSS-box observation is shared; TLX still owns renderer.setSize(),
       // backend limits and post-target allocation.
@@ -3976,7 +3983,12 @@ const TLX = (function () {
         try {
           n = (parseInt(sessionStorage.getItem("apex26.ctxLostReloads"), 10) || 0) + 1;
           sessionStorage.setItem("apex26.ctxLostReloads", String(n));
-        } catch (_) { n = ++_sessLostN; }
+        } catch (_) {
+          let prior = 0;
+          try { const m = String(window.name || "").match(/^apex26\\.ctxLostReloads=(\\d+)$/); prior = m ? parseInt(m[1], 10) || 0 : 0; } catch (_) { /* best effort */ }
+          n = Math.max(++_sessLostN, prior + 1);
+          try { window.name = "apex26.ctxLostReloads=" + n; } catch (_) { /* best effort */ }
+        }
         if (n <= 2) { try { location.reload(); } catch (_) { /* harness: the latch steers the next real boot */ } return; }
         try {
           if (typeof window.__apexReportError === "function")
@@ -4346,12 +4358,16 @@ const TLX = (function () {
           // P4: a token still filling is held back (the procedural look stays bound) and bound once ready; a newer
           // call supersedes the wait, and the never-bound tokens it held are freed instead (WGX parity).
           const gen = ++_matBindGen;
+          _matRequested = new Set(maps ? [maps.albedo, maps.normal] : []);
           const waits = maps ? [maps.albedo, maps.normal].filter((t) => t && t.pending && t.ready).map((t) => t.ready) : [];
           if (waits.length) {
             Promise.all(waits).then(() => {
               const live = (t) => !!(t && !t.pending && !t._freed);
               const a = live(maps.albedo) ? maps.albedo : null, nn = live(maps.normal) ? maps.normal : null;
-              if (gen !== _matBindGen || !a) { for (const t of [a, nn]) if (t) t.dispose(); return; }
+              if (gen !== _matBindGen || !a) {
+                for (const t of new Set([a, nn])) if (t && (gen === _matBindGen || !_matRequested.has(t))) t.dispose();
+                return;
+              }
               bindNow(Object.assign({}, maps, { albedo: a, normal: nn }));
             });
             return;
@@ -4923,6 +4939,7 @@ const TLX = (function () {
           return !!(ownGL || (renderer && renderer.backend && renderer.backend.gl));
         },
         async attachXrSession(session) {
+          const generation = this._xrAttachGeneration = (this._xrAttachGeneration || 0) + 1;
           const gl = ownGL || (renderer.backend && renderer.backend.gl) || null;
           if (!gl) throw new Error("TLX XR needs the WebGL2 backend (apex26.tlxForceGL=1)");
           // Flat boot omits xrCompatible; make the context XR-ready only here
@@ -4930,9 +4947,11 @@ const TLX = (function () {
           if (typeof gl.makeXRCompatible === "function") {
             try { await gl.makeXRCompatible(); } catch (_) { /* already compatible */ }
           }
+          if (generation !== this._xrAttachGeneration) return null;
           if (typeof XRWebGLLayer === "undefined") throw new Error("XRWebGLLayer missing");
           const layer = new XRWebGLLayer(session, gl, { antialias: false, alpha: false });
           await session.updateRenderState({ baseLayer: layer });
+          if (generation !== this._xrAttachGeneration) return null;
           this._xrLayer = layer;
           this._xrSession = session;
           _xrActive = true;
@@ -4960,6 +4979,7 @@ const TLX = (function () {
           return layer;
         },
         detachXrSession() {
+          this._xrAttachGeneration = (this._xrAttachGeneration || 0) + 1;
           this._xrLayer = null;
           this._xrSession = null;
           this._pendingXrEyes = null;

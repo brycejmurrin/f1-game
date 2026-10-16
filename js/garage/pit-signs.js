@@ -148,7 +148,7 @@ const PitSigns = (function () {
     if (!q || !q.idx || !q.idx.length || !G || typeof G.createTexMesh !== "function" ||
         typeof G.createTexture !== "function" || !supported()) return false;
     try {
-      const canvas = paintAtlas(track.pit.row.boxes, { mobile: !!G.mobileTier, side: track.pit.side, limitKph: track.pit.limitKph });
+      const canvas = paintAtlas(track.pit.row.boxes, { mobile: !!(G.isMobile || G.mobileTier), side: track.pit.side, limitKph: track.pit.limitKph });
       track.meshes.pitSignTex = G.createTexture(canvas);
       track.meshes.pitSigns = G.createTexMesh({ pos: q.pos, nrm: q.nrm, uv: q.uv, idx: q.idx });
       // The entrance lamps' RED aspects: a second mesh on the same texture,

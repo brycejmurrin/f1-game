@@ -864,6 +864,87 @@
         }
       ],
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "check",
+      "task": "Exercise livePrLines: head",
+      "fixture": "tests/unit/session-status.test.mjs",
+      "pattern": "livePrLines:\\ head",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "ship",
+      "task": "Exercise guardsVerdict: aggregator success",
+      "fixture": "tests/unit/ready-gate.test.mjs",
+      "pattern": "guardsVerdict:\\ aggregator\\ success",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "handoff",
+      "task": "Exercise toMarkdown flags unpushed",
+      "fixture": "tests/unit/session-status.test.mjs",
+      "pattern": "toMarkdown\\ flags\\ unpushed",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized Chromium; subsystem-specific browser recipe in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Native target device/GPU for renderer, touch, audio or performance claims"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
     }
   ]
 }

@@ -35,6 +35,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { bootGlx } from "../helpers/glx-mock.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const readFile = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -45,6 +46,7 @@ const read = (p) => p === "js/game.js"
 // Comment-stripped source: a pin can only match code, and a comment can
 // neither fail nor satisfy it.
 const code = (p) => (p.startsWith("css/") ? readCssSource(p) : read(p)).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+const gameUnionCode = () => gameSource().replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
 /** The span between two source needles, ASSERTING BOTH EXIST FIRST.
  *
  * `src.slice(src.indexOf(a), src.indexOf(b))` is the shape that disarmed this
@@ -263,7 +265,7 @@ test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js
   // The picker's own behaviour — a <select> with ‹ › steps, "WEBGPU
   // (UNAVAILABLE)" without navigator.gpu — is driven through bootPicker()
   // below; this is the ownership rule only.
-  assert.doesNotMatch(code("js/game.js"), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
+  assert.doesNotMatch(gameUnionCode(), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
   assert.match(code("js/perf/renderer-picker.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
   // The preset file keeps the GRAPHICS button only — the split is the ownership rule.
   assert.doesNotMatch(code("js/perf/quality-preset.js"), /pm-renderer|apex26\.gfxBackend/);
@@ -486,8 +488,8 @@ test("race-start render fail-fasts on backendState.ctxLost (drops handoff)", () 
   assert.match(src, /gfxContextLost\(\)[\s\S]{0,250}?loadingScreen\.phase\(\) === "handoff"/);
   assert.match(code("js/perf/race-entry-profile.js"), /handoff:lower-lost/);
   const body = src.slice(src.indexOf("async function startRaceBody()"), src.indexOf("const sessionEntry = SessionEntry.create();"));
-  assert.match(body, /loadTrackStepped\(trackIdx, \(\) => !gfxContextLost\(\)\)/,
-    "#976 paced load aborts mid-step when the context is already lost");
+  assert.match(body, /loadTrackStepped\(trackIdx, \(\) => !stale\(\) && !gfxContextLost\(\)\)/,
+    "paced load aborts mid-step when its entry is stale or its context is lost");
   assert.match(body, /await yieldMain\(\);[\s\S]{0,80}?if \(gfxContextLost\(\)\)/,
     "fail-closed covers the scheduler.yield gaps between paced startRaceBody legs");
   assert.match(body, /if \(player !== entryPlayer \|\| \(state !== "count" && state !== "race"\)\) return false/,

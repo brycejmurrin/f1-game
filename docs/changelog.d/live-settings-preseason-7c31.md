@@ -1,0 +1,1 @@
+Fixed: Settings search now finds rivals sound, rivals volume, boost level and boost pitch, opening and focusing the existing controls without changing their values. Career season-goal progress waits for a race result instead of presenting the preseason grid order as an on-target championship position; completed zero-point races still count.

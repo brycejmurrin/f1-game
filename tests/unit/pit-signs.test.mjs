@@ -296,6 +296,29 @@ test("with a canvas and the livery painter it paints twelve cells and uploads on
   assert.equal(t.meshes.pitSigns, null);
 });
 
+test("a phone on GRAPHICS: HIGH (isMobile, not mobileTier) still gets the half-size pit-sign atlas", () => {
+  const ctx2d = { clearRect() {}, save() {}, restore() {}, beginPath() {}, rect() {}, clip() {}, fillRect() {}, fillText() {},
+    measureText: (s) => ({ width: 10 * s.length }), set fillStyle(v) {}, set font(v) {}, set textBaseline(v) {}, set textAlign(v) {}, set globalAlpha(v) {} };
+  const document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx2d }) };
+  const LiveryTex = { paintTeamMark() {}, inkOn: () => [0.97, 0.97, 0.98] };
+  const size = (flags) => {
+    const P = loadPainter({ document, LiveryTex });
+    const up = [];
+    const G = Object.assign({ createTexMesh: () => ({ id: 1 }), createTexture: (cv) => { up.push(cv); return { id: 2 }; } }, flags);
+    const t = buildOnce(FULL);
+    t.meshes = t.meshes || {};
+    assert.equal(P.upload(G, t), true);
+    return up[0];
+  };
+  const S = ctxOnce().TrackPit.SIGN;
+  const desk = size({ isMobile: false, mobileTier: false });
+  assert.equal(desk.width, S.w); assert.equal(desk.height, S.h);
+  for (const flags of [{ isMobile: true, mobileTier: true }, { isMobile: true, mobileTier: false }]) {
+    const cv = size(flags);
+    assert.equal(cv.width, S.w / 2); assert.equal(cv.height, S.h / 2);
+  }
+});
+
 // ── EVERY circuit's pit wall actually gets built ─────────────────────────────
 // The platform, the wall, its rail and the lane-side barrier are four sweeps
 // over ONE node run, and sweep() emits nothing for a run shorter than two

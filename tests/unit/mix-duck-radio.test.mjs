@@ -29,12 +29,13 @@ const RELEASE_TAU = 0.4;
 
 function param(v) {
   const p = {
-    value: v, sets: 0, snaps: 0, cancels: 0, lastMethod: null, lastTau: null,
-    setTargetAtTime(x, _t, tau) { p.sets++; p.lastMethod = "target"; p.value = x; p.lastTau = tau; },
+    value: v, sets: 0, snaps: 0, cancels: 0, lastMethod: null, lastTau: null, events: [],
+    setTargetAtTime(x, _t, tau) { p.events.push({ value: x, at: _t, tau }); p.sets++; p.lastMethod = "target"; p.value = x; p.lastTau = tau; },
     setValueAtTime(x) { p.sets++; p.snaps++; p.lastMethod = "value"; p.value = x; },
     linearRampToValueAtTime(x) { p.sets++; p.lastMethod = "linear"; p.value = x; },
     exponentialRampToValueAtTime(x) { p.sets++; p.lastMethod = "exp"; p.value = x; },
     cancelScheduledValues() { p.cancels++; },
+    cancelAndHoldAtTime() { p.cancels++; },
   };
   return p;
 }
@@ -42,12 +43,13 @@ function param(v) {
 function node(kind, counts) {
   if (counts) counts[kind] = (counts[kind] || 0) + 1;
   const self = {
-    kind, connect: (t) => t, disconnect() {},
+    kind, connections: [], connect(t) { self.connections.push(t); return t; }, disconnect() {},
     start(t) { self.startAt = t; }, stop(t) { self.stopAt = t; },
     type: "", loop: false, loopStart: 0, loopEnd: 0, buffer: null, onended: null,
     fftSize: 0, frequencyBinCount: 0, getFloatFrequencyData() {},
     gain: param(1), frequency: param(440), detune: param(0), Q: param(1), playbackRate: param(1),
   };
+  if (counts) (counts.nodes ||= []).push(self);
   return self;
 }
 
@@ -104,6 +106,7 @@ function boot(opts = {}) {
     },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     AudioContext: function () { return makeCtx(); },
+    ...(opts.Audio ? { Audio: opts.Audio } : {}),
     fetch: () => new Promise((res) => held.push(() => res({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
   };
   sb.window = sb;
@@ -113,7 +116,7 @@ function boot(opts = {}) {
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
   return {
-    GameAudio, release, counts, gains, contexts,
+    GameAudio, release, counts, gains, contexts, vctx,
     fireDeviceChange: () => { if (deviceListeners.devicechange) deviceListeners.devicechange(); },
   };
 }
@@ -278,4 +281,120 @@ test("music still ducks through the existing soundtrack subscriber", async () =>
   near(music.gain.value, 0.5 * 0.52 * 0.35, "music still dips under a radio line");
   A.setRadioDuck(false);
   near(music.gain.value, 0.5 * 0.52, "music releases with the line");
+});
+
+
+test("selective focus routes engine/rivals/reverb separately from critical tyre and brake cues", async () => {
+  const { GameAudio: A, gains, counts, contexts, release, vctx } = boot();
+  let passByDest;
+  vctx.RivalAudio = { attach: (_ctx, dest) => { passByDest = dest; } };
+  A.init(); A.setRadioFocusDb(8); await release(); A.startEngine();
+  const [master, critical, focus] = gains;
+  assert.ok(focus.connections.includes(master)); assert.ok(critical.connections.includes(master));
+  assert.equal(passByDest, focus, "pass-by pool attaches to selective engine bus");
+  const focusedOutputs = counts.nodes.filter((n) => n.connections.includes(focus));
+  assert.ok(focusedOutputs.some((n) => n.kind === "panner"), "rival panners feed focus");
+  assert.ok(focusedOutputs.filter((n) => n.kind === "gain").length >= 6, "engine/sub/whine/harvest/ERS/reverb outputs feed focus");
+  assert.ok(counts.nodes.filter((n) => n.kind === "gain" && n.connections.includes(critical)).length >= 8,
+    "skid/brake/scrub/lock and other road feedback retain critical bus");
+  const before = counts.nodes.length; A.brakeCue(1); A.driveBrakeTone(1); A.cornerCall("L");
+  assert.ok(counts.nodes.slice(before).filter((n) => n.kind === "gain").every((n) => n.connections.includes(critical)),
+    "braking and corner blips bypass focus");
+  const owner = {}; A.setVoiceFocusHold(true, owner);
+  near(critical.gain.events.at(-1).value, 1, "positive focus keeps critical user volume");
+  near(focus.gain.events.at(-1).value, DUCK_LIN, "engine/rivals reduce 8dB");
+  A.setSfxVolume(0.5); near(focus.gain.events.at(-1).value, 0.5 * DUCK_LIN, "focus composes SFX slider");
+  near(critical.gain.events.at(-1).value, 0.5, "critical composes same user slider");
+  A.setSfxEnabled(false); near(focus.gain.events.at(-1).value, 0, "SFX OFF silences engine bus too");
+  A.setSfxEnabled(true); A.setRadioFocusDb(4);
+  near(focus.gain.events.at(-1).value, 0.5 * 10 ** (-4 / 20), "amount changes while held retarget");
+  A.setVoiceFocusHold(false, owner); contexts[0].currentTime += 0.2;
+  A.stopEngine();
+});
+
+test("audio-clock spans preserve future union across mode changes, cancellation and suspended wall time", () => {
+  const { GameAudio: A, gains, contexts } = boot(); A.init(); A.setRadioFocusDb(8);
+  const ctx = contexts[0], focus = gains[2];
+  const a = A.radioVoice([sampleBuf(2, SR)], 5, { channel: "radio", volume: 0.8 });
+  const b = A.radioVoice([sampleBuf(2, SR)], 8, { channel: "radio", volume: 0.8 });
+  assert.ok(a && b); near(A.mixDuck().focusValue, 1, "future accepted speech is not audible yet");
+  ctx.state = "suspended"; A.setRadioFocusDb(0); A.setRadioFocusDb(4);
+  near(A.mixDuck().focusValue, 1, "mode changes do not start a suspended future span now");
+  a.stop();
+  assert.deepEqual(A.mixDuck().focusEvents.filter((e) => e.at > 0).map((e) => e.at).join(","), "8,10",
+    "canceling first owner preserves later owner boundaries");
+  ctx.state = "running"; ctx.currentTime = 8.08;
+  near(A.mixDuck().focusValue, 10 ** (-4 / 20) + (1 - 10 ** (-4 / 20)) / Math.E,
+    "attack follows exact audio-time exponential");
+  b.stop(); near(focus.gain.events.at(-1).value, 1, "last owner releases");
+});
+
+test("analytic cancel-and-hold fallback keeps interrupted release and overlapping owners continuous", () => {
+  const { GameAudio: A, gains, contexts } = boot(); A.init(); A.setRadioFocusDb(8);
+  const ctx = contexts[0], focus = gains[2]; delete focus.gain.cancelAndHoldAtTime;
+  const a = {}, b = {}; A.setVoiceFocusHold(true, a); ctx.currentTime = 0.08;
+  const attack = DUCK_LIN + (1 - DUCK_LIN) / Math.E;
+  near(A.mixDuck().focusValue, attack, "one attack tau");
+  A.setVoiceFocusHold(true, b); A.setVoiceFocusHold(false, a);
+  near(A.mixDuck().focusValue, attack, "overlap preserves exact attack value");
+  A.setVoiceFocusHold(false, b); ctx.currentTime = 0.28;
+  const release = 1 + (attack - 1) * Math.exp(-0.2 / 0.4);
+  near(A.mixDuck().focusValue, release, "release evaluated from interrupted attack");
+  A.setVoiceFocusHold(true, a); near(A.mixDuck().focusValue, release, "new attack anchored without jump");
+  ctx.currentTime = 0.36;
+  near(A.mixDuck().focusValue, DUCK_LIN + (release - DUCK_LIN) / Math.E, "interrupted release->attack exact");
+  assert.ok(focus.gain.snaps > 0, "fallback anchors analytic value explicitly when hold API absent");
+  A.setVoiceFocusHold(false, a);
+});
+
+test("WATCH media focuses only on audible playing, not pending fetch, stall or muted buffers", () => {
+  const media = [];
+  class Audio {
+    constructor() { this.paused = true; this.ended = false; this.volume = 1; this.muted = false; media.push(this); }
+    play() { this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; this.onpause?.(); }
+  }
+  const { GameAudio: A, contexts, vctx } = boot({ Audio }); A.init(); A.setRadioFocusDb(8);
+  const clip = vctx.GameAudioRadioFx.playWatchMedia("https://example.test/radio.mp3", { volume: 0.8 }); const el = media[0];
+  assert.equal(A.mixDuck().focusHolds, 0, "play request has not emitted playing");
+  el.onplaying(); assert.equal(A.mixDuck().focusHolds, 1);
+  el.onstalled(); assert.equal(A.mixDuck().focusHolds, 1, "fetch stall can keep buffered audio playing");
+  el.onwaiting(); assert.equal(A.mixDuck().focusHolds, 0);
+  el.onplaying(); el.muted = true; el.onvolumechange(); assert.equal(A.mixDuck().focusHolds, 0);
+  el.muted = false; el.onvolumechange(); assert.equal(A.mixDuck().focusHolds, 1);
+  const stale = el.onplaying; clip.stop(); stale(); assert.equal(A.mixDuck().focusHolds, 0);
+  contexts[0].state = "suspended";
+  const plain = vctx.GameAudioRadioFx.playWatchMedia("https://example.test/plain.mp3", { volume: 0.8 });
+  const fallback = media.at(-1); fallback.onplaying(); assert.equal(A.mixDuck().focusHolds, 1);
+  plain.stop(); assert.equal(A.mixDuck().focusHolds, 0, "plain HTMLAudio lifecycle included");
+  contexts[0].state = "running";
+  assert.equal(A.radioVoice([sampleBuf(1, SR)], 0, { volume: 0 }), null);
+  A.setEnabled(false);
+  assert.equal(vctx.GameAudioRadioFx.playWatchMedia("https://example.test/refused.mp3", { volume: 0.8 }), null);
+});
+
+
+test("repeating STANDARD restore is inert during an active legacy attack", () => {
+  const { GameAudio: A, gains, contexts } = boot(); A.init(); A.setRadioDuck(true);
+  const [_, critical, focus] = gains, before = critical.gain.sets;
+  contexts[0].currentTime = 0.04;
+  const value = A.mixDuck().focusValue; A.setRadioFocusDb(0);
+  assert.equal(critical.gain.sets, before, "idempotent restore does not replace .08 attack with .4 release");
+  near(A.mixDuck().focusValue, value, "engine envelope unchanged");
+  near(critical.gain.lastTau, focus.gain.lastTau, "STANDARD sibling envelopes agree");
+});
+
+test("context rebuild retains focus preference and user level while dropping old voice ownership", async () => {
+  const { GameAudio: A, contexts, fireDeviceChange } = boot();
+  A.init(); A.setSfxVolume(0.5); A.setRadioFocusDb(8);
+  const old = A.radioVoice([sampleBuf(2, SR)], 5, { channel: "radio", volume: 0.8 });
+  assert.equal(A.mixDuck().focusHolds, 1);
+  const previous = contexts[0]; fireDeviceChange();
+  await new Promise((resolve) => setTimeout(resolve, 400));   // same device-change debounce fixture as above
+  assert.ok(contexts.length > 1); assert.equal(previous.state, "closed");
+  assert.equal(A.getRadioFocusDb(), 8); assert.equal(A.mixDuck().focusHolds, 0);
+  near(A.mixDuck().focusValue, 0.5, "new graph composes saved SFX volume without ghost focus");
+  const current = {}; A.setVoiceFocusHold(true, current); old.stop();
+  assert.equal(A.mixDuck().focusHolds, 1, "old source teardown cannot release new context owner");
+  A.setVoiceFocusHold(false, current);
 });

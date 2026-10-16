@@ -3,7 +3,7 @@
  * @doc Which Pure-node CI matrix slices a diff needs (fail-safe → all).
  * @section runner
  *
- * pick-unit-slices.mjs — path → {guards, vm-a1, vm-a2, vm-b1, vm-b2, page, slow,
+ * pick-unit-slices.mjs — path → {guards, vm-a1, vm-a2, vm-b1, vm-b2, page-a, page-b, slow,
  * driving-model} for the ci.yml node matrix (six slices since 2026-09-30) +
  * driving-model. Complements tools/ci/node-plan.mjs: this tool picks WHICH
  * runners to spin; node-plan skips scripts inside a spun runner.
@@ -37,33 +37,30 @@ export const SLICES = [
   "guards",
   "vm-a1", "vm-a2",
   "vm-b1", "vm-b2",
-  "page", "slow",
+  "page-a", "page-b", "slow",
   "driving-model",
 ];
 
 /** Node matrix ids only (ci.yml strategy.matrix via unit-plan). */
-export const NODE_SLICES = ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page", "slow"];
+export const NODE_SLICES = ["vm-a1", "vm-a2", "vm-b1", "vm-b2", "page-a", "page-b", "slow"];
 
 /**
  * Measured / expected p50 job durations (seconds). Used only for --costs /
- * savings estimates — never for selection. Re-balanced 2026-10-15
- * (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §7): the job medians of three
- * green ship pushes BEFORE the move were vm-a1 133, vm-a2 130, vm-b1 638,
- * vm-b2 241, page 525, slow 201. The values below are the FIRST ship-push
- * run after the move (caf37bd6, run 38700490935, 2026-10-15 07:42 UTC, every
- * row in full, setup included): the wall fell from vm-b1's 638 s to page's
- * 422 s. One run, not a median — re-measure from the job logs after a day
- * and replace these.
+ * savings estimates — never for selection. Re-measured 2026-10-16 from 18
+ * recent successful CI runs (setup included). Keep this table current when a
+ * full deploy train changes runner images or test composition; queue and setup
+ * time still need to be measured separately before moving ownership.
  */
 export const SLICE_COST_P50_SEC = {
-  guards: 279,
-  "vm-a1": 236,
-  "vm-a2": 278,
-  "vm-b1": 286,
-  "vm-b2": 361,
-  page: 422,
-  slow: 220,
-  "driving-model": 100,
+  guards: 374,
+  "vm-a1": 250,
+  "vm-a2": 280,
+  "vm-b1": 455,
+  "vm-b2": 295,
+  "page-a": 164,
+  "page-b": 391,
+  slow: 206,
+  "driving-model": 120,
 };
 
 /** Which npm scripts / groups.json keys feed each slice. MIRRORS the case
@@ -81,7 +78,8 @@ export const SLICE_SCRIPTS = {
   "vm-a2": ["test:game-vm-a", "test:garage-unit"],
   "vm-b1": ["test:game-vm-b1"],
   "vm-b2": ["test:game-vm-b2"],
-  page: ["test:vm-page"],
+  "page-a": ["test:vm-page-a"],
+  "page-b": ["test:vm-page-b"],
   slow: ["test:node-slow", "test:steering-unit", "test:mcp", "test:service-worker", "test:lifecycle-unit", "test:agent-contract"],
   "driving-model": [], // browser job: tests/specs/physics-characterization.spec.js
 };
@@ -91,7 +89,7 @@ const VM_A = ["vm-a1", "vm-a2"];
 /** game-vm-b partitions (the VM twins of the browser specs). */
 const VM_B = ["vm-b1", "vm-b2"];
 /** Former page-slow packed pair. */
-const PAGE_SLOW = ["page", "slow"];
+const PAGE_SLOW = ["page-a", "page-b", "slow"];
 /** Where each rider lives now (2026-10-15); RULES name a rider by its row. */
 const NET_AUDIO_STATE = "vm-a1";   // net-unit, audio-unit, state-unit, desktop-unit
 const GARAGE = "vm-a2";            // garage-unit
@@ -248,6 +246,7 @@ export function pick(files, opts = {}) {
     if (!slices.has(slice)) slices.set(slice, new Set());
     slices.get(slice).add(why);
   };
+  const addPages = (why) => { add("page-a", why); add("page-b", why); };
   const unmatched = [];
 
   for (const f of files) {
@@ -269,10 +268,10 @@ export function pick(files, opts = {}) {
     // An ADAPTED spec runs as itself on the vm-page slice, and select-specs
     // counts it as VM-covered, so its edit must schedule `page` or it runs
     // nowhere on the pull request (2026-10-05; node-plan forces the script).
-    if (Object.hasOwn(ADAPTED, f)) { hit = true; add("page", `ADAPTED spec, vm-page runs it as itself: ${f}`); }
+    if (Object.hasOwn(ADAPTED, f)) { hit = true; addPages(`ADAPTED spec, vm-page runs it as itself: ${f}`); }
 
     const sourceWhy = adaptedSourceWhy(f);
-    if (sourceWhy) { hit = true; add("page", sourceWhy); }
+    if (sourceWhy) { hit = true; addPages(sourceWhy); }
 
     if (GEOMETRY_PATHS.test(f)) {
       hit = true;
@@ -393,6 +392,17 @@ function main(argv = process.argv.slice(2)) {
       matrix: out.slices,
       costs: c,
     }, null, 2));
+    return;
+  }
+
+  // `--costs` is a documented planning mode. Keep it machine-readable enough
+  // for shell reports while making the per-slice estimate visible without
+  // requiring callers to know about the normal human summary format.
+  if (argv.includes("--costs")) {
+    for (const row of c.rows) {
+      console.log(`${row.slice}\t${row.selected ? "selected" : "skipped"}\tp50=${row.p50_sec}s`);
+    }
+    console.log(`selected=${c.selected_sec}s all=${c.all_sec}s saved=${c.saved_sec}s (~${c.saved_min} min)`);
     return;
   }
 
