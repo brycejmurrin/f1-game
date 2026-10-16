@@ -841,6 +841,7 @@ test("bash-guard: survey images and reports commit on the docs-only path; a code
   const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
   const put = (rel, body = "x") => { fs.mkdirSync(path.dirname(path.join(repo.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(repo.dir, rel), body); };
   try {
+    fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });   // a tree WITH tools/: the no-tools skip (#2428) is not under test here
     put("artifacts/shots/tracks/spa/t1.png"); put("artifacts/shots/gallery/index.html");
     put("artifacts/track-survey/spa-report/report.json"); put("docs/PHYSICS.md", "survey prose\n");
     repo.g("add", "-f", "artifacts", "docs");
@@ -881,5 +882,45 @@ test("post-edit.sh hands its advice to the model as PostToolUse additionalContex
     r = run("js/core/log.js");
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout.trim(), "", "no advice, no output");
+  } finally { repo.rm(); }
+});
+
+// #2429: taking one whole side of a multi-hunk conflict warns (advisory, exit 0).
+test("git checkout --theirs/--ours warns when the file has several conflict hunks", () => {
+  const repo = scratchRepo("hook-theirs-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir });
+  const hunk = "<<<<<<< HEAD\na\n=======\nb\n>>>>>>> other\n";
+  try {
+    fs.writeFileSync(path.join(repo.dir, "one.txt"), hunk);
+    fs.writeFileSync(path.join(repo.dir, "three.txt"), hunk.repeat(3));
+    let r = run("git checkout --theirs one.txt");
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stderr, /conflict hunks/, "one hunk is silent");
+    for (const c of ["git checkout --theirs three.txt", "git checkout --ours -- three.txt", "git checkout --conflict=diff3 three.txt"]) {
+      r = run(c);
+      assert.equal(r.status, 0, `advisory, not a block: ${c}`);
+      assert.match(r.stderr, /three\.txt has 3 conflict hunks; this keeps one side for all of them/, c);
+    }
+    assert.doesNotMatch(run("git checkout three.txt").stderr, /conflict hunks/, "no side flag, no warning");
+  } finally { repo.rm(); }
+});
+
+// #2428: a tree with no tools/ (track-survey-assets image branches) skips the guards with a note.
+test("a commit in a tree with no tools/ skips the guards unless it stages code", () => {
+  const repo = scratchRepo("hook-notools-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+  try {
+    fs.mkdirSync(path.join(repo.dir, "assets"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "assets/a.png"), "x");
+    repo.g("add", "assets/a.png");
+    let r = run("git commit -m img");
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /guards skipped: no tools\/ in this tree/);
+    fs.mkdirSync(path.join(repo.dir, "js"), { recursive: true });
+    fs.writeFileSync(path.join(repo.dir, "js/a-fixture.txt"), "var a;\n");
+    repo.g("add", "js/a-fixture.txt");
+    r = run("git commit -m code");
+    assert.doesNotMatch(r.stderr, /guards skipped/, "staged js/ is still guarded");
+    assert.match(r.stderr, /probe: commit code/);
   } finally { repo.rm(); }
 });
