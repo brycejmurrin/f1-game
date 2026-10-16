@@ -181,6 +181,36 @@ for (const [shapeName, viewport] of SHAPES) {
               && opts && /INSPECT ENGINE/i.test(opts.textContent || ""));
           }, null, { polling: 100, timeout: 15_000 });
         }
+        // Preserve the natural page state with every title capture. CI
+        // 38833820199 differed in lower-door compositing and the sound glyph;
+        // stable screenshots alone cannot distinguish that from stale layout.
+        if (screenName === "title") {
+          const state = await page.evaluate(() => {
+            const props = ["mask-image", "mask-composite", "-webkit-mask-composite", "mask-mode", "mask-size",
+              "background", "opacity", "transform", "zoom", "filter", "isolation", "overflow", "font", "gap", "padding"];
+            const styles = (el, pseudo = null) => {
+              const cs = getComputedStyle(el, pseudo);
+              return Object.fromEntries(props.map((p) => [p, cs.getPropertyValue(p)]));
+            };
+            return {
+              userAgent: navigator.userAgent, devicePixelRatio,
+              viewport: { width: innerWidth, height: innerHeight },
+              fonts: [...document.fonts].map((f) => ({ family: f.family, style: f.style, weight: f.weight, status: f.status })),
+              elements: ["overlay", "menu-buttons", "menu-explore", "menu-secondary", "mb-watch", "mb-photo", "mb-data", "soundbtn"]
+                .map((id) => {
+                  const el = document.getElementById(id);
+                  if (!el) throw new Error(`menu-baseline: missing diagnostic target ${id}`);
+                  return { id, classes: el.className, rect: el.getBoundingClientRect().toJSON(),
+                    clientHeight: el.clientHeight, scrollHeight: el.scrollHeight, scrollTop: el.scrollTop,
+                    hovered: el.matches(":hover"), styles: styles(el), before: styles(el, "::before"), after: styles(el, "::after") };
+                }),
+            };
+          });
+          await test.info().attach("menu-capture-state", {
+            body: JSON.stringify({ browserVersion: page.context().browser().version(), ...state }, null, 2),
+            contentType: "application/json",
+          });
+        }
         await expect(page).toHaveScreenshot(`${screenName}-${shapeName}.png`, {
           maxDiffPixelRatio: 0.01,
           animations: "disabled",

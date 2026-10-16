@@ -1,6 +1,6 @@
 {
   "_doc": [
-    "Exact spec + full describe/title quarantine; backend identity is encoded by the TLX suite in title.",
+    "Exact spec + full describe/title quarantine; the title identifies the affected backend or viewport suite.",
     "Only this known test may pass on retry. Other tests in the spec remain blocking.",
     "owner is the accountable GitHub user; evidence links the observed failed run.",
     "expires is inclusive UTC; after this date flakes block again. Review before expiry using the measured exit criteria; never extend automatically.",
@@ -16,6 +16,16 @@
       "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/37238728678",
       "expires": "2026-11-15",
       "review": "By 2026-11-15, fix the cold TLX preparation deadline and remove this row after the exact test passes without retry on three cold CI runs. Any extension needs fresh failed-run evidence and an explicit new deadline."
+    },
+    {
+      "spec": "tests/specs/menu-baseline.spec.js",
+      "since": "2026-10-16",
+      "owner": "brycejmurrin",
+      "why": "CI 38833820199 observed 3766 differing pixels in the phone title, around lower-door compositing and the sound glyph; the other five goldens passed. Prior CI on f63c2ff10 and scoped local captures on Chromium 153 and 154 passed unchanged goldens. The precise cause remains unresolved; capture-state diagnostics retain masks, pseudo-elements, fonts and browser identity. Persistent mismatches still fail.",
+      "title": "menu identity — phone-landscape › title looks like itself",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/38833820199",
+      "expires": "2026-10-23",
+      "review": "By 2026-10-23, compare failed/passing capture-state artifacts and fix the specific readiness or compositing cause. Remove this row after the exact test passes without retry on three cold CI runs. No automatic extension; a new deadline requires fresh evidence. Keep the golden, tolerance and the other five exact tests blocking."
     }
   ]
 }
