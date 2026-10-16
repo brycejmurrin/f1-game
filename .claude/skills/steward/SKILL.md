@@ -129,7 +129,7 @@ a live run cancels it, and a killed job runs no `if: always()` step, so its
 failures are lost.
 
 A deliberate ratchet raise is part of a fix, not a workaround: `node
-tools/check/ratchets.mjs --update` (a `ratchets.d` delta on a topic branch), with the reason in the commit. Never
+tools/check/ratchets.mjs --update`, with the reason in the commit. Never
 hand-edit `tests/data/ratchets.json`.
 
 ## 7. "Live" is an ancestry test, not a build number
