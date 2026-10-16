@@ -1,0 +1,1 @@
+1792189189	Bryce Murrin	Unified read-only UI inspector and existing explorer fixes: tools/ui/explorer*, focused existing unit/browser tests, docs. No renderer/game.js/menu CSS edits.  [cursor/ui-inspector-4e8a; session 48cd597fd43cad0cbdde6611]
