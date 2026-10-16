@@ -27,7 +27,7 @@ your only escalation path besides the user; ask it instead of guessing.
    Make every source edit first, then verify once (AGENTS.md rule 2).
 3. **Verify** with `check-changes`: `node tools/ci/tooling-fast.mjs --changed --jobs=3`
    in the background while you edit (AGENTS.md rule 4; the default `--jobs` is
-   1), and the full `tooling-fast --jobs=3` before a code push (rule 3). Then one browser spec or
+   1), and the full `npm run test:tooling-fast` before a code push (rule 3). Then one browser spec or
    group (`test-bg.mjs`, or `remote-group.mjs` on the pushed branch for a whole
    group). Never use hand-written `sleep`, `while`/`for` poll loops, or any
    foreground wait over 120 s — use `test-bg.mjs --wait` with `--timeout`

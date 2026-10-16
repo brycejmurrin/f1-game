@@ -296,3 +296,29 @@ test("game.js traffic / slipstream / OT-ahead use forArcNear, not a ranked walk"
   const ot = src.slice(src.indexOf("overtake mode"), src.indexOf("PLAYER SLIPSTREAM"));
   assert.ok(ot.includes("Collide.scanOtAhead"));
 });
+
+// #2565: scanTraffic never reported a BLOCKER beyond 34 m, whatever the closing
+// speed, so an AI at 50 m/s learned of a parked car only inside its stopping
+// distance. The BLOCKER reach now grows with closing speed (stop distance at half
+// braking + margin); tow, chaser and along stay at 34 and pack racing is unchanged.
+test("scanTraffic: a parked car 80 m ahead is a BLOCKER at 50 m/s closing, not at pack speeds", () => {
+  const Collide = loadCollide();
+  const L = 6200;
+  const mk = (id, prog, x, speed) => ({ id, prog, _snapProg: prog, x, _snapX: x, speed, _snapSpeed: speed, finished: false, retired: false, passFailOf: null, passFailT: 0 });
+  const scan = (egoSpeed, gap, otherSpeed) => {
+    const ego = mk(0, 1000, 0, egoSpeed), other = mk(1, 1000 + gap, 0.3, otherSpeed);
+    const ranked = [ego, other];
+    Collide.fillArcBuckets(ranked, L, TRAFFIC_BUCKET_M, (c) => c._snapProg);
+    return Collide.scanTraffic(ego, L, 13, 34.1, 2.8, false, 12, 12);
+  };
+  const fast = scan(50, 80, 0);
+  assert.equal(fast.blocker && fast.blocker.id, 1, "parked car at 80 m, AI at 50 m/s: reported");
+  assert.equal(fast.blockerGap, 80);
+  assert.equal(fast.towCar, null, "tow stays inside 34 m");
+  assert.equal(fast.chaser, null);
+  assert.equal(scan(50, 200, 0).blocker, null, "beyond the reach cap it is still unseen");
+  // Pack racing: 0 and 10 m/s closing see nothing beyond 34 m, exactly as before.
+  assert.equal(scan(55, 60, 55).blocker, null, "0 closing at 60 m: no blocker");
+  assert.equal(scan(55, 60, 45).blocker, null, "10 m/s closing at 60 m: no blocker");
+  assert.equal(scan(55, 30, 55).blocker && scan(55, 30, 55).blocker.id, 1, "inside 34 m is unchanged");
+});

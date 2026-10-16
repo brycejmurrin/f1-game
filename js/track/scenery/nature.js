@@ -982,7 +982,7 @@ const SceneryNature = (function () {
         // venue rotates through; the three permanent-circuit greys otherwise.
         const set = (def && def.standSet) || TrackSceneryData.STAND_SET_DEF;
         if (set && set.length) {
-          const kk = Math.round(s * n) % n;
+          const kk = ((Math.round(s * n) % n) + n) % n;
           liveryName = set[Math.floor(hash(kk * 2.7 + side * 1.9) * set.length) % set.length];
         }
       }
@@ -995,7 +995,7 @@ const SceneryNature = (function () {
       const tiers = Math.max(1, Math.min(3, Math.round(opts.tiers || 1)));
       const shellH = opts.h != null ? Math.max(6, opts.h) : 12;
 
-      const k = Math.round(s * n) % n;
+      const k = ((Math.round(s * n) % n) + n) % n;
       const halfFrac = (len / 2) / track.total;
       recordBarrier(s - halfFrac, s + halfFrac, side, gap);
       ctx.indexSolid(s - halfFrac, s + halfFrac, side, gap, 12.5);
