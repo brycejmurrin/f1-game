@@ -3213,6 +3213,7 @@ const G = {
   openCareer: (...a) => openCareer(...a),
   openCareerSlots: (...a) => openCareerSlots(...a),
   openDailyPicker: () => openTimeTrial(true),
+  closeSettings: () => closeSettings(),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   // The bare championship round in a season/career, else the per-session race
@@ -4670,9 +4671,8 @@ function update(dt) {
     scPassCall(scWatch.tick(player, ranked, raceCtl.level, dt));
     // Race only (TT/quali already gated): blue-flag compliance for the player.
     if (session === "race" && track) {
-      blueFlagCall(blueWatch.tick(player, ranked, {
-        total: track.total, vRef: vTop(), caution: raceCtl.level, race: true,
-      }, dt));
+      _blueCtx.total = track.total; _blueCtx.vRef = vTop(); _blueCtx.caution = raceCtl.level;
+      blueFlagCall(blueWatch.tick(player, ranked, _blueCtx, dt));
     }
   }
 
@@ -4692,10 +4692,11 @@ function update(dt) {
   // buckets (plus extra for mirrorReach / OT window). Not a rank-neighbour
   // walk: a lapped car is a lap away in ranked[] and beside you on the road.
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
-  RaceControl.beginLineStep(cars);
+  RaceControl.beginLineStep(cars); pits.stepBegin();
   parked.length = 0;
   for (const c of cars) if (c.retired && c.parkedOnRoad) parked.push(c);
   for (const c of cars) updateCar(c, dt, ranked);
+  pits.stepEnd();
   if (jumpStartPenalty.reactWindowOpen()) {
     for (const c of cars) jumpStartPenalty.tickReaction(c);
   }
@@ -4814,6 +4815,7 @@ const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separa
 const AI_LOOK_CAP = 64;        // samples the per-car look-ahead cache keeps (160 m / ~4 m nodes ≈ 41; a longer window just recomputes the tail)
 // WallClamp.apply's ctx, pooled like _aiBr: a fresh literal + addShake closure per car per tick was ~1,300 objects/s at 22 cars.
 const _wallCtx = { track: null, dt: 0, steer: 0, postLim, smp, wrapS, worldFromTrack, soundOn: false, incidentSim, addShake(d) { shake = Math.min(1, shake + d); } };
+const _blueCtx = { total: 0, vRef: 0, caution: 0, race: true };   // blueWatch.tick reads it, never keeps it
 const _aiBr = CarFields.warmDoubles({ traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 }, ["errMul"]);
 const _aiLane = CarFields.warmDoubles({ traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0, queueT: 0 }, ["queueT"]);
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
@@ -7889,6 +7891,10 @@ function render(dt) {
       tmpP[1] = p[1] + bankC.dy;
       tmpP[2] = rp.world ? rp.z : p[2] + r[2] * renderX;
     } else {
+      // A world pose answers the behind-camera cull below before the track sample
+      // (perf plan C-10): the same predicate on the same tmpP x/z, so a rival
+      // behind the eye skips sampleAt + the normalise.
+      if (!c.isPlayer && rp.world && (rp.x - camEye[0]) * _camFwdX + (rp.z - camEye[2]) * _camFwdZ < -6) continue;
       sampleAt(cS, smp2);
       // sample() lerps unit node vectors, so mid-segment |t|,|r| dip to cos(θ/2)
       // (up to ~4.7% on Spa's tightest) — used un-normalized they SCALE the drawn
@@ -8771,16 +8777,31 @@ $("rotate-controls").onclick = () => {
   const close = $("htp-close"); if (close) close.focus();
 };
 $("rotate-exit").onclick = () => quitToMenu();
-// RACE IN PORTRAIT — opt in, once. The blocker stays the default: it is the
-// rotation-locked recovery path. docs/PERF-FINDINGS.md 5a.
-$("rotate-race").onclick = () => {
-  document.body.classList.add("rotate-ok");
-  try { localStorage.setItem("apex26.portraitOk", "1"); } catch (_) { /* private: this session only */ }
+// RACE IN PORTRAIT — opt in from the blocker. The blocker stays the default: it is
+// the rotation-locked recovery path (docs/PERF-FINDINGS.md 5a). SETTINGS › DISPLAY ›
+// RACE IN PORTRAIT is the undo (#2157); the body class is the truth in private mode.
+const portraitUi = { row: null };   // the SETTINGS row, built below
+function setPortraitOk(on) {
+  document.body.classList.toggle("rotate-ok", on);
+  try { localStorage.setItem("apex26.portraitOk", on ? "1" : "0"); } catch (_) { /* private: this session only */ }
+  if (portraitUi.row) SettingRow.paint(portraitUi.row, on ? "on" : "off");
   syncRotateBlocker(true);
-};
+}
+$("rotate-race").onclick = () => { document.body.classList.add("rotate-ok"); setPortraitOk(true); };
 try {
   if (localStorage.getItem("apex26.portraitOk") === "1") document.body.classList.add("rotate-ok");
 } catch (_) { /* no storage: it asks again */ }
+{ // Built here, under FULLSCREEN (the other orientation lever), so the shell's node count stays put.
+  const note = $("pm-fullscreen-note"), r = note && note.after && SettingRow.build("pm-portrait", "RACE IN PORTRAIT");   // note.after: the node VM harness's stub DOM has none
+  if (r) {
+    const help = document.createElement("p");
+    help.className = "adv-help";
+    help.textContent = "ON races with the phone upright. OFF asks you to rotate to landscape when a race starts.";
+    note.after(r.row, help); portraitUi.row = r.row;
+    SettingRow.wire(r.row, { values: SettingRow.labels(["off", "on"]),
+      read: () => (document.body.classList.contains("rotate-ok") ? "on" : "off"), write: (v) => setPortraitOk(v === "on") });
+  }
+}
 // Team picker: opened by the garage's TEAM & DRIVER tab (js/garage/setup-sheet.js).
 // Closing without choosing leaves the current team as-is. Nothing to rebuild —
 // the garage is still underneath, unchanged.

@@ -286,21 +286,97 @@ test("stationary pinned to wall: no scrape re-arm", () => {
 // + 10000 with a STRING team.id, so NaN | 0 put every car without a wire id on
 // key 10000 — one shared 0.25 s cooldown. Behavioural: cars from different teams
 // strike the wall, and the keys GameAudio.fieldContact receives must differ.
-// The branch sits inside WallClamp's c.human block, so the cars that reach it
-// are human non-player cars (a VS FRIEND rival); human:false AI never do.
+// VS FRIEND rivals are c.human + !isPlayer (heading incidence path). Offline AI
+// is human:false and uses the else-branch incidence proxy (#2212) — same keying.
 test("rival wall SFX: cars from different teams get distinct fieldContact keys (#2170)", () => {
   const keys = [];
   const { WallClamp } = load({ onFieldContact: (_k, _i, _x, _z, key) => { keys.push(key); } });
   const mk = (teamId, seat) => noseInCar({ isPlayer: false, human: true, team: { id: teamId }, seat });
   const cars = [mk("haas", 0), mk("ferrari", 1), mk("mclaren", 0), mk("haas", 1)];
   for (const c of cars) WallClamp.apply(c, baseCtx({ soundOn: true }));
-  assert.equal(keys.length, cars.length, "every AI strike reaches fieldContact");
+  assert.equal(keys.length, cars.length, "every rival strike reaches fieldContact");
   for (const k of keys) assert.ok(Number.isInteger(k) && k >= 10000, `key ${k} is an integer in the wall range`);
   assert.equal(new Set(keys).size, keys.length, `distinct keys per car, got ${keys.join(",")}`);
   // A netplay wire id still wins, unchanged.
   keys.length = 0;
   WallClamp.apply({ ...mk("haas", 0), _wireId: 7 }, baseCtx({ soundOn: true }));
   assert.deepEqual(keys, [10007]);
+});
+
+/** Offline AI car (human:false) for #2212 fieldContact tests. */
+function offlineAiCar(over = {}) {
+  return {
+    s: 10, x: 8, human: false, isPlayer: false, speed: 40,
+    vLat: 0, head: 0, wasOnWall: false, wallT: 0, wallHits: 0, collideT: 0,
+    px: 1, pz: 10, team: { id: "haas" }, seat: 0,
+    ...over,
+  };
+}
+
+// #2212: offline AI (human:false) must reach fieldContact via the else branch
+// incidence proxy — not only VS FRIEND (human:true) rivals.
+test("offline AI wall SFX: first strike calls fieldContact with sane incidence (#2212)", () => {
+  const calls = [];
+  const { WallClamp } = load({
+    onFieldContact: (kind, inc, wx, wz, key) => { calls.push({ kind, inc, wx, wz, key }); },
+  });
+  // High |vLat|/speed → clear incidence without relying on the speed floor alone.
+  const c = offlineAiCar({ vLat: 16, speed: 40 });
+  WallClamp.apply(c, baseCtx({ soundOn: true }));
+  assert.equal(c.wasOnWall, true);
+  assert.equal(c.human, false);
+  assert.equal(calls.length, 1, "offline AI first strike must reach fieldContact");
+  const hit = calls[0];
+  assert.ok(hit.inc > 0.12 && hit.inc <= 1, `incidence ${hit.inc} in (0.12, 1]`);
+  assert.ok(hit.kind === "bump" || hit.kind === "scrape", `kind=${hit.kind}`);
+  assert.ok(Number.isInteger(hit.key) && hit.key >= 10000, `key ${hit.key}`);
+  // worldFromTrack fallback when px set: uses car world pos
+  assert.equal(hit.wx, 1);
+  assert.equal(hit.wz, 10);
+});
+
+test("offline AI wall SFX: below incidence threshold stays silent (#2212)", () => {
+  let hits = 0;
+  const { WallClamp } = load({ onFieldContact: () => { hits++; } });
+  // Creeping pin: speed floor spd/80 < 0.12, no slip, no steer-into-wall.
+  const quiet = offlineAiCar({ speed: 5, vLat: 0, wasOnWall: false });
+  WallClamp.apply(quiet, baseCtx({ soundOn: true, steer: 0 }));
+  assert.equal(hits, 0, "first pin below 0.12 must not fire");
+  // Already grinding with no slip / no steer-in → grind gate (incidence > 0.08) fails.
+  const grindQuiet = offlineAiCar({ speed: 40, vLat: 0, wasOnWall: true });
+  WallClamp.apply(grindQuiet, baseCtx({ soundOn: true, steer: 0 }));
+  assert.equal(hits, 0, "grind without slip or steer-in stays silent");
+});
+
+test("offline AI wall SFX: grind is rate-limited — no per-frame spam without incidence (#2212)", () => {
+  const calls = [];
+  const { WallClamp } = load({
+    onFieldContact: (kind, inc, _x, _z, key) => { calls.push({ kind, inc, key }); },
+  });
+  const ctx = baseCtx({ soundOn: true, steer: 0 });
+  // First strike at speed (spd/80 ≈ 0.5) — one call, then wasOnWall; further
+  // frames with no slip/steer stay below grind incidence and must not re-fire.
+  // (GameAudio's 0.25 s per-key cooldown + voice cap handle multi-car spam;
+  // wall-clamp must not call every frame on a light AI pin.)
+  const c = offlineAiCar({ speed: 40, vLat: 0 });
+  for (let i = 0; i < 60; i++) {
+    c.x = 8;
+    WallClamp.apply(c, ctx);
+  }
+  assert.equal(calls.length, 1, `one first-strike only, got ${calls.length}`);
+  assert.ok(calls[0].inc > 0.12 && calls[0].inc <= 0.55, `speed-floor incidence ${calls[0].inc}`);
+  // Sustained steer-into-wall grind: wall-clamp may call every eligible frame
+  // (cooldown lives in GameAudio); prove a stable per-car key so CD works.
+  calls.length = 0;
+  const g = offlineAiCar({ speed: 30, vLat: 0, wasOnWall: true, team: { id: "ferrari" }, seat: 1 });
+  const gCtx = baseCtx({ soundOn: true, steer: 1 }); // into +x wall
+  for (let i = 0; i < 30; i++) {
+    g.x = 8;
+    WallClamp.apply(g, gCtx);
+  }
+  assert.ok(calls.length >= 1, "steer-into-wall grind reaches fieldContact");
+  assert.ok(calls.every((h) => h.key === calls[0].key), "stable key for GameAudio cooldown");
+  assert.ok(calls.every((h) => h.inc >= 0.2), "grind fxInc floored at 0.2");
 });
 
 // verify-physics #16: game.js called WallClamp.apply(c, { …, addShake(d){…} })

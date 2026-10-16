@@ -1764,6 +1764,20 @@ var PitLane = (function () {
       react: 0, attack: 0, cautionLevel: 0, wear: 0, wrongTread: false, lapsLeft: 0, pitLossLaps: 0, scripted: false };
     // Born Double, values kept: the 0s are Smi fields, and the first fractional temper / wear split the map (PERF-HUNT-5).
     _pitCtx.react = _pitCtx.attack = _pitCtx.wear = 0.5; _pitCtx.react = _pitCtx.attack = _pitCtx.wear = 0;
+    // RaceControl.flagOut(G.cars) once per step, not once per AI (perf plan C-2:
+    // 21 scans of the field a step). game.js brackets its car loop with
+    // stepBegin/stepEnd; nothing inside that loop finishes or retires a car
+    // (finishes settle in settleLineStep after it), so every think() in it reads
+    // the same answer. Outside the bracket (tests, dev hooks) it scans live.
+    let _flagStep = false, _flagMemo = null;
+    function stepBegin() { _flagStep = true; _flagMemo = null; }
+    function stepEnd() { _flagStep = false; _flagMemo = null; }
+    function flagNow() {
+      if (_flagStep && _flagMemo !== null) return _flagMemo;
+      const out = typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars);
+      if (_flagStep) _flagMemo = out;
+      return out;
+    }
     function think(c) {
       const plan = c && c.pitPlan;
       if (c && c.pitNext && !c.human && !c.local) refreshAiNext(c);   // armed, before the early return below
@@ -1774,7 +1788,7 @@ var PitLane = (function () {
       if (G.flyingStart && G.flyingStart.owns(c)) return "";
       // The last lap, or the leader already flagged: no stop pays (the player's
       // engineer has the same finalLap guard). A lapped AI still boxed for wets.
-      if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || (typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars))) return "";
+      if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || flagNow()) return "";
       // A red flag (4) is not a pit window: the field is held and the restart clears arms.
       if (cautionLevel() >= 4) return "";
       let stopsLeft = plan.stops - (c.pitStops || 0);
@@ -1979,7 +1993,7 @@ var PitLane = (function () {
     }
 
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
-             arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think,
+             arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think, stepBegin, stepEnd,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,

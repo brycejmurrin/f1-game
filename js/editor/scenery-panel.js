@@ -103,12 +103,16 @@ const DesignerScenery = (function () {
     const library = group("1 · CHOOSE AN OBJECT"); library.dataset.role = "object-library";
     const objectFilters = el("div", "td-chips"); objectFilters.dataset.role = "object-filters";
     objectFilters.setAttribute("role", "group"); objectFilters.setAttribute("aria-label", "Object categories");
-    const nature = ["trees", "water", "palms", "hedge", "pines", "bushes"];
+    const waterKinds = ["water", "pond", "lake", "river"];
+    const nature = ["trees", "palms", "hedge", "pines", "bushes", ...waterKinds];
     function filterObjects() {
       for (const b of objectFilters.children) pressed(b, b.dataset.objectCategory === objectCategory);
-      for (const b of props.children) b.hidden = objectCategory !== "all" && (nature.includes(b.dataset.prop) ? "nature" : "venue") !== objectCategory;
+      for (const b of props.children) {
+        const kind = b.dataset.prop;
+        b.hidden = objectCategory === "water" ? !waterKinds.includes(kind) : objectCategory !== "all" && (nature.includes(kind) ? "nature" : "venue") !== objectCategory;
+      }
     }
-    for (const [id, label] of [["all", "ALL"], ["nature", "NATURE"], ["venue", "RACE VENUE"]]) {
+    for (const [id, label] of [["all", "ALL"], ["nature", "NATURE"], ["water", "WATER"], ["venue", "RACE VENUE"]]) {
       const b = btn(label, "sel-chip", () => { objectCategory = id; filterObjects(); });
       b.dataset.objectCategory = id; objectFilters.appendChild(b);
     }

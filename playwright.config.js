@@ -79,7 +79,7 @@ const RENDER_SPECS = [
   "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard", "photo-studio",
   "webgl-probes", "camera", "smoke", "season", "time-trial",
   "material-shimmer", "instanced-draw",
-  "menu-baseline",
+  "menu-baseline", "track-designer",
 ].map((n) => `**/${n}.spec.js`);
 
 // WebXR IWER suite — own project so failures are attributable and so the
