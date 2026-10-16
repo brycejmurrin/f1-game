@@ -24,13 +24,15 @@ test.describe("Touch designer workspace", () => {
     await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
     await page.evaluate(() => TrackDesigner.save());
     const root = page.locator("#trackdesigner");
-    const cells = [[393, 659, 100], [734, 343, 100], [852, 344, 100], [393, 659, 150],
-      [844, 390, 150], [393, 659, 200], [844, 390, 200], [390, 844, 100], [844, 390, 100]];
+    const cells = [[734, 343, 200], [393, 659, 100], [734, 343, 100], [852, 344, 100],
+      [393, 659, 150], [734, 343, 150], [852, 344, 150], [844, 390, 150],
+      [393, 659, 200], [852, 344, 200], [844, 390, 200], [1194, 834, 200], [390, 844, 100], [844, 390, 100]];
     for (const [width, height, scale] of cells) {
       await page.setViewportSize({ width, height });
       await page.evaluate(({ width, height, scale }) => {
         const d = document.documentElement.style, portrait = height > width, side = width === 844 ? 47 : 59;
-        for (const [key, value] of Object.entries(portrait ? { t: 59, r: 0, b: 34, l: 0 } : { t: 0, r: side, b: 21, l: side })) d.setProperty("--sa" + key, value + "px");
+        const insets = width > 1000 ? { t: 0, r: 0, b: 0, l: 0 } : portrait ? { t: 59, r: 0, b: 34, l: 0 } : { t: 0, r: side, b: 21, l: side };
+        for (const [key, value] of Object.entries(insets)) d.setProperty("--sa" + key, value + "px");
         window.__apex.uiScale(scale);
       }, { width, height, scale });
       await root.getByRole("tab", { name: "DESIGN", exact: true }).tap();
@@ -38,11 +40,12 @@ test.describe("Touch designer workspace", () => {
         await root.locator(`[data-role="mode-bar"] [data-mode="${mode}"]`).tap();
         await expect(root.locator('canvas[data-role="profile"]')).toBeVisible();
         expect(await root.evaluate((e) => Math.min(...[...e.querySelectorAll(".td-stage > canvas")]
-          .flatMap((c) => { const r = c.getBoundingClientRect(); return [r.width, r.height]; }))), "both drawing surfaces retain usable dimensions").toBeGreaterThanOrEqual(44);
+          .flatMap((c) => { const r = c.getBoundingClientRect(); return [r.width, r.height]; }))), `${width}x${height}@${scale}: both drawing surfaces retain usable dimensions`).toBeGreaterThanOrEqual(44);
         await expect.poll(() => root.evaluate((e) => {
           const stage = e.querySelector(".td-stage").getBoundingClientRect();
           const profile = e.querySelector('canvas[data-role="profile"]').getBoundingClientRect();
-          return profile.bottom - stage.bottom;
+          const map = e.querySelector('.td-stage > canvas:not([data-role="profile"])').getBoundingClientRect();
+          return Math.max(profile.bottom - stage.bottom, map.bottom - profile.top);
         }), { message: `${width}x${height}@${scale} ${mode}: profile must fit its stage` }).toBeLessThanOrEqual(1);
       }
       await root.locator('[data-role="mode-bar"] [data-mode="scenery"]').tap();
@@ -85,7 +88,7 @@ test("workspace organization preserves controls and scroll across modes and libr
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
-  for (const viewport of [{ ...LANDSCAPE, scale: 1 }, { width: 390, height: 844, scale: 1 }, { width: 734, height: 343, scale: 1 }, { ...LANDSCAPE, scale: 1.5 }]) {
+  for (const viewport of [{ ...LANDSCAPE, scale: 1 }, { width: 390, height: 844, scale: 1 }, { width: 734, height: 343, scale: 1 }, { ...LANDSCAPE, scale: 1.5 }, { width: 1280, height: 800, scale: 2 }, { width: 1920, height: 937, scale: 2 }]) {
     await page.setViewportSize(viewport);
     const root = page.locator("#trackdesigner"), rail = root.locator(".td-rail");
     await root.evaluate((e, scale) => e.style.setProperty("--ui-scale", String(scale)), viewport.scale || 1);
@@ -100,8 +103,8 @@ test("workspace organization preserves controls and scroll across modes and libr
         const toolbar = root.locator('[data-role="toolbar"]'), map = root.locator('.td-stage > canvas:not([data-role="profile"])');
         const t = await toolbar.boundingBox(), m = await map.boundingBox();
         expect(t.y + t.height <= m.y + 1 || t.x >= m.x + m.width - 1).toBe(true);
-        const profile = await root.locator('.td-stage > canvas[data-role="profile"]').boundingBox();
-        const stage = await root.locator('.td-stage').boundingBox();
+        const bounds = await root.locator('.td-stage').evaluate((e) => ({ stage: e.getBoundingClientRect().bottom,
+          profile: e.querySelector('canvas[data-role="profile"]').getBoundingClientRect().bottom }));
         const layout = await root.locator('.td-stage').evaluate((e) => ({
           width: getComputedStyle(e).width, height: getComputedStyle(e).height,
           container: getComputedStyle(e).containerName,
@@ -110,7 +113,7 @@ test("workspace organization preserves controls and scroll across modes and libr
             flex: getComputedStyle(c).flex, minHeight: getComputedStyle(c).minHeight,
             buttons: [...c.querySelectorAll('button')].map((b) => getComputedStyle(b).flex) })),
         }));
-        expect(profile.y + profile.height, JSON.stringify(layout)).toBeLessThanOrEqual(stage.y + stage.height + 1);
+        expect(bounds.profile, JSON.stringify(layout)).toBeLessThanOrEqual(bounds.stage + 1);
       }
       if (id === "scenery") {
         for (const section of ["themes", "atmosphere", "objects"]) {

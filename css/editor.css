@@ -717,7 +717,7 @@
 
 /* Preserve useful canvas and inspector space on short or enlarged interfaces.
    Scrolling belongs to the dialog once those minimums cannot fit together. */
-@container designer-shell (max-height: 350px) or ((max-width: 500px) and (max-height: 600px)) {
+@container designer-shell (max-height: 600px) {
   #trackdesigner .sheet-head { padding-block: calc(var(--gap) / 2); }
   #trackdesigner .td-body { min-height: calc(var(--tap) * 8); }
   #trackdesigner .td-rail { min-height: calc(var(--tap) * 3.5); }
@@ -730,11 +730,10 @@
 @container designer-shell (max-width: 500px) and (max-height: 600px) {
   #trackdesigner .td-body { min-height: calc(var(--tap) * 12); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
   #trackdesigner [data-role="mode-bar"] { grid-column: 1; grid-row: 1; }
-  #trackdesigner .td-stage { height: calc(var(--tap) * 6); min-height: calc(var(--tap) * 6); grid-column: 1; grid-row: 2; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(72px, 1fr) auto; }
-  #trackdesigner .td-stage > .td-chips[data-role="toolbar"],
-  #trackdesigner[data-mode="scenery"] .td-stage > .td-chips[data-role="toolbar"] { position: static; grid-column: 1; grid-row: 1; flex-flow: row wrap; }
-  #trackdesigner .td-stage > canvas:not([data-role="profile"]) { grid-column: 1; grid-row: 2; }
-  #trackdesigner .td-stage > canvas[data-role="profile"] { grid-column: 1; grid-row: 3; }
+  #trackdesigner[data-pane="design"] .td-stage { height: calc(var(--tap) * 6); min-height: calc(var(--tap) * 6); grid-column: 1; grid-row: 2; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(72px, 1fr) auto; }
+  #trackdesigner[data-pane="design"] .td-stage > .td-chips[data-role="toolbar"] { position: static; grid-column: 1; grid-row: 1; flex-flow: row wrap; }
+  #trackdesigner[data-pane="design"] .td-stage > canvas:not([data-role="profile"]) { grid-column: 1; grid-row: 2; }
+  #trackdesigner[data-pane="design"] .td-stage > canvas[data-role="profile"] { grid-column: 1; grid-row: 3; }
   #trackdesigner .td-rail { grid-column: 1; grid-row: 3; }
   #trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-body { grid-template-rows: minmax(0, 1fr); }
   #trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-rail { grid-row: 1; }
