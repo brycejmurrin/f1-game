@@ -4852,7 +4852,7 @@ const _aiLane = CarFields.warmDoubles({ traits: null, nearby: 0, roomL: 0, roomR
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 // PlayerForces.step's ctx, pooled like _wallCtx (updateCar's player bicycle model fills it every step).
 const _pfCtx = { dt: 0, driverDelta: 0, assistDelta: 0, lineDelta: 0, onThrottle: false, throttleLvl: 0, gearMult: 0, deploy: 0, braking: false,
-  surfaceMu: 0, kerbGrip: 0, bankMu: 0, modsCornering: 0, loadF: 0, loadR: 0, vertLoad: 0, af: 0, ar: 0, sp: 0, steer: 0,
+  surfaceMu: 0, kerbGrip: 0, bankMu: 0, modsCornering: 0, modsBraking: 1, loadF: 0, loadR: 0, vertLoad: 0, af: 0, ar: 0, sp: 0, steer: 0,
   weatherGrip: 0, aeroDf: 0, dirtyMul: 0, coastCut: 0, vTopNow: 0, tyres: null };
 const _aiOtPull = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0 }, ["freeSpeed", "queueT", "kTurn"]);
 const _aiDefend = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0, vTop: 0 }, ["speed", "chaserGap", "chaserSpeed", "kA", "roomL", "roomR", "x", "vTop", "blockerGap", "kTurn", "toTurnIn", "roadL", "roadR"]);
@@ -5132,7 +5132,7 @@ function updateCar(c, dt, ranked) {
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
   const wantBoost = ((c.human ? c.boostOn : aiWantsBoost) && !ersHeld)
-    || c.otT > 0;   // OVERTAKE deploys on its own — even with BOOST toggled off
+    ;   // OVERTAKE eligibility is resolved below from this tick's toggle.
   // OVERTAKE IS FREE. Its push does not come out of the battery, so an OT burst
   // costs nothing, fires on a flat ERS, and never competes with BOOST for charge.
   // It is already rationed by its own 0.5 MJ allowance per earned lap, which is what
@@ -5140,10 +5140,10 @@ function updateCar(c, dt, ranked) {
   // second, redundant limiter, and at a ~0.2/s drain over a ~4 s push a single
   // press emptied 80% of the battery, so using the overtake button left you
   // slower for the rest of the lap than if you had never pressed it.
-  const otFree = c.otT > 0;
+  let otFree = false;
   // PACE-scaled like every other accel term (docs/PHYSICS.md): unscaled it was 2.56x a pace-0.44 car's build-up but 1.54x a 1.34 one's.
   // The drain and `c.deploying` follow `onThrottle` below: the push only enters `a` on the throttle branch.
-  if (otFree || (wantBoost && c.energy > 0)) deploy = DEPLOY_A * Math.max(PACE, 0.05) * deployTaper(c);
+
 
   // --- overtake mode --- (FIA 2026 B7.2.3(c), js/race/overtake-mode.js)
   // Under 1 s behind the car ahead AT THE DETECTION LINE earns a 0.5 MJ
@@ -5197,7 +5197,9 @@ function updateCar(c, dt, ranked) {
                           _aiOtFire.blockerPace = blocker ? scriptPace(blocker) : (ahead ? scriptPace(ahead) : 0),
                           AiDrive.otShouldFire(simRnd(), dt, _aiOtFire)));
   if (S.recordInput) S.recordInput.overtake = !!fire;
-  if (OvertakeMode.spend(c, dt, fire, otGate, otFast, otTimeFor(c)) && c.isPlayer && soundOn) GameAudio.deployBoost();
+  if (OvertakeMode.prepare(c, fire, otGate, otFast, otTimeFor(c)) && c.isPlayer && soundOn) GameAudio.deployBoost();
+  otFree = c.otT > 0;
+  if (otFree || (wantBoost && c.energy > 0)) deploy = DEPLOY_A * Math.max(PACE, 0.05) * deployTaper(c);
   if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
   c.wasArmed = c.otArmed;
 
@@ -5607,6 +5609,7 @@ function updateCarLongitudinal(c, dt, ranked, S) {
   const onThrottle = c.human
     ? (inp ? !!inp.throttle : ((autoThrottle() && !wallPinned) || Input.throttle()))
     : true;
+  if (otFree) deploy *= OvertakeMode.consume(c, dt, onThrottle && !braking && deploy > 0, otTimeFor(c));
   if (!onThrottle || braking) deploy = 0;   // no thrust, so no drain and no "deploying" (BOOST held through a brake drained for nothing)
   // BOOST alone still pays: deploy always produces thrust while held (see deployTaper), so it always costs energy — a BOOST that drains nothing does nothing.
   if (deploy > 0 && !otFree) { c.energy = Math.max(0, c.energy - drainFor(c) * dt); if (c.energy <= 0) c.boostOn = false; }   // auto-release the toggle when drained
@@ -6242,7 +6245,7 @@ function updateCarBicycle(c, dt, ranked, S) {
     const pf = _pfCtx;
     pf.dt = dt; pf.driverDelta = driverDelta; pf.assistDelta = assistDelta; pf.lineDelta = lineDelta; pf.onThrottle = onThrottle;
     pf.throttleLvl = throttleLvl; pf.gearMult = gearMult; pf.deploy = deploy; pf.braking = braking;
-    pf.surfaceMu = surfaceMu; pf.kerbGrip = kerbGrip; pf.bankMu = bankMu; pf.modsCornering = mods.cornering;
+    pf.surfaceMu = surfaceMu; pf.kerbGrip = kerbGrip; pf.bankMu = bankMu; pf.modsCornering = mods.cornering; pf.modsBraking = mods.braking;
     pf.loadF = loadF; pf.loadR = loadR; pf.vertLoad = vertLoad; pf.af = af; pf.ar = ar; pf.sp = sp; pf.steer = steer;
     pf.weatherGrip = gmC; pf.aeroDf = aeroDfMult(c); pf.dirtyMul = dirtyAirMul(c.wake || 0, c.speed);
     pf.coastCut = xCoastCut(c); pf.vTopNow = vT; pf.tyres = tyres;
@@ -8917,6 +8920,7 @@ SettingsNav.onEnter((page) => {
   }
   if (page === "audio" && !raceMixUi && typeof RaceMixControls !== "undefined") raceMixUi = RaceMixControls.create(G, $("audioset"));
 });
+if (typeof ConditionCueControls !== "undefined") ConditionCueControls.create(store, $("pm-panel-driving"));
 SettingsNav.onLeave((page) => { if (page === "audio" && raceMixUi) raceMixUi.stop(); });
 // ── SETTINGS sub-menu ── separates preferences from pause actions;
 // every tuning + toggle control lives on this page. Opening it hides the pause

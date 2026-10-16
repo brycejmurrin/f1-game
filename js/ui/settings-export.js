@@ -190,6 +190,7 @@ const SPEC = [
       const clean = ControllerProfiles.clean(raw);
       return clean.devices.length === raw.devices.length ? clean : undefined;
     } },
+  { k: "conditionCues", lane: "json", group: "driving", def: false, src: "js/ui/condition-cue-controls.js" },
   { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
   { k: "drivingLine", lane: "json", group: "driving", def: "full", oneOf: ["off", "corner", "full"], src: "js/game.js" },

@@ -546,6 +546,54 @@ test('the tyre watch names the corner eating a fast-wearing set, and which end o
   assert.ok(!f2.announcements.some((a) => /EATING/.test(a[0])), 'no tyre line at the planned rate');
 });
 
+const wakeExit = { wake: .8, _dirtyAirMul: .9, _coachAssisted: false, frontUtil: .96,
+  slipFront: .12, steerAngle: .1, lateralAccel: 9, aeroX: 0, s: 100, lap: 1, prog: 100 };
+test('wake exit cue requires sustained measured loss and keeps the existing quiet/repeat policy', () => {
+  const { coach, tick, enable, announcements, c } = fixture();
+  tick(1.2, wakeExit); assert.equal(coach.feedback().total, 0, 'opt-in only');
+  enable(); tick(.9); assert.equal(coach.feedback().total, 0);
+  tick(.15); assert.equal(coach.feedback().latest.id, 'wake');
+  assert.match(announcements.at(-1)[0], /^WAKE COSTING FRONT GRIP — LEAVE ROOM ON EXIT$/);
+  assert.equal(coach.status().dirtyAirMul, .9); assert.equal(coach.status().wake, .8);
+  const motion = [c.speed, c.steerAngle, c.throttleDemand];
+  tick(9); assert.equal(coach.feedback().counts.find(t => t.id === 'wake').count, 1);
+  assert.deepEqual([c.speed, c.steerAngle, c.throttleDemand], motion, 'advice never drives the car');
+});
+
+for (const fields of [{ _dirtyAirMul: 1 }, { _dirtyAirMul: undefined }, { wake: .2 }, { aeroX: 1 },
+  { _coachAssisted: true }, { incidentInvalidLap: true }, { dnf: 'dns' }, { pitState: 'lane' },
+  { throttleDemand: 0 }, { brakeDemand: .3 }, { speed: 5 }])
+  test(`wake cue suppresses unqualified evidence ${JSON.stringify(fields)}`, () => {
+    const { coach, tick, enable } = fixture(); enable(); tick(1.2, { ...wakeExit, ...fields });
+    assert.ok(!coach.feedback().counts.some(t => t.id === 'wake'));
+  });
+
+test('wake dwell yields to flags and traffic and respects the once-per-frame stamp', () => {
+  const { coach, G, c, tick, enable } = fixture(); enable(); Object.assign(c, wakeExit);
+  G.raceRadio = { trafficBusy: () => true }; tick(1.2); assert.equal(coach.feedback().total, 0);
+  G.raceRadio.trafficBusy = () => false; G.cautionLevel = () => 1; tick(1.2);
+  assert.equal(coach.feedback().total, 0); G.cautionLevel = () => 0;
+  G._s8Stamp = 1; for (let i = 0; i < 50; i++) coach.update(.05);
+  assert.equal(coach.feedback().total, 0, 'duplicate frame does not accumulate dwell');
+  delete G._s8Stamp; tick(.9); assert.equal(coach.feedback().total, 0);
+  tick(.1); assert.equal(coach.feedback().latest.id, 'wake');
+});
+
+test('cooling goal uses the existing selected practice control and displays its measured verdict', () => {
+  const { coach, G, c, nodes } = fixture({ realInsights: true });
+  G.tyres = { on: () => true, gripMul: () => c.measuredGrip }; G.pits.pickFor = () => null;
+  Object.assign(c, { prog: 0, lap: 1, tyreWear: .1, tyreStints: 0, tyre: { id: 'soft' }, tyreGrain: .4, tyreBlister: .01, measuredGrip: .8 });
+  assert.equal(coach.setPracticeGoal('cooling'), true);
+  assert.equal(coach.mark(), true, 'explicitly arms through checkpoint button API');
+  G.raceT = 1; coach.insights.update(c);
+  Object.assign(c, { prog: 10, lap: 2 }); G.raceT = 2; coach.insights.update(c);
+  for (let i = 1; i <= 10; i++) { c.prog = 10 + i * 100; G.raceT += 2; coach.insights.update(c); }
+  Object.assign(c, { lap: 3, tyreGrain: .3, measuredGrip: .84 }); c.prog += 1; G.raceT++; coach.insights.update(c);
+  coach.paint();
+  assert.match(nodes.get('pm-drill-status').textContent, /Measured recovery.*Grain -10.0pp; grip \+5.0%/);
+  assert.doesNotMatch(nodes.get('pm-drill-status').textContent, /best|nulls/);
+});
+
 
 test('WATCH pause hides pit strategy and cannot choose tyres; driving restores it', () => {
   const { coach, G, ctx, nodes } = fixture();
