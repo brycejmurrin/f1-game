@@ -1046,6 +1046,55 @@ test("goalNow / goalOnTrack resolve champPos against live standings (team id, no
   assert.equal(Career.goalOnTrack(c.deal.goal), row.pos <= 5);
 });
 
+test("season goal progress waits for a result, not a starting grid or qualifying", () => {
+  const Career = loadDriver(null, { rounds: 24 });
+  Career.start({ flavour: "driver", teamId: "haas", seat: 0, seed: 1 });
+  const c = Career.data();
+  const goals = ["champPos", "teamPos", "beatMate", "beatRival"]
+    .map((type) => ({ type, value: type === "beatRival" ? "apex:0" : 5 }));
+  const pending = () => {
+    for (const goal of goals) {
+      assert.equal(Career.goalNow(goal), null, `${goal.type}: no preseason position`);
+      assert.equal(Career.goalOnTrack(goal), null, `${goal.type}: no preseason verdict`);
+    }
+  };
+  assert.ok(Career.driverStandings().length, "the standings table remains available");
+  pending();
+  c.season.startedRound = 0;
+  c.season.qualiOrder = ["haas:0", "apex:0", "haas:1"];
+  c.season.qualiTrack = "t0";
+  pending();
+
+  // The sprint's scored state precedes the Grand Prix and therefore round++.
+  c.season.stage = "race";
+  c.season.pts = { "apex:0": 8, "haas:0": 0, "haas:1": 0 };
+  c.season.teamPts = { apex: 8, haas: 0 };
+  assert.equal(c.season.round, 0);
+  for (const goal of goals) {
+    assert.ok(Career.goalNow(goal), `${goal.type}: scored sprint has progress`);
+    assert.equal(typeof Career.goalOnTrack(goal), "boolean");
+  }
+});
+
+test("a completed zero-point race counts, and the next season starts pending again", () => {
+  const Career = loadDriver(null, { rounds: 1 });
+  Career.start({ flavour: "driver", teamId: "haas", seat: 0, seed: 1 });
+  Career.engage(true);
+  const c = Career.data();
+  c.season.round = 1;
+  c.season.pts = { "haas:0": 0, "haas:1": 0 };
+  c.season.teamPts = { haas: 0 };
+  c.season.finishes = { "haas:0": [0, 0, 1] };
+  c.results.push({ r: 0, p: 3, pts: 0 });
+  const goal = { type: "champPos", value: 5 };
+  assert.ok(Career.goalNow(goal), "zero points does not mean no race");
+  assert.equal(typeof Career.goalOnTrack(goal), "boolean");
+  assert.ok(Career.rollover());
+  assert.equal(c.season.round, 0);
+  assert.equal(Career.goalNow(goal), null);
+  assert.equal(Career.goalOnTrack(goal), null);
+});
+
 test("the kind is drawn from the seed and the year, so it cannot be rerolled", () => {
   const a = loadDriver(); a.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
   a.engage(true);

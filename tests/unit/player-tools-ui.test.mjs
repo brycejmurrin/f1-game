@@ -76,6 +76,40 @@ test("settings result navigation and BACK restore the query and selected result 
   assert.deepEqual(calls, ["controls"]); assert.equal(h.dom.document.activeElement, target); assert.equal(target.value, "auto");
   index.hidden = false; page.hidden = true; assert.equal(ui.restore(), true); assert.equal(h.dom.document.activeElement, button); assert.equal(ui.input.value, "manual gears");
 });
+test("rivals and boost searches reveal their audio controls without changing the sound", () => {
+  const h = host(), index = h.el("div", "pm-settings-index"), panel = h.el("section", "audioset");
+  const outer = h.el("details", "audio-fold", panel), engine = h.el("details", "as-engine-details", outer);
+  const cases = [
+    { query: "rivals mute", alias: "other cars mute", id: "as-l-rivals", tag: "button", value: "" },
+    { query: "rivals level", alias: "opponents volume", id: "as-t-rivals", tag: "input", value: "3" },
+    { query: "boost level", alias: "ers whine", id: "as-t-boost", tag: "input", value: "20" },
+    { query: "boost pitch", alias: "rev lift", id: "as-t-boostlift", tag: "input", value: "2" },
+  ];
+  let changed = 0;
+  for (const row of cases) {
+    assert.match(read("index.html"), new RegExp('<' + row.tag + ' id="' + row.id + '"'), "targets an existing control");
+    row.control = h.el(row.tag, row.id, engine); row.control.value = row.value;
+    if (row.tag === "button") row.control.setAttribute("aria-pressed", "true");
+    row.control.onclick = row.control.oninput = row.control.onchange = () => changed++;
+  }
+  const api = h.run("js/ui/settings-search.js", "SettingsSearch");
+  assert.equal(api.find("rivals").length, 2); assert.equal(api.find("boost").length, 2);
+  const ui = api.create({ host: index, show(page, _focus, after) {
+    assert.equal(page, "audio"); index.hidden = true; panel.hidden = false; assert.equal(after(), true);
+  } });
+  for (const row of cases) {
+    assert.equal(api.find(row.alias)[0].target, row.id);
+    outer.open = engine.open = false; panel.hidden = true;
+    ui.input.value = row.query; ui.input.oninput();
+    const result = index.querySelector("button"); result.onclick();
+    assert.equal(outer.open, true); assert.equal(engine.open, true);
+    assert.equal(h.dom.document.activeElement, row.control);
+    for (const state of cases) assert.equal(state.control.value, state.value);
+    assert.equal(cases[0].control.getAttribute("aria-pressed"), "true"); assert.equal(changed, 0);
+    index.hidden = false; panel.hidden = true;
+    assert.equal(ui.restore(), true); assert.equal(h.dom.document.activeElement, result); assert.equal(ui.input.value, row.query);
+  }
+});
 test("named presets are per team, bounded, full validated tunes, and non-applying on save", () => {
   const h = presets(), original = h.tune.get("mercedes");
   const result = h.api.save(h.store, "mercedes", "Monza dry", { ...original, arbF: 9 }, "monza");
