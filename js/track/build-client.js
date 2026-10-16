@@ -193,7 +193,9 @@ const TrackBuildClient = (function () {
       _pending.set(seq, { resolve: (m) => { if (timer != null) clearTimeout(timer); resolve(m); }, def });
       try { worker.postMessage({
         type: "build", seq, idx, id: def.id,
-        opts: { night: opts.night, gridSlots: opts.gridSlots, chunkRibbons: !!opts.chunkRibbons, retainGraph: false },
+        opts: { night: opts.night, gridSlots: opts.gridSlots, chunkRibbons: !!opts.chunkRibbons, retainGraph: false,
+          // The graph cannot cross; the CPU geometry only when the dev surface will read it.
+          retainGeometry: !!(opts.retainGraph || (typeof Tracks !== "undefined" && Tracks.keepGeometry && Tracks.keepGeometry())) },
         mobileTier: !!gfx.mobileTier, chunkedTrackCoords: gfx.chunkedTrackCoords,
         scenery: sceneryFile ? url(sceneryFile) : null,
         team: myTeam(),

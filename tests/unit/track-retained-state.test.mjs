@@ -47,3 +47,22 @@ test('diagnostic track retains the full graph and exact geometry',()=>{
   assert.ok(Array.isArray(tr.roadGeo.nrm));
   assert.ok(Array.isArray(tr.terrainGeo.col));
 });
+
+test('a player build frees the prop/glass/water CPU geometry; the dev surface keeps it (M-3a)',()=>{
+  const T=buildContext(null,{quiet:true});
+  const def=T.LIST.find(d=>d.id==='monza');
+  const gfx={createMesh(g){return {verts:g.pos.length/3};}};
+  const geoBytes=(tr)=>['propsGeo','glassGeo','waterGeo'].reduce((n,k)=>n+(tr[k]&&tr[k].pos?tr[k].pos.length*8:0),0);
+  const keepAll=T.build(def,{gfx,chunkRibbons:false});
+  const kept=geoBytes(keepAll);
+  assert.ok(kept>0,'default (VM/diagnostic) builds keep the geometry');
+  const player=T.build(def,{gfx,retainGraph:false,chunkRibbons:false});
+  for(const k of ['propsGeo','glassGeo','waterGeo']) assert.equal(player[k],null,k+' freed on a player build');
+  console.log('M-3a freed pos bytes (monza, as doubles):',kept);
+  const wanted=T.build(def,{gfx,retainGraph:false,retainGeometry:true,chunkRibbons:false});
+  assert.ok(wanted.propsGeo&&wanted.glassGeo&&wanted.waterGeo,'retainGeometry keeps them');
+  T.setKeepGeometry(true);
+  try{ const k=T.build(def,{gfx,retainGraph:false,chunkRibbons:false}); assert.ok(k.propsGeo,'trackGeometry(true) keeps them'); }
+  finally{ T.setKeepGeometry(false); }
+  assert.ok(player.roadGeo&&player.terrainGeo,'road/terrain stay (groundY needs them)');
+});
