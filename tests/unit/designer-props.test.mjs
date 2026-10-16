@@ -254,5 +254,5 @@ test("new water bodies reject full-footprint road crossings including river tips
   assert.equal(P.dress(api, tr, [prop]), 0, "road width and four metre margin protect the bank");
   tr.pz[2] = tr.pz[3] = 20;
   for (const kind of ["pond", "lake"]) assert.equal(P.dress(api, tr, [{ ...prop, kind }]), 0, kind + " uses the same full-footprint guard");
-  assert.equal(P.dress(api, tr, [{ ...prop, kind: "water" }]), 1, "legacy water keeps its existing native clearance behavior");
+  assert.equal(P.dress(api, tr, [{ ...prop, kind: "water" }]), 0, "legacy water uses the same full-footprint road guard as newer water bodies");
 });
