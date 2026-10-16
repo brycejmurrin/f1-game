@@ -3430,7 +3430,7 @@ const G = {
     autoThrottleOpt = store.get("autoThrottle", autoThrottleOpt);
     throttleLatchOpt = store.get("throttleLatch", throttleLatchOpt);
     Input.setThrottleLatch(throttleLatchOpt);
-    SettingRow.paint($("pm-throttlemode"), autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold"));
+    paintThrottleMode();
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
     announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
@@ -8739,6 +8739,17 @@ function tickBody(now) {
 
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
+function paintThrottleMode() {
+  const mode = autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold");
+  SettingRow.paint($("pm-throttlemode"), mode);
+  const note = $("pm-throttle-note");
+  if (note) note.textContent = {
+    hold: "HOLD: keep your thumb on GAS.",
+    latch: "LATCH: tap GAS to accelerate; tap again to lift.",
+    auto: "AUTO: steer and brake; throttle is automatic.",
+  }[mode];
+}
+
 // STEERING INPUT row (js/ui/setting-row.js) and the one-line note under it.
 // The note is ALWAYS present — its text changes, it is never hidden — so a
 // mode change cannot reflow the page under a finger; same rule that keeps
@@ -9427,9 +9438,11 @@ SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "latch",
     store.set("autoThrottle", autoThrottleOpt);
     store.set("throttleLatch", throttleLatchOpt);
     Input.setThrottleLatch(throttleLatchOpt);
+    paintThrottleMode();
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
   } });
+paintThrottleMode();
 SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
   read: () => (mirrorControls ? "on" : "off"),
   write: (v) => { mirrorControls = v === "on"; store.set("mirrorControls", mirrorControls); applyMirrorControls(); } });

@@ -3574,3 +3574,14 @@ attributed peer's latest hello/ready after a burst (~30 lines of per-peer window
 was weighed and not done in this PR: `rosterEvent` closes over `role`, `id`, `sessions`, `made` and
 `underRate`, so a separate module would need a new manifest entry, a gen-shell change and a many-parameter
 factory for roughly 10 net lines. Revisit when the other net-lobby hunt PRs (#2410, #2420) have landed.
+
+## 2026-10-16 — surveyed phone UI accessibility fixes
+
+`js/game.js` codeLines 5318 → **5330**, lines 9624 → **9637**; tree
+`shellNodes` 2179 → **2182**. The small helper refreshes the selected throttle
+mode's concise help after initialization, mode changes and rookie presets.
+The three shell elements provide a native expandable comparison while keeping
+selected-mode help visible. These are intentional UI additions, not extra slack;
+`node tools/check/ratchets.mjs --update` records the measured sizes and folds the
+existing fragment without changing its effective ceilings. Native browser tests
+cover all three throttle modes and opening/closing the disclosure.

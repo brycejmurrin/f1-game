@@ -145,12 +145,16 @@ test("narrow landscape garage keeps camera and aero controls reachable", () => {
   assert.doesNotMatch(media, /#cs-stack\s*\{\s*display:\s*none/,
     "the only camera/aero controls must not disappear on narrow landscape");
   assert.match(media, /#cs-stack[\s\S]*display:\s*flex/);
-  assert.match(media, /top:\s*calc\(var\(--safe-t\) \+ var\(--gap\)\)/,
-    "the compact dock needs a definite safe-box position when the panel fills the width");
+  assert.match(media, /grid-template-rows:\s*minmax\(0, 1fr\) auto/,
+    "narrow landscape reserves an actual toolbar row outside the sheet");
+  assert.match(media, /#cs-stack[\s\S]*grid-row:\s*2;\s*position:\s*relative/,
+    "controls participate in layout rather than covering the header");
   assert.match(media, /z-index:\s*4/,
     "the compact dock must remain above the full-width garage sheet");
-  assert.match(media, /#cs-bar[\s\S]*flex-direction:\s*column/,
-    "camera and aero controls must reflow vertically in the narrow dock");
+  assert.match(media, /#cs-bar[\s\S]*flex-direction:\s*row/,
+    "the bottom toolbar uses the safe viewport width");
+  assert.match(media, /#cs-tabs[\s\S]*overflow-x:\s*hidden;\s*overflow-y:\s*auto/,
+    "the short sheet gives categories their own vertical scroll rail");
 });
 
 test("REAR-WING sits back and slightly above the wing", () => {
