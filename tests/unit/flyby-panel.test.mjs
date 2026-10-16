@@ -27,6 +27,16 @@ import { parseBlob, readBlob, blobName, validateShots as bakeValidate, shotError
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
+test("flyby shot tabs label the shared rows panel after rebuilds", () => {
+  const src = read("js/camera/flyby-editor.js");
+  assert.match(src, /const activeTab = \$\("fb-tab-" \+ sel\);/,
+    "refreshChips resolves the selected tab after rebuilding the rail");
+  assert.match(src, /if \(activeTab\) host\.setAttribute\("aria-labelledby", activeTab\.id\);/,
+    "the selected shot names the shared tabpanel");
+  assert.match(src, /else host\.removeAttribute\("aria-labelledby"\);/,
+    "an empty or invalid list does not leave a stale tab reference");
+});
+
 /** FlybyPanel's module surface, evaluated on its own. `const` at top level is
  *  rewritten to `var` so the IIFE's assignment lands on the sandbox, the same
  *  trick tests/unit/ui-improve-pass.test.mjs uses for the other UI modules. */
