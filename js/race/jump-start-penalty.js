@@ -51,7 +51,8 @@ var JumpStartPenalty = (function () {
       if (t > SportingRegs.JUMP_START_REACT_S) return;
       const vRef = G.vTop();
       if (c.human) {
-        if (SportingRegs.jumpStartFastLaunch(t, c.speed || 0, vRef)) fine(c);
+        // The assist launches at green itself; a fast build must not fine it.
+        if (!autoThrottle() && SportingRegs.jumpStartFastLaunch(t, c.speed || 0, vRef)) fine(c);
         return;
       }
       if (c.launchOn && c.launch && t < c.launch.react
