@@ -501,7 +501,7 @@ jobs:
     # Name `Pure-node unit suites (<slice>)`: the six strings WERE the deploy
     # branch's required checks until 2026-10-15, when Bryce made `CI` the one
     # required check (docs/notes/CI-CLOG-SURVEY-2026-10-15.md §4 C). They are
-    # still what pages-train.mjs, ready-gate.mjs and the tests read, so keep
+    # still what ready-gate.mjs and the tests read, so keep
     # them stable; a rename is a tool edit now, not a settings round. Do not
     # interpolate matrix.needed (or any other matrix key) into the name
     # (#454 a9a805839: the expected check never appeared).
@@ -520,7 +520,7 @@ jobs:
     # when none is needed the job skips here (2026-10-15: `CI` is the deploy
     # branch's one required check, so the six names no longer have to report
     # on a ready PR either). A deploy push and the train keep all six rows:
-    # pages-train.mjs's reuse check wants at least one expanded node row.
+    # the Pages reuse check wanted at least one expanded node row.
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.fast_tier_run == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}
     # actions:read for base-green.sh (the plan step asks whether the previous
     # tip was gated green). A job that names permissions gets ONLY what it
@@ -577,7 +577,7 @@ jobs:
         #   breakdown in the log); runner-minutes per push unchanged.
         # Matrix rows come from select's plan step / pick-unit-slices. On a
         # deploy push and the train every NODE_SLICE name is present (needed
-        # true|false) for pages-train.mjs's reuse check; a pull request lists
+        # true|false) for the Pages reuse check; a pull request lists
         # only the needed rows (2026-10-15: `CI` is the one required check —
         # until then a subset left vm-a1/vm-a2 unreported on #454, BLOCKED
         # with an otherwise green CI). Unneeded rows exit 0.
@@ -669,7 +669,7 @@ jobs:
           # `planned <script>` is the plan step's predicate (true on every
           # non-PR event); a skip prints SKIPPED <script> and the reason.
           # matrix.needed=false (deploy push / train rows): the name still
-          # reports for pages-train.mjs's reuse check, but no work runs for a
+          # reports for the Pages reuse check, but no work runs for a
           # slice this diff does not select.
           if [ "${{ steps.reuse.outputs.reuse }}" = "true" ]; then
             echo "SKIPPED slice ${{ matrix.slice }} — draft fast-tier already green on this head SHA"
@@ -2605,120 +2605,6 @@ jobs:
             echo "the IMAGES are the problem to solve before any routing change."
           fi
 
-  # POKE THE TRAIN (2026-09-10). pages.yml's cron is a backstop, not a clock:
-  # GitHub's scheduler on this repository runs HOURS late — ci.yml's own 03:17
-  # nightly was created between 07:54 and 08:18 on each of its last five days
-  # — so a green fast-tier run dispatches the train itself. A workflow_dispatch
-  # made with GITHUB_TOKEN is the documented exception to "events raised by the
-  # token start no runs". The train's own queue coalesces a burst of pokes:
-  # one gate running, one waiting, later pokes replace the waiting one; and
-  # its verdict job answers "nothing new" in one slot when a poke finds the
-  # tip already live.
-  poke-train:
-    name: Poke the release train
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: [guards, node-suites, sweeps-parts, driving-model, select, selected]
-    # Fast tier only (a deploy-branch push, never a Pages call), and only when
-    # every fast-tier job passed. A red fast tier pokes nothing; the cron
-    # backstop still gates the tip later and fails it visibly.
-    #
-    # A SKIPPED `selected` IS NOT ALWAYS A PASS (2026-09-22). It is skipped
-    # whenever the plan has no shards, and that happens two ways which are not
-    # alike:
-    #
-    #   * nothing this diff touches has a spec — a genuine pass, and the common
-    #     case for a docs or tooling change;
-    #   * every spec it DOES touch was unaffordable — dropped over budget, or
-    #     bigger than the whole 10-test cap.
-    #
-    # The second read as a pass, and it was the renderer's entire story: all six
-    # `test:gfx` specs declare 240-540 s against the gate's 180 s per-test cap,
-    # so a `js/render/` diff emptied the plan, skipped this job's dependency and
-    # poked the train with no backend having been booted by anything blocking.
-    # `dropped` separates them, and tests/specs/render-boot.spec.js is what makes
-    # the tightening safe rather than a permanent stall: a renderer diff now has
-    # an affordable spec to select, so the plan is no longer empty.
-    #
-    # And since 2026-10-04 a dropped spec blocks the poke even when `selected`
-    # ran: selected-verdict reds on it, and a poke must not outrun that red.
-    #
-    # Deliberately NOT gated on `reason`: an `infra` or `docs` plan can be
-    # honestly empty, and those are the diffs this branch takes all day.
-    #
-    # SKIPPED node-suites / driving-model ARE a pass when unit-plan said the
-    # slice was not needed (path-filtered). A skip for any other reason (cancelled
-    # parent, plan failure) is not a poke.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && (needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.select.outputs.any_node != 'true')) && needs.sweeps-parts.result == 'success' && (needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.select.outputs.driving != 'true')) && needs.select.result == 'success' && (needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0')) && needs.select.outputs.dropped == '0') }}
-    permissions:
-      actions: write
-      contents: read
-    steps:
-      # THE TIP POKES — AND SO DOES A SUPERSEDED GREEN RUN WHEN NO TRAIN IS
-      # MOVING (2026-10-03). Only-the-tip (2026-09-29) stopped a burst from
-      # dispatching 57 trains in 41 h (docs/notes/CI-CAPACITY-2026-09-29.md),
-      # but in a burst every run finished after the next merge landed, so
-      # NOTHING poked until the burst ended and the site sat 30 merges behind
-      # (docs/notes/CI-MERGE-BURST-2026-10-03.md). A dispatched train gates the
-      # branch TIP, so a poke from a superseded commit still ships everything
-      # merged so far; it is limited to "no pages.yml run is queued or running
-      # on this branch", which keeps it to one train at a time. Any doubt (API
-      # error, empty answer) pokes, as before.
-      # SINGLE-FLIGHT + TIP-CI GATE (2026-10-06). Never dual-dispatch Pages while
-      # a train is already queued/running. Never poke for a tip whose ship-fast
-      # CI FAILED. (Until 2026-10-14 a pending or cancelled tip blocked too —
-      # Pages run 37497278920 was dispatched for 85de0ac while tip CI
-      # 37496991170 was in_progress — but that live-locked merge bursts; see
-      # the tip-moved branch below.)
-      # cancel-in-progress stays false on pages.yml — we skip the poke instead
-      # of cancelling a live train.
-      - name: Is this commit still the tip, or is no train moving?
-        id: tip
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -u
-          TIP=$(gh api "repos/$GITHUB_REPOSITORY/branches/$GITHUB_REF_NAME" --jq .commit.sha 2>/dev/null || true)
-          # Runs not yet completed (queued, waiting, pending, requested, in_progress).
-          ACTIVE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pages.yml/runs?branch=$GITHUB_REF_NAME&per_page=20" \
-            --jq '[.workflow_runs[] | select(.status != "completed")] | length' 2>/dev/null || true)
-          if [ -n "$ACTIVE" ] && [ "$ACTIVE" != "0" ]; then
-            echo "poke=false" >> "$GITHUB_OUTPUT"
-            echo "NOT POKING: $ACTIVE train run(s) already queued or running (single-flight)" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          if [ -z "$TIP" ] || [ "$TIP" = "$GITHUB_SHA" ]; then
-            # This run is the tip (or tip unreadable — poke as before on doubt).
-            echo "poke=true" >> "$GITHUB_OUTPUT"
-            echo "POKING tip ${GITHUB_SHA:0:7}: fast tier green and no train moving" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          # Tip moved: poke unless the tip's push CI concluded FAILURE (2026-10-14).
-          # Waiting for completed/success live-locked a merge burst: every green
-          # run found a newer tip still pending, that tip's run was then
-          # cancelled as a superseded pending run, and nothing poked from 13:44
-          # (ship runs 38582717249, 38584256448 "NOT POKING ... pending/none").
-          # The train gates the TIP itself, so a poke from a superseded green
-          # commit is safe; pages-reuse-verdict.sh stops a red tip at once.
-          TIP_CI=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=$GITHUB_REF_NAME&event=push&per_page=30" 2>/dev/null \
-            | jq -r --arg tip "$TIP" '[.workflow_runs[] | select(.head_sha == $tip)] | .[0] | "\(.status)|\(.conclusion // "")"' || true)
-          STATUS="${TIP_CI%%|*}"
-          CONC="${TIP_CI#*|}"
-          if [ "$STATUS" = "completed" ] && [ "$CONC" = "failure" ]; then
-            echo "poke=false" >> "$GITHUB_OUTPUT"
-            echo "NOT POKING: tip moved to $TIP and its ship-fast CI concluded failure" | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            echo "poke=true" >> "$GITHUB_OUTPUT"
-            echo "POKING from a superseded commit: tip $TIP ship-fast CI is ${STATUS:-unknown}/${CONC:-none} (not red) and no train is moving" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
-      - name: Dispatch pages.yml on this branch
-        if: steps.tip.outputs.poke == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
-          echo "Poked pages.yml on \`$GITHUB_REF_NAME\` for \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
-
   # ONE STABLE REQUIRED CHECK. A job skipped by its own `if:` reports
   # SUCCESS to branch protection; only a WORKFLOW skipped by a path, branch or
   # commit-message filter leaves its checks Pending and blocks the merge
@@ -2734,17 +2620,9 @@ jobs:
   # also carries smoke, the sweeps, renderer-macos and xr.
   # tools/ci/ci-verdict.mjs.
   #
-  # EVERY JOB BUT ONE: poke-train is not a verdict, it is the train's
-  # dispatcher (2026-10-14, Actions audit C2). It runs only on a deploy-branch
-  # push, needs the same verdict jobs this one reads, and acts on them; making
-  # CI wait for it put one more queue hop on the ship run's completion, and
-  # the train it just poked looks for this run as `completed` + `success`
-  # (pages-reuse-verdict.sh's fast_run) — a run is not completed until its
-  # last job is. ci-verdict.mjs is generic over NEEDS (it names no job but
-  # selected/selected-verdict/baseline-trial), so the row's absence changes
-  # nothing it decides. A failed poke still fails the RUN's conclusion, which
-  # ci-watch.mjs and base-green.sh read; it no longer fails the `CI` check,
-  # which on a deploy-branch push gates no merge.
+  # EVERY JOB (2026-10-16): poke-train, the train's dispatcher, is gone with
+  # the deploy-branch fast tier — pages.yml runs on push now (CI/CD review
+  # #2333 finding 3). draft-ci-skipped is the one job this does not need.
   ci-verdict:
     # A label-noise run (#2184, the `on:` note) skips every job, and a SKIPPED
     # job reports success: under the required name it would sit on the head

@@ -1055,7 +1055,7 @@ deployment per commit, gates cancelling each other in bursts, and the account's
   (`tools/ci/pages-reuse-verdict.sh`). The tip's own fast tier counts while its
   run is still in progress once the tree-only jobs are green (the poking run
   always is), and a tip whose fast tier concluded `failure` stops the train at
-  the verdict (`tools/ci/pages-train.mjs`). The gate group never cancels: a running
+  the verdict (retired 2026-10-16 with the ship fast tier). The gate group never cancels: a running
   gate finishes, the next tick waits, a later tick replaces the waiting one.
   Then `publishable`, `deploy` (exact artifact, monotonic) and `verify-live` as
   before. Measured 2026-10-14: the gate's median is 20.5 min and a gated

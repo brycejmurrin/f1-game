@@ -1215,8 +1215,7 @@ test("the browser legs do not wait on the guards aggregator, and a guards red st
   };
   assert.deepEqual(needsOf("selected"), ["select"], "the matrix starts as soon as the plan exists");
   assert.doesNotMatch(job("selected").match(/^    if: .*$/m)?.[0] || "", /needs\.guards/, "its if: must not read a job it does not need");
-  for (const j of ["selected-verdict", "ci-verdict", "poke-train"]) assert.ok(needsOf(j).includes("guards"), `${j} must still need guards`);
-  assert.match(job("poke-train"), /needs\.guards\.result == 'success'/, "a guards red pokes no train");
+  for (const j of ["selected-verdict", "ci-verdict"]) assert.ok(needsOf(j).includes("guards"), `${j} must still need guards`);
   const verdictSrc = fs.readFileSync(path.join(ROOT, "tools/ci/selected-gate-verdict.mjs"), "utf8");
   assert.match(verdictSrc, /if \(guards !== "success" && guards !== "skipped"\)/, "selected-verdict reds on a guards red");
   assert.match(job("selected-verdict"), /GUARDS: \$\{\{ needs\.guards\.result \}\}/);

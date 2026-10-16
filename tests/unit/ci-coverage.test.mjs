@@ -19,7 +19,6 @@ import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverag
 // moved on, which is the drift it exists to catch pointing the wrong way. The
 // selector owns the value; this file checks ci.yml agrees with the selector.
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
-import { pickFastTier, treeOnlyGreen, rearmDecision, parseJobPages } from "../../tools/ci/pages-train.mjs";
 
 const SELECTED_TIMEOUT_MS = SELECTED_GATE.perTestTimeoutSec * 1000;
 
@@ -205,7 +204,7 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   assert.doesNotMatch(selectJob + selectedJob, /^    continue-on-error:/m);
   // The runner consumes the plan as a matrix and takes its cap per shard.
   // 2026-10-10 (R3-CI-HEALTH-2): the selected legs start as soon as the plan exists; a guards red
-  // still fails selected-verdict / ci-verdict / poke-train, which keep `guards` in their needs.
+  // still fails selected-verdict / ci-verdict, which keep `guards` in their needs.
   assert.match(selectedJob, /needs: \[select\]$/m);
   assert.match(selectedJob, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
   assert.match(selectedJob, /timeout-minutes: \$\{\{ matrix\.timeout \}\}/);
@@ -359,12 +358,10 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
   // loses no rule (the API showed 12 fast-tier names on 2026-10-04).
   const parsed = parseYAML(ciWorkflow);
   const needs = new Set(parsed.jobs["ci-verdict"].needs);
-  // ONE exemption, by name and with its reason (Actions audit C2, 2026-10-14):
-  // poke-train is the train's dispatcher, not a verdict. It runs only on a
-  // deploy-branch push (whose CI check gates no merge) and itself needs the
-  // verdict jobs; CI waiting on it delayed the run's `completed` that the
-  // poked train's reuse check looks for. Its red still fails the RUN.
-  const NOT_A_VERDICT = new Set(["poke-train", "draft-ci-skipped"]);
+  // ONE exemption, by name: draft-ci-skipped is the opt-out notice, not a
+  // verdict. (poke-train, the train's dispatcher, was the other until
+  // 2026-10-16: pages.yml runs on push now, CI/CD review #2333 finding 3.)
+  const NOT_A_VERDICT = new Set(["draft-ci-skipped"]);
   for (const [id, job] of Object.entries(parsed.jobs)) {
     if (id === "ci-verdict") continue;
     if (NOT_A_VERDICT.has(id)) {
@@ -373,13 +370,6 @@ test("ci-verdict is the always-run aggregator every other job feeds", () => {
     }
     assert.ok(needs.has(id), `job ${id} (${job.name || id}) does not feed CI — a red there would pass the required check`);
   }
-  // The exemption stays honest: poke-train gates on the same verdicts CI reads,
-  // and only ever runs on a deploy-branch push.
-  const poke = parsed.jobs["poke-train"];
-  for (const j of ["guards", "node-suites", "sweeps-parts", "driving-model", "select", "selected"]) {
-    assert.ok(poke.needs.includes(j), `poke-train must still need ${j}`);
-  }
-  assert.match(poke.if, /github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && inputs\.concurrency_key == ''/);
 });
 
 test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once per run", () => {
@@ -412,8 +402,6 @@ test("selected-verdict reds on ANY dropped spec, and owns the carry-forward once
   const names = selected.steps.map((st) => st.with?.name || "").filter(Boolean);
   assert.ok(names.length >= 2 && names.every((n) => n.includes("${{ strategy.job-index }}")),
     `every selected artifact name carries the job index: ${names.join(", ")}`);
-  // The poke must not outrun a dropped-spec red.
-  assert.match(parseYAML(ciWorkflow).jobs["poke-train"].if, /needs\.select\.outputs\.dropped == '0'\) \}\}$/);
 });
 
 test("select plans the node-suites matrix and can skip unused slices (unit-plan folded in, 2026-10-15)", () => {
@@ -515,9 +503,6 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
     "deploy-branch pushes share one no-cancel group: one fast tier at a time in a burst");
   assert.doesNotMatch(ciWorkflow, /'ship-push'/,
     "shared ship-push group is retired — it cancelled earlier merges mid-run");
-  // The superseded-but-green poke is bounded to one train at a time.
-  assert.match(ciWorkflow, /actions\/workflows\/pages\.yml\/runs\?branch=\$GITHUB_REF_NAME/,
-    "a superseded green run pokes only when no pages.yml run is queued or running");
   // The deploy gate is unaffected: its caller supplies a unique key. The train
   // rule lives on pages.yml's own ci job: one gate at a time, never cancelled
   // (a tick waits, a later tick replaces the waiting one), so lag is bounded
@@ -718,7 +703,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), ...env },
   }).trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
 
-  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
+  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
   // ci.yml has no merge_group trigger (2026-10-14), so such a run is not one of its gates.
@@ -726,22 +711,22 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   // A DRAFT PR's run is the fast tier (sweeps and smoke skipped) and concludes
   // success all the same: never a gate, and a real gate after it still counts.
   assert.equal(verdict(M2, { [D]: [run({ id: 8 })] }).reuse, "false", "a draft PR run (sweeps skipped) is not a gate");
-  assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
+  assert.deepEqual(verdict(M2, { [D]: [run({ id: 8 }), run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
     "…the ready run beside it is");
   // THE FAST TIER IS NOT A GATE. Run 2237 reused the merge commit's own
   // deploy-branch push run (guards + node suites only) as if it were the full
   // gate; the head_sha candidate is checked first, so this must be rejected
   // before the parent's real run is even looked at.
   assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })], [D]: [run()] }),
-    { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "7" },
-    "a deploy-branch push run (fast tier) must be skipped in favour of the parent's full run — and remembered as fast_run");
+    { reuse: "true", source: D, run: "https://example.test/run/7" },
+    "a deploy-branch push run (fast tier) must be skipped in favour of the parent's full run");
   // Pages run 3112 (37689226760, 2026-10-07) published 61e0a6442 on its own
   // green ship fast tier as smoke-only, after dispatch 3110 (37687308660) had
   // FAILED the full gate on that tree. The fast tier is never a gate: the
   // full gate runs, reusing only the fast tier's tree-only jobs.
   assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })] }),
-    { reuse: "false", source: "", run: "", fast_run: "7" },
-    "an exact-SHA ship fast tier alone runs the gate (fast_run named, no smoke-only shortcut)");
+    { reuse: "false", source: "", run: "" },
+    "an exact-SHA ship fast tier alone runs the gate (no smoke-only shortcut)");
   assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" }), run({ id: 99, path: ".github/workflows/pages.yml", event: "workflow_dispatch", conclusion: "failure" })] }).reuse, "false",
     "a failed Pages gate beside a green fast tier on the same sha: the gate runs again");
   // A successful run is not proof the gate RAN: the CI aggregator passes skipped jobs.
@@ -754,31 +739,6 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 12, path: ".github/workflows/pages.yml", event: "schedule" })] }).reuse, "false",
     "a cancelled smoke shard is not a pass");
   assert.equal(verdict(M2, { [D]: [run({ id: 13 })] }).reuse, "false", "a skipped selected verdict is not a pass");
-  // T1: the poking run is in progress when the train starts; its tree-only jobs count.
-  assert.deepEqual(verdict(M2, { [M2]: [run({ id: 20, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }),
-    { reuse: "false", source: "", run: "", fast_run: "20" },
-    "an IN-PROGRESS exact-sha fast tier whose tree-only jobs all passed is fast_run (71 of 82 poked trains re-ran them)");
-  assert.equal(verdict(M2, { [M2]: [run({ id: 21, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }).fast_run, "",
-    "a node suite still running: not reused");
-  assert.equal(verdict(M2, { [M2]: [run({ id: 22, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null })] }).fast_run, "",
-    "the guards aggregator not yet listed: not reused");
-  assert.equal(verdict(M2, { [M2]: [run({ id: 20, event: "push", head_branch: "feature", status: "in_progress", conclusion: null })] }).fast_run, "",
-    "only a DEPLOY-branch push run is the fast tier");
-  assert.equal(verdict(M2, { [M2]: [run({ id: 20, event: "push", head_branch: "deploy", conclusion: "cancelled" })] }).fast_run, "",
-    "a cancelled fast tier is neither reused nor red");
-  // T4: a red tip stops the train at the verdict, before any gate or tree-equal reuse.
-  const red = (runs) => cp.spawnSync("bash", [script, M2], {
-    cwd: dir, encoding: "utf8",
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(fullJobs), GITHUB_STEP_SUMMARY: "" },
-  });
-  const r1 = red({ [M2]: [run({ id: 31, event: "push", head_branch: "deploy", conclusion: "failure", html_url: "https://example.test/run/31" })] });
-  assert.equal(r1.status, 1, "a tip whose fast tier concluded failure fails the verdict at once");
-  assert.match(r1.stderr, /tip fast tier red: run 31 https:\/\/example\.test\/run\/31/);
-  assert.doesNotMatch(r1.stdout, /reuse=/, "no verdict lines: the gate must not run");
-  assert.equal(red({ [M2]: [run({ id: 31, event: "push", head_branch: "deploy", conclusion: "failure" })], [D]: [run()] }).status, 1,
-    "a red tip is not published through a tree-equal parent's green gate either");
-  assert.equal(red({ [M2]: [run({ id: 32, event: "push", head_branch: "deploy", status: "in_progress", conclusion: null }), run({ id: 31, event: "push", head_branch: "deploy", conclusion: "failure" })] }).status, 0,
-    "only the NEWEST run on the sha decides (a re-run in progress is not red)");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }, { DEPLOY_BRANCH: "" }).reuse, "false",
     "without DEPLOY_BRANCH no push run can be told from the fast tier: fail safe into the gate");
   assert.equal(verdict(M2, { [D]: [run({ path: ".github/workflows/pages.yml", event: "schedule" })] }).reuse, "true", "a train tick that deployed the same tree counts");
@@ -789,90 +749,14 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 99 })] }, { GITHUB_RUN_ID: "99" }).reuse, "false", "a run never reuses itself");
   assert.equal(verdict(M1, { [B]: [run()], [C]: [run({ path: ".github/workflows/pages.yml", event: "push" })] }).reuse, "false",
     "both parents green but the merge tree is new: the gate runs");
-  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7", fast_run: "" },
+  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7" },
     "a fast-forwarded commit with its own green push run: reuse");
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("pages-train.mjs: the tip's fast tier, in progress or done, and the re-arm decision (audit T1/T3/T4)", () => {
-  const ci = (over) => ({ id: 5, path: ".github/workflows/ci.yml", event: "push", head_branch: "deploy", head_sha: "abc", status: "completed", conclusion: "success", html_url: "u5", ...over });
-  const opts = { sha: "abc", deployBranch: "deploy" };
-  assert.equal(pickFastTier([ci()], opts).state, "green");
-  assert.equal(pickFastTier([ci({ status: "in_progress", conclusion: null })], opts).state, "running");
-  assert.equal(pickFastTier([ci({ status: "queued", conclusion: null })], opts).state, "running");
-  assert.deepEqual(pickFastTier([ci({ conclusion: "failure" })], opts), { state: "red", id: "5", url: "u5" });
-  assert.equal(pickFastTier([ci({ conclusion: "cancelled" })], opts).state, "none", "cancelled is neither green nor red");
-  assert.equal(pickFastTier([ci({ head_branch: "feature" })], opts).state, "none", "a topic-branch push is not the fast tier");
-  assert.equal(pickFastTier([ci({ event: "pull_request" })], opts).state, "none");
-  assert.equal(pickFastTier([ci({ path: ".github/workflows/pages.yml" })], opts).state, "none");
-  assert.equal(pickFastTier([ci({ head_sha: "def" })], opts).state, "none", "another sha's run never counts");
-  assert.equal(pickFastTier([ci()], { sha: "abc", deployBranch: "" }).state, "none", "no DEPLOY_BRANCH: fail safe");
-  assert.equal(pickFastTier([ci({ id: 6, status: "in_progress", conclusion: null }), ci({ conclusion: "failure" })], opts).state, "running",
-    "the newest run decides");
-
-  const job = (name, conclusion = "success", status = "completed") => ({ name, status, conclusion });
-  const green = ["Structural guards (tooling A)", "Structural guards (tooling B)", "Structural guards",
-    "Pure-node unit suites (vm-a1)", "Pure-node unit suites (page)"].map((n) => job(n));
-  assert.deepEqual(treeOnlyGreen([...green, job("Driving model (characterization traces)", "skipped")]), { ok: true, missing: [] },
-    "driving model skipped by unit-plan's path filter is a pass (as in ci-verdict and poke-train)");
-  assert.equal(treeOnlyGreen([...green.map((j) => ({ ...j, name: `ci / ${j.name}` })), job("ci / Driving model (characterization traces)")]).ok, true,
-    "a reusable-call prefix is stripped");
-  assert.equal(treeOnlyGreen(green).ok, false, "driving model not listed yet: not done");
-  assert.deepEqual(treeOnlyGreen([...green, job("Driving model (characterization traces)", null, "in_progress")]).missing, ["Driving model (characterization traces)"]);
-  assert.deepEqual(treeOnlyGreen([...green.slice(0, 2), ...green.slice(3), job("Driving model (characterization traces)")]).missing, ["Structural guards"],
-    "the aggregator must exist and be green, not just its halves");
-  assert.equal(treeOnlyGreen([...green, job("Pure-node unit suites (slow)", "failure"), job("Driving model (characterization traces)")]).ok, false);
-  assert.equal(treeOnlyGreen([...green.slice(0, 4), job("Pure-node unit suites (${{ matrix.slice }})", "skipped"), job("Driving model (characterization traces)")]).ok, false,
-    "a job-level-skipped node-suites matrix (one unexpanded row) is not a pass");
-  assert.equal(treeOnlyGreen([...green, job("Driving model (characterization traces)", "failure")]).ok, false);
-  assert.equal(treeOnlyGreen([]).ok, false, "no jobs listed (a queued run): not reusable");
-  assert.equal(parseJobPages('{"total_count":2,"jobs":[{"name":"a"}]}{"total_count":2,"jobs":[{"name":"b"}]}').length, 2, "--paginate pages concatenate");
-
-  const base = { ref: "deploy", deployBranch: "deploy", sha: "aaaaaaaaaa", tip: "bbbbbbbbbb", active: 0, tipFast: { state: "green", id: "9" } };
-  assert.equal(rearmDecision(base).rearm, true, "tip moved on, its fast tier green, no train moving: re-arm");
-  assert.equal(rearmDecision({ ...base, tip: base.sha }).rearm, false, "this run took the tip — a red gate must not loop on its own tree");
-  assert.equal(rearmDecision({ ...base, active: 1 }).rearm, false, "single-flight: never dual-dispatch Pages");
-  assert.equal(rearmDecision({ ...base, active: null }).rearm, false, "an unreadable run listing is a no, not a guess");
-  assert.equal(rearmDecision({ ...base, tip: "" }).rearm, false, "an unreadable tip is a no");
-  assert.equal(rearmDecision({ ...base, tipFast: { state: "running" } }).rearm, false, "a pending tip pokes itself when it goes green");
-  assert.equal(rearmDecision({ ...base, tipFast: { state: "red" } }).rearm, false);
-  assert.equal(rearmDecision({ ...base, tipFast: null }).rearm, false);
-  assert.equal(rearmDecision({ ...base, ref: "feature" }).rearm, false, "a run off the deploy branch never dispatches the train");
-});
-
-test("poke-train: a superseded green run pokes unless the tip is RED (merge-burst live-lock, 2026-10-14)", () => {
-  // From 13:44 on 2026-10-14 nothing poked: green ship runs 38582717249 and
-  // 38584256448 each found a newer tip whose CI was still pending, logged
-  // "NOT POKING", and that tip's run was then cancelled as a superseded
-  // pending run. The train gates the TIP, so only a red tip may block a poke.
-  const step = parseYAML(ciWorkflow).jobs["poke-train"].steps.find((st) => st.id === "tip").run;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "poke-tip-"));
-  const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
-  fs.writeFileSync(path.join(bin, "gh"),
-    '#!/usr/bin/env bash\ncase "$2" in\n  */branches/*) echo "$FAKE_TIP" ;;\n  */pages.yml/runs*) echo "$FAKE_ACTIVE" ;;\n  */ci.yml/runs*) echo "$FAKE_CI" ;;\nesac\n');
-  fs.chmodSync(path.join(bin, "gh"), 0o755);
-  const poke = ({ tip = "bbb", active = "0", tipRun = null }) => {
-    const out = path.join(dir, "out"); fs.writeFileSync(out, "");
-    cp.execFileSync("bash", ["-c", step], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: {
-      ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_REF_NAME: "deploy", GITHUB_SHA: "aaa",
-      GITHUB_OUTPUT: out, GITHUB_STEP_SUMMARY: path.join(dir, "summary"), FAKE_TIP: tip, FAKE_ACTIVE: active,
-      FAKE_CI: JSON.stringify({ workflow_runs: tipRun ? [{ head_sha: tip, ...tipRun }] : [] }) } });
-    return fs.readFileSync(out, "utf8").trim();
-  };
-  assert.equal(poke({ tip: "aaa" }), "poke=true", "the tip itself pokes");
-  assert.equal(poke({ active: "1" }), "poke=false", "single-flight: a queued or running train blocks every poke");
-  assert.equal(poke({ tipRun: { status: "in_progress", conclusion: null } }), "poke=true", "a PENDING tip no longer blocks (the live-lock)");
-  assert.equal(poke({ tipRun: { status: "queued", conclusion: null } }), "poke=true");
-  assert.equal(poke({}), "poke=true", "no run on record for the tip yet: poke");
-  assert.equal(poke({ tipRun: { status: "completed", conclusion: "success" } }), "poke=true");
-  assert.equal(poke({ tipRun: { status: "completed", conclusion: "cancelled" } }), "poke=true", "a cancelled tip run is not red");
-  assert.equal(poke({ tipRun: { status: "completed", conclusion: "failure" } }), "poke=false", "a RED tip never gets a train (T4)");
-  fs.rmSync(dir, { recursive: true, force: true });
-});
-
-test("pages.yml re-arms the train once, after everything, and holds its Pages token on deploy only", () => {
+test("pages.yml holds its Pages token on deploy only", () => {
   const pages = parseYAML(pagesWorkflow);
   // T6 least privilege: deploy-pages needs pages: write + id-token: write on
   // the deploying job (https://github.com/actions/deploy-pages); nothing else does.
@@ -884,18 +768,6 @@ test("pages.yml re-arms the train once, after everything, and holds its Pages to
     assert.equal(job.permissions.pages, undefined, `${id} holds no pages token`);
     assert.equal(job.permissions["id-token"], undefined, `${id} holds no OIDC token`);
   }
-  // T3: the re-arm. Last job, runs whatever happened above (never on cancel),
-  // single-flight through pages-train.mjs, dispatches the deploy branch only.
-  const rearm = pages.jobs.rearm;
-  assert.ok(rearm, "the train must re-arm itself for a tip that went green while it ran");
-  assert.deepEqual(rearm.needs, ["verdict", "ci", "publishable", "deploy", "verify-live"]);
-  assert.equal(rearm.if, "${{ !cancelled() }}");
-  assert.deepEqual(rearm.permissions, { actions: "write", contents: "read" });
-  const steps = rearm.steps.map((st) => st.run || "").join("\n");
-  assert.match(steps, /node tools\/ci\/pages-train\.mjs rearm "\$GITHUB_SHA"/);
-  assert.match(steps, /gh workflow run pages\.yml --repo "\$GITHUB_REPOSITORY" --ref "\$DEPLOY_BRANCH"/);
-  assert.equal(rearm.steps.find((st) => /gh workflow run/.test(st.run || "")).if, "steps.r.outputs.rearm == 'true'",
-    "the dispatch runs only on the script's yes");
   // spec-timings: npm ci only when there is junit to merge.
   const timings = parseYAML(fs.readFileSync(new URL("../../.github/workflows/spec-timings.yml", import.meta.url), "utf8"));
   const tsteps = timings.jobs.merge.steps;
@@ -946,7 +818,7 @@ test("cached browser jobs never enter apt through --with-deps", () => {
     "keyed on the lock file so a Playwright bump misses the cache");
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
   const driving = ciWorkflow.split("\n  driving-model:")[1].split("\n  renderer-macos:")[0];
-  const goldens = ciWorkflow.split("\n  baseline-trial:")[1].split("\n  poke-train:")[0];
+  const goldens = ciWorkflow.split("\n  baseline-trial:")[1].split("\n  ci-verdict:")[0];
   for (const [name, job] of [["smoke", smoke], ["driving-model", driving], ["selected", selectedJob], ["baseline-trial", goldens]]) {
     assert.match(job, /uses: \.\/\.github\/actions\/playwright-chromium/, `${name} must take Chromium from the composite action`);
     assert.doesNotMatch(job.replace(/^\s*#.*$/gm, ""), /playwright install/, `${name} carries its own install step — use the action`);
@@ -1672,63 +1544,6 @@ test("desktop pack-smoke is full-tier only (ready PRs, not drafts)", () => {
     "pack-smoke must skip draft PRs so Electron work stays on the full tier");
 });
 
-test("a green fast-tier run pokes the train; a red or called one never does", () => {
-  // GitHub's scheduler runs this repository's crons hours late (the 03:17
-  // nightly is created around 08:00; the train's first three ticks never
-  // came), so the cron is a backstop and the deploy-branch push's fast tier
-  // dispatches pages.yml itself when every fast-tier job passed.
-  const poke = (ciWorkflow.split("\n  poke-train:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.ok(poke, "poke-train job missing");
-  assert.match(poke, /needs: \[guards, node-suites, sweeps-parts, driving-model, select, selected\]/,
-    "the poke waits for every fast-tier job (select carries the node plan since 2026-10-15)");
-  const cond = poke.match(/^    if: \$\{\{ (.*) \}\}$/m)?.[1] || "";
-  assert.match(cond, /!cancelled\(\) && github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && inputs\.concurrency_key == ''/,
-    "fast tier only: a deploy-branch push, never a Pages call");
-  for (const j of ["guards", "sweeps-parts", "select"]) {
-    assert.ok(cond.includes(`needs.${j}.result == 'success'`), `${j} must be green before the poke`);
-  }
-  // Path-skipped node-suites / driving-model are a pass when the plan said so.
-  assert.ok(cond.includes("(needs.node-suites.result == 'success' || (needs.node-suites.result == 'skipped' && needs.select.outputs.any_node != 'true'))"),
-    "skipped node-suites is a pass only when the plan said any_node is false");
-  assert.ok(cond.includes("(needs.driving-model.result == 'success' || (needs.driving-model.result == 'skipped' && needs.select.outputs.driving != 'true'))"),
-    "skipped driving-model is a pass only when the plan said driving is false");
-  /* A SKIPPED `selected` IS ONLY A PASS WHEN THE PLAN WAS HONESTLY EMPTY
-     (2026-09-22). `selected` is skipped whenever the plan has no shards, and
-     that happens two ways: nothing the diff touches has a spec, or everything
-     it touches was unaffordable. The second read as a pass, and it was the
-     renderer's whole story — all six test:gfx specs declare 240-540 s against
-     the gate's 180 s per-test cap, so a js/render diff emptied the plan and
-     poked the train with no backend booted by anything blocking.
-
-     `dropped` is what separates them, and tests/specs/render-boot.spec.js is
-     what keeps the tightening from becoming a permanent stall: a renderer diff
-     now has an affordable spec, so its plan is not empty in the first place. */
-  assert.ok(cond.includes("(needs.selected.result == 'success' || (needs.selected.result == 'skipped' && needs.select.outputs.dropped == '0'))"),
-    "a skipped `selected` may only pass the poke when NO routed spec was dropped");
-  // The output the condition reads has to exist, or the comparison is against
-  // an empty string and the gate silently never fires.
-  const selectJobBody = (ciWorkflow.split("\n  select:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.match(selectJobBody, /^      dropped: \$\{\{ steps\.sel\.outputs\.dropped \}\}$/m,
-    "the select job must publish `dropped` or poke-train compares against nothing");
-  assert.match(selectStep, /dropped=\$\{dropped\}/,
-    "the step script must write `dropped` to $GITHUB_OUTPUT");
-  assert.match(selectStep, /overBudgetSpecs \|\| \[\]\)\.length \+ \(r\.unreachable/,
-    "`dropped` counts the over-budget and unreachable buckets, not just the squeezed-out ones");
-  assert.match(poke, /permissions:\s*\n\s+actions: write/, "workflow_dispatch via the token needs actions:write");
-  // A called workflow may not request more than its caller passes, and GitHub
-  // checks that at STARTUP for every declared job, skipped or not: the first
-  // poked train (run 2241) died with startup_failure because pages.yml's call
-  // passed contents/pages/id-token and ci.yml's poke job asked for actions.
-  const pagesCi = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
-  assert.match(pagesCi, /permissions:\s*\n\s+contents: read\s*\n\s+actions: write/,
-    "pages.yml's call must grant actions:write or the poke job's declaration kills every train at startup");
-  assert.match(poke, /gh workflow run pages\.yml --repo "\$GITHUB_REPOSITORY" --ref "\$GITHUB_REF_NAME"/);
-  // The heavy jobs are not in the poke's needs: smoke and sweeps are the train's.
-  const pokeNeeds = (poke.match(/needs: \[([^\]]*)\]/)?.[1] || "").split(",").map((s) => s.trim());
-  assert.ok(!pokeNeeds.includes("smoke") && !pokeNeeds.includes("sweeps"),
-    "the poke must not wait on the browser jobs; on the fast tier they are skipped and the train runs them");
-});
-
 test("pages.yml is a release train: schedule + dispatch, one deploy branch, nothing-new short-circuit", () => {
   // THE TRAIN (2026-09-10). A deploy per push at 140-300 pushes a day (3-131 in 2026-10) meant a
   // 14-job gate per commit and gates cancelling each other in bursts. The
@@ -1942,7 +1757,7 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
  * its matrix, so it could not be required: #491 merged with a red selected
  * gate on the merged tree and the tip sat red. `selected-verdict` has one
  * fixed name, runs whatever `selected` did, and reads the pair the way
- * poke-train does. Pinned so it cannot quietly stop covering a case. */
+ * poke-train did. Pinned so it cannot quietly stop covering a case. */
 test("selected-verdict: one fixed-name check that always judges the change-aware gate", () => {
   const job = ciWorkflow.slice(ciWorkflow.indexOf("\n  selected-verdict:\n"), ciWorkflow.indexOf("\n  baseline-trial:\n"));
   assert.ok(job.length > 0, "the selected-verdict job is gone");

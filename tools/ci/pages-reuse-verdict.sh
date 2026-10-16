@@ -39,10 +39,10 @@
 # shortcut (#1075) is gone for the same reason: Pages run 3112
 # (37689226760) deployed 61e0a6442 on a fast tier whose smoke, sweeps and
 # full selection never ran, right after dispatch 3110 (37687308660) FAILED
-# the full gate on that same tree (oversize-menu-baseline). A fast tier is
-# still remembered as fast_run (its tree-only jobs are reused) and nothing
-# more. Its always-false ship-only output line, and the ci.yml smoke-only
-# input it fed, were removed on 2026-10-14.
+# the full gate on that same tree (oversize-menu-baseline). Its always-false
+# ship-only output line, and the ci.yml smoke-only input it fed, were removed
+# on 2026-10-14; the fast-tier reuse (`fast_run`) went with the deploy-branch
+# fast tier on 2026-10-16 (pages.yml runs on push, CI/CD review #2333).
 #
 # A pull_request run tests GitHub's merge ref, not the PR head. That is still
 # sound here: this only reuses such a run when merging the base into the head
@@ -60,16 +60,7 @@ SHA="${1:?commit sha}"
 REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY}"
 
 say() { echo "$*" >&2; }
-# fast_run: the FAST-tier ci.yml run (a deploy-branch push: guards, node
-# suites, sweeps-parts, driving-model, selection) that already passed on this
-# exact tree, when there is one. Never a reason to skip the gate — the train
-# still runs the browser smoke, the geometry sweeps and the parts census (whose
-# filter diffs a base, so it is not tree-only) — but the tree-only jobs it
-# already passed give the same answer on the same bytes, so ci.yml's
-# `fast_tier_run` input skips them (2026-09-16; a deploy push paid ~12 min of
-# fast tier and then ~14 min of full tier, serially, with no job shared).
-FAST_RUN=""
-verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\nfast_run=%s\n' "$1" "$2" "$3" "$FAST_RUN"; }
+verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\n' "$1" "$2" "$3"; }
 tree_of() { git rev-parse --verify -q "$1^{tree}" 2>/dev/null; }
 # gate_ran <run-id>: prints `yes` only when the run's jobs show the full gate
 # ran and passed (see the header). Paginated: a full gate's selected matrix
@@ -92,31 +83,6 @@ gate_ran() {
 
 TREE="$(tree_of "$SHA")" || { say "::warning::$SHA is not in this checkout; running the full gate"; verdict false "" ""; exit 0; }
 
-# THE TIP'S OWN FAST TIER, FIRST (2026-10-14, Actions audit T1 + T4;
-# tools/ci/pages-train.mjs). Its newest deploy-branch ci.yml push run on this
-# exact sha counts as fast_run while it is STILL RUNNING once every tree-only
-# job it shares with the gate is listed, completed and green: the run that
-# pokes this train is in progress by construction (its CI aggregator comes
-# after poke-train), and listing only completed runs re-ran those jobs in 71 of
-# 82 poked trains. A tip whose fast tier CONCLUDED failure stops the train
-# here, before a ~135 job-minute gate that fails the same tree again — and
-# before any tree-equal reuse, so a red tip is never published either. Any
-# lookup failure reads `none`: no fast_run, the full gate runs.
-read -r FT_STATE FT_ID FT_REST <<EOF_FT || true
-$(node "$(dirname "$0")/pages-train.mjs" fast-tier "$SHA" 2>/dev/null || echo "none pages-train failed")
-EOF_FT
-case "$FT_STATE" in
-  red)
-    say "::error::tip fast tier red: run $FT_ID ${FT_REST:-} — fix or re-run the tip's ci.yml push run; the train gates nothing on a red tip"
-    [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "**Tip fast tier red**: run $FT_ID ${FT_REST:-} — the train stops here" >> "$GITHUB_STEP_SUMMARY"
-    exit 1 ;;
-  green)
-    FAST_RUN="$FT_ID"
-    say "fast tier's tree-only jobs already green on $SHA: ci.yml run $FAST_RUN (reused by the gate)" ;;
-  *)
-    say "no reusable fast tier on $SHA: ${FT_ID:-} ${FT_REST:-}" ;;
-esac
-
 candidates="$SHA"
 for parent in "$SHA^1" "$SHA^2"; do
   p="$(git rev-parse --verify -q "$parent" 2>/dev/null)" || continue
@@ -136,11 +102,10 @@ for c in $candidates; do
       let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}
       const self = process.env.GITHUB_RUN_ID || "";
       const deployBranch = process.env.DEPLOY_BRANCH || "";
-      // A push run is a full gate only OFF the deploy branch (there it is the fast
-      // tier). A deploy-branch push is remembered as FAST_RUN, and if it is
-      // THIS commit it is passed on as fast_run only, never as a gate. (No
-      // merge_group: ci.yml dropped that trigger on 2026-10-14 — merge queues
-      // need an organisation-owned repo.)
+      // A push run is a full gate only OFF the deploy branch (there it was the
+      // fast tier until 2026-10-16, and never a gate). (No merge_group: ci.yml
+      // dropped that trigger on 2026-10-14 — merge queues need an
+      // organisation-owned repo.)
       const fullPush = (r) => r.event === "push" && deployBranch !== "" && r.head_branch !== deployBranch;
       const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
         (r.path === ".github/workflows/ci.yml" && (fullPush(r) || r.event === "pull_request")) ||
@@ -164,12 +129,6 @@ EOF_HITS
   say "no successful gate run recorded for $c"
 done
 
-# No completed gate on this tree: run it. A green fast tier on THIS exact sha
-# is passed along as fast_run (its tree-only jobs are reused by ci.yml's
-# `fast_tier_run`), never as a reason to skip smoke, sweeps or selection.
-if [ -n "$FAST_RUN" ]; then
-  say "no reusable gate for $SHA; running the gate (reusing only fast-tier run $FAST_RUN's tree-only jobs)"
-else
-  say "no reusable gate for $SHA; running the full gate"
-fi
+# No completed gate on this tree: run it.
+say "no reusable gate for $SHA; running the full gate"
 verdict false "" ""
