@@ -30,15 +30,16 @@ soak with 22 cars (monza); closed-loop player on monaco, spa, monza, suzuka (17k
 ### Clean areas (do not re-hunt)
 
 No NaN / Infinity in `physState` or car fields; no `prog` regression within a lap and `prog ≈ (lap−1)·L + s`; no
-`NaN|Infinity|undefined` in `#hud-gap-ahead|behind`; `LoopHealth` 0 faults in every scenario; window + document
+`NaN|Infinity|undefined` in `#hud-gap-ahead|behind`; camera eye delta ≤ 0.94 m over 25 real frames; DOM garage open /
+close ×10 (listeners flat at 6, 0 intervals, DOM bounded); `LoopHealth` 0 faults in every scenario; window + document
 listeners flat (9) and 0 live intervals after restart ×10 + switch ×5; tab hidden / visible resumes cleanly; GLX
 context + soft-present up with `?gfx=glx`; career save + `garageStep` clean; no swallowed error beyond X1 while pausing on
 `all` (the closed-loop pass ran on `uncaught` only).
 
 ### Not run, and why
 
-Pit entry / stop and WATCH / replay (other lanes); DOM garage open / close (menu never on screen; career / garage lane);
-camera-jump and HUD-under-motion traps (headless freezes the camera; un-headless software GLX stalls CDP, no real GPU);
+Pit entry / stop and WATCH / replay (other lanes); camera teleport jumps (restart, rescue, pit exit, `jump`) and HUD at real frame rates (round 2 saw only 25 frames in 75 s,
+no real GPU; `step()` never moves the camera or HUD, so only the rAF loop counts);
 hand-stepped `into` / `over` tick (replaced by tracepoints; ~5 KB per step); dedicated tyre / fuel / ERS breakpoints
 (generic non-finite scan only); `prog` trap as a conditional breakpoint (done in-page per tick instead).
 
@@ -148,6 +149,24 @@ a 198 px-tall viewport, per the orchestrator's note). **GLX positively confirmed
 - T5. After a timed-out evaluation, `debugger_detach` itself reports `cleanupErrors` (three timeouts) and
   `debugger_attach` fails until the page frees up; fire-and-forget loops that write to `window.*` and are polled with a
   second short `debugger_run` avoid it.
+
+### Round 2 (camera / HUD under motion, DOM garage ×10)
+
+Chrome at `about:blank` → navigate → `headless(true)`, 844×600 window, TLX (default), SwiftShader.
+
+- **`step()` does not move the camera or the HUD.** 12 single-frame inspections (`headless(false)` → `step` → read
+  `camState().eye` → `step` → read → `headless(true)`) over a 3 600-tick closed-loop monza drive gave eye delta 0.00 m
+  every time and empty `#hud-gap-*`. The camera and HUD are updated by the render tick, so the earlier "camera trap never
+  moved" is by design, not an absent fault; camera / HUD evidence has to come from real rAF frames.
+- **Real-loop probe** (my own rAF callback sets controls only; the game's loop advances): 25 frames in 75 s on
+  software GL (frame time min 17 ms, median 3.3 s, max 7.1 s). Max camera eye delta **0.94 m/frame**, none > 20 m;
+  `#hud-gap-*` read `▲ BOT +1L` / empty with no `NaN|Infinity|undefined|^-`; `LoopHealth` 0 faults. Weak evidence by
+  construction: at ~3 s a frame the game's dt clamp keeps every delta small, so teleports (restart, rescue, pit exit,
+  `jump`) are not covered.
+- **DOM garage open / close ×10** (`#mb-garage` click → 1.5 s → `#cs-done` click → 1.2 s; `#cs-done` visible each time):
+  window + document listeners 0 (base) → 11 (first open) → **6 and flat for cycles 1–9**, live `setInterval`s 0, `LoopHealth` 0
+  faults, no new warn / error. DOM node count 4 498 → 5 358 on the first open (lazy build, +860), flat for cycles 1–5, one
+  +95 step to 5 453 at cycle 6, then flat through cycle 9: bounded, not per-cycle growth.
 
 ### F1 — AI does not brake for a stationary human car; the contact deletes ~48 m/s in one tick (medium confidence)
 
