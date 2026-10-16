@@ -4,7 +4,7 @@ Where Claude Code sessions on this repo get stuck, what they waste, and what to 
 `session_015NYY5os8qCWtYUJjRUXAUu` (Opus) at Bryce's request ("hunting through session transcripts for issues,
 ways to improve tools, ci cd, where they are getting stuck, where we may want new tools, skills or subagents"),
 with 11 Sonnet worker sessions digesting transcripts through skill `agent-fleet` `references/transcripts.md`.
-Tracking issue and sub-issues: see the PR that adds this note.
+Tracking issue: #2379 (sub-issues #2380–#2389).
 
 ## Method and coverage
 
@@ -171,18 +171,18 @@ page is rejected (`Invalid before_id`). Workers fell back to metadata-only for 2
 
 | # | kind | change | payoff | issue |
 |---|---|---|---|---|
-| 1 | skill / policy | `launch-policy.md` + `orchestrator.md`: a **quota gate** — read `rate_limit_info` from `get_session` before each launch, stop at `allowed_warning`, cap concurrent workers, stagger launches ≥ 30 s, verify each with `get_session` | the main cause of 50 of 61 failures; avoids stranded unpushed work | sub-issue |
-| 2 | skill / hook | **quota-park protocol**: on the first limit `api_error`, a worker (or its orchestrator) writes `state: blocked`, `blocker: quota until <reset>` to the fleet block, deletes its own check-in triggers, and stops replying | ends the hundreds of empty wakes; Merge Desk sees parked PRs | sub-issue |
-| 3 | tool | `session-transcript.mjs`: collapse repeated `api_error` turns into one `×N quota retries` line, classify a session `quota-parked`, add a `--summary` (metadata) mode | 5–10× cheaper transcript mining | sub-issue |
-| 4 | tool | `queue-depth.mjs --wait <min>` (blocking, exits on ok) plus a trend line; orchestrators hold launches on `= queue hold` | replaces send_later polling over 3–10 h holds | sub-issue (under #1949) |
-| 5 | tool | `ci-watch.mjs --failures-only` (and `--jobs`: pending legs one line each, queued-leg age), dedupe by run id, report `no run for head — dispatch` and `superseded → <tip>` | removes per-job wakes and the 58 k-char `actions_list` spills | sub-issue |
-| 6 | doc / skill | `worker.md`: what to do while held (refresh the PR body, end the turn silently, one timer), the sanctioned reply to the harness Stop hook (held push, merged PR → `git checkout --detach origin/<deploy>`), "one git verb per Bash call", hand off to Merge Desk instead of staying alive after `SWEEP`, compact or hand off past ~300 k context | cuts idle-wake spend ($3–5 per fix worker) and the Stop-hook detours | sub-issue |
-| 7 | tool | `deploy.mjs --wait / --status` and a generic `wait-for.mjs` (new, in tools/ci) (`--load-below`, `--file-nonempty`, `--pid-gone`) | ends hand-written pgrep/until loops and their inverted exit codes | sub-issue |
-| 8 | tool | a new `pr-body.mjs` in tools/ci: render the template, tick/strike a Plan item by index without clobbering others, add labels (`run-ci`) through the REST API | removes ad-hoc python/curl body edits and Plan clobbering | sub-issue |
-| 9 | process | Merge Desk re-cut sends the original worker `STAND DOWN <PR> recut by <PR>`; workers re-check `who-is-on-it` before opening a replacement | saves the 3 h duplicate cycles | sub-issue |
-| 10 | tool | `who-is-on-it.mjs --release` prints `released: <claim>` or `no claim for this session` | workers can trust the release | sub-issue |
-| 11 | skill | handoff convention: a handoff names branch + sha and starts with `git fetch origin <branch>`; "write a handoff prompt" is chat text unless a file is asked for; a `need_input` question on a session being archived becomes an issue | the 4 failed cold starts; lost decisions | in tracking issue |
-| 12 | launch | launch template asserts `permission_mode: auto` and the intended model, and the orchestrator checks both with `get_session` | the default/plan-mode stalls of finding 6 | in tracking issue |
+| 1 | skill / policy | `launch-policy.md` + `orchestrator.md`: a **quota gate** — read `rate_limit_info` from `get_session` before each launch, stop at `allowed_warning`, cap concurrent workers, stagger launches ≥ 30 s, verify each with `get_session` | the main cause of 50 of 61 failures; avoids stranded unpushed work | #2380 |
+| 2 | skill / hook | **quota-park protocol**: on the first limit `api_error`, a worker (or its orchestrator) writes `state: blocked`, `blocker: quota until <reset>` to the fleet block, deletes its own check-in triggers, and stops replying | ends the hundreds of empty wakes; Merge Desk sees parked PRs | #2381 |
+| 3 | tool | `session-transcript.mjs`: collapse repeated `api_error` turns into one `×N quota retries` line, classify a session `quota-parked`, add a `--summary` (metadata) mode | 5–10× cheaper transcript mining | #2382 |
+| 4 | tool | `queue-depth.mjs --wait <min>` (blocking, exits on ok) plus a trend line; orchestrators hold launches on `= queue hold` | replaces send_later polling over 3–10 h holds | #2383 (under #1949) |
+| 5 | tool | `ci-watch.mjs --failures-only` (and `--jobs`: pending legs one line each, queued-leg age), dedupe by run id, report `no run for head — dispatch` and `superseded → <tip>` | removes per-job wakes and the 58 k-char `actions_list` spills | #2384 |
+| 6 | doc / skill | `worker.md`: what to do while held (refresh the PR body, end the turn silently, one timer), the sanctioned reply to the harness Stop hook (held push, merged PR → `git checkout --detach origin/<deploy>`), "one git verb per Bash call", hand off to Merge Desk instead of staying alive after `SWEEP`, compact or hand off past ~300 k context | cuts idle-wake spend ($3–5 per fix worker) and the Stop-hook detours | #2385 |
+| 7 | tool | `deploy.mjs --wait / --status` and a generic `wait-for.mjs` (new, in tools/ci) (`--load-below`, `--file-nonempty`, `--pid-gone`) | ends hand-written pgrep/until loops and their inverted exit codes | #2386 |
+| 8 | tool | a new `pr-body.mjs` in tools/ci: render the template, tick/strike a Plan item by index without clobbering others, add labels (`run-ci`) through the REST API | removes ad-hoc python/curl body edits and Plan clobbering | #2387 |
+| 9 | process | Merge Desk re-cut sends the original worker `STAND DOWN <PR> recut by <PR>`; workers re-check `who-is-on-it` before opening a replacement | saves the 3 h duplicate cycles | #2388 |
+| 10 | tool | `who-is-on-it.mjs --release` prints `released: <claim>` or `no claim for this session` | workers can trust the release | #2389 |
+| 11 | skill | handoff convention: a handoff names branch + sha and starts with `git fetch origin <branch>`; "write a handoff prompt" is chat text unless a file is asked for; a `need_input` question on a session being archived becomes an issue | the 4 failed cold starts; lost decisions | #2379 |
+| 12 | launch | launch template asserts `permission_mode: auto` and the intended model, and the orchestrator checks both with `get_session` | the default/plan-mode stalls of finding 6 | #2379 |
 
 Lower-value items kept in the tracking issue only: tools-less worktree guard skip for image branches
 (`APEX_SKIP_GUARDS` was discovered by the model), `build-gallery.cjs` REST fallback on GraphQL 403, a
