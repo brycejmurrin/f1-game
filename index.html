@@ -2464,13 +2464,15 @@
         </section>
         <section class="vs-col">
           <h3 class="vs-col-head"><span class="vs-num">2</span>The grid</h3>
-          <!-- One row per player. #vs-me stays a single fixed row because YOU
-               are always exactly one and always first. #vs-them is now a LIST
-               the lobby fills with a row per other player — it keeps its id so
-               that everything already reading "the other player's row" still
-               finds it, and reads the same with one child as it always did. -->
-          <div class="vs-driver" id="vs-me"></div>
-          <div class="vs-others" id="vs-them"></div>
+          <!-- Seat roster: one row per human in the room (you first), filled by
+               js/net/lobby.js from localProfile(), _peers and _ready. -->
+          <div class="vs-roster-wrap">
+            <div class="vs-roster-head">
+              <span>Players</span>
+              <span id="vs-player-count" class="vs-player-count" aria-live="polite">1/4</span>
+            </div>
+            <ul id="vs-roster" class="vs-roster vs-others" role="list"></ul>
+          </div>
           <button id="vs-edit-car" class="bigbtn minibtn">GARAGE</button>
           <!-- Host only, and only below the cap. Invites are SEQUENTIAL: this
                mints a fresh connection and a fresh code while everyone already

@@ -140,6 +140,40 @@ test("Files share feedback stays visible and accessible with Undo instructions",
   assert.match(b.dom.byId("pm-share-code-help").textContent, /APXG1 \/ #ghost=/);
 });
 
+for (const kind of ["setup", "livery", "daily", "undo", "invalid"]) test(`Files ${kind} share import releases the Settings modal only when navigating`, () => {
+  const events = [];
+  const b = bootImportUI({ globals: { ShareCode: {
+    decode: () => kind === "invalid" ? { ok: false, reason: "corrupt" } : { ok: true, kind },
+    apply: (_decoded, hooks) => {
+      if (kind === "setup" || kind === "livery") hooks.openGarage("share");
+      if (kind === "daily") hooks.openDaily();
+      return { ok: true, kind };
+    },
+    messageFor: () => "status",
+  } } });
+  const settings = b.dom.document.createElement("dialog"), garage = b.dom.document.createElement("section");
+  settings.id = "pmsettings"; garage.id = "carsetup";
+  b.dom.document.body.append(settings, garage);
+  settings.hidden = false; settings.open = true; garage.hidden = true;
+  settings.close = () => { settings.open = false; events.push("native-close"); };
+  b.G.closeSettings = () => { settings.hidden = true; settings.close(); events.push("settings-cleanup"); };
+  b.G.openGarage = (from) => { events.push("garage:" + from); garage.hidden = false; };
+  b.G.openDailyPicker = () => { events.push("daily"); };
+
+  b.dom.byId("pm-share-code-in").value = "share code";
+  b.dom.byId("pm-share-code-import").click();
+  if (kind === "setup" || kind === "livery") {
+    assert.deepEqual(events, ["native-close", "settings-cleanup", "garage:share"]);
+    assert.equal(garage.hidden, false);
+  } else if (kind === "daily") {
+    assert.deepEqual(events, ["native-close", "settings-cleanup", "daily"]);
+  } else {
+    assert.deepEqual(events, [], "invalid codes and UNDO stay on Settings");
+  }
+  assert.equal(settings.open, kind === "undo" || kind === "invalid", "native modal ownership follows navigation");
+  assert.equal(settings.hidden, kind !== "undo" && kind !== "invalid");
+});
+
 for (const [label, decoded, applied, message] of [
   ["invalid code", { ok: false, reason: "corrupt" }, null, "That share code is incomplete or corrupt."],
   ["empty Undo", { ok: true, kind: "undo" }, { ok: false, reason: "nothing-to-undo" }, "There is no share code import to undo."],

@@ -22,12 +22,26 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
                    rendezvous, href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
   const elements = new Map();
   const element = (id) => {
-    const el = { id, hidden: true, value: "", textContent: "", focus() {}, setAttribute(k, v) { this[k] = v; }, removeAttribute(k) { delete this[k]; } };
+    const kids = [];
+    const el = { id, hidden: true, value: "", textContent: "", focus() {},
+      setAttribute(k, v) { this[k] = v; }, removeAttribute(k) { delete this[k]; },
+      appendChild(n) {
+        if (n && !n.tagName && n.firstChild != null) {
+          while (n.firstChild) { const c = n.firstChild; n.removeChild(c); kids.push(c); }
+          return n;
+        }
+        kids.push(n); return n;
+      },
+      removeChild(n) { const i = kids.indexOf(n); if (i >= 0) kids.splice(i, 1); return n; },
+    };
+    Object.defineProperty(el, "firstChild", { get: () => kids[0] || null });
     elements.set(id, el);
     return el;
   };
   element("vsfriend");
   element("vs-pick");
+  element("vs-roster");
+  element("vs-player-count");
   const room = element("vs-room");
   const status = element("vs-status");
   status.classList = { toggle() {} };
@@ -55,6 +69,26 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     addEventListener(type, fn) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(fn);
+    },
+    createElement(tag) {
+      const kids = [];
+      const el = { tagName: tag, className: "", textContent: "", title: "", hidden: false,
+        style: {}, dataset: {},
+        appendChild(n) { kids.push(n); return n; },
+        removeChild(n) { const i = kids.indexOf(n); if (i >= 0) kids.splice(i, 1); return n; },
+        setAttribute(k, v) { this[k] = v; if (k === "class") this.className = v; },
+        addEventListener() {},
+      };
+      Object.defineProperty(el, "firstChild", { get: () => kids[0] || null });
+      return el;
+    },
+    createDocumentFragment() {
+      const kids = [];
+      return {
+        appendChild(n) { kids.push(n); return n; },
+        removeChild(n) { const i = kids.indexOf(n); if (i >= 0) kids.splice(i, 1); return n; },
+        get firstChild() { return kids[0] || null; },
+      };
     },
   };
   const transports = [];
@@ -746,6 +780,15 @@ async function connectedHost(extra = {}) {
     scanFactory: () => { const s = { stops: 0, stop() { this.stops++; }, start: async () => ({ ok: true }) }; scanners.push(s); return s; },
     teams: TWO_TEAMS, netSession: fakeNetSession(made), transportStatus: "open",
   }, extra));
+  h.lobby.setTransportFactory(() => {
+    const closers = [];
+    const t = {
+      status: "open",
+      onClose(fn) { closers.push(fn); },
+      close() { for (const fn of closers) fn("local"); },
+    };
+    return t;
+  });
   h.lobby.wire();
   await h.lobby.host();
   h.lobby.watchForOpen();
@@ -1298,8 +1341,56 @@ test("a connection shows its verification code, and only the HOST can remove tha
     const [id] = Object.keys(codes);
     assert.equal(h.lobby.removeGuest("nobody"), false, "an unknown id is a no-op");
     assert.equal(h.lobby.removeGuest(id), true, "the host removes the guest whose code differs");
-    assert.equal(closed, 1, "by closing that guest's transport");
+    assert.equal(closed, 0, "LEFT { evicted } goes out first: the close waits for the guest's ack");
+    assert.equal(h.lobby.removeGuest(id), true, "a second tap while waiting is a no-op");
+    await new Promise((r) => setTimeout(r, 1700));
+    assert.equal(closed, 1, "a silent guest is closed after the grace window");
     assert.equal(Object.keys(h.lobby.verifyCodes()).length, 0, "and its code goes with it");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a guest the host evicts sees a dedicated message, not 'host left'", async () => {
+  let guestTransport = null, closedByGuest = false;
+  const made = [];
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }), teams: TWO_TEAMS,
+    netSession: fakeNetSession(made), transportStatus: "open",
+  });
+  h.lobby.setTransportFactory(() => {
+    const closers = [];
+    const t = {
+      status: "open",
+      onClose(fn) { closers.push(fn); },
+      close() { closedByGuest = true; for (const fn of closers) fn(); },
+    };
+    guestTransport = t;
+    return t;
+  });
+  await h.lobby.join();
+  h.lobby.watchForOpen();
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  await new Promise((r) => setTimeout(r, 300));
+  try {
+    assert.equal(made.length, 1);
+    const EV = h.context.NetPlay.EV;
+    made[0].deliver(EV.LEFT, { evicted: true });
+    // No manual close: the guest closes its own end on LEFT { evicted } (the
+    // host's ack), and that close handler reads the eviction tag.
+    assert.equal(closedByGuest, true, "the guest closed its own end");
+    assert.match(h.status.textContent, /removed you from the room/i);
+    assert.doesNotMatch(h.status.textContent, /host left the room/i);
+  } finally { h.lobby.cancel(); }
+});
+
+test("host remove: evicting the last guest keeps the host in the waiting room", async () => {
+  const { h } = await connectedHost();
+  try {
+    assert.equal(h.lobby.removeGuest("g1"), true);
+    await new Promise((r) => setTimeout(r, 1700));   // no ack from the fake guest: the grace close
+    assert.equal(h.lobby.status().guests, 0);
+    assert.match(h.status.textContent, /removed/i);
+    assert.equal(h.elements.get("vs-room").hidden, false, "not sent back to the pick screen");
+    assert.equal((await h.lobby.inviteAnother()).ok, true, "the seat is free to invite again");
   } finally { h.lobby.cancel(); }
 });
 

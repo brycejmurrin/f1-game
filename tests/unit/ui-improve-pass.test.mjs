@@ -790,7 +790,7 @@ test("VS Friend text uses the menu type scale instead of sub-floor rem literals"
     for (const size of fs.matchAll(/([0-9.]+)rem/g)) if (parseFloat(size[1]) < 0.875) offenders.push(`${r.selector}: ${size[0]}`);
   }
   assert.deepEqual(offenders, []);
-  assert.equal(decl(section, /\.vs-ready$/, "font-size"), "var(--fs-micro)");
+  assert.equal(decl(section, /\.vs-roster-remove$/, "font-size"), "var(--fs-micro)");
   assert.equal(decl(section, /\.vs-summary dd$/, "font-size"), "var(--fs-2)");
 });
 

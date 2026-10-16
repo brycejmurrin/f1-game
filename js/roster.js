@@ -254,6 +254,7 @@
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
     "js/audio/rivals.js",
+    "js/audio/crowd.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
     "js/audio/radio-voice.js",
@@ -286,6 +287,10 @@
     [
       "js/audio/engine.js",
       "js/audio/music-lib.js"
+    ],
+    [
+      "js/audio/engine.js",
+      "js/audio/crowd.js"
     ],
     [
       "js/audio/voice-pack.js",

@@ -156,6 +156,22 @@ test("MenuNav: D-pad Down leaves a focused search field; the caret keys stay wit
   assert.equal(h.MenuNav.ownsArrows(search, "PageDown"), false, "the page keys page the pane, not the field");
 });
 
+// #2161: a pad reaches MenuNav as an UNTRUSTED synthetic ArrowLeft/Right, which has no
+// native caret default, so a text INPUT owning it made the direction dead.
+test("MenuNav: a synthetic pad Left/Right leaves a search field; a trusted one keeps the caret", () => {
+  const h = bootMenuNav();
+  const search = h.add("sel-track-search", { tag: "input", type: "search", x: 10, y: 10, w: 150 });
+  h.add("sel-clear", { x: 200, y: 10, w: 60 });
+  search.focus();
+  const keyboard = h.key("ArrowRight", true);
+  assert.equal(h.focused(), "sel-track-search", "a hardware keyboard moves the caret");
+  assert.equal(keyboard.defaultPrevented, false, "the browser keeps the trusted caret default");
+  const pad = h.key("ArrowRight", false);
+  assert.equal(h.focused(), "sel-clear", "the pad's Right walks to the control on the right");
+  assert.equal(pad.defaultPrevented, true);
+  assert.equal(h.MenuNav.ownsArrows(search, "Home", { isTrusted: false }), true, "Home/End stay with the field");
+});
+
 test("MenuNav: trusted arrows edit a textarea, while a synthetic pad arrow can leave it", () => {
   const h = bootMenuNav();
   const box = h.add("vs-answer-in", { tag: "textarea", y: 10 });
