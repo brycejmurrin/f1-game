@@ -232,6 +232,11 @@ const DataResults = (function () {
       return tr;
     }
 
+    function driverTag(r, byNum) {
+      const d = byNum[r.num] || {};
+      return d.code || (r.num !== null ? "#" + r.num : "—");
+    }
+
     function driverCells(tr, r, byNum) {
       const d = byNum[r.num] || {};
       const who = d.name || (r.num !== null ? "Car " + r.num : "—");
@@ -313,8 +318,13 @@ const DataResults = (function () {
           // dp is the last round the group below BELONGS to, and a driver whose
           // deepest round is Q2 was eliminated IN Q2 — not in the Q3 they never
           // reached. Off by one here reads plausibly and is wrong on every row.
+          // The provider records no "advanced" flag: a car that went through
+          // but set no time in the next round reads exactly like the first car
+          // knocked out there. So the lead of the group below is named rather
+          // than asserted eliminated, and the band never claims more than the
+          // times prove.
           tbody.appendChild(cutRow(6, dp < 0 ? "NO TIME SET"
-                                             : "ELIMINATED IN " + qLabel(meta, dp)));
+            : "ELIMINATED IN " + qLabel(meta, dp) + " · P" + r.pos + " MAY HAVE ADVANCED WITHOUT A TIME"));
         }
         prev = dp;
         const tr = el("tr");
@@ -358,7 +368,11 @@ const DataResults = (function () {
         tr.appendChild(el("td", "dh-td-time", fmtLap(qSlot(r, i))));
         tr.appendChild(el("td", "dh-td-time", fmtGap(qGap(r, i)) || "—"));
         tbody.appendChild(tr);
-        if (n === lastThrough) tbody.appendChild(cutRow(5, "ELIMINATED IN " + qLabel(meta, i)));
+        if (n === lastThrough) {
+          const nx = ran[n + 1];
+          tbody.appendChild(cutRow(5, "ELIMINATED IN " + qLabel(meta, i) +
+            (nx ? " · " + (driverTag(nx, byNum)) + " MAY HAVE ADVANCED WITHOUT A TIME" : "")));
+        }
       });
       t.appendChild(tbody);
       return tableWrap(t);
