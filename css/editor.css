@@ -13,7 +13,7 @@
 #trackdesigner::backdrop { background: none; }
 #trackdesigner[open] {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(auto, 1fr) auto;
   /* .screen centres its items (place-items: center): with that, the body is
      content-sized (890px on a 412px-tall phone, measured 2026-10-01), overlaps
      the head and the foot, and the rail never scrolls. Stretch fills the track. */
@@ -30,7 +30,13 @@
     calc(var(--safe-b) / var(--ui-scale))
     calc(var(--safe-l) / var(--ui-scale));
   box-sizing: border-box;
-  overflow: hidden;
+  /* Size queries use the space left after UI SIZE and safe-area padding.
+     A constrained editor can grow its body and scroll the dialog instead of
+     clipping either canvas or putting the inspector underneath the footer. */
+  container: designer-shell / size;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 /* The canonical .sheet-head delivers the paint and the brand-red rail; the
    dialog is a grid, so only the flex deltas the .sheet grid would supply. */
@@ -537,7 +543,7 @@
 #trackdesigner [data-role="profile-view"] .td-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 #trackdesigner [data-role="profile-view"] button { padding-inline: calc(var(--gap) / 3); }
 @media (min-width: 761px) and (min-height: 600px) {
-  #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: calc(var(--chip-h) * 4.5); }
+  #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: clamp(72px, 40%, calc(var(--chip-h) * 4.5)); }
 }
 
 @container (max-width: 320px) {
@@ -611,7 +617,7 @@
   }
   #trackdesigner .td-stage > canvas:not([data-role="profile"]) { grid-column: 1; grid-row: 1; }
   #trackdesigner .td-stage > canvas[data-role="profile"] { grid-column: 1; grid-row: 2; height: 48px; min-height: 48px; }
-  #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: 96px; min-height: 72px; }
+  #trackdesigner[data-mode="elevation"] .td-stage > canvas[data-role="profile"] { height: clamp(72px, 40%, 96px); min-height: 72px; }
   #trackdesigner .td-stage > .td-chips[data-role="toolbar"],
   #trackdesigner[data-mode="scenery"] .td-stage > .td-chips[data-role="toolbar"] {
     position: static; grid-column: 2; grid-row: 1 / span 2;
@@ -708,5 +714,37 @@
 @media (max-width: 760px) and (orientation: portrait) {
   #trackdesigner .td-body { grid-template-rows: auto minmax(0, 1.3fr) minmax(0, 1fr); }
 }
+
+/* Preserve useful canvas and inspector space on short or enlarged interfaces.
+   Scrolling belongs to the dialog once those minimums cannot fit together. */
+@container designer-shell (max-height: 600px) {
+  #trackdesigner .sheet-head { padding-block: calc(var(--gap) / 2); }
+  #trackdesigner .td-body { min-height: calc(var(--tap) * 8); }
+  #trackdesigner .td-rail { min-height: calc(var(--tap) * 3.5); }
+  #trackdesigner .td-stage { min-height: calc(var(--tap) * 4.5); }
+  #trackdesigner .td-stage > .td-stats,
+  #trackdesigner .td-stage > .td-hint { display: none; }
+  #trackdesigner .td-foot .td-msg { min-width: 0; flex-basis: 100%; white-space: normal; overflow-wrap: anywhere; }
+}
+/* Use the effective width, not the unscaled viewport, for stacked editing. */
+@container designer-shell (max-width: 500px) and (max-height: 600px) {
+  #trackdesigner .td-body { min-height: calc(var(--tap) * 12); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
+  #trackdesigner [data-role="mode-bar"] { grid-column: 1; grid-row: 1; }
+  #trackdesigner[data-pane="design"] .td-stage { height: calc(var(--tap) * 6); min-height: calc(var(--tap) * 6); grid-column: 1; grid-row: 2; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(72px, 1fr) auto; }
+  #trackdesigner[data-pane="design"] .td-stage > .td-chips[data-role="toolbar"] { position: static; grid-column: 1; grid-row: 1; flex-flow: row wrap; }
+  #trackdesigner[data-pane="design"] .td-stage > canvas:not([data-role="profile"]) { grid-column: 1; grid-row: 2; }
+  #trackdesigner[data-pane="design"] .td-stage > canvas[data-role="profile"] { grid-column: 1; grid-row: 3; }
+  #trackdesigner .td-rail { grid-column: 1; grid-row: 3; }
+  #trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-body { grid-template-rows: minmax(0, 1fr); }
+  #trackdesigner:is([data-pane="library"], [data-pane="howto"]) .td-rail { grid-row: 1; }
+}
+@container designer-shell (max-width: 360px) {
+  #trackdesigner .td-foot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #trackdesigner .td-foot > .sel-edit,
+  #trackdesigner [data-role="file-menu"] > summary { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+  #trackdesigner [data-role="workspace-status"] { flex-wrap: wrap; }
+  #trackdesigner [data-role="checks-summary"] { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+}
+#trackdesigner [data-role="file-menu"] [data-role="file-actions"] { width: min(28em, calc(100cqw - var(--gap) * 2)); }
 
 }

@@ -20,6 +20,47 @@ const LANDSCAPE = { width: 1180, height: 720 };
 
 test.describe("Touch designer workspace", () => {
   test.use({ hasTouch: true, isMobile: true });
+  test("short and scaled phones keep both views and every workspace reachable", async ({ page }, testInfo) => {
+    await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+    await page.evaluate(() => TrackDesigner.save());
+    const root = page.locator("#trackdesigner");
+    const cells = [[734, 343, 200], [393, 659, 100], [734, 343, 100], [852, 344, 100],
+      [393, 659, 150], [734, 343, 150], [852, 344, 150], [844, 390, 150],
+      [393, 659, 200], [852, 344, 200], [844, 390, 200], [1194, 834, 200], [390, 844, 100], [844, 390, 100]];
+    for (const [width, height, scale] of cells) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(({ width, height, scale }) => {
+        const d = document.documentElement.style, portrait = height > width, side = width === 844 ? 47 : 59;
+        const insets = width > 1000 ? { t: 0, r: 0, b: 0, l: 0 } : portrait ? { t: 59, r: 0, b: 34, l: 0 } : { t: 0, r: side, b: 21, l: side };
+        for (const [key, value] of Object.entries(insets)) d.setProperty("--sa" + key, value + "px");
+        window.__apex.uiScale(scale);
+      }, { width, height, scale });
+      await root.getByRole("tab", { name: "DESIGN", exact: true }).tap();
+      for (const mode of ["edit", "elevation"]) {
+        await root.locator(`[data-role="mode-bar"] [data-mode="${mode}"]`).tap();
+        await expect(root.locator('canvas[data-role="profile"]')).toBeVisible();
+        expect(await root.evaluate((e) => Math.min(...[...e.querySelectorAll(".td-stage > canvas")]
+          .flatMap((c) => { const r = c.getBoundingClientRect(); return [r.width, r.height]; }))), `${width}x${height}@${scale}: both drawing surfaces retain usable dimensions`).toBeGreaterThanOrEqual(44);
+        await expect.poll(() => root.evaluate((e) => {
+          const stage = e.querySelector(".td-stage").getBoundingClientRect();
+          const profile = e.querySelector('canvas[data-role="profile"]').getBoundingClientRect();
+          const map = e.querySelector('.td-stage > canvas:not([data-role="profile"])').getBoundingClientRect();
+          return Math.max(profile.bottom - stage.bottom, map.bottom - profile.top);
+        }), { message: `${width}x${height}@${scale} ${mode}: profile must fit its stage` }).toBeLessThanOrEqual(1);
+      }
+      await root.locator('[data-role="mode-bar"] [data-mode="scenery"]').tap();
+      for (const section of ["themes", "atmosphere", "objects"]) {
+        await root.locator(`[data-scenery-section="${section}"]`).tap({ timeout: 10_000 });
+        await expect(root.locator(`#td-scenery-panel-${section}`)).toBeVisible();
+      }
+      for (const name of ["MY CIRCUITS", "HOW TO", "DESIGN"]) await root.getByRole("tab", { name, exact: true }).tap();
+      await root.locator('[data-role="file-menu"] > summary').tap();
+      for (const name of ["SHARE", "Share a picture card of this circuit", "EXPORT", "IMPORT"]) await root.getByRole("button", { name, exact: true }).click({ trial: true });
+      await page.keyboard.press("Escape");
+      expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1), `${width}x${height}@${scale}: no horizontal escape`).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`responsive-${width}x${height}-${scale}.jpg`) });
+    }
+  });
   test("touch scrolling keeps the map, profile and scenery sections reachable", async ({ page }) => {
     await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
     const root = page.locator("#trackdesigner");
@@ -47,7 +88,7 @@ test("workspace organization preserves controls and scroll across modes and libr
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
-  for (const viewport of [{ ...LANDSCAPE, scale: 1 }, { width: 390, height: 844, scale: 1 }, { width: 734, height: 343, scale: 1 }, { ...LANDSCAPE, scale: 1.5 }]) {
+  for (const viewport of [{ ...LANDSCAPE, scale: 1 }, { width: 390, height: 844, scale: 1 }, { width: 734, height: 343, scale: 1 }, { ...LANDSCAPE, scale: 1.5 }, { width: 1280, height: 800, scale: 2 }, { width: 1920, height: 937, scale: 2 }, { width: 1920, height: 1080, scale: 2 }]) {
     await page.setViewportSize(viewport);
     const root = page.locator("#trackdesigner"), rail = root.locator(".td-rail");
     await root.evaluate((e, scale) => e.style.setProperty("--ui-scale", String(scale)), viewport.scale || 1);
@@ -57,13 +98,13 @@ test("workspace organization preserves controls and scroll across modes and libr
       await rail.evaluate((e) => { e.scrollTop = 0; });
       await expect(root.locator('[data-role="checks-summary"]')).toBeVisible();
       expect(await root.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
-      if (id === "edit") {
-        await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.scale || 1}-edit.jpg`) });
+      if (id === "edit" || id === "elevation") {
+        await page.screenshot({ path: testInfo.outputPath(`workspace-${viewport.width}-${viewport.height}-${viewport.scale || 1}-${id}.jpg`) });
         const toolbar = root.locator('[data-role="toolbar"]'), map = root.locator('.td-stage > canvas:not([data-role="profile"])');
         const t = await toolbar.boundingBox(), m = await map.boundingBox();
         expect(t.y + t.height <= m.y + 1 || t.x >= m.x + m.width - 1).toBe(true);
-        const profile = await root.locator('.td-stage > canvas[data-role="profile"]').boundingBox();
-        const stage = await root.locator('.td-stage').boundingBox();
+        const bounds = await root.locator('.td-stage').evaluate((e) => ({ stage: e.getBoundingClientRect().bottom,
+          profile: e.querySelector('canvas[data-role="profile"]').getBoundingClientRect().bottom }));
         const layout = await root.locator('.td-stage').evaluate((e) => ({
           width: getComputedStyle(e).width, height: getComputedStyle(e).height,
           container: getComputedStyle(e).containerName,
@@ -72,7 +113,7 @@ test("workspace organization preserves controls and scroll across modes and libr
             flex: getComputedStyle(c).flex, minHeight: getComputedStyle(c).minHeight,
             buttons: [...c.querySelectorAll('button')].map((b) => getComputedStyle(b).flex) })),
         }));
-        expect(profile.y + profile.height, JSON.stringify(layout)).toBeLessThanOrEqual(stage.y + stage.height + 1);
+        expect(bounds.profile, JSON.stringify(layout)).toBeLessThanOrEqual(bounds.stage + 1);
       }
       if (id === "scenery") {
         for (const section of ["themes", "atmosphere", "objects"]) {
