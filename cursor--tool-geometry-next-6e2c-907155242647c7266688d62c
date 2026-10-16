@@ -1,1 +1,0 @@
-1792173360	Bryce Murrin	Float mixed-gap and startline JSON verdict fixes: tools/track/float-audit.cjs tools/track/startline-probe.cjs tests/unit/scenery-grounding.test.mjs tests/unit/*startline*  [cursor/tool-geometry-next-6e2c; session 907155242647c7266688d62c]
