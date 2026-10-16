@@ -416,11 +416,22 @@ window.SpotifyMusic = (function () {
     sdkPromise = new Promise((res, rej) => {
       const prev = window.onSpotifyWebPlaybackSDKReady;
       let timer = null;
+      let settled = false;
+      let handler = null;
       const cleanup = function () {
         if (timer !== null) clearTimeout(timer);
         s.onerror = null;
+        // A timed-out/failed load must give the global hook back. Leaving our
+        // dead callback installed makes a later SDK load call an already
+        // settled promise and can clobber a handler installed by another
+        // owner between retries.
+        if (window.onSpotifyWebPlaybackSDKReady === handler) {
+          window.onSpotifyWebPlaybackSDKReady = prev;
+        }
       };
-      window.onSpotifyWebPlaybackSDKReady = function () {
+      handler = window.onSpotifyWebPlaybackSDKReady = function () {
+        if (settled) return;
+        settled = true;
         if (typeof prev === "function") { try { prev(); } catch (e) { /* a foreign SDK-ready handler must not block ours */ } }
         cleanup();
         res();
@@ -428,9 +439,15 @@ window.SpotifyMusic = (function () {
       const s = document.createElement("script");
       s.src = SDK_URL;
       s.async = true;
-      s.onerror = () => { cleanup(); rej(new Error("blocked")); };
+      s.onerror = () => {
+        if (settled) return;
+        settled = true; cleanup(); rej(new Error("blocked"));
+      };
+      timer = setTimeout(() => {
+        if (settled) return;
+        settled = true; cleanup(); rej(new Error("timeout"));
+      }, 20000);
       document.head.appendChild(s);
-      timer = setTimeout(() => { cleanup(); rej(new Error("timeout")); }, 20000);
     }).catch((err) => {
       sdkPromise = null;
       throw err;

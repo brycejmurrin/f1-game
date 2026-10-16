@@ -34,6 +34,7 @@ function load(fetchImpl, opts = {}) {
   const session = new Map(opts.session || []);
   const pending = [];   // setTimeout callbacks, in the order they were queued
   const elements = new Map();
+  const scripts = opts.scripts || [];
   const element = (id) => {
     if (!elements.has(id)) elements.set(id, {
       value: "", dataset: {}, addEventListener(event, fn) { this[event] = fn; },
@@ -58,7 +59,15 @@ function load(fetchImpl, opts = {}) {
       readyState: "complete",
       getElementById(id) { return opts.dom && (id === "sp-search" || id === "sp-fwd") ? element(id) : null; },
       addEventListener() {},
-      createElement() { return {}; },
+      createElement(tag) {
+        if (tag === "script") {
+          const script = { onerror: null, src: "" };
+          scripts.push(script);
+          return script;
+        }
+        return {};
+      },
+      head: { appendChild() {} },
     },
     localStorage: {
       getItem: (key) => disk.get(key) || null,
@@ -78,7 +87,7 @@ function load(fetchImpl, opts = {}) {
   seedStore(ctx);   // spotify.js keeps its keys through GameStore.store's raw lane, over the fake localStorage above
   vm.runInContext(SRC, ctx, { filename: "js/audio/spotify.js" });
   const flush = () => { const q = pending.splice(0); for (const fn of q) if (fn) fn(); };
-  return { SpotifyMusic: sandbox.SpotifyMusic, disk, session, flush, element };
+  return { SpotifyMusic: sandbox.SpotifyMusic, disk, session, flush, element, scripts, window: sandbox };
 }
 
 test("a retryable refresh failure preserves the long-lived Spotify session", async () => {
@@ -163,6 +172,25 @@ test("an account response whose body stalls settles as a network failure", async
   assert.equal(result.reason, "network");
   resolveBody({ product: "premium" });
   await Promise.resolve();
+});
+
+test("a timed-out SDK load restores a pre-existing ready hook for retry", async () => {
+  const scripts = [];
+  const { SpotifyMusic, flush, window } = load(() => Promise.resolve(jsonResponse({})), {
+    disk: [[TOKEN_KEY, JSON.stringify({ access_token: "live", refresh_token: "r-1", expires_at: Date.now() + 3600000, scope: "streaming" })]],
+    scripts,
+  });
+  const foreign = () => {};
+  window.onSpotifyWebPlaybackSDKReady = foreign;
+
+  const connecting = SpotifyMusic.setMode("browser") && SpotifyMusic.connect();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(scripts.length, 1, "the browser mode boot should append one SDK script");
+  flush();
+  await connecting;
+  assert.equal(window.onSpotifyWebPlaybackSDKReady, foreign,
+    "timeout cleanup must restore the callback that was installed before the attempt");
 });
 
 test("concurrent callers share one rotating refresh request", async () => {
