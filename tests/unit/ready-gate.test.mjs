@@ -348,3 +348,11 @@ test("a newer queued attempt without started_at cannot reuse an old pass", () =>
   const queued = { ...run(GUARDS_JOB, "queued", null, 2), started_at: null };
   for (const checks of [[old, queued], [queued, old]]) assert.equal(guardsVerdict(checks).state, "pending");
 });
+
+test("planVerdict: [~] and Deferred: items count as closed (#2397)", () => {
+  const body = "## Plan\n- [x] a — sha\n- [~] later thing\n- [ ] Deferred: follow-up #12\n- [ ] ~~dropped~~ — why\n";
+  assert.deepEqual(planVerdict(body), { state: "done", items: 4, open: [] });
+  const open = planVerdict("## Plan\n- [~] later\n- [ ] still todo\n- [ ] Deferred-ish not closed\n");
+  assert.equal(open.state, "open");
+  assert.deepEqual(open.open, ["still todo", "Deferred-ish not closed"]);
+});

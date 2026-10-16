@@ -15,32 +15,43 @@ const SessionEntry = (function () {
       if (pending && pending.kind === kind && pending.key === key) return pending.promise;
       const mine = ++generation;
       const current = () => mine === generation;
-      const promise = (async () => {
+      const canceled = (reason) => ({ kind: "canceled", generation: mine, reason });
+      const outcome = (async () => {
         try {
           // Start after `pending` is installed. A synchronous prepare failure
           // otherwise runs catch/finally before the assignment below and leaves
           // its already-rejected promise latched as the pending request.
           await Promise.resolve().then(prepare);
-          if (!current()) return { kind: "canceled", reason: "superseded" };
+          if (!current()) return canceled("superseded");
           if (!valid()) {
             cancel();
             if (recover) recover();
-            return { kind: "canceled", reason: "settings changed" };
+            return canceled("settings changed");
           }
           // `current` lets a long commit re-check supersession after each of its own awaits.
-          return await commit(current);
+          const value = await commit(current);
+          if (!current()) return Object.assign(canceled("superseded"), { value });
+          return { kind: value === false ? "failed" : "committed", generation: mine, value };
         } catch (e) {
-          if (!current()) return { kind: "canceled", reason: "superseded" };
+          if (!current()) return canceled("superseded");
           if (recover) recover(e);
-          throw e;
+          return { kind: "failed", generation: mine, error: e };
         } finally {
           if (current()) pending = null;
         }
       })();
+      // Preserve legacy await values and duplicate promise identity. Integrations
+      // read one explicit outcome instead of interpreting void/false/canceled.
+      const promise = outcome.then((r) => {
+        if ("error" in r) throw r.error;
+        return r.kind === "canceled" && !("value" in r) ? { kind: r.kind, reason: r.reason } : r.value;
+      });
+      promise.outcome = outcome;
       pending = { kind, key, promise };
       return promise;
     }
-    return { begin, cancel };
+    const owns = (r) => !!r && r.generation === generation;
+    return { begin, cancel, owns };
   }
   return { create };
 })();
