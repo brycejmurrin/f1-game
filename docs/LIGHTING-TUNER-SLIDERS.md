@@ -604,7 +604,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
-| `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, glx.js×4 |
+| `fogDensityMul` | FOG DENSITY | 0 … 3.625 | 1 | `uFogDensity` | ✓ | game.js×2, atmosphere.js×3, glx.js×4 |
 | `fogHeight` | FOG HEIGHT FALLOFF | 0 … 0.25 | 0.018 | `uFogHeight` | ✓ | game.js×5, glx.js×4 |
 | `fogTint` | FOG WARM / COOL | -6 … 3.9 | 0 | `uFogTint` | ✓ | glx.js×2 |
 | `fogColorSat` | FOG COLOUR SATURATION | 0 … 2.5 | 1 | — |   | atmosphere.js×2 |
@@ -618,7 +618,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `fogClip` | FOG GLOW CLIP | 0 … 1.75 | 0.7 | `uLampFogClip` | ✓ | glx.js×2 |
 | `fogSunCore` | FOG SUN CORE | 0 … 1.5 | 0.6 | `uFogSunCore` |   | glx.js×2 |
 | `overcastFogMul` | OVERCAST FOG BOOST | 1 … 2.75 | 1.7 | — |   | atmosphere.js×2 |
-| `fogWxMul` | FOG BOOST | 1 … 6 | 3 | — |   | atmosphere.js×2 |
+| `fogWxMul` | FOG BOOST | 1 … 2.75 | 1.5 | — |   | atmosphere.js×2 |
 | `lampVolBase` | BEAMS (CLEAR) | 0 … 0.7 | 0.05 | — | ✓ | game.js |
 | `lampVolHaze` | BEAMS (HAZE) | 0 … 1.5 | 0.65 | — | ✓ | game.js |
 | `lampVolCap` | BEAM CEILING | 0 … 1.5 | 0.7 | — | ✓ | game.js |
@@ -684,7 +684,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` | ✓ | game.js×2, glx.js×2 |
 | `cloudDef` | CLOUD DEFINITION | 0 … 1.2 | 1 | `uCloudDef` |   | game.js×2, glx.js×2 |
 | `skyColorSat` | SKY COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
-| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×13, weather-arc.js×6, glx.js×2, puddles.js×2 |
+| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — |   | apex.js, game.js×13, real-race.js, weather-arc.js×6, glx.js×2, puddles.js×2 |
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js×3 |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
 | `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×4 |

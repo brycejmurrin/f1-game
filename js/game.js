@@ -3002,8 +3002,8 @@ function layoutDocks(steerBtns, manual) {
 // orders disagree exactly when it matters — a close finish. Early returns so
 // every "keep our own order" reason is one visible line rather than a nest.
 function netOrder(order) {
-  if (!netPlay.active()) return order;
-  if (netPlay.ownsClassification()) {
+  const kept = netPlay.active() ? null : netPlay.lastResult(); if (!netPlay.active() && !kept) return order;   // kept: the host quit just after its RESULT (#2199)
+  if (!kept && netPlay.ownsClassification()) {
     // Keyed by driverId, NOT by cars.indexOf: indices are NOT stable across
     // peers — makeCars() drops the custom team unless the local player selected
     // it, so the two grids differ in length and order, and a guest would re-read
@@ -3017,7 +3017,7 @@ function netOrder(order) {
     })));
     return order;
   }
-  const verdict = netPlay.peerResult();
+  const verdict = kept || netPlay.peerResult();
   // Array.isArray, not just a truthy .length: this is the HOST's payload off
   // the wire, and `{length:1}` passes a length test then throws on .map —
   // straight into index.html's error overlay, which eats the classification
@@ -4296,7 +4296,7 @@ let netPlay = {
   active: () => false, owns: () => false, role: () => null,
   ownsRaceControl: () => true, ownsClassification: () => true,
   awaitingStart: () => false, awaitingResult: () => false,
-  rivalDriverIds: () => [], peerLaps: () => [], peerResult: () => null,
+  rivalDriverIds: () => [], peerLaps: () => [], peerResult: () => null, lastResult: () => null,
   predict: () => null, status: () => ({ active: false, role: null }),
   tick: () => {}, stop: () => {}, hostStart: () => {},
   start: () => ({ ok: false, error: "no_net", message: "Multiplayer is not loaded." }),
@@ -4502,7 +4502,7 @@ function quitToMenu() {
 // ---------- per-frame update ----------
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
-const ranked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
+const ranked = [], parked = [], byProgDesc = (a, b) => b.prog - a.prog;   // hoisted: no comparator closure per step
 // AFTER THE FLAG a finished car keeps accruing prog in coast(), so a later but faster finisher out-progressed an
 // earlier one and took its c.rank (the HUD position, the relative board). The finishers' rank SLOTS are handed
 // back out in classification order (RaceControl.finishOrder: laps, then the clock); running cars keep theirs and
@@ -4693,13 +4693,15 @@ function update(dt) {
   // walk: a lapped car is a lap away in ranked[] and beside you on the road.
   if (track && ranked.length) Collide.fillArcBuckets(ranked, track.total, TRAFFIC_BUCKET_M, _snapProgOf);
   RaceControl.beginLineStep(cars);
+  parked.length = 0;
+  for (const c of cars) if (c.retired && c.parkedOnRoad) parked.push(c);
   for (const c of cars) updateCar(c, dt, ranked);
   if (jumpStartPenalty.reactWindowOpen()) {
     for (const c of cars) jumpStartPenalty.tickReaction(c);
   }
   RaceControl.settleLineStep();   // finishers cannot be promoted to a new incident
 
-  collide.resolveCollisions(ranked, dt);
+  collide.resolveCollisions(parked.length ? ranked.concat(parked) : ranked, dt);
 
   // Rapier debris side-world: reads car poses (kinematic mirrors), owns only
   // its own shards, writes NOTHING back to gameplay. Inert unless enabled.
@@ -5910,6 +5912,8 @@ function updateCarLateral(c, dt, ranked, S) {
       if (c.holdOff == null) c.holdOff = desiredX - targetX;
       desiredX = clamp(targetX + c.holdOff, -(hw - 0.5), hw - 0.5);
     } else c.holdOff = null;
+    const pk = parked.length ? Collide.parkedAhead(c, parked, track.total, 30 + 1.5 * c.speed) : null;   // a car parked on the road (#2162): pass it a lane clear
+    if (pk && Math.abs(desiredX - pk.x) < CLEAR) desiredX = clamp(pk.x > 0 ? pk.x - CLEAR : pk.x + CLEAR, -(hw - 0.5), hw - 0.5);
     // SIDE RUB AS A CONSTRAINT, NOT A SUGGESTION. `sep` is proportional to the
     // deficit (≤ 0.8 m once touching) and the steering deadzone below drops
     // anything under 0.3 m, while the shared racing line pulls the outer car up
@@ -6571,8 +6575,12 @@ function retireCar(c, reason) {
   const side = c.x >= 0 ? 1 : -1;
   const wall = Tracks.wallAt(track, c.s, side);
   // Out past the verge if there is room, but never through the barrier — on a
-  // street circuit "the far side of the runoff" is barely a car's width.
-  c.x = side * clamp(Math.max(smp.hw * 0.85, wall - 1.6), 0, Math.max(0, wall - 0.6));
+  // street circuit "the far side of the runoff" is barely a car's width, so
+  // the car stays ON the road there and is a static body (#2162): collide
+  // treats it as immovable, the AI steers round it (Collide.parkedAhead).
+  const halfW = Collide.WCAR / 2;
+  c.x = side * clamp(Math.max(smp.hw + halfW + 0.1, wall - 1.6), 0, Math.max(0, wall - 0.6));
+  c.parkedOnRoad = Math.abs(c.x) - halfW < smp.hw - 0.3;
   c.xVis = c.x;
   const w = worldFromTrack(c.s, c.x, smp);
   c.px = w.x; c.pz = w.z;
@@ -8114,7 +8122,8 @@ function render(dt) {
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
     // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
-    const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
+    const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c)
+      : (FieldLod.on && !c.isPlayer && _lod >= 2 ? carDraw.sharedRivalBodyMesh() : teamBodyMesh(c.team, c)));
     if (body) {
       gfx.draw(body, tmpMat, paint);
       if (_lod < 2) queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer, c.isPlayer ? null : c.visualSetup, c.isPlayer ? null : c.visStamp);   // FieldLod: no decal past 120 m

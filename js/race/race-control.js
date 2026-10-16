@@ -229,6 +229,7 @@ const RaceControl = (function () {
     let queryT = 0;
     let capHoldT = 0;       // remaining re-arm suppression after a cap-forced drop
     let capHoldLevel = 0;   // the level that capped; escalations ABOVE it still fly
+    let replayOwned = false;   // recorded flags are pictures, not live race-control procedures
     let restartWanted = false;   // one-shot: the red procedure has run its course
     // OVERTAKE after a neutralisation (Art. B7.2.2c): disabled while the Safety
     // Car is out, re-enabled only once the field has crossed the Line after it
@@ -261,7 +262,7 @@ const RaceControl = (function () {
     let enabled = !(savedCaution === false || savedCaution === 0 || savedCaution === "0");
 
     function reset() {
-      caution = blank();
+      caution = blank(); replayOwned = false;
       held = 0; heldCause = "";
       scriptHeld = 0; scriptCause = ""; wxHeld = 0; stormSince = null; stormAtStart = false;
       queryT = 0;
@@ -347,11 +348,12 @@ const RaceControl = (function () {
       // player's OWN cones and shards (hz.total >= 6) raised a VSC whose
       // cautionV held them to 0.6 of vTop, and the CAUTIONS row is hidden there
       // so it could not be switched off. Same reset path as "not racing".
-      if (G.state !== "race" || G.timeTrial || G.session === "quali") {
-        if (caution.level !== 0 || capHoldT) reset();
+      if ((G.state !== "race" && !(replayOwned && G.state === "count")) || G.timeTrial || G.session === "quali") {
+        if (caution.level !== 0 || capHoldT || replayOwned) reset();
         lowGripNoted = false;
         return;
       }
+      if (replayOwned) return;   // WATCH owns the whole flag snapshot, including GREEN and RED
       // The LOW GRIP note, once a race, on every peer (it is read off the
       // shared weather, not the flag): the one place the player is told why the
       // Overtake button went dead in the wet. Retried until the banner takes it.
@@ -480,6 +482,7 @@ const RaceControl = (function () {
     const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
     function apply(d) {
       if (!d || typeof d !== "object") return false;
+      replayOwned = d.replay === true;   // an ordinary apply releases recorded ownership
       const prev = caution.level;
       caution.level = Math.max(0, Math.min(4, d.level | 0));
       caution.sector = Number.isInteger(d.sector) && d.sector >= -1 ? d.sector : -1;

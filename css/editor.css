@@ -454,8 +454,9 @@
 #trackdesigner .td-row:has([data-look]) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 #trackdesigner .td-row:has([data-look]) > span { color: var(--dim); grid-column: 1 / -1; }
 #trackdesigner .td-row:has([data-look]) .sel-chip { min-width: 0; min-height: var(--chip-h); }
-#trackdesigner [data-role="prop-side"] { align-items: center; }
-#trackdesigner [data-role="prop-side"] > span { flex: 1; }
+#trackdesigner [data-role="prop-side"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; }
+#trackdesigner [data-role="prop-side"] > span { grid-column: 1 / -1; }
+#trackdesigner [data-role="prop-side"] .sel-chip { min-width: 0; width: 100%; justify-content: center; }
 #trackdesigner [data-role="placed-props"] .td-issue { cursor: default; }
 #trackdesigner [data-role="placed-props"] .td-issue > span { flex: 1; min-width: 0; }
 #trackdesigner [data-role="scenery"] .td-hint { display: block; line-height: 1.4; }
@@ -474,11 +475,12 @@
 #trackdesigner [data-role="object-list"] { margin-top: 0; padding-top: calc(var(--gap) / 2); }
 #trackdesigner [data-role="object-placement"],
 #trackdesigner [data-role="object-list"] { border-top: 1px solid var(--plate-line); }
-#trackdesigner [data-role="object-filters"] { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+#trackdesigner [data-role="object-filters"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #trackdesigner [data-role="object-filters"] .sel-chip { min-width: 0; justify-content: center; padding-inline: calc(var(--gap) / 3); }
 #trackdesigner [data-role="object-library"] [data-role="props"] { max-height: calc(var(--chip-h) * 3 + var(--gap) * 2); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 #trackdesigner [data-role="selected-object"] { color: var(--text); }
-#trackdesigner [data-role="prop-gap"] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; }
+#trackdesigner [data-role="prop-gap"] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+#trackdesigner [data-role="prop-gap"] > button:last-child { grid-column: 1 / -1; }
 #trackdesigner [data-role="prop-gap"] .sel-chip { min-height: var(--chip-h); min-width: var(--chip-h); padding-inline: calc(var(--gap) / 3); }
 #trackdesigner [data-role="prop-gap"] > span { grid-column: 1 / -1; }
 #trackdesigner [data-role="range-actions"] { align-self: end; }
