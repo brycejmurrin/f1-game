@@ -11,6 +11,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
 const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/designer.js"];
@@ -843,7 +844,7 @@ test("HOW TO: a third tab lists every HOWTO step, every input and the limits; th
   const tabs = walk(b.root).filter((e) => e.classList.contains("td-tab"));
   assert.deepEqual(tabs.map((t) => t.textContent), ["DESIGN", "MY CIRCUITS", "HOW TO"]);
   for (const t of tabs) assert.equal(t.getAttribute("role"), "tab");
-  assert.equal(b.root.querySelector('[role="tablist"]').getAttribute("aria-label"), "Track Designer sections");
+  assert.equal(b.root.querySelector('[role="tablist"]').getAttribute("aria-label"), "Track Designer workspace");
   assert.deepEqual(tabs.map((t) => t.getAttribute("aria-controls")), ["td-pane-design", "td-pane-library", "td-pane-howto"]);
   assert.deepEqual(tabs.map((t) => t.tabIndex), [0, -1, -1]);
   const [design, lib, how] = panes(b);
@@ -1705,7 +1706,7 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(b.G.state, "race");
   assert.equal(b.G.player.s, sTest, "…onto the armed point, not the grid");
   assert.equal(b.G.player.speed, 0);
-  assert.match(read("js/game.js"), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
+  assert.match(gameSource(), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
   // The way back: armed, so quitting reopens the designer on the same point.
   b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
   b.D.close();
