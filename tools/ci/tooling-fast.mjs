@@ -1119,6 +1119,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ui-sheets-audit.test.mjs",
   "tests/unit/uilayers-modal-order.test.mjs",
   "tests/unit/validation-cli.test.mjs",
+  "tests/unit/verify-live.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
   "tests/unit/visual-oracle.test.mjs",
   "tests/unit/vm-page-lifecycle.test.mjs",
