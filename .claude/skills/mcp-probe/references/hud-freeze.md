@@ -1,6 +1,6 @@
 # HUD / DOM freeze repro (pit stop, lap change, any HUD that stops updating)
 
-Setup per `recipes.md` § Setup (serve `:3456`, `chrome-start`, navigate, `race(id); go()`).
+Setup per [`chrome.md`](chrome.md) (serve `:3456`, `chrome-start`, navigate, `race(id); go()`).
 The HUD is DOM: no screenshot needed. Done = a value, not a picture.
 
 1. Call a stop: `__apex.pit({arm: true})` (no pit control exists; `docs/DEBUG-HOOKS.md` § `pit`).

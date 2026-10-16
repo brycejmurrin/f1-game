@@ -7,7 +7,8 @@ source audits, sharp and typescript for tooling — never shipped). Four vendore
 libraries DO ship, under `vendor/`, each loaded only by the feature that needs
 it: three.js r186 (TLX backend), Rapier (`js/physics/debris-world.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
-static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
+static files (GitHub Pages). Every project runtime JS file under `js/` is an IIFE that
+assigns ONE global; vendored addons may use their upstream module format.
 
 > **New here?** Start with [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) (boot path,
 > layer map, where to edit). This file is the module **contract** — what each
@@ -212,6 +213,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `hud-tyres.js` | `HudTyres` | tag | HUD tyre temperature state. |
 | `hud-damage.js` | `HudDamage` | tag | HUD DAMAGE CHIP: paints Damage (js/race/damage.js) on #hud-damage, a small car-outline glyph whose parts are tinted by level, with a short text fallback ("FW… |
 | `live-region.js` | `LiveRegion` | tag | LiveRegion: the ONE writer of #announce-live, the always-present polite region screen readers hear the race through. |
+| `hud-skin.js` | `HudSkin` | tag | HudSkin: the runtime team accent of the HUD (skinAccent + its WCAG ink pick). |
 | `hud-readouts.js` | `HudReadouts` | tag | the race HUD's derived readouts, kept out of js/ui/hud.js. |
 | `hud-relative.js` | `HudRelative` | tag | the opt-in RELATIVE box (iRacing-style) for GameHud. |
 | `hud-strategy.js` | `HudStrategy` | tag | the opt-in STRATEGY panel for GameHud. |

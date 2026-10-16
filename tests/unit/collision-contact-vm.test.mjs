@@ -663,7 +663,9 @@ test("a heavy rear-end fires the contact FX and the incident candidate once", as
 test("an AI striker into a parked player: the AI pays the whole share, the player is not launched", async () => {
   const A = g.apex;
   await straight(0, 0);
-  const r = A.rivals([{ dProg: -90, dx: 0, speed: 54 }])[0];
+  // 12 m back at 54 m/s: stopping takes ~66 m, so the strike is unavoidable. From 90 m the AI
+  // now brakes for the parked car (AiDrive.queueReach, #2565) and never hits it.
+  const r = A.rivals([{ dProg: -12, dx: 0, speed: 54 }])[0];
   const c = g.G.cars[r], p = g.G.player;
   c.tierV = 5;
   let worstDrop = 0, maxHuman = 0;
