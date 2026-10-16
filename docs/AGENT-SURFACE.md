@@ -10,6 +10,7 @@ need → skill (when / don'ts)
          ↓
        MCP?  local CLI pin → apex-tools (apex_*)
              live canvas   → chrome-devtools (chrome_*)      (mcp-probe)
+             source debug  → js-debugger (debugger_*)         (parent-owned existing Chrome)
              host browser  → playwright-official (browser_*) (survey-ui-matrix / css-play)
              Pages / web   → deploy-research subagent (host fetch / WebFetch)
              no wrap       → run the tools/ CLI
@@ -417,3 +418,13 @@ Host catalog empty (this Cloud dashboard often is):
 `dryRun: true` prints argv and spawns nothing. Browser wraps take the lock —
 `apex_status` first. `./tools/mcp/apex-tools-mcp.sh smoke` checks the repo shell
 wrappers without taking the lock.
+
+For source debugging, use the separately registered `js-debugger` server's
+`debugger_*` tools. When its host catalog is unavailable, keep
+`./tools/mcp/js-debugger-mcp.sh serve-http` running in one terminal, then call
+`./tools/mcp/js-debugger-mcp.sh call debugger_state '{}'` from another shell.
+The daemon preserves the attachment and pause state between calls. It attaches
+to the parent's existing local Chrome, never launches a browser, and must not
+drive a target during a Playwright group. Detach before ending the session.
+The complete [tool reference and debugging workflow](research/AGENT-JS-DEBUGGER-MCP.md)
+covers discovery, breakpoints, locals, stepping, exception pauses and cleanup.

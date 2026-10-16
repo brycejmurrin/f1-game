@@ -102,6 +102,33 @@ daemon with Ctrl-C/SIGTERM. Shutdown attempts breakpoint/exception cleanup and
 resume before closing CDP, and reports failures. Abrupt process termination
 cannot guarantee cleanup.
 
+## Tool reference
+
+These are the names exposed by the separate `js-debugger` server. In shell
+mode, pass the same name and a JSON argument object to the wrapper's `call`.
+
+| Tool | Use |
+| --- | --- |
+| `debugger_targets` | List page IDs in an existing loopback Chrome debugging endpoint. |
+| `debugger_attach` | Attach the exact selected page ID; does not launch Chrome. |
+| `debugger_state` | Read attachment, current pause token/stack/scopes and background operation status. |
+| `debugger_scripts` | Find parsed script IDs, optionally filtering by URL substring. |
+| `debugger_source` | Read a bounded source excerpt using one-based line numbers. |
+| `debugger_breakpoint` | Set an exact-URL breakpoint with one-based line/column and optional condition. |
+| `debugger_remove_breakpoint` | Remove a breakpoint owned by this debugger session. |
+| `debugger_control` | Request pause, resume, step over, step into or step out; inspect state afterward. |
+| `debugger_exceptions` | Set exception pauses to `none`, `uncaught` or `all`. |
+| `debugger_evaluate` | Inspect an expression in a paused frame; side effects require explicit opt-in. |
+| `debugger_properties` | Read current-pause object property descriptors without invoking getters. |
+| `debugger_run` | Trigger potentially mutating JavaScript without blocking later inspect/resume calls. |
+| `debugger_detach` | Remove owned breakpoints, reset exception mode, release objects and attempt resume/detach. |
+
+For game bugs, first reproduce with `__apex` hooks (see `docs/DEBUG-HOOKS.md`).
+Use this debugger when the next useful evidence is a branch decision, stack or
+local variable. A breakpoint pauses page JavaScript, so animation, UI updates
+and other page evaluations may wait until resume. Do not queue browser actions
+that depend on the page's event loop while it is paused.
+
 ## Agent workflow
 
 1. `debugger_targets {endpoint:"http://127.0.0.1:9222"}`; then
