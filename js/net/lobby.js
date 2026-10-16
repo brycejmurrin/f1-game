@@ -1428,7 +1428,11 @@ const NetLobby = (function () {
         friendQualifying = false;   // keep the room and its message up, but stop gating quali saves
         // beginRace hid the lobby — quit rather than idle an open session.
         const screen = els().screen;
-        if (screen && screen.hidden) { cancel(); if (G.quitToMenu) G.quitToMenu(); }
+        if (screen && screen.hidden) {
+          cancel(); if (G.quitToMenu) G.quitToMenu();
+          // say() wrote into the hidden lobby: tell the player on the menu they land on (H30).
+          if (G.announce) G.announce("COULD NOT START THE RACE — BACK TO MENU", 4, "info");
+        }
         return;
       }
       const started = G.netPlay.start({
