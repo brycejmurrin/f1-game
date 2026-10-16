@@ -107,6 +107,14 @@ test("race transcript includes delivered race/count cards only, bounds20 and cle
   const copy = history.rows(); copy.length = 0; assert.equal(history.rows().length, 20);
   history.clear(); assert.equal(history.rows().length, 0); G.state = "count"; assert.equal(history.delivered("Lights soon"), true);
 });
+test("race mix UI reports a refused sample and STOP cancels an active one", async () => {
+  const h = host(), panel = h.el("section", "audioset"); let playing = false, stops = 0, enabled = false;
+  h.sb.RaceMixAudition = { active: () => playing, start: () => { playing = enabled; return enabled; }, stop: () => { stops++; playing = false; } };
+  const api = h.run("js/ui/race-mix-controls.js", "RaceMixControls"), G = { soundOn: true, store: {} }, ui = api.create(G, panel), buttons = panel.querySelectorAll("button");
+  buttons[0].onclick(); await Promise.resolve(); assert.match(panel.querySelector("p").textContent, /unavailable/);
+  enabled = true; buttons[0].onclick(); await Promise.resolve(); assert.equal(playing, true); buttons[1].onclick(); assert.equal(playing, false);
+  G.soundOn = false; ui.refresh(); assert.equal(buttons[0].disabled, true); assert.ok(stops > 0);
+});
 test("controller profile UI resets only through Input and refreshes via its device event", async () => {
   const h = host(), panel = h.el("section", "controls"); let profile = { label: "Wheel", saved: true }, resets = 0;
   const input = { controllerProfile: () => profile, resetControllerProfile: () => { resets++; profile.saved = false; } };

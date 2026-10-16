@@ -60,22 +60,26 @@ export function shardEvidence(junitIn, startedIn) {
  * @returns {{ ok: boolean, reason: string, infraRetry: boolean, failedSpecs: string[] }}
  */
 export function selectedGateVerdict(input) {
+  // A red `Structural guards` is reported by its own check and keeps `CI` red
+  // (ci-verdict needs guards), so this check judges only the change-aware specs
+  // and no longer repeats it (2026-10-16 CI jobs review: 9 of 9 guards-red runs
+  // painted four red rows for one cause). It never turns a spec failure green.
+  const guards = String(input.guards || "");
+  const v = judgeSpecs(input);
+  if (guards !== "success" && guards !== "skipped") {
+    v.reason += ` (Structural guards ${guards}: reported by that check, which keeps CI red)`;
+  }
+  return v;
+}
+
+function judgeSpecs(input) {
   const select = String(input.select || "");
   const selected = String(input.selected || "");
-  const guards = String(input.guards || "");
   const dropped = String(input.dropped ?? "0");
   const called = String(input.called ?? "false");
   const draft = String(input.draft ?? "false");
   const failedSpecs = Array.isArray(input.failedSpecs) ? [...input.failedSpecs] : [];
 
-  if (guards !== "success" && guards !== "skipped") {
-    return {
-      ok: false,
-      reason: `Structural guards ${guards} — selected legs skipped`,
-      infraRetry: false,
-      failedSpecs,
-    };
-  }
   if (select !== "success") {
     return {
       ok: false,

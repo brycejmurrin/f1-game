@@ -239,6 +239,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `update-check.js` | `UpdateCheck` | tag | UpdateCheck: an in-session "a newer build is live" check and its UPDATE READY chip. index.html's shell version guard runs ONCE, at boot; an installed PWA or a… |
 | `race-message-history.js` | `RaceMessageHistory` | tag | Delivered cards only: showAnnounce calls delivered after painting its card. |
 | `controller-profile-controls.js` | `ControllerProfileControls` | tag | Explicit current-device reset; Input owns automatic per-device selection. |
+| `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
 
 **`js/track/core/`**
 
@@ -398,6 +399,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `stub.js` | `GameAudio` | tag | audio stub for the title script wall. |
 | `signal.js` | `GameAudioSignal` | LAZY_AUDIO | GameAudioSignal: sample analysis and SFX primitives. create({ context, bus, sfxOk, now }) uses live service functions; resetContext discards only the… |
 | `soundtrack.js` | `GameAudioSoundtrack` | LAZY_AUDIO | GameAudioSoundtrack: playlist, bounded decoded caches, external backends and music ducking. create(host) receives live… |
+| `race-mix-audition.js` | `RaceMixAudition` | LAZY_AUDIO | Explicit settings gesture: a bounded sample using the existing user buses. |
 | `radio-fx.js` | `GameAudioRadioFx` | LAZY_AUDIO | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |
 | `tone-model.js` | `GameAudioToneModel` | LAZY_AUDIO | GameAudioToneModel: constant manufacturer timbre, player presets and positive pitch ranges. patchTune mutates the supplied tune using recognized finite… |
 | `ers-layer.js` | `ErsLayer` | LAZY_AUDIO | ErsLayer — player-car MGU-K electric layer and overtake/boost cue. |
@@ -408,6 +410,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `crowd.js` | `CrowdAudio` | LAZY_AUDIO | CrowdAudio — trackside crowd ambience bed. |
 | `car-sfx.js` | `CarSfx` | LAZY_AUDIO | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
 | `voice-pack.js` | `VoicePack` | LAZY_AUDIO | VoicePack — recorded radio voice, composed from clips the way Crew Chief does it: fixed phrases, driver surnames, positions, numbers and gaps are separate… |
+| `battle-earcon.js` | `BattleEarcon` | LAZY_AUDIO | BattleEarcon — finite request-only gap motifs. |
 | `radio-voice.js` | `RadioVoice` | LAZY_AUDIO | The radio banner, spoken aloud by the browser's own speech synthesiser. |
 | `announcer-recorded.js` | `RecordedAnnouncer` | LAZY_AUDIO | A recorded read owns its pending load as well as its playing clips. |
 | `announcer.js` | `Announcer` | LAZY_AUDIO | The pre-race announcer: "Welcome to Apex 26…", read over the loading flyby. |

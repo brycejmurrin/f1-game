@@ -62,6 +62,27 @@ REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY}"
 say() { echo "$*" >&2; }
 verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\n' "$1" "$2" "$3"; }
 tree_of() { git rev-parse --verify -q "$1^{tree}" 2>/dev/null; }
+# A matching tree is not enough when the candidate is a parent of a merge.
+# A side branch may have changed and then reverted the workflow, staging, or
+# test-selection inputs before the merge.  The final bytes are equal, but the
+# parent's successful run did not prove the merge's path through those rules.
+# Reuse is only a time-saving optimization, so conservatively run the gate
+# whenever this history contains one of those inputs.  The exact-SHA candidate
+# is exempt: its own run necessarily used the workflow at that SHA.
+reuse_invalidated() {
+  local candidate="$1" target="$2" paths path
+  [ "$candidate" = "$target" ] && return 1
+  paths="$(git log --format= --name-only "$candidate..$target" 2>/dev/null)" || return 0
+  while IFS= read -r path; do
+    case "$path" in
+      .github/workflows/*|.github/actions/*|tools/ci/*|tools/desktop/stage.mjs|tools/desktop/stage-files.mjs|tests/groups.json|package.json|package-lock.json)
+        say "parent $candidate cannot be reused: history touched gate input $path"
+        return 0
+        ;;
+    esac
+  done <<< "$paths"
+  return 1
+}
 # gate_ran <run-id>: prints `yes` only when the run's jobs show the full gate
 # ran and passed (see the header). Paginated: a full gate's selected matrix
 # can push the job list past one page. Any lookup failure prints nothing.
@@ -95,6 +116,10 @@ for parent in "$SHA^1" "$SHA^2"; do
 done
 
 for c in $candidates; do
+  if reuse_invalidated "$c" "$SHA"; then
+    say "not reusing $c; a workflow, staging, or test-selection input changed after it"
+    continue
+  fi
   json="$(gh api "repos/$REPO/actions/runs?head_sha=$c&status=success&per_page=30" 2>/dev/null)" \
     || { say "::warning::could not list workflow runs for $c; running the full gate"; continue; }
   hit="$(printf '%s' "$json" | node -e '

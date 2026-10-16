@@ -1537,12 +1537,12 @@ var PitLane = (function () {
       return lapsToFlag(c) <= COMPOUND_WARN_LAPS && SportingRegs.compoundShort(c.tyreLog);
     }
     /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
-    function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
-    function pinnedStops() {
-      const v = G.store && G.store.get ? G.store.get(pinKey(), "auto") : "auto";
+    function pinKey(id) { const t = G.track, d = t && t.def; return "pitPlan." + ((typeof id === "string" && id.trim() ? id : null) || (d && d.id) || (t && t.id) || "track"); }
+    function pinnedStops(id) {
+      const v = G.store && G.store.get ? G.store.get(pinKey(id), "auto") : "auto";
       return v == null || v === "auto" ? null : Math.max(0, Math.min(2, v | 0));
     }
-    function setPinnedStops(v) { if (G.store && G.store.set) G.store.set(pinKey(), v == null ? "auto" : (v | 0)); }
+    function setPinnedStops(v, id) { if (G.store && G.store.set) G.store.set(pinKey(id), v == null ? "auto" : (v | 0)); }
     /** The lane's net cost in seconds at racing speed — the number that makes
      *  a 2-stop at Monaco read as the mistake it is. `estimate` refines it
      *  under a caution; this is the plain figure the STRATEGY row shows. */

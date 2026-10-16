@@ -422,6 +422,7 @@ const FULL = [
   "js/ui/update-check.js",  // UpdateCheck: in-session version.json re-check + UPDATE READY chip (call-time; script-loader asks it)
   "js/ui/race-message-history.js",
   "js/ui/controller-profile-controls.js",
+  "js/ui/race-mix-controls.js",
   "js/game.js",
 ];
 
@@ -948,6 +949,7 @@ const LAZY_RACE_SESSION_EDGES = [
 const LAZY_AUDIO = [
   "js/audio/signal.js",
   "js/audio/soundtrack.js",
+  "js/audio/race-mix-audition.js",
   "js/audio/radio-fx.js",
   "js/audio/tone-model.js",
   "js/audio/ers-layer.js",
@@ -958,6 +960,7 @@ const LAZY_AUDIO = [
   "js/audio/crowd.js",
   "js/audio/car-sfx.js",
   "js/audio/voice-pack.js",
+  "js/audio/battle-earcon.js", // finite opt-in motifs; panel and voice cancellation share the helper
   "js/audio/radio-voice.js",
   "js/audio/announcer-recorded.js",
   "js/audio/announcer.js",
@@ -973,6 +976,8 @@ const LAZY_AUDIO_EDGES = [
   ["js/audio/engine.js", "js/audio/music-lib.js"],
   ["js/audio/engine.js", "js/audio/crowd.js"],
   ["js/audio/voice-pack.js", "js/audio/radio-voice.js"],
+  ["js/audio/battle-earcon.js", "js/audio/radio-voice.js"], // stop/halt cancels all owned motifs
+  ["js/audio/battle-earcon.js", "js/audio/panel.js"], // creates the preview service at panel construction
   ["js/audio/radio-voice.js", "js/audio/announcer.js"],
   ["js/audio/announcer-recorded.js", "js/audio/announcer.js"],
   ["js/audio/engine.js", "js/audio/panel.js"],

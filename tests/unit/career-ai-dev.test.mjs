@@ -217,3 +217,87 @@ test("rollover develops after applyRegs and keeps the dice on the year that ende
   assert.ok(regs > 0 && scrub > regs && dev > scrub, "scrub, then develop, both after the new ruleset");
   assert.match(roll, /developWinter\(career, tStand, devExpect, rnd, devYear\)/);
 });
+
+// Production makeCars fixture: real catalog resolution and winter development,
+// with only surrounding race/UI services replaced by deterministic stand-ins.
+function makeCarsBoot() {
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, Map, Set, isFinite, String });
+  seedLog(ctx);
+  ctx.window = ctx;
+  for (const f of ["js/core/mat4.js", "js/core/hash32.js", "js/physics/consts.js",
+    "js/data/teams.js", "js/data/driver-ratings.js", "js/car/parts.js", "js/career/regulations.js", "js/career/ai-dev.js"]) {
+    vm.runInContext(read(f), ctx, { filename: f });
+  }
+  vm.runInContext(`
+    var career={year:2027,aiParts:{}}, active=true, tdev=1, draws=0, saved=null;
+    var Career={inCareer:()=>active,budgetCap:()=>2105,
+      aiSetup:t=>CareerAiDev.fittedOf(career,t),driverOverride:()=>null,
+      teamStats:t=>t.stats,paceMult:()=>active?tdev:1};
+    var cars=[],player=null,teamIdx=Teams.LIST.findIndex(t=>t.id==='haas'),driverIdx=0;
+    var TIER_V=Teams.TIER_V,IDLE_RPM=PhysicsConsts.IDLE_RPM;
+    var gridTeams=()=>Teams.LIST, seatsFor=t=>t.custom?[t.drivers[0],t.drivers[0]]:t.drivers;
+    var simRnd=()=>{draws++;return .5},clamp=M4.clamp;
+    var seasonDriverId=(t,i)=>t+':'+i;
+    var daily={isActive:()=>false},SetupTune={mods:()=>null,balance:()=>0,aero:()=>undefined};
+    var getTeamParts=id=>saved||Parts.getFactorySetup(Teams.LIST.find(t=>t.id===id));
+    var modsFor=(t,s)=>Parts.getMods(s,t),tyreBaseModsFor=modsFor;
+    var buildPace=DriverRatings.buildPace,CarDraw={carVisual:()=>({})},driverSkill=()=>({skill:1});
+  `, ctx);
+  const source=read("js/game.js");
+  vm.runInContext(source.slice(source.indexOf("function makeCars()"),source.indexOf("\nfunction gridRule()")),ctx);
+  return (code)=>vm.runInContext(code,ctx);
+}
+
+test("makeCars credits natural suspension development once and leaves controls unchanged", () => {
+  const run=makeCarsBoot();
+  run(`makeCars();var base=cars.find(c=>c.driverId==='racingbulls:0');
+    var oldDraws=draws;
+    CareerAiDev.developWinter(career,Teams.LIST.map((t,i)=>({id:t.id,pos:i+1})),new Map(),()=>0);
+    var rb=Teams.LIST.find(t=>t.id==='racingbulls');
+    var before=JSON.stringify(career);
+    var works=Parts.resolveSetup(Parts.getFactorySetup(rb),rb);
+    var developed=Parts.resolveSetup(career.aiParts.racingbulls.fitted,rb);
+    var gain=buildPace(developed,works);makeCars();
+    var after=cars.find(c=>c.driverId==='racingbulls:0');`);
+  assert.equal(run(`Object.keys(developed.setup).filter(k=>developed.setup[k]!==works.setup[k]).join(',')`),"suspension");
+  assert.ok(run("gain>1"));
+  assert.equal(run("after.tierV"),run("base.tierV*gain"));
+  assert.equal(run("JSON.stringify(career)"),run("before"));
+  assert.equal(run("draws"),run("oldDraws*2"),"no extra RNG draws");
+  run("tdev=1.025;makeCars()");
+  assert.equal(run("cars.find(c=>c.driverId==='racingbulls:0').tierV"),run("base.tierV*tdev*gain"));
+  run("active=false;makeCars()");
+  assert.equal(run("cars.find(c=>c.driverId==='racingbulls:0').tierV"),run("base.tierV"));
+  run("active=true;tdev=1;career.aiParts={};makeCars()");
+  assert.equal(run("cars.find(c=>c.driverId==='racingbulls:0').tierV"),run("base.tierV"));
+});
+
+test("makeCars keeps aero and ERS on dedicated channels and respects era resolution", () => {
+  const run=makeCarsBoot();
+  for (const cat of ["aero","ers"]) {
+    run(`var rb=Teams.LIST.find(t=>t.id==='racingbulls');career.aiParts={};makeCars();
+      var base=cars.find(c=>c.driverId==='racingbulls:0');
+      var works=Parts.getFactorySetup(rb);
+      var opt=Parts.CATALOG.find(c=>c.id==='${cat}').options.find(o=>
+        Parts.isOptionAvailable(o,rb)&&o.id!==works['${cat}']&&
+        ${cat === "aero" ? "Parts.aeroLoad({...works,aero:o.id},rb)!==base.aeroLoad" : "Parts.ersProfile({...works,ers:o.id},rb).deploy!==base.ersDeploy"});
+      career.aiParts.racingbulls={fitted:{...works,['${cat}']:opt.id}};makeCars();
+      var after=cars.find(c=>c.driverId==='racingbulls:0');`);
+    assert.equal(run("after.tierV"),run("base.tierV"));
+    assert.notEqual(run(cat === "aero" ? "after.aeroLoad" : "after.ersDeploy"),run(cat === "aero" ? "base.aeroLoad" : "base.ersDeploy"));
+  }
+  run(`Parts.setLegality(Regulations.legalityFor('powertrain'),'powertrain');
+    var team=Teams.LIST.find(t=>t.id==='ferrari');
+    career.aiParts.ferrari={fitted:CareerAiDev.worksSetup(team)};makeCars()`);
+  assert.equal(run("cars.find(c=>c.driverId==='ferrari:0').tierV"),run("TIER_V[team.tier]"));
+});
+
+test("makeCars preserves MY TEAM saved-build hire ratio and player tier", () => {
+  const run=makeCarsBoot();
+  run(`Teams.LIST.push({...Teams.DEFAULT_CUSTOM});teamIdx=Teams.LIST.findIndex(t=>t.custom);var team=Teams.LIST[teamIdx];
+    var works=Parts.resolveSetup(Parts.getFactorySetup(team),team);
+    saved=Parts.getFactorySetup(Teams.LIST.find(t=>t.id==='ferrari'));
+    var expected=buildPace(Parts.resolveSetup(saved,team),works);tdev=1.02;makeCars()`);
+  assert.equal(run("player.tierV"),run("TIER_V[team.tier]*tdev"));
+  assert.equal(run("cars.find(c=>c.team.custom&&!c.isPlayer).tierV"),run("TIER_V[team.tier]*tdev*expected"));
+});
