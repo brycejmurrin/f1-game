@@ -15,9 +15,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 ## 1695
 
-### New
-- Trackside crowd ambience: a low filtered bed that rises near the pit straight and grandstands, with short swells on a climb into the top three and at the chequered flag; silent on the countdown, pause, results and with SFX off.
-
 ### Fixed
 - WATCH HIGHLIGHTS: scrubbing or pressing NEXT now cuts to the right car for the coming highlight, and the replay clock no longer jumps back (#2196).
 - WATCH: the timeline reaches the formation and start footage before lights-out (#2202).
