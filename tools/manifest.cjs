@@ -407,6 +407,7 @@ const FULL = [
   "js/career/custom-team.js",
   "js/ui/quali-sheet.js",
   "js/ui/onboard.js",
+  "js/physics/debris-draw.js",
   "js/physics/debris-world.js",
   "js/physics/incident-sim.js",
   "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)
@@ -562,6 +563,7 @@ const TRACK_VM = [
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
   "js/track/scenery/venue.js",
+  "js/track/scenery/guards.js",
   "js/track/scenery/build-props.js",
   // The garages ARE the setup screen's bay (GarageScene.buildStatic), placed by
   // js/track/scenery/pits.js at build time; the row is Teams.LIST's. Both load
@@ -1132,6 +1134,7 @@ const LAZY_TRACK_BUILD = [
   "js/track/scenery/identity.js",
   "js/track/scenery/pits.js",
   "js/track/scenery/venue.js",
+  "js/track/scenery/guards.js",
   "js/track/scenery/build-props.js",
 ];
 const LAZY_TRACK_BUILD_EDGES = [
@@ -1142,6 +1145,7 @@ const LAZY_TRACK_BUILD_EDGES = [
   ["js/track/scenery/identity.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/pits.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/venue.js", "js/track/scenery/build-props.js"],
+  ["js/track/scenery/guards.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/themes.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/landmark-kit.js", "js/track/scenery/build-props.js"],
   ["js/track/scenery/circuit-kit.js", "js/track/scenery/build-props.js"],
