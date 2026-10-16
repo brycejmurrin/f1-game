@@ -2,7 +2,22 @@
 
 Lane: race weekend + AI racecraft. Owned: `js/race/**`, `tyre-model.js`, `ai-*.js`.
 
-## Honest scope
+## Update — debugger attached (second pass)
+Orchestrator's recipe worked: headless Chromium on :9222 + `npx serve`, `debugger_attach`, exceptions paused on **all**.
+- **R1: CONFIRMED-LIVE.** Paused inside the page's real `ambientAt` (breakpoint, reached via `startRaceBody` -> `info()` and
+  via the per-tick `update`). On the pre-fix module (`53fa2b57`, served and reloaded): a cell arc at its end gives
+  ambient 13 -> 30 °C and track 14 -> 48 °C in one step. On the fixed module: 29.915 -> 30 and 47.83 -> 48 (< 0.1 °C).
+  (Used the live closure functions `ambientAt`/`trackTempAt` with a synthetic arc; the game's own `weatherArc` hook builds a
+  non-cell arc, and a cell needs the plan hash, so the arc object was supplied by hand.)
+- **R2: still VM-confirmed only.** Reproducing in the live page needs a practice drill with a storm and 150 s of SC time at
+  ~0.4 s per tick; not run.
+- **Live scenario run (monaco, 22 cars, dry -> rain arc 120 s, `step(1/30)` x 600, exceptions = all):** no exception paused,
+  no lap counter going backwards, no NaN tyre temperature, max |Δ tempS| 2.4 °C per 30 ticks. Evidence: this note.
+- **Throughput limit:** SwiftShader page ~5 min wall per 20 s of sim with 22 cars, so full 6-lap races, SC/red-flag/pit
+  stress, rescue teleports and classification edge cases on 4 circuits were **NOT** driven. Those need a faster box
+  (`/dev/dri` or the llvmpipe CI runner) or `tools/ci` VM harness runs.
+
+## Honest scope (first pass)
 
 No debugger-attached Chrome was reachable (`debugger_targets http://127.0.0.1:9222` -> `fetch failed`; no `/dev/dri`, no
 parent-owned CDP browser). So the scenario list (4 circuits, SC/red flag/jump start/rewind/22-car fast-forward, exception
