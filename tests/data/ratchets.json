@@ -6,19 +6,19 @@
       "lines": 2412
     },
     "js/agent/agentview.js": {
-      "lines": 2588
+      "lines": 2584
     },
     "js/agent/apex.js": {
-      "codeLines": 2328,
-      "lines": 3324
+      "codeLines": 2327,
+      "lines": 3323
     },
     "js/car/car3d.js": {
-      "lines": 2208
+      "lines": 2207
     },
     "js/game.js": {
-      "codeLines": 5329,
+      "codeLines": 5322,
       "gMembers": 296,
-      "lines": 9636,
+      "lines": 9626,
       "topLets": 155
     },
     "js/lighting/presets.js": {
@@ -31,11 +31,11 @@
       "lines": 2978
     },
     "js/track/tracks.js": {
-      "lines": 768
+      "lines": 762
     },
     "js/ui/hud.js": {
-      "codeLines": 1665,
-      "lines": 2746
+      "codeLines": 1660,
+      "lines": 2737
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 2
