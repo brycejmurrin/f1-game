@@ -1019,9 +1019,11 @@ window.SpotifyMusic = (function () {
   }
 
   function check() {
+    const gen = sessionGen;
     const d = debug();
     if (!available()) { setStatus("off", copyOff()); return Promise.resolve({ ok: false, reason: "no-client-id" }); }
     return validToken().then((t) => {
+      if (gen !== sessionGen) return { ok: false, reason: "stale", debug: d };
       if (!t) {
         const retained = !!readToken();
         const msg = retained
@@ -1041,6 +1043,7 @@ window.SpotifyMusic = (function () {
       return fetch(API + "/me", o)
         .then((r) => { done(); return r.json().then((j) => ({ code: r.status, j }), () => ({ code: r.status, j: {} })); })
         .then(({ code, j }) => {
+          if (gen !== sessionGen) return { ok: false, reason: "stale", debug: d };
           const out = { ok: false, httpStatus: code, product: j.product || null,
             account: j.display_name || j.id || null, debug: debug() };
           if (code === 401) {
@@ -1074,6 +1077,7 @@ window.SpotifyMusic = (function () {
         })
         .catch((e) => {
           done();
+          if (gen !== sessionGen) return { ok: false, reason: "stale", debug: d };
           Log.warn("audio", "Spotify account check failed:", e && (e.name + ": " + e.message));
           setStatus("error", "Could not reach Spotify's API — offline, or blocked.");
           return { ok: false, reason: "network", debug: d };
