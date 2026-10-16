@@ -122,6 +122,7 @@ const SceneryStructures = (function () {
       if (alreadyLaid("wall", s0, s1, side, gap, `${a}|${h}|${(col || []).join(",")}`)) return;
       ctx.noteSpan("wall", s0, s1, side, gap, { h });
       recordBarrier(s0, s1, side, gap);
+      let n = 0;
       along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], a / 2)) {
@@ -130,11 +131,12 @@ const SceneryStructures = (function () {
         }
         const wallCol = col || [0.78, 0.78, 0.80];
         const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
-        ctx.instance(`wall|${a}|${h}|${wallCol.join(",")}`,
+        const t = (n++ & 1) ? a + 0.08 : a;   // alternate slabs stand 4 cm proud each side so slope-overlapped neighbours never share a face plane (TrackGeom.MIN_SEP)
+        ctx.instance(`wall|${t}|${h}|${wallCol.join(",")}`,
           { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
           (rec) => {
-            rec.box([0, (h - 0.4) / 2, 0], [a, h + 0.4, 1], wallCol);   // slab
-            rec.box([0, h, 0], [a * 1.1, 0.16, 1], capCol);            // coping rail on top
+            rec.box([0, (h - 0.4) / 2, 0], [t, h + 0.4, 1], wallCol);   // slab
+            rec.box([0, h, 0], [t * 1.1, 0.16, 1], capCol);            // coping rail on top
           },
           { kind: "wall", k, side });
       }, `wall|${side}|${gap}|${a}|${h}|${(col || []).join(",")}`);
