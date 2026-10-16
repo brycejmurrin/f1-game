@@ -193,12 +193,15 @@ function create(G) {
     }
     open.onclick = () => {
       if (G.soundOn) GameAudio.uiSelect();
+      // A newer-build slot cannot replace the live career. Keep the picker
+      // intact, including when another tab updated this card after rendering.
+      if (s.used && !Career.useSlot(s.flavour, s.i)) { announce("UPDATE REQUIRED"); return; }
       ++backupReadGeneration;
       armedDelete = "";
       armedImport = "";
       pendingImport = null;
       picking = false;
-      if (s.used) { Career.useSlot(s.flavour, s.i); G.openCareer(); return; }
+      if (s.used) { G.openCareer(); return; }
       // Opening an EMPTY slot repoints the live pointer at it; backing out
       // must restore it, or load() re-homes the player to the FIRST used slot
       // rather than the one they were in.

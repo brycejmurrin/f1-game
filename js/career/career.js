@@ -1888,8 +1888,19 @@ function adoptCalendar(c, explicit) {
     }
   }
   if (Array.isArray(c.results)) {
-    c.results = c.results.filter((r) => r && to[r.r] >= 0);
-    c.results.forEach((r) => { r.r = to[r.r]; });
+    c.results = c.results.filter((r) => r &&
+      ((typeof r.archivedCircuit === "string" && !("r" in r)) || Number.isInteger(r.r) && r.r >= 0 && r.r < ids.length));
+    c.results.forEach((r) => {
+      if (!("r" in r)) return;
+      if (to[r.r] >= 0) r.r = to[r.r];
+      else {
+        // Scored races remain career achievements, but have no index in the
+        // shortened schedule. Absent r survives migration without becoming 0
+        // and cannot satisfy a settlement guard or a sponsor/calendar window.
+        r.archivedCircuit = ids[r.r];
+        delete r.r;
+      }
+    });
   }
   if (typeof CareerPlanning !== "undefined") CareerPlanning.remapWeekend(c, done, s.round);
   else { c.objPick = null; delete s.startedRound; }

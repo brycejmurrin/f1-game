@@ -403,27 +403,26 @@ const F1API = (function () {
       // sampleAt / cumDist) and painted a bogus brake/speed spike on the trace.
       const a = arr(list);
       const out = [];
-      let t0 = NaN;
       for (let i = 0; i < a.length; i++) {
         const c = a[i] || {};
         const cMs = Date.parse(c.date);
         if (!isFinite(cMs)) continue;
-        if (!isFinite(t0)) t0 = cMs;
         out.push({
-          t: (cMs - t0) / 1000,   // seconds from first valid sample
           speed: num(c.speed), throttle: num(c.throttle), brake: num(c.brake),
           gear: num(c.n_gear), rpm: num(c.rpm), drs: num(c.drs),
           date: cMs
         });
       }
-      return out;
+      const ordered = orderedSamples(out);
+      const t0 = ordered.length ? ordered[0].date : 0;
+      return ordered.map(function (row) { row.t = (row.date - t0) / 1000; return row; });
     });
   }
 
   // x/y track positions within a window (arbitrary track-local units)
   function locationData(sessionKey, driverNumber, startISO, endISO, options) {
     return windowed("/location", sessionKey, driverNumber, startISO, endISO, options).then(function (list) {
-      return arr(list).map(function (p) {
+      return orderedSamples(arr(list).map(function (p) {
         p = p || {};
         return { x: num(p.x), y: num(p.y), date: Date.parse(p.date) };
       }).filter(function (p) {
@@ -438,7 +437,15 @@ const F1API = (function () {
         // against the car-data clock, and as a 0 it sorted before the lap and
         // never got clipped with it.
         return p.x !== null && p.y !== null && !(p.x === 0 && p.y === 0) && isFinite(p.date);
-      });
+      }));
+    });
+  }
+
+  // Stable sort: the first valid row at a timestamp wins. Duplicate feed rows
+  // must not create zero/negative clock steps in interpolation or integration.
+  function orderedSamples(rows) {
+    return rows.sort(function (a, b) { return a.date - b.date; }).filter(function (row, i, all) {
+      return i === 0 || row.date !== all[i - 1].date;
     });
   }
 

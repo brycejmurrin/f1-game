@@ -144,6 +144,10 @@ const GameStore = (function () {
         return { ok: false, durable: false, reason: this.broken || e.name };
       }
       let durable = true;
+      let beforeDisk;
+      if (options && options.migration && mirrorKey(key)) {
+        try { beforeDisk = localStorage.getItem(key); } catch (_) { /* unavailable */ }
+      }
       try {
         if (json === undefined) localStorage.removeItem(key);
         else setRoomy(key, json);
@@ -155,7 +159,8 @@ const GameStore = (function () {
       this.rev++;
       // Mirrored even when the disk write failed: a quota-refused career save
       // is exactly the write the durable copy exists for.
-      if (mirrorKey(key)) mirrorQueue(key, v === null || json === undefined ? null : json, durable, options);
+      if (mirrorKey(key)) mirrorQueue(key, v === null || json === undefined ? null : json, durable,
+        options && options.migration ? { ...options, beforeDisk } : options);
       const result = { ok: true, durable, reason: durable ? null : (this.broken || "Error") };
       this._notify({ key: k, durable, reason: result.reason, local: true });
       return result;
@@ -431,7 +436,9 @@ const GameStore = (function () {
     const user = !(options && options.migration) || !!(prior && prior.user);
     let disk;
     try { disk = localStorage.getItem(key); } catch (_) { disk = undefined; }
-    _mirrorPending.set(key, { v, lsOk: lsOk !== false, user, disk, foreign: !!(options && options.foreign), epoch: mirrorEpoch(key) });
+    _mirrorPending.set(key, { v, lsOk: lsOk !== false, user, disk,
+      beforeDisk: options && options.migration ? (prior && !prior.user ? prior.beforeDisk : options.beforeDisk) : disk,
+      foreign: !!(options && options.foreign), epoch: mirrorEpoch(key) });
     mirror.pending = _mirrorPending.size;
     if (_mirrorTimer !== null) return;
     if (typeof setTimeout !== "function") { mirrorFlush(); return; }
@@ -479,7 +486,16 @@ const GameStore = (function () {
           if (e.epoch !== mirrorEpoch(k)) continue;
           const prev = rows.get(k), authored = AUTHORED_KEY.test(k);
           const value = e.v === null ? "null" : e.v;
-          if (!e.foreign && prev && prev.lsOk === false && e.lsOk === true && value !== prev.v && _mirrorSeen.get(k) !== prev.v) continue;
+          if (!e.foreign && prev && prev.lsOk === false && e.lsOk === true && value !== prev.v && _mirrorSeen.get(k) !== prev.v) {
+            // A known stale tab may already have written these primary bytes.
+            // Preserve the refused winner and identify that exact stale copy,
+            // without granting permission to overwrite a later primary save.
+            if (!authored && Object.prototype.hasOwnProperty.call(prev, "baseline")) {
+              let disk; try { disk = localStorage.getItem(k); } catch (_) { /* unavailable */ }
+              if (disk === e.disk) os.put({ ...prev, baseline: disk });
+            }
+            continue;
+          }
           if (authored) {
             if (prev && !e.lsOk && e.v !== prev.v && _mirrorSeen.get(k) !== prev.v) continue;
             // localStorage is synchronous across tabs: detect a winner even if
@@ -499,7 +515,7 @@ const GameStore = (function () {
             os.put({ k, v: e.v, lsOk: e.lsOk, baseline });
             rows.set(k, { k, v: e.v, lsOk: e.lsOk, baseline });
           } else if (e.v === null) { os.delete(k); rows.delete(k); }
-          else { os.put({ k, v: e.v, lsOk: e.lsOk }); rows.set(k, { k, v: e.v, lsOk: e.lsOk }); }
+          else { const row = { k, v: e.v, lsOk: e.lsOk, baseline: e.lsOk ? null : e.disk }; os.put(row); rows.set(k, row); }
           committed.set(k, e.v);
         }
         authoredTotals = { bytes, keys };
@@ -577,11 +593,12 @@ const GameStore = (function () {
         if (p && p.user) continue;
         let present = null;
         try { present = localStorage.getItem(row.k); } catch (e) { return 0; }   // storage unreadable: nothing to restore into
-        // A failed authored write may replace only the primary bytes it
+        // A failed write may replace only the primary bytes it
         // originally failed against. A newer primary can outlive its writer
         // before the debounced mirror catches up. Epochs cannot survive reboot.
-        if (authored && row.lsOk === false && present !== null && present !== row.v &&
-            (!Object.prototype.hasOwnProperty.call(row, "baseline") || present !== row.baseline)) continue;
+        const primary = p && !p.user && p.beforeDisk !== undefined ? p.beforeDisk : present;
+        if (row.lsOk === false && primary !== null && primary !== row.v &&
+            (Object.prototype.hasOwnProperty.call(row, "baseline") ? primary !== row.baseline : authored)) continue;
         const newer = row.lsOk === false && present !== row.v;
         if (present !== null && !newer) continue;
         if (newer && p) _mirrorPending.delete(row.k);
@@ -688,7 +705,7 @@ const GameStore = (function () {
   }
   function ttWrite(trackId, laps) {
     const classes = [], at = new Map();
-    store.set("ttlb." + trackId, { v: 2, classes, laps: laps.map(e => {
+    return store.write("ttlb." + trackId, { v: 2, classes, laps: laps.map(e => {
       const o = {};
       for (const k of Object.keys(e)) if (k !== "context") o[k] = e[k];
       if (e.context) {
@@ -701,8 +718,8 @@ const GameStore = (function () {
   function ttBoard(trackId, context) {
     return ttRead(trackId).filter(e => context === undefined || (e.context || null) === context);
   }
-  function ttBoardAdd(trackId, entry) {
-    if (!isFinite(entry.t) || entry.t <= 0) return ttBoard(trackId);
+  function ttBoardAddResult(trackId, entry) {
+    if (!isFinite(entry.t) || entry.t <= 0) return { ok: false, durable: false, reason: "invalid-lap", laps: ttBoard(trackId) };
     const b = ttBoard(trackId);
     b.push(entry);
     b.sort((a, z) => a.t - z.t);
@@ -717,8 +734,13 @@ const GameStore = (function () {
       for (const k of rest.slice(0, TT_CLASS_MAX - keep.size)) keep.add(k);
       kept = kept.filter(e => keep.has(e.context || null));
     }
-    ttWrite(trackId, kept);
-    return kept;
+    return { ...ttWrite(trackId, kept), laps: kept };
+  }
+  function ttBoardAdd(trackId, entry) {
+    return ttBoardAddResult(trackId, entry).laps;
+  }
+  function ttBoardSaveResult(trackId) {
+    return ttWrite(trackId, ttBoard(trackId));
   }
 
   function hexToRgb(h) {
@@ -736,7 +758,7 @@ const GameStore = (function () {
     return SaveMigrate.migrateSeasonPoints(store, season);
   }
 
-  return { store, ttBoard, ttBoardAdd, ttRead, ttParseBoard,
+  return { store, ttBoard, ttBoardAdd, ttBoardAddResult, ttBoardSaveResult, ttRead, ttParseBoard,
            hexToRgb, rgbToHex, seasonDriverId,
            migrateSeasonPoints,
            migrateCareer: SaveMigrate.migrateCareer,

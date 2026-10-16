@@ -89,6 +89,7 @@ const Input = (function () {
   // held Start, so one press fired twice (pause, unpause).
   const padPrevByIndex = new Map();
   let padPrevKey = null;       // padKey of the pad padPrevButtons belongs to
+  let padSnapshotLost = false; // recovery must observe held buttons before accepting new edges
   let padDpadVal = 0;          // ramped d-pad steer, -1..1 (see padDpadSteer)
   let padDpadT = 0;            // last d-pad ramp timestamp, ms
   let padDpadSeq = 0, padDpadLeftSeq = 0, padDpadRightSeq = 0;
@@ -1496,6 +1497,10 @@ const Input = (function () {
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
       padIsWheel = false;
+      // A missing browser snapshot is not a release. Reseed on recovery:
+      // even a button pressed during the gap needs
+      // a witnessed release before it can trigger an action.
+      if (padPrevKey !== null) padSnapshotLost = true;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padPrevKey = null;
       padPrevByIndex.clear();
@@ -1509,11 +1514,12 @@ const Input = (function () {
     // a fresh press (a boost, a shift, a camera cut). Reseed from the new
     // pad. Not on first connection: the press that woke a pad is a real one.
     const key = padKey(pad, Array.prototype.indexOf.call(pads, pad));
-    if (padPrevKey !== null && key !== padPrevKey) {
+    if (padSnapshotLost || (padPrevKey !== null && key !== padPrevKey)) {
       const nb = pad.buttons ? pad.buttons.length : 0;
       padPrevButtons.length = nb;
       for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
     }
+    padSnapshotLost = false;
     padPrevKey = key;
     const profiles = ensureDeviceProfiles();
     if (profiles) profiles.activate(pad);

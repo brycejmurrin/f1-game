@@ -1211,6 +1211,7 @@ const WGX = (function () {
     let matPlaceAlbedoView = null, matPlaceNormalView = null;
     let _matOwnedAlbedo = null, _matOwnedNormal = null;
     let _matBindGen = 0, _matPendingFills = 0, _matPendingBinds = 0;   // P4: async pack fills / binds held back
+    let _matRequested = new Set();
     let matScaleUBO = null, matScaleData = new Float32Array(20);
     let _matAlbedoOn = false, _matNormalOn = false;
     const _matScales = new Float32Array(MAT_TEX_LAYERS);
@@ -5019,6 +5020,7 @@ const WGX = (function () {
     function setMaterialMaps(maps) {
       const gen = ++_matBindGen;
       const toks = maps ? [maps.albedo, maps.normal] : [];
+      _matRequested = new Set(toks);
       const waits = toks.filter((t) => t && t.pending && t.ready).map((t) => t.ready);
       if (!waits.length) { _setMaterialMapsNow(maps); return; }
       _matPendingBinds++;
@@ -5027,7 +5029,7 @@ const WGX = (function () {
         const live = (t) => !!(t && t.view && !t.pending);
         const a = live(maps.albedo) ? maps.albedo : null, nn = live(maps.normal) ? maps.normal : null;
         if (gen !== _matBindGen || !a) {   // superseded, or the albedo never filled: bind nothing, free what filled
-          for (const t of [a, nn]) if (t) freeTexture(t);
+          for (const t of new Set([a, nn])) if (t && (gen === _matBindGen || !_matRequested.has(t))) freeTexture(t);
           return;
         }
         _setMaterialMapsNow({ albedo: a, normal: nn, scales: maps.scales });

@@ -767,6 +767,30 @@ test("P4 (TLX #2149): setMaterialMaps holds a pending token back, binds it when 
   }
 });
 
+test("TLX repeated pending material adoption keeps shared tokens alive for the latest request", async () => {
+  for (const replacement of ["same", "partial", "different", "unload"]) {
+    const r = await tlxPackRig(makeAsyncGl({ busyPolls: 2 }));
+    const make = () => r.gfx.createTextureArray(2, tlxImages(2), 17);
+    const a = make(), n = make(), other = make();
+    const disposed = new Map();
+    for (const t of [a, n, other]) t.addEventListener("dispose", () => disposed.set(t, (disposed.get(t) || 0) + 1));
+    r.gfx.setMaterialMaps({ albedo: a, normal: n, scales: [1] });
+    const latest = replacement === "unload" ? null : { albedo: replacement === "different" ? other : a, normal: replacement === "same" ? n : other, scales: [2] };
+    r.gfx.setMaterialMaps(latest);
+    await Promise.all([a.ready, n.ready, other.ready]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const bound = r.calls.bound.at(-1);
+    assert.equal(bound && bound.albedo, latest && latest.albedo, replacement);
+    if (latest) {
+      assert.equal(bound.normal, latest.normal, replacement);
+      for (const t of new Set([latest.albedo, latest.normal])) assert.equal(disposed.get(t) || 0, 0, "latest tokens remain alive");
+    }
+    for (const t of new Set([a, n])) if (!latest || (t !== latest.albedo && t !== latest.normal)) assert.equal(disposed.get(t), 1, "old unshared token freed once");
+    r.gfx.setMaterialMaps(null);
+    for (const t of new Set([a, n])) assert.equal(disposed.get(t), 1, "unload frees every adopted token exactly once");
+  }
+});
+
 test("P4 (TLX #2149): the fallbacks — async null and apex26.tlxPackAsync=0 take the sync path; a refused layer takes the 2d copy", async () => {
   const size = 2, n = 17, page = size * size * 4;
   for (const [label, opts] of [["readLayerBytesAsync → null", { nullAsync: true }], ["apex26.tlxPackAsync=0", { ls: { "apex26.tlxPackAsync": "0" } }]]) {

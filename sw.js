@@ -502,6 +502,7 @@ async function precacheAssetLists() {
     "js/editor/elev-presets.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
+    "js/editor/followup-tools.js",
     "js/editor/scenery-panel.js",
     "js/editor/bridge-panel.js",
     "js/editor/designer.js",
