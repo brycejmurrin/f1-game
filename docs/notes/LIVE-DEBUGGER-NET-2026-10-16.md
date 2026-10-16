@@ -1,5 +1,41 @@
 # Live debugger hunt: multiplayer and net (2026-10-16)
 
+## Scope covered
+`js/net/netplay.js` (host and guest roles, BYE/LEFT, stall, hidden pump, ARM, goLocal/goWire,
+event fuzz), `session.js` (heartbeat, hidden pump), `snapshot.js` (encode/decode, tick wrap,
+out-of-order, duplicate), `lobby.js` code-host expiry path (read-only). Not yet: hostile
+packets beyond event fuzz, start-countdown agreement under a paused host, rejoin loop leak
+count, Nostr reconnect (requested by the orchestrator, queued).
+
+## Findings
+
+| id | file:line | severity | verdict | debugger evidence | fix commit | test | issue# |
+|---|---|---|---|---|---|---|---|
+| N1 | netplay.js:597/652 | low (wrong reason copy, hand-back reason) | CONFIRMED-LIVE | pause at 597: why="local", carFor=1, active=true; stack onClose<-session.close<-BYE handler; guest B got {wire:1,why:"local"} | a95a7949 | net-authority.test.mjs "a guest BYE tells the other guests why:\"bye\"" (fails without fix) | - |
+| N2 | lobby.js:1839 (+clearInterval sites 321,345,411,451,459,470,2192) | low (wrong copy) | CONFIRMED-LIVE | pause after `watcherArmed = !!pollTimer`: watcherArmed=true, pollTimer=116 (dead id), sessions=0, transport=null | not mine (sibling cursor/hunt-debugger-fixes-*) | - | - |
+| N3 | netplay.js:~625 | low | CONFIRMED (unit; same mechanism as N1) | incompatible-build drop closes the session itself, so close() reports "local" to the other guests | 35a39eb3 | net-authority.test.mjs "dropping one incompatible guest ..." (fails without fix) | - |
+
+## Clean areas (do not re-hunt)
+Stall tolerance and the 30 s race timeout drop (LEFT reason `timeout` correct); hidden-tab
+500 ms pumps (no false drop, true silence still dropped); host BYE at a guest; 11 junk
+payloads x every event type at a guest (no throw, no state change); late ARM (both peers get
+the same named instant); goLocal/goWire handover on silence/resume; snapshot encode of
+NaN/Infinity (wire is clamped finite); tick wrap, out-of-order and duplicate pushes.
+
+## Not run, and why
+Mid-race rejoin and a third guest (lobby phase: needs real signalling, no mid-race add
+API); QR/scan leg (camera, second device); ARM deadline expiry (45 s) not reached live;
+countdown agreement with a paused host, 10 s guest pause, x10 rejoin leak count, Nostr
+reconnect mid-handshake (queued, not started); real-network and phone behaviour.
+
+## js-debugger tool problems hit
+See "Debugger / harness notes" below: `debugger_run` has no `allowSideEffects`; an unknown
+(timed-out) run blocks further runs until detach+attach; `debugger_state` replays every
+earlier operation, so output grows without bound until re-attach.
+
+## Next step
+Finish the queued deeper hunts, then ready-gate and SWEEP once the draft PR is green.
+
 Lane `cursor/live-debug-net-4e7a` (PR #2552). Driven with the js-debugger MCP against a
 headless Chromium (CDP :9222, two tabs of `http://127.0.0.1:3456/`), source SHA = the
 branch tip. The loopback transport and in-page `NetSession`s stood in for the second peer;
