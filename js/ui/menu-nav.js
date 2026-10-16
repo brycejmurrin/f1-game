@@ -349,6 +349,23 @@ window.MenuNav = (function () {
       const hit = pickSideways(a, boxes, dx);
       if (hit) return hit.el;
     }
+    // Down off the LAST control of a scrolling pane, with nothing under it in its
+    // band: the controls below the pane (the foot's BACK) come before the wrap to
+    // the top, however far across they sit. Without this the pad reached BACK
+    // only when the band happened to be empty, which moved with every row added
+    // to the page (the DISPLAY walk).
+    if (dy > 0) {
+      const pane = from.closest && from.closest(SCROLLERS);
+      if (pane) {
+        let foot = null, footAlong = Infinity;
+        for (const el of list) {
+          if (el === from || pane.contains(el)) continue;
+          const along = centre(el).y - a.y;
+          if (along > 1 && along < footAlong) { foot = el; footAlong = along; }
+        }
+        if (foot) return foot;
+      }
+    }
     if (dy && edge) return edge;
     // No band, or a sideways end: DOM / reading order. Wrap so Left from the
     // first item and Right from the last are never a no-op — a pad D-pad press

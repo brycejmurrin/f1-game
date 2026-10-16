@@ -10,6 +10,7 @@ lenses (`.claude/workflows/README.md`).
 | Agent | Use when |
 |---|---|
 | **deploy-research** | Post-deploy liveness, shipped-JS marker checks, public-web / track reference research via the host fetch tool (WebFetch / hosted TinyFish). Read-only; no Chrome, no Playwright, never the in-repo tinyfish wrapper (egress-blocked). |
+| **release-auditor** | Read-only exact-byte release evidence: live `apex-sha`, shell/service-worker references, lazy-asset response hashes, headers and git ancestry. No browser, writes, cache deletion, dispatch or merge. |
 | **verify-agent** | Run `tools/ci/verify-change.mjs --fast` against the current tree and report the JSON verdict; `--base <ref>` repeats it on an ephemeral worktree at the session SHA / deploy tip and answers "same-red / new-on-session / already-red-on-ref". WGX edits also get `wgx-validate.mjs --static`. Read-only; never starts Playwright / `--wait` / `test-solo`; names leftover `batches` as notRun. |
 | **track-surveyor** | Survey + improve ONE circuit: writes only circuit def + scenery files (hook-enforced through `agent_type`), in its own worktree (`isolation: worktree` — parallel surveyors never share a checkout; it commits, never pushes, and the parent merges the fork's branch), verifies with `verify-track.cjs`, reports baseline deltas instead of moving them. No browser runs. |
 | **physics-contract-auditor** | Read-only `vstd-lint` + `Tracks.curvature` column classification (AI-only / assist-gated / broadcast / surface). No Playwright. |

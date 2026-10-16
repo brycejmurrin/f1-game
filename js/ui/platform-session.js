@@ -212,6 +212,18 @@ function phoneLink(url) {
 }
 let phonePad = null;
 let phonePadLoading = false, phonePadGeneration = 0;
+let recoveryOwner = null;
+const recoveryNote = document.createElement("p"), newPhoneCode = document.createElement("button");
+newPhoneCode.type = "button"; newPhoneCode.className = "sel-chip"; newPhoneCode.textContent = "MAKE NEW CODE";
+recoveryNote.setAttribute("role", "status"); newPhoneCode.hidden = true;
+$("pm-phonepad-box").append(recoveryNote, newPhoneCode);
+newPhoneCode.onclick = () => {
+  if (phonePad || phonePadLoading) $("pm-phonepad").onclick();
+  else if (recoveryOwner) recoveryOwner.cancel();
+  recoveryOwner = null;
+  newPhoneCode.hidden = true; recoveryNote.textContent = "";
+  $("pm-phonepad").onclick();
+};
 // The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
 // screen shows VISOR (the cockpit without its steering wheel — js/camera/vantage.js) while
 // it drives, and goes back when the phone is gone, unless the player cycled away meanwhile.
@@ -276,6 +288,13 @@ $("pm-phonepad").onclick = () => {
       },
       // The phone's wire died: PhonePad hosts the same code again and the phone re-dials it (lost() follows only if it gives up).
       relinking: () => { G.announce("PHONE LINK LOST — RECONNECTING", 3, "warn"); },
+      recovery: (r) => {
+        newPhoneCode.hidden = !["waiting", "connecting", "failed", "lost"].includes(r.phase);
+        recoveryNote.textContent = r.reconnecting && r.publicRelay
+          ? r.deadlineAt === null ? "Reconnecting — opening the same-code window…" :
+            "Reconnecting — same code available for up to " + Math.max(0, Math.ceil((r.deadlineAt - Date.now()) / 1000)) + " seconds. Or choose MAKE NEW CODE."
+          : "";
+      },
       // A first pairing that failed (expired, no relay): the status stays, the button starts over.
       failed: () => { btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; },
       lost: () => {
@@ -284,6 +303,7 @@ $("pm-phonepad").onclick = () => {
         phonePadCam = -1;
       },
     });
+    recoveryOwner = phonePad;
   });
 };
 }

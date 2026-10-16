@@ -32,6 +32,14 @@ RULE = ("In this repo a task that matches a skill starts with the Skill tool cal
         "before Bash, Read or Grep: its SKILL.md names the commands, hooks and tests to use.")
 
 
+# Phone verbs: the words are stopwords or too common to score, so match the shape.
+VERBS = [
+    (re.compile(r"^\W*(check|status|check it|check status|status\??|where are we)\W*$", re.I), "check"),
+    (re.compile(r"\b(push|ship)\b.*\b(deploy|default|main)\b|^\W*(push|ship)( it)?\W*$", re.I), "ship"),
+    (re.compile(r"\bhand-?off\b.*\b(prompt|brief)\b|\b(prompt|brief)\b.*\bhand-?off\b|\bcold[- ]start\b", re.I), "handoff"),
+]
+
+
 def words(text):
     return [w for w in re.findall(r"[a-z0-9][a-z0-9_.\-]*[a-z0-9]", text.lower())
             if len(w) > 2 and w not in STOP]
@@ -67,13 +75,14 @@ def matches(prompt, root):
             df[t] = df.get(t, 0) + 1
     n = len(docs)
     ptoks = set(words(prompt))
+    pinned = [name for rx, name in VERBS if name in docs and rx.search(prompt)]
     scored = []
     for name, toks in docs.items():
         s = sum(math.log((n + 1) / df[t]) for t in ptoks & toks)
         if s >= MIN_SCORE:
             scored.append((s, name))
     scored.sort(reverse=True)
-    return [name for _, name in scored[:2]]
+    return (pinned + [name for _, name in scored if name not in pinned])[:2]
 
 
 def main():

@@ -214,6 +214,7 @@ const SettingsNav = (function () {
       files: document.getElementById("pm-open-files"),
     };
     for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
+      if (search) search.cancel();
       originDoor = door;
       // LAZY_AUDIO: MUSIC & SOUND's SettingRows demote the static ‹ › chevrons.
       // show() reveals audio only after ensureAudio so MenuNav.items matches a
@@ -224,6 +225,10 @@ const SettingsNav = (function () {
     // seam owns focus when it opens, and its opener should remain authoritative.
     originDoor = null;
     show("home", false);
+    if (typeof SettingsSearch !== "undefined") SettingsSearch.register("settings-panels", [
+      { id: "resolution", label: "Resolution", page: "display", target: "pm-res-sel", aliases: "graphics picture quality sharpness" },
+      { id: "deadzone", label: "Controller dead zone", page: "advanced", target: "pm-paddz", aliases: "deadzone stick drift pad wheel centre center" },
+    ]);
     if (typeof SettingsSearch !== "undefined") search = SettingsSearch.create({
       host: document.getElementById("pm-settings-index"), show, onSelect,
       onLeave: (fn) => leaveFns.push(fn),
@@ -232,7 +237,8 @@ const SettingsNav = (function () {
       // The caller uses this on every open, including after an interrupted
       // page transition. Clear the previous door so a later BACK cannot return
       // to a stale element from an earlier dialog instance.
-      showCurrent: () => { originDoor = null; show("home", false); },
+      showCurrent: () => { originDoor = null; if (search) search.cancel(); show("home", false); },
+      returnToSearch: () => { show("home", false); return !!search && search.restore(); },
       show, back, invalidate: () => { generation++; },
     };
     return live;

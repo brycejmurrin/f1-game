@@ -1457,10 +1457,11 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
-  const finish = resolveLivery(team).finish || null;
+  const livery = resolveLivery(team), finish = livery.finish || null;
+  const surface = livery.wingCarbon === "carbon" ? "carbon" : "paint";
   const co = typeof CarDraw !== "undefined" ? CarDraw.coOpt(mat) : mat;   // A-H3 (hunt 4): opaque flaps join R1's coalesced runs on TLX; GLX/WGX and alpha < 1 get `mat` itself
   if (still || b === 0 || b === 1) {
-    const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only);
+    const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only, surface);
     if (set) gfx.draw(set, modelMat, co);
     if (b >= 0.5 && CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, 1);
     return;
@@ -1485,7 +1486,7 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
       W[8 + k] = -uu * sa + ff * ca;
       W[12 + k] += uu * fg.y + ff * fg.z;
     }
-    const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg, finish);
+    const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg, finish, surface);
     if (mesh) gfx.draw(mesh, W, co);
   }
   if (CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, b);
@@ -3661,6 +3662,7 @@ const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
+if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
@@ -8888,6 +8890,7 @@ $("sel-map-btn").onclick = openTrackDetail;
 $("sel-detail-chip").onclick = openTrackDetail;
 $("track-detail-close").onclick = closeTrackDetail;
 SettingsNav.onEnter((page) => {
+  if (page === "display") HudElements.refreshVisibility();
   if (page === "controls" && !controllerProfileUi && typeof ControllerProfileControls !== "undefined" && Input.controllerProfile) {
     controllerProfileUi = ControllerProfileControls.create({ host: $("pm-panel-controls"), input: Input, afterReset: () => { if (keyBinds) keyBinds.render(); } });
   }
@@ -8902,6 +8905,22 @@ SettingsNav.onEnter((page) => {
 // the same rule the mode-dependent driving controls follow, so the grid never
 // reflows under a thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
+SettingsSearch.register("race-settings", [{ id: "tyre-wear", label: "Tyre wear", page: "race-settings", target: "rs-tyres-sel",
+  aliases: "tires degradation pit stops", options: "off light real",
+  unavailableReason: "Tyre wear is chosen in Race Settings before starting a solo race.",
+  navigate: (arrived) => { settingsNav.invalidate(); return raceSettings.openSettingSearch(() => settingsNav.returnToSearch(), arrived); },
+}]);
+const revealHudRequirement = (target) => SettingsSearch.reveal(target === "rs-tyres-sel" ? $("rs-tyres-sel") : target === "pm-hudprofile-sel" ? $("pm-hudprofile-sel") : null);
+HudElements.configure({ context: () => ({ state, hasPlayer: !!player, profile: hudProfile,
+  timeTrial: isTimeTrial(), practice: isPractice(), session, tyreWear: !!(tyres && tyres.on()), carCount: cars.length }),
+  navigate: (page, target) => { if (page === "race-settings") { const row = SettingsSearch.find("tyre wear").find((r) => r.id === "tyre-wear"), opener = document.activeElement;
+      settingsNav.invalidate();
+      if (row && raceSettings.openSettingSearch(() => { settingsNav.show("display", false); SettingsSearch.reveal(opener); }, () => revealHudRequirement(target)) === false) {
+        const host = $("pm-panel-display"); let note = host.querySelector("[data-hud-nav-status]");
+        if (!note) { note = document.createElement("p"); note.dataset.hudNavStatus = ""; note.className = "adv-help"; note.setAttribute("role", "status"); host.prepend(note); }
+        note.textContent = row.unavailableReason; LiveRegion.say(row.unavailableReason, "hud"); } }
+    else { settingsNav.show(page, true); revealHudRequirement(target); } },
+});
 photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0),
   borrowCar: () => {
     // A fresh photo subject, never the last race's live car or seeded stream.

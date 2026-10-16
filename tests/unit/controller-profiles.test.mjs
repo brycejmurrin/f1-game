@@ -92,3 +92,38 @@ test('standard controller cannot consume a persisted legacy wheel map before the
   drive(pad('wheel later', '')); assert.equal(I.getPadAxisMap().steer, 3); assert.equal(I.getControllerProfiles().legacyClaimed, true);
   drive(pad('another wheel', '')); assert.equal(I.getPadAxisMap().steer, 0);
 });
+
+
+test('current profile reset invalidates only old-axis/sign calibration and persists it', () => {
+  for (const [steer, invert, rest] of [[3, 1, .2], [0, -1, .2], [0, 1, .2], [3, 1, 0]]) {
+    const { Input: I, drive, storage } = boot();
+    const wheel = pad('Calibrated wheel', '');
+    drive(wheel); I.setPadAxisMap({ steer, steerInvert: invert });
+    I.setPadRest({ 'Other pad': .1 });
+    wheel.axes[steer] = rest * invert;
+    assert.equal(I.calibratePad(), true);
+    storage.set('padRest', plain(I.padRestStore()));
+    const changed = steer !== 0 || invert !== 1;
+    I.resetControllerProfile();
+    wheel.axes[0] = changed ? 0 : rest;
+    I.poll();
+    assert.equal(I.debugState().pad.steer, 0, 'center remains neutral after reset');
+    const saved = plain(I.padRestStore());
+    assert.equal(saved['Other pad'], .1, 'another device keeps its calibration');
+    assert.equal(saved['Calibrated wheel'] || 0, changed ? 0 : rest);
+    if (changed) assert.deepEqual(storage.get('padRest'), saved, 'invalidation reaches durable save seam');
+  }
+});
+
+test('owned wheel-map commit rejects disconnected owner and selects the captured device profile', () => {
+  const { Input: I, drive } = boot();
+  drive(pad('Unrelated pad'));
+  const before = plain(I.getPadAxisMap());
+  assert.equal(I.setPadAxisMap({ steer: 3 }, '0:Absent wheel'), null);
+  assert.deepEqual(plain(I.getPadAxisMap()), before);
+  const wheel = pad('Captured wheel', '');
+  drive(wheel);
+  assert.ok(I.setPadAxisMap({ steer: 3 }, '0:Captured wheel'));
+  assert.equal(I.controllerProfile().id, 'Captured wheel');
+  assert.equal(I.getPadAxisMap().steer, 3);
+});
