@@ -53,6 +53,36 @@ test("bitmap-decode-worker answers error without throwing", async () => {
   assert.match(posted[0].message, /bad png/);
 });
 
+for (const [label, crop] of [["full", undefined], ["cropped", [0, 0, 2, 2]]]) {
+  test(`bitmap-decode-worker closes the untransferred ${label} bitmap when the transfer throws, and still replies (#1784)`, async () => {
+    const posted = [];
+    let closes = 0;
+    const fakeBmp = { width: 2, height: 2, close() { closes++; throw new Error("close failed"); } };
+    const ctx = vm.createContext({
+      createImageBitmap: async () => fakeBmp,
+      postMessage: (m) => { if (m.type === "decoded") throw new Error("DataCloneError"); posted.push(m); },
+    });
+    ctx.self = ctx;
+    vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx, { filename: "bitmap-decode-worker.js" });
+    await ctx.onmessage({ data: { type: "decode", seq: 3, blob: { size: 1 }, crop } });
+    assert.equal(closes, 1, "the worker-owned bitmap is closed once");
+    assert.equal(posted.length, 1);
+    assert.equal(posted[0].type, "error");
+    assert.equal(posted[0].seq, 3);
+    assert.match(posted[0].message, /DataCloneError/, "a throwing close() does not replace the reply");
+  });
+}
+
+test("bitmap-decode-worker never closes a bitmap it transferred (#1784)", async () => {
+  let closes = 0;
+  const fakeBmp = { close() { closes++; } };
+  const ctx = vm.createContext({ createImageBitmap: async () => fakeBmp, postMessage: () => {} });
+  ctx.self = ctx;
+  vm.runInContext(read("js/workers/bitmap-decode-worker.js"), ctx, { filename: "bitmap-decode-worker.js" });
+  await ctx.onmessage({ data: { type: "decode", seq: 1, blob: { size: 1 } } });
+  assert.equal(closes, 0);
+});
+
 test("BitmapDecode client falls back to main-thread createImageBitmap without Worker", async () => {
   const calls = [];
   const bmp = { width: 1, height: 1, close() {} };
