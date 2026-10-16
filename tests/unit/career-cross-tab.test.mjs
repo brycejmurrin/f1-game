@@ -441,7 +441,13 @@ test("missing calendar preserves exact raw JSON through reads, save, mutation an
   assert.equal(disk.get("apex26.career.driver.0"), raw);
   assert.equal(Career.planning().adopt(), true);
   assert.deepEqual(Array.from(Career.data().season.calIds), ["a"]);
-  assert.equal(Career.data().results.length, 1);
+  // Scored races of a removed circuit stay as career achievements (the tip's
+  // archivedCircuit rule): the round index goes, the result and its circuit id stay.
+  const kept = Array.from(Career.data().results);
+  assert.equal(kept.length, 2);
+  assert.equal(kept[0].r, 0);
+  assert.equal(kept[1].archivedCircuit, "gone");
+  assert.equal("r" in kept[1], false);
   assert.equal(Career.conflicted(), false);
 });
 
