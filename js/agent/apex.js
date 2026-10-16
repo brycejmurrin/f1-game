@@ -3227,6 +3227,7 @@ const api = {
           live = live || p;
           return live !== p ? live + " (pick: " + p + ")" : live;
         }, "?"),   // what BOUND, not only the pick
+        backendFallback: safe(() => sessionStorage.getItem("apex26.gfxFallbackWhy"), null),   // why a WGX/TLX pick bound WebGL2 (#2285)
         mobile: safe(() => !!(gfx && gfx.isMobile), null),
         mobileTier: safe(() => !!(gfx && gfx.mobileTier), null),
         hdr: safe(() => !!(gfx && gfx.hdrMode && gfx.hdrMode()), null),
