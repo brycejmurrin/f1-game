@@ -92,6 +92,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/session-transcript.mjs** | Digest saved `list_events` pages into a timeline: prompts, replies, commands, MCP calls, subagents, errors. | agent-fleet |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
+| **ci/verify-live.mjs** | Post-deploy byte and SHA-256 verification for the shell, secondary pages, service worker, and lazy assets. | — |
 | **ci/wait-for.mjs** | The generic background waiter: block until the 1-min load drops, a file is non-empty, or a pid is gone (exit 0 / 124). | — |
 | **ci/who-is-on-it.mjs** | Recent pushes per branch, who touched your paths, live claims: the check before fixing a shared red. | check-changes |
 
