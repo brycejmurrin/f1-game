@@ -90,3 +90,38 @@ test("a stop the red flag interrupts before the set is fitted is not counted", (
   assert.equal(fitted.pitStops, 1, "a set already fitted is a stop taken");
   assert.equal(early.pitState, "none");
 });
+
+
+test("red-flag grids and their first crossing preserve physical tyre age", async () => {
+  const game = await createGame({ track: "monza", storage: { tyreWear: "real" } });
+  try {
+    await game.race("monza", "day", "dry", { laps: 12 });
+    const G = game.G, L = G.track.total;
+    G.tyres.setLevel("real");
+    for (const c of G.cars) {
+      c.lap = 2; c.prog = L + 200; c._progGift = 0;
+      G.tyres.fit(c, c.tyre);
+      c.lap = 6; c.fuelLap = 6; c.prog = 5 * L + 200; c.s = 200;
+      c.tyreWear = c.tyreWearF = c.tyreWearR = 0.5;
+    }
+    const p = G.player, age = G.tyres.lapsOn(p);
+    assert.equal(age, 4);
+    for (let restart = 0; restart < 2; restart++) {
+      game.apex.go();
+      const lifeBefore = G.tyres.lapsLeft(p), wearBefore = p.tyreWear;
+      assert.equal(game.apex.redFlag().state, "count");
+      for (const c of G.cars) assert.equal(G.tyres.lapsOn(c), age);
+      assert.equal(G.tyres.lapsLeft(p), lifeBefore);
+      assert.equal(p.tyreWear, wearBefore);
+      game.apex.go(); game.apex.setInput({ throttle: true, steer: 0 });
+      for (let tick = 0; tick < 600 && p.s > L / 2; tick++) game.step(1);
+      game.apex.clearInput();
+      assert.ok(p.s < L / 2, "actually crossed the restart line");
+      assert.equal(G.tyres.lapsOn(p), age, "first crossing is only metres driven");
+    }
+    G.tyres.fit(p, p.tyre);
+    assert.equal(G.tyres.lapsOn(p), 0);
+    p.prog += L;
+    assert.equal(G.tyres.lapsOn(p), 1);
+  } finally { game.close(); }
+});

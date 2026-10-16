@@ -637,3 +637,25 @@ test("tray mutation invalidation preserves a driver's cross-session comparison w
   assert.match(popup.textContent, /A One R vs A One Q/);
   h.DataHub.close();
 });
+
+for (const pick of ["year", "meeting"]) test(`an older latest response cannot replace a pending explicit ${pick} change`, async () => {
+  const h = harness();
+  h.DataHub.open("results"); await h.drain();
+  h.tab("live"); await h.flush();   // force a latest response ahead of the next picker request
+  h.tab("results"); await h.flush();
+  if (pick === "year") {
+    const year = h.content().find((n) => n.classList.contains("dh-pill") && n.textContent === "2025");
+    assert.ok(year); year.dispatch("click");
+  } else {
+    const gp = h.content().selects()[0]; gp.value = "40"; gp.dispatch("change");
+  }
+  await h.flush();
+  assert.equal(h.pending[0].name, "latestSession", "reproduce the real FIFO order");
+  await h.drain();
+  assert.equal(h.resultKeys.at(-1), 400, "the explicit meeting's classification replaces the old body");
+  const selected = h.content().selects()[1].children.find((option) => option.selected);
+  assert.equal(selected.value, "400", "the session picker agrees with the selected meeting");
+  if (pick === "year") assert.ok(h.meetingYears.slice(1).every((year) => year === 2025),
+    "the late LIVE load must also retain the requested year");
+  h.DataHub.close();
+});

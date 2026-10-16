@@ -68,8 +68,9 @@ export async function callTool(session, name, args = {}) {
     if (changesSession) session.toolBusy = true;
     try { body = await routes[name](); }
     finally { if (changesSession) session.toolBusy = false; }
-    if (JSON.stringify(body).length > 128000) throw Error("Result exceeds 128KB; narrow the request. The debugger action may already have completed.");
-    return { content: [{ type: "text", text: JSON.stringify(body) }], structuredContent: body,
+    const serialized = JSON.stringify(body);
+    if (Buffer.byteLength(serialized, "utf8") > 128000) throw Error("Result exceeds 128KB; narrow the request. The debugger action may already have completed.");
+    return { content: [{ type: "text", text: serialized }], structuredContent: body,
       isError: body.ok === false || !!body.cleanupErrors?.length || !!body.exceptionDetails };
   } catch (error) {
     const body = { ok: false, error: String(error.message || error).slice(0, 2000) };

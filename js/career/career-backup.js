@@ -36,10 +36,14 @@ const CareerBackup = (function () {
   // `rowFlavour` is the slot the file files it under; a driver career that
   // claims a MY TEAM row (a hand edit) would load as a driver save in that set.
   function futureSave(data) {
-    return !!(data && typeof SaveMigrate !== "undefined" && Number(data.v) > SaveMigrate.CAREER_V);
+    return !!(data && typeof SaveMigrate !== "undefined"
+      && (typeof data.v === "number" || typeof data.v === "string") && Number(data.v) > SaveMigrate.CAREER_V);
   }
   function slotPayloadOk(data, rowFlavour) {
     if (data == null) return { ok: true };
+    if (isObj(data) && data.v != null && typeof data.v !== "number" && typeof data.v !== "string") {
+      return { ok: false, reason: "invalid-version" };
+    }
     if (futureSave(data)) return { ok: false, reason: "newer-version" };
     if (Array.isArray(data)) return { ok: false, reason: "slot-not-object" };
     if (!isObj(data)) return { ok: false, reason: "slot-not-object" };
@@ -561,6 +565,10 @@ const CareerBackup = (function () {
   // Write one slot through store.write (IndexedDB mirror included). Refuses a
   // newer live revision the same way Career.save() does.
   function writeSlot(f, i, data, expectedRevision) {
+    return writeSlotValue(f, i, data, expectedRevision, false);
+  }
+  // Only apply() owns prepared values. Public single-slot writes still migrate.
+  function writeSlotValue(f, i, data, expectedRevision, prepared) {
     const s = store();
     if (!s) return { ok: false, durable: false, reason: "no-store" };
     const key = slotKey(f, i);
@@ -572,7 +580,7 @@ const CareerBackup = (function () {
     let value = null;
     if (data != null) {
       const clone = JSON.parse(JSON.stringify(data));
-      const migrated = migrate(clone);
+      const migrated = prepared ? clone : migrate(clone);
       if (!migrated) return { ok: false, durable: false, reason: "migrate-failed" };
       value = migrated;
     }
@@ -824,8 +832,14 @@ const CareerBackup = (function () {
         if (expected[id] !== now) return { ok: false, reason: "conflict", slot: id };
       }
       if (liveConflict(f, idx)) return { ok: false, reason: "conflict", slot: id };
-      const data = JSON.parse(JSON.stringify(row.data));
-      if (f === "myteam" && typeof CareerTeamIdentity !== "undefined") data.myTeamIdentity = CareerTeamIdentity.sanitize(data.myTeamIdentity || envelope.myTeam || CareerTeamIdentity.capture(s));
+      // Migration is part of preflight: a malformed later row must not throw
+      // after earlier destination slots have already been replaced.
+      let data;
+      try {
+        data = migrate(JSON.parse(JSON.stringify(row.data)));
+        if (!data) return { ok: false, reason: "migrate-failed", slot: id };
+        if (f === "myteam" && typeof CareerTeamIdentity !== "undefined") data.myTeamIdentity = CareerTeamIdentity.sanitize(data.myTeamIdentity || envelope.myTeam || CareerTeamIdentity.capture(s));
+      } catch (_) { return { ok: false, reason: "migrate-failed", slot: id }; }
       plan.push({ f: f, i: idx, data, id: id });
     }
 
@@ -856,7 +870,7 @@ const CareerBackup = (function () {
       if (liveConflict(step.f, step.i)) {
         return { ok: false, reason: "conflict", slot: id, written: written };
       }
-      const result = writeSlot(step.f, step.i, step.data, exp);
+      const result = writeSlotValue(step.f, step.i, step.data, exp, true);
       if (!result.ok || result.reason === "conflict") {
         return { ok: false, reason: result.reason || "write-failed", slot: id, written: written };
       }

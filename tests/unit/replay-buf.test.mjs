@@ -627,6 +627,33 @@ test("the replay dock is styled from css (no inline cssText) and labelled for as
   assert.doesNotMatch(dock.innerHTML, /style=/);
 });
 
+test("paused replay keeps unchanged contact-sheet options and refreshes changed tags without losing selection", () => {
+  let replacements = 0;
+  const picker = { value: "", children: [],
+    replaceChildren() { replacements++; this.children = []; },
+    appendChild(option) { this.children.push(option); if (!this.value) this.value = option.value; } };
+  const dock = { hidden: true };
+  const doc = { getElementById: (id) => id === "pm-replay-tag" ? picker : id === "pm-replay-dock" ? dock : null,
+    createElement: () => ({}) };
+  const R = boot(doc), field = cars(1), G = { cars: field, paused: true, raceT: 4 };
+  const api = R.create(G);
+  for (let i = 0; i <= R.HZ * 4; i++) api.sample(i / R.HZ, field);
+  api.pushTag("pass", 2, 0); api.pushTag("pit", 3, 0);
+  assert.equal(api.beginScrub(), true);
+  api.stepFrame(-1); assert.equal(api.status().scrubPlaying, false);
+  picker.value = "1";
+  const original = picker.children.slice(), paints = replacements;
+  for (let i = 0; i < 60; i++) api.tickScrub(1 / 60);
+  assert.equal(replacements, paints, "a stopped replay never replaces unchanged options");
+  assert.deepEqual(picker.children, original, "option identity survives repainting");
+  assert.equal(picker.value, "1");
+  api.pushTag("retirement", 3.5, 0); api.tickScrub(0);
+  assert.equal(replacements, paints + 1, "new footage metadata updates the choices once");
+  assert.equal(picker.children.length, 3); assert.equal(picker.value, "1");
+  api.tickScrub(0); assert.equal(replacements, paints + 1);
+  api.endScrub();
+});
+
 test("css/dialogs.css gives #pm-replay-dock safe-area, wrapping and a viewport cap", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/dialogs.css"), "utf8");
   const m = css.match(/#pm-replay-dock \{([^}]*)\}/);

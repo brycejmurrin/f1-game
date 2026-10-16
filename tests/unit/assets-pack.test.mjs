@@ -629,6 +629,135 @@ test("P4: readLayerBytesAsync returns byte-identical layers to readLayerBytes th
   assert.deepEqual(sync.ops.filter((o) => o[0] === "readSync").map((o) => o[1]), [1, 5, 9, 16], "the sync path still reads each layer in place");
 });
 
+test("P4: the clean 14-layer pack batches GL error checks before publishing callbacks", async () => {
+  const mock = makeAsyncGl();
+  let queries = 0;
+  mock.gl.getError = () => { queries++; return 0; };
+  const assets = assetLoader({ setTimeout, OffscreenCanvas: class { getContext() { return mock.gl; } } });
+  const images = [], complete = [];
+  for (const i of [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16]) images[i] = layerImage(i, 2);
+  const done = await assets.readLayerBytesAsync(2, images, 17, new Uint8Array(17 * 16), (i, bytes) => {
+    assert.ok(bytes);
+    assert.equal(queries, 4, "publish only after the whole copied batch passed its error check");
+    complete.push(i);
+  });
+  assert.equal(queries, 4, "query budget stays constant instead of four round trips per image");
+  assert.deepEqual([...done], complete);
+  assert.equal(new Set(complete).size, 14, "every layer fires exactly once");
+});
+
+for (const refusal of ["successful-readback", "synchronous-fallback"]) {
+  test(`P4: a throwing ${refusal} consumer cannot strand the job or duplicate callbacks`, { timeout: 1000 }, async () => {
+    // Force the poll onto a timer: an escaped callback would reject neither
+    // the pending promise nor release its PBOs, and surface as uncaught JS.
+    const mock = makeAsyncGl({ busyPolls: 1 }), live = new Set(), callbacks = [];
+    const create = mock.gl.createBuffer, remove = mock.gl.deleteBuffer;
+    mock.gl.createBuffer = () => { const b = create(); live.add(b); return b; };
+    mock.gl.deleteBuffer = b => { assert.ok(live.delete(b), "each buffer freed once"); return remove(b); };
+    const assets = assetLoader({ setTimeout, OffscreenCanvas: class { getContext() { return mock.gl; } } });
+    const images = [];
+    for (const i of [1, 2, 3]) images[i] = layerImage(i, 2, refusal === "synchronous-fallback" && i === 2);
+    const done = await assets.readLayerBytesAsync(2, images, 4, new Uint8Array(64), (i, bytes) => {
+      callbacks.push([i, !!bytes]);
+      if ((refusal === "successful-readback" && i === 1) || !bytes) throw Error("consumer refused layer");
+    });
+    assert.deepEqual([...done], refusal === "successful-readback" ? [1, 2, 3] : [1, 3]);
+    assert.equal(callbacks.length, 3, "every available layer is notified once despite consumer failure");
+    assert.equal(new Set(callbacks.map(([i]) => i)).size, 3, "a fallback exception does not trigger another fallback");
+    assert.equal(live.size, 0, "the completed promise owns no PBOs");
+    assert.equal(mock.ops.filter(([op]) => op === "deleteSync").length, 1, "the fence is released");
+    assert.deepEqual(mock.ops.filter(([op]) => op === "bind").at(-1), ["bind", false]);
+  });
+}
+
+for (const failure of ["createBuffer-null", "bufferData", "readPixels"]) {
+  test(`P4: a ${failure} failure releases its buffer before fallback and preserves sibling layers`, async () => {
+    const mock = makeAsyncGl(), gl = mock.gl;
+    const live = new Set(), freed = new Set(), fallback = [];
+    let layer = null, bound = null;
+    const original = Object.fromEntries(["texImage2D", "createBuffer", "bindBuffer", "bufferData", "readPixels", "getBufferSubData", "deleteBuffer"].map(k => [k, gl[k]]));
+    gl.texImage2D = (...args) => { layer = args[args.length - 1].id; return original.texImage2D(...args); };
+    gl.createBuffer = () => {
+      if (layer === 2 && failure === "createBuffer-null") return null;
+      const b = original.createBuffer(); live.add(b); return b;
+    };
+    gl.bindBuffer = (target, b) => { bound = b; return original.bindBuffer(target, b); };
+    gl.bufferData = (...args) => {
+      if (layer === 2 && failure === "bufferData") throw Error("injected bufferData failure");
+      // WebGL errors leave state untouched, rather than throwing, with no PBO bound.
+      if (!bound) return;
+      return original.bufferData(...args);
+    };
+    gl.readPixels = (...args) => {
+      if (layer === 2 && failure === "readPixels") throw Error("injected readPixels failure");
+      if (typeof args[args.length - 1] === "number" && !bound) return;
+      return original.readPixels(...args);
+    };
+    gl.getBufferSubData = (...args) => { if (bound) return original.getBufferSubData(...args); };
+    gl.deleteBuffer = (b) => {
+      if (!b) return;
+      assert.ok(!freed.has(b), "each allocated buffer is deleted once");
+      freed.add(b); live.delete(b); return original.deleteBuffer(b);
+    };
+    const assets = assetLoader({ setTimeout, OffscreenCanvas: class { getContext() { return gl; } } });
+    const images = []; for (const i of [1, 2, 3]) images[i] = layerImage(i, 2);
+    const data = new Uint8Array(64);
+    const done = await assets.readLayerBytesAsync(2, images, 4, data, (i, bytes) => {
+      if (bytes) return;
+      assert.equal(bound, null, "sync fallback cannot inherit a pixel-pack buffer binding");
+      assert.equal(live.size, 1, "only the first successful sibling's pending buffer is still owned");
+      fallback.push(i);
+    });
+    assert.deepEqual([...done], [1, 3], "the failed layer never gets polled or falsely reported as filled");
+    assert.deepEqual(fallback, [2]);
+    for (const i of [1, 3]) assert.deepEqual([...data.subarray(i * 16, (i + 1) * 16)], [...images[i].pixels(2, 2)]);
+    assert.deepEqual([...data.subarray(32, 48)], Array(16).fill(0), "failed bytes stay untouched for fallback");
+    assert.equal(live.size, 0, "all successful and failed allocations are released");
+    assert.equal(bound, null);
+  });
+}
+
+for (const failure of ["bufferData-OUT_OF_MEMORY", "readPixels-INVALID_OPERATION", "getBufferSubData-INVALID_OPERATION"]) {
+  test(`P4: nonthrowing ${failure} cannot report zero bytes as a completed layer`, async () => {
+    const mock = makeAsyncGl(), gl = mock.gl;
+    const live = new Set(), errors = [], fallbacks = [], completed = [];
+    let layer = null, bound = null;
+    const original = Object.fromEntries(["texImage2D", "createBuffer", "bindBuffer", "bufferData", "readPixels", "getBufferSubData", "deleteBuffer"].map(k => [k, gl[k]]));
+    gl.getError = () => errors.shift() || 0;
+    gl.texImage2D = (...args) => { layer = args[args.length - 1].id; return original.texImage2D(...args); };
+    gl.createBuffer = () => { const b = original.createBuffer(); b.layer = layer; live.add(b); return b; };
+    gl.bindBuffer = (target, b) => { bound = b; return original.bindBuffer(target, b); };
+    gl.bufferData = (...args) => {
+      if (layer === 2 && failure.startsWith("bufferData")) { errors.push(0x0505); return; }
+      return original.bufferData(...args);
+    };
+    gl.readPixels = (...args) => {
+      if (!bound.data || (layer === 2 && failure.startsWith("readPixels"))) { errors.push(0x0502); return; }
+      return original.readPixels(...args);
+    };
+    gl.getBufferSubData = (...args) => {
+      if (bound.layer === 2 && failure.startsWith("getBufferSubData")) { errors.push(0x0502); return; }
+      return original.getBufferSubData(...args);
+    };
+    gl.deleteBuffer = (b) => { assert.ok(live.delete(b), "delete each owned allocation once"); return original.deleteBuffer(b); };
+    const assets = assetLoader({ setTimeout, OffscreenCanvas: class { getContext() { return gl; } } });
+    const images = []; for (const i of [1, 2, 3]) images[i] = layerImage(i, 2);
+    const data = new Uint8Array(64);
+    const done = await assets.readLayerBytesAsync(2, images, 4, data, (i, bytes) => {
+      if (bytes) completed.push(i);
+      else { assert.equal(bound, null); fallbacks.push(i); }
+    });
+    assert.deepEqual([...done], [1, 3]);
+    assert.deepEqual(completed, [1, 3], "no success callback for the failed zero-filled layer");
+    assert.deepEqual(fallbacks, failure.startsWith("getBufferSubData") ? [] : [2], "queue errors fall back synchronously while images are alive");
+    for (const i of [1, 3]) assert.deepEqual([...data.subarray(i * 16, (i + 1) * 16)], [...images[i].pixels(2, 2)]);
+    assert.deepEqual([...data.subarray(32, 48)], Array(16).fill(0));
+    assert.equal(live.size, 0);
+    assert.equal(bound, null);
+    assert.deepEqual(errors, [], "error flags from a failed layer cannot poison successful siblings");
+  });
+}
+
 test("P4: readLayerBytesAsync degrades the way the sync path does — refused layers, a failed wait, no fence API", async () => {
   const size = 2, page = size * size * 4, n = 4;
   const ctx = (mock) => assetLoader({ setTimeout, OffscreenCanvas: class { getContext(kind) { return kind === "webgl2" ? mock.gl : null; } } });

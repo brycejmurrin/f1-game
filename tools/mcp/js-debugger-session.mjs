@@ -4,6 +4,17 @@ import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
 const sourceLocation = p => ({ scriptId: p.scriptId, line: p.lineNumber + 1, column: (p.columnNumber ?? 0) + 1 });
+function exceptionPreview(value) {
+  if (!value || typeof value.type !== "string") return undefined;
+  const out = { type: value.type, subtype: value.subtype, className: clip(value.className, 100),
+    description: clip(value.description, 200), objectId: value.objectId,
+    unserializableValue: value.unserializableValue, uncaught: value.uncaught };
+  if (Object.hasOwn(value, "value") && (value.value === null || ["string", "number", "boolean"].includes(typeof value.value))) {
+    out.value = typeof value.value === "string" ? clip(value.value, 2000) : value.value;
+    if (typeof value.value === "string" && value.value.length > 2000) out.truncated = true;
+  }
+  return out;
+}
 function operationResult(result) {
   const size = JSON.stringify(result).length;
   return size <= 4000 ? result : { truncated: true, originalCharacters: size,
@@ -16,6 +27,7 @@ export class DebugSession {
     this.cdp = null; this.pause = null; this.sequence = 0;
     this.scripts = new Map(); this.objects = new Set(); this.breakpoints = new Map();
     this.operations = new Map(); this.operationSequence = 0; this.connecting = false;
+    this.operationGroups = new Set();
     this.generation = randomUUID();
   }
   resetPause() {
@@ -83,6 +95,7 @@ export class DebugSession {
       client.on("Debugger.paused", event => {
         this.resetPause();
         this.pause = { token: `${this.generation}:${++this.sequence}`, reason: event.reason,
+          exception: ["exception", "promiseRejection"].includes(event.reason) ? this.remember(exceptionPreview(event.data)) : undefined,
           hitBreakpoints: event.hitBreakpoints || [],
           frames: event.callFrames.slice(0, 10).map((f, index) => ({ index, functionName: clip(f.functionName, 200),
             url: clip(f.url || this.scripts.get(f.location.scriptId)?.url, 1000), scriptId: f.location.scriptId,
@@ -103,7 +116,7 @@ export class DebugSession {
       });
       client.on("Debugger.globalObjectCleared", () => { this.resetPause(); this.clearScripts(); });
       client.on("disconnect", () => {
-        this.resetPause(); this.scripts.clear(); this.breakpoints.clear();
+        this.resetPause(); this.scripts.clear(); this.breakpoints.clear(); this.operationGroups.clear();
         if (this.cdp === client) { this.cdp = null; this.target = null; }
       });
       await client.send("Runtime.enable");
@@ -123,6 +136,7 @@ export class DebugSession {
     // Reset exception pauses and owned breakpoints before resuming the program.
     const commands = [["Debugger.setPauseOnExceptions", { state: "none" }],
       ...[...this.breakpoints.keys()].map(breakpointId => ["Debugger.removeBreakpoint", { breakpointId }]),
+      ...[...this.operationGroups].map(objectGroup => ["Runtime.releaseObjectGroup", { objectGroup }]),
       ["Runtime.releaseObjectGroup", { objectGroup: this.generation }]];
     if (this.pause) commands.push(["Runtime.releaseObjectGroup", { objectGroup: this.pause.token }]);
     await Promise.all(commands.map(async ([method, params]) => {
@@ -195,13 +209,29 @@ export class DebugSession {
     if (this.pause) throw Error("Use debugger_evaluate while paused");
     if ([...this.operations.values()].some(o => ["pending", "unknown"].includes(o.status))) throw Error("An evaluation is pending or its execution is unknown; inspect state/resume or detach first");
     const id = ++this.operationSequence, generation = this.generation;
+    const objectGroup = `${generation}:run:${id}`;
+    this.operationGroups.add(objectGroup);
     const operation = { id, status: "pending" }; this.operations.set(id, operation);
     if (this.operations.size > 10) this.operations.delete(this.operations.keys().next().value);
     // Deliberately not awaited: a breakpoint inside the expression must not
     // prevent a later MCP request from inspecting and resuming it.
     client.send("Runtime.evaluate", { expression, awaitPromise, returnByValue: true,
-      generatePreview: false, objectGroup: generation }, 30000).then(r => {
-      if (this.generation === generation) Object.assign(operation, { status: r.exceptionDetails ? "exception" : "completed", result: operationResult(r) });
+      generatePreview: false, objectGroup }, 30000).then(async r => {
+      // returnByValue still creates remote Error handles on thrown expressions.
+      // Their graphs must not survive for the whole attachment after a result
+      // has been copied into the bounded history. Unknown/timed-out execution
+      // keeps its group until detach: a deadline does not cancel page JS.
+      let cleanupError;
+      try {
+        await client.send("Runtime.releaseObjectGroup", { objectGroup }, 1000);
+        this.operationGroups.delete(objectGroup);
+      } catch (e) {
+        cleanupError = clip(e.message);
+      }
+      // A final operation status also means its cleanup attempt has settled,
+      // so clients can verify reachability without racing the release command.
+      if (this.generation === generation) Object.assign(operation, { status: r.exceptionDetails ? "exception" : "completed",
+        result: operationResult(r), ...(cleanupError ? { cleanupError } : {}) });
     }, e => { if (this.generation === generation) Object.assign(operation, { status: "unknown", error: clip(e.message) }); });
     return { operationId: id, status: "pending", note: "Inspect debugger_state; a response timeout does not cancel JavaScript execution." };
   }

@@ -33,7 +33,29 @@ const RealReplay = (function () {
     for (let i = 0; i < pts.length; i += stepP) S.push([pts[i][0], pts[i][1]]);
     if (S.length < 8 || C.length < 8) return null;
     const centroid = (P) => { let x = 0, y = 0; for (const p of P) { x += p[0]; y += p[1]; } return [x / P.length, y / P.length]; };
-    const near = (x, y) => { let b = 0, bd = Infinity; for (let i = 0; i < C.length; i++) { const dx = C[i][0] - x, dy = C[i][1] - y, d = dx * dx + dy * dy; if (d < bd) { bd = d; b = i; } } return b; };
+    // Build once for all sixteen starts and their ICP iterations. Keep the
+    // original indices: equal-distance matches must still choose the first
+    // centreline point, as the exhaustive scan did (including lap direction).
+    function index(ids, axis) {
+      if (!ids.length) return null;
+      ids.sort((a, b) => C[a][axis] - C[b][axis] || a - b);
+      const mid = ids.length >> 1;
+      return { i: ids[mid], axis, left: index(ids.slice(0, mid), 1 - axis), right: index(ids.slice(mid + 1), 1 - axis) };
+    }
+    const root = index(C.map((_, i) => i), 0);
+    let nearest = 0, nearestD2 = Infinity;
+    function visit(node, x, y) {
+      if (!node) return;
+      const p = C[node.i], dx = p[0] - x, dy = p[1] - y, d = dx * dx + dy * dy;
+      if (d < nearestD2 || (d === nearestD2 && node.i < nearest)) { nearestD2 = d; nearest = node.i; }
+      const delta = node.axis ? y - p[1] : x - p[0];
+      const first = delta <= 0 ? node.left : node.right, other = delta <= 0 ? node.right : node.left;
+      visit(first, x, y);
+      // Equality can contain an earlier index; non-finite queries also retain
+      // the scan's fallback rather than pruning an unordered distance.
+      if (!(delta * delta > nearestD2)) visit(other, x, y);
+    }
+    const near = (x, y) => { nearest = 0; nearestD2 = Infinity; visit(root, x, y); return nearest; };
     const cs = centroid(S), ct = centroid(C);
     const mapper = (refl, th, tx, ty) => (p) => { const x = p[0], y = refl * p[1], cos = Math.cos(th), sin = Math.sin(th); return [cos * x - sin * y + tx, sin * x + cos * y + ty]; };
     let best = null;
@@ -401,6 +423,12 @@ const RealReplay = (function () {
       }
       return enabled;
     }
+    function seekEvent(index) {
+      const h = run && Number.isInteger(index) && run.events[index];
+      if (!h) return null;
+      seekTo(h.t - LEAD_S, h);
+      return h.text;
+    }
     function eventStep(dir) {
       if (!run) return null;
       const list = run.events;
@@ -654,7 +682,7 @@ const RealReplay = (function () {
                cars: [...run.cars.values()].filter((f) => f.tr).length, broadcast: bc ? bc.status() : null };
     }
 
-    const api = { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, setPaused, eventStep, isRunning: () => !!run,
+    const api = { start, stop, owns, tick, follow, setSpeed, stepSpeed, seek, skip, status, setPaused, eventStep, seekEvent, isRunning: () => !!run,
              describe: () => run ? { name: run.script.name || run.script.circuit || "REAL RACE", startT: run.startT, drivers: [...run.cars.entries()].filter(([, f]) => f.tr && f.d).map(([c, f]) => ({ code: f.d.code, name: f.d.name, get available() { return !c.retired; } })), events: run.events, speeds: SPEEDS } : null,
              setLocked: (v) => (bc && run ? bc.setLocked(v) : false),
              // The in-game AUTO camera (js/camera/mode-switch.js): hand the picture to the

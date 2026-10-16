@@ -809,3 +809,35 @@ test("A-H3: drawAeroFlaps draws through CarDraw.coOpt — coalesced on TLX, the 
   assert.equal(v.ctx.CarDraw.coOpt(paint), v.carDraw.coOpt(paint), "CarDraw.coOpt delegates to the live instance");
   assert.match(read("js/car/car-draw.js"), /coOpt: \(o\) => \(_instance \? _instance\.coOpt\(o\) : o\)/, "…and is the identity before one exists");
 });
+
+
+test("custom decal recipes retain 32 recent states per team and re-resolve legality changes", () => {
+  const v = carDrawVm();
+  let resolutions = 0, legality = "2026";
+  v.ctx.Parts.legalityKey = () => legality;
+  v.ctx.Parts.getVisualTiers = (setup) => ({ recipe: setup.aero, legality, serial: ++resolutions });
+  v.ctx.Car3D.aeroLevelOf = (parts) => Number(parts.recipe.replace("upgrade", "")) % 5;
+  v.ctx.Car3D.aeroStyleOf = (parts) => ({ recipe: parts.recipe });
+  const team = v.teams[0], other = v.teams[1];
+  const resolve = (i, t = team) => v.carDraw.teamDecalState(t, false, { ...WORKS, aero: "upgrade" + i }, "stamp" + i);
+  const states = Array.from({ length: 32 }, (_, i) => resolve(i));
+  const otherState = resolve(1, other);
+  assert.strictEqual(resolve(0), states[0], "drawing an old but active recipe promotes it");
+  resolve(32);
+  assert.strictEqual(resolve(0), states[0], "the promoted active recipe survives the bound");
+  const evicted = resolve(1);
+  assert.notStrictEqual(evicted, states[1], "the least recently used recipe is recomputed");
+  assert.equal(evicted.parts.recipe, states[1].parts.recipe);
+  assert.equal(evicted.val, states[1].val);
+  assert.equal(evicted.aero.recipe, states[1].aero.recipe);
+  assert.strictEqual(resolve(1, other), otherState, "another team's working recipe stays warm");
+  for (let i = 33; i < 96; i++) { resolve(i); resolve(0); }
+  assert.strictEqual(resolve(0), states[0], "an active recipe survives years of upgrades");
+  const before = resolutions;
+  for (let i = 64; i < 96; i++) resolve(i);
+  assert.ok(resolutions > before, "history beyond the 32-state working set was discarded");
+  legality = "2027";
+  const nextRules = resolve(95);
+  assert.equal(nextRules.parts.legality, "2027", "same stamp is resolved against the new rules");
+  assert.strictEqual(resolve(95), nextRules, "new-rule results remain memoized");
+});

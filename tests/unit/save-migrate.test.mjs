@@ -318,3 +318,28 @@ test("remapPoints leaves season.config alone: the standalone season keeps its fr
   SM.migrateSeasonPoints({ get: () => null, set() {} }, viaStandalone);
   assert.deepEqual(JSON.parse(JSON.stringify(viaStandalone.config)), { drop: 2 }, "migrateSeasonPoints keeps it too");
 });
+
+test("JSON objects in numeric leaves cannot throw while opening a career", () => {
+  const SM = load();
+  const bad = JSON.parse('{"toString":"not callable","valueOf":null}');
+  const c = SM.migrateCareer({ v: 2, flavour: "driver", team: "haas",
+    money: bad, rep: bad, year: bad, seed: bad, seat: bad, facility: bad, budgetLvl: bad,
+    deal: { salary: bad, bonusPt: bad, left: bad, years: bad },
+    season: { round: 0, pts: { "haas:0": bad }, teamPts: { haas: bad } },
+    roster: [{ salary: bad, left: bad, pending: { ask: bad } }],
+    results: [{ r: bad, p: bad, pts: bad }], history: [{ wins: bad, podiums: bad, pts: bad }],
+    winterReport: { year: 2026, teams: [{ rankBefore: bad, rankAfter: bad }] },
+  });
+  for (const key of ["money", "rep", "seed", "seat", "facility", "budgetLvl"]) assert.equal(c[key], 0, key);
+  assert.equal(c.year, 2026);
+  for (const key of ["salary", "bonusPt", "left", "years"]) assert.equal(c.deal[key], 0, key);
+  assert.equal(c.season.pts["haas:0"], 0);
+  assert.equal(Object.hasOwn(c.season.teamPts, "haas"), false);
+  assert.equal(c.roster[0].salary + c.roster[0].left + c.roster[0].pending.ask, 0);
+  assert.equal(c.results[0].r + c.results[0].p + c.results[0].pts, 0);
+  assert.equal(c.tally.wins + c.tally.podiums + c.tally.pts, 0);
+  assert.equal(c.winterReport.teams[0].rankBefore, 1);
+  assert.equal(c.winterReport.teams[0].rankAfter, 1);
+  const normalized = JSON.stringify(c);
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(normalized))), normalized);
+});

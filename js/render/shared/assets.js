@@ -261,6 +261,11 @@ const Assets = (function () {
     const gl = scratch && scratch.gl;
     if (!gl || typeof gl.fenceSync !== "function" || typeof gl.clientWaitSync !== "function" ||
         typeof gl.getBufferSubData !== "function") return null;
+    // Consumers may refuse a layer. Their callbacks must not strand a queued
+    // readback, trigger a second fallback, or prevent owned buffers being freed.
+    const notifyLayer = (i, bytes) => {
+      if (onLayer) { try { onLayer(i, bytes); } catch (_) { /* consumer refused */ } }
+    };
     const page = size * size * 4;
     const done = [];
     const pending = [];
@@ -272,7 +277,7 @@ const Assets = (function () {
       if (raw) {
         if (raw.length >= page) {
           data.set(raw.subarray(0, page), i * page); done.push(i);
-          if (onLayer) onLayer(i, data.subarray(i * page, (i + 1) * page));
+          notifyLayer(i, data.subarray(i * page, (i + 1) * page));
         }
       } else pending.push(i);
     }
@@ -285,6 +290,16 @@ const Assets = (function () {
       scratch.view = view;
       scratch.page = page;
     }
+    // This context belongs only to Assets (_ensureScratchGl creates its own
+    // canvas). Drain stale scratch errors before each transaction; GL failures
+    // generally set flags instead of throwing, including allocation failures.
+    const scratchErrors = () => {
+      let failed = false;
+      if (typeof gl.getError === "function") {
+        for (let i = 0; i < 16 && gl.getError(); i++) failed = true;
+      }
+      return failed;
+    };
     const slots = [];   // { i, pbo }: layer i's own readback buffer
     let sync = null;
     const freeAll = () => {
@@ -292,22 +307,44 @@ const Assets = (function () {
       for (const s of slots) { try { gl.deleteBuffer(s.pbo); } catch (_) { /* lost */ } }
       if (sync) { try { gl.deleteSync(sync); } catch (_) { /* lost */ } }
     };
+    const queueLayer = (i, checked) => {
+      let pbo = null;
+      if (checked) scratchErrors();
+      try {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[i]);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+          notifyLayer(i, null);
+          return;
+        }
+        pbo = gl.createBuffer();
+        if (!pbo) throw new Error("createBuffer");
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+        gl.bufferData(gl.PIXEL_PACK_BUFFER, page, gl.STREAM_READ);
+        gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+        gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+        if (checked && (scratchErrors() || gl.isContextLost())) throw new Error("readPixels");
+        slots.push({ i, pbo });
+      } catch (_) {
+        // Own allocations even before the queue accepts them. Fallback reads
+        // client memory, so it must not inherit a pixel-pack buffer binding.
+        try { gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null); } catch (_) { /* lost */ }
+        if (pbo) { try { gl.deleteBuffer(pbo); } catch (_) { /* lost */ } }
+        notifyLayer(i, null);
+      }
+    };
     try {
+      scratchErrors();
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-      for (const i of pending) {
-        try {
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, images[i]);
-          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-          if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { if (onLayer) onLayer(i, null); continue; }
-          const pbo = gl.createBuffer();
-          gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
-          gl.bufferData(gl.PIXEL_PACK_BUFFER, page, gl.STREAM_READ);
-          // With a PIXEL_PACK_BUFFER bound the last argument is a byte offset into it.
-          gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, 0);
-          gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
-          slots.push({ i, pbo });
-        } catch (_) { if (onLayer) onLayer(i, null); }
+      for (const i of pending) queueLayer(i, false);
+      // getError is a GPU round trip. Check the whole batch, then retry with
+      // per-layer checks ONLY on failure while every source image is alive.
+      // Successful siblings still ship; a failed layer falls back exactly once.
+      if (scratchErrors() || gl.isContextLost()) {
+        const retry = slots.splice(0);
+        for (const { pbo } of retry) { try { gl.deleteBuffer(pbo); } catch (_) { /* lost */ } }
+        for (const { i } of retry) queueLayer(i, true);
       }
       sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
       gl.flush();
@@ -329,15 +366,31 @@ const Assets = (function () {
           waited += POLL_MS; setTimeout(poll, POLL_MS); return;
         }
         if (r === gl.ALREADY_SIGNALED || r === gl.CONDITION_SATISFIED) {
-          try {
-            for (const { i, pbo } of slots) {
+          scratchErrors();
+          let failed = false;
+          for (const { i, pbo } of slots) {
+            try {
               gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
-              // dstOffset / length are ELEMENTS of the typed array — bytes for a Uint8Array.
+              // Offsets and length are Uint8Array elements (bytes).
               gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, view, i * page, page);
-              done.push(i);
-              if (onLayer) onLayer(i, view.subarray(i * page, (i + 1) * page));
+            } catch (_) { failed = true; }
+          }
+          // Do not publish any copy until the batch is known to be valid.
+          // A failed batch is uncommon: reread its slots individually there,
+          // preserving good siblings without taxing every successful upload.
+          failed = scratchErrors() || gl.isContextLost() || failed;
+          for (const { i, pbo } of slots) {
+            if (failed) {
+              scratchErrors();
+              try {
+                gl.bindBuffer(gl.PIXEL_PACK_BUFFER, pbo);
+                gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, view, i * page, page);
+                if (scratchErrors() || gl.isContextLost()) continue;
+              } catch (_) { continue; }
             }
-          } catch (_) { /* a lost context mid-copy: the layers that landed still ship */ }
+            done.push(i);
+            notifyLayer(i, view.subarray(i * page, (i + 1) * page));
+          }
         }
         finish();   // WAIT_FAILED / the 8 s cap / a lost context: the pack ships the layers that landed
       };
