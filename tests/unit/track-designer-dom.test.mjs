@@ -1035,8 +1035,11 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
     /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?grid-template-rows:\s*minmax\(72px,\s*1fr\)\s*auto/,
     "portrait stage grid: definite map row + profile");
   assert.match(css,
-    /@media \(max-width: 760px\), \(orientation: portrait\) \{[\s\S]*?\[data-role="toolbar"\][\s\S]*?position:\s*absolute/,
-    "portrait floats UNDO/REDO/FIT on the map to save stack height");
+    /@media \(max-width: 760px\) and \(orientation: portrait\) \{[\s\S]*?#trackdesigner:not\(\[data-mode="scenery"\]\) \.td-stage > \.td-chips\[data-role="toolbar"\][\s\S]*?position:\s*static[\s\S]*?grid-row:\s*1/,
+    "portrait toolbar gets its own row instead of covering the map");
+  assert.match(css,
+    /#trackdesigner:not\(\[data-mode="scenery"\]\) \.td-stage > canvas\[data-role="profile"\][\s\S]*?grid-row:\s*3/,
+    "portrait profile stays below the dedicated toolbar and map rows");
 });
 
 test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that point, anchored at the press; a canvas press hides it; a stamp tool hands the canvas a ghost", () => {
