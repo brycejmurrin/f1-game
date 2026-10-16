@@ -87,7 +87,8 @@ for (const [door, panel, close] of [["pm-camtune", "camtune", "ct-close"], ["pm-
       await page.locator("#" + door).click();
       await expect(page.locator("#" + panel)).toHaveJSProperty("hidden", false);
       await page.locator("#" + close).click();
-      await expect(page.locator("#pm-panel-visual")).toBeVisible();   // the editors return to the page that opened them
+      await expect(page.locator("#pm-panel-visual")).toBeVisible();
+      await expect(page.locator("#pm-panel-display")).toBeHidden();
       expect(errors).toEqual([]);
     } finally { release(); }
   });
@@ -258,6 +259,7 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
     document.getElementById("pausebtn").click();
     document.getElementById("pm-settings").click();
     document.getElementById("pm-open-visual").click();
+    document.getElementById("pm-visual-tuners").open = true;
     document.getElementById("pm-camtune").click();
   });
   // The #camtune wrapper is a zero-width fixed shell (the docked .sheet inside
@@ -296,6 +298,8 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("apex26.camComfort") || "{}").fovBias)).toBe(-5);
 
   // ALL CAMS scope writes the global baseline, not the live mode.
+  await page.locator('#camtune-inner .ew-tools > summary').click();
+  await expect(page.locator('#camtune-inner .ew-tools')).toHaveAttribute('open', '');
   await page.evaluate(() => document.querySelector('#ct-scope button[data-scope="global"]').click());
   await expect(page.locator("#ct-profile")).toContainText("ALL CAMERAS");
   await page.evaluate(() => {
@@ -308,8 +312,6 @@ test("the pause-menu panel edits the camera you are looking through", async ({ p
   await expect(page.locator("#ct-profile")).toContainText("HOOD");
 
   // Picking another chip switches the live camera AND what the sliders edit.
-  // The camera chips live in the editor workspace's tools disclosure, which short screens keep closed.
-  await page.evaluate(() => { const d = document.querySelector("#camtune-inner details.ew-tools"); if (d) d.open = true; });
   await page.locator('#ct-modes .lt-tab[data-mode="drift"]').click();
   expect(await page.evaluate(() => __apex.camera().mode)).toBe("drift");
   await expect(page.locator("#ct-profile")).toContainText("DRIFT");

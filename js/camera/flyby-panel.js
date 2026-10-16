@@ -307,9 +307,9 @@ function createEditorOpener(G, buttonId, ensure, method) {
   }
   function open(fromUi) {
     cancel();
-    // The door lives on whichever Settings page hosts it (Visual Studio, formerly HUD & CAMERA).
-    const settings = G.$("pmsettings"), button = G.$(buttonId), display = button && button.closest('[id^="pm-panel-"]');
-    const visible = () => !!(settings && !settings.hidden && display && !display.hidden);
+    // Follow the button's owning Settings page when destinations are reorganized.
+    const settings = G.$("pmsettings"), button = G.$(buttonId), host = button && button.closest('[id^="pm-panel-"]');
+    const visible = () => !!(settings && !settings.hidden && host && !host.hidden);
     if (fromUi && !visible()) return Promise.resolve();
     if (fromUi && _pendingUiOpen) _pendingUiOpen.cancel();
     const request = { cancel, state: G.state, paused: G.paused, observer: null };
@@ -320,7 +320,7 @@ function createEditorOpener(G, buttonId, ensure, method) {
         request.observer = new MutationObserver(() => { if (pending === request) cancel(); });
         // Even hide-then-reopen ends the old visit. Observe only while waiting.
         request.observer.observe(settings, { attributes: true, attributeFilter: ["hidden"] });
-        request.observer.observe(display, { attributes: true, attributeFilter: ["hidden"] });
+        request.observer.observe(host, { attributes: true, attributeFilter: ["hidden"] });
       }
     }
     return Promise.resolve().then(ensure).then((real) => {

@@ -188,9 +188,9 @@ test("Live uses the hub content as its only stacked scroll owner", async ({ page
 
 test("Export explains the Gather prerequisite before Download is ready", async ({ page }) => {
   await dataReady(page);
-  // GPS TRACE EXPORT is a developer tool now: it lives behind the Developer tools disclosure, not the tab rail.
-  await page.locator("summary", { hasText: "Developer tools" }).click();
-  await page.getByRole("button", { name: "GPS TRACE EXPORT" }).click();
+  // GPS trace export belongs to Developer tools rather than the player tab rail.
+  await page.locator(".dh-developer-tools > summary").click();
+  await page.getByRole("button", { name: "GPS TRACE EXPORT", exact: true }).click();
   const status = page.locator(".dh-export-status");
   await expect(page.getByRole("button", { name: "Download" })).toBeDisabled();
   await expect(status).toContainText("Not gathered yet");

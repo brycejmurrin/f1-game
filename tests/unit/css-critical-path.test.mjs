@@ -121,8 +121,8 @@ test("blocking and preload byte census stay under the post-cut ceilings", () => 
   // Destination-group Home (2026-10-16, #2447): css/menu-destinations.css, ~2.7 KiB. It stays blocking on purpose:
   // the group widths, the compact-desktop grid rows for Garage/Explore/Create and the hidden group labels decide
   // where the title column sits, and a deferred sheet would move it after first paint. The tip was 222473 B.
-  assert.ok(blocking < 225500, `blocking CSS is ${blocking} B; want < 225500`);
-  assert.ok(preload < 225500, `preload CSS is ${preload} B; want < 225500`);
+  assert.ok(blocking < 222500, `blocking CSS is ${blocking} B; want < 222500`);
+  assert.ok(preload < 222500, `preload CSS is ${preload} B; want < 222500`);
   const settingsBytes = SETTINGS_FOUC.reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0);
   assert.ok(settingsBytes > 70000, "the dropped preload still exists as print→all bytes");
 });

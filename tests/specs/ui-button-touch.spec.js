@@ -230,8 +230,8 @@ async function openLightingPhotoMode(page) {
   await openPauseSettings(page);
   // Menu clicks stay as locator.click: the pause menu parks the render loop, so
   // Playwright's stability checks are cheap here (lighting-tuner-grade's table).
-  // The tuners live on the Visual Studio page now, and its disclosure is open by default.
   await page.locator("#pm-open-visual").click();
+  await expect(page.locator("#pm-visual-tuners")).toHaveAttribute("open", "");
   // openSettings() re-runs syncSettingsAvailability; after go() the door is live.
   await page.waitForFunction(() => {
     const b = document.getElementById("pm-lighting");
@@ -240,6 +240,8 @@ async function openLightingPhotoMode(page) {
   await page.locator("#pm-lighting").click();
   await page.waitForFunction(() => document.body.classList.contains("lt-open"),
     null, { polling: 100, timeout: BOOT_MS });
+  // Free Camera remains on the toolbar even when compact tools are folded.
+  await expect(page.locator("#lighting .ew-toolbar #pc-toggle")).toBeVisible();
   // Opening the tuner starts the live-preview render path — #pc-toggle must
   // use clickLive or the actionability poll pays for SwiftShader frames.
   await clickLive(page, "pc-toggle");
@@ -321,7 +323,8 @@ test.describe("Lighting tuner — pause lifecycle", () => {
       return {
         photo: document.body.classList.contains("photo-mode"),
         lighting: !$("lighting").hidden,
-        visual: !$("pm-panel-visual").hidden && !$("pmsettings").hidden,
+        // Tuners hide Settings while preserving their originating page.
+        visual: !$("pmsettings").hidden && !$("pm-panel-visual").hidden,
         settingsHome: !$("pm-settings-index").hidden,
         settings: !$("pmsettings").hidden,
         pause: !$("pausemenu").hidden,
