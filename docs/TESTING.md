@@ -1317,7 +1317,7 @@ what it covers.
 | `bootstrap-doctor.test.mjs` | Real YAML skill headers, helper references, mirror repair, protected shell interval checks, Chromium discovery and read-only environment diagnostics. |
 | `apex-career-delete.test.mjs` | Career slot deletion preserves storage durability and failure results through the agent API. |
 | `lazy-bundles-prefetch.test.mjs` | real `lazy-bundles.js` under a scripted loader: the boot scenery prefetch never leaves an unhandled rejection; a partially loaded race-session / audio / net group is repaired on retry (per-file loaded sets, the ready hook once); evaluated net scripts are never re-injected; a throwing post-load hook clears the memo; `ensureScenery` resolves false after one retry |
-| `lazy-track-build.test.mjs` | LAZY_TRACK_BUILD (12 build-only track files ~535 KB): not on FULL, stays on TRACK_VM; `ensureScenery` awaits `ensureTrackBuild` before the first Tracks.build; reinject marks TrackBuildProps / TrackModels / TrackHiddenFaces resident |
+| `lazy-track-build.test.mjs` | LAZY_TRACK_BUILD (13 build-only track files ~535 KB): not on FULL, stays on TRACK_VM; `ensureScenery` awaits `ensureTrackBuild` before the first Tracks.build; reinject marks TrackBuildProps / TrackModels / TrackHiddenFaces resident |
 | `renderer-boot-timeout.test.mjs` | a never-settling XR probe / backend script fetch / `Gfx.create` resolves `start()` with GLX within `BOOT_STEP_MS`; a hung create() keeps the canary armed, a slow fetch does not |
 | `script-loader-throw.test.mjs` | a throwing `prepareLazyLoad` / Promise executor settles `inject()` as a failed file instead of stalling `pump()` and the caller forever |
 | `validation-cli.test.mjs` | Validation and planning CLIs reject invalid numeric inputs, account for unclaimed paths, preserve immutable plans, validate material integrity and bound lighting proposals. |
@@ -1515,6 +1515,7 @@ what it covers.
 | `harness-display.test.mjs` | headless shot tools: `clearDeadDisplay` drops a stale local `DISPLAY=:N` with no `/tmp/.X11-unix/XN` so SwiftShader WebGL can start; `chromiumArgsForBackend` pins `--enable-unsafe-swiftshader`; `gotoGame` names WebGL/DISPLAY on boot timeout |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `road-position-checks.test.mjs` | Position-based road-ribbon checks on real Monza/Monaco: a collapsed section (across and along), collapsed or detached skirts and a 50 m lifted vertex are rejected, unmodified circuits and coincident fold-clamped rails pass |
+| `over-road-scan.test.mjs` | The shared over-road triangle scan: only a neighbour under the triangle can alias-clear it (grade-independent), and crossover decks are skipped by mesh provenance, never by intrusion size |
 | `lobed-trees.test.mjs` | Opt-in crown recipes: desktop/mobile geometry budgets, canonical/fused normals and sway, atomic primitive rejection and planting reservation fallback |
 | `terrain-falloff.test.mjs` | Optional terrain descent: unchanged road shelf/rails, pit flattening, smooth floor joins, invalid-option fallback and actual banked near-road vertices |
 | `circuit-corner-anchors.test.mjs` | FIA 2025 physical Imola/Hungaroring corner topology and Imola's measured timing offsets on the built centreline |
