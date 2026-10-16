@@ -51,7 +51,10 @@ permissions:
 # branch, and two runs racing on the same `commit_branch` would each try to
 # fast-forward over the other. A later dispatch queues behind the running one.
 concurrency:
-  group: import-models-${{ inputs.commit_branch || 'bot/model-import' }}
+  # Serialize by the bot branch being written, not by the source ref. Two
+  # dispatches from different refs may target the same commit_branch; keyed by
+  # github.ref they can race and each replace the other's baked pack.
+  group: import-models-${{ github.repository }}-${{ inputs.commit_branch || 'bot/model-import' }}
   cancel-in-progress: false
 
 jobs:

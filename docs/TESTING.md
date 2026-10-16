@@ -445,7 +445,9 @@ tools directly.)
 | `game-vm-b` | every other `game-vm` file: agent-view 27 s, ai-racecraft 33 s, mechanics-integration 15 s, the rest seconds each — ~2 min on a runner. Partition of `game-vm`; the whole list locally, while CI runs its two halves below |
 | `game-vm-b1` | the first of two time-balanced halves of `game-vm-b` (CI slice `vm-b1`). The 2026-09-30 cut measured 367 s each locally at `--jobs=4` but 437 s vs 220 s on a runner (three green ship pushes, 2026-10-15), so it was re-cut from per-file runner medians (LPT over the 59 files, ~850 s of serial test time a side; `docs/notes/CI-CLOG-SURVEY-2026-10-15.md` §7): race-flow-fixes 208 s, real-replay 98 s, game-round2, quali-pace-parity and 25 more. `node-plan.test.mjs` pins that `b1` + `b2` is exactly `game-vm-b` and disjoint |
 | `game-vm-b2` | the second half (CI slice `vm-b2`): car-fields 190 s, ai-racecraft ~100 s, mechanics-integration, agent-view, race-settings and 25 more. The ten seconds-to-a-minute scripts that rode `vm-b1` (net-unit, audio-unit, garage-unit, state-unit, steering-unit, mcp, service-worker, lifecycle-unit, agent-contract, desktop-unit; 180 s together by 2026-10-15) now ride the three light rows — `vm-a1`, `vm-a2`, `slow` — per `pick-unit-slices.mjs` `SLICE_SCRIPTS`, which its test pins to ci.yml's case arms |
-| `vm-page` | the browser specs that run **as themselves** in node under `tests/helpers/vm-page.js` (`tools/ci/twinned-specs.mjs` `ADAPTED`): `tests/unit/adapted-specs.test.mjs` spawns one `APEX_VM_PAGE=1 node --test <spec>` child per spec, two at a time, and fails a child whose TAP summary cannot be read or that declares no tests. Its own CI runner (`node-suites` slice `page`), in the Pages gate unconditionally, which is what lets `partitionArgs` drop the browser copies locally and `select-specs` skip them on the blocking gate. Each entry was RUN green under the adapter before it was listed — `vm-portable` says eligible, only a run says adapted |
+| `vm-page` | local compatibility alias: runs both vm-page partitions serially through `tests/unit/adapted-specs.test.mjs` |
+| `vm-page-a` | four adapted specs (Albert Park foundation, autopilot, logging, projection), each as its own `APEX_VM_PAGE=1 node --test` child; CI slice `page-a` |
+| `vm-page-b` | seven adapted specs (agent-drive bench, COTA and Imola foundations, livery contrast, physics fixes, pit lane, race control), each as its own child; CI slice `page-b` |
 | `mcp` | [UI explorer](UI-EXPLORER.md) replay, navigation graph, reduction, fault adapters and offline evidence contracts; plus the `.cursor/environment.json` bootstrap pins (`environment-json`) — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json`. The two CLI-only MCP wrapper suites (`tinyfish-mcp`, `probe-mcp`: spawn-heavy, not MCP-attached) moved to `tests/manual/` on 2026-09-10 and are run by path; their fast-gate half is `mcp-cli.test.mjs` |
 | `docs-guards` | the unit files that READ the prose trees ci.yml's `paths-ignore` skips (`docs/**`, `**/*.md`, `.claude/**`, `.cursor/**`, `.codex/**`): docs-integrity, generated-docs, agent-config, skill-progressive, hooks-documented, F1 Dev Tools scene/preset/replay helper contracts and the rest of `tests/groups.json`'s list. `.github/workflows/docs-guards.yml` ran this group on every pull request from 2026-09-25 until 2026-10-15, when its required context was removed and the workflow retired (every file is in `tooling-fast`, so ci.yml's guards job already covered a prose PR; the second workflow was one job start per PR event — `docs/notes/CI-CLOG-SURVEY-2026-10-15.md`). The group remains the local alias the docs-only fast path and the agent-config skill call. |
 | `node-slow` | the raster/spawn-heavy car files (`cockpit-pale-surfaces`, `crest-marks`, `slider-effect`; 152 s of the old 315 s loop) plus `flyby-fleet` (the flyby's twelve-circuit audit, ~1 min) and `foundation-core-vm` (~26 s, builds all sixteen foundation circuits) — CI guards always, locally when pick-tests names it |
@@ -1024,51 +1026,41 @@ the line.
 
 ---
 
-### Release train (2026-09-10)
+### Release train (2026-09-10; on push since 2026-10-16)
 
-`pages.yml` no longer runs on push. The deploy branch took 140-300 commits a
-day from several agents when the train was designed (3-131 a day measured
-2026-10-14), and a deploy per push meant a 14-job gate and a Pages
-deployment per commit, gates cancelling each other in bursts, and the account's
-20 job slots spent re-testing trees one commit apart. Two tiers replace it:
+`pages.yml` runs on every code push to the deploy branch (prose paths
+ignored), on the hourly cron `41 * * * *` as a backstop (GitHub's scheduler
+runs this repository's crons HOURS late) and on a manual `workflow_dispatch`
+= "deploy now". The train takes the tip, gates it once and publishes exactly
+that commit; the workflow-level `pages-train-<ref>` group keeps one running
+and ONE pending run, and a newer push replaces the pending one, so a merge
+burst costs one gate per gate length and the train always takes the newest
+tip (GitHub's default `queue: single`; the 2026-10-16 CI/CD review, #2333,
+finding 3). From 2026-09-10 to 2026-10-16 a deploy-branch push ran a FAST
+tier in `ci.yml` (guards, node suites, census, driving-model, selection in a
+no-cancel `ship-fast` group) whose green poked the train, and the train
+re-armed itself for a tip that went green mid-run; measured on 2026-10-15/16
+that tier reached 38 % of merges (184 pushes, 112 replaced while pending)
+and cost 5,587 job-minutes a day for verdicts the train repeated, so the
+push starts the train directly and the merge's verdict is the train's
+`ci / …` rows (`node tools/ci/ci-watch.mjs --sha <merge sha>` follows them,
+or says `superseded` when a newer push replaced the pending train).
 
-- **Fast tier, per push to the deploy branch** (`ci.yml`, `on: push`):
-  Structural guards as two parallel tooling-fast halves
-  (`Structural guards (tooling A)` / `(tooling B)`) plus the aggregator
-  still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 —
-  `ci.yml` header; #1075), node suites, parts census, driving-model,
-  change-aware selection. Five to nine minutes, four slots, its own
-  concurrency group so sessions never cancel each other's verdict. This run
-  is the answer to "did my push break anything".
-- **The train** (`pages.yml`; started by `ci.yml`'s `poke-train` job when a
-  deploy-branch push's fast tier goes green, by a manual `workflow_dispatch`
-  = "deploy now", by its own `rearm` job when the tip moved on to a green
-  fast tier while it ran, and by the hourly cron `41 * * * *` as a backstop — GitHub's
-  scheduler runs this repository's crons HOURS late: the 03:17 nightly is
-  created between 07:54 and 08:18 on each of its last five days, and the
-  train's first three ticks on 2026-09-10 never arrived at all): `verdict`
-  refuses any branch but `DEPLOY_BRANCH`, reads the
-  live shell's `apex-sha` (`tools/ci/pages-live-sha.sh`), stops in one slot when
-  the tip is already live, otherwise hands the live commit to `ci.yml` as
-  `before_sha` (so the sweeps, smoke and selection filters diff against exactly
-  what is live) and skips the gate when the tip's tree already has a green run
-  (`tools/ci/pages-reuse-verdict.sh`). The tip's own fast tier counts while its
-  run is still in progress once the tree-only jobs are green (the poking run
-  always is), and a tip whose fast tier concluded `failure` stops the train at
-  the verdict (`tools/ci/pages-train.mjs`). The gate group never cancels: a running
-  gate finishes, the next tick waits, a later tick replaces the waiting one.
-  Then `publishable`, `deploy` (exact artifact, monotonic) and `verify-live` as
-  before. Measured 2026-10-14: the gate's median is 20.5 min and a gated
-  publish (dispatch to live) 23 min median, 73 min p90 — queue waits in the
-  03-08 UTC bursts, not the tests, make the tail. After a train, `rearm`
-  dispatches one more for a tip that went green while it ran (only when no
-  other pages.yml run is queued or running), so a commit no longer waits for
-  the cron; and `poke-train` pokes from a superseded green commit unless the
-  tip's fast tier is red (a still-pending tip used to block every poke in a
-  merge burst, 2026-10-14).
+`verdict` refuses any branch but `DEPLOY_BRANCH`, reads the live shell's
+`apex-sha` (`tools/ci/pages-live-sha.sh`), stops in one slot when the tip is
+already live, otherwise hands the live commit to `ci.yml` as `before_sha` (so
+the sweeps, smoke and selection filters diff against exactly what is live;
+never the push's previous tip, which may be unpublished) and skips the gate
+when the tip's tree already has a green run (`tools/ci/pages-reuse-verdict.sh`).
+The gate group never cancels: a running gate finishes, the next push waits, a
+later push replaces the waiting one. Then `publishable`, `deploy` (exact
+artifact, monotonic) and `verify-live` as before. Measured 2026-10-14: the
+gate's median is 20.5 min and a gated publish (dispatch to live) 23 min
+median, 73 min p90 — queue waits in the 03-08 UTC bursts, not the tests, make
+the tail.
 
 Inside `ci.yml` a Pages call is recognised by its `concurrency_key` (the
-caller's event is `schedule` or `workflow_dispatch` there, never `push`): the
+caller's event is `push`, `schedule` or `workflow_dispatch` there): the
 sweeps and smoke ship filters accept it as a gate with a base, the smoke job
 takes the 50-minute cap and runs `smoke.spec.js` rather than the nightly's wide
 group, and `select` plans against the live commit. `tests/unit/ci-coverage.test.mjs`
@@ -1085,17 +1077,18 @@ mark ready only when final; keep about six or fewer ready PRs open
 `node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
 CI check-run named `Structural guards` — the aggregator after the
 `Structural guards (tooling A)` / `(tooling B)` halves — or a local
-full-suite stamp) and `node tools/ci/ready-full-cap.mjs` (refuse when ≥3
-ready PRs already have in-progress or queued full-tier `ci.yml`; draft
-fast-tier stays uncapped). On top of that desk cap, GitHub bounds the LEGS
+full-suite stamp). There is no desk cap on ready PRs since 2026-10-16 (the
+cap of 3 read 13/3 with 12 ready PRs open; `ready-full-cap.mjs` is
+informational). GitHub bounds the LEGS
 (2026-10-15): a ready PR's `selected` legs each join one of LANES fleet-wide
 `concurrency: { group: selected-lane-<n>, queue: max }` groups (the lane is a
 field of every matrix row, `tools/ci/select-specs.mjs` LANES, its start
-rotated by run number) and its smoke shard one lane per shard index, so at
-most LANES selected legs and one smoke run
-across every ready PR at once and the rest wait FIFO without holding a runner
-or being cancelled; the train, the nightly and a dispatch get a group of
-their own per leg and never wait behind PR work. Sync with
+rotated by run number), so at most LANES selected legs run across every
+ready PR at once and the rest wait FIFO without holding a runner or being
+cancelled; the train, the nightly and a dispatch get a group of their own
+per leg and never wait behind PR work. Smoke has no lane (2026-10-16: one
+2.6-min job per run that never failed waited p90 17.5 min behind other PRs'
+smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync with
 `node tools/ci/sync-pr.mjs <branch>`
 once before the final CI run — do **not** enable auto-update-branch bots or a
 require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (at the end of
@@ -1118,7 +1111,7 @@ Two always-judged checks give the gate fixed names:
   failed). Since 2026-10-10 (R3-CI-HEALTH-2) `selected` itself needs only
   `select`, so the browser legs start as soon as the plan exists instead of
   queueing behind the ~6 min guards shards; `selected-verdict`, `ci-verdict`
-  and `poke-train` still need `guards`, so a guards red still fails the gate. A needed job skipped by its `if:` is a pass; a needed failure or
+  still need `guards`, so a guards red still fails the gate. A needed job skipped by its `if:` is a pass; a needed failure or
   cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
   It is the only check that also carries smoke, the sweeps, renderer-macos and
   xr, and since 2026-10-15 it is the deploy branch's ONE required check (an
@@ -1160,11 +1153,10 @@ Two always-judged checks give the gate fixed names:
 - `Emulated VR (IWER / xr-emulated)` when the diff reaches XR paths
 - `Pack smoke (ubuntu-latest)` (`desktop.yml`, packaging paths only)
 - `Golden menus on a runner (trial, non-blocking)` (nightly/dispatch only, advisory)
-- `Poke the release train` (deploy-branch push fast tier only — not PRs)
 
 Heavy jobs use one shared skip expression on deploy pushes and draft PRs (`github.event.pull_request.draft` inside `ci.yml`; `desktop.yml` uses `draft == false`). `ready_for_review` is listed on every `pull_request` trigger so marking ready starts the full tier on the same `head_sha` (draft fast runs may cancel — AGENTS.md rule 8 dedupe).
-| **Ship push** | push to deploy branch | Fast tier only; a green run pokes the Pages train from the tip, or from a superseded commit when no train is queued or running. Pushes share one no-cancel `ship-fast` group: the running fast tier finishes and only the newest waiting push stays queued (`docs/notes/CI-MERGE-BURST-2026-10-03.md`). |
-| **Pages train** | poke / dispatch / cron | Full gate against live `before_sha`; gate group never cancels. |
+| **Ship push** | push to deploy branch | Starts `pages.yml` directly (2026-10-16): no ci.yml run of its own. |
+| **Pages train** | push / dispatch / cron | Full gate against live `before_sha` (ci.yml called with `concurrency_key`); one running + one pending, the newest push replaces the pending one; never cancelled mid-run. |
 | **Nightly** | `ci.yml` schedule `17 4 * * *` (04:17 UTC) | Rotating browser group (`nightly-group.mjs`) instead of smoke-only; renderer / gfx on real GPU; coverage for the ~61 specs `select-specs` never picks. `gpu-census.yml` runs on its own staggered cron (`47 5 * * *`, 05:47 UTC) for adapter identity. |
 
 Every `pull_request` workflow uses a per-PR concurrency group with
@@ -1187,6 +1179,17 @@ Quarantined tests still run and permanent failures remain red. Agents fix real f
 only for timeout / infra errors; never skip a test or loosen a tolerance to
 get green. `tests/unit/flaky-quarantine.test.mjs` pins the ledger and the
 wiring.
+
+**Detection is daily, not by hand (2026-10-16).** `.github/workflows/flake-tally.yml`
+runs `node tools/ci/flake-tally.mjs --events all --days 2 --propose --issue` every
+morning: every FAILED `ci.yml` and `pages.yml` run of the last two days (PR fast
+tiers, ready full tiers, the train, the nightly; a green run holds no unquarantined
+flake under `APEX_FAIL_ON_FLAKY=1`, a cancelled run tested nothing), only the logs of
+their failed browser jobs, tallied by spec + title, with the repeat offenders proposed
+as quarantine rows in the ledger's current shape — a test that passed only on retry in
+≥ 2 runs, or failed first-try on ≥ 3 branches (a red that follows the test, not the
+change). It rewrites one open issue labelled `flaky`; the ledger itself stays a PR with
+an owner and the evidence run.
 
 CSS-only changes select a one-boot title/touch/pause reachability smoke and
 relevant menu goldens; they do not discard the browser plan. A failed or cancelled selected
@@ -1283,6 +1286,9 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `settings-search.test.mjs` | Search return focus and scroll, cancelled lazy navigation, owner descriptors and option labels, external destinations and full-row layout. |
+| `followup-platform.test.mjs` | Native install guidance, desktop single-instance/crash recovery and bounded mobile file/share handling; tooling-fast, desktop-unit and mobile-unit. |
+| `followup-update-check.test.mjs` | Hung update fetch/body recovery, abort fallback and stale-result isolation; tooling-fast and lifecycle-unit. |
 | `player-tools-backup.test.mjs` | Real SettingsExport and ControllerProfiles/SetupPresets: authored defaults, ALL/CHANGED profile round-trips, bounded controller maps, strict named-setup imports, malformed-file preservation, and the reload-based import contract. |
 | `phone-input-improvements.test.mjs` | Age-bounded phone actions, semantic activation, pointer release, input ACK freshness and negotiated touch steering. |
 | `controller-profiles.test.mjs` | Per-device axes/buttons, bounded legacy adoption and source-owned remote input release. |
@@ -1802,6 +1808,7 @@ what it covers.
 | `track-build-wait.test.mjs` | the loadTrack fixture waits for a track build on PROGRESS, not a 45 s deadline: it keeps waiting while the Log ring grows, fails with a STALL message when it stops, and a hard cap ends the wait even if the stall check is broken — the fake page is bounded so a never-ending wait reads as a red test rather than a hung worker; with `raceFlag` (the shared page's loadTrack) a reused page's OLD world is not ready until this `race()` settles, and a rejected start fails with its reason |
 | `deploy-stamp.test.mjs` | the deploy-stamped shell generation: pages.yml stamps `2000 + commit count` on a full-depth checkout, `verify-live` polls the CDN for it, ci.yml no longer demands a committed generation newer than live, and `node tools/ci/bump-cache.mjs --apply` --at N --root` stamps a staged copy without touching the repo |
 | `deploy-tool.test.mjs` | `tools/ci/deploy.mjs` offline: same deploy branch as pick-tests, `--help`, the circuit-touch detector, preflight refusals, and a real merge where both sides add a unit file coming out clean with nothing to regenerate (no doc commits the ladder sizes); prose docs are never auto-cured |
+| `wait-for.test.mjs` | `tools/ci/wait-for.mjs` (`--load-below` / `--file-nonempty` / `--pid-gone`, exit 0 / 124 / 1, unknown-flag errors) and `tools/lib/deploy-status.mjs` (the `= deploy start/done` markers behind `deploy.mjs --status` / `--wait`: none / running / done / died, last verdict wins) on a fake clock, plus the CLIs end to end |
 | `tooling-fast-runner.test.mjs` | `tools/ci/tooling-fast.mjs` itself: longest-first scheduling from `tests/data/tooling-fast-timings.json` (local runs override it), a hung FILE failing by name at the per-file wall with its process group killed, a hung TEST failing via `--test-timeout` |
 | `game-vm.test.mjs` | `tools/lib/game-vm.cjs` boots js/game.js in a Node VM (~300 ms, DOM/GLX/audio stubbed, feature-detected GLX optionals ABSENT so every subsystem takes its degrade path): race, go, step, a finite physState under throttle, a lap-line crossing |
 | `physics-characterization-vm.test.mjs` | the driving-model gate in Node: the four baseline scenarios of `physics-characterization.spec.js` against `tests/data/physics-baseline.json`, EXACT equality at the spec's 1e-4 rounding (measured 2026-09-01) — the browser spec stays as the cross-check |
@@ -1963,6 +1970,7 @@ what it covers.
 | `tlx-chunked-lifecycle.test.mjs` | TLX geometry teardown ownership: freeing either a plain mesh or every spatial chunk releases pooled renderer geometry before disposing it, exactly once, and clears the dead handles |
 | `ai-band.test.mjs` | `AiBand` (`js/physics/ai-band.js`): scripted mode never bands from the player gap; catch-up is reverse-only with start-line and lapping gates; `applyVmax` respects `BAND_CEIL`; the Race Settings AI PACE row is injected (no static shell id) |
 | `ai-drive.test.mjs` | Pure AI racecraft helpers in `js/physics/ai-drive.js` — rating→behaviour maps, situation OT fire rate, ERS want/bank, wantX, aeroLoad corner limit, racing-line hold mix, multi-sample soft brake, adaptive lane, street pack seating, team houseStyle, seat/#2 let-by orders, consistency brake band — in a VM with no browser. Since 2026-10-01 the tactics layer: follow gap as a time headway (`followGap`), `repassLock`, `attemptRoll`, `runExtra`/`latchLate`, `sideYieldsA` with the next corner, `startCalm`, mid-train / predicted-side / edge-capped `defendPull`, `paceSample`, and the held-line `humanYieldT` clause |
+| `ai-pass-complete.test.mjs` | Pass-completion knobs in `AiDrive` (permanent only): `passHunger` / `coverConcede` / pace-edge `otWant`+`otFireRate`+`latchLate`+`runExtra`+`towGain`, and ERS catchEdge. Streets stay at the prior baselines. No browser. |
 | `ai-ratings-math.test.mjs` | Pure Pearson / column-stats / style-zero-mean helpers for `tools/check/ai-ratings.mjs`, plus a live `--json` pin that the authored `DriverRatings.BASE` craft/awareness/consistency cluster is decorrelated (max |r| < 0.5) with column means near the pre-change tip |
 | `game-tools-help.test.mjs` | Expensive game-systems CLIs (`ai-pace` / `ai-field` / `ai-line` / `ai-human`, `player-dyn`, `physics-tune-sweep`, `career-economy`) answer `--help` and exit 0 before the game VM or Chromium boots — measured 2026-10-01, `--help` on each silently ran the full measurement |
 | `driver-ratings-personality.test.mjs` | `DriverRatings.BASE` personality gates: craft/awareness/consistency pairwise |r| < 0.5, column means within ±1.5 of tip, `skill()` is pace-only, `overall()` still ranks elites above rookies |
@@ -2062,15 +2070,17 @@ what it covers.
 | `circuit-scope.test.mjs` | guards `tools/lib/circuit-scope.cjs`, the one place `APEX_CIRCUITS` narrows the fleet sweeps: `scope()` semantics (unset = every id, set = the named ids in the caller's order, an unknown id = nothing), every audit CLI's `--all` resolving through it (float-audit's three entry points included), the seven roster-rebuilding sweep suites reading the scope AND holding their anti-vacuity floor to the SCOPED roster (a CLI narrowed while its suite still expects 52 would fail), their listing in `select-specs`' `CIRCUIT_FILTERED_TESTS`, and ci.yml's sweeps job computing the ids on a pull request only and handing them to `test:sweeps`. |
 | `coverage-merge.test.mjs` | guards `tools/ci/coverage-merge.mjs`, the only consumer of the raw V8 lists a flagged run writes. Every url shape a run produces must map to one repo-relative row (served `?v=…` query stripped, `file://` from an absolute vm filename, helpers and the vendored three.js island refused); a node entry must be measured against the text V8 saw — the VM's `const`→`var` rewrite, chosen by the top-level range length, never the raw file, which would shift every later line; a synthetic dump merges through monocart into an lcov row; an empty union is a reported reason and writes nothing; and `tests/helpers/js-coverage.js` is inert without `APEX_JS_COVERAGE=1` (no CDP call, no file) |
 | `flaky-quarantine.test.mjs` | guards `tests/helpers/flaky-policy.mjs` and `tests/data/flaky-quarantine.json`, the `@quarantine` ledger behind `APEX_FAIL_ON_FLAKY=1` (AGENTS.md §Concurrent PRs / §Verification 9: a pass that needed a retry is a red). The verdict is pure set membership on the reporter's `{spec, title}` key — an unlisted flake fails the run, a quarantined one is printed and spared — so it is pinned on fixtures; the quarantine file is a LEDGER, so every row must name a spec that exists and carry `since`, `owner` and `why`, and a row for a deleted spec fails the commit rather than lingering. Two structural cases keep the wiring honest: every `APEX_WORKERS: 1` env block in `ci.yml` also sets `APEX_FAIL_ON_FLAKY: 1`, and `run-playwright.mjs` never pushes Playwright's all-or-nothing `--fail-on-flaky-tests`, which cannot spare a named spec |
-| `flake-tally.test.mjs` | guards `tools/ci/flake-tally.mjs`, the read-only nightly flake tally (scheduled `ci.yml` runs → first-try fails and pass-on-retry by spec+title). Fixture-only: Playwright `report.json` outcomes, live-reporter `= FLAKY` / `x FAIL` log lines, junit fail-then-pass pairs, markdown columns, and exact-name artifact URL shaping (never a repo-wide artifact page scan) |
+| `flake-tally.test.mjs` | guards `tools/ci/flake-tally.mjs`, the read-only flake tally (scheduled `ci.yml` runs, or with `--events all` every FAILED `ci.yml` / `pages.yml` run of the last N days → first-try fails and pass-on-retry by spec+title; `proposeRows` names a test that passed only on retry in ≥ 2 runs or failed first-try on ≥ 3 branches; `quarantineRows` prints them in the ledger's current shape; `.github/workflows/flake-tally.yml` runs it daily into one `flaky` issue). Fixture-only: Playwright `report.json` outcomes, live-reporter `= FLAKY` / `x FAIL` log lines, junit fail-then-pass pairs, markdown columns, and exact-name artifact URL shaping (never a repo-wide artifact page scan) |
 | `behind-ship.test.mjs` | guards `tools/ci/behind-ship.mjs`, the non-blocking "how far behind ship?" advisory on Structural guards for pull_request events (AGENTS.md §Concurrent PRs). Pins the warn threshold (10), the `::warning::` annotation shape (never `::error::`), CLI exit 0 even when unresolved or over threshold, and that `ci.yml`'s guards job wires the step PR-only |
 | `publish-shots.test.mjs` | guards `tools/ci/publish-shots.mjs`, the evidence-branch publisher (shots/<topic> cut from the ship tip in a temporary worktree). Runs against a throwaway bare repo + clone under `artifacts/`, never the real origin: refuses non-PNG, >400 KB, a wrong topic prefix, a missing `node_modules`, an existing topic without `--append` and an `--append` to a missing one; `--dry-run` leaves remote, worktrees and branches untouched; a full publish lands a README + PNGs one commit above the ship tip, prints the sha, removes the worktree and pushes nothing but `shots/*` (`assertShotsBranch`) |
-| `ready-full-cap.test.mjs` | guards `tools/ci/ready-full-cap.mjs`, the Merge Desk refuse before mark-ready when ≥3 ready PRs already have in-progress/queued full-tier `ci.yml` (AGENTS.md §Concurrent PRs). Pins draft runs never count, ship/pages runs never count, default cap 3, `--exclude` freeing a slot, and that AGENTS.md documents the check without weakening draft=fast / ready=full |
-| `queue-depth.test.mjs` | guards `tools/ci/queue-depth.mjs`, AGENTS.md rule 4's push hold (`docs/notes/ACTIONS-AUDIT-2026-10-14.md` finding 6). Pins that the gauge counts queued + running JOBS split by runner label (macOS vs the rest; `waiting` and completed jobs hold no slot), never runs; each threshold alone is a hold (≥ 60 Linux in flight (40 slots), ≥ 10 queued, ≥ 5 macOS); runs examined are capped at 30 (two list calls plus one jobs call each) with truncation reported as a lower bound; any API failure is an error, never an ok; `apex-status/` is gitignored; and AGENTS.md plus the three skills cite the tool and jobs, not ">15 runs" |
+| `ready-full-cap.test.mjs` | guards `tools/ci/ready-full-cap.mjs`, the count of ready PRs with live full-tier `ci.yml` (informational since 2026-10-16; it was the Merge Desk refuse before mark-ready). Pins draft runs never count, ship/pages runs never count, default cap 3, `--exclude` freeing a slot, and that AGENTS.md documents the check without weakening draft=fast / ready=full |
+| `queue-depth.test.mjs` | guards `tools/ci/queue-depth.mjs`, the Actions queue gauge (`docs/notes/ACTIONS-AUDIT-2026-10-14.md` finding 6; informational since 2026-10-16, no push is held on it). Pins that the gauge counts queued + running JOBS split by runner label (macOS vs the rest; `waiting` and completed jobs hold no slot), never runs; each threshold alone is a hold (≥ 60 Linux in flight (40 slots), ≥ 10 queued, ≥ 5 macOS); runs examined are capped at 30 (two list calls plus one jobs call each) with truncation reported as a lower bound; any API failure is an error, never an ok; `apex-status/` is gitignored; and AGENTS.md plus the three skills cite the tool and jobs, not ">15 runs" |
 | `test-bg-outcome.test.mjs` | guards `tools/ci/test-bg.mjs`'s `outcomeOf`, the verdict read out of a background run's log: a non-zero `= bg exit` wins over an earlier `= run passed` or `# fail 0` (a two-command group's red second half, or a Playwright half killed before its summary, used to read as passed and `--wait` exited 0); exit 0 keeps the richer summary, and the Playwright, TAP and plain-script formats still read |
 | `ci-watch.test.mjs` | guards `tools/ci/ci-watch.mjs`, the post-push CI/Pages watcher an agent arms instead of waiting (AGENTS.md rule 12). Pure parts pinned on fixtures: the NEWEST run per workflow wins, so the push run the PR run cancels on the same SHA (rule 8's designed dedupe) is never read as a red; a failed job is a red before its run ends while the watch keeps reporting; a run that concluded failure with no failed job (a setup error) is still a red; no run yet is not green; each finished job is exactly one event (Monitor turns every line into a message), skipped jobs are silent, and a red names its failing step and URL |
 | `pr-board.test.mjs` | guards `tools/ci/pr-board.mjs`, the read-only board a Claude-run CI Watch acts from (`.claude/skills/ci-watch`). Pins every `suggest()` branch and its precedence (FOREIGN-ARM, SYNC, FIX, ARM, READY, NONE, WAIT), READY flips consuming the `ready-full-cap` slots, ci state from the runs on the head sha (live beats finished, the cancelled draft sibling is dedupe), the table rendering, paging past 100 PRs, `--pr`, every API-error path, and that no request is ever anything but a bare curl GET |
-| `ready-gate.test.mjs` | guards `tools/ci/ready-gate.mjs`, the draft→ready check (AGENTS.md §Concurrent PRs / rule 3): Structural guards success on the tip, or a local full-suite stamp after tooling-fast passed. Evidence #1111 (designer-canvas). Pure fixtures: aggregator success/fail/pending, A+B halves when the aggregator is skipped, local stamp SHA mismatch, and evaluate()'s CI-over-local precedence |
+| `ready-gate.test.mjs` | guards `tools/ci/ready-gate.mjs`, the draft→ready check (AGENTS.md §Concurrent PRs / rule 3): Structural guards success on the tip, or a local full-suite stamp after tooling-fast passed. Evidence #1111 (designer-canvas). Pure fixtures: aggregator success/fail/pending, A+B halves when the aggregator is skipped, local stamp SHA mismatch, and evaluate()'s CI-over-local precedence; `[~]` / `Deferred:` Plan items count as closed (#2397) |
+| `pr-body.test.mjs` | guards `tools/ci/pr-body.mjs` (#2387), the PR-body editor: pure transforms (tick with evidence, strike with why, defer `[~]`, move `**now:**`, add, Status block, fleet key) on a fixture body with a commented-out example list, proving a concurrent edit to another item survives; `main` re-reads the live body, PATCHes once, `--dry-run` writes nothing, labels go through POST; flag pairing and unknown-flag errors |
+| `handback.test.mjs` | guards `tools/ci/handback.mjs` and `tools/ci/post-merge.mjs` (#2397): hand-back prints exactly one `SWEEP <PR#>` plus one DONE line only when the head's `= ci` is passed and ready-gate (Plan included) exits 0, and lists the fleet block's `checkin=` triggers; post-merge reads `merge ok (2 parents)` vs `SQUASH`, runs `who-is-on-it --release` once |
 | `bash-guard-hardening.test.mjs` | `.claude/hooks/bash-guard.sh` fails CLOSED (ledger L12/M36, 2026-10-09): RUNS the real hook on a commit hidden in `if/then/fi`, `{ }`, loops, `$((1 << n))` lines, a line continuation, `eval`, backticks and unbalanced quotes (`shellparse.py` answers `null` for the unparseable, the regex fallback also runs for `[]`), on `pkill -9f` / `-u root -f` / `--signal 9 -f` / trailing `-f`, on a `<<<` or arithmetic `<<` swallowing the next line, and `.claude/settings.json`'s push denies (`--force` after the ref, `+ref`, `HEAD:refs/heads/<deploy>`); and `protect-files.sh` on the allow-listed "read" commands that WRITE a named file (round-4 SUPPLY-4, 2026-10-10): `git checkout <ref> -- f` / `git restore [--source] f`, `git diff|show|log --output=f`, a sed script with a `w`/`W` command or `s///w` flag, `curl -o|--output|-so f` — 20 write shapes exit 2 against a generated target and 15 read controls (`git checkout <branch>`, `git diff`, `sed -n '1,20p'`, `curl URL`) still exit 0 |
 | `skill-hint-hook.test.mjs` | `.claude/hooks/skill-hint.py`, the UserPromptSubmit skill hint (2026-10-14): a race-weekend prompt names `race-weekend` first; silent with exit 0 on a slash command, empty or garbage stdin; `APEX_SKILL_HINT=off` prints nothing and `generic` only the rule; `.claude/settings.json` wires it with timeout ≤ 5 s; offline floor — its top two hold the expected skill for ≥ 85 % of the routing queries |
 | `subagent-contract-hook.test.mjs` | `.claude/hooks/subagent-contract.py`, the SubagentStop hook (2026-10-14): RUNS it on fake payloads shaped as the hooks reference documents (`agent_type`, `stop_hook_active`, `last_assistant_message`) — a good report per contracted reporter agent passes; over a row cap, a missing verdict/tally line or a wrong row shape returns `{"decision":"block"}`; `stop_hook_active`, unknown agents, an empty message and garbage stdin pass (fail open); settings.json's matcher selects exactly the contracted agents |
@@ -2112,6 +2122,7 @@ what it covers.
 | `desktop-app-protocol.test.mjs` | `desktop/app-protocol.js` MIME table, Range 206/suffix/416 parse, path-traversal reject; Electron 44.4.5 pin + `app-protocol.js` in builder `files` |
 | `desktop-builder-config.test.mjs` | `desktop/electron-builder.config.cjs` appId/productName match `lib/identity.cjs`, NSIS `deleteAppDataOnUninstall === false`, extraResources `site`, asar, mac entitlements + camera usage, no publish provider |
 | `desktop-notices.test.mjs` | every path in `desktop/scripts/notices.mjs` `NOTICE_SOURCES` exists in git; concatenated notices name the UNLICENSED caveat |
+| `desktop-pack-dry-run.test.mjs` | `tools/desktop/pack-dry-run.mjs --dry-run` (also runnable alone): stages + stamps into a temp dir and checks every electron-builder input (`files`, `extraResources` site + notices, icons, entitlements, derived version, `pack:test` chain) without building installers or touching `desktop/`; leaves the repo untouched |
 | `desktop-version.test.mjs` | `appVersionFrom({apexVersion:"1.0", build:2110})` → `1.0.2110`; set-version / stage share the mapping |
 | `desktop-unpacked-bin.test.mjs` | `desktop/scripts/unpacked-bin.mjs` resolves electron-builder `--dir` binaries; desktop.yml pack-smoke matrix + soft-GL + optional signed-verify skips |
 | `mobile-config.test.mjs` | Capacitor `identity.json` freeze, config shape, AndroidManifest (INTERNET/CAMERA/cleartext/fullSensor), Gradle env version + keystore, SW skip on Capacitor |
@@ -2206,6 +2217,8 @@ what it covers.
 | `car-fields-vm.test.mjs` | `CarFields.predeclare` sets the 68 late-added car fields to `undefined` at spawn (never 0): every key present after `makeCars`, identical key order and one hidden class across all cars, sim hash identical with and without, the manifest loads it before game.js (game-vm); `warmShape` (WARM + MUTABLE) changes no value or key over a lap plus a pit stop and leaves the digest identical, and a race run to results adds no car key and keeps every car in fast mode; `warmDoubles` changes no value or key, the per-step scratch/context objects (game.js `_ucS` and AiDrive ctxs, TrackLine, Collide, AiDrive, RaceFacts) keep their map across a fractional store (born Double, with a Smi control), and the sim is identical with the game.js calls a no-op. |
 | `game-round2-vm.test.mjs` | game.js round 2 (game-vm): BOOST does not deploy or drain in the pit lane, Overtake is not earned in the lane, the lightning bleach restores when the gate closes mid-flash, the ghost car draw waits for lap 1, world-fixed camera rigs are not dragged by the car-frame damper, quitToMenu restores `cars` from `qualiField` and forgets a one-off GP's quali order, a failed quali prepare cancels the lobby, startRace re-applies the landscape lock and attaches the gyro, a transient motion refusal does not claim a switch, pm-calib takes its zero after 300 ms, a refused data/WATCH bundle is announced, a STANDARD daily is prepared once the race session lands, `record()` tolerates a malformed day entry. |
 | `pace-arming-vm.test.mjs` | `otArmed` and `xArmed` arm at the same `vStd` at pace 0.5, 1 and 1.3 (PACE invariance of the arming gates; goes red when a gate reads a raw `c.speed`). |
+
+| `verify-live.test.mjs` | Post-deploy live byte verification: secondary HTML, service-worker bytes, and every lazy asset hash must match the stamped runtime tree. | `test:tooling-fast` |
 
 
 ## See also

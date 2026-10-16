@@ -42,7 +42,7 @@ test("a real rename lists its source, and the circuit rules fire on it", () => {
     assert.deepEqual(paths.sort(), ["docs/PHYSICS.md", "js/circuits/cota.js"]);
     // …which is what lets the directory's rules fire (the circuit slices) for a file that left it
     const slices = new Set(pick(paths).slices.keys());
-    assert.ok(slices.has("vm-a1") && slices.has("page"), [...slices].join(","));
+    assert.ok(slices.has("vm-a1") && slices.has("page-a") && slices.has("page-b"), [...slices].join(","));
     assert.ok(!new Set(pick(["docs/PHYSICS.md"]).slices.keys()).has("vm-a1"), "the destination alone routed docs-only");
   } finally { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });

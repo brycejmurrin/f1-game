@@ -403,6 +403,8 @@ let DRIFT = 0;             // rear looseness 0..1: 0 = planted (no oversteer). S
 // A car's PACE as the AI judges it: vmax less its X-mode gain, and for a HUMAN x its paceF (AiDrive.paceSample). A net-owned human never reaches updateCar's stamp, so it reads vTop().
 // xVmaxGain / paceRef / xDfLoss / xCoastCut: js/race/pace-math.js
 function paceVmax(o) { return (o._vmaxNow || (o.human ? vTop() : 0)) / (1 + xVmaxGain(o) * (o.aeroX || 0)) * (o.human ? (o.paceF || 1) : 1); }
+// Scripted field pace (tierV×skill) for AiDrive.pairEdgeN (pass-completion).
+function scriptPace(o) { return (o && o.tierV > 0 && o.skill > 0) ? o.tierV * o.skill : 0; }
 // These four are `let` so the emulation/tuning harness (setPhysics) can sweep them
 // — they are the core feel levers found by emulating real drivers, not pause-menu
 // sliders. FRONT_GRIP: front friction bias (<1) for an understeer-safe default.
@@ -1455,10 +1457,11 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
   // The moveable flaps are drawn OUTSIDE the baked mesh, so Car3D.build()'s
   // finish remap never reached them — a chrome/satin car kept glossy top flaps.
   // Thread the livery finish through so getAeroFlap remaps the flap material too.
-  const finish = resolveLivery(team).finish || null;
+  const livery = resolveLivery(team), finish = livery.finish || null;
+  const surface = livery.wingCarbon === "carbon" ? "carbon" : "paint";
   const co = typeof CarDraw !== "undefined" ? CarDraw.coOpt(mat) : mat;   // A-H3 (hunt 4): opaque flaps join R1's coalesced runs on TLX; GLX/WGX and alpha < 1 get `mat` itself
   if (still || b === 0 || b === 1) {
-    const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only);
+    const set = CarMesh.getAeroFlapSet(aLvl, col, style, finish, b >= 0.5, only, surface);
     if (set) gfx.draw(set, modelMat, co);
     if (b >= 0.5 && CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, 1);
     return;
@@ -1483,7 +1486,7 @@ function drawAeroFlaps(team, aLvl, blend, modelMat, mat, style, only, still) {
       W[8 + k] = -uu * sa + ff * ca;
       W[12 + k] += uu * fg.y + ff * fg.z;
     }
-    const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg, finish);
+    const mesh = CarMesh.getAeroFlap(aLvl, col, i, style, fg, finish, surface);
     if (mesh) gfx.draw(mesh, W, co);
   }
   if (CarMesh.drawAeroEdge) CarMesh.drawAeroEdge(modelMat, aLvl, style, b);
@@ -2183,13 +2186,14 @@ async function loadTrackStepped(idx, live) {
       && await TrackBuildClient.build(idx, def, opts, gfx, sceneryResident(def.id) ? SCENERY_DIR + "/" + def.id + ".js" : null);
     if (track !== null || !live()) return false;   // a sync loadTrack, or the player backed out, meanwhile
     // A replay that throws (an upload fails) already freed its handles: build in steps instead of failing the preparation.
-    if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }
+    if (msg) try { built = await TrackBuildClient.replay(msg, def, gfx, undefined, live); } catch (e) { Log.warn("track", "build worker replay failed (" + (e && e.message) + "); building in steps"); }
     if (msg && built && (track !== null || !live())) { freeTrackMeshes(built); return false; }   // superseded during the replay
     if (!built) { if (track !== null || !live()) return false; built = await Tracks.buildPaced(def, opts, live, freeTrackMeshes); }
   } finally {
     try { if (!raceArmedSentinel()) PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
   }
   if (!built) return false;
+  if (track !== null || !live()) { freeTrackMeshes(built); return false; }
   _loadTrackBody(idx, def, built, prevId);
   return true;
 }
@@ -2721,7 +2725,7 @@ async function startRaceBody() {
   // live() stays true: this session owns the build (menu prep uses a generation gate).
   // live() also drops on ctxLost so a CONTEXT_LOST mid-step does not wait forever.
   if (vmNoFramePump) loadTrack(trackIdx);
-  else if (!(await loadTrackStepped(trackIdx, () => !gfxContextLost())) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
+  else if (!(await loadTrackStepped(trackIdx, () => !stale() && !gfxContextLost())) && !stale()) { loadingScreen.stop(); quitToMenu(); return false; }
   if (stale()) return false; rlap("loadTrack");
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
@@ -3658,6 +3662,7 @@ const _atmo = Atmosphere.create(G), applyRaceSettings = _atmo.applyRaceSettings;
 // CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
 raceMessageHistory = typeof RaceMessageHistory !== "undefined" ? RaceMessageHistory.create(G) : null;
+if (typeof HudInputs !== "undefined") HudInputs.mountReview();
 // Select-screen UI (js/ui/select-screen.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt } = Menus.create(G);
 // The car-drawing seam (js/car/car-draw.js): mesh / atlas caches, the player's
@@ -4877,9 +4882,17 @@ function collideFx(a, b, impact) {
 }
 
 // updateCar's per-step scratch: the locals its parts (below it) read and hand back; rewritten before every read.
-const _ucS = CarFields.warmDoubles({ vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl"]);
+const _ucS = CarFields.warmDoubles({ recordInput: null, vT: 0, inp: 0, roomL: 0, roomR: 0, unstuckActive: 0, queued: 0, aiT: 0, braking: 0, hw: 0, slopeSin: 0, k: 0, mods: 0, gmC: 0, perfMul: 0, vmax: 0, alongO: 0, alongDx: 0, deploy: 0, throttleLvl: 0, gearMult: 0, surfaceMu: 0, brakeDecel: 0, onThrottle: 0, steer: 0, gripScale: 0, latFac: 0, kerbGrip: 0, bankMu: 0, dd: 0, blocker: 0, blockerGap: 0, letPass: 0, aiFreeSpeed: 0, squeezed: 0, roadL: 0, roadR: 0, alongDprog: 0, chaser: 0, chaserGap: 0, nearbyN: 0, sep: 0, slopeNose: 0, trMul: 0, gm0: 0, pitV: 0, cautionV: 0, otFree: 0, brakeLvl: 0, accelCeil: 0, towCar: 0, towGap: 0 }, ["alongDx", "alongDprog", "sep", "surfaceMu", "pitV", "aiFreeSpeed", "brakeLvl"]);
 function updateCar(c, dt, ranked) {
   const S = _ucS;
+  // This scratch snapshot never supplies controls to physics. Native Input is
+  // read once at its existing sites; only the TT recorder receives this copy.
+  S.recordInput = isTimeTrial() && c.isPlayer && !c.retired && !c.finished ? { native: !inputOf(c) } : null;
+  if (S.recordInput && InputGhost.needsState()) {
+    const state = {};
+    for (const key of Object.keys(c)) if ((typeof c[key] === "number" && Number.isFinite(c[key])) || ["boolean", "string"].includes(typeof c[key]) || c[key] === null) state[key] = c[key];
+    S.recordInput.initialState = { car: state, seed: simSeed(), rngState: simSeed(undefined, true), raceT: raceT - dt };
+  }
   // A retirement is out of the race: no driving model, no coast, no lap timing.
   // It stays exactly where retireCar() parked it until the flag.
   if (c.retired) { c._prevS = c.s; c.skidIntensity = c.wheelLock = c.brakeDemand = c.throttleDemand = c.towing = c.wake = 0; c.deploying = false; c.collideT = Math.max(0, c.collideT - dt); return; }   // the cues below are about driving: zero them, or squeal / smoke / marks / the ERS whine freeze at the last value until the flag
@@ -4938,6 +4951,7 @@ function updateCar(c, dt, ranked) {
   const perfMul = trMul * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
+
 
   // --- speed targets ---
   let vmax = VMAX * PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
@@ -5077,7 +5091,9 @@ function updateCar(c, dt, ranked) {
 
   // --- electric deploy ---
   let deploy = 0;
-  if (c.isPlayer && Input.consumeBoostToggle()) c.boostOn = !c.boostOn;   // BOOST is a toggle
+  const boostToggle = c.isPlayer && Input.consumeBoostToggle();
+  if (S.recordInput) S.recordInput.boost = !!boostToggle;
+  if (boostToggle) c.boostOn = !c.boostOn;   // BOOST is a toggle
   // Short-circuit empty battery before the LUT sample AiDrive would ignore anyway.
   // pitHeld: lane limiter only (OT earn / flaps also gate on it). ersHeld adds box + caution for BOOST.
   const pitHeld = pits.held(c);
@@ -5089,6 +5105,9 @@ function updateCar(c, dt, ranked) {
     _aiBoost.chaser = !!chaser; _aiBoost.chaserGap = chaserGap; _aiBoost.chaserSpeed = chaser ? chaser._snapSpeed : 0;
     _aiBoost.team = c.team; _aiBoost.seat = c.seat; _aiBoost.stats = c.houseStats;
     _aiBoost.ersDeploy = c.ersDeploy; _aiBoost.ersRegen = c.ersRegen; _aiBoost.vTop = vT;   // closing rates ride the pace scale
+    // Pace-scaled catch (#1401): edge over the tow car arms ERS when queue-levelled.
+    _aiBoost.street = !!track.street; _aiBoost.towVmax = towCar ? paceVmax(towCar) : 0;
+    _aiBoost.ourVmax = paceVmax(c); _aiBoost.ourPace = scriptPace(c); _aiBoost.towPace = towCar ? scriptPace(towCar) : 0;
     aiWantsBoost = AiDrive.wantBoost(_aiBoost);
   }
   const wantBoost = ((c.human ? c.boostOn : aiWantsBoost) && !ersHeld)
@@ -5118,7 +5137,13 @@ function updateCar(c, dt, ranked) {
   // allowance (AI fire / spend). Seed the crossing trackers the same way
   // OvertakeMode.lines does. Profiled Monza 22-car: the walk was ~17 % of
   // updateCar positionTicks and dragged inLane to ~2.6 % of all JS self-time.
-  let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
+  // Keep the ahead-search radius meaningful while reversing. A held allowance
+  // can outlive a forward pass, so c.speed may be negative even though this
+  // scan is still requested; a negative arc reach makes the bucket walker skip
+  // the adjacent bucket and can hide the car ahead. Reverse has no closing
+  // speed for OT timing, but it still needs a finite, non-negative search.
+  const otSpeed = Math.max(0, c.speed);
+  let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * otSpeed + 1;
   if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
   const otOpen = raceCtl.otDetectOpen();
   const otNeedAhead = (c.otE > 0 || c.otOn) ||
@@ -5144,7 +5169,13 @@ function updateCar(c, dt, ranked) {
                           _aiOtFire.kAhead = Tracks.curvature(track, wrapS(c.s + 40)),
                           _aiOtFire.street = !!track.street, _aiOtFire.team = c.team, _aiOtFire.seat = c.seat,
                           _aiOtFire.stats = c.houseStats, _aiOtFire.other = blocker,
+                          // Pass hunger (permanent): queue time + pace edge over the car ahead.
+                          _aiOtFire.queueT = c.queueT || 0,
+                          _aiOtFire.blockerVmax = blocker ? paceVmax(blocker) : (ahead ? paceVmax(ahead) : 0),
+                          _aiOtFire.ourVmax = paceVmax(c), _aiOtFire.ourPace = scriptPace(c),
+                          _aiOtFire.blockerPace = blocker ? scriptPace(blocker) : (ahead ? scriptPace(ahead) : 0),
                           AiDrive.otShouldFire(simRnd(), dt, _aiOtFire)));
+  if (S.recordInput) S.recordInput.overtake = !!fire;
   if (OvertakeMode.spend(c, dt, fire, otGate, otFast, otTimeFor(c)) && c.isPlayer && soundOn) GameAudio.deployBoost();
   if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
   c.wasArmed = c.otArmed;
@@ -5175,7 +5206,7 @@ function updateCar(c, dt, ranked) {
     // so any local car that had not pressed the (since removed) PIT key had
     // `c.xOn` overwritten from the raw input and the active-aero toggle stopped
     // working entirely (tests/unit/active-aero-vm.test.mjs, 7 red).
-    if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
+    if (c.local) { const toggle = Input.consumeAeroToggle(); if (S.recordInput) S.recordInput.aeroToggle = !!toggle; if (toggle) c.xOn = !c.xOn; }
     else c.xOn = !!(inp && inp.aero);
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
@@ -5224,6 +5255,7 @@ function updateCar(c, dt, ranked) {
     c.shiftT = Math.max(0, c.shiftT - dt);
     const up = c.local ? Input.consumeShiftUp() : !!inp.shiftUp,
           down = c.local ? Input.consumeShiftDown() : !!inp.shiftDown;
+    if (S.recordInput) { S.recordInput.shiftUp = !!up; S.recordInput.shiftDown = !!down; }
     if (gearsManual()) {
       if (up && c.gear < GEARS && c.shiftT <= 0) { c.gear++; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(true); }
       if (down && c.gear > 1 && c.shiftT <= 0) { c.gear--; c.shiftT = 0.1; if (soundOn && c.local) GameAudio.shift(false); }
@@ -5245,6 +5277,7 @@ function updateCar(c, dt, ranked) {
   // and the separate pit ribbon remain road, even outside the main half-width.
   let surfaceMu; let brakeDecel; let onThrottle; S.hw = hw; S.slopeSin = slopeSin; S.slopeNose = slopeNose; S.mods = mods; S.trMul = trMul; S.gmC = gmC; S.gm0 = gm0; S.perfMul = perfMul; S.inp = inp; S.vmax = vmax; S.pitV = pitV; S.cautionV = cautionV; S.deploy = deploy; S.otFree = otFree; S.braking = braking; S.brakeLvl = brakeLvl; S.throttleLvl = throttleLvl; S.gearMult = gearMult; S.accelCeil = accelCeil;
   updateCarLongitudinal(c, dt, ranked, S); deploy = S.deploy, surfaceMu = S.surfaceMu, brakeDecel = S.brakeDecel, onThrottle = S.onThrottle;
+  if (S.recordInput) Object.assign(S.recordInput, { throttle: onThrottle, brake: !!braking, throttleLevel: throttleLvl, brakeLevel: brakeLvl, aero: !!c.xOn });
 
   // --- lateral ---
   let steer, gripScale; let latFac; let kerbGrip; let bankMu; S.hw = hw; S.k = k; S.dd = dd; S.vT = vT; S.inp = inp; S.vmax = vmax; S.roomL = roomL; S.roomR = roomR; S.blocker = blocker; S.blockerGap = blockerGap; S.unstuckActive = unstuckActive; S.letPass = letPass; S.aiFreeSpeed = aiFreeSpeed; S.squeezed = squeezed; S.roadL = roadL; S.roadR = roadR; S.alongO = alongO; S.alongDx = alongDx; S.alongDprog = alongDprog; S.chaser = chaser; S.chaserGap = chaserGap; S.nearbyN = nearbyN; S.sep = sep; S.aiT = aiT; S.braking = braking;
@@ -5324,6 +5357,7 @@ function updateCar(c, dt, ranked) {
   // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
   S.vT = vT; S.inp = inp; S.roomL = roomL; S.roomR = roomR; S.unstuckActive = unstuckActive; S.queued = queued; S.aiT = aiT; S.braking = braking;
+  if (S.recordInput) records.sampleInput(c, S.recordInput);
   updateCarAdvance(c, dt, ranked, S);
 }
 // updateCar's parts, in the order it calls them: its statements moved VERBATIM (same float ops, same order),
@@ -5448,7 +5482,13 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     c.wake = towCar ? wakeOf(towGap, towCar._snapX - c.x) : 0;   // cleared in clear air, or dirtyAirMul sticks
     c.towing = (towCar && !braking && kMax < 0.006) ? c.wake : 0;
     if (c.towing > 0) {
-      vmax *= 1 + AiDrive.towGain(!!track.street) * c.towing;
+      // Pass hunger lifts the tow on permanents when we have a pace edge on the
+      // car ahead (AiDrive.towGain); streets and the player path stay base gain.
+      const towH = AiDrive.passHunger({
+        street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0,
+        blockerVmax: paceVmax(towCar), ourVmax: paceVmax(c), blockerPace: scriptPace(towCar), ourPace: scriptPace(c),
+      });
+      vmax *= 1 + AiDrive.towGain(!!track.street, towH) * c.towing;
     }
     // THE LANE'S CAP, LAST: the phase, tyre, fuel and tow multipliers above
     // are pace, and a limit is not pace — the tow alone ran a queue down the
@@ -5499,7 +5539,15 @@ function updateCarBrakePlan(c, dt, ranked, S) {
     // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
     // yield to, with no lane to yield into — back out under its speed, brake
     // dabbed, until we are clear. The pass latch below reads it too.
-    if (alongO && c.sbsT > AiDrive.sbsCommitT() && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase());   // COMMIT OR YIELD: tuck in behind
+    if (alongO && c.sbsT > AiDrive.sbsCommitT({
+      street: !!track.street, traits: aiT, vTop: vT, other: alongO,
+      ourVmax: paceVmax(c), ourPace: scriptPace(c),
+      otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
+    }) && c.passOf !== alongO && alongO._snapSpeed >= c.speed - 0.5 * vT / VMAX) vmax = Math.min(vmax, alongO._snapSpeed * AiDrive.sbsEase({
+      street: !!track.street, traits: aiT, vTop: vT, other: alongO,
+      ourVmax: paceVmax(c), ourPace: scriptPace(c),
+      otherVmax: paceVmax(alongO), otherPace: scriptPace(alongO),
+    }));   // COMMIT OR YIELD: tuck in behind
     squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO._snapX, c.kTurn) &&
         (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
     if (squeezed) {
@@ -5709,7 +5757,8 @@ function updateCarLateral(c, dt, ranked, S) {
   const hw = S.hw; const k = S.k; const dd = S.dd; const vT = S.vT; const inp = S.inp; const vmax = S.vmax; const roomL = S.roomL; const roomR = S.roomR; const blocker = S.blocker; const blockerGap = S.blockerGap; const unstuckActive = S.unstuckActive; const letPass = S.letPass; const aiFreeSpeed = S.aiFreeSpeed; const squeezed = S.squeezed; const roadL = S.roadL; const roadR = S.roadR; const alongO = S.alongO; const alongDx = S.alongDx; const alongDprog = S.alongDprog; const chaser = S.chaser; const chaserGap = S.chaserGap; const nearbyN = S.nearbyN; let sep = S.sep; const aiT = S.aiT; const braking = S.braking;
   let steer, gripScale;
   if (c.human) {
-    steer = inp ? (inp.steer ?? 0) : Input.steer(dt);   // dt: ramps advance per physics step
+    steer = inp ? (inp.steer ?? 0) : Input.steer(dt);
+    if (S.recordInput) S.recordInput.steer = steer;   // dt: ramps advance per physics step
   }
   else {
     // Adaptive preferred lane: under traffic density, slowly bias toward the
@@ -5759,7 +5808,8 @@ function updateCarLateral(c, dt, ranked, S) {
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE NEXT CORNER (AI-only reads): its curvature just past the turn-in owns the pass side and the level side-by-side; its zone's quality says whether to get a run.
     c.kTurn = _atk.toTurnIn < 400 ? AiDrive.cornerK(Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 10)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 30)), Tracks.curvature(track, wrapS(c.s + _atk.toTurnIn + 55))) : 0;
-    c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street) : 0;
+    const _passH = blocker ? AiDrive.passHunger({ street: !!track.street, traits: aiT, vTop: vT, queueT: c.queueT || 0, blockerVmax: paceVmax(blocker), ourVmax: paceVmax(c), blockerPace: scriptPace(blocker), ourPace: scriptPace(c) }) : 1;
+    c.runT = blocker && blockerGap < 40 ? AiDrive.runExtra(k, track.attackQ ? track.attackQ[Math.floor(wrapS(c.s + _atk.toTurnIn - 2) / track.total * track.n) % track.n] : 0, c.atkWant, !!track.street, _passH) : 0;
     // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
     // Slice 4: easy/normal visibility lift lives in AiDrive.mistakeChance (DIFF.err frozen).
     // seconds with a car within 0.6 s behind; the roll is once per braking
@@ -5844,6 +5894,7 @@ function updateCarLateral(c, dt, ranked, S) {
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       // ...and with the blocker's X-mode gain taken back out: freeSpeed is read before our own flap opens, so a raw _vmaxNow hid up to 15 % of pace
       _aiOtPull.blockerVmax = paceVmax(blocker); _aiOtPull.vTop = vT; _aiOtPull.queueT = c.queueT || 0;
+      _aiOtPull.ourVmax = paceVmax(c); _aiOtPull.ourPace = scriptPace(c); _aiOtPull.blockerPace = scriptPace(blocker);
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage only with a reachable lane and no cooldown on this stretch.
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
@@ -5886,7 +5937,9 @@ function updateCarLateral(c, dt, ranked, S) {
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser._snapSpeed;
       _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser; _aiDefend.x = c.x; _aiDefend.vTop = vT;
       _aiDefend.blocker = blocker; _aiDefend.blockerGap = blockerGap; _aiDefend.kTurn = c.kTurn; _aiDefend.toTurnIn = _atk.toTurnIn; _aiDefend.roadL = roadL; _aiDefend.roadR = roadR;
-      defend = AiDrive.defendPull(_aiDefend);
+      // Cover concede (permanent, AI-AI): chaser pace edge → defender yields cover.
+      _aiDefend.chaserVmax = paceVmax(chaser); _aiDefend.ourVmax = paceVmax(c);
+      _aiDefend.chaserPace = scriptPace(chaser); _aiDefend.ourPace = scriptPace(c); defend = AiDrive.defendPull(_aiDefend);
     }
     // One defensive move per straight (AiDrive.defendOnce); the side resets in
     // the braking zone, where defending is over anyway (holdLine below).
@@ -6387,7 +6440,7 @@ function updateCarAdvance(c, dt, ranked, S) {
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
   // takeover jumps s/x — recording it would corrupt the ghost trace).
-  if (isTimeTrial() && c.isPlayer) records.sample(c, inp);
+  if (isTimeTrial() && c.isPlayer) records.sample(c, inp, true);
 
   // --- wrong-way + auto-rescue (player only) ---
   if (c.human && state === "race" && !c.finished) {
@@ -7883,7 +7936,7 @@ function render(dt) {
     // field is the SUBJECT rather than the leftovers the guard above describes.
     // Still nothing after quitToMenu: that leaves the loading screen inactive,
     // which is the same break as before.
-    if (state === "menu" && !loadingScreen.active()) break;
+    if (state === "menu" && !loadingScreen.active() && !(photoStudio && photoStudio.hasCar())) break;
     if (!c.isPlayer && player && !dbgCam) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
@@ -8837,6 +8890,7 @@ $("sel-map-btn").onclick = openTrackDetail;
 $("sel-detail-chip").onclick = openTrackDetail;
 $("track-detail-close").onclick = closeTrackDetail;
 SettingsNav.onEnter((page) => {
+  if (page === "display") HudElements.refreshVisibility();
   if (page === "controls" && !controllerProfileUi && typeof ControllerProfileControls !== "undefined" && Input.controllerProfile) {
     controllerProfileUi = ControllerProfileControls.create({ host: $("pm-panel-controls"), input: Input, afterReset: () => { if (keyBinds) keyBinds.render(); } });
   }
@@ -8851,7 +8905,31 @@ SettingsNav.onEnter((page) => {
 // the same rule the mode-dependent driving controls follow, so the grid never
 // reflows under a thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
-photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0), garage: {
+SettingsSearch.register("race-settings", [{ id: "tyre-wear", label: "Tyre wear", page: "race-settings", target: "rs-tyres-sel",
+  aliases: "tires degradation pit stops", options: "off light real",
+  unavailableReason: "Tyre wear is chosen in Race Settings before starting a solo race.",
+  navigate: (arrived) => { settingsNav.invalidate(); return raceSettings.openSettingSearch(() => settingsNav.returnToSearch(), arrived); },
+}]);
+const revealHudRequirement = (target) => SettingsSearch.reveal(target === "rs-tyres-sel" ? $("rs-tyres-sel") : target === "pm-hudprofile-sel" ? $("pm-hudprofile-sel") : null);
+HudElements.configure({ context: () => ({ state, hasPlayer: !!player, profile: hudProfile,
+  timeTrial: isTimeTrial(), practice: isPractice(), session, tyreWear: !!(tyres && tyres.on()), carCount: cars.length }),
+  navigate: (page, target) => { if (page === "race-settings") { const row = SettingsSearch.find("tyre wear").find((r) => r.id === "tyre-wear"), opener = document.activeElement;
+      settingsNav.invalidate();
+      if (row && raceSettings.openSettingSearch(() => { settingsNav.show("display", false); SettingsSearch.reveal(opener); }, () => revealHudRequirement(target)) === false) {
+        const host = $("pm-panel-display"); let note = host.querySelector("[data-hud-nav-status]");
+        if (!note) { note = document.createElement("p"); note.dataset.hudNavStatus = ""; note.className = "adv-help"; note.setAttribute("role", "status"); host.prepend(note); }
+        note.textContent = row.unavailableReason; LiveRegion.say(row.unavailableReason, "hud"); } }
+    else { settingsNav.show(page, true); revealHudRequirement(target); } },
+});
+photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0),
+  borrowCar: () => {
+    // A fresh photo subject, never the last race's live car or seeded stream.
+    const before = { cars, player }, rng = _simRngState;
+    try { makeCars(); cars = player ? [player] : []; }
+    catch (e) { cars = before.cars; player = before.player; throw e; }
+    finally { _simRngState = rng; }
+    return () => { cars = before.cars; player = before.player; };
+  }, garage: {
   snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id), } });
 function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
@@ -8865,7 +8943,7 @@ uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperien
   openSettingsPage: (page, fold) => { openSettings(); settingsNav.show(page, true); const f = fold && $(fold); if (f) { if (f.tagName === "DETAILS") f.open = true; else if (f.parentElement.tagName === "DETAILS") f.parentElement.open = true; f.scrollIntoView({ block: "start" }); f.focus(); } },
 });
 AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: () => openExperiencePhoto(state === "menu" ? "home" : "race"), openDisplay: () => settingsNav.show("display", true),
-  applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
+  applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
 });
 function syncSettingsAvailability() {
   const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }

@@ -4,6 +4,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import vm from "node:vm";
+import { gameSource } from "../helpers/game-source.mjs";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 let g;
@@ -268,4 +269,48 @@ test("a restart that finds the season finished tears the race chrome down to the
   assert.equal(document.body.classList.contains("in-race"), false, "no in-race class");
   assert.equal(g.G.els.overlay.hidden, false, "the title is up");
   g.G.quitToMenu();
+});
+
+test("explicit outcomes preserve legacy values and suppress late canceled commits", async () => {
+  const entry = vm.runInContext("SessionEntry", g.ctx).create();
+  let release;
+  const p = entry.begin("race", "held", () => {}, () => new Promise(r => { release = r; }), () => true);
+  await tick(); entry.cancel(); release(undefined);
+  assert.equal((await p.outcome).kind, "canceled");
+  assert.equal(await p, undefined, "legacy commit return is preserved even when its outcome is canceled");
+  const next = entry.begin("race", "ok", () => {}, () => undefined, () => true);
+  assert.equal(await next, undefined);
+  const committed = await next.outcome;
+  assert.equal(committed.kind, "committed"); assert.equal(entry.owns(committed), true);
+  entry.cancel(); assert.equal(entry.owns(committed), false);
+  const failed = entry.begin("race", "no", () => {}, () => false, () => true);
+  assert.equal(await failed, false); assert.equal((await failed.outcome).kind, "failed");
+});
+
+test("paced track completion abandons canceled and superseded worlds before adoption", async () => {
+  const source = gameSource();
+  const start = source.indexOf("async function loadTrackStepped(");
+  const end = source.indexOf("\nfunction loadTrack(", start);
+  for (const mode of ["accepted", "canceled", "superseded"]) {
+    let finish, live = true, adopts = 0; const freed = [];
+    const built = { owned: mode };
+    const ctx = vm.createContext({ ensureCircuit: async () => {}, ensureTrackBuild: async () => {},
+      Tracks: { LIST: [{ id: "test" }], buildPaced: () => new Promise(r => { finish = r; }) },
+      sessionDarkFor: () => false, fieldSize: () => 1, trackBuildOpts: () => ({}),
+      builtTrackId: null, builtTrackNight: null, builtGridSlots: 0,
+      raceArmedSentinel: () => false, PerfGov: { sentinelArm() {} },
+      track: null, state: "menu", dropTrackWorld() {}, gfx: {},
+      freeTrackMeshes: w => freed.push(w), _loadTrackBody: () => { adopts++; },
+    });
+    vm.runInContext(source.slice(start, end) + "\nthis.run = loadTrackStepped;", ctx);
+    const pending = ctx.run(0, () => live);
+    await tick();
+    if (mode === "canceled") live = false;
+    if (mode === "superseded") ctx.track = { newer: true };
+    finish(built);
+    assert.equal(await pending, mode === "accepted");
+    assert.equal(adopts, mode === "accepted" ? 1 : 0);
+    assert.equal(freed.length, mode === "accepted" ? 0 : 1);
+    if (freed.length) assert.equal(freed[0], built);
+  }
 });

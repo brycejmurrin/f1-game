@@ -212,6 +212,28 @@ test("out-of-order and duplicate packets are handled, not trusted", () => {
   assert.equal(buf.size(), 3);
 });
 
+test("interpolation unwraps uint32 wire ticks across the long-session rollover", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0 });
+  const before = 0xFFFFFFFF - 40;
+  assert.equal(buf.push(before, car({ s: 100, speed: 50 })), true);
+  // The wire carries this as 24 after performance.now() wraps.  Keep it after
+  // `before`, rather than inserting it at the front of the ring.
+  assert.equal(buf.push(24, car({ s: 110, speed: 50 })), true);
+  const state = buf.sample(0x100000000 + 24);
+  assert.ok(state, "post-wrap target should resolve a sample");
+  assert.equal(state.s, 110);
+  assert.equal(buf.push(24, car({ s: 999 })), false, "same raw tick remains a duplicate");
+});
+
+test("decoded rollover ticks use the arrival clock epoch for adaptive delay", () => {
+  const buf = NetSnapshot.createInterp({ total: TOTAL, delayMs: 0, adaptive: true });
+  const arrival = 0x100000000 + 120;
+  assert.equal(buf.push(0xFFFFFFFF - 20, car({ s: 100, speed: 50 }), arrival - 100), true);
+  assert.equal(buf.push(80, car({ s: 120, speed: 50 }), arrival), true);
+  const state = buf.sample(arrival);
+  assert.ok(state && state.s >= 120, "arrival-domain target should not fall behind the wrapped packet");
+});
+
 test("predict() leads sample() by exactly the interpolation delay", () => {
   // Contact must NOT be resolved against the drawn pose: sample() is
   // deliberately delayMs in the past, so a rival you are side by side with is

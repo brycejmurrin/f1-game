@@ -217,6 +217,12 @@ test("hostile payloads are rejected with a reason and change nothing", () => {
   const cases = [
     [{ format: "nope", slots: [] }, "wrong-format"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: { money: NaN } }] }, "nan-money"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { driver: { name: "A", code: { toString: null }, num: 99 } }) }] }, "driver-code"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { driver: { name: {}, code: "YOU", num: 99 } }) }] }, "driver-name"],
+    [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0,
+      data: Object.assign(save({}), { driver: { name: "A", code: "YOU", num: {} } }) }] }, "driver-num"],
     [{ format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 0, data: [1, 2, 3] }] }, "slot-not-object"],
     // A driver career filed under a MY TEAM row (and the reverse) would load as
     // the wrong flavour in that slot set.
@@ -733,6 +739,25 @@ test("malformed history / offers / moves / roster rows import without crashing c
   h.Career.load();
   h.Career.engage(true);
   assert.doesNotThrow(() => h.Career.settleRound([{ team: { id: "haas" } }], { team: { id: "haas" } }));
+});
+
+test("career imports keep only catalog part IDs and fitted category options", () => {
+  const h = loadHarness();
+  h.ctx.Parts.CATALOG = [
+    { id: "engine", options: [{ id: "engine-stock" }, { id: "engine-race" }] },
+    { id: "tyres", options: [{ id: "tyres-soft" }] },
+  ];
+  const incoming = Object.assign(save(), {
+    owned: ["engine-race", "engine-race", "future-part", 7, "tyres-soft"],
+    fitted: { engine: "engine-race", tyres: "future-tyres", future: "engine-race", __proto__: { bad: true } },
+  });
+  const r = h.CareerBackup.apply({ format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 0, data: incoming },
+  ] }, { otherFlavourConfirmed: true });
+  assert.equal(r.ok, true);
+  const stored = JSON.parse(h.disk.get("apex26.career.driver.0"));
+  assert.deepEqual(stored.owned, ["engine-race", "tyres-soft"]);
+  assert.deepEqual(stored.fitted, { engine: "engine-race" });
 });
 
 /* ── MY TEAM identity (global garage keys a myteam save only points at) ── */

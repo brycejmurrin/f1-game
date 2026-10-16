@@ -330,6 +330,19 @@
     flex: 1 1 0;
     padding-inline: calc(var(--gap) / 3);
   }
+  /* Keep the history toolbar in its own row on portrait phones. Floating it
+     over the canvas hides the grid scale and reduces the usable map surface. */
+  #trackdesigner:not([data-mode="scenery"]) .td-stage {
+    grid-template-rows: minmax(72px, 1fr) auto auto;
+  }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > .td-chips[data-role="toolbar"] {
+    position: static;
+    grid-row: 2;
+    pointer-events: auto;
+  }
+  #trackdesigner:not([data-mode="scenery"]) .td-stage > canvas[data-role="profile"] {
+    grid-row: 3;
+  }
   .td-foot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--gap) / 2); }
   .td-foot [data-role="file-actions"] { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .td-foot .sel-chip, .td-foot .sel-edit { padding-inline: calc(var(--gap) / 2); }

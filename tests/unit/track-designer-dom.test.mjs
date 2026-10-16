@@ -11,6 +11,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
 const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/designer.js"];
@@ -843,13 +844,28 @@ test("HOW TO: a third tab lists every HOWTO step, every input and the limits; th
   const tabs = walk(b.root).filter((e) => e.classList.contains("td-tab"));
   assert.deepEqual(tabs.map((t) => t.textContent), ["DESIGN", "MY CIRCUITS", "HOW TO"]);
   for (const t of tabs) assert.equal(t.getAttribute("role"), "tab");
+  assert.equal(b.root.querySelector('[role="tablist"]').getAttribute("aria-label"), "Track Designer workspace");
+  assert.deepEqual(tabs.map((t) => t.getAttribute("aria-controls")), ["td-pane-design", "td-pane-library", "td-pane-howto"]);
+  assert.deepEqual(tabs.map((t) => t.tabIndex), [0, -1, -1]);
   const [design, lib, how] = panes(b);
   assert.equal(how.dataset.pane, "howto"); assert.equal(how.getAttribute("role"), "tabpanel");
+  assert.deepEqual([design.getAttribute("aria-labelledby"), lib.getAttribute("aria-labelledby"), how.getAttribute("aria-labelledby")],
+    [tabs[0].id, tabs[1].id, tabs[2].id]);
   assert.equal(how.hidden, true);
   tabs[2].click();
   assert.deepEqual([design.hidden, lib.hidden, how.hidden], [true, true, false]);
   assert.deepEqual(tabs.map((t) => t.getAttribute("aria-selected")), ["false", "false", "true"]);
+  assert.deepEqual(tabs.map((t) => t.tabIndex), [-1, -1, 0]);
   assert.equal(b.root.dataset.pane, "howto", "phone layout can give the guide its own space");
+  tabs[2].focus();
+  const left = { type: "keydown", key: "ArrowLeft", preventDefault() {}, stopPropagation() {} };
+  b.dom.dispatch(tabs[2], left);
+  assert.equal(b.root.dataset.pane, "library", "ArrowLeft activates the previous designer tab");
+  assert.equal(b.dom.document.activeElement, tabs[1], "tab focus follows activation");
+  const home = { type: "keydown", key: "Home", preventDefault() {}, stopPropagation() {} };
+  b.dom.dispatch(tabs[1], home);
+  assert.equal(b.root.dataset.pane, "design", "Home activates the first designer tab");
+  assert.equal(b.dom.document.activeElement, tabs[0]);
   const H = b.D.HOWTO;
   const tasks = walk(how).filter(e => e.dataset.helpTask);
   assert.deepEqual(tasks.map(e => e.dataset.helpTask), ["selection", "height", "scenery"]);
@@ -1690,7 +1706,7 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(b.G.state, "race");
   assert.equal(b.G.player.s, sTest, "…onto the armed point, not the grid");
   assert.equal(b.G.player.speed, 0);
-  assert.match(read("js/game.js"), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
+  assert.match(gameSource(), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
   // The way back: armed, so quitting reopens the designer on the same point.
   b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
   b.D.close();
