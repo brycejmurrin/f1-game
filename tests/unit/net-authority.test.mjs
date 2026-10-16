@@ -1395,6 +1395,57 @@ test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire whe
   net.stop();
 });
 
+test("temporary fallback cannot finish a connected human or remove it from the result wait", () => {
+  const RaceControl = eval(src("js/race/race-control.js") + ";RaceControl");
+  for (const crossing of [false, true]) {
+    const G = poseG(2), net = NetPlay.create(G), s = stateSession();
+    G.track.total = 5000; G.lapsTarget = 3; G.raceT = 120;
+    net.start({ role: "host", session: s, interpDelayMs: 0 });
+    const rival = G.cars[1];
+    rival.lap = 3; rival.s = 4995; rival._nMid = true;
+    s.feed(10000, 1, { ...lapPose(4995), lap: 3, speed: 0 }, 10000); net.tick(10000);
+    net.tick(12100);
+    assert.equal(net.owns(rival), false);
+    if (crossing) {
+      const cross = RaceControl.lineTransition(rival, 4995, 5, 10, 5000, 3, G.cars, 122.1, 1 / 60);
+      assert.equal(cross.flagged, false, "fallback motion does not raise the race flag");
+      assert.equal(!!rival.finished, false);
+      assert.equal(rival.finishT == null, true);
+      assert.equal(RaceControl.flagOut(G.cars), false);
+    }
+    G.player.finished = true; G.player.finishT = 123;
+    assert.equal(RaceControl.finishDelay(G.cars, 124, 3, 0), 0, "connected owner still racing during silence");
+    s.feed(12200, 1, { ...lapPose(4970), lap: 3, speed: 0 }, 12200); net.tick(12200);
+    assert.equal(rival.lap, 3); assert.equal(!!rival.finished, false);
+    assert.equal(rival.finishT == null, true);
+    assert.equal(RaceControl.finishDelay(G.cars, 124, 3, 0), 0);
+    net.stop();
+    assert.equal(RaceControl.finishDelay(G.cars, 124, 3, 0), 2.2, "a real disconnect releases human membership");
+  }
+});
+
+test("an owner finish arriving during fallback is preserved when its finishing pose resumes", () => {
+  const G = poseG(2), net = NetPlay.create(G), s = stateSession();
+  G.track.total = 5000; G.lapsTarget = 3; G.raceT = 120;
+  net.start({ role: "host", session: s, interpDelayMs: 100 });
+  const rival = G.cars[1];
+  rival.lap = 3; rival.s = 4995; rival._nMid = true;
+  s.feed(10000, 1, { ...lapPose(4995), lap: 3, speed: 0 }, 10000); net.tick(10000);
+  net.tick(12100); G.raceT = 122;
+  // Local fallback crosses first, but cannot supply the owner's lap evidence.
+  const RaceControl = eval(src("js/race/race-control.js") + ";RaceControl");
+  RaceControl.lineTransition(rival, 4995, 5, 10, 5000, 3, G.cars, 122, 1 / 60);
+  s.deliver(NetPlay.EV.LAP, { code: rival.code, driverId: rival.driverId, lap: 4, fin: 121.9, invalid: true });
+  assert.equal(!!rival.finished, false, "owner event waits for owner pose, not fallback lap");
+  s.feed(12200, 1, { ...lapPose(5), lap: 4, speed: 0 }, 12200); net.tick(12200);
+  s.feed(12300, 1, { ...lapPose(6), lap: 4, speed: 0 }, 12300); net.tick(12300);
+  assert.equal(rival.finished, true); assert.equal(rival.finishT, 121.9);
+  net.tick(14400);
+  s.feed(14500, 1, { ...lapPose(10), lap: 4, speed: 0 }, 14500); net.tick(14500);
+  assert.equal(rival.finished, true); assert.equal(rival.finishT, 121.9, "later fallback/resume preserves genuine terminal state");
+  net.stop();
+});
+
 // ---- a rival that left while a guest was still BUILDING (sibling register 8.1) ----
 // The host's race-phase LEFT ({wire}) reached a guest whose session still held the LOBBY's handlers,
 // which read only the lobby phase's `from`: it seated the leaver as a human nobody would move, and
