@@ -4,6 +4,8 @@ Start here. This page is a **reading order**, not a filing cabinet: the tables
 below say what to read and in what order, and the index at the bottom exists so
 nothing goes unfindable.
 
+Player-facing release notes use per-change [changelog.d/](changelog.d/) fragments.
+
 ## Read in this order
 
 **If you are an agent**, the path is `AGENTS.md` → `ARCHITECTURE.md` →
