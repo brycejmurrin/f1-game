@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
+import { estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS }
   from "../../tools/ci/tooling-fast.mjs";
@@ -28,6 +28,15 @@ test("longest recorded duration first; unmeasured files ahead of all, in list or
     "c has no timing (first), b and d tie at the top (list order kept), then descending");
   assert.deepEqual(scheduleLongestFirst(files, {}), files, "no timings at all is list order");
   assert.deepEqual(files, ["a", "b", "c", "d", "e"], "the input list is not mutated");
+});
+
+test("timing estimate reports total and worker critical path", () => {
+  const e = estimateToolingFast(["a", "b", "c"], { a: 100, b: 500, c: 200 }, 2);
+  assert.equal(e.totalMs, 800);
+  assert.equal(e.criticalPathMs, 500);
+  assert.deepEqual(e.workerMs, [500, 300]);
+  const unknown = estimateToolingFast(["a", "missing"], { a: 100 }, 2);
+  assert.deepEqual(unknown.unmeasured, ["missing"]);
 });
 
 test("local measurements override the committed table", () => {
@@ -211,6 +220,21 @@ test("--changed selects pinned unit tests for a tool edit, not the full suite", 
   assert.deepEqual(r.files.sort(), ["tests/unit/agent-config.test.mjs", "tests/unit/test-bg-outcome.test.mjs"].sort());
   assert.ok(r.files.length < all.length);
   assert.deepEqual(shardsCoveringFiles(r.files, all), ["2/2"]);
+});
+
+test("a file pin does not inherit a generic top-level tree pin", () => {
+  const exact = "tests/unit/" + "exact.test.mjs";
+  const dir = "tests/unit/" + "dir.test.mjs";
+  const tree = "tests/unit/" + "tree.test.mjs";
+  const all = [exact, dir, tree];
+  const pinIndex = new Map([
+    ["js/ui/hud.js", new Set([exact])],
+    ["js/ui", new Set([dir])],
+    ["js", new Set([tree])],
+  ]);
+  const r = selectToolingFastChanged(["js/ui/hud.js"], { allFiles: all, pinIndex,
+    scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
+  assert.deepEqual(r.files.sort(), [dir, exact].sort());
 });
 
 test("--changed fail-safes to the full list on infra paths", () => {

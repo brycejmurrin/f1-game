@@ -686,8 +686,14 @@ function myTeamStandingRow() {
   if (!career) return null;
   return teamStandings().find((r) => r.id === career.team) || null;
 }
-function goalNow(goal) { return goal ? goalKind(goal.type).now(career, goal.value) : null; }
-function goalOnTrack(goal) { return goal ? goalKind(goal.type).onTrack(goal.value) : null; }
+// Before scoring, standings only reflect the grid's tie-break order. A sprint
+// can score at round 0; award() records every entrant in pts, even on zero.
+function goalHasResult() {
+  const s = career && career.season;
+  return !!(s && (s.round > 0 || Object.keys(s.pts || {}).length));
+}
+function goalNow(goal) { return goal && goalHasResult() ? goalKind(goal.type).now(career, goal.value) : null; }
+function goalOnTrack(goal) { return goal && goalHasResult() ? goalKind(goal.type).onTrack(goal.value) : null; }
 function setAmbition(i) {
   if (!career || blocked()) return ambition();
   career.amb = ambIdx(clamp(i | 0, 0, AMBITION.length - 1));

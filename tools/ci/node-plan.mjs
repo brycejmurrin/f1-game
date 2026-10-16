@@ -101,7 +101,7 @@ export function topicalTfOverlap(groups = groupsJson()) {
 /** Paths a slice cannot be scoped around: the file may be the very suite a
  *  slice runs, or the harness every VM script boots through. */
 export const RUN_ALL_PATHS = [
-  /^tests\/unit\//, /^tests\/helpers\//, /^tools\/lib\//, /^\.github\/workflows\/ci\.yml$/,
+  /^tests\/helpers\//, /^tools\/lib\//, /^\.github\/workflows\/ci\.yml$/,
   /^tools\/ci\/node-plan\.mjs$/,
   /^tools\/ci\/run-group\.mjs$/,
   /^tools\/ci\/tooling-fast\.mjs$/,
@@ -156,6 +156,28 @@ export function scriptBuilds(script, circuits, groups = groupsJson()) {
 }
 const groupsJson = () => JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups;
 
+/**
+ * Unit files are generated into either tooling-fast or a topical group. The
+ * old blanket RUN_ALL_PATHS rule treated every tests/unit edit as a harness
+ * change, so a one-file audio or game-vm fix started every node script. Return
+ * the owning test:* groups for known files and leave unknown files fail-safe.
+ */
+export function unitFileOwnership(changed, groups = groupsJson()) {
+  const tooling = new Set(
+    TOOLING_FAST_FILES.filter((f) => typeof f === "string" && !f.startsWith("//")),
+  );
+  const owned = new Map();
+  const unknown = [];
+  for (const file of changed.filter((f) => /^tests\/unit\//.test(f))) {
+    const groupsForFile = Object.entries(groups)
+      .filter(([, entry]) => (entry.files || []).includes(file))
+      .map(([name]) => name.replace(/^test:/, ""));
+    if (groupsForFile.length) owned.set(file, groupsForFile);
+    else if (!tooling.has(file)) unknown.push(file);
+  }
+  return { owned, unknown };
+}
+
 /** The plan for a changed-file list. `ref` is the diff base (for the
  *  per-circuit data files); empty keeps those files TRACKED. */
 export function plan(changed, ref = "", scripts = pkgScripts()) {
@@ -177,6 +199,14 @@ export function plan(changed, ref = "", scripts = pkgScripts()) {
   const hosts = changed.filter((f) => RUN_ALL_PATHS.some((re) => re.test(f)));
   if (hosts.length) return all(`a suite or harness changed (${hosts.slice(0, 3).join(", ")})`);
   const g = pick(changed);
+  const unit = unitFileOwnership(changed);
+  if (unit.unknown.length) return all(`unowned unit file (${unit.unknown.slice(0, 3).join(", ")})`);
+  // pick-tests intentionally routes tests/unit to audit. Replace that weak
+  // bucket with generated topical ownership so scoped node scripts can see a
+  // known unit file without treating the entire unit tree as a harness.
+  for (const [file, groupsForFile] of unit.owned) {
+    for (const group of groupsForFile) g.set(group, new Set([`unit ownership: ${file}`]));
+  }
   // The boot group reaches here only through pick-tests' two blanket rules
   // ("any source edit", "script tags + DOM shell"), the same way it reaches
   // the selected gate — and logging.spec.js, an ADAPTED spec, lives in it, so

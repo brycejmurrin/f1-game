@@ -53,6 +53,8 @@ test("a lap counted under a takeover resets the player's sector clock and keeps 
   });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  for (const file of ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"])
+    vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: file });
   vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx, { filename: "js/race/race-control.js" });
   vm.runInContext(SRC, ctx, { filename: "js/physics/incident-sim.js" });
   const IncidentSim = vm.runInContext("IncidentSim", ctx);

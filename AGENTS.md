@@ -50,7 +50,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above: `test:guards` (the commit hook,
    every commit) ⊂ `test:tooling-fast` (`gen-ladder-figures.mjs --table` sizes it) ⊂ `deploy.mjs --gate-only`, the only
    pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine; `docs/notes/PREPUSH-GATE-LADDER.md`).
-   Before every code `git push`: `npm run test:tooling-fast` plus the change-aware pick (`pick-tests`) must pass.
+   Before every code `git push`: `npm run test:tooling-fast` plus the change-aware pick (`pick-tests`) must pass; edit loops may use `verify-change --fast --json` / `tooling-fast --changed` for a diff-sized budget.
 4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards` about a minute, one `node --test`, `verify-track`, `pick-tests`).
    Background, ONE Bash `run_in_background` task logging to `artifacts/logs/`: 2–15 min (`tooling-fast`, `deploy.mjs --gate-only`) and a browser group (`test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task; exit 1 = red, 124 = still running).
    While it runs, do work that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`; shared-contract files stay out of worktrees). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout.
