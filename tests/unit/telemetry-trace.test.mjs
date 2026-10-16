@@ -27,6 +27,28 @@ for (const file of [
 }
 const T = vm.runInContext("DataTelemetry", ctx);
 
+test("braking duel aligns distance and refuses clamped or missing feed intervals", () => {
+  const model = vm.runInContext("DataTelemetryModel", ctx);
+  function lane(speed) {
+    const car = Array.from({ length: 41 }, (_, i) => ({ t: i / 4, speed, brake: i < 10 ? 0 : i < 22 ? 50 : 0, throttle: i < 10 ? 100 : i < 28 ? 20 : 100 }));
+    return { car, cum: model.cumDist(car) };
+  }
+  const a = lane(36), b = lane(45), r = model.brakingDuel(a, b, 0, 90);
+  assert.equal(r.available, true); assert.ok(r.lanes[0].brake); assert.ok(r.lanes[0].throttle);
+  assert.ok(r.lanes[0].brake.distance < r.lanes[1].brake.distance);
+  assert.ok(Math.abs(r.change + 1.8) < 1e-9);
+  assert.equal(model.brakingDuel(a, b, 0, 110).available, false);
+  const missing = lane(36); missing.car[12].brake = null;
+  assert.equal(model.brakingDuel(missing, b, 0, 90).available, false);
+  const gap = lane(36); gap.car.splice(10, 10); gap.cum = model.cumDist(gap.car);
+  assert.match(model.brakingDuel(gap, b, 0, 90).reason, /gap/);
+  const flat = lane(36); flat.car.forEach((c) => { c.brake = 0; c.throttle = 100; });
+  const absent = model.brakingDuel(flat, b, 0, 90);
+  assert.equal(absent.available, true); assert.equal(absent.lanes[0].brake, null); assert.equal(absent.lanes[0].throttle, null);
+  flat.car[12].brake = 50;
+  assert.equal(model.brakingDuel(flat, b, 0, 90).lanes[0].brake, null, "one noisy feed sample must not become two grid hits");
+});
+
 // A closed, oval-ish lap in track-local units at ~3.7 Hz, like the real feed.
 function lap(n = 400, dtMs = 270) {
   const out = [];
@@ -206,6 +228,34 @@ test("a driver with no GPS of their own rides the path on THEIR lap, not the oth
   const s = sweep(view, fast, 60);   // over ITS OWN 60 s lap
   assert.ok(Math.abs(s.total - 2 * Math.PI) < 0.12,
     `borrowed-path dot swept ${s.total.toFixed(3)} rad over its own lap, want 2pi`);
+});
+
+test("compare gaps stay at the reference finish while a slower lap keeps playing", () => {
+  const player = vm.runInContext("DataTelemetryPlayer", ctx).create({}, { paintFrame() {} });
+  const cell = () => ({ textContent: "", style: {}, classList: { toggle() {} } });
+  const lane = (finish) => ({
+    car: [{ t: 0, speed: 180, gear: 6, throttle: 100, brake: 0, rpm: 10000 },
+      { t: finish, speed: 180, gear: 6, throttle: 100, brake: 0, rpm: 10000 }],
+    cum: { t: [0, finish], d: [0, 1000] },
+  });
+  const primary = lane(80), compare = lane(82), third = lane(84);
+  const view = {
+    cursorT: 80, primary, compare, laps: [primary, compare, third], rpmMax: 12000,
+    g: {
+      speed: [cell(), cell()], gear: [cell(), cell()], thr: [cell(), cell()],
+      brk: [cell(), cell()], rpm: [cell(), cell()], drs: [cell(), cell()],
+      delta: cell(), board: [{ spd: cell(), ref: true },
+        { spd: cell(), dl: cell() }, { spd: cell(), dl: cell() }],
+    },
+  };
+  for (const t of [79, 80, 81, 82, 83]) {
+    view.cursorT = t;
+    player.paintFrame(view);
+    const expected = t < 80 ? "+1.98s" : "+2.00s";
+    assert.equal(view.g.delta.textContent, expected, `compare gauge at ${t}s`);
+    assert.equal(view.g.board[1].dl.textContent, expected.slice(0, -1), `compare board at ${t}s`);
+    assert.equal(view.g.board[2].dl.textContent, t < 80 ? "+3.95" : "+4.00", `third lane at ${t}s`);
+  }
 });
 
 // Exercise the real controller -> view -> player -> renderer wiring with a

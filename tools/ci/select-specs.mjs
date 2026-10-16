@@ -63,11 +63,24 @@ export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
 /** Browser-leg LANES (2026-10-15): ci.yml's `selected` job carries a job-level
  *  concurrency group `selected-lane-<lane>` with `queue: max` on pull requests,
  *  so at most LANES selected legs run fleet-wide at once and the rest wait in
- *  FIFO order WITHOUT holding a runner or being cancelled
- *  (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax,
+ *  FIFO order WITHOUT holding a runner or being cancelled (up to 100 pending per
+ *  group; https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax,
  *  `concurrency.queue`). ready-full-cap.mjs still caps whole ready RUNS at the
- *  desk; this caps legs in GitHub. 12 = three ready runs' worth of ~4 legs each. */
-export const LANES = 12;
+ *  desk; this caps legs in GitHub.
+ *  24, measured 2026-10-15 22:43Z: 17 ready runs held 2–22 legs each (median
+ *  ~9, not the ~4 the first value of 12 assumed), 55 legs sat pending in lanes
+ *  while only 17–22 of the 40 Linux slots ran. 24 lanes + the train's own legs
+ *  (~5) + fast tiers and node rows (~6–8) + smoke (1) stays under 40. */
+export const LANES = 24;
+
+/** First lane of a run's legs: GITHUB_RUN_NUMBER mod LANES. With every run
+ *  starting at lane 0, a 9-leg run only ever fed lanes 0–8, so the low lanes
+ *  queued every ready PR while the high ones idled. Rotating the start spreads
+ *  legs evenly; a run's own legs still land in distinct lanes. */
+export function laneBase(env = process.env) {
+  const n = Number(env.GITHUB_RUN_NUMBER);
+  return Number.isInteger(n) && n > 0 ? n % LANES : 0;
+}
 
 // These specs already have their own jobs with runner-measured timeout
 // policies. Re-running them in the selected job used its generic 120 s cap and
@@ -804,7 +817,7 @@ export function fit(specs, budgetMin, { rank = () => 3, db = timings(), overflow
  *  cache key (two "Unable to reserve cache") and uploaded three artifacts
  *  called `spec-timings-junit-selected-selected`. Budgeted bins are now
  *  `selected-<i>`, and a final pass suffixes any repeat. */
-export function shards(r, db = timings(), quarantine = loadQuarantine()) {
+export function shards(r, db = timings(), quarantine = loadQuarantine(), base = laneBase()) {
   const items = [];
   const cost = (x) => (x.sec != null ? x.sec : expectedSec(x, db));
   for (const s of [...(r.selected || []).map((x) => ({ ...x, budgeted: true })), ...(r.oversize || []), ...(r.overflow || []),
@@ -905,8 +918,9 @@ export function shards(r, db = timings(), quarantine = loadQuarantine()) {
       // APEX_CIRCUITS for the job: empty = every circuit (see select()).
       circuits: (r.circuits || []).join(","),
       // The leg's concurrency lane on a pull request (ci.yml `selected`): legs
-      // cycle through LANES groups, so a run's own legs never queue behind each other.
-      lane: i % LANES };
+      // cycle through LANES groups from laneBase(), so a run's own legs never
+      // queue behind each other and runs do not all pile into lane 0.
+      lane: (base + i) % LANES };
   });
   // Unique names: a matrix name keys ci.yml's timings artifact, and a repeat
   // there is an upload that collides.
@@ -1001,6 +1015,8 @@ export const CIRCUIT_FILTERED_TESTS = new Set([
   // floor it holds a scoped audit CLI to (tools/lib/circuit-scope.cjs).
   "tests/unit/prop-clipping.test.mjs",
   "tests/unit/scenery-grounding.test.mjs",
+  // 2026-10-15 (#2210): gates the scoped roster, no longer a fixed 3-circuit sample.
+  "tests/unit/scenery-ground-audit.test.mjs",
   "tests/unit/coplanar-faces.test.mjs",
   "tests/unit/props-tri-ratchet.test.mjs",
   "tests/unit/road-under-floor.test.mjs",
@@ -1319,6 +1335,16 @@ export function dropBootFallback(groups) {
 // minutes of expected work, inside the fixed gate's own ~6-minute wall.
 export const DEFAULT_BUDGET_MIN = 10;
 
+// CSS needs real layout coverage too. Keep the change-aware set small instead
+// of selecting the entire UI group; fit()/shards() retain the normal budgets.
+export function cssSpecs(changed) {
+  const files = changed.filter((f) => /^css\//.test(f));
+  if (!files.length) return [];
+  const specs = new Set(["tests/specs/css-player-smoke.spec.js"]);
+  if (files.some((f) => /^css\/(menus|title|carsetup|tokens|select|fonts-hud|components|responsive|dialogs|dialog-platform|overlays|garage-experience)\.css$/.test(f))) specs.add("tests/specs/menu-baseline.spec.js");
+  return [...specs];
+}
+
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const changed = changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
@@ -1337,7 +1363,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
   const docsOnly = isDocsOnly(changed);
   const kind = changeKind(changed);
-  const lightDiff = docsOnly || kind === "docs" || kind === "css";
+  const lightDiff = docsOnly || kind === "docs";
   // The three always-run inputs, unioned into the candidate set BEFORE the cut
   // so they compete for the budget on merit rather than being bolted on after.
   const changedSpecs = changed.filter((f) => /^tests\/specs\/.+\.spec\.js$/.test(f)
@@ -1359,10 +1385,10 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, lightDiff ? [] : routed);
-  // Docs-/CSS-only PRs skip the selected matrix at the plan (required check
+  // Docs-only PRs skip the selected matrix at the plan (required check
   // names still report). Never a pull_request paths filter: those leave
   // required checks pending.
-  const candidates = lightDiff ? [] : routed;
+  const candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
   const reason = !changed.length ? "none"
     : lightDiff ? (kind === "css" ? "css" : "docs")
     : tracked.length ? "infra"

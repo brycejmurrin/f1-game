@@ -115,7 +115,8 @@ const InputPadMenu = (function () {
         const sx = axisMap.steer;
         const ax = pad.axes || [];
         if (Number.isInteger(sx) && sx >= 0 && sx < ax.length) {
-          const x = ((ax[sx] || 0) * axisMap.steerInvert - padRest()) * axisMap.steerInvert;
+          // Wheel directions share driving's signed space; rest was measured AFTER inversion.
+          const x = (ax[sx] || 0) * axisMap.steerInvert - padRest();
           if (Math.abs(x) >= PAD_NAV_DEADZONE) return x < 0 ? "left" : "right";
         }
         if ((padButtons("shiftDown") || []).some((b) => b != null && btnDown(pad, b))) return "up";

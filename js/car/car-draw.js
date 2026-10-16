@@ -219,6 +219,21 @@ const CarDraw = (function () {
       const suffix = lidKey(team, (_pbSetup && car.visPaint) || _pbNum);
       return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKeyFor(team, suffix), buildPendingTeamMesh, TEAM_MESH_CACHE_MAX);
     }
+    // ONE procedural body for every rival past FieldLod tier 2 (~120 m, ±10 %
+    // hysteresis on c._lodTier). Team livery stays on the planted wheels; the
+    // mesh is neutral grey so we never pay a Car3D.build per seat at range.
+    let _sharedRivalBody = null;
+    function sharedRivalBodyMesh() {
+      if (carModelBuf) return null;
+      if (_sharedRivalBody) return _sharedRivalBody;
+      const team = Teams.LIST[0];
+      const setup = Parts.getFactorySetup(team);
+      _sharedRivalBody = G.gfx.createMesh(Car3D.build([0.72, 0.72, 0.72], [0.72, 0.72, 0.72], {
+        field: true, silhouette: true, noDriver: true, noWheels: true, livery: {}, smooth: false,
+        parts: Parts.getVisualTiers(setup, team),
+      }));
+      return _sharedRivalBody;
+    }
 
     // ── decals ──────────────────────────────────────────────────────
     const _decalTexCache = {}, _decalTexFail = {}, _decalTexOrder = [];
@@ -457,9 +472,10 @@ const CarDraw = (function () {
         let keep = false;
         try {
           if (!owns()) return;
-          const next = crispPlayerDecal(G.gfx.createTexture(src));
+          const transfer = !!bitmap && G.gfx.backend === "three";
+          const next = crispPlayerDecal(G.gfx.createTexture(src, transfer ? { disposeSource: closeBitmap } : undefined));
           if (!next) throw new Error("no texture");   // keep the preview rather than cache a null over it
-          keep = !!bitmap && G.gfx.backend === "three";   // three holds texture.image for the texture's life
+          keep = transfer;   // TLX owns this bitmap until Texture.dispose; GLX/WGX already copied it
           const prev = _decalTexCache[key];
           _decalTexCache[key] = next;
           _decalTexBytes[key] = atlasBytes(canvas);
@@ -1510,6 +1526,8 @@ const CarDraw = (function () {
         for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
         for (const k in teamBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamBodies[k]); delete teamBodies[k]; }
         for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
+        if (_sharedRivalBody && G.gfx.freeMesh) G.gfx.freeMesh(_sharedRivalBody);
+        _sharedRivalBody = null;
         playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = 0;
         for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
         cockpitBodyOrder.length = 0;
@@ -1572,12 +1590,14 @@ const CarDraw = (function () {
       wheelMeshOrder.length = 0;
       for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
       fieldWheelOrder.length = 0;
+      if (_sharedRivalBody && G.gfx.freeMesh) G.gfx.freeMesh(_sharedRivalBody);
+      _sharedRivalBody = null;
       _teamMeshKeyCache.clear();
     }
 
     let _menuCarPrep = null;   // the last prepareMenuCarAssets that ran to its end (menuCarAssets)
     return (_instance = {
-      teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
+      teamMesh, teamBodyMesh, sharedRivalBodyMesh, playerBodyMesh, cockpitBodyMesh, cockpitShadowMesh, cockpitCaster,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
       drawPlayerWheels, drawPitCrew, pitCrewDrawn, drawCockpitRig, drawExhaustFx, glassState, drawMirrorCar,

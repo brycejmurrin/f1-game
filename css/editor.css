@@ -81,12 +81,22 @@
 .td-rail {
   grid-column: 2; grid-row: 1 / span 2;
   container-type: inline-size;
+  align-self: stretch;
+  max-height: 100%;
+  box-sizing: border-box;
   min-height: 0; min-width: 0;
   overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+  /* ScrollFade draws .sf-scroll::before; hide the native gutter so the orange
+     thumb is not stacked on a grey bar that eats the NEXT / name field lane
+     (1440×900, 1280×800 — #1893). */
   scrollbar-gutter: stable;
+  scrollbar-width: none;
   display: flex; flex-direction: column; gap: var(--gap);
-  padding-right: calc(var(--gap) / 4);
+  padding-inline-end: var(--pad);
 }
+.td-rail::-webkit-scrollbar { display: none; }
 /* Equal-width tabs: flex-basis auto sized each chip to its label, so DESIGN /
    MY CIRCUITS / HOW TO jumped width when the selected border changed. */
 .td-tabs { position: sticky; top: 0; z-index: 3; background: var(--bg); padding-block: calc(var(--gap) / 2); display: flex; flex-wrap: nowrap; gap: calc(var(--gap) / 2); }
@@ -407,7 +417,7 @@
 @media (max-width: 760px) and (max-height: 500px) and (orientation: landscape) {
   /* Side by side keeps the inspector usable when there is no height for a stack. */
   .td-body { grid-template-columns: minmax(0, 1fr) minmax(240px, 38%); grid-template-rows: auto minmax(0, 1fr); }
-  .td-rail { grid-column: 2; grid-row: 1 / span 2; }
+  .td-rail { grid-column: 2; grid-row: 1 / span 2; max-height: 100%; }
   .td-foot { display: flex; flex-wrap: wrap; }
   .td-stage > canvas:not([data-role="profile"]) { min-height: 72px; }
   .td-stage > canvas[data-role="profile"] {
@@ -454,8 +464,9 @@
 #trackdesigner .td-row:has([data-look]) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 #trackdesigner .td-row:has([data-look]) > span { color: var(--dim); grid-column: 1 / -1; }
 #trackdesigner .td-row:has([data-look]) .sel-chip { min-width: 0; min-height: var(--chip-h); }
-#trackdesigner [data-role="prop-side"] { align-items: center; }
-#trackdesigner [data-role="prop-side"] > span { flex: 1; }
+#trackdesigner [data-role="prop-side"] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: center; }
+#trackdesigner [data-role="prop-side"] > span { grid-column: 1 / -1; }
+#trackdesigner [data-role="prop-side"] .sel-chip { min-width: 0; width: 100%; justify-content: center; }
 #trackdesigner [data-role="placed-props"] .td-issue { cursor: default; }
 #trackdesigner [data-role="placed-props"] .td-issue > span { flex: 1; min-width: 0; }
 #trackdesigner [data-role="scenery"] .td-hint { display: block; line-height: 1.4; }
@@ -474,11 +485,12 @@
 #trackdesigner [data-role="object-list"] { margin-top: 0; padding-top: calc(var(--gap) / 2); }
 #trackdesigner [data-role="object-placement"],
 #trackdesigner [data-role="object-list"] { border-top: 1px solid var(--plate-line); }
-#trackdesigner [data-role="object-filters"] { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+#trackdesigner [data-role="object-filters"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #trackdesigner [data-role="object-filters"] .sel-chip { min-width: 0; justify-content: center; padding-inline: calc(var(--gap) / 3); }
 #trackdesigner [data-role="object-library"] [data-role="props"] { max-height: calc(var(--chip-h) * 3 + var(--gap) * 2); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 #trackdesigner [data-role="selected-object"] { color: var(--text); }
-#trackdesigner [data-role="prop-gap"] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; }
+#trackdesigner [data-role="prop-gap"] { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; }
+#trackdesigner [data-role="prop-gap"] > button:last-child { grid-column: 1 / -1; }
 #trackdesigner [data-role="prop-gap"] .sel-chip { min-height: var(--chip-h); min-width: var(--chip-h); padding-inline: calc(var(--gap) / 3); }
 #trackdesigner [data-role="prop-gap"] > span { grid-column: 1 / -1; }
 #trackdesigner [data-role="range-actions"] { align-self: end; }

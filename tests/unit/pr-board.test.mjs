@@ -217,6 +217,41 @@ test("measure: failing jobs come from the failed run; --pr reads one PR but stil
   assert.ok(!calls.includes("pulls/1"));
 });
 
+test("measure --pr counts armed siblings across every PR page, without reading their CI details", () => {
+  for (const methods of [["merge", "merge"], ["squash", "rebase"], ["merge", null]]) {
+    const prs = Array.from({ length: 101 }, (_, i) => prObj(i + 1, { draft: true }));
+    prs[0] = prObj(1, { auto_merge: { merge_method: methods[0] } });
+    prs[2] = prObj(3);
+    if (methods[1]) prs[100] = prObj(101, { auto_merge: { merge_method: methods[1] } });
+    const { request, calls } = fakeApi({
+      prs,
+      runsBySha: { [SHA(3)]: [{ id: 77, status: "completed", conclusion: "success" }] },
+      jobsByRun: { 77: fullJobs() }, checksBySha: { [SHA(3)]: guard() },
+    });
+    const all = measure({ request });
+    const expected = methods[1] ? "WAIT" : "ARM";
+    assert.equal(all.rows.find((r) => r.number === 3).suggest, expected);
+    calls.length = 0;
+    const one = measure({ request, only: 3 });
+    assert.equal(one.ok, true);
+    assert.deepEqual(one.rows.map((r) => [r.number, r.suggest]), [[3, expected]], methods.join("/"));
+    assert.ok(calls.some((q) => q.startsWith("pulls?") && q.includes("page=2")));
+    assert.deepEqual(calls.filter((q) => /^pulls\/\d+$/.test(q)), ["pulls/3"]);
+    assert.ok(!calls.some((q) => q.includes(`head_sha=${SHA(1)}`) || q.startsWith(`commits/${SHA(101)}/`)),
+      "siblings need metadata, not per-PR CI inspection");
+  }
+});
+
+test("measure --pr refreshes the selected PR's armed state after listing siblings", () => {
+  const prs = [prObj(1, { auto_merge: { merge_method: "merge" } }), prObj(3, { auto_merge: { merge_method: "merge" } })];
+  const { request } = fakeApi({ prs,
+    runsBySha: { [SHA(3)]: [{ id: 77, status: "completed", conclusion: "success" }] },
+    jobsByRun: { 77: fullJobs() }, checksBySha: { [SHA(3)]: guard() },
+  });
+  const v = measure({ only: 3, request: (q) => q === "pulls/3" ? { json: prObj(3) } : request(q) });
+  assert.equal(v.rows[0].suggest, "ARM", "the newly disarmed target leaves only one sibling armed");
+});
+
 test("measure --pr on a PR that is closed or targets another base is a bad-args error", () => {
   const { request } = fakeApi({ prs: [prObj(4, { state: "closed" }), prObj(6, { base: { ref: "main" } })] });
   for (const n of [4, 6]) {

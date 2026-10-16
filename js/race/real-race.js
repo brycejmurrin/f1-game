@@ -383,6 +383,7 @@ const RealRace = (function () {
     let heldLevel = 0;
     let redFired = new Set();
     let simRef = [];      // sim race time of the reference car at each completed lap
+    let watchFlag = null;   // last recorded flag applied; unchanged frames allocate nothing
     let rainWant = null;  // the weather the script last asked for (mid-race rain)
     let fed = null;       // the narration lines already said (feed keys)
     let handover = null;  // {c, t, said}: the seat car driven by the AI until t runs out, then the player's
@@ -481,7 +482,9 @@ const RealRace = (function () {
     }
 
     function disarm() {
-      if (heldLevel && G.holdCaution) G.holdCaution(0);
+      if (watchFlag && G.applyCaution) G.applyCaution({ level: 0 });
+      else if (heldLevel && G.holdCaution) G.holdCaution(0);
+      watchFlag = null;
       heldLevel = 0; armed = false; placed = false; raceT0 = 0; field = null; tables = null; K = 0; simRef = []; redFired = new Set(); rainWant = null; fed = null; handover = null;
       if (plateUp) count(null);
       goHold = 0;
@@ -492,6 +495,7 @@ const RealRace = (function () {
     // game's own grid, plans and reliability draws ran in startRaceBody), so
     // everything scripted is laid over it here — one re-grid, no RNG draw.
     function arm() {
+      watchFlag = null;   // startRace reset race control, including a repeated WATCH launch
       const script = active.script, cars = G.cars;
       const realLaps = script.laps | 0, simLaps = active.laps;
       const byId = new Map(active.seatMap.map((s) => [s.driverId, s]));
@@ -527,7 +531,9 @@ const RealRace = (function () {
         const pos = f.d.pos != null ? f.d.pos : Infinity;
         if (row.length > refLen || (row.length === refLen && pos < refPos)) { refLen = row.length; refPos = pos; refNum = f.d.num; }
       }
-      tables = { pace: paceTable(script), cum, refNum, wins: cautionsFor(script, simLaps), at: fieldAt(script, active.startLap) };
+      const winner = script.drivers.find((d) => d.pos === 1) || script.drivers[0];
+      tables = { pace: paceTable(script), cum, refNum, wins: cautionsFor(script, simLaps), at: fieldAt(script, active.startLap),
+        watchStarts: winner && winner.lapStart || [], watchCautions: script.cautions || [] };
       const wearOn = G.tyres && G.tyres.on && G.tyres.on();
       for (const c of cars) {
         const f = field.get(c);
@@ -568,7 +574,7 @@ const RealRace = (function () {
         // WATCH: the whole field, the seat included, becomes the replay's puppets; nothing here steers.
         const seats = new Map();
         for (const [c2, f2] of field) seats.set(c2, f2.d);
-        const ok = replay.start({ script, traces: active.traces, seats, startLap: active.startLap, follow: active.seatCode, camera: active.camera, reel: active.reel });
+        const ok = replay.start({ script, traces: active.traces, seats, startLap: active.startLap, follow: active.seatCode, camera: active.camera, reel: active.reel, onTimeline: watchTimeline });
         if (!ok) { active.watch = false; Log.warn("game", "RealRace.arm: the replay did not start — racing it instead"); }
         else placed = true;
       }
@@ -811,6 +817,38 @@ const RealRace = (function () {
       if (want !== heldLevel && G.holdCaution) { G.holdCaution(want, cause); heldLevel = want; }
     }
 
+    // WATCH reads a snapshot from recorded time, never the live-drive latches.
+    // This also runs inside replay seeks/cuts, before the new picture is painted.
+    function watchTimeline(T) {
+      const script = active.script;
+      const starts = tables.watchStarts;
+      let lap = starts.length ? 1 : Math.max(1, leaderLap());
+      for (let i = 1; i < starts.length; i++) if (starts[i] != null && starts[i] <= T) lap = i + 1;
+      let level = 0, cause = "";
+      for (const w of tables.watchCautions) {
+        if (!w || !(w.level >= 2)) continue;
+        const from = w.tFrom != null ? w.tFrom : starts[Math.max(0, (w.from | 0) - 1)];
+        const to = w.tTo != null ? w.tTo : starts[w.to != null ? w.to | 0 : w.from | 0];
+        const inside = from != null ? T >= from && (to != null ? T < to : lap <= (w.to || w.from))
+          : lap >= w.from && lap <= (w.to != null ? w.to : w.from);
+        if (inside && w.level > level) {
+          level = Math.min(4, w.level | 0);
+          cause = w.cause || (level === 4 ? "RED FLAG" : level === 3 ? "SAFETY CAR" : "VSC");
+        }
+      }
+      if (!watchFlag || watchFlag.level !== level || watchFlag.cause !== cause) {
+        if (G.applyCaution) G.applyCaution({ level, cause, phase: level === 4 ? "held" : "", replay: true });
+        watchFlag = { level, cause }; heldLevel = level;
+      }
+      // The feed gives weather per lap. A recording cuts to that lap's sky,
+      // including entry in the rain; only a driven race walks a live weather arc.
+      const want = weatherAt(script, lap);
+      if (G.weatherArc) G.weatherArc = null;
+      if (G.raceWeather !== want && G.setWeatherLive) G.setWeatherLive(want);
+      rainWant = want;
+      if (G.frame && G.trackWetness) G.frame.wetness = G.trackWetness();
+    }
+
     // Rain that started or stopped in the real race turns the sky here over an arc.
     function tickWeather(lap) {
       const script = active.script;
@@ -834,7 +872,7 @@ const RealRace = (function () {
       // field means a new race, so it is armed afresh (grid, pace, stops, hand-over, the replay's camera).
       if (armed && field && G.cars && G.cars.length && !field.has(G.cars[0])) disarm();
       if (!armed) { if ((st === "count" || st === "race") && G.cars && G.cars.length && G.track) arm(); return; }
-      if (active.watch) { replay.tick(dt); if (st !== "race") return; const wl = leaderLap(); tickCautions(wl); tickWeather(wl); return; }
+      if (active.watch) { replay.tick(dt); return; }
       if (st !== "race") return;
       if (!placed) { placed = true; if (tables.at) place(); }
       tickHandover(dt);

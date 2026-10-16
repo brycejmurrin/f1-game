@@ -40,7 +40,7 @@ const LoadingScreen = (function () {
     try {
       if (typeof navigator === "undefined" || !navigator || navigator.webdriver !== true) return false;
       if (typeof window !== "undefined" && window && window.__apexFullIntro === true) return false;
-      if (typeof location !== "undefined" && location && /[?&]fullIntro=1(?:&|$)/.test(location.search || "")) return false;
+      if (typeof DevFlags !== "undefined" && DevFlags.get("fullIntro")) return false;
       return true;
     } catch (_) { return false; }
   }
