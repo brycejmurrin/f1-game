@@ -1798,7 +1798,7 @@ test("the debris pools instance behind a capability read, with the loop as fallb
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
   // 2h). GLX ships updateInstances; WGX and TLX have not been ported and MUST
   // keep the per-body path rather than silently drawing nothing.
-  const dw = code("js/physics/debris-world.js");
+  const dw = code("js/physics/debris-draw.js");   // #1661: the drawing half of DebrisWorld
   assert.match(dw, /gfx\.updateInstances\(/);
   assert.match(dw, /gfx\.drawInstanced\(/);
   assert.match(dw, /!gfx\.createInstancedBatch\s*\|\|\s*!gfx\.updateInstances\s*\|\|\s*!gfx\.drawInstanced/,
