@@ -194,6 +194,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `menu-nav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
 | `aria-state.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
 | `setting-row.js` | `SettingRow` | tag | SettingRow — the ONE control for an enumerated preference on a settings sheet: LABEL ‹ VALUE › One line at every UI SIZE and orientation. |
+| `settings-search.js` | `SettingsSearch` | tag | Find settings by player terms. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: SETTINGS › BACKUP & RESTORE, which carries a player's state OUT of the browser and back IN. |
@@ -232,6 +233,8 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
 | `platform-session.js` | `PlatformSession` | tag | PlatformSession: platform UI, phone controller and session interruptions. create(G, deps) exposes staged wiring so entry boot order stays explicit. |
 | `update-check.js` | `UpdateCheck` | tag | UpdateCheck: an in-session "a newer build is live" check and its UPDATE READY chip. index.html's shell version guard runs ONCE, at boot; an installed PWA or a… |
+| `race-message-history.js` | `RaceMessageHistory` | tag | Delivered cards only: showAnnounce calls delivered after painting its card. |
+| `controller-profile-controls.js` | `ControllerProfileControls` | tag | Explicit current-device reset; Input owns automatic per-device selection. |
 
 **`js/track/core/`**
 
@@ -377,6 +380,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `pad-menu.js` | `InputPadMenu` | tag | InputPadMenu: gamepad/phone menu navigation, focus seeding and held-direction repeats. |
 | `haptics.js` | `InputHaptics` | tag | InputHaptics: device/remote vibration, controller rumble and capability checks. |
 | `hold-buttons.js` | `InputHoldButtons` | tag | InputHoldButtons: multi-pointer hold/tap buttons, analog travel and teardown safety nets. |
+| `controller-profiles.js` | `ControllerProfiles` | tag | ControllerProfiles — bounded physical-device maps; legacy maps seed only the first device. |
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
 | `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). |
 | `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire, and shows a steering-wheel dash fed… |

@@ -893,6 +893,7 @@ declare const Onboard: GameModuleFactory;
 declare const Director: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
+declare const RaceMessageHistory: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;
 declare const RivalAudio: GameModuleFactory;
 declare const CarSfx: GameModuleFactory;
