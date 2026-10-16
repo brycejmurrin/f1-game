@@ -410,6 +410,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **check/html-sink-lint.mjs** | Flags non-constant `.innerHTML =` / `.outerHTML =` / `insertAdjacentHTML()` sinks in js/ outside the audited allowlist. |
 | **check/offline-precache-check.cjs** | Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache. |
 | **check/reject-lint.mjs** | An unhandled rejection paints a full-screen overlay — finds promise-returning API calls that discard theirs. |
+| **check/tolerance-diff.mjs** | Fails a PR that loosens a test tolerance (toBeCloseTo digits, a bound, tol/eps) beside production edits. |
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
 | **ci/assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
 | **ci/base-green.sh** | Was this commit gated green? Prints `green`, `red` or `unknown` for a sha from its ci.yml / pages.yml runs. |
