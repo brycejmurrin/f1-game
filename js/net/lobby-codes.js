@@ -33,7 +33,7 @@ const LobbyCodes = (function () {
     if (p.length === 2 && p[0] === magicName && /^[szp]$/.test(p[1])) return c + ".";
     return c;
   }
-  function codeFrom(text) {
+  function codeFrom(text, keepShortTail = false) {
     const raw = String(text || "").replace(INVISIBLE, "").trim();
     if (!raw) return "";
     const tokens = raw.split(/\s+/);
@@ -80,8 +80,8 @@ const LobbyCodes = (function () {
       // Final short tail after a long fragment: keep base64url-ish crumbs and
       // bracketed closers, not a lone English word ("thanks" / "now") that
       // follows a body rejoined from an APEX1.s.\n fold.
-      if (long && i === tokens.length - 1 && (!ended || opened)
-          && (opened || /[0-9_-]/.test(t) || t.length >= 10)) {
+      if (keepShortTail || (long && i === tokens.length - 1 && (!ended || opened)
+          && (opened || /[0-9_-]/.test(t) || t.length >= 10))) {
         code += t;
       }
       break;
@@ -90,6 +90,18 @@ const LobbyCodes = (function () {
     // the trailing dot so peekCode says bad_code, not an empty-body corrupt.
     if (/^[A-Za-z0-9]+\.[szp]\.$/.test(code)) code = code.slice(0, -1);
     return code;
+  }
+
+  // A short final fragment can be all letters, just like surrounding prose.
+  // Keep the conservative parse if it decodes; otherwise accept the additional
+  // fragment only when the real decoder validates it. At most two candidates.
+  function resolveCode(text) {
+    const code = codeFrom(text), tail = codeFrom(text, true);
+    if (tail === code) return code; // ordinary input keeps synchronous negotiation locks
+    return NetHandshake.decodeCode(code).then(async (parsed) => {
+      if (parsed.ok) return code;
+      return (await NetHandshake.decodeCode(tail)).ok ? tail : code;
+    });
   }
 
   // The QR carries the invite LINK, not the code: a link scanned by the
@@ -120,13 +132,21 @@ const LobbyCodes = (function () {
   function create(api) {
     const { els, $, say, makeAnswer, acceptAnswer, cancelledResult, has, focusInto, shownStep } = api;
 
+    let deliveryGeneration = 0, pasteGeneration = 0;
     function deliver(kind, text) {
-      const code = codeFrom(text);
-      if (!code) return false;
-      const e = els();
-      const box = kind === "invite" ? e.inviteIn : e.answerIn;
-      if (box) box.value = code;
-      return kind === "invite" ? makeAnswer(code) : acceptAnswer(code);
+      const delivery = ++deliveryGeneration, paste = pasteGeneration;
+      const operation = api.getOperation ? api.getOperation() : null;
+      const apply = (code) => {
+        if (delivery !== deliveryGeneration || paste !== pasteGeneration
+            || (api.getOperation && operation !== api.getOperation())) return cancelledResult();
+        if (!code) return false;
+        const e = els();
+        const box = kind === "invite" ? e.inviteIn : e.answerIn;
+        if (box) box.value = code;
+        return kind === "invite" ? makeAnswer(code) : acceptAnswer(code);
+      };
+      const code = resolveCode(text);
+      return typeof code === "string" ? apply(code) : code.then(apply);
     }
 
     let scanner = null;
@@ -148,6 +168,7 @@ const LobbyCodes = (function () {
 
     // Clear invite/QR/answer widgets per attempt (retry used to show a dead peer).
     function resetSteps() {
+      deliveryGeneration++;
       const e = els();
       for (const f of ["invite", "inviteIn", "answer", "answerIn"]) if (e[f]) e[f].value = "";
       if (e.answerHint) e.answerHint.hidden = true;
@@ -193,7 +214,6 @@ const LobbyCodes = (function () {
       return res;
     }
 
-    let pasteGeneration = 0;
     async function pasteInto(kind) {
       const paste = ++pasteGeneration;
       const operation = api.getOperation ? api.getOperation() : null;
@@ -264,11 +284,11 @@ const LobbyCodes = (function () {
     }
 
     return {
-      codeFrom, deliver, scan, stopScan, pasteInto, copy, handOff, resetSteps,
+      codeFrom, resolveCode, deliver, scan, stopScan, pasteInto, copy, handOff, resetSteps,
       paintQr, drawQr, drawAnswerQr, shareInvite, shareAnswer, canShare,
     };
   }
 
-  return { codeFrom, paintQr, canShare, create };
+  return { codeFrom, resolveCode, paintQr, canShare, create };
 })();
 Object.freeze(LobbyCodes);
