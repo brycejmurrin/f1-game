@@ -472,9 +472,10 @@ const CarDraw = (function () {
         let keep = false;
         try {
           if (!owns()) return;
-          const next = crispPlayerDecal(G.gfx.createTexture(src));
+          const transfer = !!bitmap && G.gfx.backend === "three";
+          const next = crispPlayerDecal(G.gfx.createTexture(src, transfer ? { disposeSource: closeBitmap } : undefined));
           if (!next) throw new Error("no texture");   // keep the preview rather than cache a null over it
-          keep = !!bitmap && G.gfx.backend === "three";   // three holds texture.image for the texture's life
+          keep = transfer;   // TLX owns this bitmap until Texture.dispose; GLX/WGX already copied it
           const prev = _decalTexCache[key];
           _decalTexCache[key] = next;
           _decalTexBytes[key] = atlasBytes(canvas);

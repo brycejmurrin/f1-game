@@ -722,6 +722,7 @@
   ],
     TRACK_VM: [
     "js/core/log.js",
+    "js/core/dev-flags.js",
     "js/core/mat4.js",
     "js/track/core/geom.js",
     "js/track/core/pit.js",

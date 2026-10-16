@@ -43,6 +43,21 @@ const HudStrategy = (function () {
     if (pl.next == null) return pl.stops ? "DONE" : "NO STOP";
     return "L" + pl.next + (pl.code ? " " + pl.code : "");
   }
+  /** Only PitLane's car-behind estimate can describe the pit window. */
+  function fmtWindow(est) {
+    if (!est || !Number.isFinite(est.lossS) || est.lossS <= 0) return "";
+    if (est.gapS === undefined) return "";
+    if (est.gapS === null) return "EST WINDOW --" + (est.caution ? " · CAUTION" : "");
+    if (!Number.isFinite(est.gapS) || est.gapS < 0) return "";
+    const margin = Math.round(est.gapS - est.lossS);
+    return "EST WINDOW " + (margin >= 0 ? "+" : "") + margin + " s" + (est.caution ? " · CAUTION" : "");
+  }
+  /** Hysteresis in estimated laps: enter half a lap short, clear at the plan. */
+  function tyresShort(left, pl, wasShort) {
+    if (!Number.isFinite(left) || left < 0 || !pl || !Number.isFinite(pl.next)
+      || !Number.isFinite(pl.lapsToStop) || pl.lapsToStop <= 0) return false;
+    return wasShort ? left < pl.lapsToStop : left < pl.lapsToStop - 0.5;
+  }
   /** The undercut rule (see the header). Every input a number or a bool. */
   function undercut(o) {
     if (!o || !o.hasRival || o.rivalInPit || o.rivalLapped) return false;
@@ -55,6 +70,7 @@ const HudStrategy = (function () {
   const doc = typeof document !== "undefined" ? document : null;
   let root = null, nodes = null;
   const last = { tyre: "", loss: "", next: "", uc: null, ucWho: null, label: "" };
+  let short = false, shortPlayer = null, shortNext = null;
   const ctx = { hasRival: false, rivalInPit: false, rivalLapped: false, stopLeft: false, gapS: 0, lossS: 0, rivalWear: 0, myWear: 0 };
 
   function build() {
@@ -66,6 +82,8 @@ const HudStrategy = (function () {
       el.setAttribute("data-k", k);
       const h = doc.createElement("span"); h.textContent = head; el.appendChild(h);
       const v = doc.createElement("b"); el.appendChild(v);
+      // Estimate wording wraps inside this panel instead of widening a phone HUD.
+      if (k === "loss" || k === "next") { v.style.maxWidth = "24ch"; v.style.overflowWrap = "anywhere"; }
       root.appendChild(el);
       nodes[k] = v; nodes[k + "Row"] = el;
     };
@@ -82,7 +100,7 @@ const HudStrategy = (function () {
     if (!root && !build()) return;
     const tyres = G.tyres, pit = G.pits;
     const race = G.state === "race" && !G.timeTrial && !G.practice && G.session !== "quali";   // PRACTICE is the G.practice flag on a race session, never G.session
-    if (!isOn() || !race || !tyres || !tyres.on() || player.retired) { if (!root.hidden) root.hidden = true; return; }
+    if (!isOn() || !race || !tyres || !tyres.on() || player.retired) { short = false; shortPlayer = null; if (!root.hidden) root.hidden = true; return; }
     const b = doc.body;
     if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;
     if (root.hidden) root.hidden = false;
@@ -92,9 +110,13 @@ const HudStrategy = (function () {
     let dirty = set("tyre", (code ? code + " " : "") + fmtLaps(left, spent));
     const est = pit && pit.estimate ? pit.estimate(player) : null;
     const lossS = est && est.lossS > 0 ? est.lossS : pit && pit.lossS ? pit.lossS() : NaN;
-    dirty = set("loss", fmtLoss(lossS)) || dirty;
+    const window = fmtWindow(est);
+    dirty = set("loss", fmtLoss(lossS) + (window ? " · " + window : "")) || dirty;
     const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
-    dirty = set("next", fmtNext(pl)) || dirty;
+    if (player !== shortPlayer || (pl && pl.next) !== shortNext) short = false;
+    shortPlayer = player; shortNext = pl && pl.next;
+    short = tyresShort(left, pl, short);
+    dirty = set("next", fmtNext(pl) + (short ? " · EST TYRES SHORT OF L" + pl.next : "")) || dirty;
     // The car directly ahead in race order (G.ranked, as the gap chips read it).
     const ranked = G.ranked || [];
     let i = (player.rank || 0) - 1;
@@ -125,5 +147,5 @@ const HudStrategy = (function () {
     }
   }
 
-  return Object.freeze({ UNDERCUT_WEAR, fmtLaps, fmtLoss, fmtNext, undercut, tick });
+  return Object.freeze({ UNDERCUT_WEAR, fmtLaps, fmtLoss, fmtNext, fmtWindow, tyresShort, undercut, tick });
 })();

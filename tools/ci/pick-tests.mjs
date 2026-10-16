@@ -209,6 +209,7 @@ export const RULES = [
   [/^tests\/data\/perf-frametime-baseline\.json/, ["perf-frametime"], "committed frametime baseline — regen via APEX_UPDATE_BASELINE"],
   [/^js\/perf\//, ["ui"], "the quality preset, renderer picker and the overlays — DOM screens"],
   [/^js\/input\//, ["input"], ""],
+  [/^js\/input\/controller-profiles\.js$/, ["steering-unit"], "controller-profiles.test.mjs — per-device maps, legacy migration and input-owner release"],
   // PHONE AS CONTROLLER: its node suite (phone-pad.test.mjs) is in steering-unit,
   // and the roll math it shares with input.js is asserted there too.
   [/^js\/input\/(phone-pad|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],

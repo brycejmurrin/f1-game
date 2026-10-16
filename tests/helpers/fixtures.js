@@ -141,6 +141,9 @@ async function installMocks(context) {
     // that the shipped default enables the lane is asserted in
     // tests/unit/tyre-model.test.mjs, which costs nothing to run.
     try { localStorage.setItem("apex26.tyreWear", JSON.stringify("off")); } catch (_) {}
+    // WIND (js/race/wind.js) the same way: a seeded per-race wind would move every
+    // top speed and lateral trace; "off" is a true no-op (tests/unit/wind.test.mjs).
+    try { localStorage.setItem("apex26.wind", JSON.stringify("off")); } catch (_) {}
   }, LOG_SPEC);
   await context.route("https://api.jolpi.ca/**", (route) =>
     route.fulfill({

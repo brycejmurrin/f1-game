@@ -205,7 +205,7 @@ const DataRealRace = (function () {
       else d.pits.sort((a, b) => a - b);
       if (!d.lapsDone) d.lapsDone = d.laps.filter((t) => t > 0).length;
       // Where and when the car went out: the incident row naming it on the lap it stopped, else the end of its last timed lap.
-      if (d.dnf && !d.dns) {
+      if (d.dnf && !d.dns && !d.dsq) {
         const inc = incidentFor(raw.raceControl, d, (d.lapsDone | 0) + 1);
         d.outWhere = inc ? inc.where : null;
         // WHEN: the start of the lap it did not finish (the stewards' note is dated when it was posted, laps later).
@@ -235,7 +235,7 @@ const DataRealRace = (function () {
       return true;
     });
     return {
-      v: SCRIPT_V, source: "openf1",
+      v: SCRIPT_V, source: "openf1", fetchedAt: new Date().toISOString(),
       sessionKey: num(s.session_key), meetingKey: num(s.meeting_key), year: num(s.year),
       name: String(s.meeting_name || s.name || ((s.country_name || "") + " Grand Prix")).trim(),
       session: String(s.session_name || "Race"),
@@ -286,7 +286,7 @@ const DataRealRace = (function () {
     // they retired at Baku 2026): a pass on either side of a retiring car is
     // the retirement, not an overtake.
     const ends = {};   // num -> the lap the car's race ended on (dnf only)
-    for (const d of arr(drivers)) if (d && d.dnf && d.num != null) ends[d.num] = (d.lapsDone | 0) + 1;
+    for (const d of arr(drivers)) if (d && d.dnf && !d.dns && !d.dsq && d.num != null) ends[d.num] = (d.lapsDone | 0) + 1;
     const starts = {};   // num -> [lap start ms by lap]
     for (const l of arr(laps)) {
       const n = num(l && l.driver_number), k = lapNo(l && l.lap_number), t = Date.parse(l && l.date_start || "");   // a 1e9 index would make lapOf walk 1e9 slots
@@ -324,6 +324,7 @@ const DataRealRace = (function () {
     const cum = typeof RealRace !== "undefined" && RealRace.cumTable ? RealRace.cumTable(script) : null;
     if (!cum) return [];
     const running = [], stopped = [];
+    const confidence = timingConfidence(script, cum);
     for (const d of script.drivers || []) {
       const row = cum[d.num];
       const pits = d.pits || [];
@@ -333,21 +334,69 @@ const DataRealRace = (function () {
       if (row.length > lap || down) running.push({ num: d.num, code: d.code, down, t: d.laps[lap - 1] > 0 ? d.laps[lap - 1] : null, cum: row[Math.min(lap, done)], pitIn: pits.indexOf(lap) >= 0, pitOut: pits.indexOf(lap - 1) >= 0, tyre: compoundAt(d, lap), out: false });
       else stopped.push({ num: d.num, code: d.code, t: null, cum: null, done: row.length - 1, pitIn: false, pitOut: false, tyre: compoundAt(d, row.length - 1), out: true });
     }
+    for (const r of running) r.approximate = !!(confidence[r.num] && confidence[r.num][Math.min(lap, cum[r.num].length - 1)]);
     running.sort((a, b) => a.down - b.down || a.cum - b.cum);
     stopped.sort((a, b) => b.done - a.done);
     const lead = running.length ? running[0].cum : 0;
     running.forEach((r, i) => {
       r.pos = i + 1;
+      r.gapApproximate = r.approximate || !!(running[0] && running[0].approximate);
+      r.intervalApproximate = r.approximate || !!(i && running[i - 1].approximate);
       r.gap = r.down ? null : +(r.cum - lead).toFixed(3);   // a lap down is not a time gap: the board says "+N LAP"
       r.interval = r.down ? null : i ? +(r.cum - running[i - 1].cum).toFixed(3) : 0;
     });
     stopped.forEach((r, i) => { r.pos = running.length + i + 1; r.gap = null; r.interval = null; });
     return running.concat(stopped);
   }
+  // Display-only provenance; the cumulative times and simulator remain unchanged.
+  function timingConfidence(script, cum) {
+    const out = {};
+    for (const d of script.drivers || []) {
+      const row = cum[d.num] || []; let filled = false;
+      out[d.num] = row.map((_, i) => { if (i && !((d.laps || [])[i - 1] > 0)) filled = true; return filled; });
+    }
+    return out;
+  }
   function compoundAt(d, lap) {
     let c = null;
     for (const st of d.stints || []) if (st.from <= lap) c = st.c;
     return c ? c[0] : null;
+  }
+
+  /** Observed crossings only: never use cumTable's median-filled laps here. */
+  function pitDuel(script, aNum, aStop, bNum, bStop) {
+    const a = script.drivers.find((d) => d.num === +aNum), b = script.drivers.find((d) => d.num === +bNum);
+    const before = Math.min(+aStop, +bStop) - 1, after = Math.max(+aStop, +bStop) + 1;
+    const unavailable = (reason) => ({ available: false, reason, startLap: Math.max(1, before) });
+    if (!a || !b || a === b || !(a.pits || []).includes(+aStop) || !(b.pits || []).includes(+bStop)) return unavailable("Choose two drivers and one stop each.");
+    if (before < 1 || after > script.laps || a.dnf || b.dnf || a.dns || b.dns || a.lapsDone < after || b.lapsDone < after) return unavailable("Unavailable for retirement, lap-down or incomplete timing.");
+    const crossing = (d, lap) => {
+      const start = (d.lapStart || [])[lap - 1], duration = (d.laps || [])[lap - 1];
+      return typeof start === "number" && isFinite(start) && typeof duration === "number" && isFinite(duration) && duration > 0 ? start + duration : null;
+    };
+    // Every selected lap must be present; a missing intermediate sample can hide a lap-down interval.
+    for (let lap = before; lap <= after; lap++) {
+      const x = crossing(a, lap), y = crossing(b, lap);
+      if (x === null || y === null) return unavailable("Unavailable: missing real lap crossings.");
+      if (Math.abs(x - y) >= Math.min(a.laps[lap - 1], b.laps[lap - 1])) return unavailable("Unavailable: possible lap-down mismatch.");
+    }
+    const gapBefore = crossing(a, before) - crossing(b, before), gapAfter = crossing(a, after) - crossing(b, after);
+    return { available: true, before, after, startLap: before, gapBefore, gapAfter, change: gapAfter - gapBefore,
+      compounds: [a, b].map((d) => (compoundAt(d, before) || "—") + " → " + (compoundAt(d, after) || "—")),
+      caution: (script.cautions || []).some((c) => c.from <= after && (c.to || c.from) >= before),
+      rain: script.rain ? script.rain.slice(before, after + 1).some(Boolean) : null };
+  }
+
+  /** Download facts, separate from sporting retirement and cache identity. */
+  function traceDetails(script, traces) {
+    return script.drivers.map((d) => {
+      const raw = traces && traces.cars && traces.cars[d.num], count = raw ? Math.floor(raw.length / 3) : 0;
+      const gaps = [];
+      for (let i = 3; i < count * 3; i += 3) if (raw[i] - raw[i - 3] > 3) gaps.push([raw[i - 3], raw[i]]);
+      return { num: d.num, code: d.code, dns: !!d.dns, retired: !!d.dnf && !d.dns, count,
+        start: count ? raw[0] : null, end: count ? raw[(count - 1) * 3] : null, gaps,
+        retry: !!(traces && (traces.failed || []).includes(d.num)) };
+    });
   }
 
   /** One entry per real lap: who led, the passes, the stops, who went out, the
@@ -370,7 +419,7 @@ const DataRealRace = (function () {
         rain: !!(Array.isArray(script.rain) && script.rain[lap]),
         passes: (script.passes || []).filter((p) => p.lap === lap).map((p) => ({ by: code(p.by), over: code(p.over), pos: p.pos })),
         pits: board.filter((r) => r.pitIn).map((r) => r.code),
-        out: (script.drivers || []).filter((d) => d.dnf && (d.lapsDone | 0) + 1 === lap && (d.lapsDone | 0) < laps).map((d) => d.code),
+        out: (script.drivers || []).filter((d) => d.dnf && !d.dns && !d.dsq && (d.lapsDone | 0) + 1 === lap && (d.lapsDone | 0) < laps).map((d) => d.code),
         fastest: fastest ? { code: fastest.code, t: fastest.t } : null,
       });
     }
@@ -410,8 +459,8 @@ const DataRealRace = (function () {
   }
 
   // ── Fetching: one script per session, through F1API's queue and rate window ──
-  function fetchRaw(sessionKey) {
-    const q = (path, opts) => F1API.request(OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey), TTL, opts);
+  function fetchRaw(sessionKey, fresh) {
+    const q = (path, opts) => F1API.request(OPENF1 + path + "session_key=" + encodeURIComponent(sessionKey), TTL, fresh ? Object.assign({}, opts, { cache: false }) : opts);
     return Promise.all([
       q("/sessions?"), q("/drivers?"), q("/laps?", { cache: false }), q("/stints?"), q("/pit?"), q("/overtakes?"),
       q("/race_control?"), q("/weather?"), q("/session_result?"), q("/position?"), q("/team_radio?"),
@@ -645,13 +694,15 @@ const DataRealRace = (function () {
     function tracks() { return typeof Tracks !== "undefined" && Tracks.LIST ? Tracks.LIST : []; }
 
     /** The script for a session: the cache, else nine OpenF1 requests. */
-    function scriptFor(sessionKey) {
-      const hit = cached(sessionKey);
-      if (hit) return Promise.resolve(hit);
-      return fetchRaw(sessionKey).then((raw) => {
+    function scriptFor(sessionKey, fresh, current) {
+      const hit = !fresh && cached(sessionKey);
+      if (hit) return Promise.resolve(Object.assign({}, hit, { provenance: "cached" }));
+      return fetchRaw(sessionKey, !!fresh).then((raw) => {
+        if (current && !current()) throw new Error("cancelled");
         const script = build(raw, findTeam, tracks());
-        if (script.complete && script.drivers.length) remember(script); else forgetRaw(sessionKey);
-        return script;
+        if (!script.drivers.length) throw new Error(NO_RACE_MSG);
+        if (script.complete) remember(script); else if (!fresh) forgetRaw(sessionKey);
+        return Object.assign({}, script, { provenance: "fetched" });
       });
     }
 
@@ -719,7 +770,7 @@ const DataRealRace = (function () {
       const ev = {};
       const add = (lap, text) => { if (lap >= 1 && lap <= script.laps) (ev[lap] = ev[lap] || []).push(text); };
       for (const w of script.cautions || []) add(w.from, w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VSC");
-      for (const d of script.drivers || []) { if (d.dnf && d.lapsDone >= 0) add(d.lapsDone + 1, d.code + " out"); }
+      for (const d of script.drivers || []) { if (d.dnf && !d.dns && !d.dsq && d.lapsDone >= 0) add(d.lapsDone + 1, d.code + " out"); }
       const rain = Array.isArray(script.rain) ? script.rain : [];
       for (let n = 1; n <= script.laps; n++) if (rain[n] && !rain[n - 1]) add(n, "rain");
       return ev;
@@ -730,6 +781,7 @@ const DataRealRace = (function () {
       const field = el("label", "dh-pick-field");
       field.appendChild(el("span", "dh-pick-label", "DRIVER"));
       const pick = el("select", "dh-pick-select");
+      pick.setAttribute("aria-label", "DRIVER");
       const seated = script.drivers.filter((d) => !seats || seats.has(d.num));
       if (!seated.some((d) => d.code === seatCode)) seatCode = seated.length ? seated[0].code : null;
       seated.forEach((d) => {
@@ -765,6 +817,9 @@ const DataRealRace = (function () {
       if (!canReplay) { row.appendChild(el("span", "dh-lr-meta", "Real positions need a script with timestamps — reopen the tab to refetch it.")); return row; }
       const state = el("span", "dh-lr-meta"); state.setAttribute("role", "status");
       row.appendChild(state);
+      const coverage = el("details", "dh-lr-meta");
+      coverage.appendChild(el("summary", null, "Downloaded feed coverage"));
+      const coverageBody = el("div"); coverage.appendChild(coverageBody); row.appendChild(coverage);
       // A race loaded on an earlier visit is in IndexedDB: say so once it answers (a repaint, not a fetch).
       const progress = el("progress"); progress.max = script.drivers.length;
       progress.setAttribute("aria-label", "Download real car positions"); progress.hidden = true; row.appendChild(progress);
@@ -776,7 +831,7 @@ const DataRealRace = (function () {
         requestGen++; loading = null; traceError = "Download cancelled. RETRY keeps the cars already loaded.";
         F1API.cancelAll(); updateReplayRow();
       });
-      replayUi = { script, slot, state, progress, load, highlights, full, cancel };
+      replayUi = { script, slot, state, coverage, coverageBody, progress, load, highlights, full, cancel };
       updateReplayRow();
       const generation = requestGen;
       if (!have && !loading) traceGet(script.sessionKey, script).then((hit) => {
@@ -788,6 +843,17 @@ const DataRealRace = (function () {
       if (!replayUi) return;
       const u = replayUi, sk = u.script.sessionKey, tr = traceFits(traces, u.script) ? traces : null;
       const busy = loading && loading.sessionKey === sk, failed = tr && tr.failed ? tr.failed : [];
+      u.coverage.hidden = !tr;
+      clear(u.coverageBody);
+      if (tr) {
+        u.coverageBody.appendChild(el("p", null, "Times are seconds from lights out. Feed gaps or endings do not indicate a sporting retirement. Gaps over 3 seconds are listed."));
+        traceDetails(u.script, tr).forEach((d) => {
+          const seconds = (t) => t.toFixed(1) + "s";
+          const gaps = d.gaps.slice(0, 12).map((g) => seconds(g[0]) + "–" + seconds(g[1])).join(", ") + (d.gaps.length > 12 ? " (" + d.gaps.length + " gaps total)" : "");
+          u.coverageBody.appendChild(el("div", null, d.code + ": " + (d.dns ? "DNS" : !d.count ? "missing feed" : d.count + " samples · " + seconds(d.start) + "–" + seconds(d.end)) +
+            (d.retired ? " · classified retirement" : "") + (d.retry ? " · retry available" : "") + (gaps ? " · gaps " + gaps : "")));
+        });
+      }
       u.state.textContent = busy ? "LOADING REAL POSITIONS · " + loading.done + " / " + loading.total + " CARS"
         : traceError || (tr ? failed.length ? "PARTIAL POSITIONS · RETRY " + failed.map((n) => (u.script.drivers.find((d) => d.num === n) || {}).code || n).join(", ") : "REAL POSITIONS READY · " + Object.keys(tr.cars).length + " CARS"
           : "REAL POSITIONS · ABOUT 60 MB ON FIRST LOAD · SAVED ON THIS DEVICE");
@@ -847,6 +913,36 @@ const DataRealRace = (function () {
       };
       if (traceFits(traces, script)) return go(traces);
       return loadTraces(script, slot, go);
+    }
+
+    function pitDuelCard(script, slot) {
+      const card = el("section", "dh-livecard");
+      card.appendChild(el("h3", "dh-section", "PIT-STOP DUEL"));
+      card.appendChild(el("p", "dh-live-sub", "Observed net gap change across two stops. A negative change means the first driver gained time; this does not isolate the cause."));
+      const fields = el("div", "dh-pick-fields"), picks = [];
+      ["First driver and stop", "Second driver and stop"].forEach((label, i) => {
+        const field = el("label", "dh-pick-field"); field.appendChild(el("span", "dh-pick-label", label));
+        const pick = el("select", "dh-pick-select"); pick.setAttribute("aria-label", label);
+        const blank = el("option", null, "Choose a stop"); blank.value = ""; pick.appendChild(blank);
+        script.drivers.forEach((d) => (d.pits || []).forEach((lap) => {
+          const option = el("option", null, d.code + " · L" + lap); option.value = d.num + ":" + lap; pick.appendChild(option);
+        }));
+        field.appendChild(pick); fields.appendChild(field); picks[i] = pick;
+      });
+      card.appendChild(fields);
+      const result = el("p", "dh-lr-meta"); result.setAttribute("role", "status"); card.appendChild(result);
+      const action = el("button", "dh-pill", "WATCH STOP DUEL"); action.type = "button"; card.appendChild(action);
+      let comparison = null;
+      const refresh = () => {
+        const a = picks[0].value.split(":"), b = picks[1].value.split(":");
+        comparison = pitDuel(script, a[0], a[1], b[0], b[1]); action.disabled = !comparison.available;
+        const signed = (v) => (v >= 0 ? "+" : "") + v.toFixed(3) + "s";
+        result.textContent = comparison.available ? "Observed net gap change: " + signed(comparison.change) + " · L" + comparison.before + " " + signed(comparison.gapBefore) + " → L" + comparison.after + " " + signed(comparison.gapAfter) +
+          " · compounds " + comparison.compounds.join(" / ") + " · " + (comparison.caution ? "caution overlap" : "no recorded caution overlap") + " · " + (comparison.rain === null ? "rain data unavailable" : comparison.rain ? "rain overlap" : "no recorded rain overlap") : comparison.reason;
+      };
+      picks.forEach((pick) => pick.addEventListener("change", refresh));
+      action.addEventListener("click", () => { if (comparison && comparison.available) { const number = +picks[0].value.split(":")[0]; seatCode = script.drivers.find((d) => d.num === number).code; watch(script, slot, comparison.startLap, false); } });
+      refresh(); return card;
     }
 
     /** The race lap by lap: one row per lap with what it held and a JUMP IN; a
@@ -921,8 +1017,8 @@ const DataRealRace = (function () {
         if (r.pos <= 3 && !r.out) row.className = r.pos === 1 ? "dh-lr-p1" : r.pos === 2 ? "dh-lr-p2" : "dh-lr-p3";
         row.appendChild(el("td", null, r.out ? "OUT" : "P" + r.pos));
         row.appendChild(el("td", null, r.code));
-        row.appendChild(el("td", null, r.out ? "L" + r.done : r.down ? "+" + r.down + (r.down > 1 ? " LAPS" : " LAP") : fmtGap(r.gap)));
-        row.appendChild(el("td", null, r.out ? "" : fmtGap(r.interval)));
+        row.appendChild(el("td", null, r.out ? "L" + r.done : r.down ? "+" + r.down + (r.down > 1 ? " LAPS" : " LAP") : (r.gapApproximate ? "≈" : "") + fmtGap(r.gap)));
+        row.appendChild(el("td", null, r.out ? "" : (r.intervalApproximate ? "≈" : "") + fmtGap(r.interval)));
         row.appendChild(el("td", null, fmtLap(r.t)));
         row.appendChild(el("td", null, r.tyre || "—"));
         row.appendChild(el("td", null, r.pitIn ? "IN" : r.pitOut ? "OUT LAP" : ""));
@@ -964,6 +1060,7 @@ const DataRealRace = (function () {
       const pickRow = el("div", "dh-pick-fields");
       pickRow.appendChild(seatPicker(script, seats)); pickRow.appendChild(watchCameraPicker());
       watchCard.appendChild(pickRow); watchCard.appendChild(replayRow(script, slot)); slot.appendChild(watchCard);
+      slot.appendChild(pitDuelCard(script, slot));
 
       const driveCard = el("section", "dh-livecard");
       driveCard.appendChild(el("h3", "dh-section", "DRIVE THIS RACE"));
@@ -1000,7 +1097,7 @@ const DataRealRace = (function () {
         tr.appendChild(who);
         tr.appendChild(el("td", null, d.team));
         tr.appendChild(el("td", null, d.stints.map((s) => (s.c[0] || "?") + (s.to - s.from + 1)).join(" ") || "—"));
-        tr.appendChild(el("td", null, d.dnf ? "DNF L" + d.lapsDone : d.pos != null ? "P" + d.pos : "—"));
+        tr.appendChild(el("td", null, d.dsq ? "DSQ" : d.dns ? "DNS" : d.dnf ? "DNF L" + d.lapsDone : d.pos != null ? "P" + d.pos : "—"));
         const cell = el("td");
         const seated = !seats || seats.has(d.num);
         const go = el("button", "dh-pill", seated ? "JUMP IN" : NO_SEAT_MSG);
@@ -1014,7 +1111,23 @@ const DataRealRace = (function () {
       });
       table.appendChild(tbody);
       entry.appendChild(table); slot.appendChild(entry);
-      slot.appendChild(el("div", "dh-footnote", DATA_CREDIT));
+      const source = el("details", "dh-footnote");
+      source.appendChild(el("summary", null, "Data source and freshness"));
+      source.appendChild(el("p", null, DATA_CREDIT));
+      source.appendChild(el("p", null, "Session " + script.sessionKey + " · " + (script.provenance === "cached" ? "Cached timing" : "Loaded OpenF1 timing") + " · assembled " + (script.fetchedAt && Number.isFinite(Date.parse(script.fetchedAt)) ? new Date(script.fetchedAt).toLocaleString() : "time unavailable for older cache") + ". ≈ gaps include reconstructed untimed laps; these are estimates, not official timing. Normal loads may reuse cached API responses; Refresh requests uncached responses."));
+      const link = el("a", null, "OpenF1 session source");
+      link.href = OPENF1 + "/sessions?session_key=" + encodeURIComponent(script.sessionKey); link.target = "_blank"; link.rel = "noopener noreferrer"; source.appendChild(link);
+      const licence = el("a", null, "CC BY-NC-SA 4.0 licence"); licence.href = "https://creativecommons.org/licenses/by-nc-sa/4.0/"; licence.target = "_blank"; licence.rel = "noopener noreferrer"; source.appendChild(licence);
+      const refresh = el("button", "dh-pill", "REFRESH THIS SESSION"); refresh.type = "button";
+      const status = el("p", null, ""); status.setAttribute("role", "status");
+      refresh.onclick = () => {
+        const generation = bodyGen; refresh.disabled = true; status.textContent = "Refreshing timing…";
+        scriptFor(script.sessionKey, true, () => generation === bodyGen && slot.isConnected !== false && (!isOpen || isOpen())).then((next) => {
+          if (generation !== bodyGen || slot.isConnected === false || (isOpen && !isOpen())) return;
+          traces = null; slot.textContent = ""; paint(next, slot);
+        }, () => { if (generation === bodyGen && slot.isConnected !== false) { refresh.disabled = false; status.textContent = "Refresh failed. The previous replay is still available."; } });
+      };
+      source.appendChild(refresh); source.appendChild(status); slot.appendChild(source);
     }
 
     function jumpIn(script, code) {
@@ -1031,7 +1144,7 @@ const DataRealRace = (function () {
              setWatchCamera: (camera) => { watchCamera = camera; return watchCamera; } };
   }
 
-  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached, remember,
-           fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, TRACE_MAX, DISTANCES, CACHE_KEY, CACHE_MAX };
+  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, timingConfidence, raceBook, fmtLap, fetchRaw, forgetRaw, cached, remember,
+           pitDuel, traceDetails, fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, TRACE_MAX, DISTANCES, CACHE_KEY, CACHE_MAX };
 })();
 Object.freeze(DataRealRace);
