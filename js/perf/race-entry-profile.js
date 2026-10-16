@@ -356,9 +356,9 @@ const RaceEntryProfile = (() => {
       if (owns()) end();
       onFail(e);
     });
-    request.outcome.then((result) => {
+    request.then((result) => {
       if (!owns()) return;
-      if (result.kind !== "committed" || !sessionEntry.owns(result)) { clearMenuEntrySession(); end(); }
+      if (result === false || (result && result.kind === "canceled")) { clearMenuEntrySession(); end(); }
       else { mark("session:committed"); clearMenuEntrySession(); presentationEnabled = true; }
     }, () => { if (owns()) { clearMenuEntrySession(); end(); } });
     return request;
