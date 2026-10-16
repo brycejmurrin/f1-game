@@ -47,7 +47,14 @@
  * Anything it cannot resolve is measured as before. bash-guard.sh and
  * sync-pr.mjs --push call it this way.
  *
- * Exit: 0 ok, 1 hold, 2 bad args, 3 no token / API unreachable.
+ * THE ONE WAITER (#2383). `--wait <min>` blocks in ONE background command instead of a
+ * send_later → wake → re-run → narrate loop: it polls every `--interval` s (default 30, min 10),
+ * prints one line per poll with the in-flight/queued TREND (`134→112→72`), and exits 0 on
+ * `= queue ok`, 124 on timeout. Hysteresis: after a hold it stays "hold" until ok has held
+ * for 2 min (HYSTERESIS_MS), so one quiet poll between two bursts is not a green light.
+ * An API error is retried; three in a row exit 3.
+ *
+ * Exit: 0 ok, 1 hold, 2 bad args, 3 no token / API unreachable, 124 --wait timeout.
  *
  * REST (read 2026-10-14):
  *   https://docs.github.com/en/rest/actions/workflow-runs?apiVersion=2022-11-28#list-workflow-runs-for-a-repository
@@ -299,11 +306,52 @@ export function pushVerdict(text, current, request = api) {
   return { skip: true, why, line: `= queue skip — push starts no CI (${why}): not held` };
 }
 
+/** Minutes of continuous ok that turn a hold into a go (--wait). */
+export const HYSTERESIS_MS = 2 * 60_000;
+export const WAIT_INTERVAL_S = 30;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const arrow = (xs) => xs.slice(-8).join("→");
+
+/**
+ * Poll `measureFn` until the gauge has read ok for HYSTERESIS_MS straight (→ 0),
+ * or `minutes` pass (→ 124). Every poll reports one line ending in the
+ * in-flight / queued trend. Injectable measure, clock and sleep for tests.
+ * @returns {Promise<{code:number, trend:{inFlight:number[], queued:number[]}, last:object|null}>}
+ */
+export async function waitForOk({ minutes, intervalS = WAIT_INTERVAL_S, hysteresisMs = HYSTERESIS_MS, measureFn = measure, now = Date.now, wait = sleep, report = () => {} }) {
+  const deadline = now() + minutes * 60_000;
+  const trend = { inFlight: [], queued: [] };
+  let okSince = null, errors = 0, last = null;
+  for (;;) {
+    const v = measureFn();
+    if (v.error) {
+      if (++errors >= 3) { report(`= queue unknown — API: ${v.error} (3 polls in a row)`); return { code: 3, trend, last }; }
+    } else {
+      errors = 0; last = v;
+      trend.inFlight.push(v.linux.inFlight); trend.queued.push(v.queued);
+      okSince = v.hold ? null : (okSince ?? now());
+      const settled = okSince !== null && now() - okSince >= hysteresisMs;
+      const tail = `trend in-flight ${arrow(trend.inFlight)}, queued ${arrow(trend.queued)}`;
+      if (settled) { report(`${v.line} — ok held ${Math.round((now() - okSince) / 1000)}s; ${tail}`); return { code: 0, trend, last }; }
+      report(okSince !== null
+        ? `= queue settling (ok for ${Math.round((now() - okSince) / 1000)}s of ${Math.round(hysteresisMs / 1000)}s) — ${tail}`
+        : `${v.line.replace(/ — .*/, "")} — ${v.reasons.join("; ")}; ${tail}`);
+    }
+    if (now() + intervalS * 1000 > deadline) {
+      report(`= queue timeout — still ${last ? (last.hold ? "hold" : "settling") : "unknown"} after ${minutes} min; ${last ? `trend in-flight ${arrow(trend.inFlight)}, queued ${arrow(trend.queued)}` : "no reading"}`);
+      return { code: 124, trend, last };
+    }
+    await wait(intervalS * 1000);
+  }
+}
+
 function parseArgs(argv) {
-  const out = { json: false, write: null, push: null };
+  const out = { json: false, write: null, push: null, wait: null, interval: WAIT_INTERVAL_S };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") out.json = true;
+    else if (a === "--wait") { const n = Number(argv[++i]); if (!(n > 0)) return { error: "--wait needs a number of minutes > 0" }; out.wait = n; }
+    else if (a === "--interval") { const n = Number(argv[++i]); if (!(n >= 10)) return { error: "--interval needs seconds ≥ 10" }; out.interval = n; }
     else if (a === "--push") { if (argv[i + 1] === undefined) return { error: "--push needs the push command" }; out.push = argv[++i]; }
     else if (a === "--write") out.write = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i] : DEFAULT_OUT;
     else return { error: `unknown arg: ${a}` };
@@ -313,11 +361,12 @@ function parseArgs(argv) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
-  exitIfHelp(argv, `usage: node tools/ci/queue-depth.mjs [--json] [--write [path]] [--push "<git push command>"]
+  exitIfHelp(argv, `usage: node tools/ci/queue-depth.mjs [--json] [--write [path]] [--push "<git push command>"] [--wait <min> [--interval <s>]]
 
 Counts queued + running Actions JOBS by OS against ${LINUX_SLOTS} Linux / ${MACOS_SLOTS} macOS slots.
 Hold at ≥${LINUX_HOLD} Linux in flight, ≥${QUEUED_HOLD} queued, or ≥${MACOS_SLOTS} macOS. --write defaults to ${DEFAULT_OUT}.
 --push: exit 0 with "= queue skip" when every pushed branch has no open PR or a draft without run-ci.
+--wait <min>: block (run it as ONE background task) until ok has held 2 min; prints the in-flight/queued trend each poll; exit 0 ok, 124 timeout.
 Exit 0 = ok, 1 = hold (commit locally, do not push), 2 = bad args, 3 = API/token.`);
   const args = parseArgs(argv);
   if (args.error) { console.error(`queue-depth: ${args.error}`); process.exit(2); }
@@ -325,6 +374,10 @@ Exit 0 = ok, 1 = hold (commit locally, do not push), 2 = bad args, 3 = API/token
     const cur = spawnSync("git", ["branch", "--show-current"], { cwd: ROOT, encoding: "utf8" }).stdout?.trim() || "";
     const p = pushVerdict(args.push, cur);
     if (p.skip) { console.log(p.line); process.exit(0); }
+  }
+  if (args.wait != null) {
+    const w = await waitForOk({ minutes: args.wait, intervalS: args.interval, report: (l) => console.log(l) });
+    process.exit(w.code);
   }
   const v = measure();
   if (v.error) { console.log(`= queue unknown — API: ${v.error}`); process.exit(3); }
