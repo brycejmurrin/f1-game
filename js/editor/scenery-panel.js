@@ -35,9 +35,12 @@ const DesignerScenery = (function () {
     const gaps = Object.assign({}, TrackDesignerProps.DEFAULT_GAP);
     const summary = el("div", "td-group"); summary.dataset.role = "theme-summary";
     const activeName = el("div", "td-label");
+    const lookSummary = el("div", "td-hint"); lookSummary.dataset.role = "look-summary";
+    const resetLook = btn("RESET ATMOSPHERE", "sel-chip", () => onPreset("default"));
+    resetLook.setAttribute("aria-label", "Reset time of day, trees and crowd to theme defaults");
     const blurb = el("div", "td-hint"); blurb.dataset.role = "theme-blurb";
     blurb.setAttribute("aria-live", "polite");
-    summary.append(activeName, blurb);
+    summary.append(activeName, lookSummary, resetLook, blurb);
     const searchRow = el("div", "td-chips"); searchRow.dataset.role = "theme-search";
     const search = el("input", "td-input"); search.type = "search";
     search.placeholder = "Find a theme…"; search.setAttribute("aria-label", "Find a scenery theme");
@@ -198,11 +201,16 @@ const DesignerScenery = (function () {
     placementGroup.append(selectedObject, placement, target, sides, gap, hint, actions);
     propsGroup.append(library, placementGroup, placedGroup);
     const panels = { themes: themePanel, atmosphere, objects: propsGroup };
+    const scrollPositions = new Map();
     function showSection(id) {
+      const rail = root.closest(".td-rail");
+      if (rail) scrollPositions.set(section, rail.scrollTop);
       section = panels[id] ? id : "themes";
       blurb.hidden = section !== "themes";
       for (const [key, panel] of Object.entries(panels)) panel.hidden = key !== section;
       for (const b of nav.children) { const on = b.dataset.scenerySection === section; pressed(b, on); b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; }
+      const target = section;
+      if (rail) rail.scrollTop = scrollPositions.get(target) || 0;
     }
     for (const [id, panel] of Object.entries(panels)) {
       const b = btn(id.toUpperCase(), "sel-chip", () => showSection(id)); b.dataset.scenerySection = id;
@@ -239,6 +247,7 @@ const DesignerScenery = (function () {
       for (const key of Object.keys(lookRows)) for (const b of lookRows[key].children) if (b.dataset.look) pressed(b, b.dataset.look === key + ":" + look[key]);
       for (const b of presets.children) pressed(b, LOOK_ROWS.every(([key]) => PRESETS[b.dataset.preset][key] === look[key]));
       const c = TrackDesignerProps.counts(d.props);
+      lookSummary.textContent = look.time.toUpperCase() + " · TREES " + look.trees.toUpperCase() + " · CROWD " + look.crowd.toUpperCase() + " · " + c.total + "/" + TrackDesignerProps.TOTAL + " OBJECTS";
       selectedObject.textContent = TrackDesignerProps.LABELS[kind] + " · " + TrackDesignerProps.DESCRIPTIONS[kind];
       empty.hidden = c.total > 0;
       rangeActions.hidden = placementMode !== "range"; swap.disabled = state.sel < 0 || state.span < 0 || state.sel === state.span;

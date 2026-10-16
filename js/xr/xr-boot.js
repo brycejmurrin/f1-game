@@ -236,9 +236,9 @@ const XrBoot = (function () {
     // on its last injected sample (R3-STATES-2). Drop the remote sample and take
     // the game's pause path; api.pause decides eligibility (race/count, no net).
     if (typeof XrSession.on === "function") XrSession.on((ev, d) => {
-      if (!(ev === "end" || (ev === "visibility" && d && d.state !== "visible"))) return;
-      if (ev !== "end" && typeof Input !== "undefined" && Input.remoteLost) { try { Input.remoteLost(); } catch (_) { /* */ } }
-      if (api && typeof api.pause === "function") { try { api.pause(ev === "end" ? "xr-end" : "xr-hidden"); } catch (_) { /* */ } }
+      if (!(ev === "reset" || ev === "end" || (ev === "visibility" && d && d.state !== "visible"))) return;
+      if (ev !== "end" && ev !== "reset" && typeof Input !== "undefined" && Input.remoteLost) { try { Input.remoteLost("xr"); } catch (_) { /* */ } }
+      if (api && typeof api.pause === "function") { try { api.pause(ev === "reset" ? "xr-reset" : ev === "end" ? "xr-end" : "xr-hidden"); } catch (_) { /* */ } }
     });
     _bound = true;
   }
@@ -310,15 +310,11 @@ const XrBoot = (function () {
    * presentXR. Returns null when not in XR.
    */
   const _cullVP = new Float32Array(16), _cullEyes = [];
+  const _forward = [0, 0, 1], _up = [0, 1, 0];
   function applyEyes(frame, camEye, camTgt, camUp) {
     if (!comfort() || typeof XrSession === "undefined" || typeof XrRig === "undefined") return null;
-    const fwd = [
-      (camTgt[0] - camEye[0]),
-      (camTgt[1] - camEye[1]),
-      (camTgt[2] - camEye[2]),
-    ];
-    const up = camUp || [0, 1, 0];
-    XrSession.setAnchor(camEye, fwd, up);
+    for (let i = 0; i < 3; i++) _forward[i] = camTgt[i] - camEye[i];
+    XrSession.setAnchor(camEye, _forward, camUp || _up);
     const gfx = _boundGfx;
     const layer = gfx && typeof gfx.xrLayer === "function" ? gfx.xrLayer() : (gfx && gfx._xrLayer) || null;
     const eyes = XrSession.eyeFrames(layer);
