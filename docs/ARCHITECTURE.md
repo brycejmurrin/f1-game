@@ -120,6 +120,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
 | `puddles.js` | `Puddles` | tag | Puddles: the ONE reference for the standing-water mask the three lit shaders hand-mirror (GLX glsl-lit.js, TLX tsl-lit.js, WGX wgsl-chunks.js). |
+| `compatibility-recovery.js` | `GfxRecovery` | tag | a player-controlled escape from a known failed WebGPU renderer. |
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
 | `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
 
@@ -271,6 +272,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `identity.js` | `SceneryIdentity` | LAZY_TRACK_BUILD | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `pits.js` | `SceneryPits` | LAZY_TRACK_BUILD | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
 | `venue.js` | `SceneryVenue` | LAZY_TRACK_BUILD | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
+| `guards.js` | `SceneryGuards` | LAZY_TRACK_BUILD | SceneryGuards: the road / pit-complex guards of TrackBuildProps (onRoadHit, rejBox, rejRad, onTrack). |
 | `build-props.js` | `TrackBuildProps` | LAZY_TRACK_BUILD | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/track/`**

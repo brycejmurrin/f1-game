@@ -63,7 +63,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
    (`etimes` does not track wall clock here); kill a busy Chrome of yours by a listed PID (`pkill -f` is hook-refused). The MCP servers at 0 % are the harness's.
 8. A timeout on a busy box measures the machine: check `/proc/loadavg` (< 3) and for a live `playwright test` first; re-run alone only when the verdict matters.
    On CI, `cancelled` with zero failures is a timeout until proven otherwise — EXCEPT the designed one: a draft PR's run and its `ready_for_review` run share a group on purpose, so marking it ready cancels the fast run on the same `head_sha` seconds in (dedupe, not a red).
-9. Stopping is allowed: a pushed change that names its unverified groups beats an hour of SwiftShader. Never widen a tolerance or skip a test to get green (`waitForFunction` polling: `wait-polling-lint.mjs`).
+9. Stopping is allowed: a pushed change that names its unverified groups beats an hour of SwiftShader. Never widen a tolerance (`tools/check/tolerance-diff.mjs` fails it on a PR; excuse a row in `tests/data/tolerance-exceptions.json`) or skip a test to get green (`waitForFunction` polling: `wait-polling-lint.mjs`).
    A pass that needed a retry is a red: list the flaky test in the PR like a not-run group, then fix it or quarantine it in `tests/data/flaky-quarantine.json`; `APEX_FAIL_ON_FLAKY=1` makes the runner fail it.
 10. Never hand a subagent a browser run ("report it unverified"; `bash-guard.sh` refuses it inside one). Worktrees start at the session SHA
     (`worktree.baseRef: "head"`); `track-surveyor` edits in its own, so merge its branch into yours before you verify (survey-track §Hand-back).

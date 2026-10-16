@@ -187,10 +187,41 @@ test("renderer-boot caps requestAdapter and idle-preloads three vendor", () => {
   assert.match(boot, /rel = "modulepreload"/);
 });
 
-test("Assets strip decode yields between layers", () => {
-  const src = read("js/render/shared/assets.js");
-  assert.match(src, /function _yieldDecode\(\)/);
-  assert.match(src, /scheduler\.yield/);
-  assert.match(src, /queueMicrotask/);
-  assert.match(src, /if \(n\+\+\) await _yieldDecode\(\)/);
+test("Assets strip decode gives a future task a turn between successive layers", async () => {
+  for (const schedulerAvailable of [true, false]) {
+    const turns = [], decoded = [], closed = [];
+    let uploads = 0, microtasks = 0, installed = 0;
+    const defer = (kind) => new Promise((resolve) => turns.push({ kind, run: resolve }));
+    const ctx = vm.createContext({
+      Log: { info() {}, enabled: () => false },
+      queueMicrotask(fn) { microtasks++; queueMicrotask(fn); },
+      setTimeout(fn, delay) { assert.equal(delay, 0); turns.push({ kind: "timer", run: fn }); return turns.length; },
+      ...(schedulerAvailable ? { scheduler: { yield: () => defer("scheduler") } } : {}),
+      fetch: async (url) => url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: { size: 1, albedo: "albedo.png",
+          layers: [{ mat: 1, scale: 1 }, { mat: 2, scale: 1 }, { mat: 3, scale: 1 }] } }) }
+        : { ok: true, blob: async () => ({ size: 3 }) },
+      createImageBitmap: async (_, x, y) => { decoded.push(y); return { close() { closed.push(y); } }; },
+    });
+    const assets = vm.runInContext(read("js/render/shared/assets.js") + ";Assets", ctx);
+    assets.init({ createTextureArray() { uploads++; return {}; }, setMaterialMaps() { installed++; } });
+    const pending = assets.load();
+    const settle = () => new Promise(setImmediate);
+    await settle();
+    assert.deepEqual(decoded, [1], "only the first layer may decode before another task runs");
+    assert.equal(uploads, 0);
+    for (const layer of [2, 3]) {
+      assert.equal(turns.length, 1, "one continuation awaits a real task boundary");
+      const turn = turns.shift();
+      assert.equal(turn.kind, schedulerAvailable ? "scheduler" : "timer", "prefer scheduler; timer fallback must beat a microtask");
+      turn.run(); await settle();
+      assert.deepEqual(decoded, Array.from({ length: layer }, (_, i) => i + 1));
+      if (layer === 2) assert.equal(uploads, 0, "do not upload a partially decoded strip");
+    }
+    assert.equal(await pending, true);
+    assert.equal(microtasks, 0, "microtask-only continuation would drain all layers before the next task");
+    assert.equal(uploads, 1); assert.equal(installed, 1);
+    assert.deepEqual(closed, [1, 2, 3], "decoded owners close exactly once after the completed upload");
+    assert.equal(turns.length, 0);
+  }
 });

@@ -702,6 +702,7 @@ const GLXChunked = (function () {
       const eye = F.eye, cd = F.cullDist, cf = F.cullFog;
       const ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
       const prevProg = gl.getParameter(gl.CURRENT_PROGRAM);
+      const prevCull = !!gl.getParameter(gl.CULL_FACE);
       gl.useProgram(_occProg);
       gl.uniformMatrix4fv(_occU.vp, false, F.viewProj);
       bindVAO(_occVao);
@@ -709,6 +710,7 @@ const GLXChunked = (function () {
       setDepthMask(false);
       setBlend(false);
       gl.depthFunc(gl.LEQUAL);
+      setCull(false);   // inward proxy faces must still conservatively cover the bounds
       try {
         for (const mesh of meshes) {
           const st = _occStateOf(mesh);
@@ -731,6 +733,12 @@ const GLXChunked = (function () {
             const cand = Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
                          !Frustum.radialCulled(ch.min, ch.max, ex, ey, ez, cd, cf);
             if (!cand) { st.flag[i] = 1; continue; }   // out of frustum: not our business, and never left hidden
+            // A clipped or enclosing proxy cannot establish occlusion safely.
+            const mn = ch.min, mx = ch.max, near = _fcPlanes[4];
+            const inside = eye && ex >= mn[0] && ex <= mx[0] && ey >= mn[1] && ey <= mx[1] && ez >= mn[2] && ez <= mx[2];
+            const nearMin = near[3] + near[0] * (near[0] >= 0 ? mn[0] : mx[0])
+              + near[1] * (near[1] >= 0 ? mn[1] : mx[1]) + near[2] * (near[2] >= 0 ? mn[2] : mx[2]);
+            if (inside || nearMin <= 0) { st.flag[i] = 1; continue; }
             tested++;
             if (st.flag[i] === 0) culled++;
             if (st.sent[i]) continue;                  // one query in flight per chunk
@@ -743,8 +751,8 @@ const GLXChunked = (function () {
             gl.uniform3f(_occU.mn, ch.min[0], ch.min[1], ch.min[2]);
             gl.uniform3f(_occU.mx, ch.max[0], ch.max[1], ch.max[2]);
             gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, st.q[i]);
-            gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
-            gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
+            try { gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0); }
+            finally { gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE); }
             st.sent[i] = 1; st.at[i] = _occFrame; queries++;
           }
         }
@@ -756,6 +764,7 @@ const GLXChunked = (function () {
         // own test and the sky goes black for every frame after the first
         // occlusion pass. Only reachable with apex26.occlusionCull=1, which
         // ships OFF — which is why nothing caught it.
+        setCull(prevCull);
         gl.depthFunc(gl.LEQUAL);
         gl.colorMask(true, true, true, true);
         setDepthMask(true);

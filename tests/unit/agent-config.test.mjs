@@ -834,6 +834,19 @@ test("bash-guard's `if:` filters parse, and every policed command shape still re
     assert.ok(!reaches(cmd), `read-only command should skip bash-guard: ${cmd}`);
 });
 
+// #1984: a delegation prompt must not grant a write the track-surveyor edit hook denies.
+test("the survey-track delegation template owns exactly what the track-surveyor hook lets it write (#1984)", () => {
+  const tpl = fs.readFileSync(path.join(ROOT, ".claude/skills/survey-track/references/delegation.md"), "utf8");
+  const owned = tpl.split("\n").find((l) => l.startsWith("OWNED"));
+  assert.ok(owned, "template has an OWNED line");
+  assert.match(owned, /js\/circuits\/<id>\.js/);
+  assert.match(owned, /js\/circuits\/scenery\/<id>\.js/);
+  assert.doesNotMatch(owned, /docs\//, "docs/tracks/<id>.md is not writable by the surveyor");
+  assert.match(tpl.split("\n").find((l) => l.startsWith("FORBIDDEN")), /docs\/\*\*/);
+  const hook = fs.readFileSync(path.join(ROOT, ".claude/hooks/protect-files.sh"), "utf8");
+  assert.match(hook, /only js\/circuits\/<id>\.js, js\/circuits\/scenery\/<id>\.js, scratch\/ and\s+#\s+artifacts\//);
+});
+
 // Skill hygiene pins from the 2026-10-16 issue burn-down (#1693 #1688 #1687 #1700).
 {
   const skillsDir = path.join(ROOT, ".claude/skills");
