@@ -127,6 +127,7 @@ not.
 | `sel-` | 35 | `select.css` | `career.css`, `components.css`, `carsetup.css`, `overlays.css`, `race-setup.css`, `tokens.css` |
 | `res-` | 44 | `components.css` | `career.css`, `overlays.css`, `tokens.css` |
 | `hud-` | 83 | `hud.css` | `touch-controls.css`, `responsive.css`, `tokens.css` |
+| `input-` | 2 | `hud.css` | Pause input review and its responsive static chart. |
 | `adv-` | 31 | `tuner.css` | `settings-controls.css`, `components.css`, `carsetup.css`, `overlays.css`, `race-setup.css` |
 | `as-` | 23 | `tuner.css` | `components.css`, `dialogs.css`, `settings.css` |
 | `opt-` | 19 | `tuner.css` | `components.css`, `settings-controls.css`, `settings.css` |

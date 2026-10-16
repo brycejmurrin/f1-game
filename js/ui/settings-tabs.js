@@ -216,6 +216,7 @@ const SettingsNav = (function () {
 
     const doors = Object.fromEntries(Object.entries(routes).filter(([, route]) => route.door).map(([id, route]) => [id, route.door()]));
     for (const [id, door] of Object.entries(doors)) if (door) door.onclick = () => {
+      if (search) search.cancel();
       if (current !== "home") stack.push({ page: current, door, origin: originDoor, scroll: document.getElementById("pm-settings-body")?.scrollTop || 0 });
       originDoor = door;
       // LAZY_AUDIO: MUSIC & SOUND's SettingRows demote the static ‹ › chevrons.
@@ -235,7 +236,8 @@ const SettingsNav = (function () {
       // The caller uses this on every open, including after an interrupted
       // page transition. Clear the previous door so a later BACK cannot return
       // to a stale element from an earlier dialog instance.
-      showCurrent: () => { originDoor = null; direct = false; stack.length = 0; show("home", false); },
+      showCurrent: () => { originDoor = null; direct = false; stack.length = 0; if (search) search.cancel(); show("home", false); },
+      returnToSearch: () => { direct = false; stack.length = 0; show("home", false); return !!search && search.restore(); },
       showDirect: (id, focus) => { direct = true; stack.length = 0; show(id, focus); },
       current: () => current,
       show, back, invalidate: () => { generation++; if (current !== "home") fireLeave(current); current = "home"; direct = false; stack.length = 0; },

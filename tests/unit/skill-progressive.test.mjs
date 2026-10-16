@@ -316,8 +316,8 @@ test("every custom subagent declares name, description, and model", () => {
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
     "agent-surface-reviewer.md", "bloat-auditor.md", "ci-red-triage.md", "ci-watcher.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
-    "merge-desk.md", "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md", "worker.md",
-  ], "thirteen agents since 2026-10-15 (merge-desk and worker added; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-watcher 2026-10-10; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+    "merge-desk.md", "physics-contract-auditor.md", "prior-art-scout.md", "release-auditor.md", "track-surveyor.md", "verify-agent.md", "worker.md",
+  ], "fourteen agents since 2026-10-16 (release-auditor added; merge-desk and worker added; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-watcher 2026-10-10; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
@@ -335,6 +335,8 @@ test("every custom subagent declares name, description, and model", () => {
     // 2026-10-15: Merge Desk readies, arms and launches lane workers — judgement,
     // so it runs on the session's model.
     "merge-desk.md": "inherit",
+    // 2026-10-16: read-only release verification; scan-and-report, so the cheap tier.
+    "release-auditor.md": "haiku",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
