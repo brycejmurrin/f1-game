@@ -1725,3 +1725,17 @@ test("CSS-only changes retain bounded relevant player layout coverage", () => {
   assert.match(src, /kind === "css" \? cssSpecs\(changed\) : routed/);
   assert.doesNotMatch(src, /const lightDiff = .*kind === "css"/);
 });
+
+test("lanes: a run's legs take distinct lanes from a run-number-rotated start", async () => {
+  const { LANES, laneBase } = await import("../../tools/ci/select-specs.mjs");
+  assert.equal(laneBase({}), 0, "no run number (local, tests): lane 0 first");
+  assert.equal(laneBase({ GITHUB_RUN_NUMBER: "12633" }), 12633 % LANES);
+  const specs = ["tests/specs/multiplayer-seats.spec.js", "tests/specs/multiplayer-npeer.spec.js",
+    "tests/specs/hud-layout.spec.js", "tests/specs/ui-scale.spec.js"];
+  const base = LANES - 1;
+  const lanes = shards(fit(specs, 1, { db: EMPTY }), EMPTY, new Set(), base).map((j) => j.lane);
+  assert.ok(lanes.length >= 2, `two legs to wrap: ${lanes}`);
+  assert.ok(lanes.includes(base) && lanes.includes(0), `starts at the rotated lane and wraps: ${lanes}`);
+  assert.equal(new Set(lanes).size, lanes.length, "a run's own legs never share a lane");
+  assert.ok(lanes.every((l) => Number.isInteger(l) && l >= 0 && l < LANES), "every lane is in range");
+});
