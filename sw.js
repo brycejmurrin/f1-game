@@ -293,6 +293,7 @@ async function precacheAssetLists() {
     "js/render/webgpu/wgx-shadow.js",
     "js/render/webgpu/wgx-chunked.js",
     "js/render/webgpu/wgx-post.js",
+    "js/render/webgpu/wgx-roadlut.js",
     "js/render/webgpu/wgx.js",
     "js/render/three/tsl-chunks.js",
     "js/render/three/tsl-lit.js",

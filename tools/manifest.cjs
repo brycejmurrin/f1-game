@@ -878,6 +878,7 @@ const DEFERRED = {
     "js/render/webgpu/wgx-shadow.js",
     "js/render/webgpu/wgx-chunked.js",
     "js/render/webgpu/wgx-post.js",
+    "js/render/webgpu/wgx-roadlut.js",
     "js/render/webgpu/wgx.js",
   ],
   three: [
@@ -1259,6 +1260,7 @@ const DEFERRED_EDGES = [
   ["js/render/webgpu/wgx-shadow.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-chunked.js", "js/render/webgpu/wgx.js"],
   ["js/render/webgpu/wgx-post.js", "js/render/webgpu/wgx.js"],
+  ["js/render/webgpu/wgx-roadlut.js", "js/render/webgpu/wgx.js"],   // wgx.js destructures WGXRoadLut at eval
   ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
   ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
   ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
@@ -1289,6 +1291,7 @@ const PATHS = {
   WGX_SHADOW: "js/render/webgpu/wgx-shadow.js",
   WGX_CHUNKED: "js/render/webgpu/wgx-chunked.js",
   WGX_POST: "js/render/webgpu/wgx-post.js",
+  WGX_ROADLUT: "js/render/webgpu/wgx-roadlut.js",
   WGX: "js/render/webgpu/wgx.js",
   INST_CELLS: "js/render/shared/inst-cells.js",
   GLTF: "js/render/shared/gltf.js",
