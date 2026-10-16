@@ -566,3 +566,93 @@ test('incident timeline: penalty, invalid lap and contact persist in order with 
   api.reset(); tick({}); tick({ penalty: 10 }); api.settle();
   assert.equal(saves.get('incidentLog').sessions.length, 2);
 });
+test('material weather change restarts measured tyre life without changing the stint', () => {
+  const { api, c, G, tick } = fixture();
+  tick({ prog: 150, tyreWear: .1 }, 4);
+  assert.ok(api.forecast().remainingLaps > 0);
+  G.trackWetness = () => .04; tick({ prog: 170, tyreWear: .11 });
+  assert.ok(api.forecast().observedLaps > .5, 'small change keeps history');
+  G.trackWetness = () => .08; tick({ prog: 190, tyreWear: .12 });
+  assert.equal(api.forecast().observedLaps, 0);
+  assert.equal(api.forecast().reachesFinish, null);
+  assert.equal(c.tyreStints, 0); assert.equal(c.tyre.id, 'soft');
+  tick({ prog: 330, tyreWear: .15 }, 4);
+  assert.equal(api.forecast().remainingLaps, null);
+  tick({ prog: 340, tyreWear: .16 });
+  assert.ok(Math.abs(api.forecast().remainingLaps - 10.5) < 1e-10, 'only wet segment wear');
+});
+
+for (const transition of [{ tyreStints: 1 }, { tyre: { id: 'medium' } }, { tyreWear: 0 }, { pitState: 'lane' }])
+  test(`energy history restarts at interruption ${JSON.stringify(transition)}`, () => {
+    const { api, G, tick } = fixture();
+    G.sectorIdx = 1; tick({ prog: 60, energy: .9, tyreWear: .01 }, 2);
+    G.sectorIdx = 2; tick({ prog: 150, energy: .8 }, 3);
+    G.sectorIdx = 0; tick({ prog: 240, energy: .7 }, 3);
+    G.sectorIdx = 1; tick({ prog: 330, energy: .6 }, 3);
+    assert.ok(api.forecast().energyPerLap > 0);
+    G.sectorIdx = 2; tick({ prog: 350, ...transition });
+    assert.equal(api.forecast().energyPerLap, null);
+    assert.ok(api.forecast().sectors.every(s => s === null), 'crossing sector cannot add old-stint sample');
+    tick({ prog: 370, pitState: 'none' });
+    G.sectorIdx = 0; tick({ prog: 430, energy: .5 }, 2);
+    G.sectorIdx = 1; tick({ prog: 490, energy: .4 }, 2);
+    assert.equal(api.forecast().energyPerLap, null, 'two clean sectors cannot complete forecast');
+    G.sectorIdx = 2; tick({ prog: 550, energy: .3 }, 2);
+    G.sectorIdx = 0; tick({ prog: 610, energy: .2 }, 2);
+    assert.ok(Math.abs(api.forecast().energyPerLap - .3) < 1e-10);
+  });
+
+function coolingFixture() {
+  const f = fixture(); f.G.practice = true;
+  f.G.tyres.gripMul = c => c.measuredGrip;
+  Object.assign(f.c, { tyreWear: .1, tyreGrain: .4, tyreBlister: .01, measuredGrip: .8 });
+  f.api.startDrill('cooling'); f.tick({}, 1); f.tick({ prog: 30, lap: 2 });
+  return f;
+}
+function finishCoolingLap(f, fields = {}) {
+  f.tick({ prog: 130 }, 3); f.tick({ prog: 230 }, 3);
+  f.tick({ prog: 330, lap: 3, ...fields }, 3);
+  return f.api.summary().lastDrill;
+}
+test('selected cooling lap reports start/end measurements without awarding mastery', () => {
+  const f = coolingFixture(), last = finishCoolingLap(f, { tyreGrain: .3, measuredGrip: .84 });
+  assert.equal(last.clean, true); assert.equal(last.score, null);
+  assert.match(last.text, /Measured recovery · Grain -10.0pp; grip \+5.0%/);
+  assert.equal(last.recovery.grainStart, .4); assert.equal(last.recovery.grainEnd, .3);
+  assert.equal(last.recovery.gripStart, .8); assert.equal(last.recovery.gripEnd, .84);
+  assert.equal(f.saves.has('circuitMastery'), false);
+  last.recovery.grainStart = 99; assert.equal(f.api.summary().lastDrill.recovery.grainStart, .4);
+});
+test('cooling verdict does not promise recovery from grain alone or dominant blisters', () => {
+  for (const fields of [{ tyreGrain: .3, measuredGrip: .79 }, { tyreGrain: .4, measuredGrip: .84 },
+    { tyreGrain: .3, measuredGrip: .84, tyreBlister: .5 }]) {
+    const last = finishCoolingLap(coolingFixture(), fields);
+    assert.match(last.text, /^No recovery measured/);
+    if (fields.tyreBlister) assert.match(last.text, /Blistering remains/);
+  }
+});
+for (const [reason, alter] of [
+  ['off track', f => { f.c.offroad = true; }], ['contact', f => { f.c.contactT = 1; }],
+  ['pit', f => { f.c.pitState = 'lane'; }], ['invalid', f => { f.c.incidentInvalidLap = true; }],
+  ['caution', f => { f.G.cautionLevel = () => 1; }], ['stint', f => { f.c.tyreStints = 1; }],
+  ['compound', f => { f.c.tyre.id = 'medium'; }], ['wear rollback', f => { f.c.tyreWear = 0; }],
+  ['weather', f => { f.G.trackWetness = () => .06; }], ['track', f => { f.G.track = { total: 300 }; }],
+  ['measurement lost', f => { f.c.measuredGrip = NaN; }], ['practice ended', f => { f.G.practice = false; }],
+  ['position jumped', f => { f.c.prog = 4000; }], ['clock reset', f => { f.G.raceT = -10; }]])
+  test(`cooling lap invalidates ${reason} rather than publishing a recovery`, () => {
+    const f = coolingFixture(); alter(f); f.tick();
+    const last = f.api.summary().lastDrill;
+    assert.equal(last.clean, false); assert.equal(last.recovery, null); assert.equal(last.score, null);
+  });
+test('cooling goal refuses scored/tyres-off starts and ignores the partial lap before the timing line', () => {
+  const f = fixture(); assert.equal(f.api.startDrill('cooling'), false);
+  f.G.practice = true; f.G.tyres.on = () => false; assert.equal(f.api.startDrill('cooling'), false);
+  f.G.tyres.on = () => true; f.G.tyres.gripMul = c => c.measuredGrip;
+  Object.assign(f.c, { tyreGrain: .7, tyreBlister: .01, measuredGrip: .7 });
+  assert.equal(f.api.startDrill('cooling'), true); f.tick({ prog: 20 });
+  assert.equal(f.api.summary().lastDrill, null);
+  f.tick({ prog: 30, lap: 2, tyreGrain: .4, measuredGrip: .8 });
+  const last = finishCoolingLap(f, { tyreGrain: .3, measuredGrip: .84 });
+  assert.equal(last.recovery.grainStart, .4, 'arming partial lap is excluded');
+  f.api.reset(); assert.equal(f.api.summary().drill, null); assert.equal(f.api.summary().lastDrill, null);
+});

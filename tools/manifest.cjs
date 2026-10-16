@@ -291,6 +291,8 @@ const FULL = [
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
+  "js/garage/setup-trials.js", // bounded unscored setup comparison receipts (call-time consumers)
+  "js/race/setup-trial-session.js", // fresh solo trial sessions through normal race entry
   "js/garage/setup-presets.js",
   "js/garage/setup-experiments.js", // reversible tune experiments and aero bench
   "js/garage/setup-sheet.js",
@@ -421,6 +423,7 @@ const FULL = [
   "js/ui/update-check.js",  // UpdateCheck: in-session version.json re-check + UPDATE READY chip (call-time; script-loader asks it)
   "js/ui/race-message-history.js",
   "js/ui/controller-profile-controls.js",
+  "js/ui/condition-cue-controls.js",
   "js/ui/race-mix-controls.js",
   "js/game.js",
 ];

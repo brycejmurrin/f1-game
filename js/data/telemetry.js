@@ -93,8 +93,6 @@ const DataTelemetry = (function () {
         const chipByNum = {};
         const pick = el("div", "dh-driverpick");
         const detail = el("div", "dh-telem-detail");
-        const driverByNum = {};
-        drivers.forEach(function (d) { driverByNum[d.num] = d; });
 
         function selectionChanged() {
           // A changed tray supersedes both outcomes of the pending lap load.

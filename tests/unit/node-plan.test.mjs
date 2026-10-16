@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds } from "../../tools/ci/node-plan.mjs";
+import { plan, toShell, SCOPED, RUN_ALL_PATHS, ALWAYS_ON_TOPICAL, THINNED_VM, topicalTfOverlap, adaptedGroups, circuitsOf, scriptBuilds, unitFileOwnership } from "../../tools/ci/node-plan.mjs";
 import { filesFor } from "../../tools/ci/run-group.mjs";
 import { TOOLING_FAST_FILES } from "../../tools/ci/tooling-fast.mjs";
 import { gateNodeSuites } from "../../tools/ci/deploy.mjs";
@@ -43,6 +43,26 @@ test("a UI-only diff skips the VM slices; the fast scripts are never in the plan
   assert.match(sh, /planned\(\) \{/);
   assert.equal(p.skipTf, true, "matched PR plans thin tooling-fast overlap on topical riders");
   assert.match(sh, /export NODE_PLAN_SKIP_TF=1/);
+});
+
+test("known unit ownership narrows the node plan, while tooling-fast and unknown files stay safe", () => {
+  const vm = plan(["tests/unit/real-replay-vm.test.mjs"]);
+  assert.equal(vm.all, false);
+  assert.ok(vm.run.includes("test:game-vm-b1") && vm.run.includes("test:game-vm-b2"), JSON.stringify(vm));
+  assert.ok(vm.run.includes("test:game-vm-a") && vm.skip.includes("test:node-slow"), JSON.stringify(vm));
+
+  const fast = plan(["tests/unit/select-screen-fixes.test.mjs"]);
+  assert.equal(fast.all, false);
+  assert.deepEqual(fast.run, [], JSON.stringify(fast));
+  assert.ok(fast.skip.includes("test:game-vm-b1"), JSON.stringify(fast));
+
+  const unregistered = "tests/unit/" + "new-" + "unregistered.test.mjs";
+  const unknown = plan([unregistered]);
+  assert.equal(unknown.all, true, JSON.stringify(unknown));
+  assert.match(unknown.reason, /unowned unit file/);
+  const ownership = unitFileOwnership(["tests/unit/real-replay-vm.test.mjs", unregistered]);
+  assert.ok(ownership.owned.get("tests/unit/real-replay-vm.test.mjs")?.includes("game-vm-b1"));
+  assert.deepEqual(ownership.unknown, [unregistered]);
 });
 
 test("PR matched plans skip only tooling-fast ∩ always-on topical; --all and fail-safe do not", () => {
@@ -116,7 +136,7 @@ test("a game.js diff runs every VM slice, unscoped", () => {
 });
 
 test("fail safe: no diff, an infra path, a unit file, a harness, or an unrouted path runs everything", () => {
-  for (const changed of [[], ["package.json"], ["tests/unit/game-vm.test.mjs"], ["tools/lib/game-vm.cjs"],
+  for (const changed of [[], ["package.json"], ["tests/unit/" + "new-unregistered.test.mjs"], ["tools/lib/game-vm.cjs"],
                          ["tests/data/physics-baseline.json"], ["some/unknown/file.txt"], [".github/workflows/ci.yml"]]) {
     const p = plan(changed);
     assert.equal(p.all, true, `${JSON.stringify(changed)} must run everything (${p.reason})`);
