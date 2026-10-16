@@ -929,6 +929,15 @@ const Input = (function () {
       kbSeen = true;
       noteInputSource("keyboard");
     }
+    // Native HUD buttons own their activation keys. Let the browser deliver
+    // their click once; releases still clear keys held before focus moved here.
+    const nativeHudActivation = tag === "BUTTON" && active && active.matches &&
+      active.matches("#btn-cam, #pausebtn, #hud-restore") &&
+      (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter");
+    if (nativeHudActivation) {
+      if (!down) { heldKeys.delete(e.code); syncHeldKeys(); }
+      return;
+    }
     /* COMMAND EATS THE KEY-UP, so Command going down is a release-all.
        On macOS the OS does not deliver key-up to an application while Command
        is held: press W, tap Cmd, let go of W, and NO keyup ever arrives. The
@@ -1518,9 +1527,12 @@ const Input = (function () {
     const dpad = padDpadSteer(pad);
     padSteerAnalog = Math.abs(stick) > 0.001;
     padSteer = padSteerAnalog ? stick : dpad;
+    // Capture/menu presses still enter padPrevButtons below, but cannot arm a
+    // driving toggle — even if their callback closes that owner this poll.
+    const padOwnsDrive = !axisCaptureCb && !padCaptureCb && !(window.UiLayers && window.UiLayers.navOpen());
     // pedals: analog triggers, a wheel's pedal AXES, or the A/B face buttons.
     if (throttleIsToggle()) {
-      if (padActEdge(pad, "throttle")) padThrottleToggle = !padThrottleToggle;
+      if (padOwnsDrive && padActEdge(pad, "throttle")) padThrottleToggle = !padThrottleToggle;
       padThrottle = padThrottleToggle;
       padThrottleVal = padThrottleToggle ? 1 : 0;
     } else {
@@ -1591,7 +1603,7 @@ const Input = (function () {
         if (padActEdge(pad, "radio")) radioPressed = true;
         if (padActEdge(pad, "mirror")) mirrorPressed = true;
         if (lookBackIsToggle()) {
-          if (padActEdge(pad, "lookBack")) padLookBackToggle = !padLookBackToggle;
+          if (padOwnsDrive && padActEdge(pad, "lookBack")) padLookBackToggle = !padLookBackToggle;
           padLookBack = padLookBackToggle;
         } else padLookBack = padActVal(pad, "lookBack") > 0.5;
       }

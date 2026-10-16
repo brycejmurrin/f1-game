@@ -293,6 +293,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/data-lazy-loader.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
+  "tests/unit/data-replay-improvements.test.mjs",
   "tests/unit/data-results.test.mjs",
   // The SCHEDULE tab's date and start time from one instant in the viewer's
   // zone (TZ pinned to Los Angeles), and NEXT against the clock. ~0.1 s.
@@ -334,6 +335,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-builder-config.test.mjs",
   "tests/unit/desktop-native.test.mjs",
   "tests/unit/desktop-notices.test.mjs",
+  "tests/unit/desktop-pack-dry-run.test.mjs",
   // Electron desktop spike: stage allow-list + stamp, native SW/Spotify gates,
   // app:// Range/MIME/traversal (Electron #38749), unpacked-bin helper,
   // ship-filter staged path list (stage-files.mjs).
@@ -849,6 +851,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-entry-vm.test.mjs",
   "tests/unit/session-status.test.mjs",
   "tests/unit/session-stub-surface.test.mjs",
+  "tests/unit/session-transcript.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.

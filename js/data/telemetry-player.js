@@ -75,7 +75,42 @@ const DataTelemetryPlayer = (function () {
       }
 
       bar.appendChild(el("span", "dh-thint", "drag chart to scrub"));
+      if (view.compare) bar.appendChild(buildBrakingDuel(view));
       return bar;
+    }
+
+    function buildBrakingDuel(view) {
+      const panel = el("details", "dh-thint"); panel.appendChild(el("summary", null, "BRAKING ZONE DUEL"));
+      panel.appendChild(el("p", null, "Speed-integrated distance estimate. Two loaded lanes, sampled at equal distance. Brake: 10% → 20%; throttle after braking: 70% → 90%; two distinct consecutive feed samples required. Observed changes do not isolate their cause."));
+      const inputs = [];
+      ["Zone start (metres)", "Zone end (metres)"].forEach(function (label, i) {
+        const wrap = el("label"); wrap.appendChild(el("span", null, label));
+        const input = el("input"); input.type = "number"; input.min = "0"; input.step = "1";
+        input.value = i ? "300" : "0"; input.setAttribute("aria-label", label); wrap.appendChild(input); panel.appendChild(wrap); inputs.push(input);
+      });
+      const result = el("div"); result.setAttribute("role", "status"); panel.appendChild(result);
+      function refresh() {
+        while (result.firstChild) result.removeChild(result.firstChild);
+        const analysis = DataTelemetryModel.brakingDuel(view.primary, view.compare, +inputs[0].value, +inputs[1].value);
+        if (!analysis.available) { result.appendChild(el("p", null, analysis.reason)); return; }
+        result.appendChild(el("p", null, "Observed delta change (comparison minus primary): " + signed(analysis.change, 3) + "s"));
+        analysis.lanes.forEach(function (lane, i) {
+          result.appendChild(el("p", null, dcode((i ? view.compare : view.primary).d)));
+          [["Brake onset", lane.brake], ["Minimum speed", lane.minSpeed], ["Throttle recovery", lane.throttle]].forEach(function (entry) {
+            if (!entry[1]) { result.appendChild(el("span", null, entry[0] + ": unavailable. ")); return; }
+            const metric = entry[1], button = el("button", "dh-tbtn", entry[0] + ": " + Math.round(metric.distance) + "m" + (metric.value === undefined ? "" : " · " + Math.round(metric.value) + " km/h"));
+            button.type = "button";
+            button.addEventListener("click", function () {
+              pauseAnim(view);
+              // The shared chart/map cursor is the primary lane's clock.
+              view.cursorT = timeAtDist(view.primary.cum, metric.distance); view._last = 0; paintFrame(view);
+              if (view.updateSummary) view.updateSummary();
+            });
+            result.appendChild(button);
+          });
+        });
+      }
+      inputs.forEach(function (input) { input.addEventListener("change", refresh); }); refresh(); return panel;
     }
     function setPlayLabel(view) {
       if (!view.playBtn) return;
@@ -176,7 +211,7 @@ const DataTelemetryPlayer = (function () {
       if (g.delta && view.compare) {
         const dP = distAtT(view.primary.cum, refT);
         const delta = timeAtDist(view.compare.cum, dP) - refT;   // >0: compare is behind
-        g.delta.textContent = signed(delta, 2) + "s";
+        g.delta.textContent = isFinite(delta) ? signed(delta, 2) + "s" : "—";
         g.delta.classList.toggle("dh-pos", delta > 0.02);
         g.delta.classList.toggle("dh-neg", delta < -0.02);
       }
@@ -189,7 +224,7 @@ const DataTelemetryPlayer = (function () {
           cell.spd.textContent = (cc && cc.speed !== null) ? Math.round(cc.speed) : "—";
           if (cell.ref) return;
           const dl = timeAtDist(lane.cum, dRef) - refT;   // >0: this lane is behind the ref
-          cell.dl.textContent = signed(dl, 2);
+          cell.dl.textContent = isFinite(dl) ? signed(dl, 2) : "—";
           cell.dl.classList.toggle("dh-pos", dl > 0.02);
           cell.dl.classList.toggle("dh-neg", dl < -0.02);
         });

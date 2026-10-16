@@ -325,6 +325,32 @@ test.describe.parallel("Career — hub", () => {
     await expect(page.locator("#cr-go")).toHaveText("GO RACING");
   });
 
+  test("NEW CAREER number rejects truncated numeric input before saving", async ({ page }) => {
+    await boot(page);
+    await page.locator("#mb-career").click();
+    await page.locator("#cr-left .cr-slot").nth(0).locator(".cr-slot-main").click();
+    const fields = page.locator("#cr-right .cr-input");
+    await fields.nth(0).fill("Number Test");
+    await fields.nth(1).fill("NUM");
+    const number = page.locator('#cr-right input[type="number"]');
+    for (const value of ["1e2", "1.5", "100", "0", ""]) {
+      await number.fill(value);
+      await page.locator("#cr-go").click();
+      await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+      await expect(number).toHaveAttribute("aria-invalid", "true");
+      await expect(page.locator("#cr-right")).toContainText("Number must be 1–99");
+      expect(await page.evaluate(() => localStorage.getItem("apex26.career.driver.0"))).toBeNull();
+    }
+    // Scientific notation is accepted only as its complete, in-range integer.
+    await number.fill("1e1");
+    await page.locator("#cr-go").click();
+    await expect(page.locator("#cr-title")).toHaveText("CAREER 2026");
+    const savedNumber = () => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.career.driver.0")).driver.num);
+    expect(await savedNumber()).toBe(10);
+    await page.reload();
+    expect(await savedNumber()).toBe(10);
+  });
+
   test("the hub reports balance, reputation and the round", async ({ page }) => {
     await boot(page);
     await startCareer(page);

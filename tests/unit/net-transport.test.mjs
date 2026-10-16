@@ -407,7 +407,7 @@ test("NO relay ships by default, because both free ones were measured dead", () 
     + "must say so — the lobby's failure copy branches on it");
 });
 
-test("a credentials URL ships by default, and yours overrides it", async () => {
+test("no credential endpoint ships by default, and yours overrides it", async () => {
   // The relay is a FETCH URL with expiring credentials, not an embedded
   // password — that is the difference between this and the Open Relay static
   // credentials that were retired out from under build 971.
@@ -421,15 +421,13 @@ test("a credentials URL ships by default, and yours overrides it", async () => {
   const turnServer = { urls: ["turn:relay.metered.example:443"], username: "u", credential: "c" };
   global.fetch = async (u) => { seen.push(u); return { json: async () => ({ iceServers: [turnServer] }) }; };
   try {
-    // No apex26.turnApi configured: the shipped default is used.
+    // No apex26.turnApi configured: no credential endpoint is fetched.
     global.localStorage = { getItem: () => null };
     await fresh.prefetchIce();
-    assert.equal(seen.length, 1, "the default credentials URL is fetched");
-    assert.match(seen[0], /^https:\/\/\S+\/api\/v1\/turn\/credentials\?apiKey=/,
-      "and it is a credentials endpoint, not a bare TURN server");
-    assert.equal(fresh.hasRelay(), true, "once it answers, a relay exists");
+    assert.equal(seen.length, 0, "the default path stays STUN-only");
+    assert.equal(fresh.hasRelay(), false, "no relay exists without an explicit endpoint");
 
-    // A player (or a fork) who sets their own must not be moved onto ours.
+    // A player (or a fork) who sets their own endpoint opts in explicitly.
     const mine = load("js/net/transport.js", "NetTransport");
     seen.length = 0;
     global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://mine.example/creds" : null) };
@@ -843,7 +841,7 @@ test("a fetched ICE entry that makes the constructor throw is dropped and rtc() 
     close() {}
   }
   global.RTCPeerConnection = FakePC;
-  global.localStorage = { getItem: () => null };
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://relay.example/creds" : null) };
   global.fetch = async () => ({ json: async () => ({ iceServers: [{ urls: "garbage" }] }) });
   try {
     const fresh = load("js/net/transport.js", "NetTransport");
@@ -880,7 +878,7 @@ test("stats().turn follows the PC's iceServers, not a later hasRelay() flip", as
     close() {}
   }
   global.RTCPeerConnection = FakePC;
-  global.localStorage = { getItem: () => null };
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://relay.example/creds" : null) };
   try {
     const fresh = load("js/net/transport.js", "NetTransport");
     assert.equal(fresh.hasRelay(), false, "control: no relay yet");
@@ -1010,7 +1008,7 @@ test("prefetchIce retains last-good TURN while a TTL refresh is in flight", asyn
   Date.now = () => now;
   let fetchN = 0;
   let resolveSecond;
-  global.localStorage = { getItem: () => null };
+  global.localStorage = { getItem: (k) => (k === "apex26.turnApi" ? "https://relay.example/creds" : null) };
   global.fetch = () => {
     fetchN++;
     if (fetchN === 1) {
