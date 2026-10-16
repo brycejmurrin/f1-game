@@ -40,6 +40,48 @@ test.describe.parallel("Career — the modes screen", () => {
     expect(st.slot).toBe(1);
   });
 
+  for (const flavour of ["driver", "myteam"]) {
+    test(`${flavour}: NUMBER validates the full native value before saving`, async ({ page }) => {
+      const pane = flavour === "driver" ? "#cr-left" : "#cr-right";
+      const key = `apex26.career.${flavour}.0`;
+      await boot(page);
+      await page.evaluate(() => window.__apex.agentHelp());
+      await page.locator("#mb-career").click();
+      await page.locator(`${pane} .cr-slot.empty .cr-slot-main`).first().click();
+      for (const raw of ["1e2", "1.5", "99.9", "0", "100", ""]) {
+        const number = page.getByLabel("NUMBER", { exact: true });
+        await number.fill(raw);
+        const native = await number.evaluate((input) => ({ value: input.value, number: input.valueAsNumber }));
+        expect(native.value).toBe(raw);
+        if (raw) expect(native.number).toBe(Number(raw));
+        await page.locator("#cr-go").click();
+        expect(await page.evaluate((k) => localStorage.getItem(k), key), `${raw}: slot stays empty`).toBeNull();
+        await expect(page.getByLabel("NUMBER", { exact: true })).toHaveAttribute("aria-invalid", "true");
+        await expect(page.getByRole("alert")).toHaveText("Number must be 1–99");
+      }
+      await page.locator("#cr-back").click();
+      await boot(page);   // rejected drafts must not become saves on BACK or reload
+      expect(await page.evaluate((mode) => window.__apex.careerSlots(mode).some((s) => s.used), flavour)).toBe(false);
+      await page.locator("#mb-career").click();
+      for (const [raw, want] of [["1", 1], ["99", 99], ["42", 42], ["1e1", 10]]) {
+        await page.locator(`${pane} .cr-slot.empty .cr-slot-main`).first().click();
+        await page.getByLabel("NUMBER", { exact: true }).fill(raw);
+        await page.locator("#cr-go").click();
+        const saved = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), key);
+        expect(saved.driver.num).toBe(want);
+        if (raw !== "1e1") {
+          await page.locator("#cr-slots").click();
+          const del = page.locator(`${pane} .cr-slot`).first().getByRole("button", { name: /^(Confirm: )?delete /i });
+          await del.click(); await del.click();   // delete only this test's newly created slot
+          expect(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), key)).toBeNull();
+        }
+      }
+      await boot(page);
+      expect(await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).driver.num, key)).toBe(10);
+      expect(await page.evaluate(() => Career.data().driver.num)).toBe(10);
+    });
+  }
+
   test("a used slot continues that career", async ({ page }) => {
     await boot(page);
     await page.evaluate(() => {

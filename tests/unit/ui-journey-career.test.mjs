@@ -123,6 +123,47 @@ test("NEW CAREER START is gated on name / 3-letter code / number 1–99", () => 
   assert.match(js, /draftFieldErr = errs/);
 });
 
+function numberForm(flavour) {
+  const js = read("js/career/career-ui.js"), controls = {}, starts = [];
+  let input;
+  const ctx = {
+    Number, String, Object, draft: { flavour, name: "Number Test", code: "NUM", num: 99 },
+    draftFieldErr: null, draftFrom: null,
+    $: (id) => (controls[id] ||= {}),
+    addField: (_label, _value, _length, onInput) => { input = onInput; return {}; },
+    Career: { active: () => false, start: (d) => { starts.push({ ...d }); return true; } },
+    G: { soundOn: false, openCareer() {} }, buildSetupPanes() {},
+  };
+  vm.createContext(ctx);
+  const field = js.indexOf('const numIn = addField("NUMBER"');
+  const gate = js.indexOf("  function draftErrors(d)");
+  const submit = js.indexOf('  $("cr-go").onclick =');
+  assert.ok(field >= 0 && gate >= 0 && submit >= 0);
+  // Execute the shipped input callback, validator and START handler together.
+  vm.runInContext(js.slice(field, js.indexOf("    right.appendChild(form);", field)), ctx);
+  vm.runInContext(js.slice(gate, js.indexOf('  $("cr-back").onclick', gate)), ctx);
+  vm.runInContext(js.slice(submit, js.indexOf('  $("co-back").onclick', submit)), ctx);
+  return { ctx, starts, enter: (raw) => input(raw), submit: () => controls["cr-go"].onclick() };
+}
+
+for (const flavour of ["driver", "myteam"]) {
+  test(`${flavour}: NUMBER validates the complete input before starting a career`, () => {
+    for (const raw of ["1e2", "1.5", "99.9", "0", "100", "", "Infinity", "12abc"]) {
+      const h = numberForm(flavour);
+      h.enter(raw); h.submit();
+      assert.equal(h.starts.length, 0, `${raw}: invalid input must never reach Career.start`);
+      assert.equal(h.ctx.draftFieldErr.num, "Number must be 1–99", raw);
+    }
+    for (const [raw, want] of [["1", 1], ["99", 99], ["42", 42], ["1e1", 10]]) {
+      const h = numberForm(flavour);
+      h.enter("1.5"); h.submit();
+      h.enter(raw); h.submit();
+      assert.deepEqual(h.starts.map((d) => d.num), [want], `${raw}: correction commits the complete numeric value`);
+      assert.equal(h.ctx.draftFieldErr, null);
+    }
+  });
+}
+
 test("save retry explicitly persists the career before reading its status", () => {
   const source = read("js/ui/select-screen.js");
   const retry = source.slice(source.indexOf("const retrySave ="), source.indexOf("const exportRecovery ="));
