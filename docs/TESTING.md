@@ -1189,6 +1189,15 @@ as quarantine rows in the ledger's current shape — a test that passed only on 
 change). It rewrites one open issue labelled `flaky`; the ledger itself stays a PR with
 an owner and the evidence run.
 
+**Base-red detector (2026-10-16, CI jobs review).** The same workflow runs every
+2 hours in `--base-red` mode over the last 3 h of failed runs: a spec that failed
+first-try on 3 or more unrelated branches, or on 2 including the deploy branch
+(a train), is a red on the base, not on any one diff. It opens, refreshes or
+closes ONE issue labelled `base-red` ("Base red suspects (auto)"). Advisory: the
+label and the issue block nothing; they exist so the tenth session to meet
+the same red looks at the deploy branch first (measured: menu-keyboard
+data-esc-close, 7 PR runs and 3 trains, about 1,000 job-min, triaged ten times).
+
 CSS-only changes select a one-boot title/touch/pause reachability smoke and
 relevant menu goldens; they do not discard the browser plan. A failed or cancelled selected
 matrix is red even if sibling JUnit is clean: missing execution evidence needs a
