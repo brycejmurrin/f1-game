@@ -2161,9 +2161,12 @@ jobs:
           git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || run_all "before-sha $BEFORE unreachable"
           CHANGED=$(git diff --name-only "$BEFORE" "$GITHUB_SHA") || run_all "git diff failed"
           echo "--- changed files ---"; echo "$CHANGED"; echo "---------------------"
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/xr/|tests/specs/vr-emulated\.spec\.js$|tests/helpers/iwer-install\.mjs$|tests/vendor/iwer-2\.5\.0\.min\.js$|playwright\.config\.js$|\.github/workflows/ci\.yml$)'; then
+          # These renderer entry points own XR boot, context compatibility and
+          # stereo layer attach/present/detach; flat-renderer checks cannot prove
+          # those paths. The manifest owns the lazy XR load order.
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/xr/|js/render/renderer-boot\.js$|js/render/glx/glx\.js$|js/render/three/tlx\.js$|tools/manifest\.cjs$|tests/specs/(vr-emulated|xr-plan)\.spec\.js$|tests/helpers/iwer-install\.mjs$|tests/vendor/iwer-2\.5\.0\.min\.js$|playwright\.config\.js$|\.github/workflows/ci\.yml$)'; then
             echo "xr=true" >> "$GITHUB_OUTPUT"
-            echo "RUNNING test:xr: the diff touches WebXR, IWER, or the xr-emulated project"
+            echo "RUNNING test:xr: the diff touches WebXR, its renderer boundaries, lazy roster, IWER, or the xr-emulated project"
           else
             echo "xr=false" >> "$GITHUB_OUTPUT"
             echo "SKIPPING test:xr: nothing in this diff reaches WebXR"
