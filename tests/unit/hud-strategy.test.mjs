@@ -49,7 +49,7 @@ test("undercut: car ahead inside the pit-loss window on older tyres", () => {
 
 function fakeDom() {
   const mk = (tag) => {
-    const el = { tag, hidden: false, attrs: {}, children: [], textContent: "",
+    const el = { tag, hidden: false, style: {}, attrs: {}, children: [], textContent: "",
       setAttribute(k, v) { el.attrs[k] = String(v); }, appendChild(c) { el.children.push(c); return c; } };
     return el;
   };
@@ -95,4 +95,40 @@ test("tick: race + wear only; shows laps, loss, next, and the cue with the rival
 
 test("never reads track curvature (the arc must not reach the driver)", () => {
   assert.doesNotMatch(SRC, /curvature|kCur|Tracks\./);
+});
+
+
+test("estimated pit window uses only finite canonical gap minus loss", () => {
+  const S = load();
+  assert.equal(S.fmtWindow({ gapS: 24, lossS: 21, marginS: 999 }), "EST WINDOW +3 s");
+  assert.equal(S.fmtWindow({ gapS: 17, lossS: 21 }), "EST WINDOW -4 s");
+  assert.equal(S.fmtWindow({ gapS: 21, lossS: 21, caution: true }), "EST WINDOW +0 s · CAUTION");
+  assert.equal(S.fmtWindow({ gapS: null, lossS: 21 }), "EST WINDOW --");
+  for (const est of [null, { gapS: NaN, lossS: 21 }, { gapS: Infinity, lossS: 21 }, { gapS: -1, lossS: 21 }, { gapS: 24, lossS: 0 }, { gapS: 24, lossS: Infinity }]) assert.equal(S.fmtWindow(est), "");
+});
+
+test("estimated tyres short of planned stop has hysteresis and suppresses unknown/no stop", () => {
+  const S = load(), pl = { next: 18, lapsToStop: 8 };
+  assert.equal(S.tyresShort(3, pl, false), true);
+  assert.equal(S.tyresShort(12, pl, true), false);
+  assert.equal(S.tyresShort(7.7, pl, false), false);
+  assert.equal(S.tyresShort(7.7, pl, true), true);
+  assert.equal(S.tyresShort(8, pl, true), false);
+  for (const left of [null, NaN, Infinity, -1]) assert.equal(S.tyresShort(left, pl, true), false);
+  assert.equal(S.tyresShort(3, { next: null, lapsToStop: null }, true), false);
+});
+
+test("strategy tick updates honest window and clears tyre warning on changed or unknown plan", () => {
+  const { root, doc } = fakeDom(), S = load({ document: doc });
+  const p = { lap: 10, rank: 1, prog: 100, speed: 50, tyre: { code: "M" } };
+  let left = 3, est = { gapS: 24, lossS: 21 }, pl = { next: 18, lapsToStop: 8 };
+  const G = { state: "race", session: "race", cars: [p], ranked: [p], tyres: { on: () => true, spent: () => 0.4, lapsLeft: () => left }, pits: { estimate: () => est, lossS: () => 21, planInfo: () => pl } };
+  const val = (k) => root.children.find(r => r.attrs["data-k"] === k).children[1].textContent;
+  S.tick(G, p);
+  assert.match(val("loss"), /EST WINDOW \+3 s/); assert.match(val("next"), /EST TYRES SHORT OF L18/);
+  left = 12; S.tick(G, p); assert.equal(val("next"), "L18");
+  est = null; left = null; S.tick(G, p);
+  assert.equal(val("loss"), "~21 s", "red flag/null estimate never falls back to a window");
+  assert.equal(val("next"), "L18");
+  pl = { next: null, stops: 0 }; left = 1; S.tick(G, p); assert.equal(val("next"), "NO STOP");
 });

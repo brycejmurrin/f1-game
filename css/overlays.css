@@ -1314,6 +1314,7 @@ body:has(dialog:modal) #update-chip { display: none; }
    needs an ellipsis. Sibling of `.res-pos` only, so TT best-lap `.res-pts`
    (no position cell) keeps its clock. */
 body[data-width="narrow"] #results-table > .res-row > .res-pos ~ .res-pts { display: none; }
+body[data-width="narrow"] #results-table > [data-results-part="ranking"] > .res-row > .res-pos ~ .res-pts { display: none; }
 /* TYRE STINT STRIP (js/physics/tyre-model.js stints(), drawn by results-sheet.js
    and only while TYRE WEAR is on). A PROPORTIONAL bar, not a row of chips: each
    segment's width is its share of the car's laps, so a glance down the column
@@ -1403,4 +1404,13 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 #ch-contents a[aria-current="true"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
+
+/* Results stint descriptions share the driver's column and stay inside it. */
+#results .res-name [data-stint-details] { max-width: 100%; font-size: var(--fs-micro); font-weight: normal; }
+#results .res-name [data-stint-details] > summary { cursor: pointer; min-height: var(--tap); align-content: center; }
+#results .res-name [data-stint-details] > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#results .res-name [data-stint-text] { white-space: normal; overflow-wrap: anywhere; }
+
+#results .res-name:has([data-stint-details]) { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
+
 } /* @layer components */

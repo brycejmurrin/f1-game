@@ -27,14 +27,14 @@ test("a failed or cancelled needed job fails the aggregator", () => {
   assert.match(verdict({ smoke: { result: "cancelled" } }).bad[0], /cancelled/);
 });
 
-test("selected cancelled is deferred when selected-verdict succeeded (clean-junit infra-retry)", () => {
+test("a green selected-verdict cannot waive a cancelled selected job", () => {
   const v = verdict({
     selected: { result: "cancelled" },
     "selected-verdict": { result: "success" },
     guards: { result: "success" },
   });
-  assert.equal(v.ok, true);
-  assert.ok(v.skipped.some((s) => /selected: deferred to selected-verdict/.test(s)));
+  assert.equal(v.ok, false);
+  assert.ok(v.bad.some((s) => /selected: cancelled/.test(s)));
 });
 
 test("selected cancelled still fails when selected-verdict also failed", () => {

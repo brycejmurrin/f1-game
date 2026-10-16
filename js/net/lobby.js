@@ -1552,9 +1552,12 @@ const NetLobby = (function () {
       const e = els();
       // The button reads the box, and the box holds whatever got there — a
       // link, or a code inside a message — when no paste event ran (a keyboard
-      // clipboard chip, drag-drop). codeFrom: the same unwrapping deliver() does.
-      const code = codeFrom(codeIn != null ? codeIn : (e.inviteIn ? e.inviteIn.value : ""));
-      if (codeIn != null && e.inviteIn) e.inviteIn.value = codeIn;
+      // clipboard chip, drag-drop). Resolve as deliver() does, before pairing.
+      const readingGen = operationGeneration;
+      const resolved = resolveCode(codeIn != null ? codeIn : (e.inviteIn ? e.inviteIn.value : ""));
+      const code = typeof resolved === "string" ? resolved : await resolved;
+      if (!operationCurrent(readingGen)) return cancelledResult();
+      if (e.inviteIn) e.inviteIn.value = code;
       if (!code.trim()) { say("Paste their invite code first.", true); return { ok: false, error: "empty" }; }
       // Shape first, connection second: a typo is refused as a typo even while
       // join() is still waiting on the ICE prefetch (the transport arrives up
@@ -1613,8 +1616,11 @@ const NetLobby = (function () {
     async function acceptAnswer(codeIn) {
       if (taking && taking === transport) { say("That answer is already being read.", true); return { ok: false, error: "already_accepting" }; }
       const e = els();
-      const code = codeFrom(codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : ""));   // as makeAnswer
-      if (codeIn != null && e.answerIn) e.answerIn.value = codeIn;
+      const readingGen = operationGeneration;
+      const resolved = resolveCode(codeIn != null ? codeIn : (e.answerIn ? e.answerIn.value : ""));
+      const code = typeof resolved === "string" ? resolved : await resolved;
+      if (!operationCurrent(readingGen)) return cancelledResult();
+      if (e.answerIn) e.answerIn.value = code;
       if (!code.trim()) { say("Paste their answer code first.", true); return { ok: false, error: "empty" }; }
       const peek = NetHandshake.peekCode ? NetHandshake.peekCode(code) : { ok: true };   // shape before connection, as makeAnswer
       if (!peek.ok) { say(peek.message, true); return { ok: false, error: peek.error, message: peek.message }; }
@@ -1640,7 +1646,7 @@ const NetLobby = (function () {
     }
 
     const {
-      codeFrom, deliver, scan, stopScan, pasteInto, copy, handOff,
+      resolveCode, deliver, scan, stopScan, pasteInto, copy, handOff,
       drawQr, drawAnswerQr, shareInvite, shareAnswer, canShare, resetSteps,
     } = LobbyCodes.create({
       els, $, say, makeAnswer, acceptAnswer, cancelledResult,

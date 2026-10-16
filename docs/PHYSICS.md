@@ -1178,6 +1178,20 @@ behind `GripSteer.setLevel` (notch 1 = OFF). `tests/unit/grip-steer.test.mjs`
 asserts the source has no `Tracks` / `curvature` / `kCur` and that notch 1 is
 identity.
 
+**Localized rain** (`js/race/rain-cells.js`, read by `js/race/weather-arc.js`
+`wetnessAt`) is a classified exception in the **surface** channel, not a
+table row, because it reads no curvature (the no-ghosts check would reject the
+row): under a MIXED shower that covers a window of the lap, `gripMult(c)` in
+`js/game.js` reads the road wetness at the car's own arc position `c.s` — the
+water on the asphalt under the tyre, like a gravel trap or a kerb, never the
+track's shape or the racing line. The cell is placed from the start weather,
+the host's plan `{to, dur}` and the track length alone, drifts on the shared
+race clock, and every segment keeps WeatherArc's closed-form τ lag, so it is
+the same for every car at the same `s` and on every peer. Tread advice and pit
+calls (`treadFor`) read the LAP MEAN (`trackWetness()`), which is what makes a
+half-wet lap a tyre dilemma. Ruled 2026-10-14 with the localized-rain change; a
+curvature or line read added to the cell model would make it a table row.
+
 **The incident handback heading reset** (`js/physics/incident-sim.js`, the
 settled-backwards branch of the Rapier takeover's handback, fbaf18822) is a
 classified exception, not a table row, because it reads no curvature (the

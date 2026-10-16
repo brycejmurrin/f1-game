@@ -161,6 +161,8 @@ const Collide = (() => {
     chaser: null, chaserGap: Infinity,
     alongO: null, alongDx: 0, alongDprog: 0, alongAdx: Infinity,
   };
+  // Born Double, values kept: a 0 literal is a Smi field, and the first fractional store split the map mid-race (PERF-HUNT-5).
+  _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0.5; _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0;
   function _onTrafO(o) {
     const s = _traf, c = s.c;
     // A finisher coasting past the line is still a car on the road: it blocks,
@@ -202,6 +204,7 @@ const Collide = (() => {
     return s;
   }
   const _ot = { c: null, L: 0, W: 0, ahead: null, gapAhead: Infinity, skip: null };
+  _ot.L = _ot.W = 0.5; _ot.L = _ot.W = 0;   // born Double, like _traf
   function _onOtO(o) {
     const s = _ot, c = s.c;
     if (o.finished || o.retired || (s.skip && s.skip(o))) return;
@@ -242,6 +245,7 @@ const Collide = (() => {
   // the gantry legs — a copy of the limit block at the top of WallClamp.apply
   // (js/physics/wall-clamp.js; keep the two in step). Fills `out` {r, l, laneMin, side}.
   const _lim = { r: 0, l: 0, laneMin: 0, side: 0 }, _postLim = { r: 0, l: 0, minOut: 0, side: 0 };
+  _lim.laneMin = 0.5; _lim.laneMin = 0;   // born Double, like _traf
   function _wallLimits(track, s, x, out) {
     let wallR = Tracks.wallAt(track, s, 1), wallL = Tracks.wallAt(track, s, -1);
     let laneMin = 0, pitSd = 0;
@@ -436,6 +440,7 @@ const Collide = (() => {
     // so nothing aliases across a pair and the relaxation loop stays allocation-free.
     const _sep = { iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5 };
     const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA: 0.5, sB: 0.5, aSp: 0, bSp: 0, sideContact: false };  // shared like _sep: both pairContact call sites destructure at once, keeping the relaxation loop allocation-free as its own comment promises
+    _ct.dProg = _ct.dX = _ct.penLong = _ct.penLat = _ct.aSp = _ct.bSp = 0.5; _ct.dProg = _ct.dX = _ct.penLong = _ct.penLat = _ct.aSp = _ct.bSp = 0;   // born Double, like _traf
     // Reused AiDrive ctxs — not a fresh object literal to wantBoost /
     // otShouldFire / brakeDecision / wantX / adaptLane / otPull / defendPull /
     // isBoxed every physics step (~8 × 20 cars × 60 Hz). Same

@@ -1,27 +1,13 @@
 #!/usr/bin/env node
 /**
- * @doc Selected-specs gate verdict: cancel/red with clean junit is infra-retry, not a hard fail.
+ * @doc Selected-specs gate verdict: failed or cancelled shards require a successful rerun.
  * @section runner
  *
- * Evidence: PR #1109 run 37493213168 — one Selected shard cancelled after
- * `= run passed` (job cap during junit upload); junit from sibling shards had
- * zero failures; `selected-verdict` still failed with SELECTED=cancelled.
- *
- * A timed-out job reports `cancelled` (ci.yml header). Real test failures
- * write <failure>/<error> into junit before the reporters finalise
- * (--max-failures stops gracefully). So:
- *   - selected cancelled|failure + junit failures  → hard fail
- *   - selected cancelled|failure + junit clean, EVERY shard that reached its
- *     run step left a junit with testcases         → infra-retry (pass)
- *   - selected cancelled|failure + a shard that STARTED its run step (it
- *     uploads a selected-started-* marker first) but left no readable junit
- *     (cap kill, crash, spec import error, a failed artifact download)
- *                                                   → hard fail (15-F2)
- *   - a shard that never reached the run step (checkout / install died) has no
- *     marker and stays infra noise.
- *   - selected success|skipped                    → existing rules
- * Must never treat cancel as green when junit names a failing spec — or when
- * it cannot say that no test body died.
+ * Clean sibling JUnit is useful diagnostics, but cannot prove that every
+ * planned leg ran: checkout/install can fail before a started marker exists.
+ * Failure/cancellation therefore stays red even with clean available JUnit.
+ * Started shards without JUnit and artifact download errors get explicit
+ * diagnostics. Successful or genuinely empty plans retain the normal rules.
  *
  *   node tools/ci/selected-gate-verdict.mjs [--junit-root DIR] [--junit-in DIR] [--started-in DIR]
  *     reads DOWNLOAD_FAILED (the artifact download steps' outcome) and SELECT / SELECTED / GUARDS / DROPPED / CALLED / DRAFT from env
@@ -139,8 +125,9 @@ export function selectedGateVerdict(input) {
         failedSpecs,
       };
     }
-    infraRetry = true;
-    reason = `selected specs ${selected} with clean junit — infra-retry (not a fail)`;
+    // A sibling's clean JUnit cannot prove a leg that died before its marker
+    // ran. Without the complete expected matrix, only success proves completion.
+    return { ok: false, reason: `selected specs ${selected} — clean junit does not prove every planned shard ran; re-run the failed job`, infraRetry: false, failedSpecs };
   } else {
     return {
       ok: false,

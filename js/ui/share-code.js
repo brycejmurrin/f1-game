@@ -123,7 +123,7 @@ const ShareCode = (function () {
   }
 
   function shareUrl(code) {
-    try { return location.origin + location.pathname + "#share=" + code; }
+    try { return (typeof Native !== "undefined" && Native.shareBase ? Native.shareBase() : location.origin + location.pathname) + "#share=" + code; }
     catch (_) { return null; }
   }
 

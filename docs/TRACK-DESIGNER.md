@@ -410,3 +410,5 @@ the designer with the same point selected.
 - 24 saved circuits.
 - No online play on your own circuits yet: RACE A FRIEND uses the shipped
   circuits.
+
+In MY CIRCUITS, **RECOVER PREVIOUS DRAFT** restores the unsaved design displaced by a load or import, including after a reload. Your current unsaved design remains one UNDO away. The backup holds the most recently displaced unsaved design.

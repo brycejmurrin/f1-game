@@ -190,7 +190,7 @@ interface StudioRig {
 interface TestInput { steer: number; throttle: boolean; brake: boolean; }
 
 /** A scheduled weather transition — startWeatherArc(). */
-interface WeatherArc { from: string; to: string; t: number; dur: number; seq: unknown; }
+interface WeatherArc { from: string; to: string; t: number; dur: number; seq: unknown; cell?: { c0: number; h: number; v: number; life: number; total: number } | null; sectors?: Array<{ sector: number; wet: number; raining: boolean }> | null; where?: number[] | null; }
 
 /** An ACTIVE AERO activation zone, in arc metres. Owner: js/physics/aero-zones.js. */
 interface AeroZone { start: number; end: number; len: number; }
@@ -374,6 +374,7 @@ interface GameCtx {
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
   readonly openDailyPicker: () => void;
+  readonly closeSettings: () => void;
   readonly openWatchPhoto: () => boolean;
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
@@ -892,6 +893,7 @@ declare const Onboard: GameModuleFactory;
 declare const Director: GameModuleFactory;
 declare const SetupCamera: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
+declare const RaceMessageHistory: GameModuleFactory;
 declare const RaceSettings: GameModuleFactory;
 declare const RivalAudio: GameModuleFactory;
 declare const CarSfx: GameModuleFactory;
