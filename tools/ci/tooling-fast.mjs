@@ -521,6 +521,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/glx-output-target.test.mjs",
   // #2153: GLX resize() snaps a ±1 px present/render jitter (WGX hysteresis) so the post chain is not rebuilt (mock).
   "tests/unit/glx-resize-hysteresis.test.mjs",
+  "tests/unit/glx-resource-balance.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
   "tests/unit/grip-steer.test.mjs",
   "tests/unit/handback.test.mjs",
@@ -567,6 +568,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/import-models.test.mjs",
   "tests/unit/incident-gate.test.mjs",
   "tests/unit/incident-rpm.test.mjs",
+  "tests/unit/init-owner-resize-observer.test.mjs",
   // InputBindings factory alone (conflict claim, reset/isDefault, persistence,
   // brand labels) — no input.js. Complements key-binds.test.mjs. ~0.1 s.
   "tests/unit/input-bindings.test.mjs",
