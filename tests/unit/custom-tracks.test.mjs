@@ -619,3 +619,32 @@ test("an edit under a full quota keeps the old circuit's board and ghosts until 
   assert.equal(data["ttlb." + other], undefined);
   assert.deepEqual(cleared.sort(), ["ghost:" + old, "ghost:" + other, "input:" + old, "input:" + other].sort());
 });
+
+
+test("delayed title designer respects newer navigation, race ownership and repeated taps", async () => {
+  for (const action of ["none", "settings", "settings-return", "escape", "race", "repeat", "failed"]) {
+    const b = boot(), listeners = new Map(), opened = [];
+    let release, owner = { id: "mainmenu" }, racing = false;
+    const title = owner, door = {};
+    b.ctx.document = {
+      addEventListener(type, fn) { const set = listeners.get(type) || new Set(); set.add(fn); listeners.set(type, set); },
+      removeEventListener(type, fn) { listeners.get(type).delete(fn); },
+    };
+    const emit = (type, event) => { for (const fn of listeners.get(type) || []) fn({ type, ...event }); };
+    b.ctx.ApexRoster = { LAZY_EDITOR: ["editor"] };
+    b.ctx.UiLayers = { top: () => owner, inRace: () => racing };
+    b.ctx.TrackDesigner = { init() {}, open: () => opened.push("designer") };
+    b.C.create({}, { door, load: () => new Promise((resolve) => { release = resolve; }) });
+    const first = door.onclick();
+    let second;
+    if (action === "settings") owner = { id: "settings" };
+    if (action === "settings-return") { emit("click", { target: {} }); owner = title; }
+    if (action === "escape") emit("keydown", { key: "Escape" });
+    if (action === "race") racing = true;
+    if (action === "repeat") { emit("click", { target: door }); second = door.onclick(); }
+    release(action !== "failed");
+    await Promise.all([first, second]);
+    assert.equal(opened.length, ["none", "repeat"].includes(action) ? 1 : 0, action);
+    assert.ok([...listeners.values()].every((set) => set.size === 0), "temporary navigation listeners are released: " + action);
+  }
+});

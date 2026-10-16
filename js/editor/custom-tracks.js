@@ -525,9 +525,33 @@ const CustomTracks = (function () {
     // not looked up by id here: the shell gains it with the screen (PR4), and
     // the shell-id guard holds every literal lookup to an id that exists.
     const door = _hooks.door || null;
+    let doorGeneration = 0;
     if (door) door.onclick = () => {
       if (G.soundOn && typeof GameAudio !== "undefined") GameAudio.uiSelect();
-      ensureEditor().then((ok) => { if (ok && typeof TrackDesigner !== "undefined") TrackDesigner.open(); });
+      const generation = ++doorGeneration;
+      const layers = typeof UiLayers !== "undefined" ? UiLayers : null;
+      const owner = layers && layers.top ? layers.top() : null;
+      let cancelled = false;
+      // Loading is only preparation: another navigation owns the next screen.
+      // Remember an intervening click even if that screen closes before load.
+      const cancel = (event) => {
+        if (event.type === "keydown" ? event.key === "Escape" : event.target !== door && !(door.contains && door.contains(event.target))) cancelled = true;
+      };
+      const doc = typeof document !== "undefined" ? document : null;
+      if (doc && doc.addEventListener) {
+        doc.addEventListener("click", cancel, true);
+        doc.addEventListener("keydown", cancel, true);
+      }
+      return ensureEditor().then((ok) => {
+        if (!ok || cancelled || generation !== doorGeneration || typeof TrackDesigner === "undefined") return;
+        if (layers && ((layers.inRace && layers.inRace()) || (layers.top && layers.top() !== owner))) return;
+        TrackDesigner.open();
+      }).finally(() => {
+        if (doc && doc.removeEventListener) {
+          doc.removeEventListener("click", cancel, true);
+          doc.removeEventListener("keydown", cancel, true);
+        }
+      });
     };
     if (typeof window !== "undefined" && window.addEventListener) { consumeTrackHash(); window.addEventListener("hashchange", consumeTrackHash); }
     return { ensureEditor, consumeTrackHash };
