@@ -2111,6 +2111,7 @@ what it covers.
 | `desktop-app-protocol.test.mjs` | `desktop/app-protocol.js` MIME table, Range 206/suffix/416 parse, path-traversal reject; Electron 44.4.5 pin + `app-protocol.js` in builder `files` |
 | `desktop-builder-config.test.mjs` | `desktop/electron-builder.config.cjs` appId/productName match `lib/identity.cjs`, NSIS `deleteAppDataOnUninstall === false`, extraResources `site`, asar, mac entitlements + camera usage, no publish provider |
 | `desktop-notices.test.mjs` | every path in `desktop/scripts/notices.mjs` `NOTICE_SOURCES` exists in git; concatenated notices name the UNLICENSED caveat |
+| `desktop-pack-dry-run.test.mjs` | `tools/desktop/pack-dry-run.mjs --dry-run` (also runnable alone): stages + stamps into a temp dir and checks every electron-builder input (`files`, `extraResources` site + notices, icons, entitlements, derived version, `pack:test` chain) without building installers or touching `desktop/`; leaves the repo untouched |
 | `desktop-version.test.mjs` | `appVersionFrom({apexVersion:"1.0", build:2110})` → `1.0.2110`; set-version / stage share the mapping |
 | `desktop-unpacked-bin.test.mjs` | `desktop/scripts/unpacked-bin.mjs` resolves electron-builder `--dir` binaries; desktop.yml pack-smoke matrix + soft-GL + optional signed-verify skips |
 | `mobile-config.test.mjs` | Capacitor `identity.json` freeze, config shape, AndroidManifest (INTERNET/CAMERA/cleartext/fullSensor), Gradle env version + keystore, SW skip on Capacitor |
