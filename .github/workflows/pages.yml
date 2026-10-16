@@ -23,6 +23,29 @@ on:
   # `rearm` job below): a commit whose fast tier went green while a train ran
   # was told "NOT POKING" by poke-train and then waited for that cron —
   # 20 % of commits shipped 18-239 min late. A manual dispatch is "deploy now".
+  # ON PUSH (2026-10-16, the CI/CD review #2333 finding 3). The ship-push
+  # fast tier in ci.yml reached 38 % of merges (184 pushes a day, 112 replaced
+  # while pending in `ship-fast`, 70 completed) and cost 5,587 job-minutes a
+  # day for verdicts the train repeated; poke-train only pokes from a run that
+  # completed, so most merges waited for this cron. A push now starts the
+  # train directly: the workflow-level `pages-train-<ref>` group keeps one
+  # running and ONE pending run, and a newer push replaces the pending one
+  # (GitHub's default `queue: single`; `queue: max` would gate every
+  # intermediate commit, which is the cost being removed), so a burst costs
+  # one gate per gate length and the train always takes the newest tip.
+  # The same prose paths ci.yml ignored start no train; the cron ships them.
+  # `verdict` still refuses any ref but the deploy branch and diffs the gate
+  # against the LIVE commit, never the push's previous tip (unpublished and
+  # possibly ungated, it is not a base).
+  push:
+    branches:
+      - claude/f1-game-project-26h3ng
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".claude/**"
+      - ".cursor/**"
+      - ".codex/**"
   schedule:
     - cron: "41 * * * *"
   workflow_dispatch:

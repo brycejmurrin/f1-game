@@ -862,7 +862,7 @@ jobs:
         id: filter
         if: steps.reuse.outputs.reuse != 'true'
         env:
-          BEFORE: ${{ inputs.before_sha != '' && inputs.before_sha || github.event.before }}
+          BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || (inputs.concurrency_key == '' && github.event.before) || '' }}
           EVENT: ${{ github.event_name }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           CALLED: ${{ inputs.concurrency_key != '' }}
@@ -1722,9 +1722,9 @@ jobs:
           # none": it always had one. Fail-safe is preserved, not weakened —
           # an unresolvable or unreachable base still runs everything.
           BEFORE: >-
-            ${{ inputs.before_sha != '' && inputs.before_sha
-                || (github.event_name == 'pull_request' && github.event.pull_request.base.sha
-                    || github.event.before) }}
+            ${{ inputs.concurrency_key != '' && inputs.before_sha
+                || (inputs.concurrency_key == '' && github.event_name == 'pull_request' && github.event.pull_request.base.sha
+                    || (inputs.concurrency_key == '' && github.event.before) || '') }}
           EVENT: ${{ github.event_name }}
           # A Pages call (the train) always carries a concurrency_key; its
           # before_sha is the LIVE commit, the exact base to diff against.
@@ -1914,7 +1914,7 @@ jobs:
           # empty tree), like the sweeps/parts/ship filters, never HEAD~1: a
           # one-commit slice of a tip carrying every unpublished commit.
           EVENT: ${{ inputs.concurrency_key != '' && 'push' || github.event_name }}
-          PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
+          PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || (inputs.concurrency_key == '' && github.event.before) || '' }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           CALLED: ${{ inputs.concurrency_key != '' }}
           # The nightly lane (tools/ci/ci-resolve-before.sh): a day's union diff

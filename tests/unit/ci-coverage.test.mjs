@@ -217,7 +217,9 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
 test("selection resolves the event-specific base and fails closed when it cannot", () => {
   // A direct push still resolves against the push's before; a Pages call
   // substitutes the train's live commit (asserted in the Pages-call test).
-  assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/);
+  // 2026-10-16 (CI/CD review #2333, PR F): a push-triggered train calls ci.yml with the push's
+  // `before` populated; an empty before_sha must still mean "run everything", never that commit.
+  assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| \(inputs\.concurrency_key == '' && github\.event\.before\) \|\| '' \}\}/);
   assert.match(selectJob, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   // Base resolution is delegated to ci-select-specs-step.sh -> ci-resolve-before.sh (HEAD~1 fallback).
   assert.match(selectJob, /ci-select-specs-step\.sh/);
@@ -1734,7 +1736,10 @@ test("pages.yml is a release train: schedule + dispatch, one deploy branch, noth
   // stops in one slot when the live site already serves the tip, and hands
   // the gate the live commit as its diff base.
   const onBlock = pagesWorkflow.slice(pagesWorkflow.indexOf("\non:\n"), pagesWorkflow.indexOf("\npermissions:"));
-  assert.doesNotMatch(onBlock, /^\s+push:/m, "the train must not run on push");
+  // 2026-10-16 (CI/CD review #2333 finding 3): the train runs ON push to the deploy branch,
+  // with ci.yml's prose paths-ignore; one running + one pending run per the workflow group.
+  assert.match(onBlock, /^\s+push:\n\s+branches:\n\s+- claude\/f1-game-project-26h3ng\n\s+paths-ignore:/m, "the train runs on push to the deploy branch");
+  assert.match(onBlock, /paths-ignore:\n(\s+- "[^"]+"\n){5}/, "the same five prose globs ci.yml ignored");
   // Hourly since 2026-10-14: three ticks an hour were delivered ~4.5 times a
   // day, and the train now re-arms itself (`rearm`), so the cron is a backstop.
   assert.match(onBlock, /schedule:\s*\n\s+- cron: "41 \* \* \* \*"/, "one tick an hour, off the hour");
@@ -1796,7 +1801,7 @@ test("ci.yml treats a Pages call as the gate it is, whatever the caller's event"
   assert.match(shipFilter, /case "\$EVENT" in\n\s+push\) ;;\n\s+pull_request\) \[ "\$CALLED" = "true" \] \|\| IS_PR=true ;;/,
     "the ship filter resolves a ready pull request instead of fail-safing it into smoke");
   assert.match(selectJob, /EVENT: \$\{\{ inputs\.concurrency_key != '' && 'push' \|\| github\.event_name \}\}/);
-  assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/,
+  assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| \(inputs\.concurrency_key == '' && github\.event\.before\) \|\| '' \}\}/,
     "on a Pages call the plan's base is the train's live commit");
 });
 
