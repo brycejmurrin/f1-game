@@ -9,6 +9,14 @@ the host in the waiting room and rotates the room code (`rotateRoomAfterEvict`),
 eviction (`LEFT { evicted }`, the guest closes its own end, `EVICT_GRACE_MS` fallback) so the guest reads
 "The host removed you" rather than "The host left". Tree `cssClasses` / `rawColor` / `shellNodes` move with
 the roster markup; the dead `.vs-ready` and `[data-verify-remove]` rules are deleted against it.
+## 2026-10-15 — PR #1928 ship merge `e8f052304`: HUD caps catch-up (footprint audit)
+
+Merge `claude/f1-game-project-26h3ng` into `cursor/footprint-audit-7c2d` to refresh the
+branch before ready; no OWNED footprint/tool edits in the HUD files. `css/hud.css` codeLines
+2122 → **2165** (+43), lines 2346 → **2393** (+47); `js/ui/hud.js` codeLines 1594 → **1596**
+(+2), lines 2652 → **2654** (+2); `js/game.js` codeLines 5137 → **5138** (+1). Deliberate
+`tests/data/ratchets.json` remeasure on the merged tree so Structural guards `--base` clears;
+the footprint feature commit `62005ca73` is unchanged.
 
 ## 2026-10-14 — sync #1501 onto ship tip `151cc6569`: absorb game.js +1
 

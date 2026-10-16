@@ -47,7 +47,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   status.classList = { toggle() {} };
   for (const id of ["vs-close", "vs-invite-more", "vs-host", "vs-join", "vs-make-answer", "vs-accept",
                     "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value",
-                    "vs-edit-car", "vs-ready"]) element(id);
+                    "vs-code-share", "vs-code-copy", "vs-edit-car", "vs-ready"]) element(id);
   const scan = element("vs-scan");
   const video = element("vs-scan-video");
   const listeners = new Map();
@@ -1442,7 +1442,7 @@ function codeRoomHarness() {
     rendezvous: {
       usingPrivateRelay: () => false, makeCode: () => "ABC234",
       hostRoom: async (o) => {
-        const room = { code: o.code, onJoiner: o.onJoiner, stopped: 0, stop() { room.stopped++; }, rotate() {} };
+        const room = { code: o.code, onJoiner: o.onJoiner, onFail: o.onFail, stopped: 0, stop() { room.stopped++; }, rotate() {} };
         rooms.push(room);
         return { ok: true, stop: () => room.stop(), rotate: () => {} };
       },
@@ -1529,6 +1529,63 @@ test("the last guest leaving the ROOM seals the reopened code and restores every
     assert.equal(h.elements.get("vs-code-join").hidden, false, "ENTER A CODE is offered again");
     await new Promise((r) => setTimeout(r, 400));
     assert.equal(rooms.length, 2, "nothing reopens the room afterwards");
+  } finally { h.lobby.cancel(); }
+});
+
+test("INVITE ANOTHER stops the reopened code room, and CLOSE brings the same code back (#2197)", async () => {
+  // inviteAnother() invalidated the reopened room's generation without stopping
+  // it: the room kept reposting its offer while mintOffer/onJoiner returned
+  // early, so a friend typing the code the host was told was "still open" got
+  // nothing — and CLOSE then killed it for good.
+  const { h, rooms, ts, until, withGuest } = codeRoomHarness();
+  h.lobby.wire();
+  try {
+    await withGuest();
+    const pending = ts[ts.length - 1];
+    assert.equal((await h.lobby.inviteAnother()).ok, true);
+    assert.equal(rooms[1].stopped, 1, "INVITE ANOTHER must stop the room it would otherwise orphan");
+    assert.equal(pending.status, "closed", "…and drop its half-built transport");
+    h.click("vs-close");                               // back to the room, nothing new minted
+    await until(() => rooms.length === 3, "CLOSE reopened the room");
+    assert.equal(rooms[2].code, "ABC234", "…under the code the host was told is still open");
+    assert.equal(rooms[2].stopped, 0);
+    await rooms[2].onJoiner("g2", "answer-2");
+    assert.equal(rooms[2].stopped, 1, "a joiner's answer on the reopened room is acted on");
+  } finally { h.lobby.cancel(); }
+});
+
+test("a room code that expires with nobody in it is taken down, with host copy (#2200)", async () => {
+  // onFail said nostr's GUEST line ("Check the six characters…") and left the
+  // dead code painted with SHARE/COPY live, so the host could hand it out.
+  const { h, rooms } = codeRoomHarness();
+  try {
+    assert.equal((await h.lobby.codeHost()).ok, true);
+    assert.equal(h.elements.get("vs-code-share").disabled, false, "a live code is shareable");
+    rooms[0].onFail({ ok: false, error: "expired", message: "Nobody answered that code. Check the six characters, or ask your friend for a fresh one." });
+    assert.equal(h.elements.get("vs-code-share").disabled, true, "SHARE is off for a dead code");
+    assert.equal(h.elements.get("vs-code-copy").disabled, true, "…and COPY");
+    assert.equal(h.elements.get("vs-code-value").textContent, "", "the dead code is no longer shown");
+    assert.doesNotMatch(h.status.textContent, /six characters/, "not the guest's copy");
+    assert.match(h.status.textContent, /expired.*NEW CODE/i);
+  } finally { h.lobby.cancel(); }
+});
+
+test("the only guest leaving while INVITE ANOTHER's scanner runs stops the camera (#2200)", async () => {
+  const scanners = [];
+  const { h, made, closers } = closableHarness({
+    scanFactory: () => { const sc = { stops: 0, stop() { this.stops++; }, start: async () => ({ ok: true }) }; scanners.push(sc); return sc; },
+  });
+  try {
+    await h.lobby.host();
+    h.lobby.watchForOpen();
+    for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+    assert.equal(closers.length, 1, "the guest is connected");
+    await h.lobby.inviteAnother();
+    assert.equal((await h.lobby.scan("answer")).ok, true);
+    assert.equal(h.scan.hidden, false);
+    closers[0]("remote");                           // the only guest leaves → back to the pick
+    assert.equal(scanners[0].stops, 1, "the camera never outlives the step that opened it");
+    assert.equal(h.scan.hidden, true);
   } finally { h.lobby.cancel(); }
 });
 
@@ -1739,7 +1796,9 @@ test("room-code expiry while watching keeps expiry copy, not TURN; pure ICE stil
 
     // dropPending while waitForOpen is still armed: close the pending PC the
     // way onFail/teardown does. On tip, the next poll tick overwrites with TURN.
-    assert.equal(h.lobby.status().pending, true, "watcher still owns the pending transport");
+    // #2200: the failed join drops its own pending transport (and its PC).
+    assert.equal(h.lobby.status().pending, false, "a failed code join leaves no pending transport");
+    assert.equal(transport.status, "closed");
     transport.close();
     // Poll is 250 ms — wait past at least two ticks so waitForOpen can fire.
     await new Promise((r) => setTimeout(r, 700));
