@@ -117,7 +117,7 @@ const SceneryStructures = (function () {
       }
     };
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
-    const wall = (s0, s1, side, gap, h, col, thick) => {
+    const wall = (s0, s1, side, gap, h, col, thick, alt) => {
       const a = thick || 0.5;
       if (alreadyLaid("wall", s0, s1, side, gap, `${a}|${h}|${(col || []).join(",")}`)) return;
       ctx.noteSpan("wall", s0, s1, side, gap, { h });
@@ -131,7 +131,9 @@ const SceneryStructures = (function () {
         }
         const wallCol = col || [0.78, 0.78, 0.80];
         const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
-        const t = (n++ & 1) ? a + 0.08 : a;   // alternate slabs stand 4 cm proud each side so slope-overlapped neighbours never share a face plane (TrackGeom.MIN_SEP)
+        // `alt` (opt-in, metres): every other slab stands `alt` thicker, so slope-overlapped
+        // neighbours never share a side plane (z-fight, coplanar-audit; TrackGeom.MIN_SEP).
+        const t = alt && (n++ & 1) ? a + alt : a;
         ctx.instance(`wall|${t}|${h}|${wallCol.join(",")}`,
           { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
           (rec) => {
