@@ -817,8 +817,6 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
-      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-        if: steps.reuse.outputs.reuse != 'true'
       # DOES THIS DIFF TOUCH THE CAR THE CENSUS PHOTOGRAPHS?
       #
       # This census builds the CAR and never a circuit, so it has nothing to do
@@ -877,6 +875,12 @@ jobs:
             echo "parts=false" >> "$GITHUB_OUTPUT"
             echo "SKIPPING THE PARTS CENSUS: nothing in this diff reaches the car the sweep photographs"
           fi
+      # The filter needs only git, bash and the checked-out geometry-paths
+      # module. Delay Node/npm setup until the census is actually applicable;
+      # the job still runs and reports success on an unrelated diff so Pages
+      # and the aggregate verdict retain their existing semantics.
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+        if: steps.reuse.outputs.reuse != 'true' && steps.filter.outputs.parts == 'true'
       - if: steps.reuse.outputs.reuse != 'true' && steps.filter.outputs.parts == 'true'
         run: npm run test:sweeps-parts
       - name: Reused draft
