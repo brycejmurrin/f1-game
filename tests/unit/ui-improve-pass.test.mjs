@@ -651,6 +651,15 @@ test("garage categories implement one roving tab system", () => {
     assert.match(js, new RegExp(`\\.key\\s*===\\s*"${key}"`));
 });
 
+test("compact garage budget status stays readable beside FREE BUILD", () => {
+  const garage = css("css/carsetup.css");
+  const selector = '#cs-inner[data-density="compact"] #cs-budget-row #cs-budget';
+  assert.equal(decl(garage, selector, "white-space"), "nowrap");
+  assert.equal(decl(garage, selector, "overflow"), "hidden");
+  assert.equal(decl(garage, selector, "text-overflow"), "ellipsis");
+  assert.equal(decl(garage, '#cs-inner[data-density="compact"] #cs-budget.unlimited', "display"), "none");
+});
+
 test("high-scale settings and Last Race retain useful local width", () => {
   const components = css("css/components.css");
   const data = css("css/data.css");

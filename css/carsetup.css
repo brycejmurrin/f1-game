@@ -1675,6 +1675,20 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
    iPhone (734x343): header 84 -> 57px, #cs-options 88 -> 115px. */
 #cs-inner[data-density="compact"] #cs-budget-row { flex-wrap: nowrap; }
 #cs-inner[data-density="compact"] #cs-budget-row #cs-budget { flex: 1 1 0; min-width: 0; }
+/* The budget readout shares this row with the fixed-width FREE BUILD toggle.
+   At high UI scale the row still has to fit both controls; allowing the
+   sentence to wrap turns each word into a vertical stack and pushes the
+   actionable tabs below the fold. Keep the status a single readable line and
+   reserve the remaining width for the toggle. */
+#cs-inner[data-density="compact"] #cs-budget-row #cs-budget {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* In FREE BUILD the adjacent toggle already carries the complete status. The
+   duplicate sentence has no useful information and, at high zoom, would leave
+   it only a few pixels wide beside the fixed toggle. */
+#cs-inner[data-density="compact"] #cs-budget.unlimited { display: none; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }
 /* CRITICAL LOCAL WIDTH — at high UI size the stat summary can consume the
