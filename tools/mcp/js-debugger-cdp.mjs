@@ -12,7 +12,9 @@ export function localUrl(raw, websocket = false) {
 export async function targets(endpoint) {
   const u = localUrl(endpoint);
   if (u.pathname !== "/") throw Error("Browser endpoint must be an origin, e.g. http://127.0.0.1:9222");
-  const response = await fetch(new URL("/json/list", u), { redirect: "error", signal: AbortSignal.timeout(5000) });
+  let response;
+  try { response = await fetch(new URL("/json/list", u), { redirect: "error", signal: AbortSignal.timeout(5000) }); }
+  catch (e) { throw Error(`Cannot reach Chrome at ${u.origin} (${e.cause?.code || e.name}); start Chrome with --remote-debugging-port and check the endpoint`); }
   if (!response.ok) throw Error(`Target discovery HTTP ${response.status}`);
   const raw = await response.text();
   if (raw.length > 1024 * 1024) throw Error("Target discovery response too large");
