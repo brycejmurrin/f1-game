@@ -1817,3 +1817,11 @@ for (const action of ["delete-arm", "delete-confirm", "close", "normal"]) test(`
   const review = h.G.$("cr-left").querySelectorAll('[data-cr-act="import"]').some((button) => button.textContent === "IMPORT?");
   assert.equal(review, action === "normal", "abandoned file must not recreate an import review");
 });
+
+test("a {toString:1} version marker does not throw out of validate/apply", () => {
+  const h = loadHarness();
+  const payload = { format: "apex26-career-backup-v1", slots: [{ flavour: "driver", i: 1,
+    data: Object.assign(save({}), { v: JSON.parse('{"toString":1}'), tally: { pts: JSON.parse('{"toString":1}') } }) }] };
+  assert.doesNotThrow(() => h.CareerBackup.validate(payload));
+  assert.doesNotThrow(() => h.CareerBackup.apply(payload, { otherFlavourConfirmed: true }));
+});

@@ -328,3 +328,16 @@ test("roundMap and finishMap skip a __proto__ key like the sibling maps", () => 
     assert.deepEqual(Object.keys(out), ["AAA"]);
   }
 });
+
+test("migrateCareer coerces a {toString:1} field instead of throwing (live fuzz 2026-10-16)", () => {
+  const SM = load();
+  const hostile = () => JSON.parse('{"toString":1}');
+  const out = SM.migrateCareer({ v: hostile(), flavour: "driver", team: "haas", money: hostile(), rep: hostile(),
+    tally: { pts: hostile(), wins: hostile() }, seat: hostile(), year: hostile(), seed: hostile(), budgetLvl: hostile(), facility: hostile(), deal: { salary: hostile(), years: hostile() } });
+  assert.equal(out.money, 0);
+  assert.equal(out.rep, 0);
+  assert.equal(out.tally.pts, 0);
+  assert.equal(out.year, 2026);
+  assert.equal(out.budgetLvl, 0);
+  assert.equal(out.facility, 0);
+});

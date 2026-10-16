@@ -36,7 +36,8 @@ const CareerBackup = (function () {
   // `rowFlavour` is the slot the file files it under; a driver career that
   // claims a MY TEAM row (a hand edit) would load as a driver save in that set.
   function futureSave(data) {
-    return !!(data && typeof SaveMigrate !== "undefined" && Number(data.v) > SaveMigrate.CAREER_V);
+    if (!data || typeof SaveMigrate === "undefined") return false;
+    try { return Number(data.v) > SaveMigrate.CAREER_V; } catch (_) { return false; }
   }
   function slotPayloadOk(data, rowFlavour) {
     if (data == null) return { ok: true };
