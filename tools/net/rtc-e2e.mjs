@@ -50,6 +50,7 @@ for (let i = 0; i < 40 && !up; i++) {
 console.log("server up:", up, adopted ? "(adopted an existing one)" : "");
 if (!up) { await shutdown(); process.exit(1); }
 const log = (...a) => console.log(...a);
+const pageErrors = [];
 
 // Two pages in one browser means one of them is always the background tab, and
 // Chromium throttles a background tab's rAF to a crawl. That is fatal here and
@@ -67,7 +68,7 @@ const b = await launchChromium({
 const mk = async () => {
   const c = await b.newContext({ viewport: { width: 844, height: 390 } });
   const p = await c.newPage();
-  p.on("pageerror", (e) => log("  [pageerror]", String(e).slice(0, 160)));
+  p.on("pageerror", (e) => { pageErrors.push(String(e)); log("  [pageerror]", String(e).slice(0, 160)); });
   // "load" waits for every asset (5 MB of JS + WebGL init); __apex being
   // present is the real readiness signal, same as the Playwright specs use.
   await p.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded", timeout: 90000 });
@@ -87,27 +88,69 @@ log("both pages booted");
 const t0 = Date.now();
 const el = () => ((Date.now() - t0) / 1000).toFixed(1) + "s";
 
-const hostRes = await A.evaluate(() => window.__apex.lobbyHost());
-log(el(), "host invite:", hostRes.ok ? `ok len=${hostRes.code.length}` : JSON.stringify(hostRes));
-if (!hostRes.ok) { await shutdown(); process.exit(1); }
+async function connect(rehost = false) {
+  let hostRes;
+  if (rehost) {
+    // Natural departure returns straight to HOST/JOIN. Do not call lobbyHost:
+    // that hook calls open() and would hide a missing reset on this UI route.
+    const before = await A.locator("#vs-invite").inputValue();
+    await A.evaluate(() => document.getElementById("vs-host").click());
+    await A.waitForFunction((before) => {
+      const code = document.getElementById("vs-invite").value;
+      return code && code !== before;
+    }, before, { polling: 100, timeout: 60000 });
+    hostRes = { ok: true, code: await A.locator("#vs-invite").inputValue() };
+  } else hostRes = await A.evaluate(() => window.__apex.lobbyHost());
+  log(el(), "host invite:", hostRes.ok ? `ok len=${hostRes.code.length}` : JSON.stringify(hostRes));
+  if (!hostRes.ok) { await shutdown(); process.exit(1); }
 
-const joinRes = await B.evaluate((c) => window.__apex.lobbyJoin(c), hostRes.code);
-log(el(), "guest answer:", joinRes.ok ? `ok len=${joinRes.code.length}` : JSON.stringify(joinRes));
-if (!joinRes.ok) { await shutdown(); process.exit(1); }
+  const joinRes = await B.evaluate((c) => window.__apex.lobbyJoin(c), hostRes.code);
+  log(el(), "guest answer:", joinRes.ok ? `ok len=${joinRes.code.length}` : JSON.stringify(joinRes));
+  if (!joinRes.ok) { await shutdown(); process.exit(1); }
 
-const accRes = await A.evaluate((c) => window.__apex.lobbyAccept(c), joinRes.code);
-log(el(), "host accepted:", JSON.stringify(accRes).slice(0, 120));
+  const accRes = await A.evaluate((c) => window.__apex.lobbyAccept(c), joinRes.code);
+  log(el(), "host accepted:", JSON.stringify(accRes).slice(0, 120));
 
-// CONNECTED IS NOT STARTED. Since the waiting room (PR #200) a session goes
-// active only when the host presses START with everyone READY — this script
-// predated that and sat 90 s on a perfectly good connection reading "NO
-// SESSION" (2026-09-27). Do what the buttons do: wait until the guest is IN,
-// say READY on both sides, wait for the host to have HEARD it (a real round
-// trip, so pressing at once is a silent refusal), then START.
-const inRoom = async () => ((await A.evaluate(() => window.__apex.lobby())).guests || 0) >= 1;
-for (let i = 0; i < 30 && !(await inRoom()); i++) await new Promise((r) => setTimeout(r, 2000));
-if (!(await inRoom())) { log(`\n*** the guest never reached the room ***`); await shutdown(); process.exit(1); }
-log(el(), "guest is in the room");
+  const inRoom = async () => ((await A.evaluate(() => window.__apex.lobby())).guests || 0) >= 1;
+  for (let i = 0; i < 30 && !(await inRoom()); i++) await new Promise((r) => setTimeout(r, 2000));
+  if (!(await inRoom())) { log(`\n*** the guest never reached the room ***`); await shutdown(); process.exit(1); }
+  for (const p of [A, B]) {
+    await p.waitForFunction(() => window.__apex.lobbyRoom()?.open, null, { polling: 100, timeout: 10000 });
+  }
+  log(el(), "guest is in the room");
+}
+// Seed non-default readiness on BOTH sides before teardown: otherwise the
+// replacement-room check could pass even if it leaked the old false values.
+async function readyBoth() {
+  await Promise.all([A, B].map((p) => p.evaluate(() => window.__apex.lobbyReady(true))));
+  for (const p of [A, B]) {
+    await p.waitForFunction(() => {
+      const r = window.__apex.lobbyRoom();
+      return r && r.selfReady && r.peerReady;
+    }, null, { polling: 100, timeout: 10000 });
+  }
+}
+async function assertUnready() {
+  for (const p of [A, B]) {
+    const room = await p.evaluate(() => window.__apex.lobbyRoom());
+    if (!room || room.selfReady || room.peerReady) { log("*** fresh room inherited readiness ***", JSON.stringify(room)); await shutdown(); process.exit(1); }
+  }
+}
+await connect();
+await readyBoth();
+// Exercise actual close events and a fresh room on the SAME pages, so leaked
+// transport ownership/readiness cannot hide behind a new browser context.
+await B.evaluate(() => document.getElementById("vs-close").click());
+await A.waitForFunction(() => window.__apex.lobby().guests === 0, null, { polling: 100, timeout: 10000 });
+await connect(true);
+await assertUnready();
+log(el(), "natural departure and direct rehost passed");
+await readyBoth();
+await Promise.all([A, B].map((p) => p.evaluate(() => document.getElementById("vs-close").click())));
+await connect();
+await assertUnready();
+log(el(), "disconnect and fresh room re-entry passed");
+// A connected room only becomes a race after both READY packets arrive.
 await Promise.all([A, B].map((p) => p.evaluate(() => window.__apex.lobbyReady(true))));
 let readyAll = false;
 for (let i = 0; i < 20 && !readyAll; i++) {
@@ -209,7 +252,9 @@ log(`\nboth cars driving:        ${moving}`);
 log(`A sees B where B says:    ${seesB}  (A thinks s=${pa.rival.s}, B says s=${pb.mine.s})`);
 log(`B sees A where A says:    ${seesA}  (B thinks s=${pb.rival.s}, A says s=${pa.mine.s})`);
 
-const playing = moving && seesB && seesA;
+const healthy = pa.active && pb.active && pa.synced && pb.synced && !pa.startPending && !pb.startPending;
+const playing = moving && seesB && seesA && healthy && pageErrors.length === 0;
+log("both sessions healthy:", healthy, "page errors:", pageErrors.length);
 log(playing
   ? `\n*** TWO PEERS RACING EACH OTHER OVER REAL WebRTC at ${el()} ***`
   : `\n*** connected, but not racing correctly ***`);
