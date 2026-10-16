@@ -23,6 +23,7 @@ export class DebugSession {
     this.pause = null; this.objects.clear();
     if (token && this.cdp && !this.cdp.closed) this.cdp.send("Runtime.releaseObjectGroup", { objectGroup: token }).catch(() => {});
   }
+  markOperations(from, to) { for (const o of this.operations.values()) if (o.status === from) o.status = to; }
   connected() { if (!this.cdp || this.cdp.closed) throw Error("Attach a target first"); return this.cdp; }
   paused(token) {
     this.connected();
@@ -50,11 +51,14 @@ export class DebugSession {
     bp.locations.push(p);
     if (bp.locations.length > 5) bp.locations.shift();
   }
-  state() {
+  // Only the latest operation carries its result: tool responses used to re-send
+  // all ten stored results on every call. Older rows keep id/status.
+  state(withResults = false) {
+    const ops = [...this.operations.values()];
     return { connected: !!this.cdp && !this.cdp.closed, target: this.target || null,
       paused: !!this.pause, pause: this.pause,
       breakpointCount: this.breakpoints.size, breakpoints: [...this.breakpoints.values()].slice(0, 20).map(b => ({ ...b, url: clip(b.url, 300) })),
-      operations: [...this.operations.values()] };
+      operations: withResults ? ops.map((o, i) => i === ops.length - 1 ? o : { id: o.id, status: o.status }) : ops.map(o => ({ id: o.id, status: o.status })) };
   }
   async listTargets(endpoint) {
     return { targets: (await this.discover(endpoint)).map(({ webSocketDebuggerUrl, ...t }) => t) };
@@ -82,6 +86,7 @@ export class DebugSession {
       client.on("Debugger.breakpointResolved", b => this.resolveBreakpoint(b.breakpointId, b.location));
       client.on("Debugger.paused", event => {
         this.resetPause();
+        this.markOperations("pending", "paused");
         this.pause = { token: `${this.generation}:${++this.sequence}`, reason: event.reason,
           hitBreakpoints: event.hitBreakpoints || [],
           frames: event.callFrames.slice(0, 10).map((f, index) => ({ index, functionName: clip(f.functionName, 200),
@@ -89,7 +94,7 @@ export class DebugSession {
             line: f.location.lineNumber + 1, column: f.location.columnNumber + 1, callFrameId: f.callFrameId,
             scopes: f.scopeChain.slice(0, 6).map(s => ({ type: s.type, name: clip(s.name, 100), object: this.remember(s.object) })) })) };
       });
-      client.on("Debugger.resumed", () => this.resetPause());
+      client.on("Debugger.resumed", () => { this.resetPause(); this.markOperations("paused", "pending"); });
       client.on("Runtime.executionContextsCleared", () => { this.resetPause(); this.clearScripts(); });
       client.on("Runtime.executionContextDestroyed", event => {
         const wasPaused = !!this.pause;
@@ -116,7 +121,7 @@ export class DebugSession {
   async detach() {
     const client = this.cdp;
     if (!client) return { detached: true, cleanupErrors: [] };
-    const cleanupErrors = [];
+    const cleanupErrors = [], cleanupWarnings = [];
     let resumedEventObserved = false;
     const observed = () => { resumedEventObserved = true; };
     client.on("Debugger.resumed", observed);
@@ -129,12 +134,16 @@ export class DebugSession {
       try { await client.send(method, params, 1000); } catch (e) { cleanupErrors.push(`${method}: ${clip(e.message)}`); }
     }));
     for (const method of [...(this.pause ? ["Debugger.resume"] : []), "Debugger.disable"]) {
-      try { await client.send(method, {}, 1000); } catch (e) { cleanupErrors.push(`${method}: ${clip(e.message)}`); }
+      try { await client.send(method, {}, 1000); } catch (e) {
+        // Closing the CDP session below disables the domain anyway, so a slow
+        // Debugger.disable (full software-GL frames) is a warning, not a failed cleanup.
+        (method === "Debugger.disable" ? cleanupWarnings : cleanupErrors).push(`${method}: ${clip(e.message)}`);
+      }
     }
     client.close(); this.cdp = null; this.target = null; this.resetPause();
     client.removeListener("Debugger.resumed", observed);
     this.breakpoints.clear(); this.scripts.clear();
-    return { detached: true, cleanupErrors, cleanupAcknowledged: cleanupErrors.length === 0, resumedEventObserved };
+    return { detached: true, cleanupErrors, cleanupWarnings, cleanupAcknowledged: cleanupErrors.length === 0, resumedEventObserved };
   }
   async scriptsList(filter = "") {
     this.connected(); return { scripts: [...this.scripts.values()].filter(s => s.url.includes(filter)).slice(0, 200) };
@@ -147,7 +156,7 @@ export class DebugSession {
       source: lines.slice(startLine - 1, startLine - 1 + count).map((s, i) => `${startLine + i}: ${clip(s, 1000)}`).join("\n") };
   }
   async setBreakpoint(url, line, column = 1, condition = "") {
-    if (this.breakpoints.size >= 100) throw Error("Breakpoint limit100 reached; remove unused breakpoints");
+    if (this.breakpoints.size >= 100) throw Error("Breakpoint limit 100 reached; remove unused breakpoints");
     const r = await this.connected().send("Debugger.setBreakpointByUrl", { url, lineNumber: line - 1,
       columnNumber: column - 1, condition });
     const bp = { id: r.breakpointId, url, line, column, locations: [] };
@@ -200,7 +209,7 @@ export class DebugSession {
     // Deliberately not awaited: a breakpoint inside the expression must not
     // prevent a later MCP request from inspecting and resuming it.
     client.send("Runtime.evaluate", { expression, awaitPromise, returnByValue: true,
-      generatePreview: false, objectGroup: generation }, 30000).then(r => {
+      generatePreview: false, objectGroup: generation }, 600000).then(r => {
       if (this.generation === generation) Object.assign(operation, { status: r.exceptionDetails ? "exception" : "completed", result: operationResult(r) });
     }, e => { if (this.generation === generation) Object.assign(operation, { status: "unknown", error: clip(e.message) }); });
     return { operationId: id, status: "pending", note: "Inspect debugger_state; a response timeout does not cancel JavaScript execution." };

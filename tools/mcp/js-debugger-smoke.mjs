@@ -103,7 +103,7 @@ try {
   assert.ok(bp.locations[0].column >= 1);
   await call("debugger_run", { expression: "window.finalResult = fixture()" });
   let state = await until(s => s.paused); const first = state.pause.token;
-  check("breakpoint pauses pending evaluation", () => { assert.equal(state.pause.frames[0].line, 5); assert.equal(state.operations[0].status, "pending"); });
+  check("breakpoint pauses pending evaluation", () => { assert.equal(state.pause.frames[0].line, 5); assert.equal(state.operations[0].status, "paused"); });
   const evalArgs = { pauseToken: first, expression: "answer" };
   check("paused frame local evaluation", () => {});
   assert.equal((await call("debugger_evaluate", evalArgs)).result.value, 41);

@@ -230,6 +230,26 @@ test("partial footprint: roof skins, bridge decks and thin cantilever arms stay 
   assert.equal(result.findings.length, 0);
 });
 
+test("unsupported: a prop outside the terrain does not certify its neighbour (#1941)", () => {
+  const A = [[0.5, 4.5, 0.5], [1, 1, 1]], B = [[1.5, 5.5, 0.5], [1, 1, 1]];
+  const audit = (boxes) => {
+    const { prims, buf } = fixture(boxes, () => 0);
+    return GA.analyse({ Tracks: { terrainY: (_t, x) => (x <= 1 ? null : 0) } },
+      { meshes: { props: { __cap: { pos: buf.pos } } } }, prims, { coplanar: false, footprints: false });
+  };
+  assert.equal(audit([B]).counts.unsupported, 1, "B alone floats over known terrain");
+  const both = audit([A, B]);
+  // The ratcheted count keeps its legacy meaning (unjudged A still seeds); B is reported
+  // separately so the rescue is visible instead of silent.
+  assert.equal(both.counts.unsupported, 0);
+  assert.equal(both.unknownSupport.length, 1, "advisory list, never a ratcheted count");
+  assert.equal(both.unknownSupport[0].p.maxY, 6, "B, not the unjudged A");
+  // a really grounded neighbour still propagates support
+  const C = [[0.5, 0.5, 2.5], [1, 1, 1]];
+  const grounded = audit([C]);
+  assert.equal(grounded.counts.unsupported + grounded.unknownSupport.length, 0);
+});
+
 test("partial footprint: missing terrain is explicitly unjudged", () => {
   const { result } = fixture([[[0, 5, 0], [10, 10, 10]]], () => null);
   assert.equal(result.unknownSamples, 9);
