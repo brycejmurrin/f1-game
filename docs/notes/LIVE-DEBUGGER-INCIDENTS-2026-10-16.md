@@ -36,7 +36,20 @@ starts as NaN (undefined minus dt) until `collideFx` sets it. The live `carAt` d
 expose it, so unverified live; `game.js` (forbidden) initialises it for AI.
 
 ## 2. Debris world
-(in progress)
+
+Burst 40 at sev 90, then circuit switch (Monza->Spa), `reset()` and a visibilitychange.
+Rapier world freed each time: `destroyWorld` saw 98 / 107 bodies+colliders, and
+`live`/`queued`/`spawned` read 0 afterwards. No NaN piece found.
+
+### F2 (fixed) - shards thrown off the road ribbon fall forever
+The Rapier world holds only the road trimesh. Live capture at tick 95: 4 of 48 slots at
+y -4.9..-6.7 with vy about -12 m/s (free fall since spawn). A falling piece never sleeps and
+is not "far" from a player above it, so `_ageAndCullPool` never retired it: it held a pool
+slot and kept the asleep-skip (`_needSolve`) off. Fix: kill plane `_floorY` = lowest road
+vertex - 25 m, applied in the shared cull. Test: `debris-step-skip.test.mjs`, red without
+the fix. Live re-check on the patched code: NOT done. The reloaded page pegged the
+SwiftShader GPU process (load 17) and starved the commit hook, so the debug Chrome was
+stopped; the unit test is the evidence.
 
 ## 3. Incident takeovers
 (in progress)
