@@ -9,8 +9,8 @@
       "lines": 2584
     },
     "js/agent/apex.js": {
-      "codeLines": 2327,
-      "lines": 3323
+      "codeLines": 2323,
+      "lines": 3317
     },
     "js/car/car3d.js": {
       "lines": 2207
@@ -25,10 +25,10 @@
       "lines": 7339
     },
     "js/net/lobby.js": {
-      "lines": 2400
+      "lines": 2328
     },
     "js/render/glx/glx.js": {
-      "lines": 2978
+      "lines": 2981
     },
     "js/track/tracks.js": {
       "lines": 757
@@ -82,7 +82,7 @@
       "ceiling": 2,
       "slack": 0
     },
-    "waitForTimeout": 84,
+    "waitForTimeout": 85,
     "waitNoPolling": {
       "ceiling": 44,
       "slack": 39
