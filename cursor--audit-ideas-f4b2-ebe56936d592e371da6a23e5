@@ -1,1 +1,0 @@
-1792140014	Bryce Murrin	Implement audited Daily backup class/day preservation and atomic merged-Daily byte/schema preflight in js/career/career-backup.js and existing career-backup tests only. Do not touch active daily-challenge owner or menu routing/tuner owner.  [cursor/audit-ideas-f4b2; session ebe56936d592e371da6a23e5]
