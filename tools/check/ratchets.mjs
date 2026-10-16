@@ -1,10 +1,13 @@
 // ratchets.mjs — ONE ratchet mechanism for the numbers that only ever grow.
-// @doc Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update`, `--json`, `--base <ref>` (names raises).
-// Full description: Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps ceilings down, `--json`, `--base <ref>` names raises.
+// @doc Size ratchets: ratchets.json + per-branch ratchets.d/ deltas. `--check`, `--update`, `--fold`, `--json`, `--base <ref>`.
+// Full description: Size ratchets from `tests/data/ratchets.json` plus the per-branch delta fragments in `tests/data/ratchets.d/`: `--check` (default), `--update` snaps ceilings down, `--fold` sums the fragments in, `--json`, `--base <ref>` names raises.
 //
 //   node tools/check/ratchets.mjs            # check: every metric <= its ceiling, no ceiling far above its value
 //   node tools/check/ratchets.mjs --update   # rewrite ratchets.json with the current values (after an extraction,
 //                                      #   or on a merged tree — the deploy-merge rule)
+//   node tools/check/ratchets.mjs --fold     # sum tests/data/ratchets.d/*.json into ratchets.json, delete them
+//   node tools/check/ratchets.mjs --auto-raise[=40]   # the commit hook's form: on a topic branch it writes
+//                                      #   tests/data/ratchets.d/<branch>.json (a delta), never ratchets.json
 //   node tools/check/ratchets.mjs --json     # {ok, rows:[{file, metric, value, ceiling, over, slack}]}
 //   node tools/check/ratchets.mjs --base <ref> [--max-raise=40] [--advisory]   # --advisory: a raise past the absorb
 //                                      #   annotates instead of failing — for PUSH runs, where no PR body can carry the reason
@@ -120,8 +123,102 @@ export function looseLine(r) {
   return `${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackRule ?? r.slackMax})`;
 }
 
-export function load() {
+/* PER-BRANCH RAISE FRAGMENTS (#2291, 2026-10-15). The commit hook's
+ * --auto-raise wrote an ABSOLUTE ceiling into ratchets.json, so two open PRs
+ * that both grew js/game.js (or apex.js) wrote different numbers on the same
+ * line: #2231, #2242, #2254 and #2289 went DIRTY on this file alone while
+ * their sources merged clean. Sorted one-entry-per-line keys
+ * (merge-hygiene.mjs) cannot fix a same-line fight, and GitHub's mergeability
+ * runs no custom merge driver. So an auto-raise on a topic branch writes a
+ * DELTA to tests/data/ratchets.d/<branch>.json, a file only that branch
+ * touches; the effective ceiling is ratchets.json plus every fragment.
+ * Line counts add under a clean three-way merge, so the merged tip's ceiling
+ * equals its value (tests/unit/ratchet-merge-hotspot.test.mjs). `--update` and
+ * `--fold` write the sum back as absolutes and delete the fragments. */
+const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
+export const FRAG_DIR = path.join(ROOT, "tests/data/ratchets.d");
+const FRAG_REL = path.relative(ROOT, FRAG_DIR).split(path.sep).join("/");
+
+/** ratchets.json alone, without the fragments. */
+export function loadBase() {
   return JSON.parse(fs.readFileSync(DATA, "utf8"));
+}
+
+/** Every fragment on disk, as [{name, data}] sorted by name. */
+export function readFragments(dir = FRAG_DIR) {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter((f) => f.endsWith(".json")).sort()
+    .map((name) => ({ name, data: JSON.parse(fs.readFileSync(path.join(dir, name), "utf8")) }));
+}
+
+/** base + the deltas of every fragment. PURE. A delta for an entry that
+ *  ratchets.json no longer carries (its file was deleted and --update dropped
+ *  it) has nothing to move and is ignored. */
+export function applyFragments(base, frags) {
+  const out = JSON.parse(JSON.stringify(base));
+  const bump = (bag, metric, d) => {
+    if (!bag || !(metric in bag) || typeof d !== "number") return;
+    const raw = bag[metric];
+    bag[metric] = typeof raw === "number" ? raw + d : { ...raw, ceiling: raw.ceiling + d };
+  };
+  for (const { data } of frags) {
+    for (const [file, metrics] of Object.entries(data.files || {})) for (const [m, d] of Object.entries(metrics)) bump(out.files?.[file], m, d);
+    for (const [m, d] of Object.entries(data.tree || {})) bump(out.tree, m, d);
+  }
+  return out;
+}
+
+/** The effective ceilings: ratchets.json plus every fragment. */
+export function load() {
+  return applyFragments(loadBase(), readFragments());
+}
+
+/** The fragment name for the checked-out branch, or null where a fragment
+ *  would be wrong: a detached HEAD, or the deploy branch itself (nothing
+ *  merges into it except through a PR, so absolutes cannot fight there). */
+export function fragmentName(branch) {
+  if (!branch || branch === "HEAD" || branch === DEPLOY_BRANCH) return null;
+  return branch.replace(/[^A-Za-z0-9._-]+/g, "--") + ".json";
+}
+
+function currentBranch() {
+  try {
+    return cp.execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch { return null; }
+}
+
+/** Add `rows`' (value - ceiling) to this branch's fragment; delete it when
+ *  every delta nets to zero. */
+async function writeFragment(name, rows) {
+  const file = path.join(FRAG_DIR, name);
+  const frag = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+  for (const r of rows) {
+    const scope = r.tree ? (frag.tree ||= {}) : ((frag.files ||= {})[r.file] ||= {});
+    const d = (scope[r.metric] || 0) + (r.value - r.ceiling);
+    if (d) scope[r.metric] = d; else delete scope[r.metric];
+    if (!r.tree && !Object.keys(scope).length) delete frag.files[r.file];
+  }
+  const { stableStringify } = await import("./merge-hygiene.mjs");
+  const empty = !Object.keys(frag.files || {}).length && !Object.keys(frag.tree || {}).length;
+  if (empty) { fs.rmSync(file, { force: true }); return; }
+  fs.mkdirSync(FRAG_DIR, { recursive: true });
+  fs.writeFileSync(file, stableStringify(frag));
+}
+
+/** Write `data` (effective ceilings) as the new absolute ratchets.json and
+ *  delete every fragment it now includes. */
+async function writeAbsolute(data) {
+  const { normalizeRatchets, stableStringify } = await import("./merge-hygiene.mjs");
+  fs.writeFileSync(DATA, stableStringify(normalizeRatchets(data)));
+  for (const { name } of readFragments()) fs.rmSync(path.join(FRAG_DIR, name), { force: true });
+}
+
+/** `--fold`: sum the fragments into ratchets.json. No measuring, so every
+ *  effective ceiling is unchanged; only where the number lives moves. */
+export async function fold() {
+  const n = readFragments().length;
+  await writeAbsolute(load());
+  return n;
 }
 
 export async function measure(data = load()) {
@@ -185,10 +282,9 @@ export async function update(data = load(), { dryRun = false, lowerOnly = false 
     const raw = bag[r.metric];
     bag[r.metric] = typeof raw === "number" ? r.value : { ...raw, ceiling: r.value };
   }
-  // Sorted keys + one entry per line so two PRs raising different ceilings
-  // insert on different lines (tools/check/merge-hygiene.mjs).
-  const { normalizeRatchets, stableStringify } = await import("./merge-hygiene.mjs");
-  fs.writeFileSync(DATA, stableStringify(normalizeRatchets(data)));
+  // Sorted keys + one entry per line (tools/check/merge-hygiene.mjs); the
+  // snap is absolute, so it folds the fragments in.
+  await writeAbsolute(data);
   return rows;
 }
 
@@ -231,7 +327,7 @@ export function autoRaiseBlockReason(r, maxRaise = 40) {
   return null;
 }
 
-export async function autoRaise({ maxRaise = 40, dryRun = false, data = load() } = {}) {
+export async function autoRaise({ maxRaise = 40, dryRun = false, data = load(), branch } = {}) {
   const v = verdict(await measure(data));
   const big = v.over.map((r) => ({ ...r, reason: autoRaiseBlockReason(r, maxRaise) })).filter((r) => r.reason);
   if (big.length) return { ok: false, raised: [], lowered: [], blocked: big };
@@ -241,7 +337,14 @@ export async function autoRaise({ maxRaise = 40, dryRun = false, data = load() }
              raised: v.over.map((r) => ({ file: r.file, metric: r.metric })),
              lowered: v.loose.map((r) => ({ file: r.file, metric: r.metric })) };
   }
-  const rows = await update(data);
+  // On a topic branch the raise goes to the branch's own fragment (FRAG_DIR);
+  // the deploy branch or a detached HEAD snaps the absolutes as before.
+  const name = fragmentName(branch === undefined ? currentBranch() : branch);
+  let rows;
+  if (name) {
+    rows = await measure(data);
+    await writeFragment(name, updateReceipt(rows).changes);
+  } else rows = await update(data);
   const key = (r) => `${r.file} ${r.metric}`;
   const raised = rows.filter((r) => v.over.some((o) => key(o) === key(r)));
   const lowered = rows.filter((r) => v.loose.some((o) => key(o) === key(r)));
@@ -284,9 +387,14 @@ export function diffRatchets(base, current) {
  *  message when the ref (or the file at that ref) is unreachable — a shallow
  *  clone is the usual cause, and the caller's exit code says so. */
 export function loadAt(ref) {
-  const out = cp.execFileSync("git", ["show", `${ref}:${path.relative(ROOT, DATA).split(path.sep).join("/")}`],
+  const show = (rel) => cp.execFileSync("git", ["show", `${ref}:${rel}`],
     { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  return JSON.parse(out);
+  const base = JSON.parse(show(path.relative(ROOT, DATA).split(path.sep).join("/")));
+  // The fragments at <ref> too: --base compares EFFECTIVE ceilings, so a
+  // raise is named once, whichever file carries it.
+  const names = cp.execFileSync("git", ["ls-tree", "--name-only", `${ref}`, `${FRAG_REL}/`],
+    { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).split("\n").filter((f) => f.endsWith(".json")).sort();
+  return applyFragments(base, names.map((f) => ({ name: path.basename(f), data: JSON.parse(show(f)) })));
 }
 
 /** True when `docs/notes/CEILING-HISTORY.md` differs from <ref> — the written
@@ -428,11 +536,16 @@ async function main() {
     process.exitCode = receipt.missing.length ? 1 : 0;
     return;
   }
+  if (argv.includes("--fold")) {
+    const n = await fold();
+    console.log(`ratchets --fold: ${n} fragment(s) summed into tests/data/ratchets.json and deleted; every effective ceiling unchanged`);
+    return;
+  }
   const auto = argv.find((a) => a.startsWith("--auto-raise"));
   if (auto) {
     const maxRaise = Number(auto.split("=")[1]) || 40;
     const r = await autoRaise({ maxRaise });
-    for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff)`);
+    for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff: ${fragmentName(currentBranch()) ? `tests/data/ratchets.d/${fragmentName(currentBranch())}` : "tests/data/ratchets.json"})`);
     for (const x of r.lowered) console.log(`LOWERED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value}`);
     for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — ${x.reason}: ${x.tree || x.slackMax === 0 ? "shrink it back" : "extract"}, or raise it deliberately (node tools/check/ratchets.mjs --update) and say why in the commit`);
     process.exitCode = r.ok ? 0 : 1;

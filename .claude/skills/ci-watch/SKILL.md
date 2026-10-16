@@ -84,6 +84,10 @@ ARM a PR only when ALL hold; any miss is WAIT (say which):
 4. One summary per sweep, no per-PR chatter: the table, the actions taken
    (`#n READY`, `#n ARM`, ...), the PRs stood down on and why, anything needing
    Bryce. Never poll with `gh run view` loops; the board is the poll.
+5. **CI verdict (agents watching their own PR):** one
+   `node tools/ci/ci-watch.mjs --sha <tip> --once` per turn — never
+   `--timeout 600` or any long foreground poll loop. If the line is still
+   `= ci running` or jobs are queued, write a handoff note and end the turn.
 
 ## Cadence
 

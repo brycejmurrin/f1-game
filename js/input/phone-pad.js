@@ -325,9 +325,16 @@ const PhonePad = (function () {
     // hosted again for the room's own lifetime (nostr HOST_TIMEOUT_MS), and the
     // phone dials it again by itself. A private relay's one mailbox is not reusable.
     let relink = false;
+    // A failed pairing takes its dead QR down and releases the pending
+    // transport; the page's button stops reading STOP PAIRING (#2198).
     function failed(msg) {
       phase = "failed"; say(msg, true);
+      dropRoom();
+      if (!active && transport) { try { transport.close(); } catch (e) { /* never opened */ } }
+      transport = null;
+      qr(null, null);
       if (relink) { relink = false; Log.info("input", "phone pad re-link gave up"); if (ui.lost) { try { ui.lost(); } catch (e) { /* ui's problem */ } } }
+      else if (ui.failed) { try { ui.failed(); } catch (e) { /* ui's problem */ } }
     }
 
     function dropRoom() {
@@ -370,7 +377,9 @@ const PhonePad = (function () {
           onFail: (r) => {
             if (!r || r.error === "cancelled" || r.error === "stopped" || !["waiting", "connecting"].includes(phase)) return;
             if (r.advisory) { say(r.message, true); return; }
-            failed(r.message || "The room service went away — try again.");
+            // nostr's expiry copy is VS FRIEND's ("Check the six characters…").
+            failed(r.error === "expired" ? "The code expired — press STEER THIS GAME WITH A PHONE for a new one."
+              : r.message || "The room service went away — try again.");
           },
           mintOffer: async () => null,     // one phone; a second scan gets nothing
           onJoiner: async (_who, answer) => {
@@ -399,7 +408,7 @@ const PhonePad = (function () {
                 dropRoom();
                 if (wasLinked && why !== "peer" && !deps.usingPrivateRelay()) {
                   relink = true; active = null; transport = null;
-                  Log.info("input", "phone pad dropped (" + why + ") — hosting " + code + " again");
+                  Log.info("input", "phone pad dropped (" + why + ") — hosting again");
                   if (ui.relinking) { try { ui.relinking(); } catch (e) { /* ui's problem */ } }
                   open();
                   return;
@@ -841,14 +850,21 @@ const PhonePad = (function () {
     // the same code once more as soon as the page is in front of the player;
     // the game hosts that code again for two minutes (host() re-link).
     let redial = null;
+    // A re-dial can land before the game has re-hosted the code (it waits out
+    // its own disconnect grace first): retry a failed one on this backoff,
+    // inside the game's 120 s re-host window, then give up (#2198).
+    const REDIAL_BACKOFF_MS = [5000, 15000, 30000];
+    let redialTries = 0, redialTimer = null, redialing = false;
+    function stopRedial() { redial = null; redialTries = 0; if (redialTimer) { clearTimeout(redialTimer); redialTimer = null; } }
     function redialNow() {
       if (!redial || connecting || session || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
       const c = redial; redial = null;
+      redialing = true;
       connect(c);
     }
     if (typeof document !== "undefined") document.addEventListener("visibilitychange", redialNow);
     function cancel() {
-      redial = null;
+      stopRedial();
       const old = attempt; attempt = null;
       if (old) old.cancelled = true;
       connecting = false;
@@ -861,7 +877,9 @@ const PhonePad = (function () {
     }
     if (typeof window !== "undefined" && window.addEventListener) window.addEventListener("pagehide", cancel);
     async function connect(codeIn) {
+      const isRedial = redialing; redialing = false;
       if (connecting || session) return { ok: false, error: "busy" };
+      if (!isRedial) stopRedial();   // a CONNECT tap replaces any pending retry
       const incoming = pairingFromUrl(codeIn);
       if (incoming) { pairing = incoming; codeIn = incoming.code; if (dom.codeIn) dom.codeIn.value = codeIn; paintCodeInput(); }
       if (pairing && (pairing.invalid || !deps.setSessionUrl(pairing.relay))) {
@@ -907,6 +925,16 @@ const PhonePad = (function () {
             : why.error === "expired" ? "The game is not offering that code any more — press STEER THIS GAME WITH A PHONE there for a new one."
             : why.message || "Could not reach the game. Make a new code there and try again.", true);
           try { transport.close(); } catch (e) { /* never opened */ }
+          if (isRedial && why.error !== "build_mismatch") {
+            if (redialTries < REDIAL_BACKOFF_MS.length) {
+              const wait = REDIAL_BACKOFF_MS[redialTries++];
+              say("Link lost — reconnecting… (try " + redialTries + " of " + REDIAL_BACKOFF_MS.length + ")", true);
+              redialTimer = setTimeout(() => { redialTimer = null; redial = code; redialNow(); }, wait);
+            } else {
+              redialTries = 0;
+              say("Could not reconnect to the game — press STEER THIS GAME WITH A PHONE there, then CONNECT.", true);
+            }
+          }
           return why;
         }
         say("Connecting…");
@@ -937,6 +965,7 @@ const PhonePad = (function () {
         });
         if (attempt !== owner) { active.close(); return { ok: false, error: "cancelled" }; }
         session = active;
+        redialTries = 0;   // a link is up: a later drop gets the full backoff again
         const tick = () => { if (session !== active) return; active.pump(); requestAnimationFrame(tick); };
         if (typeof requestAnimationFrame === "function") requestAnimationFrame(tick);
         return { ok: true };
