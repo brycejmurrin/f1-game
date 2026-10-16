@@ -11,7 +11,7 @@ import { cachedPlan, returnTo, verifyStages, runStages, VERIFY_MODES } from "../
 import { sessionId, main as whoMain } from "../../tools/ci/who-is-on-it.mjs";
 import { episodeLeaks } from "../../tools/check/episode-diff.mjs";
 import { update, updateReceipt, DATA } from "../../tools/check/ratchets.mjs";
-import { project, main as importMain } from "../../tools/track/import-circuit-path.mjs";
+import { project, meanError, main as importMain } from "../../tools/track/import-circuit-path.mjs";
 import { validatePresets, presetChanges } from "../../tools/lighting/preset-validation.mjs";
 import { skyDepthErrors } from "../../tools/gfx/wgx-validate.mjs";
 import { encodePNG, decodePNG, sampleRadianceHdr } from "../../tools/gen/assets.mjs";
@@ -228,6 +228,18 @@ test("importer imports without fetching, and help/invalid options are validated 
   } finally { globalThis.fetch = original; }
   assert.throws(() => project([]), /coordinates/);
   assert.throws(() => project([[1, 2], [NaN, 3], [4, 5]]), /coordinates/);
+});
+
+test("self-check error ignores a constant shift and a differing vertex count", () => {
+  const ring = [[0, 0], [100, 0], [200, 50], [200, 150], [100, 200], [0, 150]];
+  const shifted = ring.map(([x, z]) => [x, z - 3.5]);
+  assert.ok(meanError(ring, shifted).err < 0.01);
+  // a hand-added vertex on an edge is the same polyline, so it stays inside the 2 m bar
+  const extra = [...ring.slice(0, 2), [150, 25], ...ring.slice(2)];
+  assert.ok(meanError(ring, extra).err < 0.01);
+  // a real deviation still reads
+  const moved = ring.map(([x, z], i) => (i === 3 ? [x + 60, z] : [x, z]));
+  assert.ok(meanError(ring, moved).err > 5);
 });
 
 test("importer does not claim success when source has no requested circuit coverage", (t) => {

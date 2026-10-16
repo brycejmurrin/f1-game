@@ -57,6 +57,12 @@ const COMMITTED = {
   suzuka: "jp-1962", vegas: "us-2023", zandvoort: "nl-1948",
 };
 
+// Circuits whose committed trace was deliberately hand-edited away from the
+// upstream digitisation (Baku's old-town section is up to 45 m off). The bar
+// for these is their MEASURED drift, so further drift fails; re-import (or a
+// new edit) lowers or raises it with a reason.
+const HAND_TUNED = { baku: 15 };
+
 // The retired / off-calendar circuits upstream carries that the game does not.
 const CLASSICS = {
   hockenheim: "de-1932", nurburgring: "de-1927", catalunya: "es-1991",
@@ -145,28 +151,68 @@ function emit(gameId, entry, asJson) {
   return `    path: { len: ${entry.len}, pts: ${JSON.stringify(entry.pts)} },  // ${gameId}`;
 }
 
-// Mean per-vertex distance between two same-length traces, after aligning the
-// rotational offset and point order (a trace may be stored reversed).
-function meanError(a, b) {
-  if (a.length !== b.length) return { err: Infinity, offset: 0, reversed: false };
+// Mean error between two traces. A committed trace is recentred on ITS OWN
+// bounding box, so a hand edit near the extreme (miami's Turnpike section)
+// shifts every vertex by a constant; the comparison therefore removes the best
+// translation (the mean displacement) before measuring. Same vertex count:
+// per-vertex distance after aligning rotation and direction (a trace may be
+// stored reversed). Different count (bahrain carries hand-added vertices):
+// the symmetric mean distance between each trace and the other's polyline.
+export function meanError(a, b) {
+  if (a.length !== b.length) return polylineError(a, b);
   const n = a.length;
-  const ca = centre(a), cb = centre(b);
-  const A = a.map(([x, z]) => [x - ca[0], z - ca[1]]);
   let best = { err: Infinity, offset: 0, reversed: false };
   for (const reversed of [false, true]) {
-    const B0 = reversed ? [...b].reverse() : b;
-    const B = B0.map(([x, z]) => [x - cb[0], z - cb[1]]);
+    const B = reversed ? [...b].reverse() : b;
     for (let off = 0; off < n; off++) {
+      let dx = 0, dz = 0;
+      for (let i = 0; i < n; i++) { const q = B[(i + off) % n]; dx += a[i][0] - q[0]; dz += a[i][1] - q[1]; }
+      dx /= n; dz /= n;
       let sum = 0;
       for (let i = 0; i < n; i++) {
-        const p = A[i], q = B[(i + off) % n];
-        sum += Math.hypot(p[0] - q[0], p[1] - q[1]);
+        const q = B[(i + off) % n];
+        sum += Math.hypot(a[i][0] - q[0] - dx, a[i][1] - q[1] - dz);
       }
       const err = sum / n;
       if (err < best.err) best = { err, offset: off, reversed };
     }
   }
   return best;
+}
+
+function segDist(p, a, b) {
+  const vx = b[0] - a[0], vz = b[1] - a[1], l2 = vx * vx + vz * vz;
+  const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * vx + (p[1] - a[1]) * vz) / l2)) : 0;
+  return Math.hypot(p[0] - a[0] - t * vx, p[1] - a[1] - t * vz);
+}
+function toPolyline(p, pts) {
+  let d = Infinity;
+  for (let i = 0; i < pts.length; i++) d = Math.min(d, segDist(p, pts[i], pts[(i + 1) % pts.length]));
+  return d;
+}
+function polylineError(a, b) {
+  const ca = centre(a), cb = centre(b);
+  let dx = ca[0] - cb[0], dz = ca[1] - cb[1], err = Infinity;
+  for (let iter = 0; iter < 8; iter++) {
+    const B = b.map(([x, z]) => [x + dx, z + dz]);
+    err = (a.reduce((s, p) => s + toPolyline(p, B), 0) / a.length
+      + B.reduce((s, p) => s + toPolyline(p, a), 0) / B.length) / 2;
+    // nudge the translation by the mean vertex-to-nearest-point residual of `a`
+    let rx = 0, rz = 0;
+    for (const p of a) {
+      let bd = Infinity, bq = null;
+      for (let i = 0; i < B.length; i++) {
+        const u = B[i], v = B[(i + 1) % B.length];
+        const vx = v[0] - u[0], vz = v[1] - u[1], l2 = vx * vx + vz * vz;
+        const t = l2 ? Math.max(0, Math.min(1, ((p[0] - u[0]) * vx + (p[1] - u[1]) * vz) / l2)) : 0;
+        const q = [u[0] + t * vx, u[1] + t * vz], d = Math.hypot(p[0] - q[0], p[1] - q[1]);
+        if (d < bd) { bd = d; bq = q; }
+      }
+      rx += p[0] - bq[0]; rz += p[1] - bq[1];
+    }
+    dx += rx / a.length; dz += rz / a.length;
+  }
+  return { err, offset: 0, reversed: false };
 }
 
 function centre(pts) {
@@ -237,12 +283,13 @@ if (selfCheck) {
     // (0.4-1.1 m) and far below any real projection mistake, which lands in the
     // hundreds of metres.
     checked++;
-    const ok = cmp.err <= 2;
+    const bar = HAND_TUNED[gameId] ?? 2;
+    const ok = cmp.err <= bar;
     results.push({ gameId, ok, errorM: Number.isFinite(cmp.err) ? cmp.err : null, points: made.pts.length, committedPoints: have.pts.length });
     if (!ok) failures++;
     worst = Math.max(worst, cmp.err);
     if (!asJson) console.log(
-      `${ok ? "OK  " : "FAIL"} ${gameId.padEnd(13)} err=${cmp.err.toFixed(2)} m  ` +
+      `${ok ? (bar > 2 ? "EDIT" : "OK  ") : "FAIL"} ${gameId.padEnd(13)} err=${cmp.err.toFixed(2)} m  ` +
       `pts ${made.pts.length}/${have.pts.length}  len ${made.len}/${have.len}` +
       `${cmp.reversed ? "  (stored reversed)" : ""}`);
   }
