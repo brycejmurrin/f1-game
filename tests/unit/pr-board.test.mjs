@@ -42,12 +42,12 @@ test("suggest: ARM needs the gate; a pending or absent gate waits", () => {
   assert.equal(suggest({ ...base, gate: "none" }, ctx()), "WAIT");
 });
 
-test("suggest: READY — draft, green, gate passed, cap room", () => {
+test("suggest: READY — draft, green, gate passed; the cap is reported, never a WAIT (2026-10-16)", () => {
   const d = { ...base, draft: true };
   assert.equal(suggest(d, ctx(0)), "READY");
   assert.equal(suggest(d, ctx(2)), "READY");
-  assert.equal(suggest(d, ctx(3)), "WAIT", "cap full");
-  assert.equal(suggest(d, { room: 0 }), "WAIT");
+  assert.equal(suggest(d, ctx(3)), "READY", "a full cap no longer holds a green draft");
+  assert.equal(suggest(d, { room: 0 }), "READY");
   assert.equal(suggest(d, { room: 1 }), "READY");
 });
 
@@ -146,11 +146,11 @@ test("evaluate: sorts, derives ci/gate/failing jobs, and READY flips consume the
   ];
   const r = evaluate(items, { cap: { cap: 3, count: 2, ok: true } });
   assert.deepEqual(r.rows.map((x) => x.number), [3, 5, 7, 9]);
-  assert.deepEqual(r.rows.map((x) => x.suggest), ["READY", "FIX", "WAIT", "WAIT"], "one slot: the first draft takes it");
+  assert.deepEqual(r.rows.map((x) => x.suggest), ["READY", "FIX", "WAIT", "READY"], "every green draft is READY; the cap is only reported");
   assert.deepEqual(r.rows[1].failing, ["Smoke (2)"]);
   assert.equal(r.rows[1].gate, "failed");
   assert.equal(r.rows[1].mergeMethod, "merge");
-  assert.equal(r.cap.room, 1);
+  assert.equal(r.cap.room, 1, "the cap is still measured and reported");
 });
 
 test("render: header, one line per PR, a footer; empty board says so", () => {
@@ -215,6 +215,41 @@ test("measure: failing jobs come from the failed run; --pr reads one PR but stil
   assert.deepEqual(one.rows.map((r) => r.number), [2]);
   assert.ok(calls.some((c) => c.startsWith("actions/workflows/ci.yml/runs?event=pull_request")), "cap still measured");
   assert.ok(!calls.includes("pulls/1"));
+});
+
+test("measure --pr counts armed siblings across every PR page, without reading their CI details", () => {
+  for (const methods of [["merge", "merge"], ["squash", "rebase"], ["merge", null]]) {
+    const prs = Array.from({ length: 101 }, (_, i) => prObj(i + 1, { draft: true }));
+    prs[0] = prObj(1, { auto_merge: { merge_method: methods[0] } });
+    prs[2] = prObj(3);
+    if (methods[1]) prs[100] = prObj(101, { auto_merge: { merge_method: methods[1] } });
+    const { request, calls } = fakeApi({
+      prs,
+      runsBySha: { [SHA(3)]: [{ id: 77, status: "completed", conclusion: "success" }] },
+      jobsByRun: { 77: fullJobs() }, checksBySha: { [SHA(3)]: guard() },
+    });
+    const all = measure({ request });
+    const expected = methods[1] ? "WAIT" : "ARM";
+    assert.equal(all.rows.find((r) => r.number === 3).suggest, expected);
+    calls.length = 0;
+    const one = measure({ request, only: 3 });
+    assert.equal(one.ok, true);
+    assert.deepEqual(one.rows.map((r) => [r.number, r.suggest]), [[3, expected]], methods.join("/"));
+    assert.ok(calls.some((q) => q.startsWith("pulls?") && q.includes("page=2")));
+    assert.deepEqual(calls.filter((q) => /^pulls\/\d+$/.test(q)), ["pulls/3"]);
+    assert.ok(!calls.some((q) => q.includes(`head_sha=${SHA(1)}`) || q.startsWith(`commits/${SHA(101)}/`)),
+      "siblings need metadata, not per-PR CI inspection");
+  }
+});
+
+test("measure --pr refreshes the selected PR's armed state after listing siblings", () => {
+  const prs = [prObj(1, { auto_merge: { merge_method: "merge" } }), prObj(3, { auto_merge: { merge_method: "merge" } })];
+  const { request } = fakeApi({ prs,
+    runsBySha: { [SHA(3)]: [{ id: 77, status: "completed", conclusion: "success" }] },
+    jobsByRun: { 77: fullJobs() }, checksBySha: { [SHA(3)]: guard() },
+  });
+  const v = measure({ only: 3, request: (q) => q === "pulls/3" ? { json: prObj(3) } : request(q) });
+  assert.equal(v.rows[0].suggest, "ARM", "the newly disarmed target leaves only one sibling armed");
 });
 
 test("measure --pr on a PR that is closed or targets another base is a bad-args error", () => {
@@ -307,9 +342,8 @@ test("ci-watch skill pins the authority, MERGE-commit-only and no-merge rules an
   assert.match(t, /MERGE-COMMIT-ONLY/);
   assert.match(t, /mergeMethod: "MERGE"/);
   assert.match(t, /Never merge/);
-  assert.match(t, /At most 3 flips per sweep/);
   assert.match(t, /ready-gate\.mjs/);
-  assert.match(t, /ready-full-cap\.mjs/);
+  assert.match(t, /No ready cap since\s+2026-10-16/, "the cap is retired; the skill says so instead of gating on it");
   assert.match(t, /## Routine prompt/);
   for (const s of SUGGESTIONS) assert.ok(t.includes(s), `ci-watch must route ${s}`);
   // pr-owner and session-comms folded into steward / agent-fleet references (2026-10-14).
@@ -334,7 +368,7 @@ test("steward ownership reference (ex pr-owner) pins the loop's gates and carrie
   assert.match(t, /sync-pr\.mjs/);
   assert.match(t, /remote-group\.mjs/);
   assert.match(t, /ready-gate\.mjs/);
-  assert.match(t, /ready-full-cap\.mjs/);
+  assert.doesNotMatch(t, /ready-full-cap\.mjs exit 0/, "no cap gate in the ready flow since 2026-10-16");
   assert.match(t, /Do not enable auto-merge or merge/);
   assert.match(t, /\.github\/pull_request_template\.md/);
 });
@@ -344,7 +378,7 @@ test("ci-watcher agent is read-only (no write or MCP tools) and listed in the ag
   assert.match(t, /^tools: Bash, Read, Grep, Glob$/m);
   assert.match(t, /^readonly: true$/m);
   assert.match(t, /pr-board\.mjs --json/);
-  assert.match(t, /ready-full-cap\.mjs/);
+  assert.match(t, /informational/, "the cap is reported, never a hold");
   assert.match(read(".claude/agents/README.md"), /\*\*ci-watcher\*\*/);
 });
 

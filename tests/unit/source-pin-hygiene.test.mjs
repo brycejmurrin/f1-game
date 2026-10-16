@@ -26,7 +26,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // 2026-10-11: ship #1313/#1398 lowered to 308; #1389/#1403 sync keeps that.
 const CEILING = 308;
 const EXEMPT = new Set(["tests/helpers/game-source.mjs", "tests/unit/source-pin-hygiene.test.mjs"]);
-const RAW = /game\.js['"]/g;
+// A quoted path literal ends `game.js"` / `game.js'`. A possessive in prose (`game.js's`)
+// is not a read: 2026-10-16 a comment saying "game.js's real scale" counted as the 309th
+// read and turned the tip red, so an apostrophe followed by `s` is not counted.
+const RAW = /game\.js(?:"|'(?!s\b))/g;
 
 function rawSites() {
   const per = [];
@@ -43,6 +46,14 @@ function rawSites() {
   walk("tests");
   return per;
 }
+
+test("the raw-read pattern counts quoted path literals, not possessive prose", () => {
+  const count = (t) => (t.match(RAW) || []).length;
+  assert.equal(count('readFileSync(join(ROOT, "js/game.js"), "utf8")'), 1);
+  assert.equal(count("readFileSync(join(ROOT, 'js/game.js'), 'utf8')"), 1);
+  assert.equal(count("// Scripted pace on game.js's real scale"), 0, "a possessive comment is not a read");
+  assert.equal(count("// see game.js's note and also read 'js/game.js'"), 1, "only the real literal counts");
+});
 
 test("raw js/game.js source reads under tests/ never grow (read through tests/helpers/game-source.mjs)", () => {
   const per = rawSites();

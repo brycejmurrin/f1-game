@@ -1132,6 +1132,29 @@ function menuRig() {
   return r;
 }
 
+test("a held D-pad direction re-arms immediately when a child menu layer opens", () => {
+  const r = menuRig();
+  const { Input, sb, dispatched, tick } = r;
+  const pad = rawPad();
+  let layer = { id: "parent", contains: () => true };
+  sb.MenuNav.activeLayer = () => layer;
+  sb.UiLayers.top = () => layer;
+  sb.navigator.getGamepads = () => [pad];
+  r.fire("gamepadconnected", { gamepad: pad });
+
+  setBtn(pad, 13, true);
+  tick();
+  assert.deepEqual(dispatched.map((e) => e.key), ["ArrowDown"], "the initial hold moves the parent layer");
+  dispatched.length = 0;
+
+  // Keep the D-pad held while A opens a nested sheet. The child must receive
+  // the held direction on its first poll instead of waiting for the parent's
+  // 450 ms repeat deadline.
+  layer = { id: "child", contains: () => true };
+  tick();
+  assert.deepEqual(dispatched.map((e) => e.key), ["ArrowDown"], "the child layer gets an immediate direction step");
+});
+
 test("I-01: a mapping-\"\" pad (wheel) resting at -1 on axes 1-3 does not walk the menu", () => {
   const { Input, sb, fire, dispatched, tick } = menuRig();
   const pad = rawPad({ mapping: "", id: "Logitech G29 Driving Force Racing Wheel", axes: [0, -1, -1, -1] });
@@ -1163,6 +1186,26 @@ test("I-01: a mapping-\"\" pad's buttons 14/15 do not steer; a standard pad's st
   setBtn(std, 14, true);
   for (let i = 0; i < 30; i++) { t += 16; Input.poll(); }
   assert.ok(Input.debugState().pad.steer < 0, "control: the standard d-pad left steers");
+});
+
+test("wheel menu directions honor steering inversion and the signed calibrated centre", () => {
+  for (const mapping of ["", "standard"]) for (const invert of [1, -1]) for (const rest of [-0.1, 0, 0.2]) {
+    const { Input, sb, fire, dispatched, tick } = menuRig();
+    const pad = rawPad({ mapping, id: mapping ? "Standard pad" : "Wheel", axes: [rest * invert, 0, -1, -1] });
+    Input.setPadAxisMap({ steer: 0, steerInvert: invert, throttle: 2, brake: 3 });
+    Input.setPadRest(rest);
+    sb.navigator.getGamepads = () => [pad];
+    fire("gamepadconnected", { gamepad: pad });
+    tick();
+    assert.deepEqual(dispatched.map((e) => e.key), [], `centre: mapping ${mapping}, invert ${invert}, rest ${rest}`);
+    for (const [offset, key] of [[-0.7, "ArrowLeft"], [0.5, "ArrowRight"]]) {
+      pad.axes[0] = +((rest + offset) * invert).toFixed(2); tick();
+      assert.deepEqual(dispatched.map((e) => e.key), [key], `mapping ${mapping}, invert ${invert}, rest ${rest}, raw ${pad.axes[0]}`);
+      dispatched.length = 0;
+      pad.axes[0] = rest * invert; tick();
+      assert.deepEqual(dispatched.map((e) => e.key), [], "returning to calibrated centre stops menu movement");
+    }
+  }
 });
 
 test("I-01: a wheel's bound paddles navigate up/down in a menu", () => {

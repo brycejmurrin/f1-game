@@ -116,6 +116,7 @@ const SPEC = [
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
   { k: "buildWorker", lane: "raw", group: "display", def: "1", src: "js/track/build-client.js BUILD IN BACKGROUND (unset = ON when multi-core; \"0\"/\"1\" force)", oneOf: ["0", "1"] },
+  { k: "portraitOk", lane: "raw", group: "display", def: "0", src: "js/game.js RACE IN PORTRAIT (\"1\" = race upright, else the rotate blocker)", oneOf: ["0", "1"] },
   { k: "debris", lane: "raw", group: "display", def: "0", src: "js/ui/debris-opts.js + js/physics/debris-world.js create() (only \"1\" is on)" },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId", perDevice: true },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
@@ -163,6 +164,7 @@ const SPEC = [
   { k: "touchCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "padCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "touchRange", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js touchRangeFromSlider (0.12 of the long edge at 5)" },
+  { k: "touchDragSpeed", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js touchSpeedFromSlider (1 = off, the default; 10 = full ADAPTIVE BUTTONS shed on drag range)" },
   { k: "dragSmooth", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js dragCutoffFromSlider (1 = filter off)" },
   { k: "digitalRate", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js steerRateFromSlider (KEY_RAMP_IN)" },
   { k: "analogSpeedSteer", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js analogSpeedFromSlider (1 = off)" },
@@ -222,6 +224,7 @@ const SPEC = [
   { k: "throttleLatch", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
   { k: "dirtyAir", lane: "json", group: "driving", def: "classic", oneOf: ["off", "classic", "cfd"], src: "js/game.js PhysicsConsts.DirtyAir" },
+  { k: "wind", lane: "json", group: "driving", def: "real", oneOf: ["off", "real"], src: "js/race/race-settings.js WIND row → Wind.setLevel" },
   { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
   { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
@@ -692,9 +695,9 @@ function resetGarage() {
 
 // THE CAREER FILE: the six championship slots and the live pointer. Same
 // allowlist discipline as the garage — only career.<flavour>.<i> and
-// careerSlot leave or enter the namespace. Every slot value runs through
-// migrateCareer on the way out and on the way in so a hand-edited or
-// older-build file cannot crash Career.load().
+// careerSlot leave or enter the namespace. Supported slots run through
+// migrateCareer on export/import; opaque future saves export verbatim and
+// refuse import so an older build cannot silently discard them.
 const CAREER_FORMAT = "apex26-career-v1";
 const CAREER_FLAVOURS = ["driver", "myteam"];
 const CAREER_SLOT_N = 3;
@@ -712,6 +715,14 @@ function migrateSlot(raw) {
   if (typeof GameStore !== "undefined" && GameStore.migrateCareer) return GameStore.migrateCareer(copy);
   return copy && typeof copy === "object" && !Array.isArray(copy) ? copy : null;
 }
+// Ask the shared authority about opaque future saves before migration can
+// discard them. Check only the version so unrelated legacy coercion, shape
+// and size decisions cannot hide a future discriminator.
+function futureCareerSlot(raw, flavour) {
+  if (typeof CareerBackup === "undefined") return false;
+  return CareerBackup.validate({ format: CareerBackup.FORMAT,
+    slots: [{ flavour, i: 0, data: { v: raw && raw.v } }] }).reason === "newer-version";
+}
 function collectCareer() {
   const out = {};
   let n = 0;
@@ -727,7 +738,7 @@ function collectCareer() {
           if (s != null) raw = JSON.parse(s);
         } catch (_) { raw = null; }
       }
-      const c = migrateSlot(raw);
+      const c = futureCareerSlot(raw, f) ? JSON.parse(JSON.stringify(raw)) : migrateSlot(raw);
       if (!c) continue;
       out[k] = c;
       n++;
@@ -775,9 +786,10 @@ function applyCareer(file, revisions) {
       else skipped++;
       continue;
     }
+    const match = CAREER_SLOT_RE.exec(k);
+    if (futureCareerSlot(bag[k], match[1])) return refused("newer-version");
     const c = migrateSlot(bag[k]);
     if (!c) { skipped++; continue; }
-    const match = CAREER_SLOT_RE.exec(k);
     slots.push({ flavour: match[1], i: Number(match[2]), data: c });
   }
   if (!slots.length && liveSlot == null) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
@@ -885,7 +897,7 @@ function create(G) {
         flash(b, label, `SAVED (${n})`);
         Log.info("ui", "file saved", { id, n });
       } catch (e) {
-        flash(b, label, "FAILED");
+        flash(b, label, typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "CANCELLED" : "FAILED");
         Log.warn("ui", "file save failed", e && e.message);
       } finally {
         b.disabled = false;
@@ -986,8 +998,8 @@ function create(G) {
           const ti = Teams.LIST.findIndex((t) => t.id === teamId);
           if (ti >= 0) G.teamIdx = ti;
         },
-        openGarage: (from) => { if (G.openGarage) G.openGarage(from || "share"); },
-        openDaily: () => { if (G.openDailyPicker) G.openDailyPicker(); },
+        openGarage: (from) => { if (G.openGarage) { if (G.closeSettings) G.closeSettings(); G.openGarage(from || "share"); } },
+        openDaily: () => { if (G.openDailyPicker) { if (G.closeSettings) G.closeSettings(); G.openDailyPicker(); } },
       });
       shareStatus.textContent = ShareCode.messageFor(started.n ? { ok: false } : applied);
     };

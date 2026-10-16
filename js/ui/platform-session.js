@@ -88,6 +88,7 @@ if ($("pm-fullscreen")) {
 (function iosInstallNudge() {
   const el = $("ios-install");
   if (!el) return;
+  if (typeof Native !== "undefined" && Native.isNative()) { el.hidden = true; return; }
   const nav = navigator;
   const ios = /iPad|iPhone|iPod/.test(nav.userAgent) ||
     (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);   // iPadOS reports as a Mac
@@ -115,6 +116,11 @@ if ($("pm-fullscreen")) {
 (function installChip() {
   const chip = $("install-chip"), row = $("pm-install");
   if (!chip && !row) return;
+  if (typeof Native !== "undefined" && Native.isNative()) {
+    if (chip) chip.hidden = true;
+    if (row) row.hidden = true;
+    return;
+  }
   let deferred = null;
   const hide = () => { if (chip) chip.hidden = true; };
   const paintRow = () => { if (row) row.hidden = !deferred; };
@@ -142,12 +148,68 @@ if ($("pm-fullscreen")) {
   const ov = $("overlay");
   if (ov) ov.addEventListener("click", (e) => { if (e.target.closest && e.target.closest(".bigbtn")) hide(); });
 })();
+
+// A settled optional pool can still have misses: give installed web players a
+// concrete offline status and an explicit retry beside the install door.
+(function offlineReadiness() {
+  if (typeof Native !== "undefined" && Native.isNative()) return;
+  const anchor = $("pm-install");
+  if (!anchor || !anchor.parentNode || !navigator.serviceWorker || typeof MessageChannel === "undefined") return;
+  const note = document.createElement("p"), button = document.createElement("button");
+  note.className = "adv-help"; note.setAttribute("role", "status");
+  note.textContent = "Offline availability has not been checked.";
+  button.type = "button"; button.textContent = "CHECK OFFLINE AVAILABILITY";
+  anchor.parentNode.insertBefore(note, anchor.nextSibling);
+  anchor.parentNode.insertBefore(button, note.nextSibling);
+  let busy = false, retry = false, polls = 0;
+  async function refresh(download = false) {
+    if (busy) return;
+    const controller = navigator.serviceWorker.controller;
+    if (!controller) { note.textContent = "Offline availability is unknown until this page is controlled by its installer."; return; }
+    busy = true; button.disabled = true;
+    try {
+      const result = await new Promise((resolve) => {
+        const channel = new MessageChannel(); let ended = false;
+        const finish = (value) => {
+          if (ended) return;
+          ended = true; clearTimeout(timer); channel.port1.close(); channel.port2.close(); resolve(value);
+        };
+        const timer = setTimeout(() => finish(null), 5000);
+        channel.port1.onmessage = (event) => finish(event.data);
+        try { controller.postMessage({ type: download ? "apex-offline-retry" : "apex-offline-status" }, [channel.port2]); }
+        catch (_) { finish(null); }
+      });
+      if (navigator.serviceWorker.controller !== controller || !result || result.type !== "apex-offline-status" || !result.known) {
+        retry = false; note.textContent = "Offline availability is unknown. Try checking again.";
+      } else {
+        retry = !!(result.coreReady && result.optionalMissing > 0);
+        note.textContent = !result.coreReady ? "Core offline files are incomplete. Reconnect and reload to install them."
+          : result.optionalMissing > 0 ? "Core game ready offline. " + result.optionalMissing + " of " + result.optionalTotal + " optional files remain unavailable." + (result.retrying ? " Downloading…" : "")
+          : "Core game and install downloads ready offline. Optional content used later may still need a connection.";
+        if (result.retrying && polls++ < 12) setTimeout(() => refresh(), 5000);
+        else polls = 0;
+      }
+    } finally {
+      busy = false; button.disabled = false;
+      button.textContent = retry ? "RETRY OPTIONAL DOWNLOADS" : "CHECK OFFLINE AVAILABILITY";
+    }
+  }
+  button.addEventListener("click", () => { polls = 0; refresh(retry); });
+  navigator.serviceWorker.addEventListener("controllerchange", () => refresh());
+  refresh();
+})();
 }
 
 function wirePhone() {
 // PHONE AS CONTROLLER (js/input/phone-pad.js, LAZY_NET): the button loads the
 // multiplayer stack the pairing rides on, then the module owns the pairing and
 // feeds Input.remoteSample(). A second press cancels; a lost phone re-arms it.
+// Pairing's generic URL builder follows its page origin. Adapt outgoing links
+// here for native hosts, preserving the private code and relay in the fragment.
+function phoneLink(url) {
+  if (!url || typeof Native === "undefined" || !Native.isNative()) return url;
+  return PhonePad.padUrl("", Native.shareBase()).replace(/#.*$/, "") + new URL(url).hash;
+}
 let phonePad = null;
 let phonePadLoading = false, phonePadGeneration = 0;
 // The camera the player was in before a phone linked: a phone in the hand is the wheel, so the
@@ -194,11 +256,12 @@ $("pm-phonepad").onclick = () => {
     if (generation !== phonePadGeneration) return;
     phonePadLoading = false;
     if (!ok) { btn.textContent = "STEER THIS GAME WITH A PHONE"; status.textContent = "Could not load the pairing stack — check the connection."; return; }
-    $("pm-phonepad-url").textContent = PhonePad.padUrl("").replace(/#.*$/, "");
+    $("pm-phonepad-url").textContent = phoneLink(PhonePad.padUrl("")).replace(/#.*$/, "");
     phonePad = PhonePad.host({
       hud: phonePadDash,
       say: (t) => { status.textContent = t; },
       qr: (url, code) => {
+        url = phoneLink(url);
         LobbyCodes.paintQr($("pm-phonepad-qr-wrap"), $("pm-phonepad-qr"), url);
         $("pm-phonepad-code").textContent = code || "";
         $("pm-phonepad-code").setAttribute("data-private", String(!!code && code.length > 6));
@@ -213,6 +276,8 @@ $("pm-phonepad").onclick = () => {
       },
       // The phone's wire died: PhonePad hosts the same code again and the phone re-dials it (lost() follows only if it gives up).
       relinking: () => { G.announce("PHONE LINK LOST — RECONNECTING", 3, "warn"); },
+      // A first pairing that failed (expired, no relay): the status stays, the button starts over.
+      failed: () => { btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; },
       lost: () => {
         btn.textContent = "STEER THIS GAME WITH A PHONE"; phonePad = null; G.announce("PHONE DISCONNECTED", 3, "warn");
         if (phonePadCam >= 0 && G.camMode === VISOR_CAM) G.setCamMode(phonePadCam);

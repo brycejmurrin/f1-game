@@ -298,14 +298,21 @@ const NetPlay = (function () {
       car.incidentInvalidLap = true; car.lapTime = 0; car._secT0 = null;
     }
     // A silent rival goes to the local AI; its packets bring it back.
+    // Keep owner lap evidence apart from speculative motion: fallback crossings
+    // cannot finish a connected human, validate a LAP event, or seed gateLap.
     function goLocal(r) {
       r.stale = true;
+      if (!r.hostAi) { r.car._nOwnerLap = r.car.lap; r.car._nOwnerS = r.car.s; r.car._nFallback = true; }
       if (!r.hostAi) G.setCarRole(r.car, false, false);
       r.car.netInput = null;
       scrubForHandBack(r.car);
     }
     function goWire(r) {
       r.stale = false;
+      if (!r.hostAi) {
+        r.car.lap = r.car._nOwnerLap; r.car.s = r.car._nOwnerS;
+        r.car._nFallback = false;
+      }
       if (!r.hostAi) G.setCarRole(r.car, true, false);
     }
     let lastPublish = -Infinity, lastStrategy = -Infinity;
@@ -332,6 +339,7 @@ const NetPlay = (function () {
     const PEER_LAPS_CAP = 64;
     let peerLaps = [];
     let peerResult = null;                // the host's classification, if sent
+    let resultCars = null;                // the G.cars it classifies (one array per race)
     const eventLog = [];                  // recent inbound events, for status()
 
     const _smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 8 };
@@ -717,7 +725,7 @@ const NetPlay = (function () {
               // (RaceControl.lineTransition), and gating on the target parks
               // its `fin` in _nFin for good — the other peer then waits out
               // the 360 s/lap hard cap for a rival that has already finished.
-              if (fr.car.lap >= finLap && finishAllowed(finLap)) { fr.car.finished = true; fr.car.finishT = fin; fr.car._nFin = null; fr.car._nFinLap = null; }
+              if ((fr.car._nFallback ? fr.car._nOwnerLap : fr.car.lap) >= finLap && finishAllowed(finLap)) { fr.car.finished = true; fr.car.finishT = fin; fr.car._nFin = null; fr.car._nFinLap = null; }
               else { fr.car._nFin = fin; fr.car._nFinLap = finLap; }
             }
             // A RETIREMENT is the owner's word too. The 13 B snapshot has no
@@ -761,6 +769,7 @@ const NetPlay = (function () {
               // rest of the field: pose it from the wire, never re-simulate it.
               const r = remotes.get(d.wire);
               G.setCarRole(r.car, false, false);
+              r.car._nHuman = false; r.car._nFallback = false;
               remotes.delete(d.wire);
               r.hostAi = true; r.stale = false;
               aiRemotes.set(d.wire, r);
@@ -782,6 +791,7 @@ const NetPlay = (function () {
       }
       const gone = id == null ? remoteList() : [remotes.get(id)].filter(Boolean);
       for (const r of gone) {
+        r.car._nHuman = false; r.car._nFallback = false;
         G.setCarRole(r.car, false, false);
         r.car.netInput = null;
         scrubForHandBack(r.car);   // a returned rival races on: no instant DNF, no bogus lap
@@ -806,7 +816,7 @@ const NetPlay = (function () {
         return { ok: false, error: "already_active", message: "A network race is already active." };
       }
       peerLaps = [];
-      peerResult = null;
+      peerResult = null; resultCars = G.cars;
       resultWaitFrom = null;
       if (!opts.transport && !opts.session) {
         Log.warn("net", "play start fail no_transport");
@@ -853,6 +863,7 @@ const NetPlay = (function () {
         if (!car) continue;
         peerCar.set(j.id != null ? j.id : PEER_ONE, G.wireId(car));
         G.setCarRole(car, true, false);
+        car._nHuman = true; car._nFallback = false;   // connected membership survives temporary AI motion
         car._nFin = null; car._nFinLap = null; car._nMid = false; car._nRiseT = null;   // gateLap / pending-fin state, per race
         car.mods = j.mods || car.mods || null;
         remotes.set(G.wireId(car), makeRemote(car, opts, { profile: j.profile || null }));
@@ -1246,9 +1257,9 @@ const NetPlay = (function () {
         // in a four-player room, ~75 % of each SCTP/DTLS/UDP datagram overhead.
         // An aged packet (NetSnapshot.encodeAged) keeps each car's own
         // presentedAt stamp, which is why it was split in the first place.
-        // …and, every AI_EVERY-th publish, the host's AI field (plus any human
-        // slot the local AI is covering through a silence): guests pose these
-        // instead of simulating their own (docs/notes/MULTIPLAYER-AI-REPLICATION.md).
+        // …and, every AI_EVERY-th publish, the host's AI field. A connected
+        // human's fallback pose is speculative: relaying it as fresh owner
+        // evidence could finish that human on another guest.
         const withAi = role === "host" && (++publishN % AI_EVERY) === 0;
         if (role === "host" && (sessions.size > 1 || withAi)) {
           _relay.length = 0;
@@ -1261,7 +1272,7 @@ const NetPlay = (function () {
           if (withAi) for (const c of G.cars || []) {
             if (c === localCar) continue;
             const id = G.wireId(c), r = id >= 0 ? remotes.get(id) : null;
-            if (id < 0 || (r && !r.stale)) continue;   // a live human rival is relayed above
+            if (id < 0 || r) continue;   // human owner poses are relayed above; never fallback motion
             _relay.push({ id, car: c, at });
           }
           if (_relay.length) {
@@ -1294,6 +1305,11 @@ const NetPlay = (function () {
         (!holdUntil || nowMs() < holdUntil),
       peerLaps: () => peerLaps.slice(),
       peerResult: () => peerResult,
+      // The host's RESULT after the race's session ended (BYE, transport
+      // close): a host that quits as it publishes must not hand the guest its
+      // own, differing order (#2199). Only for the field it classifies — the
+      // next race builds a new G.cars — and never after this side quit.
+      lastResult: () => (!active && role === "guest" && lastReason !== "local" && G.cars === resultCars) ? peerResult : null,
       // updateCar() consults this: a car posed from the network must not also
       // be simulated locally, or the two fight every frame. A membership test
       // now rather than an identity one, the same shape incidentSim.owns has.

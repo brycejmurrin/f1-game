@@ -9,8 +9,11 @@ import { bootEditor, design, plain, ellipse, read } from "../helpers/editor-vm.m
 
 test("KINDS / CAPS / sanitize: known kinds only, per-kind and total caps", () => {
   const { P } = bootEditor();
-  assert.equal(P.KINDS.join(","), "stand,gantry,trees,water,flood,billboard,palms,hedge,pines,bushes,marshal,camera");
+  assert.equal(P.KINDS.join(","), "stand,gantry,trees,water,flood,billboard,palms,hedge,pines,bushes,marshal,camera,pond,lake,river");
   assert.equal(P.TOTAL, 16);
+  assert.ok(P.KINDS.length <= 16, "kind indices fit the share-code nibble");
+  assert.equal(P.KINDS.indexOf("water"), 3, "legacy water retains its codec index");
+  assert.equal(P.CAPS.water, 4);
   assert.equal(P.sanitize(null), null);
   assert.equal(P.sanitize([]), null);
   assert.equal(P.sanitize([{ kind: "nope", s: 0.2 }]), null);
@@ -235,4 +238,52 @@ test("mixed recipes give exact immutable proposals and refuse kind/total limits 
   assert.equal(R({...state,design:design({props:full})}, "corner").ok, false);
   assert.equal(R({...state,sel:-1}, "corner").ok, false);
   assert.equal(R({...state,span:-1}, "hedge").ok, false);
+});
+
+test("water palette: four distinct bodies dress through waterSurface and preserve old water", async () => {
+  const { P, C, CD } = bootEditor(), calls = [];
+  const kinds = ["water", "pond", "lake", "river"];
+  const props = kinds.map((kind, i) => ({ kind, s: (i + 1) / 5, side: i % 2 ? -1 : 1, gap: 0 }));
+  assert.equal(P.dress({ K: () => 42, waterSurface: (...args) => calls.push(args) }, { n: 100 }, props), 4);
+  assert.deepEqual(calls.map((args) => plain(args[3])), [[220, 0.25, 280], [60, 0.25, 80], [320, 0.25, 380], [28, 0.25, 360]]);
+  assert.equal(new Set(calls.map((args) => JSON.stringify(args[4]))).size, 4, "distinct water colours");
+  for (let i = 0; i < kinds.length; i++) {
+    assert.equal(calls[i][0], 42);
+    assert.equal(calls[i][1], props[i].side);
+    assert.equal(calls[i][2], P.MIN_GAP[kinds[i]], "safe clearance at rendering time");
+    assert.equal(calls[i][5].id, "custom-prop-" + kinds[i] + "-" + i);
+    const row = P.placeBatch([], kinds[i], { start: 0.1, end: 0.7, count: 4, side: 1 });
+    assert.equal(row.length, 4, "four bodies of each kind can be placed");
+    assert.equal(P.canPlace(row, kinds[i]), false);
+    assert.equal(P.place(row, kinds[i], { s: 0.8 }), null);
+  }
+  assert.equal(P.dress({}, { n: 100 }, props), 0, "missing water API degrades safely");
+  const d = C.sanitize(design({ props }));
+  assert.deepEqual(plain(C.sanitize(JSON.parse(JSON.stringify(d))).props), plain(d.props), "saved JSON reload preserves all water kinds");
+  const back = await CD.decode(await CD.encode(d));
+  assert.equal(back.ok, true, back.reason);
+  assert.equal(back.id, d.id);
+  assert.deepEqual(plain(back.design.props), plain(d.props), "share code preserves all water kinds");
+});
+
+
+test("new water bodies reject full-footprint road crossings including river tips", () => {
+  const { P } = bootEditor();
+  const tr = { n: 6, px: [0, -100, -100, 100, 100, -100], pz: [0, 0, 170, 170, 500, 500],
+    rx: [1, 1, 1, 1, 1, 1], rz: [0, 0, 0, 0, 0, 0], hw: [6, 6, 6, 6, 6, 6] };
+  const calls = [], suppressed = [], api = { track: tr, K: () => 0, waterSurface: (...a) => calls.push(a), modelDiagnostics: { suppressed } };
+  const prop = { kind: "river", s: 0, side: 1, gap: 24 };
+  assert.equal(P.dress(api, tr, [prop]), 0, "road intersects the far end of the 360 m river");
+  assert.equal(calls.length, 0, "reject before native emission");
+  assert.match(suppressed[0].reason, /footprint/);
+  // All road vertices miss the river: the crossing is along a segment between them.
+  assert.ok(tr.px.every((x) => x < 20 || x > 68));
+  tr.pz[2] = tr.pz[3] = 250;
+  assert.equal(P.dress(api, tr, [prop]), 1, "a river clear of the full road emits normally");
+  assert.equal(calls.length, 1);
+  tr.pz[2] = tr.pz[3] = 188;
+  assert.equal(P.dress(api, tr, [prop]), 0, "road width and four metre margin protect the bank");
+  tr.pz[2] = tr.pz[3] = 20;
+  for (const kind of ["pond", "lake"]) assert.equal(P.dress(api, tr, [{ ...prop, kind }]), 0, kind + " uses the same full-footprint guard");
+  assert.equal(P.dress(api, tr, [{ ...prop, kind: "water" }]), 0, "legacy water uses the same full-footprint road guard as newer water bodies");
 });

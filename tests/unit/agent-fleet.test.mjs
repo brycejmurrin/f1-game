@@ -37,6 +37,8 @@ test("a subscription never stands alone: each host's timer is named beside it", 
     assert.match(text, /subscribe_timer/, `${file} names Cursor's timer`);
   }
   assert.match(WORKER, /ci-watch\.mjs --sha <head> --once/, "worker reads CI on every wake");
+  assert.match(WORKER, /tooling-fast\.mjs --changed/);
+  assert.match(WORKER, /tooling-fast\.mjs --changed --jobs=3/, "worker's edit loop keeps the rule-4 job cap");
 });
 
 test("the adapter table covers each host's verified spawn path", () => {
@@ -82,7 +84,9 @@ test("the launch template carries every field the agent-fleet launch policy requ
   const tpl = ORCH.match(/## Launch template[\s\S]*?```text\n([\s\S]*?)```/);
   assert.ok(tpl, "orchestrator.md has the fenced launch template");
   for (const field of ["OWNED:", "FORBIDDEN:", "DONE WHEN:", "CAPS:", "ORCHESTRATOR:",
-    "ready-gate.mjs", "ready-full-cap.mjs", "Do not enable auto-merge or merge."]) {
+    "ready-gate.mjs", "Do not enable auto-merge or merge."]) {
+    assert.ok(!tpl[1].includes("ready-full-cap"), "the ready cap was retired 2026-10-16");
+    assert.ok(!tpl[1].includes("PUSH SLOT"), "paced push was retired 2026-10-16");
     assert.ok(tpl[1].includes(field), `launch template lost ${field}`);
   }
   // The policy moved from AGENTS.md §Concurrent PRs to the skill (2026-10-14 trim); the pin moved with it.

@@ -127,3 +127,38 @@ test("settings.json runs the hook on SubagentStop for exactly the contracted age
   const t0 = Date.now(); stop("code-hunter", GOOD["code-hunter"]);
   assert.ok(Date.now() - t0 < 2000, "the hook is fast");
 });
+
+// SubagentHandback (#2228 research; https://code.claude.com/docs/en/hooks, §SubagentStop):
+// "a subagent that runs with the SubagentHandback tool delivers its report through that
+// tool before it stops. The last_assistant_message field then holds the subagent's
+// closing text, if any, which is not the delivered report. The report is that call's
+// message input, which a PreToolUse … hook matched on SubagentHandback receives as
+// tool_input.message." So the contract is checked there too, and a deny sends the
+// reason back to the subagent; one deny per agent_id, then it lets the hand-back through.
+test("a malformed report handed back through SubagentHandback is denied once, with the contract reason", () => {
+  const cwd = fs.mkdtempSync(path.join(ROOT, "artifacts", "contract-handback-"));
+  const handback = (agent_type, message, agent_id) => run({
+    session_id: "s", transcript_path: "/x.jsonl", cwd, hook_event_name: "PreToolUse",
+    tool_name: "SubagentHandback", tool_input: { message }, agent_id, agent_type });
+  try {
+    for (const [agent, msg] of Object.entries(GOOD)) passes(handback(agent, msg, "good-" + agent), agent);
+    const bad = handback("finding-verifier", "CLAIM 1 | MAYBE | evidence: x", "bad-1");
+    assert.equal(bad.status, 0);
+    assert.ok(bad.json, "expected a PreToolUse decision");
+    assert.equal(bad.json.hookSpecificOutput.hookEventName, "PreToolUse");
+    assert.equal(bad.json.hookSpecificOutput.permissionDecision, "deny");
+    assert.match(bad.json.hookSpecificOutput.permissionDecisionReason, /Report contract \(finding-verifier\)/);
+    passes(handback("finding-verifier", "CLAIM 1 | MAYBE | evidence: x", "bad-1"), "one deny per agent, never a loop");
+    passes(handback("general-purpose", "anything", "gp-1"), "uncontracted agents are left alone");
+    passes(run({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" }, agent_type: "code-hunter", cwd }),
+      "only SubagentHandback is checked");
+  } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+});
+
+test("settings.json runs the contract hook on PreToolUse SubagentHandback", () => {
+  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
+  const g = (settings.hooks.PreToolUse || []).find((x) => x.hooks.some((h) => h.command.includes("subagent-contract.py")));
+  assert.ok(g, "a PreToolUse group runs subagent-contract.py");
+  assert.ok(new RegExp(g.matcher).test("SubagentHandback"));
+  assert.ok(!new RegExp(`^(?:${g.matcher})$`).test("Bash"), "and nothing else");
+});

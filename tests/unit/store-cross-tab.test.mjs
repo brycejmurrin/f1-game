@@ -583,6 +583,26 @@ test("write(k, undefined) removes the key instead of storing the string \"undefi
   assert.equal(again.store.broken, null);
 });
 
+test("write rejects top-level functions and Symbols without deleting the previous value", () => {
+  const { store, disk } = load();
+  store.write("u", { a: 1 });
+  const before = disk.get("apex26.u");
+
+  const fn = store.write("u", () => 1);
+  assert.equal(fn.ok, false);
+  assert.equal(fn.durable, false);
+  assert.equal(fn.reason, "TypeError");
+  assert.equal(disk.get("apex26.u"), before, "a function must not delete the saved bytes");
+  assert.deepEqual(store.get("u", null), { a: 1 }, "the prior cached value remains usable");
+
+  const symbol = store.write("u", Symbol("unsupported"));
+  assert.equal(symbol.ok, false);
+  assert.equal(symbol.durable, false);
+  assert.equal(symbol.reason, "TypeError");
+  assert.equal(disk.get("apex26.u"), before, "a Symbol must not delete the saved bytes");
+  assert.deepEqual(store.get("u", null), { a: 1 }, "the prior value remains after both rejected writes");
+});
+
 /** store.js over a disk whose setItem throws `fail.name` while it is set, with
  *  Log.warn captured. */
 function bootLogged(fail = { name: null }) {
@@ -621,6 +641,7 @@ test("writeFailed() names a failed write until that key is written durably again
 // first write, and failed localStorage writes give Career no storage event.
 function loadCareerMirrored(options = {}) {
   const h = loadMirrored(options);
+  h.ctx.Blob = Blob; // CareerBackup measures UTF-8 file bytes with the browser Blob API.
   h.ctx.Teams = {
     LIST: [{ id: "haas", tier: 4, drivers: [
       { name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 },
@@ -646,7 +667,7 @@ test("an explicit backup import before mirror restore survives Career.load migra
   h.Career.load();
   const result = h.CareerBackup.apply({ format: h.CareerBackup.FORMAT,
     slots: [{ flavour: "driver", i: 0, data: JSON.parse(savedCareer(300)) }] });
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(h.Career.data().money, 300);
   await h.store.mirror.ready;
   await h.store.mirrorFlush();

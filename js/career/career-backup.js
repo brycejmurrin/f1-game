@@ -35,8 +35,12 @@ const CareerBackup = (function () {
   // 0, which would silently turn a poisoned file into a zero-credit career.
   // `rowFlavour` is the slot the file files it under; a driver career that
   // claims a MY TEAM row (a hand edit) would load as a driver save in that set.
+  function futureSave(data) {
+    return !!(data && typeof SaveMigrate !== "undefined" && Number(data.v) > SaveMigrate.CAREER_V);
+  }
   function slotPayloadOk(data, rowFlavour) {
     if (data == null) return { ok: true };
+    if (futureSave(data)) return { ok: false, reason: "newer-version" };
     if (Array.isArray(data)) return { ok: false, reason: "slot-not-object" };
     if (!isObj(data)) return { ok: false, reason: "slot-not-object" };
     if (data.flavour != null && flavourIn(data.flavour) !== flavourIn(rowFlavour)) {
@@ -53,6 +57,24 @@ const CareerBackup = (function () {
     }
     if (data.driver != null && (typeof data.driver !== "object" || Array.isArray(data.driver))) {
       return { ok: false, reason: "driver-not-object" };
+    }
+    // Driver identity is rendered in title/cards and used as a rating key. A
+    // JSON object in `code` (or a non-string name) survives JSON.parse but
+    // throws during template interpolation, after apply() has already written
+    // the slot. Validate the scalar leaves before any persistence instead of
+    // allowing an import to brick the career screen.
+    if (data.driver != null) {
+      const d = data.driver;
+      if (Object.prototype.hasOwnProperty.call(d, "name") && typeof d.name !== "string") {
+        return { ok: false, reason: "driver-name" };
+      }
+      if (Object.prototype.hasOwnProperty.call(d, "code") && typeof d.code !== "string") {
+        return { ok: false, reason: "driver-code" };
+      }
+      if (Object.prototype.hasOwnProperty.call(d, "num")
+          && (typeof d.num !== "number" || !Number.isFinite(d.num))) {
+        return { ok: false, reason: "driver-num" };
+      }
     }
     if (data.fitted != null && (typeof data.fitted !== "object" || Array.isArray(data.fitted))) {
       return { ok: false, reason: "fitted-not-object" };
@@ -153,15 +175,12 @@ const CareerBackup = (function () {
     const name = filename || ("apex26-career-backup-" + Date.now() + ".json");
     const text = typeof envelope === "string" ? envelope : serialize(envelope);
     const blob = new Blob([text], { type: "application/json" });
-    // Prefer the Capacitor Share path when the native shim is viable; otherwise
-    // the click interceptor on NativeDownload still catches the <a download>.
+    // Native failures (including a dismissed chooser) stay failures. Falling
+    // back to an anchor invokes the native click interceptor a second time.
     if (typeof NativeDownload !== "undefined" && NativeDownload.viable && NativeDownload.viable()
         && typeof NativeDownload.saveBlob === "function") {
       return NativeDownload.saveBlob(blob, name).then(function () {
         return { ok: true, name: name };
-      }).catch(function (err) {
-        log("warn", "career backup native download failed: " + ((err && err.message) || err));
-        return clickDownload(blob, name);
       });
     }
     return Promise.resolve(clickDownload(blob, name));
@@ -181,6 +200,16 @@ const CareerBackup = (function () {
 
   function exportAll() {
     const envelope = build();
+    // Preserve raw future careers for recovery, but never download extras that
+    // this reader would reject or truncate. Export has no destination checks.
+    for (const k of EXTRA_KEYS) {
+      if (envelope[k] == null) continue;
+      const checked = cleanExtra(k, envelope[k]);
+      if (!checked.ok) return Promise.resolve(checked);
+    }
+    if (new Blob([serialize(envelope)]).size > MAX_BYTES) {
+      return Promise.resolve({ ok: false, reason: "too-large" });
+    }
     return download(envelope).then(function (r) {
       return Object.assign({ envelope: envelope }, r || { ok: true });
     });
@@ -188,18 +217,21 @@ const CareerBackup = (function () {
 
   function validate(raw, rawText) {
     if (rawText != null) {
-      const n = typeof rawText === "string" ? rawText.length
+      const n = typeof rawText === "string" ? new Blob([rawText]).size
         : (rawText && rawText.byteLength) || 0;
       if (n > MAX_BYTES) return { ok: false, reason: "too-large" };
     }
     if (raw == null) return { ok: false, reason: "empty" };
     if (typeof raw === "string") {
-      if (raw.length > MAX_BYTES) return { ok: false, reason: "too-large" };
+      if (new Blob([raw]).size > MAX_BYTES) return { ok: false, reason: "too-large" };
       let parsed = null;
       try { parsed = JSON.parse(raw); } catch (e) { return { ok: false, reason: "bad-json" }; }
       return validate(parsed, raw);
     }
     if (!isObj(raw)) return { ok: false, reason: "not-object" };
+    try {
+      if (new Blob([JSON.stringify(raw)]).size > MAX_BYTES) return { ok: false, reason: "too-large" };
+    } catch (_) { return { ok: false, reason: "bad-json" }; }
     if (raw.format !== FORMAT) return { ok: false, reason: "wrong-format" };
     if (!Array.isArray(raw.slots)) return { ok: false, reason: "slots-not-array" };
     if (raw.slots.length > 12) return { ok: false, reason: "too-many-slots" };
@@ -241,13 +273,62 @@ const CareerBackup = (function () {
     return { ok: true, envelope: raw };
   }
 
+  // Recovery exports contain one active snapshot, not six named slots. The
+  // destination is explicit and this adapter only reviews; apply owns writes.
+  function recoveryEnvelope(raw, target, rawText) {
+    if (!target || !FLAVOURS.includes(target.flavour) || !Number.isInteger(target.i) || target.i < 0 || target.i >= SLOTS) return { ok: false, reason: "bad-slot" };
+    let clone, text;
+    try {
+      text = typeof raw === "string" ? raw : JSON.stringify(raw);
+      if (!text || text.length > MAX_BYTES || new Blob([text]).size > MAX_BYTES || (rawText && new Blob([rawText]).size > MAX_BYTES)) return { ok: false, reason: "too-large" };
+      clone = JSON.parse(text);
+    } catch (_) { return { ok: false, reason: "bad-json" }; }
+    if (!isObj(clone) || clone.format !== "apex26-recovery-v1") return { ok: false, reason: "wrong-format" };
+    if (clone.career == null && clone.season == null) return { ok: false, reason: "empty-recovery" };
+    const envelope = { format: FORMAT, slots: [] };
+    if (clone.career != null) {
+      const data = clone.career;
+      if (!isObj(data)) return { ok: false, reason: "slot-not-object" };
+      if (data.flavour != null && !FLAVOURS.includes(data.flavour)) return { ok: false, reason: "flavour-mismatch" };
+      if ((data.flavour || "driver") !== target.flavour) return { ok: false, reason: "flavour-mismatch" };
+      if (typeof SaveMigrate === "undefined" || !Number.isSafeInteger(SaveMigrate.CAREER_V)
+        || (data.v != null && (!Number.isSafeInteger(data.v) || data.v < 0 || data.v > SaveMigrate.CAREER_V))) return { ok: false, reason: "unsupported-version" };
+      envelope.slots.push({ flavour: target.flavour, i: target.i, data });
+    }
+    // A foreign calendar must never be silently shortened by SeasonCal.load.
+    for (const season of [clone.career && clone.career.season, clone.season]) {
+      if (!season) continue;
+      if (!isObj(season)) return { ok: false, reason: "season-not-object" };
+      const ids = season.config && season.config.trackIds;
+      if (ids != null && (!Array.isArray(ids) || !ids.length || ids.length > 64 || new Set(ids).size !== ids.length
+        || typeof Tracks === "undefined" || !Array.isArray(Tracks.LIST)
+        || ids.some((id) => !Tracks.LIST.some((t) => t.id === id)))) return { ok: false, reason: "unsupported-calendar" };
+    }
+    if (clone.season != null) {
+      const keys = ["round", "pts", "teamPts", "driverCodes", "finishes", "roundPts", "config", "stage", "lastFl", "seed", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"];
+      if (Object.keys(clone.season).some((k) => !keys.includes(k))) return { ok: false, reason: "unsupported-season" };
+      if (clone.season.round != null && (!Number.isInteger(clone.season.round) || clone.season.round < 0 || clone.season.round > 200)) return { ok: false, reason: "season-invalid" };
+      if (clone.season.config != null) {
+        const config = clone.season.config;
+        const configKeys = ["trackIds", "quali", "sprint", "sprintIds", "laps", "points", "flPoint", "drop"];
+        if (!isObj(config) || Object.keys(config).some((k) => !configKeys.includes(k))) return { ok: false, reason: "unsupported-calendar" };
+        const clean = cleanSeasonConfig(config);
+        if (Object.keys(config).some((k) => JSON.stringify(config[k]) !== JSON.stringify(clean[k]))) return { ok: false, reason: "unsupported-calendar" };
+      }
+      if (clone.season.qualiOrder != null && typeof cleanQualifying !== "function") return { ok: false, reason: "unsupported-qualifying" };
+      envelope.season = clone.season;
+    }
+    const checked = validate(envelope, rawText || text);
+    return checked.ok ? { ok: true, envelope, recovery: true } : checked;
+  }
+
   // THE OPTIONAL EXTRAS ARE UNTRUSTED. validate() only proved they were objects, and
   // apply() wrote them to storage as given: a 4 MB `junk` key rode a legal file into
   // the 5 MB quota, and `season` came back through SeasonCal.resume(), which keeps
   // every key it does not know. Each extra now goes through an allowlist cleaner
   // that rebuilds it from the fields its reader uses, bounded in size, and a payload
   // that is oversized or carries an own `__proto__` key is refused outright.
-  const EXTRA_MAX = 256 * 1024;      // serialised bytes, per extra (the file cap is 5 MB for ALL of it)
+  const EXTRA_MAX = 256 * 1024;      // serialised bytes, per small extra; Daily uses its schema + file cap
   const EXTRA_KEYS = Object.freeze(["season", "badges", "daily", "records"]);
   const DAY_RE = /^\d{4}-\d\d-\d\d$/;
   const ID_RE = /^[A-Za-z0-9_.:-]{1,48}$/;
@@ -369,6 +450,7 @@ const CareerBackup = (function () {
     if (own(e, "best")) out.best = cleanBest(e.best);
     if (own(e, "laps")) out.laps = num(e.laps, 0, 1e6) | 0;
     if (!nested && isObj(e.classes)) {
+      if (Object.keys(e.classes).filter(classKey).length > 8) throw new Error("too many daily classes");
       out.classes = idMap(e.classes, 8, (v) => cleanDayEntry(v, true), classKey);
     }
     return out;
@@ -379,8 +461,9 @@ const CareerBackup = (function () {
     if (isObj(r.days)) {
       const src = plain(r.days);
       const days = {};
-      // The newest 120 days: the reader keeps a window and never asks for more.
-      for (const day of Object.keys(src).filter((k) => DAY_RE.test(k)).sort().slice(-120)) {
+      const dates = Object.keys(src).filter((k) => DAY_RE.test(k)).sort();
+      if (dates.length > 120) throw new Error("too many daily days");
+      for (const day of dates) {
         const e = cleanDayEntry(src[day], false);
         if (e) days[day] = e;
       }
@@ -421,9 +504,17 @@ const CareerBackup = (function () {
   // payload (the junk key is what costs the quota), and again on what is kept.
   function cleanExtra(name, raw) {
     try {
-      if (JSON.stringify(raw).length > EXTRA_MAX) return { ok: false, reason: name + "-too-large" };
+      const incoming = new Blob([JSON.stringify(raw)]).size;
+      // Daily context keys contain whole car/tune configs: 61 days × eight
+      // classes legitimately exceeds 256 KiB. Only schema-checked Daily data
+      // gets the file budget; discarded junk retains the original extra cap.
+      const limit = name === "daily" ? MAX_BYTES : EXTRA_MAX;
+      if (incoming > limit) return { ok: false, reason: name + "-too-large" };
       const value = CLEANERS[name](raw);
-      if (JSON.stringify(value).length > EXTRA_MAX) return { ok: false, reason: name + "-too-large" };
+      const kept = new Blob([JSON.stringify(value)]).size;
+      if (kept > limit || (name === "daily" && incoming - kept > EXTRA_MAX)) {
+        return { ok: false, reason: name + "-too-large" };
+      }
       return { ok: true, value: value };
     } catch (e) {
       if (e && e.hostile) return { ok: false, reason: name + "-hostile" };
@@ -470,6 +561,7 @@ const CareerBackup = (function () {
     const s = store();
     if (!s) return { ok: false, durable: false, reason: "no-store" };
     const key = slotKey(f, i);
+    if (futureSave(s.get(key, null))) return { ok: false, durable: false, reason: "newer-version" };
     if (expectedRevision != null && s.keyRevision && expectedRevision !== s.keyRevision(key)) {
       return { ok: false, durable: false, reason: "conflict" };
     }
@@ -480,6 +572,10 @@ const CareerBackup = (function () {
       const migrated = migrate(clone);
       if (!migrated) return { ok: false, durable: false, reason: "migrate-failed" };
       value = migrated;
+    }
+    if (typeof CareerRestorePoints !== "undefined") {
+      const previous = s.get(key, null);
+      if (previous) CareerRestorePoints.capture(f, i, previous, { reason: "before-import" });
     }
     const result = typeof s.write === "function" ? s.write(key, value) : { ok: true, durable: s.set(key, value) !== false, reason: null };
     if (typeof Career !== "undefined" && Career) {
@@ -549,7 +645,38 @@ const CareerBackup = (function () {
   function seasonAhead(local, incoming) {
     if (!isObj(local)) return false;
     const a = local.round | 0, b = incoming.round | 0;
-    return a !== b ? a > b : seasonPts(local) > seasonPts(incoming) || qualifyingAhead(local, incoming);
+    return a !== b ? a > b : seasonPts(local) > seasonPts(incoming)
+      || qualifyingAhead(local, incoming) || sprintAhead(local, incoming);
+  }
+  function sprintAhead(local, incoming) {
+    // A shortened sprint can award zero points but still advance to the GP.
+    // Protect that stage only within the same championship and weekend.
+    if (local.stage !== "race" || incoming.stage === "race") return false;
+    const a = cleanExtra("season", local), b = cleanExtra("season", incoming);
+    if (!a.ok || !b.ok) return false;
+    const mine = a.value, theirs = b.value, c = mine.config;
+    const id = c && c.trackIds[mine.round];
+    if (!id || !(c.sprint === true || (c.sprint === "rounds" && c.sprintIds.includes(id)))
+        || !sameSeasonValue(c, theirs.config) || mine.round !== theirs.round) return false;
+    if ((incoming.seed != null && incoming.seed !== mine.seed)
+        || (local.seed != null && local.seed !== mine.seed)) return false;
+    // award() adds zero-valued rows and display codes even when nobody scores.
+    const nonzero = (map) => Object.fromEntries(Object.entries(map).flatMap(([key, value]) => {
+      if (Array.isArray(value)) {
+        value = value.slice();
+        while (value.length && !value[value.length - 1]) value.pop();
+      }
+      return (Array.isArray(value) ? value.length : value) ? [[key, value]] : [];
+    }));
+    for (const key of ["pts", "teamPts", "finishes", "roundPts"]) {
+      if (!sameSeasonValue(nonzero(mine[key]), nonzero(theirs[key]))) return false;
+      delete mine[key]; delete theirs[key];
+    }
+    for (const id of Object.keys(theirs.driverCodes)) if (mine.driverCodes[id] !== theirs.driverCodes[id]) return false;
+    for (const key of ["stage", "seed", "driverCodes", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"]) {
+      delete mine[key]; delete theirs[key];
+    }
+    return sameSeasonValue(mine, theirs);
   }
 
   // Badges are earned once and never revoked: import is a UNION of the two
@@ -662,6 +789,8 @@ const CareerBackup = (function () {
 
     const s = store();
     const selected = o.liveSlot;
+    if (o.recovery && envelope.season != null && o.expectedSeasonRevision != null && s && s.keyRevision
+      && o.expectedSeasonRevision !== s.keyRevision("season")) return { ok: false, reason: "conflict" };
     if (selected != null && !/^(driver|myteam):[0-2]$/.test(selected)) return { ok: false, reason: "bad-slot" };
     if (selected != null && o.expectedSelectionRevision != null && s && s.keyRevision
         && o.expectedSelectionRevision !== s.keyRevision("careerSlot")) return { ok: false, reason: "conflict" };
@@ -694,6 +823,7 @@ const CareerBackup = (function () {
       // An empty row is "nothing to restore", never "delete": build() exports
       // all six slots, so writing its nulls wiped saves the backup never had.
       if (row.data == null) { skipped.push(id); continue; }
+      if (s && futureSave(s.get(slotKey(f, idx), null))) return { ok: false, reason: "newer-version", slot: id };
       if (Object.prototype.hasOwnProperty.call(expected, id)) {
         const now = revisionOf(f, idx);
         if (expected[id] !== now) return { ok: false, reason: "conflict", slot: id };
@@ -733,7 +863,7 @@ const CareerBackup = (function () {
     let seasonWritten = false;
     // The second mode confirmation must not replay already-restored global progress.
     // MY TEAM identity still accompanies its slot on that confirmation.
-    const progressExtras = o.includeExtras !== false && o.includeProgressExtras !== false;
+    const progressExtras = o.includeExtras !== false && o.includeProgressExtras !== false && !(o.recovery && failed);
     if (s && typeof s.write === "function") {
       // validate() proved every extra cleans; what is written is the cleaned copy.
       // recordWrite tracks durable/issues the same way slot restores do (#1296).
@@ -770,7 +900,9 @@ const CareerBackup = (function () {
       }
     }
 
-    if (typeof Career !== "undefined" && Career && Career.load) Career.load({ persist: false });
+    // Recovery restores storage for later deliberate slot selection; load()
+    // would auto-adopt the first imported slot on a fresh install.
+    if (!o.recovery && typeof Career !== "undefined" && Career && Career.load) Career.load({ persist: false });
     // The write above bumped the season key's revision under SeasonCal's armed one,
     // so its next save() read as a conflict and the title kept showing the old
     // championship until something re-entered SEASON. Re-arm it from the store.
@@ -816,6 +948,7 @@ const CareerBackup = (function () {
     download: download,
     exportAll: exportAll,
     validate: validate,
+    recoveryEnvelope: recoveryEnvelope,
     apply: apply,
     preview: preview,
     writeSlot: writeSlot,

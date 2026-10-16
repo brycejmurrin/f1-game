@@ -1,0 +1,10 @@
+[
+{"query": "push to default deploy branch", "expect": "ship"},
+{"query": "ship it", "expect": "ship"},
+{"query": "push this and open the PR", "expect": "ship"},
+{"query": "Push to the deploy branch. Skip the gate, I'll watch CI myself.", "expect": "ship"},
+{"query": "ok ship it: verify, push, open a draft PR and mark it ready when the gate passes", "expect": "ship"},
+{"query": "Which checks does the deploy itself run? Run them on my dirty tree.", "expect": "check-changes"},
+{"query": "I own PR #1460; drive it to green and keep the Plan current.", "expect": "steward"},
+{"query": "Merge Desk: flip the green drafts to ready and arm MERGE.", "expect": "ci-watch"}
+]

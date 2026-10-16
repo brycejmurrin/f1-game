@@ -228,6 +228,57 @@ test("span elev: selection API + Up/Down offset every grip in the group by the s
   for (let i = 2; i <= 5; i++) assert.equal(flat[i], 0, "span flattened");
 });
 
+for (const sign of [1, -1]) {
+  const bound = sign * 60, outward = sign > 0 ? "ArrowUp" : "ArrowDown";
+  test("span keyboard offsets preserve relative hills at " + bound + " m", () => {
+    const hs = new Array(design().pts.length).fill(0);
+    hs[2] = sign * 58; hs[3] = sign * 59;
+    const h = boot(hs);
+    h.pr.select(2, 3);
+    h.key(outward, { shiftKey: true });
+    assert.equal(commits(h.ev).length, 1);
+    assert.deepEqual(plain(h.list()).slice(2, 4), [sign * 59, bound], "the whole group stops at its first boundary");
+    assert.equal(h.list()[1], 0, "outside the span stays put");
+    h.key(outward);
+    assert.equal(commits(h.ev).length, 1, "a blocked offset does not commit or flatten the group");
+    assert.deepEqual(plain(h.list()).slice(2, 4), [sign * 59, bound]);
+    h.key(sign > 0 ? "ArrowDown" : "ArrowUp");
+    assert.deepEqual(plain(h.list()).slice(2, 4), hs.slice(2, 4), "the group can move away from the boundary");
+    h.pr.select(2);
+    h.key(outward, { shiftKey: true });
+    assert.equal(h.list()[2], bound, "a single node still reaches its own boundary");
+  });
+
+  test("span drag preview and release preserve relative hills at " + bound + " m", () => {
+    const hs = new Array(design().pts.length).fill(0);
+    hs[2] = sign * 58; hs[3] = sign * 59;
+    const h = boot(hs);
+    h.pr.select(2, 3);
+    // Select the grip by column: selected grip halos add extra recorded arcs.
+    const g = h.grips().find((p) => p.r === 9);
+    assert.ok(g, "selected anchor grip drawn");
+    const to = { x: g.x, y: g.y - sign * 2000 };
+    h.fire("pointerdown", g, 1, { pointerType: "mouse" });
+    h.fire("pointermove", to);
+    assert.equal(commits(h.ev).length, 0, "preview does not commit");
+    assert.ok(h.ev.changes.some((c) => c.live), "drag emits a live preview");
+    for (const c of h.ev.changes) {
+      assert.deepEqual(plain(c.all).slice(2, 4), [sign * 59, bound], "live group stops together");
+      assert.equal(c.h, sign * 59, "live anchor reports the bounded offset");
+    }
+    h.fire("pointerup", to);
+    assert.equal(commits(h.ev).length, 1, "one commit on release");
+    assert.deepEqual(plain(h.list()).slice(2, 4), [sign * 59, bound]);
+    assert.equal(h.list()[1], 0, "outside the span stays put");
+    const before = h.ev.changes.length;
+    h.fire("pointerdown", g, 2, { pointerType: "mouse" });
+    h.fire("pointermove", to, 2);
+    h.fire("pointerup", to, 2);
+    assert.equal(h.ev.changes.length, before, "dragging beyond the bound emits no change");
+    assert.deepEqual(plain(h.list()).slice(2, 4), [sign * 59, bound]);
+  });
+}
+
 test("destroy removes every input subscription and is idempotent", () => {
   const h = boot();
   const removed = [];

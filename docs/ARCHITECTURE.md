@@ -84,6 +84,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
+| `dev-flags.js` | `DevFlags` | tag | DevFlags: one registry for boot-time URL / hash / localStorage toggles. |
 | `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers modules share (M4.clamp / M4.lerp / M4.wrapDelta). ident() allocates; every *To variant… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `clipboard.js` | `ApexClipboard` | tag | one clipboard write/read home. navigator.clipboard + textarea execCommand fallback for plain http / older WebKit. |
@@ -118,6 +119,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
+| `puddles.js` | `Puddles` | tag | Puddles: the ONE reference for the standing-water mask the three lit shaders hand-mirror (GLX glsl-lit.js, TLX tsl-lit.js, WGX wgsl-chunks.js). |
 | `shadow-pass.js` | `ShadowPass` | tag | ShadowPass: the three shadow-map passes out of js/game.js — the snap-cached SUN map (terrain + road ribbons + props, rebuilt when the camera crosses a… |
 | `mirror-pass.js` | `MirrorPass` | tag | MirrorPass: the HUD REAR-VIEW MIRROR. |
 
@@ -159,6 +161,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
+| `restore-points.js` | `CareerRestorePoints` | tag | CareerRestorePoints — bounded local history at explicit round/import boundaries. |
 | `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
 | `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
@@ -179,6 +182,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `title-fx.js` | `TitleFx` | tag | TitleFx: title-screen motion, wash and the background drawing. |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
+| `save-health.js` | `SaveHealth` | tag | SaveHealth — on-demand measurements and cache-only cleanup. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
 | `loading-screen.js` | `LoadingScreen` | tag | PRE-RACE LOADING SCREEN. |
 | `survey-hud.js` | `SurveyHud` | tag | APEX_SURVEY_HUD survey fixture. |
@@ -282,6 +286,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
 | `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
 | `storm.js` | `Storm` | tag | STORM (⛈): the weather above RAIN. |
+| `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
 | `overtake-mode.js` | `OvertakeMode` | tag | OVERTAKE MODE (FIA 2026 Sporting Regs B7.2.3(c)): one Detection Line per circuit, the 1 s check there, and the 0.5 MJ allowance granted at the Activation Line… |
 | `pace-math.js` | `PaceMath` | tag | PACE / ERS math: vTop/vStd/aStd, X-mode aero gains, paceRef buffer, ERS drain/regen/overtake duration, aeroDfMult, and gearHi/rpmFor. |
@@ -289,6 +294,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `broadcast.js` | `Broadcast` | tag | BROADCAST (Broadcast.create(G, replay)) The TV view of a REAL RACE WATCH / HIGHLIGHTS run: a timing tower down the left (position, team colour, the real… |
 | `real-replay.js` | `RealReplay` | tag | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
 | `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
+| `rain-cells.js` | `RainCells` | tag | LOCALIZED RAIN (RainCells): a shower that covers a WINDOW of the lap and drifts along it, instead of F1 24/25's uniform "blanket" rain. |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `forecast.js` | `Forecast` | tag | WEATHER FORECAST (Forecast): what the pit wall KNOWS about a dynamic-weather race, as a timed, located-in-laps statement with honest uncertainty. |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
@@ -338,6 +344,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `selection-panel.js` | `DesignerSelection` | LAZY_EDITOR | shared point/range selection controls for the map and profile. |
 | `followup-tools.js` | `DesignerFollowup` | LAZY_EDITOR | small designer review tools. |
 | `scenery-panel.js` | `DesignerScenery` | LAZY_EDITOR | DesignerScenery: the track designer's scenery inspector. |
+| `bridge-panel.js` | `DesignerBridges` | LAZY_EDITOR | authored road-overpass controls. |
 | `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
 
 **`js/car/`**
@@ -393,6 +400,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `music-lib.js` | `MusicLib` | LAZY_AUDIO | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | LAZY_AUDIO | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
 | `rivals.js` | `RivalAudio` | LAZY_AUDIO | RivalAudio — the field around you, reduced to the player's TRACK frame for js/audio/engine.js, which owns the sound and deliberately does no track maths. |
+| `crowd.js` | `CrowdAudio` | LAZY_AUDIO | CrowdAudio — trackside crowd ambience bed. |
 | `car-sfx.js` | `CarSfx` | LAZY_AUDIO | CarSfx — the player car's contact sounds, reduced to four 0..1 levels for GameAudio.setCarSfx, plus the pit-stop wheel guns on the stop's edges. scrub fronts… |
 | `voice-pack.js` | `VoicePack` | LAZY_AUDIO | VoicePack — recorded radio voice, composed from clips the way Crew Chief does it: fixed phrases, driver surnames, positions, numbers and gaps are separate… |
 | `radio-voice.js` | `RadioVoice` | LAZY_AUDIO | The radio banner, spoken aloud by the browser's own speech synthesiser. |
@@ -457,6 +465,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision and plank sparks, gravel/grass kickup, rain spray) for js/game.js. |
+| `droplets.js` | `Droplets` | tag | Droplets: rain on the lens / visor for the ONBOARD cameras (cockpit, hood, visor, helmet, T-cam). |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
 | `car-fx.js` | `CarFx` | tag | CarFx: per-car motion effects js/game.js's render loop asks for once a car's grounded basis is built — the PLANK SPARKS a car throws when its floor bottoms… |
 

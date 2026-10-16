@@ -78,7 +78,7 @@ class El {
   remove() {}
 }
 
-function boot(fetchImpl) {
+function boot(fetchImpl, nativeDownload) {
   let now = EPOCH;
   let seq = 0;
   const timers = new Map();
@@ -105,6 +105,7 @@ function boot(fetchImpl) {
     Uint8Array,
     Uint32Array,
     Blob,
+    NativeDownload: nativeDownload,
     setTimeout(fn, ms) {
       const id = ++seq;
       timers.set(id, { fn, at: now + (Number(ms) || 0) });
@@ -301,6 +302,32 @@ function jsonFiles(entries) {
   return entries.filter((entry) => entry.name.endsWith(".json"));
 }
 
+test("native ZIP download waits for sharing and never reports a cancelled or failed share as downloaded", async () => {
+  for (const outcome of ["success", "cancel", "failure"]) {
+    let resolve, reject, saved;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const h = boot(openF1Fetch(() => ({ body: [] })), {
+      viable: () => true, saveBlob: (blob, name) => { saved = { blob, name }; return held; },
+    });
+    const wrap = await h.context.DataExport.create({ el: (tag, cls, text) => new El(tag, cls, text), clear() {}, isOpen: () => true }).loadExport();
+    const [gather, download] = find(wrap, "dh-export-row").children;
+    const status = find(wrap, "dh-export-status");
+    gather.click();
+    await h.pump(() => !download.disabled && gather.textContent === "Gather");
+    download.click();
+    await h.pump(() => !!saved);
+    assert.equal(saved.name, "apex-startlines-2026.zip");
+    assert.equal(saved.blob.type, "application/zip");
+    assert.equal(download.disabled, true);
+    assert.doesNotMatch(status.textContent, /Downloaded/);
+    assert.equal(h.downloadName(), null, "native ZIP must not fall back to an intercepted anchor");
+    if (outcome === "success") resolve(); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await h.pump(() => !download.disabled);
+    assert.match(status.textContent, outcome === "success" ? /Downloaded apex-startlines-2026.zip/ : outcome === "cancel" ? /ZIP ERROR: Share canceled/ : /ZIP ERROR: disk full/);
+    if (outcome !== "success") assert.doesNotMatch(status.textContent, /Downloaded/);
+  }
+});
+
 test("export zip lists every circuit from the OpenF1 mock, with CRC-32 and JSON shape", async () => {
   const out = await runExport(openF1Fetch());
   assert.equal(out.year, 2026);
@@ -372,4 +399,33 @@ test("a failed OpenF1 response leaves Download disabled and records the error", 
   assert.equal(out.download.disabled, true);
   assert.equal(out.download.textContent, "Download");
   assert.match(out.status, /ERROR: not found/);
+});
+
+for (const defect of ["start", "end", "middle"]) {
+  test(`export rejects a timestamp-${defect} partial trace despite sufficient samples`, async () => {
+    const out = await runExport(openF1Fetch((url) => {
+      if (!url.includes("/location")) return;
+      const rows = openF1Fixture(url);
+      return { body: rows.filter((_, i) => defect === "start" ? i >= 38 :
+        defect === "end" ? i < 102 : i < 45 || i >= 83) };
+    }));
+    const parsed = JSON.parse(jsonFiles(unzip(await out.blob.arrayBuffer()))[0].data.toString("utf8"));
+    assert.deepEqual(parsed.circuits, {});
+  });
+}
+
+test("export tries the next driver after a partial trace, independent of coordinate scale", async () => {
+  const out = await runExport(openF1Fetch((url) => {
+    if (!url.includes("/location")) return;
+    const rows = openF1Fixture(url);
+    return { body: new URL(url).searchParams.get("driver_number") === "1" ? rows.slice(38) :
+      rows.map((p) => ({ ...p, x: p.x * 10, y: p.y * 10 })) };
+  }));
+  const parsed = JSON.parse(jsonFiles(unzip(await out.blob.arrayBuffer()))[0].data.toString("utf8"));
+  assert.ok(Object.keys(parsed.circuits).length > 0);
+  const rows = openF1Fixture("https://api.openf1.org/v1/location");
+  for (const circuit of Object.values(parsed.circuits)) {
+    assert.deepEqual(circuit.sf, [rows[0].x * 10, rows[0].y * 10]);
+    assert.equal(circuit.nLoc, rows.length);
+  }
 });

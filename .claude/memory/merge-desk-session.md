@@ -13,3 +13,5 @@ On 2026-10-15 Bryce asked for a Claude Merge Desk ("I want agents to work togeth
 **Why:** a fresh-session Routine had no GitHub connector and no way to talk to the fleet.
 
 **How to apply:** route ready/arm requests to that session instead of arming yourself; if it is gone (list_sessions tag merge-desk), tell Bryce rather than acting as Merge Desk. Related: [[pr-auto-merge]].
+
+**Stale check 2026-10-16:** `get_session session_01WQY3pk88sN7o9MCxyAYoWr` returns "the requested resource was not found" — that desk is gone. Before sending SWEEP, find the current `[Merge Desk]` session with `list_sessions` (or ask Bryce); do not message this id.

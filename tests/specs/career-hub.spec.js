@@ -433,20 +433,33 @@ test.describe.parallel("Career — the hire's contract", () => {
 
   test("re-signing takes their asking price and clears the block", async ({ page }) => {
     await boot(page);
-    await page.evaluate(() => window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 }));
-    await goRacing(page);
-    const out = await page.evaluate(() => {
-      window.__apex.careerSim(24);
-      window.__apex.careerRollover();
-      const p = window.__apex.careerHire();
-      if (!p || p.kind !== "renew") return { skipped: true, kind: p && p.kind };
-      window.__apex.careerHire("renew");
-      return { ask: p.ask, salary: window.__apex.career().roster[0].salary,
-               pending: window.__apex.careerHire() };
+    const offer = await page.evaluate(() => {
+      window.__apex.career({ flavour: "myteam", hire: "NKM", seed: 4242 });
+      // Stage the contract boundary explicitly. Season simulation may poach
+      // this driver; that is a different flow, never a reason to pass renewal.
+      const hire = Career.data().roster[0];
+      hire.left = 0;
+      hire.pending = { kind: "renew", ask: hire.salary + Career.HIRE_MIN };
+      Career.save();
+      window.__apex.career(true);
+      return window.__apex.careerHire();
     });
-    if (out.skipped) { expect(out.kind).toBe("left"); return; }
-    expect(out.salary).toBe(out.ask);
-    expect(out.pending).toBeNull();
+    expect(offer.kind).toBe("renew");
+    await expect(page.locator("#cr-go")).toBeDisabled();
+    await expect(page.locator("#cr-rehire")).toBeVisible();
+    await page.locator("#cr-rehire").click();
+    const renewed = await page.evaluate(() => ({
+      salary: window.__apex.career().roster[0].salary, pending: window.__apex.careerHire(),
+    }));
+    expect(renewed.salary).toBe(offer.ask);
+    expect(renewed.pending).toBeNull();
+    await expect(page.locator("#cr-rehire")).toHaveCount(0);
+    await expect(page.locator("#cr-go")).toBeEnabled();
+    await boot(page); // a new page load must keep the accepted contract
+    await page.evaluate(() => window.__apex.career(true));
+    expect(await page.evaluate(() => window.__apex.career().roster[0].salary)).toBe(offer.ask);
+    expect(await page.evaluate(() => window.__apex.careerHire())).toBeNull();
+    await expect(page.locator("#cr-go")).toBeEnabled();
   });
 
   test("signing somebody else replaces the seat and its wage", async ({ page }) => {

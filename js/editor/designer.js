@@ -28,10 +28,10 @@ const TrackDesigner = (function () {
    *  STEPS in the order a first circuit is built, GESTURES per input, LIMITS. */
   const HOWTO = Object.freeze({
     STEPS: Object.freeze([
-      { n: 1, title: "Start", text: "Use RANDOMISE for a starting circuit, START FROM… for a template, or DRAW one closed loop." },
+      { n: 1, title: "Start", text: "Open DRAW and use RANDOMISE for a starting circuit, START FROM… for a template, or DRAW one closed loop." },
       { n: 2, title: "Shape", text: "Open EDIT and drag a selected point to move the road; RANGE selects a whole section. UNDO restores the previous edit." },
       { n: 3, title: "Corners", text: "In EDIT, choose a corner shape and its size, then tap a point to place it. REPLACE THE SELECTED SPAN reshapes a selected section." },
-      { n: 4, title: "Elevation", text: "Open ELEVATION to select points and adjust their height in metres. BANK ° tilts a turn; KERB chooses flat, sausage or rumble, and BERMS supports banked corners." },
+      { n: 4, title: "Elevation", text: "Open ELEVATION to adjust point heights or add ROAD BRIDGES. Select a turn here; BANK ° tilts it; KERB chooses flat, sausage or rumble, and BERMS supports banked corners." },
       { n: 5, title: "Look", text: "Open SCENERY and choose a theme; LIVE SCENERY shows an overhead preview. Tune the atmosphere or place objects beside the road." },
       { n: 6, title: "Checks", text: "Open TEST and resolve red CHECKS before saving. Use FIX where a repair is available." },
       { n: 7, title: "Race and share", text: "Name your circuit and SAVE, then RACE or TIME TRIAL. SHARE copies a link; CARD / EXPORT / IMPORT move one circuit; MY CIRCUITS → EXPORT ALL / IMPORT LIBRARY backs up the collection." },
@@ -77,7 +77,7 @@ const TrackDesigner = (function () {
   let spanArm = false, selectionMode = "point", selectionPanel = null, heightStep = 1;
   let params = { L: 200, R: 60, deg: 90, dir: 1 };
   // propKind: the scenery-mode props palette selection (TrackDesignerProps.KINDS).
-  let propKind = "stand", scenery = null, sceneryView = false, repair = null;
+  let propKind = "stand", scenery = null, sceneryView = false, repair = null, bridges = null;
   const undo = [], redo = [];
   let replacementGeneration = 0, lifecycleWired = false;
   let libraryImportGeneration = 0, libraryImportPlan = null;
@@ -700,6 +700,7 @@ const TrackDesigner = (function () {
     const next = MODES.some((m) => m[0] === name) ? name : "edit";
     if (next === "scenery") sceneryView = true;
     if (next === mode) { refreshControls(); return mode; }
+    hideCtx();
     mode = next;
     if (mode === "elevation") toggleElevationHeat(true);
     if (ui.rail) ui.rail.scrollTop = 0;
@@ -743,18 +744,31 @@ const TrackDesigner = (function () {
   }
   const keptNote = (kept) => (kept ? " · UNDO brings back the design you had" : "");
   /** The autosaved draft, sanitized loosely (a work in progress may be red). */
-  function draftItem() {
-    const d = custom.draft();
+  function draftItem(previous) {
+    const d = previous ? (custom.draftPrev && custom.draftPrev()) : custom.draft();
     const it = d && custom.sanitize(d, { loose: true });
     if (!it || !it.pts.length) return null;
     if (typeof d.originId === "string") it.originId = d.originId;
     return it;
   }
 
+  function recoverDraft() {
+    const previous = draftItem(true);
+    if (!previous) { renderLibrary(); return false; }
+    // Recovery always keeps the current draft, including name-only edits.
+    savedSnap = null;
+    const kept = load(previous, "recover", previous.originId);
+    savedSnap = null;
+    saveDraft();
+    showPane("design");
+    message("Previous draft recovered" + keptNote(kept));
+    return true;
+  }
+
   // ── save / race ───────────────────────────────────────────────────────────
   function save(forRace) {
     if (previewT || !verdict) runPreview();
-    if (!verdict || !verdict.ok) { message("Fix the red issues before " + (forRace ? "racing" : "saving"), true); return { ok: false, reason: "red" }; }
+    if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before " + (forRace ? "racing" : "saving"), true); return { ok: false, reason: "red" }; }
     design.turns = verdict.turns.slice();
     design.lengthM = Math.round(verdict.tr.total);
     design.name = CustomTracks.sanitizeName(ui.name ? ui.name.value : design.name);
@@ -766,6 +780,9 @@ const TrackDesigner = (function () {
       return r;
     }
     design.id = r.id; design.originId = r.id;
+    // The draft may already be on disk: a reload must edit this saved id,
+    // rather than add a duplicate through the old, now-replaced library link.
+    saveDraft();
     savedSnap = snapshot();
     message(r.durable ? "Saved to MY CIRCUITS" : "Saved — but storage is full, so it may not survive a reload", !r.durable);
     Log.info("track", "designer saved " + r.id + " (" + design.name + ", " + design.lengthM + " m)");
@@ -837,17 +854,21 @@ const TrackDesigner = (function () {
     stage.insertBefore(ui.toolbar, canvas);
     // rail
     const rail = el("div", "td-rail"); ui.rail = rail;
-    const tabs = el("div", "td-tabs"); tabs.setAttribute("role", "tablist");
+    const tabs = el("div", "td-tabs");
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Track Designer workspace");
     ui.tabDesign = tabBtn("DESIGN", "design"); ui.tabLib = tabBtn("MY CIRCUITS", "library"); ui.tabHow = tabBtn("HOW TO", "howto");
     tabs.append(ui.tabDesign, ui.tabLib, ui.tabHow);
-    ui.paneDesign = el("section", "td-pane"); ui.paneDesign.setAttribute("role", "tabpanel"); ui.paneDesign.dataset.pane = "design";
-    ui.paneLib = el("section", "td-pane"); ui.paneLib.setAttribute("role", "tabpanel"); ui.paneLib.dataset.pane = "library"; ui.paneLib.hidden = true;
-    ui.paneHow = el("section", "td-pane"); ui.paneHow.setAttribute("role", "tabpanel"); ui.paneHow.dataset.pane = "howto"; ui.paneHow.hidden = true;
+    ui.paneDesign = el("section", "td-pane"); ui.paneDesign.id = "td-pane-design"; ui.paneDesign.setAttribute("role", "tabpanel"); ui.paneDesign.dataset.pane = "design";
+    ui.paneLib = el("section", "td-pane"); ui.paneLib.id = "td-pane-library"; ui.paneLib.setAttribute("role", "tabpanel"); ui.paneLib.dataset.pane = "library"; ui.paneLib.hidden = true;
+    ui.paneHow = el("section", "td-pane"); ui.paneHow.id = "td-pane-howto"; ui.paneHow.setAttribute("role", "tabpanel"); ui.paneHow.dataset.pane = "howto"; ui.paneHow.hidden = true;
     ui.paneHow.setAttribute("aria-label", "How to build a circuit");
     rail.append(tabs, ui.paneDesign, ui.paneLib, ui.paneHow);
     buildDesignPane(ui.paneDesign);
     const libraryFiles = el("div", "td-chips"); libraryFiles.dataset.role = "library-files";
-    libraryFiles.append(btn("EXPORT ALL", "sel-chip", exportLibraryFile), btn("IMPORT LIBRARY", "sel-chip", () => ui.libraryFile.click()));
+    ui.recoverDraft = btn("RECOVER PREVIOUS DRAFT", "sel-chip", recoverDraft);
+    ui.recoverDraft.hidden = true;
+    libraryFiles.append(ui.recoverDraft, btn("EXPORT ALL", "sel-chip", exportLibraryFile), btn("IMPORT LIBRARY", "sel-chip", () => ui.libraryFile.click()));
     ui.libraryFile = el("input"); ui.libraryFile.type = "file"; ui.libraryFile.accept = ".json,application/json"; ui.libraryFile.hidden = true;
     ui.libraryFile.setAttribute("aria-label", "Import a circuit library file");
     ui.libraryFile.addEventListener("change", () => { const f = ui.libraryFile.files && ui.libraryFile.files[0]; ui.libraryFile.value = ""; if (f) importLibraryFile(f); });
@@ -926,7 +947,24 @@ const TrackDesigner = (function () {
   }
   function tabBtn(label, pane) {
     const b = btn(label, "sel-chip td-tab", () => showPane(pane));
-    DesignerFollowup.tab(b, pane, () => [ui.tabDesign, ui.tabLib, ui.tabHow], showPane);
+    b.id = "td-tab-" + pane;
+    b.dataset.pane = pane;
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-controls", "td-pane-" + pane);
+    b.tabIndex = -1;
+    b.addEventListener("keydown", (e) => {
+      const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
+      if (!keys.includes(e.key)) return;
+      const tabs = [ui.tabDesign, ui.tabLib, ui.tabHow];
+      const at = tabs.indexOf(b);
+      if (at < 0) return;
+      const next = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1
+        : (at + ((e.key === "ArrowRight" || e.key === "ArrowDown") ? 1 : -1) + tabs.length) % tabs.length;
+      e.preventDefault(); e.stopPropagation();
+      const target = tabs[next];
+      showPane(target.dataset.pane);
+      target.focus();
+    });
     return b;
   }
   function showPane(pane) {
@@ -934,8 +972,11 @@ const TrackDesigner = (function () {
     if (root) root.dataset.pane = pane;
     for (const [b, p, id] of [[ui.tabDesign, ui.paneDesign, "design"], [ui.tabLib, ui.paneLib, "library"], [ui.tabHow, ui.paneHow, "howto"]]) {
       const on = id === pane;
-      p.hidden = !on; p.id = "td-panel-" + id; p.setAttribute("aria-labelledby", b.id); b.tabIndex = on ? 0 : -1;
+      p.hidden = !on;
       b.classList.toggle("active", on); b.setAttribute("aria-selected", on ? "true" : "false");
+      b.setAttribute("aria-controls", p.id);
+      b.tabIndex = on ? 0 : -1;
+      p.setAttribute("aria-labelledby", b.id);
     }
     if (pane === "library") renderLibrary();
   }
@@ -949,7 +990,7 @@ const TrackDesigner = (function () {
       details.appendChild(el("summary", "td-label", task.title));
       const steps = el("ol");
       for (const text of task.steps) steps.appendChild(el("li", "td-hint", text));
-      details.append(steps, el("p", "td-hint", task.note), btn("OPEN " + task.mode.toUpperCase(), "sel-chip", () => { setMode(task.mode); showPane("design"); }));
+      details.append(steps, el("p", "td-hint", task.note), btn("OPEN " + task.mode.toUpperCase(), "sel-chip", () => { setMode(task.mode); showPane("design"); if (ui.tabDesign) ui.tabDesign.focus(); }));
       pane.appendChild(details);
     }
     const list = (label, rows) => {
@@ -1040,18 +1081,18 @@ const TrackDesigner = (function () {
     modes.appendChild(ui.modes);
     // tools
     // The rail reads as the order a circuit is built in: 1 SHAPE … 5 CHECKS.
-    const tools = group("1 SHAPE");
+    const tools = group("SHAPE");
     ui.tools = el("div", "td-chips");
     for (const [id, label] of TOOLS) {
       const b = btn(label, "sel-chip", () => setTool(id)); b.dataset.tool = id; b.setAttribute("aria-pressed", "false");
-      ui.tools.appendChild(b);
+      b.hidden = id === "draw"; ui.tools.appendChild(b);
     }
     // The stage's hint is hidden on a phone (css/editor.css): this copy stays in the rail.
     ui.toolHint = el("div", "td-hint", toolHint());
     tools.append(ui.tools, ui.toolHint);
     ui.toolsGroup = tools;
     // stamp params
-    ui.shape = group("2 CORNERS");
+    ui.shape = group("CORNERS");
     ui.shapeLabel = ui.shape._label;
     ui.paramRows = {};
     for (const key of ["L", "R", "deg"]) {
@@ -1064,7 +1105,7 @@ const TrackDesigner = (function () {
     dirRow.append(ui.dirL, ui.dirR); ui.shape.appendChild(dirRow);
     ui.apply = btn("STAMP AT SELECTED POINT", "sel-edit", () => applyStamp(sel >= 0 ? sel : 0, span >= 0 ? span : null));
     // Always keep 2 CORNERS in the rail (hiding the whole group left 1 SHAPE → 3 LOOK).
-    ui.shapeHint = el("div", "td-hint", "Pick STRAIGHT, CORNER, HAIRPIN, CHICANE or S-BEND under 1 SHAPE to stamp.");
+    ui.shapeHint = el("div", "td-hint", "Pick STRAIGHT, CORNER, HAIRPIN, CHICANE or S-BEND under SHAPE to stamp.");
     ui.shape.append(ui.apply, ui.shapeHint);
     // Scenery owns discovery and placement controls; all writes remain in this
     // module so history, validation, autosave and race hand-off share one path.
@@ -1075,7 +1116,7 @@ const TrackDesigner = (function () {
       onRecipe: (props) => { commit(Object.assign({}, design, { props }), "prop"); return true; } });
     const theme = scenery.root; ui.themeGroup = theme;
     // circuit
-    const circuit = group("4 DETAILS");
+    const circuit = group("ROAD"); ui.circuitGroup = circuit;
     ui.name = el("input", "td-input"); ui.name.type = "text"; ui.name.maxLength = CustomTracks.LIMITS.name; ui.name.autocomplete = "off"; ui.name.spellcheck = false;
     ui.name.setAttribute("aria-label", "Circuit name"); ui.name.placeholder = "CIRCUIT NAME";
     ui.name.addEventListener("input", () => { design.name = CustomTracks.sanitizeName(ui.name.value); scheduleDraft(); });
@@ -1160,13 +1201,13 @@ const TrackDesigner = (function () {
     const head = el("div", "td-chips");
     ui.fixAll = btn("FIX ALL", "sel-chip", () => fixEverything());
     ui.fixAll.hidden = true; ui.fixAll.setAttribute("aria-label", "Fix every issue the designer can repair");
-    head.append(el("div", "td-label", "5 CHECKS"), ui.fixAll);
+    head.append(el("div", "td-label", "CHECKS"), ui.fixAll);
     // Not a live region: it is rebuilt on every preview (announceChecks speaks the counts).
     ui.issues = el("ul", "td-issues"); ui.issues.setAttribute("aria-label", "Design checks");
     repair = DesignerFollowup.repairPanel({ el, btn, getDesign: () => design, check: TrackValidate.check, onApply: (next, codes, msg) => { commitFix(next, codes); message(msg); } });
     issues.append(head, ui.issues, repair.root);
     // share in: a pasted code or link (SHARE on the foot copies one out)
-    const sharing = group("SHARE CODE");
+    const sharing = group("SHARE CODE"); ui.sharingGroup = sharing;
     ui.code = el("input", "td-input"); ui.code.type = "text"; ui.code.autocomplete = "off"; ui.code.spellcheck = false;
     ui.code.placeholder = "PASTE A SHARE CODE OR LINK"; ui.code.setAttribute("aria-label", "Share code or link");
     ui.code.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); loadFrom(ui.code.value); } });
@@ -1197,6 +1238,8 @@ const TrackDesigner = (function () {
     buildInsight(pane, circuit, actions, sharing);
     buildAuthoring();
     buildDesigned(circuit);
+    bridges = DesignerBridges.create({ el, btn, group, onChange: (next, msg) => { commit(next, "bridges"); message(msg + " · open TEST to check clearance"); } });
+    ui.elevGroup.appendChild(bridges.root);
   }
 
   // ── share out / in ────────────────────────────────────────────────────────
@@ -1210,13 +1253,14 @@ const TrackDesigner = (function () {
   /** Copy the share link; the code also lands in the SHARE CODE field for a long-press copy. */
   async function share() {
     if (previewT || !verdict) runPreview();
-    if (!verdict || !verdict.ok) { message("Fix the red issues before sharing", true); return null; }
+    if (!verdict || !verdict.ok) { setMode("test"); message("Fix the red issues before sharing", true); return null; }
     const code = await shareCode();
     if (!code) { message("This design cannot be encoded", true); return null; }
     const url = TrackCodec.shareUrl(code);
     if (ui.code) ui.code.value = url;
     let copied = false;
     try { if (typeof ApexClipboard !== "undefined" && ApexClipboard.write) copied = !!(await ApexClipboard.write(url)); } catch (_) { copied = false; }
+    if (!copied) setMode("test");
     message(copied ? "Share link copied" : "Share link is in the SHARE CODE field — copy it from there", !copied);
     Log.info("track", "designer share " + (design.id || "(unsaved)") + " " + code.length + " chars" + (copied ? " copied" : ""));
     return url;
@@ -1356,7 +1400,7 @@ const TrackDesigner = (function () {
     for (const b of ui.tools.children) { const on = b.dataset.tool === tool; b.classList.toggle("active", on); b.setAttribute("aria-pressed", on ? "true" : "false"); }
     const kind = TrackStamps.KINDS[tool];
     const showElev = mode === "elevation";
-    if (ui.toolsGroup) ui.toolsGroup.hidden = !(mode === "edit" || mode === "draw");
+    if (ui.toolsGroup) ui.toolsGroup.hidden = mode !== "edit";
     // #1039: keep 2 CORNERS in the rail so numbering never skips 1 → 3; hide only stamp controls (and only outside EDIT).
     if (ui.shape) ui.shape.hidden = mode !== "edit";
     if (ui.elevGroup) ui.elevGroup.hidden = !showElev;
@@ -1377,14 +1421,15 @@ const TrackDesigner = (function () {
       ui.dirL.classList.toggle("active", params.dir === 1); ui.dirR.classList.toggle("active", params.dir === -1);
       ui.dirL.setAttribute("aria-pressed", params.dir === 1 ? "true" : "false"); ui.dirR.setAttribute("aria-pressed", params.dir === -1 ? "true" : "false");
       ui.apply.textContent = span >= 0 && sel >= 0 ? "REPLACE THE SELECTED SPAN" : sel >= 0 ? "STAMP AFTER POINT " + (sel + 1) : "STAMP AT THE START";
-      ui.shapeLabel.textContent = "2 CORNERS · " + stampExample();
+      ui.shapeLabel.textContent = "CORNERS · " + stampExample();
     } else if (ui.shapeLabel) {
-      ui.shapeLabel.textContent = "2 CORNERS";
+      ui.shapeLabel.textContent = "CORNERS";
     }
+    if (bridges && showElev) bridges.refresh({ design, sel });
     if (scenery) scenery.refresh({ design, sel, span, propKind });
     if (selectionPanel) selectionPanel.refresh({ design, sel, span, mode, selectionMode });
     if (ui.quickHeight) {
-      ui.quickHeight.hidden = sel < 0;
+      ui.quickHeight.hidden = sel < 0 || (mode !== "edit" && !showElev);
       if (sel >= 0) {
         const count = S.spanIndices(sel, span, design.pts.length).length;
         ui.quickHeightLabel.textContent = "HEIGHT CHANGE (m) · " + count + (count === 1 ? " POINT" : " POINTS");
@@ -1402,9 +1447,10 @@ const TrackDesigner = (function () {
     if (ui.undo) ui.undo.disabled = !undo.length;
     if (ui.redo) ui.redo.disabled = !redo.length;
     ui.start.disabled = ui.del.disabled = !(sel >= 0);
-    if (ui.prevPt) { ui.prevPt.disabled = !design.pts.length; ui.prevPt.hidden = mode === "edit" || showElev; }
-    if (ui.nextPt) { ui.nextPt.disabled = !design.pts.length; ui.nextPt.hidden = mode === "edit" || showElev; }
+    if (ui.prevPt) { ui.prevPt.disabled = !design.pts.length; ui.prevPt.hidden = mode !== "test"; }
+    if (ui.nextPt) { ui.nextPt.disabled = !design.pts.length; ui.nextPt.hidden = mode !== "test"; }
     if (ui.spanEnd) {
+      ui.spanEnd.hidden = true; // RANGE is the single visible selection workflow.
       ui.spanEnd.disabled = !(sel >= 0);
       ui.spanEnd.classList.toggle("active", !!spanArm);
       ui.spanEnd.setAttribute("aria-pressed", spanArm ? "true" : "false");
@@ -1428,6 +1474,19 @@ const TrackDesigner = (function () {
       ui.bermOn.classList.toggle("active", on); ui.bermOn.setAttribute("aria-pressed", on ? "true" : "false");
       ui.bermOff.classList.toggle("active", !on); ui.bermOff.setAttribute("aria-pressed", !on ? "true" : "false");
     }
+    if (ui.circuitGroup) {
+      ui.circuitGroup.hidden = mode === "scenery" || showElev;
+      ui.circuitGroup._label.textContent = mode === "draw" ? "START A CIRCUIT" : mode === "test" ? "CIRCUIT DETAILS" : "ROAD";
+      for (const node of [ui.name, ui.country]) node.hidden = mode !== "test";
+      ui.width.hidden = ui.spanW.hidden = mode !== "edit";
+      for (const node of [ui.reverse, ui.start, ui.del]) node.hidden = mode !== "edit";
+      for (const node of [ui.heat, ui.testHere]) node.hidden = mode !== "test";
+      ui.seedRow.hidden = ui.styleRow.hidden = mode !== "draw";
+      ui.candidateSection.hidden = mode !== "draw";
+    }
+    if (ui.turnsGroup) ui.turnsGroup.hidden = mode === "draw" || mode === "scenery";
+    if (ui.checksGroup) ui.checksGroup.hidden = mode !== "test";
+    if (ui.sharingGroup) ui.sharingGroup.hidden = mode !== "test";
     if (root) root.dataset.mode = mode;
     refreshAuthoring();
     syncProfile();
@@ -1495,6 +1554,7 @@ const TrackDesigner = (function () {
   }
   function renderLibrary() {
     if (!ui.lib) return;
+    if (ui.recoverDraft) ui.recoverDraft.hidden = !draftItem(true);
     while (ui.lib.firstChild) ui.lib.removeChild(ui.lib.firstChild);
     const items = custom.list();
     if (!items.length) { ui.lib.appendChild(el("div", "td-empty", "No saved circuits yet — SAVE the design on the left and it appears here. Saved circuits also show under MY CIRCUITS in the RACE picker.")); return; }
@@ -1648,7 +1708,7 @@ const TrackDesigner = (function () {
   /** The 4 DETAILS rows become [RANDOMISE][TRACK OF THE DAY][START FROM…] over
    *  [REVERSE]…[FIT VIEW][SPEED]; the START FROM cards and a TURNS group after 5 CHECKS. */
   function buildInsight(pane, circuit, actions, before) {
-    const seedRow = el("div", "td-chips");
+    const seedRow = el("div", "td-chips"); ui.seedRow = seedRow;
     ui.totd = btn("TRACK OF THE DAY", "sel-chip", () => trackOfTheDay());
     ui.fromBtn = btn("START FROM…", "sel-chip", () => toggleStartFrom());
     ui.fromBtn.setAttribute("aria-expanded", "false");
@@ -1662,7 +1722,7 @@ const TrackDesigner = (function () {
     actions.insertBefore(ui.heat, ui.testHere && ui.testHere.parentNode === actions ? ui.testHere : null);
     ui.from = el("div", "td-grid"); ui.from.hidden = true; ui.from.setAttribute("aria-label", "Start from a real circuit");
     circuit.appendChild(ui.from);
-    const turns = group("TURNS");
+    const turns = group("TURNS"); ui.turnsGroup = turns;
     ui.turns = el("ul", "td-issues"); ui.turns.setAttribute("aria-label", "Corners, in driving order");
     turns.appendChild(ui.turns);
     pane.appendChild(DesignerFollowup.learningPanel({ el, btn }).root);
@@ -1697,9 +1757,9 @@ const TrackDesigner = (function () {
     sel = c.i0; span = c.i1;
     params = Object.assign({}, params, { R: c.fit.R, dir: c.fit.dir }, c.fit.kind === "corner" ? { deg: c.fit.deg } : {});
     if (cv) { cv.setSelection(sel, span); cv.focusAt(c.sApex); }
-    setTool(c.fit.kind);
+    if (mode !== "elevation" && mode !== "test") setTool(c.fit.kind);
     refreshControls();
-    message("T" + n + " selected — tune it and press REPLACE THE SELECTED SPAN");
+    message("T" + n + (mode === "elevation" ? " selected — set BANK ° below" : mode === "test" ? " selected — TEST HERE to drive this section" : " selected — tune it and press REPLACE THE SELECTED SPAN"));
     return true;
   }
   function refreshHeat() {
@@ -1813,7 +1873,7 @@ const TrackDesigner = (function () {
     for (const b of stepBtns(ui.spanW)) b.setAttribute("aria-disabled", on ? "false" : "true");
     ui.spanW._refresh();
     const c = pickedTurn();
-    ui.turnPick.hidden = !c;
+    ui.turnPick.hidden = !c || mode !== "elevation";
     if (c) { ui.turnPickLabel.textContent = "SELECTED TURN · T" + c.n; ui.bank._refresh(); }
   }
   // SPAN WIDTH: the span sel → span in driving order (REPLACE's span), as
@@ -1977,9 +2037,11 @@ const TrackDesigner = (function () {
     // POINT m / single-node edit: when a SPAN is selected and the anchor is in
     // it, offset every grip in the group by the same delta (relative hills stay).
     if (keepSpan) {
-      const dh = v - elevH(design.heights[i] || 0);
-      if (dh === 0) { refreshControls(); return false; }
       const group = TrackShape.spanIndices(sel, span, design.pts.length);
+      const values = group.map(j => elevH(design.heights[j] || 0));
+      const limit = CustomTracks.LIMITS.rise;
+      const dh = Math.max(-limit - Math.min(...values), Math.min(limit - Math.max(...values), v - elevH(design.heights[i] || 0)));
+      if (dh === 0) { refreshControls(); return false; }
       const next = design.heights.slice();
       for (const j of group) next[j] = elevH((next[j] || 0) + dh);
       commit(Object.assign({}, design, { heights: next, elevations: [] }), "elev:span");
@@ -2054,7 +2116,10 @@ const TrackDesigner = (function () {
       ui.styles[st] = b; ui.styleRow.appendChild(b);
     }
     ui.cands = el("div", "td-grid"); ui.cands.hidden = true; ui.cands.setAttribute("aria-label", "Designed circuits, best first");
-    circuit.append(ui.styleRow, ui.cands);
+    ui.candidateSection = el("div");
+    ui.from.remove();
+    ui.candidateSection.append(ui.from, ui.styleRow, ui.cands);
+    circuit.appendChild(ui.candidateSection);
   }
   function setDesignBusy(on) {
     candBusy = on;
@@ -2248,7 +2313,7 @@ const TrackDesigner = (function () {
    *  the game's mark and the share link in the right column. { canvas, url, name } | null. */
   async function cardCanvas() {
     if (previewT || !verdict) runPreview();
-    if (!verdict || !verdict.ok || !verdict.tr) { message("Fix the red issues before sharing", true); return null; }
+    if (!verdict || !verdict.ok || !verdict.tr) { setMode("test"); message("Fix the red issues before sharing", true); return null; }
     // The encoder yields to compression; editing can continue meanwhile. One
     // snapshot owns the link, drawing, filename AND native share-sheet title.
     const item = copy(design), preview = verdict;

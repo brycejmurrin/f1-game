@@ -198,7 +198,11 @@ test("WATCH official finishers and disqualifications survive the full game's res
     assert.equal(winner.finishT, publishedWinner.lapStart[lastLap] + publishedWinner.laps[lastLap]);
     assert.equal(!!dsq.dsq, true, "the published disqualification must survive simulator settlement");
     assert.equal(dsq.retired, false); assert.equal(dsq.finished, false);
-    const rows = G.els.resultsTable.children.filter((n) => String(n.className).split(" ").includes("res-row"));
+    const classification = G.els.resultsTable.children.find((n) => n.getAttribute("role") === "list"
+      && n.getAttribute("aria-label") === "Race classification");
+    assert.ok(classification, "published results expose the named race classification");
+    const rows = classification.children.filter((n) => String(n.className).split(" ").includes("res-row"));
+    assert.equal(rows.length, G.cars.length, "every official car retains one classification row");
     const text = (row) => row.children.map((n) => n.textContent).join(" ");
     assert.match(text(rows.find((row) => /LEC/.test(text(row)))), /DSQ/);
     assert.doesNotMatch(text(rows.find((row) => /RUS/.test(text(row)))), /DSQ|DNF/);
@@ -585,7 +589,7 @@ test("BROADCAST PiP in WATCH: two cars 8 m apart put the partner in the inset (l
   } finally { g.close(); }
 });
 
-function transportReplay(extra = {}) {
+function transportReplay(extra = {}, { completeSubject = false } = {}) {
   const ctx = vm.createContext({ M4: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) },
     Log: { info() {}, warn() {}, debug() {} },
     CamModes: { CAM_MODES: ["cockpit", "side", "heli", "chase", "tcam", "cinematic", "low"].map((id) => ({ id })) },
@@ -598,8 +602,9 @@ function transportReplay(extra = {}) {
     setCamMode: (m) => { G.camMode = m; } };
   const replay = vm.runInContext("RealReplay", ctx).create(G);
   const options = { script: { laps: 2, drivers, passes: [{ t: 12, lap: 1, by: 2, over: 1, pos: 1 }] },
-    traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, 10) } },
+    traces: { frame: "track", cars: { 1: line(0, 50, 0, 0, 30), 2: line(0, 45, 0, 0, completeSubject ? 30 : 10) } },
     seats: new Map([[cars[0], drivers[0]], [cars[1], drivers[1]]]), follow: "AAA", camera: "auto" };
+  if (completeSubject) assert.ok(options.traces.cars[2].t.at(-1) >= options.script.passes[0].t, "event navigation fixture includes BBB footage at its pass");
   replay.start(options);
   return { replay, G, cars, snaps, drivers, options, ctx };
 }
@@ -736,7 +741,7 @@ test("BROADCAST manual camera ownership keeps the on-air shot and AUTO baseline 
 });
 
 test("WATCH follow lock survives director holds and event navigation, AUTO releases it, and restart clears playback state", () => {
-  const { replay, G } = transportReplay();
+  const { replay, G } = transportReplay({}, { completeSubject: true });
   replay.setLocked(true);
   replay.tick(25);
   assert.equal(replay.status().follow, "AAA", "the selected driver stays locked beyond the old twenty-second hold");
@@ -755,7 +760,7 @@ test("WATCH follow lock survives director holds and event navigation, AUTO relea
 });
 
 test("WATCH paused event navigation paints the final subject and event shot in one camera snap", () => {
-  const { replay, G, cars } = transportReplay();
+  const { replay, G, cars } = transportReplay({}, { completeSubject: true });
   const frames = [];
   G.snapGameCam = (paint) => frames.push({ paint, car: G.player.code, prog: G.player.prog,
     camera: G.camMode, T: G.raceT });
@@ -769,7 +774,7 @@ test("WATCH paused event navigation paints the final subject and event shot in o
 });
 
 test("WATCH timeline changes reset commentary at the new clock and pose before snapping", () => {
-  const { replay, G, options } = transportReplay();
+  const { replay, G, options } = transportReplay({}, { completeSubject: true });
   const order = [];
   G.raceRadio = { resetTimeline: () => order.push(["radio", G.raceT, G.player.prog]) };
   G.snapGameCam = () => order.push(["snap", G.raceT, G.player.prog]);
@@ -816,6 +821,49 @@ test("HIGHLIGHTS opens with the event's shot and preserves manual subject and ca
     assert.equal(replay.status().follow, "AAA", "AUTO can follow events again");
     replay.stop();
   }
+});
+
+test("HIGHLIGHTS scrub into a reel gap follows the next item's driver before its event (#2196)", () => {
+  const { replay, G, cars, drivers, options } = transportReplay();
+  const ccc = { code: "CCC" };
+  cars.push(ccc); drivers.push({ code: "CCC", num: 3, pos: 3, name: "Driver C", lapStart: [0] });
+  options.seats = new Map([[cars[0], drivers[0]], [cars[1], drivers[1]], [ccc, drivers[2]]]);
+  options.reel = true;
+  options.script.passes = [{ t: 100, by: 2, over: 1 }, { t: 300, by: 3, over: 2 }];
+  options.traces.cars = { 1: line(0, 50, 0, 0, 400), 2: line(0, 50, 0, 0, 400), 3: line(0, 50, 0, 0, 400) };
+  replay.start(options);
+  assert.equal(replay.status().follow, "BBB");
+  const cuts = replay.status().broadcast.cuts;
+  replay.seek(250);
+  assert.equal(replay.status().reelIdx, 1);
+  assert.equal(replay.status().follow, "CCC", "the scrub lands on the next item's driver");
+  assert.ok(replay.status().broadcast.cuts > cuts, "the scrub is a cut");
+  for (let i = 0; i < 56; i++) replay.tick(1);
+  assert.equal(replay.status().T, 306);
+  assert.equal(replay.status().follow, "CCC", "CCC's pass at 300 is on camera");
+  replay.stop();
+});
+
+test("HIGHLIGHTS NEXT onto a reel item lands on it, and the clock never runs back (#2196)", () => {
+  const { replay, drivers, options } = transportReplay();
+  drivers[0].pits = [2]; drivers[0].pitT = [106];
+  options.reel = true;
+  options.script.passes = [{ t: 100, by: 2, over: 1 }];
+  options.traces.cars = { 1: line(0, 50, 0, 0, 400), 2: line(0, 50, 0, 0, 400) };
+  replay.start(options);
+  assert.equal(replay.status().T, 92);
+  replay.eventStep(1);
+  assert.equal(replay.status().T, 98);
+  assert.equal(replay.status().reelIdx, 1, "NEXT lands reelIdx on the pit stop");
+  assert.equal(replay.status().follow, "AAA");
+  let last = replay.status().T;
+  for (let i = 0; i < 12; i++) {
+    replay.tick(1);
+    const T = replay.status().T;
+    assert.ok(T > last, "T runs forward: " + last + " -> " + T);
+    last = T;
+  }
+  replay.stop();
 });
 
 test("WATCH paused seek repaints the timing tower and race clock without advancing the director", () => {
@@ -1349,4 +1397,125 @@ test("WATCH unavailable driver selection stays honest and never locks the previo
   assert.equal(replay.status().follow, "BBB"); assert.equal(replay.status().broadcast.locked, true);
   assert.equal(replay.status().paused, true);
   replay.stop();
+});
+
+async function watchEnvironment(startLap = 1, duration = 350, tyreWear = "real") {
+  const g = await createGame({ track: "baku", storage: { tyreWear } });
+  const { script } = scriptIn(g), RR = vm.runInContext("RealRace", g.ctx);
+  for (const d of script.drivers) {
+    d.lapStart = Array.from({ length: 51 }, (_, i) => i * 10);
+    d.laps = Array(51).fill(10);
+  }
+  script.cautions = [{ from: 2, to: 3, level: 3, tFrom: 12, tTo: 27, cause: "SAFETY CAR" },
+    { from: 5, to: 7, level: 4, tFrom: 42, tTo: 69, cause: "RED FLAG" }];
+  script.rain = Array.from({ length: 52 }, (_, lap) => lap >= 2 && lap <= 30);
+  const v = g.G.track.total / 10;
+  const traces = { frame: "track", cars: { 63: line(1, v, 0, 0, duration), 16: line(-20, v, 1, 0, duration) } };
+  const previousCar = g.G.cars[0];
+  RR.launch(script, { seat: "RUS", watch: true, camera: "heli", traces, startLap });
+  await g.settle(() => g.G.cars[0] !== previousCar && g.G.state === "count", 8000);
+  g.step(2);
+  return { g, G: g.G, RR, script, traces, replay: RR.replay() };
+}
+
+test("WATCH seeks restore recorded flags immediately, and a paused red never restarts the puppet field", async () => {
+  const { g, G, RR, replay } = await watchEnvironment();
+  try {
+    g.apex.go(); replay.setPaused(true);
+    replay.seek(15); assert.equal(g.apex.caution().level, 3);
+    replay.seek(35); assert.equal(g.apex.caution().level, 0);
+    replay.seek(15); assert.equal(g.apex.caution().level, 3, "rewind restores the passed safety car before a frame");
+    replay.seek(28); assert.equal(g.apex.caution().level, 0, "recorded end time wins over the inclusive lap window");
+    replay.seek(45); assert.equal(g.apex.caution().level, 4);
+    const car = G.player, pose = [car.prog, car.lap, car.px, car.pz], clock = replay.status().T;
+    g.step(15 * 60);
+    assert.equal(G.state, "race", "recorded red has no live-drive countdown");
+    assert.equal(replay.status().T, clock); assert.equal(replay.status().paused, true);
+    assert.deepEqual([car.prog, car.lap, car.px, car.pz], pose, "pause preserves the recorded pose past the live red timeout");
+    assert.equal(g.apex.caution().level, 4);
+    replay.seek(75); assert.equal(g.apex.caution().level, 0);
+    replay.seek(45); assert.equal(g.apex.caution().level, 4, "a recorded red can be watched twice");
+    G.quitToMenu(); assert.equal(g.apex.caution().level, 0, "leaving WATCH releases its flag owner");
+  } finally { g.close(); }
+});
+
+test("WATCH entry and paused seeks take weather from the recording, independent of completed future rain", async () => {
+  for (const startLap of [1, 20]) {
+    const { g, G, replay } = await watchEnvironment(startLap);
+    try {
+      assert.ok(Math.abs(replay.status().T - (startLap - 1) * 10) < 0.05);
+      assert.equal(G.raceWeather, startLap === 1 ? "dry" : "rain", "entry already has the recorded weather");
+      g.apex.go(); replay.setPaused(true);
+      const weather = () => ({ chip: G.raceWeather, wetness: G.trackWetness(), rendered: G.frame.wetness });
+      replay.seek(15); const first = weather();
+      assert.equal(first.chip, "rain"); assert.equal(first.wetness, 1);
+      replay.seek(200); g.step(1);
+      replay.seek(15); assert.deepEqual(weather(), first, "future footage cannot change the earlier snapshot");
+      replay.seek(5); assert.equal(G.raceWeather, "dry"); assert.equal(G.trackWetness(), 0);
+      assert.equal(G.frame.wetness, 0, "road presentation is restored before the seek paints");
+      replay.seek(15); assert.deepEqual(weather(), first);
+      assert.equal(G.weatherArc, null, "live weather arcs do not own a recorded sky");
+      assert.equal(replay.status().paused, true);
+      G.quitToMenu();
+    } finally { g.close(); }
+  }
+});
+
+
+test("WATCH takes its recorded flag ownership through the normal starting countdown", async () => {
+  const { g, G, RR, script, traces, replay } = await watchEnvironment(3);
+  try {
+    for (let entry = 0; entry < 2; entry++) {
+      if (entry) {
+        const previousCar = G.cars[0];
+        RR.launch(script, { seat: "RUS", watch: true, camera: "heli", traces, startLap: 3 });
+        await g.settle(() => G.cars[0] !== previousCar && G.state === "count", 8000);
+        g.step(2);
+      }
+      assert.equal(G.state, "count"); assert.equal(g.apex.caution().level, 3, "a repeated launch takes flag ownership afresh");
+      replay.setPaused(true); const clock = replay.status().T;
+      g.step(10 * 60);   // let the real starting lights finish, without go()
+      assert.equal(G.state, "race"); assert.equal(replay.status().T, clock);
+      assert.equal(g.apex.caution().level, 3);
+    }
+    replay.seek(35); assert.equal(g.apex.caution().level, 0);
+    g.step(60); assert.equal(g.apex.caution().level, 0);
+    G.quitToMenu();
+  } finally { g.close(); }
+});
+
+test("HIGHLIGHTS rejects missing and ended subject footage before nearby pass suppression", () => {
+  const { replay, options } = transportReplay();
+  options.script.passes = [{ t: 12, by: 2, over: 1 }, { t: 13, by: 1, over: 2 }];
+  for (const subject of [undefined, line(0, 45, 0, 0, 10), line(0, 45, 0, 15, 30)]) {
+    if (subject) options.traces.cars[2] = subject;
+    else delete options.traces.cars[2];
+    replay.start({ ...options, reel: true });
+    assert.deepEqual(Array.from(replay.describe().events, (e) => e.num), [1]);
+    assert.equal(replay.status().follow, "AAA");
+  }
+  options.traces.cars[2] = line(0, 45, 0, 0, 30);
+  replay.start({ ...options, reel: true });
+  assert.deepEqual(Array.from(replay.describe().events, (e) => e.num), [2]);
+  assert.equal(replay.status().follow, "BBB", "restored subject footage restores the first pass");
+  replay.stop();
+});
+
+test("WATCH seeks and playing show recorded sets including a same-compound restop", async () => {
+  const { g, G, replay, script } = await watchEnvironment(1, 400, "off");
+  try {
+    const d = script.drivers.find((d) => d.code === "RUS");
+    d.stints = [{ from: 1, to: 31, c: "MEDIUM" }, { from: 32, to: 36, c: "SOFT" }, { from: 37, to: 51, c: "SOFT" }];
+    g.apex.go(); replay.setPaused(true);
+    const c = G.cars.find((c) => c.code === "RUS");
+    replay.seek(315); assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 2);
+    const log = c.tyreLog;
+    replay.seek(316); assert.equal(c.tyreLog, log, "same stint preserves metadata identity");
+    replay.seek(365); assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 3); assert.equal(c.pitStops, 2);
+    assert.notEqual(c.tyreLog, log);
+    replay.seek(305); assert.equal(c.tyre.code, "M"); assert.equal(c.tyreStints, 1); assert.equal(c.pitStops, 0);
+    replay.seek(309.9); replay.setPaused(false); replay.tick(0.2);
+    assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 2);
+    G.quitToMenu();
+  } finally { g.close(); }
 });

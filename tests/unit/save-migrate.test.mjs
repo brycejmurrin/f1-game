@@ -87,16 +87,15 @@ test("legacy code-keyed points remap onto stable ids exactly once", () => {
   assert.deepEqual(JSON.parse(JSON.stringify(again.season.pts)), { "haas:0": 25 }, "an id key must not be re-mapped or doubled");
 });
 
-test("a save from a newer build keeps its version (never downgraded), keys intact", () => {
-  // It used to be stamped BACK to CAREER_V ("documented, not endorsed"): a
-  // newer build's save opened once in an older tab then read as old, and the
-  // newer build re-ran rungs over data they had already migrated (bug hunt
-  // 2026-09-22). migrateCareer now keeps Math.max(v, CAREER_V).
+test("future schemas are rejected before any normalization, including large versions", () => {
   const SM = load();
-  const c = SM.migrateCareer({ v: SM.CAREER_V + 5, flavour: "myteam", team: "haas", futureKey: { x: 1 } });
-  assert.equal(c.v, SM.CAREER_V + 5);
-  assert.equal(c.flavour, "myteam");
-  assert.deepEqual(c.futureKey, { x: 1 }, "unknown keys survive the stamp â€” the next rung decides whether that stays true");
+  for (const v of [SM.CAREER_V + 1, 2 ** 31, 2 ** 32, Number.MAX_SAFE_INTEGER]) {
+    const c = { v, flavour: "future", tdev: { haas: 15 }, season: { config: { future: true } } };
+    const before = JSON.stringify(c);
+    assert.equal(SM.migrateCareer(c), null);
+    assert.equal(JSON.stringify(c), before);
+    assert.equal(SM.validateCareerSave(c), false);
+  }
 });
 
 test("junk in, null out: a non-object save is refused rather than repaired", () => {
@@ -115,6 +114,18 @@ test("a malformed season (number, string, array) is replaced, never thrown on â€
     assert.ok(!Array.isArray(c.season));
     assert.equal(c.season.round, 0);
   }
+});
+
+test("a malformed driver identity is repaired so an existing slot remains recoverable", () => {
+  const SM = load();
+  const c = SM.migrateCareer({ v: 1, flavour: "driver", team: "haas", money: 1,
+    driver: { name: {}, code: { toString: null }, num: "99" } });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.driver)), { name: "Your Name", code: "YOU", num: 99 });
+  const partial = SM.migrateCareer({ v: 1, flavour: "driver", team: "haas", money: 1,
+    driver: { name: "Ada", code: "ADA", num: 7 } });
+  assert.deepEqual(JSON.parse(JSON.stringify(partial.driver)), { name: "Ada", code: "ADA", num: 7 });
+  assert.equal(JSON.stringify(SM.migrateCareer(JSON.parse(JSON.stringify(c)))), JSON.stringify(c),
+    "driver repair is idempotent");
 });
 
 

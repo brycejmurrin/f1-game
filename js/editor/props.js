@@ -8,19 +8,19 @@
 const TrackDesignerProps = (function () {
   "use strict";
   // Order is the codec kind index — never reorder; append only.
-  const KINDS = Object.freeze(["stand", "gantry", "trees", "water", "flood", "billboard", "palms", "hedge", "pines", "bushes", "marshal", "camera"]);
+  const KINDS = Object.freeze(["stand", "gantry", "trees", "water", "flood", "billboard", "palms", "hedge", "pines", "bushes", "marshal", "camera", "pond", "lake", "river"]);
   const LABELS = Object.freeze({
     stand: "STAND", gantry: "GANTRY", trees: "TREES",
     water: "WATER", flood: "FLOOD", billboard: "BOARD", palms: "PALMS", hedge: "HEDGE",
-    pines: "PINES", bushes: "BUSHES", marshal: "MARSHAL", camera: "CAMERA",
+    pines: "PINES", bushes: "BUSHES", marshal: "MARSHAL", camera: "CAMERA", pond: "POND", lake: "LAKE", river: "RIVER",
   });
   // Per-kind and total caps: custom tracks stay under the fleet prop budget.
-  const CAPS = Object.freeze({ stand: 4, gantry: 4, trees: 6, water: 2, flood: 2, billboard: 8, palms: 6, hedge: 6, pines: 6, bushes: 6, marshal: 4, camera: 4 });
+  const CAPS = Object.freeze({ stand: 4, gantry: 4, trees: 6, water: 4, flood: 2, billboard: 8, palms: 6, hedge: 6, pines: 6, bushes: 6, marshal: 4, camera: 4, pond: 4, lake: 4, river: 4 });
   const TOTAL = 16;
   const DEFAULT_GAP = Object.freeze({
-    stand: 18, gantry: 0, trees: 34, water: 40, flood: 28, billboard: 9, palms: 24, hedge: 12, pines: 28, bushes: 16, marshal: 14, camera: 20,
+    stand: 18, gantry: 0, trees: 34, water: 40, flood: 28, billboard: 9, palms: 24, hedge: 12, pines: 28, bushes: 16, marshal: 14, camera: 20, pond: 28, lake: 50, river: 24,
   });
-  const MIN_GAP = Object.freeze({ stand: 14, gantry: 0, trees: 20, water: 24, flood: 18, billboard: 6, palms: 16, hedge: 8, pines: 20, bushes: 10, marshal: 10, camera: 14 });
+  const MIN_GAP = Object.freeze({ stand: 14, gantry: 0, trees: 20, water: 24, flood: 18, billboard: 6, palms: 16, hedge: 8, pines: 20, bushes: 10, marshal: 10, camera: 14, pond: 16, lake: 30, river: 14 });
   const DESCRIPTIONS = Object.freeze({
     stand: "A 70 m grandstand for spectators.", gantry: "An overhead gantry spanning the road.",
     trees: "A short belt of mixed woodland.", water: "A large trackside pond; allow plenty of space.",
@@ -28,6 +28,15 @@ const TrackDesignerProps = (function () {
     palms: "Three palms, spaced 12 m apart.", hedge: "A 48 m clipped hedge along the track.",
     pines: "Three tall pines, spaced 14 m apart.", bushes: "Five low shrubs, spaced 6 m apart.",
     marshal: "A marshal shelter with a track-facing signal panel.", camera: "A 12 m broadcast camera tower.",
+    pond: "A compact 60 × 80 m pond for infields and gardens.",
+    lake: "A broad 320 × 380 m lake; allow a large open area.",
+    river: "A narrow 28 × 360 m straight river section; its direction stays fixed on the map.",
+  });
+  const WATER = Object.freeze({
+    water: { size: [220, 0.25, 280], color: [0.14, 0.36, 0.48] },
+    pond: { size: [60, 0.25, 80], color: [0.18, 0.42, 0.38] },
+    lake: { size: [320, 0.25, 380], color: [0.10, 0.30, 0.46] },
+    river: { size: [28, 0.25, 360], color: [0.16, 0.40, 0.50] },
   });
   const GAP_MAX = 120;
   const BOARD_COLS = Object.freeze([
@@ -180,6 +189,32 @@ const TrackDesignerProps = (function () {
     return placed;
   }
 
+  // Native waterSurface emits a WORLD-axis box. Test every road segment against
+  // its full footprint, expanded conservatively by road half-width + clearance.
+  // The native centre-radius guard alone misses a long river's distant ends.
+  function waterOverlapsRoad(tr, k, side, gap, size) {
+    if (!tr || !tr.n || !tr.px || !tr.pz || !tr.rx || !tr.rz || !tr.hw) return false;
+    const offset = side * (tr.hw[k] + gap + size[0] / 2);
+    const cx = tr.px[k] + tr.rx[k] * offset, cz = tr.pz[k] + tr.rz[k] * offset;
+    if (!Number.isFinite(cx) || !Number.isFinite(cz)) return true;
+    for (let i = 0; i < tr.n; i++) {
+      const j = (i + 1) % tr.n, margin = Math.max(tr.hw[i], tr.hw[j]) + 4;
+      const axes = [[tr.px[i] - cx, tr.px[j] - tr.px[i], size[0] / 2 + margin],
+        [tr.pz[i] - cz, tr.pz[j] - tr.pz[i], size[2] / 2 + margin]];
+      let enter = 0, exit = 1;
+      for (const [start, delta, half] of axes) {
+        if (![start, delta, half].every(Number.isFinite)) return true;
+        if (Math.abs(delta) < 1e-9) { if (Math.abs(start) > half) { exit = -1; break; } }
+        else {
+          const a = (-half - start) / delta, b = (half - start) / delta;
+          enter = Math.max(enter, Math.min(a, b)); exit = Math.min(exit, Math.max(a, b));
+        }
+      }
+      if (enter <= exit) return true;
+    }
+    return false;
+  }
+
   function placeOne(api, sv, K, p, i) {
     const side = p.side || 1;
     const gap = effectiveGap(p.kind, p.gap);
@@ -203,10 +238,14 @@ const TrackDesignerProps = (function () {
       });
       return true;
     }
-    if (p.kind === "water") {
+    if (WATER[p.kind]) {
       if (!api.waterSurface) return false;
-      api.waterSurface(k, side, gap, [220, 0.25, 280], [0.14, 0.36, 0.48], { id: "custom-prop-water-" + i });
-      return true;
+      const water = WATER[p.kind], clearance = Math.max(MIN_GAP[p.kind], gap), id = "custom-prop-" + p.kind + "-" + i;
+      if (waterOverlapsRoad(api.track, k, side, clearance, water.size)) {
+        if (api.modelDiagnostics && api.modelDiagnostics.suppressed) api.modelDiagnostics.suppressed.push({ id, reason: "water footprint overlaps road" });
+        return false;
+      }
+      return api.waterSurface(k, side, clearance, water.size, water.color, { id }) !== false;
     }
     if (p.kind === "flood") {
       if (!api.floodMast) return false;

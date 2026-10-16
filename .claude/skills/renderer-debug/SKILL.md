@@ -1,6 +1,6 @@
 ---
 name: renderer-debug
-description: "Use when any renderer looks wrong on TLX (three.js), GLX (WebGL2) or WGX (WebGPU): blank/dark/black canvas or screen, missing road/world, NaN-white surfaces, lights wrong, shadow acne, bloom wrong, HDR/hdrMode or MSAA/HDR format issues, GL_INVALID_OPERATION, shader/WGSL compile or GPU validation errors, device lost or frozen frame, silent fallback to WebGL2, transparent cars, wgx-validate, WebXR/VR (js/xr/). Washed-out night → lighting-tuner; garbled or wrong-colour PBR material on any backend → asset-pack; shimmer while driving → playwright-probe."
+description: "Use when any renderer looks wrong on TLX (three.js), GLX (WebGL2) or WGX (WebGPU): blank/black canvas, missing road/world, NaN-white surfaces, lights wrong, shadow acne, bloom wrong, HDR/MSAA format issues, GL_INVALID_OPERATION, shader/WGSL/GPU validation errors, device lost or frozen frame, silent WebGL2 fallback, transparent cars, wgx-validate, WebXR/VR (js/xr/). Washed-out night → lighting-tuner; garbled or wrong-colour PBR material on any backend → asset-pack; shimmer while driving → playwright-probe."
 ---
 
 # Debug the renderer — TLX, GLX or WGX
@@ -33,7 +33,8 @@ __apex.diag({download:false}).env.backend   // "three" | "webgl2" | "webgpu"
 ```
 
 A value like `webgl2 (pick: webgpu)` means the pick failed and the fallback
-bound: read `localStorage["apex26.gfxWgxFail"]` / `["apex26.gfxTlxFail"]`
+bound: `env.backendFallback` says why (renderer-boot's step: null or slow adapter,
+canary strike, hung fetch/init, refused create), then read `localStorage["apex26.gfxWgxFail"]` / `["apex26.gfxTlxFail"]`
 and `env.backendState` (`pin`, `forceWebGL`, `gpuErrors`). Pin a backend for a
 probe with `apex-eval.mjs <track> <expr> --backend three|webgl2|webgpu` (a
 `GLX.*()` / `WGX.*()` expression silently answers for TLX without it).

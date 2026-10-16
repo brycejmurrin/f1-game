@@ -4,15 +4,6 @@ const DesignerFollowup = (function () {
   "use strict";
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const key = (v) => JSON.stringify(v);
-  function tab(b, id, tabs, select) {
-    b.id = "td-tab-" + id; b.setAttribute("role", "tab"); b.setAttribute("aria-controls", "td-panel-" + id);
-    b.addEventListener("keydown", (ev) => {
-      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(ev.key)) return;
-      const list = tabs(), at = list.indexOf(b);
-      const next = ev.key === "Home" ? 0 : ev.key === "End" ? list.length - 1 : (at + (ev.key === "ArrowRight" ? 1 : -1) + list.length) % list.length;
-      ev.preventDefault(); select(["design", "library", "howto"][next]); list[next].focus();
-    });
-  }
   /** Construct a complete proposal or refuse it without changing any list. */
   function recipe(state, id) {
     const P = TrackDesignerProps, d = state && state.design;
@@ -99,6 +90,6 @@ const DesignerFollowup = (function () {
     });
     open.setAttribute("aria-expanded", "false"); root.append(open, hint, content); return { root };
   }
-  return { tab, recipe, recipePanel, repairPanel, learningPanel };
+  return { recipe, recipePanel, repairPanel, learningPanel };
 })();
 Object.freeze(DesignerFollowup);

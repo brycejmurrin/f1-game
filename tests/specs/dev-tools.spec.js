@@ -161,7 +161,7 @@ test.describe("__apex.finishRace()", () => {
 
     await page.evaluate(() => window.__apex.finishRace());
     await page.locator("#results").waitFor({ state: "visible" });
-    const actual = await page.locator("#results-table > .res-row .res-name").allTextContents();
+    const actual = await page.locator('#results-table > [data-results-part="ranking"][aria-label="Race classification"] > .res-row .res-name').allTextContents();
 
     expect(actual.map((name) => name.trim().split(/\s+/)[0])).toEqual(expected);
   });
