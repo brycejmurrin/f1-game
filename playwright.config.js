@@ -74,6 +74,7 @@ if (process.env.APEX_GL === "llvmpipe") {
 const RENDER_SPECS = [
   "dev-tools", "f1-track-accuracy", "hud-audit", "image-grade-visual",
   "lighting-ab", "lighting-tuner-grade",
+  "garage-first-frame",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
   "parts-liveries",
   "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard", "photo-studio",
