@@ -391,6 +391,7 @@ const NetNostr = (function () {
 
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
 
+      const startedAt = Date.now(), deadlineAt = startedAt + (hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
       expireTimer = later(expire, hosting ? HOST_TIMEOUT_MS : JOIN_TIMEOUT_MS);
 
       let opened = 0;
@@ -505,7 +506,7 @@ const NetNostr = (function () {
         settled = true;
         nostrLog({ ok: true, subscribed: true });
         resolve({
-          ok: true, subscribed: true,
+          ok: true, subscribed: true, startedAt, deadlineAt,
           rotate: (next) => {
             current = next || null;
             if (!current && mintOffer) {
