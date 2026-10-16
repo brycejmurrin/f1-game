@@ -1,0 +1,11 @@
+{
+  "files": {
+    "js/agent/apex.js": {
+      "codeLines": 4,
+      "lines": 6
+    },
+    "js/render/glx/glx.js": {
+      "lines": -3
+    }
+  }
+}

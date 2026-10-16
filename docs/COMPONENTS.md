@@ -142,6 +142,9 @@ not.
 | `pane-` | 9 | `components.css` | — |
 | `music-` | 9 | `tuner.css` | — |
 | `set-` | 17 | `settings-controls.css` | `race-setup.css`, `tuner.css` |
+| `settings-` | 5 | `player-tools.css` | — |
+| `race-` | 2 | `player-tools.css` | — |
+| `save-` | 8 | `save-health.css` | — |
 The long tail (`fb-`, `sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
@@ -517,7 +520,7 @@ Also measured, added when the gaps above were closed: `datastandings`,
 than a Grand Prix classification), `hudtouch` and `hudbuttons` (the two remaining
 steering modes — "touch" hides the gas pedal, "buttons" adds an explicit GAS), and
 `garagewheels`; later, the Settings pages (`settingscontrols`, `settingsdriving`,
-`settingsdisplay`), `duelpicker`, `loading`, `flybyeditor`, `lightingtunerfly` and
+`settingsdisplay`, `settingsappearance`, `settingsa11y`), `duelpicker`, `loading`, `flybyeditor`, `lightingtunerfly` and
 `photocontrols`.
 
 **`garagewheels` exists to MEASURE a claim rather than assert it.** The line used

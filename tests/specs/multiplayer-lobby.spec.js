@@ -127,6 +127,32 @@ test.describe("VS FRIEND lobby", () => {
     await expect(page.locator("#vs-status")).toHaveClass(/vs-error/);
   });
 
+  test("a short final wrapped fragment reaches the real invite decoder through buttons and paste", async ({ page, pageErrors }) => {
+    await menu(page);
+    // An answer in JOIN must reach wrong_code_kind, before transport/build checks.
+    // This exercises the real decoder without requiring sandbox ICE gathering.
+    for (const kind of ["invite", "answer"]) {
+      const code = await page.evaluate((k) => NetHandshake.encodeCode({
+        k, b: 1, s: "v=0\r\na=ice-ufrag:abcd\r\n", note: "wrapped invite regression",
+      }), kind === "invite" ? "answer" : "offer");
+      expect(code.slice(-2)).toHaveLength(2);
+      for (const paste of [false, true]) {
+        await menu(page);
+        await page.click("#mb-vs");
+        await page.click(kind === "invite" ? "#vs-join" : "#vs-host");
+        const box = page.locator("#vs-" + kind + "-in");
+        const wrapped = code.slice(0, -2) + "\r\n" + code.slice(-2);
+        await box.fill(paste ? "https://x.test/#vs=" + wrapped : wrapped);
+        if (paste) await box.dispatchEvent("paste");
+        else await page.click(kind === "invite" ? "#vs-make-answer" : "#vs-accept");
+        await expect(page.locator("#vs-status")).toHaveText(kind === "invite"
+          ? "That is an answer code, not an invite code." : "That is an invite code, not an answer code.");
+        await expect(box).toHaveValue(code);
+      }
+    }
+    expect(pageErrors).toEqual([]);
+  });
+
   test("the profile on the wire is IDS, never resolved multipliers", async ({ page }) => {
     // The security-relevant claim. If multipliers crossed the wire, a peer
     // could declare itself faster; instead it declares which parts it fitted

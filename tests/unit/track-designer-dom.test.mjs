@@ -429,6 +429,65 @@ test("open({design}), EDIT and IMPORT never drop unsaved work: UNDO brings it ba
   assert.equal(b2.D.state().design.theme, "harbour");
 });
 
+test("SAVE durably updates the draft library link even after autosave has finished", async () => {
+  const b = bootScreen();
+  // Match real GameStore's durable JSON boundary, rather than retaining aliases.
+  b.ctx.GameStore.store.set = (k, v) => { b.data[k] = plain(v); };
+  openGreen(b);
+  const a = b.D.save(); assert.equal(a.ok, true);
+  b.D.setTheme("alpine");
+  await new Promise(resolve => setTimeout(resolve, 650));
+  assert.equal(b.data.customTrackDraft.originId, a.id, "autosaved before SAVE");
+  const saved = b.D.save(); assert.equal(saved.ok, true);
+  assert.notEqual(saved.id, a.id);
+  const disk = plain(b.data); // reload without close(), which independently flushes
+  b.D.close();
+  const next = bootScreen(disk);
+  next.D.init(next.G, { custom: next.C, root: next.root }); next.D.open();
+  assert.equal(next.D.state().design.originId, saved.id);
+  next.D.setTheme("oasis");
+  assert.equal(next.D.save().ok, true);
+  assert.equal(next.C.list().length, 1, "save after reload replaces, never duplicates");
+  next.D.close();
+});
+
+test("MY CIRCUITS recovers the previous unsaved draft after a fresh-page reload", () => {
+  const b = bootScreen(); openGreen(b);
+  b.D.setTheme("alpine");
+  const mine = plain(b.D.state().design);
+  b.D.load(b.C.sanitize(design({ theme: "oasis" })), "replacement");
+  b.D.close();
+  const next = bootScreen(plain(b.data));
+  next.D.init(next.G, { custom: next.C, root: next.root }); next.D.open();
+  assert.equal(next.D.state().design.theme, "oasis");
+  next.D.showPane("library");
+  const recover = chipsIn(next.root, "RECOVER PREVIOUS DRAFT")[0];
+  assert.equal(recover.hidden, false, "recovery is reachable even with an empty library");
+  recover.click();
+  assert.deepEqual(plain(next.D.state().design.pts), mine.pts);
+  assert.equal(next.D.state().design.theme, "alpine");
+  assert.equal(next.C.draft().theme, "alpine", "recovery immediately persists");
+  assert.equal(next.D.undo(), true, "the current unsaved replacement is itself protected");
+  assert.equal(next.D.state().design.theme, "oasis");
+  next.D.close();
+});
+
+test("recovering after reload keeps a name-only edit to a saved circuit in undo", () => {
+  const b = bootScreen(); openGreen(b);
+  b.D.setName("Previous A"); b.D.setTheme("alpine");
+  b.D.load(b.C.sanitize(design({ theme: "oasis" })), "replacement"); b.D.preview();
+  assert.equal(b.D.save().ok, true);
+  b.D.setName("Unsaved B name"); b.D.close();
+  const next = bootScreen(plain(b.data));
+  next.D.init(next.G, { custom: next.C, root: next.root }); next.D.open();
+  next.D.showPane("library"); chipsIn(next.root, "RECOVER PREVIOUS DRAFT")[0].click();
+  assert.equal(next.D.state().design.name, "PREVIOUS A");
+  assert.equal(next.C.draftPrev().name, "UNSAVED B NAME", "also protected across another reload");
+  assert.equal(next.D.undo(), true);
+  assert.equal(next.D.state().design.name, "UNSAVED B NAME");
+  next.D.close();
+});
+
 test("UNDO inside one design keeps its name and library link (setName and SAVE sit outside the history)", () => {
   const b = bootScreen();
   b.D.init(b.G, { custom: b.C, root: b.root });
@@ -1001,6 +1060,15 @@ test("the canvas's press-and-hold row: DELETE · START HERE · CLOSE act on that
   b.dom.dispatch(canvas, { type: "pointerdown", pointerId: 7, clientX: 5, clientY: 5 });
   b.dom.dispatch(canvas, { type: "pointercancel", pointerId: 7 });
   assert.equal(row.hidden, true, "the next press on the canvas hides it");
+  for (const mode of ["scenery", "elevation", "test", "draw"]) {
+    b.D.setMode("edit"); hooks.onContext(3, { x: 100, y: 100 });
+    const points = plain(b.D.state().design.pts);
+    b.D.setMode(mode);
+    assert.equal(row.hidden, true, "switch to " + mode + " dismisses point actions");
+    chipsIn(row, "DELETE")[0].click();
+    assert.deepEqual(plain(b.D.state().design.pts), points, "stale action cannot delete a point");
+  }
+  b.D.setMode("edit");
   hooks.onContext(3, { x: 100, y: 100 });
   b.D.close();
   assert.equal(row.hidden, true, "closing the screen hides it");
@@ -2110,6 +2178,23 @@ test("SELECT END arms a touch-friendly span; stamp REPLACE uses it; group elev o
   assert.deepEqual([b.D.state().sel, b.D.state().span], [5, 9], "span selection survives group elev");
 });
 
+test("POINT m range offsets stop the whole selection at either height bound", () => {
+  const b = bootHooked(); openGreen(b);
+  for (const sign of [1, -1]) {
+    const heights = b.D.state().design.heights.map(() => 0);
+    heights[3] = sign * 58; heights[4] = sign * 59;
+    b.D.setHeights(heights, 3); b.D.selectRange(3, 4);
+    assert.equal(b.D.setNodeHeight(3, sign * 60), true);
+    assert.deepEqual(plain(b.D.state().design.heights.slice(3, 5)), [sign * 59, sign * 60]);
+    const undoCount = b.D.state().undo;
+    assert.equal(b.D.setNodeHeight(3, sign * 60), false, "limit is a no-op, not a flattened hill");
+    assert.equal(b.D.state().undo, undoCount);
+    assert.equal(b.D.state().design.heights[2], 0);
+    b.D.undo(); assert.deepEqual(plain(b.D.state().design.heights), heights);
+  }
+  b.D.close();
+});
+
 // ── stale design state must not leak into a NEW loop ────────────────────────
 const hilly = (b, extra) => b.C.sanitize(design(Object.assign({
   pts: ellipse(36, 800, 500),
@@ -2298,7 +2383,7 @@ test("save after undo and redo replaces the current library record without dupli
 
 test("MY CIRCUITS collection controls import atomically and leave the working draft intact", async () => {
   const b = bootScreen(); openGreen(b);
-  assert.deepEqual(walk(b.root).find((e) => e.dataset.role === "library-files").children.map((e) => e.textContent), ["EXPORT ALL", "IMPORT LIBRARY"]);
+  assert.deepEqual(walk(b.root).find((e) => e.dataset.role === "library-files").children.map((e) => e.textContent), ["RECOVER PREVIOUS DRAFT", "EXPORT ALL", "IMPORT LIBRARY"]);
   const draft = plain(b.D.state().design), envelope = { format: b.C.COLLECTION_FORMAT, v: 1, items: [draft] };
   assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify(envelope) }), true);
   assert.match(msgText(b), /Imported 1 circuits/); assert.equal(b.C.list().length, 1);

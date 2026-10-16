@@ -211,6 +211,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/chromium-shell.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
+  // CI guards born 2026-10-15: ci-rerun.mjs refuses a superseded/live/green/re-run run; ci-cancel-on-close.yml joins ci.yml's PR group. Pure, no network or browser.
+  "tests/unit/ci-guard-tools.test.mjs",
   "tests/unit/ci-pr-base.test.mjs",
   "tests/unit/ci-verdict.test.mjs",
   "tests/unit/ci-watch.test.mjs",
@@ -250,6 +252,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/component-inventory.test.mjs",
   "tests/unit/conflict-cure.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
+  "tests/unit/controller-profiles.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
   // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
   // mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.
@@ -289,6 +292,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/data-lazy-loader.test.mjs",
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
+  "tests/unit/data-replay-improvements.test.mjs",
   "tests/unit/data-results.test.mjs",
   // The SCHEDULE tab's date and start time from one instant in the viewer's
   // zone (TZ pinned to Los Angeles), and NEXT against the clock. ~0.1 s.
@@ -336,6 +340,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/desktop-stage.test.mjs",
   "tests/unit/desktop-unpacked-bin.test.mjs",
   "tests/unit/desktop-version.test.mjs",
+  // DevFlags: query/hash/storage resolution for boot toggles (js/core/dev-flags.js).
+  "tests/unit/dev-flags.test.mjs",
   "tests/unit/digital-steer.test.mjs",
   // Live TV director (js/camera/director.js): pure cut dwell/battles + dbgCam publish without car forces. ~0.05 s.
   "tests/unit/director.test.mjs",
@@ -348,6 +354,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/driver-ratings-personality.test.mjs",
   "tests/unit/driving-coach.test.mjs",
   "tests/unit/driving-cues.test.mjs",
+  // Droplets lens overlay gates (rain rate, onboard-only, caps, reduced motion, LOW off) + spray scaling / nearest-N. ~0.2 s.
+  "tests/unit/droplets-spray.test.mjs",
   // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
   // named legend has to round-trip through two setters, and the inert VM DOM
   // builds no SettingRow children, so painting the row would assert nothing.
@@ -606,6 +614,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
   "tests/unit/lobby-codes.test.mjs",
   "tests/unit/lobed-trees.test.mjs",
+  // lockup-bench.mjs sweep (speed × pedal × brake bias × weather) pinned on
+  // Monza; VM pins dry/rain shapes for bias- and speed-dependent wheelLock.
+  "tests/unit/lockup-bench-vm.test.mjs",
   "tests/unit/log-namespaces.test.mjs",
   // LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.
   // VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.
@@ -691,6 +702,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/perf-race-entry.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/perf-try.test.mjs",
+  "tests/unit/phone-input-improvements.test.mjs",
   // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a
   // phone sample reaching Input's tilt pipeline over the in-process loopback
   // transport — same VM harness, no browser, ~0.3 s.
@@ -718,6 +730,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-collision-side.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
+  "tests/unit/player-tools-backup.test.mjs",
+  "tests/unit/player-tools-ui.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
   "tests/unit/pr-board.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
@@ -731,6 +745,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/pu-harvest-audio.test.mjs",
   // shots/<topic> evidence-branch publisher: validations, dry run, full publish into a throwaway bare repo.
   "tests/unit/publish-shots.test.mjs",
+  // STANDING-WATER PUDDLES: js/render/shared/puddles.js reference mask (sample pins, growth/drying, edge bias) + every constant mirrored in GLX/TLX/WGX + the PUDDLES knob plumbing. Pure, < 1 s.
+  "tests/unit/puddles.test.mjs",
   // Push hold: queued + running Actions JOBS by OS vs the 40 Linux / 5 macOS slots, never runs. Fixtures.
   "tests/unit/queue-depth.test.mjs",
   "tests/unit/quick-validate.test.mjs",
@@ -757,6 +773,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // radio-lines phrasebook: slot fill, recent-history pick, variant counts.
   "tests/unit/radio-lines.test.mjs",
   "tests/unit/radio-voice.test.mjs",
+  // LOCALIZED RAIN: a drifting shower over a window of the lap, per-segment closed-form lag, lap mean = old global. VM, ~0.3 s.
+  "tests/unit/rain-cells.test.mjs",
   // Two PRs auto-raising one module's ceiling merge clean (ratchets.d fragments, #2291).
   "tests/unit/ratchet-merge-hotspot.test.mjs",
   "tests/unit/ratchets.test.mjs",
@@ -807,6 +825,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/road-lut-frame.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
+  "tests/unit/save-durability.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/save-schema-registry.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
@@ -1050,6 +1069,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // setTargetAtTime ramps, zero per-frame nodes. Fake-audio VM, < 1 s.
   "tests/unit/tyre-squeal-slip.test.mjs",
   "tests/unit/ui-experience.test.mjs",
+  "tests/unit/ui-explorer-core.test.mjs",
+  "tests/unit/ui-explorer-report.test.mjs",
+  "tests/unit/ui-explorer.test.mjs",
   // ui-fit r7: camera tuner rail-off portrait — #ct-previews placed in grid
   // row 3, one minmax column, #ct-close / #ct-prev-* --tap-paint floors
   // (#camtune-inner / #ct-* only; lighting untouched).
@@ -1064,6 +1086,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // (survey rank 1; 26×26 vs 52, 82 soft taps) and SATIN/CHROME tags do
   // not ellipsis (20 trunc). css/carsetup.css #cs-options.cs-liv-grid only.
   "tests/unit/ui-fit-garage-livery-r6.test.mjs",
+  // ui-fit r6 rank 5: lighting over flyby stacked dock — side-by-side on
+  // wide short, #lt-rows 3-row floor; camera / #fb-* tap floors untouched.
+  "tests/unit/ui-fit-lighting-flyby-stack.test.mjs",
   // ui-fit round 6: lighting tuner compact foot / short-tab --tap-paint
   // floors (#lighting-inner / #lt-* only; camera untouched).
   "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
@@ -1073,6 +1098,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ui-fit round 6: Settings ACCESSIBILITY #pm-panel-a11y pad / scroll-pad
   // so the last colourblind help clears BACK (survey rank 8; 844×390).
   "tests/unit/ui-fit-settings-a11y-r6.test.mjs",
+  // ui-fit round 6: Settings APPEARANCE studio reflow + pad above BACK
+  // (survey rank 7; 300×3604 @ 390×844, 222×5059 @ scale 200).
+  "tests/unit/ui-fit-settings-appearance-r6.test.mjs",
   // ui-fit round 3: tap floors (settings HUD checklist, photo studio, How to
   // Play compact chips) and ScrollFade selectors for #cr-body / .td-rail.
   "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
@@ -1087,6 +1115,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/uilayers-modal-order.test.mjs",
   "tests/unit/validation-cli.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
+  "tests/unit/visual-oracle.test.mjs",
+  "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/wait-polling.test.mjs",
@@ -1114,6 +1144,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // Job 4: speed-scaled wind — crawl gate, monotonic gain+cutoff, pit-lane
   // quiet vs top-speed rush, setTargetAtTime ramps, zero per-frame nodes.
   "tests/unit/wind-speed.test.mjs",
+  // WIND (js/race/wind.js): a pure function of (seed, circuit, weather, clock), fog calm and a storm gusty,
+  // gusts and the side force capped, head/tail wind a few km/h of top speed, OFF a true no-op. VM, ~1 s.
+  "tests/unit/wind.test.mjs",
   "tests/unit/xr-backend-pin.test.mjs",
   "tests/unit/xr-cull-union.test.mjs",
   "tests/unit/xr-opts.test.mjs",

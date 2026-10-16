@@ -49,7 +49,7 @@ A PR that ends `cancelled` twice, zero failures — the recipe:
    `cancelled`: open its jobs (`ci-red-triage`) for one at its `timeout-minutes`
    cap — a real red — and check `/proc/loadavg`. 3. Neither: re-dispatch
    `ci.yml` once (`group: <name>`), do NOT sync the branch to "refresh" it
-   (section 2: a sync is a new full PR run and can cancel again).
+   (section 2: a sync is a new full PR run and can cancel again). Re-run only via `tools/ci/ci-rerun.mjs <run_id>`.
 
 ## 2. A base merge is `sync-pr.mjs`, never a hand merge — and only when you must
 

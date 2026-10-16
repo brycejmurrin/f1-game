@@ -33,30 +33,77 @@ let g = null;
 before(async () => { g = await createGame({ track: "monza" }); await g.race("monza"); });
 after(() => { if (g) g.close(); });
 
-/** One seeded episode, digested the way the browser spec digests it: the
- *  player's own trace AND the finishing order of the whole field, because the
- *  2026-09-08 break moved only the latter. */
+/** Actual simulation values, keyed by the stable car index used by carAt().
+ * No rounding: a tiny AI controller divergence must change the digest too. */
+function checkpoint(seconds) {
+  const positions = new Map(g.apex.fieldState().map((c) => [c.id, c.pos]));
+  const cars = g.G.cars.map((c, id) => ({
+    id, code: c.code, isPlayer: !!c.isPlayer, pos: positions.get(id),
+    prog: c.prog, x: c.x, speed: c.speed,
+    retired: !!c.retired, finished: !!c.finished,
+  }));
+  assert.ok(cars.length > 1, "checkpoint must include AI cars");
+  for (const c of cars) for (const key of ["prog", "x", "speed", "pos"]) {
+    assert.ok(Number.isFinite(c[key]), `${c.code} ${key} must be live telemetry`);
+  }
+  return {seconds, cars};
+}
+
+/** Four seconds is a running-order check, not a finishing-order claim. */
 function episode(seed) {
   const A = g.apex;
   A.headless(true);
   A.reset(0.02, 55, 0, seed);
-  const r = A.rollout({ seconds: 4, input: { steer: 0.05, throttle: true } });
-  const f = A.field({ detail: "full" });
-  A.headless(false);
-  return JSON.stringify({
-    distanceM: r.distanceM,
-    speed: r.speedKph,
-    to: r.to,
-    grid: f.positions.map((p) => p.code + ":" + p.pace).join(","),
-  });
+  const checkpoints = [checkpoint(0)];
+  let distanceM = 0;
+  try {
+    for (let seconds = 1; seconds <= 4; seconds++) {
+      const r = A.rollout({ seconds: 1, input: { steer: 0.05, throttle: true } });
+      distanceM += r.distanceM;
+      checkpoints.push(checkpoint(seconds));
+    }
+    return JSON.stringify({distanceM, checkpoints});
+  } finally { A.headless(false); }
 }
 
-test("one seed replays byte-identically, field order included", () => {
+test("one seed replays byte-identically, every car's motion and running order included", () => {
   const a = episode(42), b = episode(42), c = episode(42);
   assert.equal(b, a, "the second replay of seed 42 differs from the first");
   assert.equal(c, a, "the third replay of seed 42 differs from the first");
-  // Anti-vacuity: a car that never moved would replay trivially.
-  assert.ok(JSON.parse(a).distanceM > 50, `the episode barely drove (${JSON.parse(a).distanceM} m)`);
+  const trace = JSON.parse(a);
+  assert.ok(trace.distanceM > 50, `the episode barely drove (${trace.distanceM} m)`);
+  const start = trace.checkpoints[0].cars;
+  const end = trace.checkpoints.at(-1).cars;
+  assert.deepEqual(end.map((c) => [c.id, c.code]), start.map((c) => [c.id, c.code]), "car identities must remain stable");
+  assert.ok(end.some((c, i) => !c.isPlayer && c.prog !== start[i].prog), "at least one AI must actually move");
+});
+
+test("digest detects AI-only motion, retirement and running-order perturbations", () => {
+  const baseline = episode(42);
+  for (const key of ["prog", "x", "speed", "retired", "pos"]) {
+    const altered = JSON.parse(baseline);
+    const ai = altered.checkpoints[2].cars.find((c) => !c.isPlayer);
+    assert.ok(ai);
+    assert.ok(Object.hasOwn(ai, key), `digest must contain ${key}`);
+    ai[key] = typeof ai[key] === "boolean" ? !ai[key] : ai[key] + 0.000001;
+    assert.notEqual(JSON.stringify(altered), baseline, `digest missed AI ${key}`);
+    assert.deepEqual(altered.checkpoints[2].cars.find((c) => c.isPlayer),
+      JSON.parse(baseline).checkpoints[2].cars.find((c) => c.isPlayer), "player remains unchanged");
+  }
+});
+
+test("checkpoint reads an AI-only simulation perturbation while the player stays identical", () => {
+  const ai = g.G.cars.find((c) => !c.isPlayer);
+  assert.ok(ai);
+  const before = checkpoint(4);
+  const original = ai.x;
+  try {
+    ai.x += 0.125;
+    const after = checkpoint(4);
+    assert.notEqual(JSON.stringify(after), JSON.stringify(before), "AI lateral telemetry must affect the digest");
+    assert.deepEqual(after.cars.find((c) => c.isPlayer), before.cars.find((c) => c.isPlayer));
+  } finally { ai.x = original; }
+  assert.deepEqual(checkpoint(4), before, "control must restore the simulation state");
 });
 
 test("a different seed really does deal a different field", () => {

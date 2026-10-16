@@ -145,7 +145,7 @@ const GhostShare = (function () {
   }
 
   function shareUrl(code) {
-    try { return location.origin + location.pathname + "#ghost=" + code; }
+    try { return (typeof Native !== "undefined" && Native.shareBase ? Native.shareBase() : location.origin + location.pathname) + "#ghost=" + code; }
     catch (_) { return null; }
   }
 

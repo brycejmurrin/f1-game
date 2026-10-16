@@ -1335,6 +1335,16 @@ export function dropBootFallback(groups) {
 // minutes of expected work, inside the fixed gate's own ~6-minute wall.
 export const DEFAULT_BUDGET_MIN = 10;
 
+// CSS needs real layout coverage too. Keep the change-aware set small instead
+// of selecting the entire UI group; fit()/shards() retain the normal budgets.
+export function cssSpecs(changed) {
+  const files = changed.filter((f) => /^css\//.test(f));
+  if (!files.length) return [];
+  const specs = new Set(["tests/specs/css-player-smoke.spec.js"]);
+  if (files.some((f) => /^css\/(menus|title|carsetup|tokens|select|fonts-hud|components|responsive|dialogs|dialog-platform|overlays|garage-experience)\.css$/.test(f))) specs.add("tests/specs/menu-baseline.spec.js");
+  return [...specs];
+}
+
 export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const changed = changedPaths([changedRef]);   // rename SOURCES too (ledger M36)
   const g = pick(changed);   // Map: group -> reasons (pick-tests' native shape)
@@ -1353,7 +1363,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)) && !circ.dataResolved.includes(f));
   const docsOnly = isDocsOnly(changed);
   const kind = changeKind(changed);
-  const lightDiff = docsOnly || kind === "docs" || kind === "css";
+  const lightDiff = docsOnly || kind === "docs";
   // The three always-run inputs, unioned into the candidate set BEFORE the cut
   // so they compete for the budget on merit rather than being bolted on after.
   const changedSpecs = changed.filter((f) => /^tests\/specs\/.+\.spec\.js$/.test(f)
@@ -1375,10 +1385,10 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
   const routed = [...new Set([...changedSpecs, ...imported, ...ownFoundations, ...sourceAffected, ...specs, ...racing])]
     .filter((f) => !otherCircuit(f));
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, lightDiff ? [] : routed);
-  // Docs-/CSS-only PRs skip the selected matrix at the plan (required check
+  // Docs-only PRs skip the selected matrix at the plan (required check
   // names still report). Never a pull_request paths filter: those leave
   // required checks pending.
-  const candidates = lightDiff ? [] : routed;
+  const candidates = lightDiff ? [] : kind === "css" ? cssSpecs(changed) : routed;
   const reason = !changed.length ? "none"
     : lightDiff ? (kind === "css" ? "css" : "docs")
     : tracked.length ? "infra"

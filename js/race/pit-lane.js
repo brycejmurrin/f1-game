@@ -1762,6 +1762,8 @@ var PitLane = (function () {
     }
     const _pitCtx = { stopsLeft: 0, lapsToStop: 0, rivalBehindBoxed: false, stuckBehind: false, rivalUsed: false, fits: true,
       react: 0, attack: 0, cautionLevel: 0, wear: 0, wrongTread: false, lapsLeft: 0, pitLossLaps: 0, scripted: false };
+    // Born Double, values kept: the 0s are Smi fields, and the first fractional temper / wear split the map (PERF-HUNT-5).
+    _pitCtx.react = _pitCtx.attack = _pitCtx.wear = 0.5; _pitCtx.react = _pitCtx.attack = _pitCtx.wear = 0;
     // RaceControl.flagOut(G.cars) once per step, not once per AI (perf plan C-2:
     // 21 scans of the field a step). game.js brackets its car loop with
     // stepBegin/stepEnd; nothing inside that loop finishes or retires a car
@@ -1864,6 +1866,7 @@ var PitLane = (function () {
     // js/car/car-draw.js lifts and slides the wheels by these, js/game.js
     // lifts the body. One shared record, no per-frame allocation.
     const _anim = { lift: 0, off: 0, u: -1 };
+    _anim.lift = _anim.off = _anim.u = 0.5; _anim.lift = _anim.off = 0; _anim.u = -1;   // born Double, like _pitCtx
     const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
     function stopAnim(c) {
       const zz = z();
