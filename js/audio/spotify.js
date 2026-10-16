@@ -104,6 +104,7 @@ window.SpotifyMusic = (function () {
   // requests that already passed through fetch before sign-out.
   let sessionGen = 0;
   let searchT = null;
+  let searchRevision = 0;
   const commandTimers = new Set();
 
   /* ---------------- storage (GameStore's raw lane) ----------------
@@ -895,8 +896,9 @@ window.SpotifyMusic = (function () {
     devVol = v;
     putDeviceVolume(v);
   }
-  function searchPlaylists(q) {
+  function searchPlaylists(q, revision) {
     const gen = sessionGen;
+    const queryRevision = revision == null ? ++searchRevision : revision;
     const term = (q || "").trim();
     if (!term) { results = []; render(); return Promise.resolve([]); }
     return api("/search?type=playlist&limit=10&q=" + encodeURIComponent(term)).then((r) => {
@@ -909,7 +911,7 @@ window.SpotifyMusic = (function () {
           by: (p.owner && p.owner.display_name) || "" }));
       }, () => []);
     }).then((rs) => {
-      if (gen !== sessionGen) return [];
+      if (gen !== sessionGen || queryRevision !== searchRevision) return [];
       results = rs || []; render(); return results;
     });
   }
@@ -1408,12 +1410,14 @@ window.SpotifyMusic = (function () {
     });
     on("sp-search", "input", (e) => {
       const q = e.target.value;
-      if (searchT !== null) clearTimeout(searchT);
+      const revision = ++searchRevision;
+      if (searchT !== null) { clearTimeout(searchT); searchT = null; }
+      if (!q.trim()) { results = []; render(); return; }
       // Debounced: one request per pause in typing, not per keystroke.
       const gen = sessionGen;
       searchT = setTimeout(() => {
         searchT = null;
-        if (gen === sessionGen) searchPlaylists(q);
+        if (gen === sessionGen && revision === searchRevision) searchPlaylists(q, revision);
       }, 350);
     });
     on("as-sp-playlist", "change", (e) => {

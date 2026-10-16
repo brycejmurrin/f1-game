@@ -247,6 +247,7 @@
     LAZY_AUDIO: [
     "js/audio/signal.js",
     "js/audio/soundtrack.js",
+    "js/audio/race-mix-audition.js",
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
@@ -257,6 +258,7 @@
     "js/audio/crowd.js",
     "js/audio/car-sfx.js",
     "js/audio/voice-pack.js",
+    "js/audio/battle-earcon.js",
     "js/audio/radio-voice.js",
     "js/audio/announcer-recorded.js",
     "js/audio/announcer.js",
@@ -295,6 +297,14 @@
     [
       "js/audio/voice-pack.js",
       "js/audio/radio-voice.js"
+    ],
+    [
+      "js/audio/battle-earcon.js",
+      "js/audio/radio-voice.js"
+    ],
+    [
+      "js/audio/battle-earcon.js",
+      "js/audio/panel.js"
     ],
     [
       "js/audio/radio-voice.js",
