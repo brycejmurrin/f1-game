@@ -145,7 +145,8 @@ function bitmapRig(backend, { refuse = false } = {}) {
   const bitmaps = [];
   r.ctx.createImageBitmap = (src, opts) => {
     if (refuse) return Promise.reject(new Error("InvalidStateError"));
-    const b = { bitmap: true, src, opts, width: src.width, height: src.height, closed: false, close() { this.closed = true; } };
+    const b = { bitmap: true, src, opts, width: src.width, height: src.height, closed: false, closeCalls: 0,
+      close() { this.closeCalls++; this.closed = true; } };
     bitmaps.push(b);
     return Promise.resolve(b);
   };
@@ -185,6 +186,30 @@ test("C-P3: a bitmap that lands after the livery moved on is closed and never ca
   r.drain(); await tick(); await tick();
   assert.equal(r.hiBuilds.length, 2, "no failure was counted: the fresh key paints and swaps");
   assert.equal(r.carDraw.getCarDecalTexture(t, 1, true).canvas.bitmap, true);
+});
+
+test("TLX bitmap ownership stays with CarDraw when texture creation fails", async () => {
+  for (const failure of ["null", "throw"]) {
+    const r = bitmapRig("three"), t = team("me"), m = new Float32Array(16);
+    const create = r.G.gfx.createTexture;
+    r.G.gfx.createTexture = (src, opts) => {
+      if (src.bitmap) { if (failure === "throw") throw new Error("upload refused"); return null; }
+      return create(src, opts);
+    };
+    r.carDraw.drawCarDecals(t, m, true, 1, false, true); r.drain();
+    await tick(); await tick();
+    assert.equal(r.bitmaps[0].closeCalls, 1, failure + ": the caller closes the untransferred bitmap");
+    assert.equal(r.carDraw.getCarDecalTexture(t, 1, true).canvas.id, "me#1:prev");
+  }
+});
+
+test("a stale TLX bitmap is closed once without transferring it to the renderer", async () => {
+  const r = bitmapRig("three"), t = team("me"), m = new Float32Array(16);
+  r.carDraw.drawCarDecals(t, m, true, 1, false, true); r.drain();
+  r.carDraw.invalidateDecalTextures("me");
+  await tick(); await tick();
+  assert.equal(r.bitmaps[0].closeCalls, 1);
+  assert.deepEqual(uploads(r), ["me#1:prev"]);
 });
 
 test("C-P3: a refused bitmap uploads the canvas (the old path), counted as no failure; apex26.liveryAsync=0 never asks", async () => {

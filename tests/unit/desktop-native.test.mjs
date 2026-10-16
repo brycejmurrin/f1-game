@@ -220,3 +220,69 @@ test("Spotify copy under native names the redirect-URI limitation", () => {
   assert.equal(st.state, "off");
   assert.match(st.message, /browser redirect|web build/i);
 });
+
+test("cross-device links use public HTTPS in wrappers and preserve web deployment paths", async () => {
+  const publicBase = "https://brycejmurrin.github.io/f1-game/";
+  const ghost = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/ghost-monza-short.json"), "utf8"));
+  for (const kind of ["web", "desktop", "android", "ios"]) {
+    const origin = { web: "https://preview.test", desktop: "app://apex", android: "https://localhost", ios: "capacitor://localhost" }[kind];
+    const sandbox = {
+      location: { origin, pathname: "/custom/index.html" },
+      TextEncoder, TextDecoder, Uint8Array, btoa, atob, URL,
+      Teams: { LIST: [{ id: "mercedes" }] }, Tracks: { LIST: [{ id: "monza" }] },
+    };
+    if (kind === "desktop") sandbox.__APEX_NATIVE__ = { desktop: true };
+    if (kind === "android" || kind === "ios") sandbox.Capacitor = { isNativePlatform: () => true, getPlatform: () => kind };
+    sandbox.window = sandbox;
+    const ctx = vm.createContext(sandbox);
+    for (const file of ["js/core/native.js", "js/net/handshake.js", "js/car/ghost-share.js", "js/ui/share-code.js"])
+      vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: file });
+    const base = kind === "web" ? origin + "/custom/index.html" : publicBase;
+    assert.equal(vm.runInContext("Native.shareBase()", ctx), base);
+    assert.equal(vm.runInContext("NetHandshake.inviteUrl('INVITE')", ctx), base + "#vs=INVITE");
+    assert.equal(vm.runInContext("NetHandshake.inviteFromUrl(NetHandshake.inviteUrl('INVITE'))", ctx), "INVITE");
+    const sharedGhost = await vm.runInContext("GhostShare", ctx).encode(ghost, { track: "monza" });
+    assert.equal(sharedGhost.ok, true);
+    assert.equal(sharedGhost.url, base + "#ghost=" + sharedGhost.code);
+    for (const [type, payload] of [
+      ["setup", { team: "mercedes", tune: { arbF: 7, arbR: 6, rideF: 22, rideR: 62, brakeBias: 56 } }],
+      ["livery", { team: "mercedes", id: "custom" }],
+      ["daily", { day: "2026-10-15", track: "monza" }],
+    ]) {
+      const shared = vm.runInContext("ShareCode", ctx).encode(type, payload);
+      assert.equal(shared.ok, true);
+      assert.equal(shared.url, base + "#share=" + shared.code);
+    }
+
+    // Drive the real platform UI callback using the generic pairing builder.
+    // The adapter must preserve relay configuration and null QR teardown.
+    const native = vm.runInContext("Native", ctx);
+    const pad = vm.runInNewContext(readFileSync(join(ROOT, "js/input/phone-pad.js"), "utf8") + ";PhonePad", {
+      location: sandbox.location, URL,
+    });
+    const nodes = new Map(), qrs = [];
+    const $ = (id) => {
+      if (!nodes.has(id)) nodes.set(id, { textContent: "", hidden: true, setAttribute() {}, scrollIntoView() {} });
+      return nodes.get(id);
+    };
+    let pairingUi;
+    Object.assign(sandbox, {
+      PhysicsConsts: {}, CamModes: { CAM_MODES: [] },
+      PhonePad: { padUrl: pad.padUrl, host: (ui) => { pairingUi = ui; return { cancel() {} }; } },
+      LobbyCodes: { paintQr: (_wrap, _canvas, url) => qrs.push(url) },
+    });
+    vm.runInContext(readFileSync(join(ROOT, "js/ui/platform-session.js"), "utf8"), ctx);
+    const session = vm.runInContext("PlatformSession", ctx).create({ $, els: {}, store: {} }, { ensureNet: async () => true });
+    session.wirePhone();
+    $("pm-phonepad").onclick();
+    await new Promise(setImmediate);
+    const directory = kind === "web" ? origin + "/custom/" : publicBase;
+    assert.equal($("pm-phonepad-url").textContent, directory + "controller.html");
+    const rawUrl = pad.padUrl("ABC234", null, "https://relay.test/base");
+    pairingUi.qr(rawUrl, "ABC234");
+    assert.equal(qrs.at(-1), directory + "controller.html#pad=ABC234&relay=https%3A%2F%2Frelay.test%2Fbase");
+    assert.equal(native.canonicalOrigin(), origin, "sharing must not change storage identity");
+    pairingUi.qr(null, null);
+    assert.equal(qrs.at(-1), null);
+  }
+});

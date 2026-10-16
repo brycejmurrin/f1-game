@@ -83,6 +83,9 @@ export function normalizeJob(raw, defaults = {}) {
     type: format.type,
     quality: format.type === "jpeg" ? capture.quality ?? format.quality ?? 85 : undefined,
     raster: !!(raw.raster ?? defaults.raster),
+    // orbit / cinematic / trackside re-site the eye out of scenery (__apex opts.clear, #2253); opt-in so
+    // existing shots and survey baselines keep their framing.
+    clear: !!(raw.clear ?? defaults.clear),
   };
 }
 
@@ -127,6 +130,7 @@ export function parseShotArgv(argv, ROOT) {
     team: TEAM,
     jpeg,
     raster,
+    clear: has(argv, "--clear"),
   };
 
   if (batchPath) {
@@ -138,7 +142,7 @@ export function parseShotArgv(argv, ROOT) {
   const positionals = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i].startsWith("--")) {
-      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster"
+      if (argv[i] !== "--hud" && argv[i] !== "--jpeg" && argv[i] !== "--raster" && argv[i] !== "--clear"
         && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
       continue;
     }
@@ -180,5 +184,6 @@ export const SHOT_USAGE = `usage: node tools/shot/shot.mjs <trackId> <frac> [cam
   --gpu swiftshader|llvmpipe|hardware|lavapipe --browser auto|chromium|shell
   --backend three|webgl2|webgpu --trace[=path] --cache-assets --isolated --seed N
   cam: park | eye | orbit | cinematic | trackside.
+  --clear: orbit/cinematic/trackside re-site the eye out of scenery (batch field clear).
   --jpeg / .jpg → JPEG q85 (human review). --raster → __apex.render view only (no PNG).
   Default out: scratch/captures/playwright-probe/<track>-<frac%>-<cam>.png`;

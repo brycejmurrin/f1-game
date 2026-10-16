@@ -273,3 +273,27 @@ test("TLX decal runs: A6's live-record guard, one material per run, and the norm
   assert.match(tlx, /for \(const run of \[_blob, \.\.\._decalRuns\.values\(\)\]\)/, "a hidden run is warmed like A6's blob");
   assert.match(gameSource(), /CarMesh\.flushTailGlows\(\);[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*carDraw\.flushDecals\(night\);/, "flushed after the car loop, before the livery decals (their old relative order)");
 });
+
+test("blueWatch.tick gets the pooled _blueCtx, never a per-step literal (issue #1649)", () => {
+  const g = gameSource();
+  assert.match(g, /const _blueCtx = \{ total: 0, vRef: 0, caution: 0, race: true \}/);
+  assert.match(g, /blueWatch\.tick\(player, ranked, _blueCtx, dt\)/);
+  assert.equal(/blueWatch\.tick\([^)]*\{/.test(g), false, "a literal is back in the race step");
+});
+
+test("car loop: a world-posed rival behind the eye is culled before sampleAt (perf plan C-10)", () => {
+  const g = gameSource();
+  const early = g.indexOf("rp.world && (rp.x - camEye[0]) * _camFwdX + (rp.z - camEye[2]) * _camFwdZ < -6) continue;");
+  assert.notEqual(early, -1, "the early behind-camera cull moved");
+  const sample = g.indexOf("sampleAt(cS, smp2);", early);
+  assert.ok(sample > early && sample - early < 200, "it must sit right before the field's track sample");
+  // Same predicate as the full cull it front-runs (tmpP x/z ARE rp.x/rp.z for a world pose).
+  assert.match(g, /if \(dx \* _camFwdX \+ dz \* _camFwdZ < -6\) continue;/);
+});
+
+test("Collide relaxation stops after a pass that reached no contact (hunt-2 P6)", () => {
+  const src = read("js/physics/collide.js");
+  const body = lift(src, "resolveCollisions");
+  assert.match(body, /if \(pass > 0 && !_colTouched\) break;/);
+  assert.match(lift(src, "_colResolvePair"), /if \(!ct\) return;\s*_colTouched = true;/);
+});

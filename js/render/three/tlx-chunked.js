@@ -386,7 +386,7 @@
         });
         buckets.clear();
         merged.forEach((m, mk) => {
-          const idx = new Array(m.n);
+          const idx = new IndexArray(m.n);
           let o = 0;
           for (const part of m.parts) for (let i = 0; i < part.length; i++) idx[o++] = part[i];
           buckets.set(mk, { idx, mn: m.mn, mx: m.mx, gx: m.gx, gz: m.gz });
@@ -395,8 +395,8 @@
       const chunks = [];
       let count = 0;
       buckets.forEach((bk, key) => {
-        const arr = new IndexArray(bk.idx);
-        bk.idx = null;   // typed copy made — the growable JS array can go now
+        const arr = bk.idx instanceof IndexArray ? bk.idx : new IndexArray(bk.idx);
+        bk.idx = null;   // geometry owns the typed indices; drop the bucket reference
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", aPos);
         geo.setAttribute("normal", aNrm);
