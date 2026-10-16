@@ -1,6 +1,6 @@
 ---
 name: js-debugger
-description: "Use when debugging Apex 26 JavaScript with breakpoints, stepping, paused locals or exception pauses through js-debugger. Heap/CPU profiling → mcp-probe."
+description: "Use when debugging JavaScript via js-debugger: conditional source breakpoints, stepping into/over, call frame scopes, locals, stale pause tokens, debugger daemon, exception pauses. Heap/CPU profiling → mcp-probe."
 ---
 
 # Source debugging with the separate debugger MCP
@@ -38,8 +38,8 @@ client reload/trust. Never edit global agent instructions for this workflow.
 1. Call `debugger_targets` with the real CDP `endpoint`; attach its exact
    `targetId` using `debugger_attach`. On a game page establish identity with
    `__apex.info()` and call `__apex.agentHelp()` once per page session.
-2. Narrow `debugger_scripts` by file name, then use `debugger_source` to find
-   the statement. Preserve the returned URL including its query suffix.
+2. Narrow `debugger_scripts` by file name, then use `debugger_source` (it needs
+   that row's `scriptId`, not a URL) to find the statement. Preserve the returned URL including its query suffix.
    Source lines/columns are one-based; frame indices are zero-based.
 3. Set `debugger_breakpoint` at that URL/line, optionally with a condition
    isolating the reproduction from background animation calls. Conditions run
@@ -60,6 +60,12 @@ client reload/trust. Never edit global agent instructions for this workflow.
 7. Resume before browser actions that require page JavaScript. Read the
    operation's final result in state; a timeout leaves execution unknown and
    does not cancel JavaScript. Detach before trying a new run in that case.
+
+To get a pause in the game, start a real race inside the run: `race()` with no
+argument returns false and `go()` alone leaves zero cars. Recipe and the Cloud
+Chromium launch line are in the reference. Under software GL, `attach`, `detach`
+and `debugger_exceptions` can time out yet apply; `__apex.headless(true)` makes
+them take about 0.2 s. A run stopped at a breakpoint reads `paused`, not `unknown`.
 
 Paused evaluation blocks side effects by default. Only use
 `allowSideEffects:true` or mutating `debugger_run` for the intended local
