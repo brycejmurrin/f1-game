@@ -1514,6 +1514,7 @@ what it covers.
 | `garage-before-api.test.mjs` | Garage before GitHub REST helper: mocked `fetch` retries on 5xx/429/network (not 4xx), honors `Retry-After`, injectable zero delay, and `listPackArtifacts` exact `?name=` filter for `garage-before-<sha>` |
 | `harness-display.test.mjs` | headless shot tools: `clearDeadDisplay` drops a stale local `DISPLAY=:N` with no `/tmp/.X11-unix/XN` so SwiftShader WebGL can start; `chromiumArgsForBackend` pins `--enable-unsafe-swiftshader`; `gotoGame` names WebGL/DISPLAY on boot timeout |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
+| `centreline-kinks.test.mjs` | Centreline kink scan: a lone hard vertex on a straight is flagged, smooth arcs are not, and the pinned per-circuit counts in `tests/data/centreline-kinks.json` match the built circuits |
 | `lobed-trees.test.mjs` | Opt-in crown recipes: desktop/mobile geometry budgets, canonical/fused normals and sway, atomic primitive rejection and planting reservation fallback |
 | `terrain-falloff.test.mjs` | Optional terrain descent: unchanged road shelf/rails, pit flattening, smooth floor joins, invalid-option fallback and actual banked near-road vertices |
 | `circuit-corner-anchors.test.mjs` | FIA 2025 physical Imola/Hungaroring corner topology and Imola's measured timing offsets on the built centreline |
