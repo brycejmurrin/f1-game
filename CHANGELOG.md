@@ -15,6 +15,12 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 
 ## 1695
 
+### New
+- Track Designer: add, edit and remove road bridges; place ponds, lakes and straight river sections from a water palette.
+
+### Improved
+- Track Designer workspaces separate drawing, road editing, elevation, scenery and testing controls, reducing repeated menus.
+
 ### Fixed
 - WATCH HIGHLIGHTS: scrubbing or pressing NEXT now cuts to the right car for the coming highlight, and the replay clock no longer jumps back (#2196).
 - WATCH: the timeline reaches the formation and start footage before lights-out (#2202).
