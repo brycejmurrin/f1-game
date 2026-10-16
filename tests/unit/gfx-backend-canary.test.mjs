@@ -650,9 +650,18 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
     "optIn must require the group to exist and be non-empty — a pick for files that are gone is not an opt-in");
 
   const wgx = code("js/render/webgpu/wgx.js");
-  assert.match(wgx, /device\.lost[\s\S]{0,600}_wgxEscalate\(/, "device.lost climbs the ladder through _wgxEscalate");
+  const lossCallback = wgx.match(/device\.lost\.then\(function\s*\(info\)\s*\{\s*if\s*\(info && info\.reason === "destroyed"\) return;/);
+  assert.ok(lossCallback, "device.lost registers its recovery callback");
+  // Extract the callback itself: capture cleanup may grow the body without
+  // changing the visible-loss ladder, so a character budget is not its contract.
+  const lossBody = fnBody(wgx.slice(lossCallback.index).replace(
+    /^device\.lost\.then\(function\s*\(info\)/, "function deviceLoss(info)"), "deviceLoss");
+  assert.match(lossBody, /if\s*\(!hidden\)\s*\{[^]*?_wgxEscalate\("device lost \("[^;]*,\s*true\);\s*return;/,
+    "visible device.lost climbs the ladder through forced _wgxEscalate");
+  assert.match(fnBody(wgx, "_wgxEscalate"), /_lost\s*=\s*true;\s*_rejectCapture\([^;]*;\s*_healReset\(\)/,
+    "loss escalation rejects queued capture before recovery bookkeeping");
   assert.match(fnBody(wgx, "_wgxEscalate"), /apex26\.gfxClaimFail/, "the last rung surrenders the tab to GLX via the claim-fail latch");
-  assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,2200}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+  assert.doesNotMatch(lossBody, /setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
   assert.match(wgx, /\bWGX_LITE\b/);
   assert.match(wgx, /\bIS_WEBKIT\b/);
   assert.match(wgx, /WGX_LITE\s*&&\s*format\s*===\s*"rgba16float"\s*\)\s*format\s*=\s*"bgra8unorm"/);
@@ -4059,11 +4068,16 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // geometry.dispose() alone only nulls an attribute mirror. A pooled wrapper
   // dropped without the event pinned every chunk of every freed track (~17 MB
   // of JS heap per picker pick, measured). Both drop paths go through one helper.
-  assert.match(tlxSrc, /function dropWrapper\(m\) \{[\s\S]*?if \(_warmPending\) \{ _dropQueue\.push\(m\); return; \}\s*try \{ m\.dispatchEvent\(\{ type: "dispose" \}\); \}[\s\S]*?m\.geometry = null; m\.material = null;\s*\}/,
-    "dropWrapper dispatches three's dispose event before nulling the wrapper — and defers while a warm's compileAsync may still hold the mesh");
+  const drop = fnBody(tlxSrc, "dropWrapper");
+  assert.match(drop, /if \(_warmPending\)[^]*?_dropQueue\.push\(\{ mesh: m, ownedGeometry \}\)[^]*?return;/,
+    "warm retains both object and owned geometry in one retirement record");
+  assert.match(drop, /m\.dispatchEvent\(\{ type: "dispose" \}\);[^]*?m\.geometry = null; m\.material = null;[^]*?ownedGeometry\.dispose\(\)/,
+    "object disposal precedes reference clearing and owned geometry disposal");
   assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
   assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
-  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 3, "releaseGeometry, prunePool and the flush all drop through it");
+  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 2, "releaseGeometry and prunePool drop shared wrappers through the helper");
+  assert.match(fnBody(tlxSrc, "flushDropped"), /dropWrapper\(entry\.mesh, entry\.ownedGeometry\)/, "flush retains ownership metadata");
+  assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
   assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
     "warm probes dispose before clearing references, after pending compilation settles");
@@ -5172,7 +5186,7 @@ test("TLX placeholder material arrays carry the pack's sampling state (WGSL acce
     "t.minFilter = THREE.LinearMipmapLinearFilter",
     "t.magFilter = THREE.LinearFilter",
     "t.generateMipmaps = true",
-    "t.anisotropy = 4",
+    "t.anisotropy = materialArrayAnisotropy()",
   ]) {
     assert.ok(pack.includes(line), "createTextureArray lost `" + line + "` — the pack sampling state changed; mirror it in the placeholder");
     assert.ok(placeholder.includes(line), "placeholder array lacks `" + line + "` — three compiles the lit program against the placeholder, and a Nearest/Nearest ClampToEdge placeholder bakes textureLoad+clamp into the WGSL for the life of the program");
@@ -6005,7 +6019,7 @@ function bootScenario({ install = true, init = true, pref = "webgl2", skip = fal
     Event: class { constructor(type) { this.type = type; } },
     location: { reload: () => events.push("reload") },
     BACKEND_FILES: { webgl2: ["glsl-chunks.js", "glx.js"] },
-    canvas: {}, _claimSkipped: skip, _createHung: false, pick: pref, why: "",   // start()'s closure state the sliced fallback reads
+    canvas: {}, _claimSkipped: skip, _createHung: false, _initOwner: null, pick: pref, why: "",   // start()'s closure state the sliced fallback reads
     backendPreference: () => pref,
     showGraphicsUnavailable: () => events.push("unavailable"),
     async loadBackendScripts(group) {
