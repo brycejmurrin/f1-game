@@ -1,0 +1,1 @@
+1792134914	Bryce Murrin	F5 only ambient zero multiplier: js/render/three/tsl-lit.js tests/unit/tlx-hunt4c.test.mjs docs/changelog.d/module-render-fixes.md; R1/R2 read-only analysis due active #2345 overlap  [cursor/module-render-fix-8d90; session b0461c4948027d33f201c24d]
