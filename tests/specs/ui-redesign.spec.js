@@ -25,6 +25,49 @@ async function waitReady(page) {
   await page.evaluate(() => window.__apex.headless(true));
 }
 
+test("circuit picker initially exposes portrait search and short-landscape selected name", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 659 });
+  await waitReady(page);
+  await page.click("#mb-race");
+  await expect(page.locator("#sel-inner")).toHaveAttribute("data-shape", "tall");
+
+  // Measure before focusing/clicking: either action can scroll a clipped
+  // field into view and conceal the initial-state regression.
+  const visibleFraction = (selector) => page.evaluate((selector) => {
+    const el = document.querySelector(selector);
+    const r = el.getBoundingClientRect();
+    let left = Math.max(0, r.left), right = Math.min(innerWidth, r.right);
+    let top = Math.max(0, r.top), bottom = Math.min(innerHeight, r.bottom);
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const cs = getComputedStyle(p), pr = p.getBoundingClientRect();
+      if (/^(auto|scroll|hidden|clip)$/.test(cs.overflowX)) {
+        left = Math.max(left, pr.left); right = Math.min(right, pr.right);
+      }
+      if (/^(auto|scroll|hidden|clip)$/.test(cs.overflowY)) {
+        top = Math.max(top, pr.top); bottom = Math.min(bottom, pr.bottom);
+      }
+    }
+    return r.width > 0 && r.height > 0
+      ? Math.max(0, right - left) * Math.max(0, bottom - top) / (r.width * r.height) : 0;
+  }, selector);
+  await expect.poll(() => visibleFraction("#sel-track-search")).toBeGreaterThan(0.98);
+  await page.locator("#sel-track-search").fill("monaco");
+  await expect(page.locator("#sel-tracks .track-row:not([hidden])")).toHaveCount(1);
+  await page.locator("#sel-track-search").fill("");
+  await page.locator("#sel-track-search").blur();
+
+  await page.setViewportSize({ width: 734, height: 343 });
+  await expect(page.locator("#sel-inner")).toHaveAttribute("data-density", "compact");
+  await expect(page.locator("#sel-inner")).not.toHaveAttribute("data-shape", "tall");
+  // A previous focus must not carry a scroll offset into this initial view.
+  await page.evaluate(() => {
+    document.getElementById("sel-track-section").scrollTop = 0;
+    document.getElementById("sel-track-filter").scrollLeft = 0;
+  });
+  await expect.poll(() => visibleFraction("#sel-preview-name")).toBeGreaterThan(0.98);
+  await expect.poll(() => visibleFraction("#sel-go")).toBeGreaterThan(0.98);
+});
+
 test("catalogue, garage, settings, data table, and compact multiplayer fit", async ({ page }) => {
   await waitReady(page);
 
@@ -945,4 +988,99 @@ test("balanced control rows derive their shape from local room", async ({ page }
   expect(doorTotal).toBeGreaterThan(0);
   expect(settings.rowCounts.reduce((n, c) => n + c, 0)).toBe(doorTotal);
   expect(settings.lastFill).toBeGreaterThan(0.9);
+});
+
+test("settings offers concise throttle help and separate backup actions", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 659 });
+  await waitReady(page);
+  await page.click("#mb-settings");
+  await page.click("#pm-open-controls");
+  for (const mode of ["hold", "latch", "auto"]) {
+    await page.locator("#pm-throttlemode-sel").selectOption(mode);
+    await expect(page.locator("#pm-throttle-note")).toContainText(mode.toUpperCase() + ":");
+  }
+  await expect(page.locator("#pm-throttle-compare")).not.toHaveAttribute("open", "");
+  await page.locator("#pm-throttle-compare summary").click();
+  await expect(page.locator("#pm-throttle-compare")).toHaveAttribute("open", "");
+  await page.locator("#pm-throttle-compare summary").click();
+  await page.click("#pm-settings-close");
+  await page.click("#pm-open-files");
+  for (const viewport of [{ width: 393, height: 659 }, { width: 734, height: 343 }, { width: 1280, height: 800 }]) {
+  await page.setViewportSize(viewport);
+  for (const section of ["save", "restore", "share"]) {
+    const button = page.locator("#pm-files-show-" + section);
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#pm-files-" + section)).toBeVisible();
+    const layout = await page.evaluate((section) => {
+      const nav = document.getElementById("pm-files-nav").getBoundingClientRect();
+      const content = document.getElementById("pm-files-" + section).getBoundingClientRect();
+      return { navBottom: nav.bottom, contentTop: content.top, leftDelta: Math.abs(nav.left - content.left), widthDelta: Math.abs(nav.width - content.width) };
+    }, section);
+    expect(layout.contentTop).toBeGreaterThanOrEqual(layout.navBottom);
+    expect(layout.leftDelta).toBeLessThanOrEqual(1);
+    expect(layout.widthDelta).toBeLessThanOrEqual(1);
+    for (const other of ["save", "restore", "share"].filter((s) => s !== section)) {
+      await expect(page.locator("#pm-files-" + other)).toBeHidden();
+    }
+  }
+  }
+  await page.locator("#pm-share-code-in").fill("harmless invalid fixture");
+  await page.locator("#pm-share-code-import").click();
+  await expect(page.locator("#pm-share-code-status")).not.toBeEmpty();
+});
+
+test("shared sheets reflow long labels and retain keyboard exits at narrow widths", async ({ page }) => {
+  await waitReady(page);
+  // 320 CSS pixels is the layout width of a 1280px window at 400% zoom.
+  // This checks reflow; it does not claim native browser zoom emulation.
+  for (const viewport of [{ width: 320, height: 568 }, { width: 568, height: 320 }, { width: 1280, height: 800 }]) {
+    await page.setViewportSize(viewport);
+    for (const scale of [100, 200]) {
+      await page.evaluate((scale) => window.__apex.uiScale(scale), scale);
+      await page.locator("#mb-help").focus();
+      await page.keyboard.press("Enter");
+      await expect(page.locator("#howtoplay")).toBeVisible();
+      const original = await page.evaluate(() => {
+        const heading = document.getElementById("dlg-howtoplay"), exit = document.getElementById("htp-close");
+        const original = { heading: heading.textContent, exit: exit.textContent };
+        heading.textContent = "AccessibilityPreferencesWithoutAbbreviations";
+        exit.textContent = "Close help and return to the main menu";
+        window.SheetShape.reclassify();
+        return original;
+      });
+      await expect.poll(() => page.evaluate(() => {
+        const sheet = document.getElementById("howtoplay-inner");
+        const body = sheet.querySelector(".sheet-body");
+        const head = sheet.querySelector(".sheet-head").getBoundingClientRect();
+        const foot = sheet.querySelector(".sheet-foot").getBoundingClientRect();
+        const b = body.getBoundingClientRect(), s = sheet.getBoundingClientRect();
+        return s.left >= 0 && s.right <= innerWidth + 1 && s.top >= 0 && s.bottom <= innerHeight + 1
+          && b.height >= 44 && b.top >= head.bottom - 1 && b.bottom <= foot.top + 1
+          && sheet.scrollWidth <= sheet.clientWidth + 1;
+      })).toBe(true);
+      const body = page.locator("#howtoplay-inner .sheet-body");
+      await body.hover();
+      await page.mouse.wheel(0, 100000);
+      await expect.poll(() => body.evaluate((e) => e.scrollHeight - e.clientHeight - e.scrollTop)).toBeLessThanOrEqual(2);
+      expect(await body.evaluate((e) => {
+        const last = e.querySelector("dl dd:last-child").getBoundingClientRect();
+        const pane = e.getBoundingClientRect();
+        return last.bottom > pane.top && last.top < pane.bottom;
+      }), "scroll end must still show content, not an empty spacer").toBe(true);
+      await expect(page.locator("#howtoplay-inner #htp-controls-refresher")).toBeAttached();
+      const exit = page.locator("#htp-close");
+      expect(await exit.evaluate((e) => e.scrollHeight - e.clientHeight)).toBeLessThanOrEqual(1);
+      await exit.focus();
+      await expect(exit).toBeFocused();
+      expect(await page.evaluate(() => document.documentElement.scrollTop)).toBe(0);
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#howtoplay")).toBeHidden();
+      await expect(page.locator("#mb-help")).toBeFocused();
+      await page.evaluate((original) => {
+        document.getElementById("dlg-howtoplay").textContent = original.heading;
+        document.getElementById("htp-close").textContent = original.exit;
+      }, original);
+    }
+  }
 });
