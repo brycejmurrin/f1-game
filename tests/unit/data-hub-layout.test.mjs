@@ -47,6 +47,17 @@ test("tall-narrow hub tabs are a 3-column grid (not one full-width column)", () 
   );
 });
 
+test("compact tall-narrow hub tabs switch to two columns and keep labels inside", () => {
+  assert.match(
+    DATA_CSS,
+    /body\[data-density="compact"\]\[data-shape="tall"\]\[data-width="narrow"\]\s+\.dh-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+  );
+  assert.match(
+    DATA_CSS,
+    /body\[data-shape="tall"\]\[data-width="narrow"\]\s+\.dh-tab\s*\{[^}]*overflow-wrap:\s*anywhere/,
+  );
+});
+
 test(".dh-content cancels sf-thumb width (no dead horizontal scroll)", () => {
   assert.equal(decl(rules, ".dh-content", "touch-action"), "pan-y");
   assert.equal(decl(rules, ".dh-content", "overscroll-behavior-x"), "none");

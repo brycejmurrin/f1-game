@@ -223,6 +223,12 @@ body[data-shape="tall"][data-width="narrow"] .dh-tabs {
   gap: calc(var(--gap) * 0.4);
   padding: calc(var(--gap) * 0.5) var(--gap);
 }
+/* At the compact zoom tier the card's local width is roughly half the
+   physical phone width. Two columns preserve readable tab words; three
+   columns leave 50–70px cells where labels paint over their neighbours. */
+body[data-density="compact"][data-shape="tall"][data-width="narrow"] .dh-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 /* white-space:normal on .dh-tab below is the fallback when a 3-col cell is
    narrower than WATCH & DRIVE / TELEMETRY. */
 /* --tap-paint, not --tap-min: the portrait tabs painted 110x38 on a 393x659
@@ -238,6 +244,11 @@ body[data-shape="tall"][data-width="narrow"] .dh-tab {
   word-break: normal;
   letter-spacing: var(--ls-4);
   line-height: 1.15;
+  /* UI SIZE zoom can make a three-column cell narrower than a single tab
+     word (SCHEDULE / STANDINGS / TELEMETRY). Allow the label to break inside
+     its own button instead of painting over the adjacent tab. At normal size
+     the words already fit, so this is a no-op for the shipped layout. */
+  overflow-wrap: anywhere;
 }
 
 .dh-content {

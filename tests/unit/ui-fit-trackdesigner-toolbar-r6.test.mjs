@@ -24,6 +24,17 @@ test("Track Designer toolbar chips floor taps at --tap (r6)", () => {
   assert.equal(decl(rules, CHIP, "min-width"), "var(--tap)");
 });
 
+test("compact short-landscape toolbar stays inside its stage grid cell", () => {
+  assert.match(
+    css,
+    /@media \(max-height:\s*500px\) and \(orientation:\s*landscape\)[\s\S]*?body\[data-density="compact"\][\s\S]*?\.td-chips\[data-role="toolbar"\][\s\S]*?display:\s*grid/,
+  );
+  assert.match(
+    css,
+    /body\[data-density="compact"\][\s\S]*?\.td-chips\[data-role="toolbar"\][\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+  );
+});
+
 test("r6 carve stays Track Designer toolbar (no foreign selectors)", () => {
   const m = css.match(/UI Fit r6: Track Designer tool-strip[\s\S]*?\n\}[\s\S]*?\n\}/);
   assert.ok(m, "r6 toolbar block present before @layer close");
