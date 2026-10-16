@@ -212,3 +212,38 @@ test("RivalAudio.silence(t) zeroes the pool; the title stub has it too (#2187)",
   vm.runInContext(stub, sc);
   assert.doesNotThrow(() => vm.runInContext("RivalAudio.create({}).silence(); RivalAudio.silence()", sc));
 });
+
+
+test("Rivals switch and zero level mute both engine and pass-by without another frame", () => {
+  const { A, RivalAudio } = boot();
+  A.init(); A.setEnabled(true); A.startEngine();
+  const me = { s: 500, speed: 50, x: 0 };
+  const R = RivalAudio().create({ track: { total: 1000 }, cars: [me, { s: 504, speed: 80, rpm: 12000 }] });
+  const feed = () => A.setRivals(R.collect(me));
+  feed();
+  assert.ok(R.passByState().some(v => v.gain > 0));
+  assert.ok(A.rivalState().some(v => v.gain > 0));
+  A.setLayer("rivals", false);
+  assert.ok(R.passByState().every(v => v.gain === 0), "toggle immediately fades pass-by");
+  feed();
+  assert.ok(R.passByState().every(v => v.gain === 0), "collect cannot reopen muted hiss");
+  assert.ok(A.rivalState().every(v => v.gain === 0));
+  A.setLayer("rivals", true); feed();
+  assert.ok(R.passByState().some(v => v.gain > 0));
+  A.setTune({ rivals: 0 });
+  assert.ok(R.passByState().every(v => v.gain === 0), "zero trim immediately fades pass-by");
+  feed();
+  assert.ok(A.rivalState().every(v => v.gain === 0));
+  A.setTune({ rivals: 1 }); feed();
+  assert.ok(R.passByState().some(v => v.gain > 0), "restoring trim restores sound");
+});
+
+test("Rivals mute survives lazy first binding", () => {
+  const b = boot({ stubRival: true });
+  b.A.init(); b.A.setLayer("rivals", false);
+  const RA = b.loadRivals();
+  const me = { s: 500, speed: 50 };
+  const R = RA.create({ track: { total: 1000 }, cars: [me, { s: 504, speed: 80 }] });
+  R.collect(me);
+  assert.ok(R.passByState().every(v => v.gain === 0));
+});
