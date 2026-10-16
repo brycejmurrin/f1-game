@@ -517,6 +517,7 @@ async function precacheAssetLists() {
     "js/camera/tuner-panel.js",
     "js/camera/flyby-editor.js",
     // LAZY_CAREER_UI — CAREER screen behind the title CAREER door
+    "js/career/career-planning-ui.js",
     "js/career/career-ui.js",
     // /@gen-shell:sw-optional
   ]);
@@ -702,7 +703,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-ui\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; WGX is runtime-only (opt-in).

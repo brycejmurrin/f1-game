@@ -3685,7 +3685,9 @@ _pitCrewDrawn = pitCrewDrawn;   // __apex.pit() reads G.pitCrewDrawn to prove th
 // panels further down: CustomTeam.create() takes spMeshBust as a value, so
 // the module has to exist by then.
 const setupCam = SetupCamera.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps,
-  teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render });
+  teamDecalState, carDecalNum, drawCarDecals, carPaintMat, PAINT_DRY_DAY, MAT_REFLECT_X, render,
+  previewDecalMesh: (team) => { const decal = teamDecalState(team, true), liv = resolveLivery(team);
+    return getCarDecalMesh(decal.val, decal.parts, !!carDraw.modelBuf, team.id, liv.finShape, liv.spineHeight); } });
 const { resetSetupCam, setSetupCamPanel, spMeshBust } = setupCam;
 // The garage pre-built while the menu idles (js/garage/prebuild.js); `timed` measures tap -> first garage frame.
 const garagePre = GaragePrebuild.create(G, { gate: _menuGate, setupCam, menuIdle, menuSlice,

@@ -1,6 +1,6 @@
 # Testing reference
 
-120+ root Playwright spec files (`tests/specs/*.spec.js`) + 700+ `node --test` unit suites
+120+ root Playwright spec files (`tests/specs/*.spec.js`) + 750+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1286,6 +1286,8 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `career-data-audio-improvements.test.mjs` | Career half of #1776's follow-ups: slot-owned MY TEAM identity, contract preview/sign agreement and staleness, winter report deltas (the audio and data halves are split into their own suites with their pieces). |
+| `garage-followups.test.mjs` | Reversible tune experiment controls, aero bench and garage followup behavior; tooling-fast and garage-unit. |
 | `settings-search.test.mjs` | Search return focus and scroll, cancelled lazy navigation, owner descriptors and option labels, external destinations and full-row layout. |
 | `followup-platform.test.mjs` | Native install guidance, desktop single-instance/crash recovery and bounded mobile file/share handling; tooling-fast, desktop-unit and mobile-unit. |
 | `followup-update-check.test.mjs` | Hung update fetch/body recovery, abort fallback and stale-result isolation; tooling-fast and lifecycle-unit. |

@@ -3567,7 +3567,7 @@ phoneL broadcast @150% overlaps (22 → target 0 on announce/flag/limits/tyre/re
 
 ## 2026-10-16 — VS FRIEND lobby settings revisions + peer state bursts (#2342, split 6/8 of #1776)
 
-`js/net/lobby.js` lines 2334 → **2400** (+66; a delta in `tests/data/ratchets.d/sync-pr-cursor-1776-net-lobby-78da.json`).
+`js/net/lobby.js` lines 2334 → **2400** (+66; a delta, since folded into `tests/data/ratchets.json`).
 Deliberate raise past the 40-line absorb: settings are acknowledged by revision (revisionless peers may only
 confirm the initial rules), READY/GO carry the revision, and the guest-side `rosterEvent` keeps each
 attributed peer's latest hello/ready after a burst (~30 lines of per-peer window + timer state). Extraction
