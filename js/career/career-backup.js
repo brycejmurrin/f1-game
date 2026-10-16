@@ -264,16 +264,26 @@ const CareerBackup = (function () {
         || (data.v != null && (!Number.isSafeInteger(data.v) || data.v < 0 || data.v > SaveMigrate.CAREER_V))) return { ok: false, reason: "unsupported-version" };
       envelope.slots.push({ flavour: target.flavour, i: target.i, data });
     }
-    // A foreign calendar must never be silently shortened by SeasonCal.load.
+    // Career calendars use calIds; standalone calendars use config.trackIds.
+    // Neither may silently lose circuits when the restored save is opened.
+    const careerSeason = clone.career && clone.career.season;
+    const knownCalendar = (ids) => Array.isArray(ids) && ids.length > 0 && ids.length <= 64
+      && new Set(ids).size === ids.length && typeof Tracks !== "undefined" && Array.isArray(Tracks.LIST)
+      && ids.every((id) => typeof id === "string" && Tracks.LIST.some((t) => t.id === id));
+    if (careerSeason && careerSeason.calIds != null && !knownCalendar(careerSeason.calIds)) {
+      return { ok: false, reason: "unsupported-calendar" };
+    }
     for (const season of [clone.career && clone.career.season, clone.season]) {
       if (!season) continue;
       if (!isObj(season)) return { ok: false, reason: "season-not-object" };
       const ids = season.config && season.config.trackIds;
-      if (ids != null && (!Array.isArray(ids) || !ids.length || ids.length > 64 || new Set(ids).size !== ids.length
-        || typeof Tracks === "undefined" || !Array.isArray(Tracks.LIST)
-        || ids.some((id) => !Tracks.LIST.some((t) => t.id === id)))) return { ok: false, reason: "unsupported-calendar" };
+      if (ids != null && !knownCalendar(ids)) return { ok: false, reason: "unsupported-calendar" };
     }
-    if (clone.season != null) {
+    // Older recovery exporters included G.season even during career play,
+    // where it aliases career.season. Keep that snapshot only in its career
+    // slot; restoring it as a standalone championship would mix the two modes.
+    const careerAlias = isObj(careerSeason) && sameSeasonValue(careerSeason, clone.season);
+    if (clone.season != null && !careerAlias) {
       const keys = ["round", "pts", "teamPts", "driverCodes", "finishes", "roundPts", "config", "stage", "lastFl", "seed", "qualiOrder", "qualiTrack", "qualiMode", "qualiSeat"];
       if (Object.keys(clone.season).some((k) => !keys.includes(k))) return { ok: false, reason: "unsupported-season" };
       if (clone.season.round != null && (!Number.isInteger(clone.season.round) || clone.season.round < 0 || clone.season.round > 200)) return { ok: false, reason: "season-invalid" };

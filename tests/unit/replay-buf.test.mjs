@@ -118,6 +118,63 @@ test("beginScrub is a no-op when netPlay is active", () => {
   assert.equal(api.beginScrub(), false);
 });
 
+test("instant replay cuts the drone tether on entry, explicit seeks, LAST and exit, but eases playback", () => {
+  const ctx = vm.createContext({ Math, Float32Array, Float64Array, Uint8Array,
+    Log: { info() {} }, Tracks: {
+      sample(track, s, out) {
+        out.p[0] = 0; out.p[1] = 0; out.p[2] = s;
+        out.t[0] = 0; out.t[1] = 0; out.t[2] = 1;
+        out.r[0] = 1; out.r[1] = 0; out.r[2] = 0;
+      }, curvature: () => 0,
+    } });
+  for (const file of ["js/core/mat4.js", "js/camera/extra-rigs.js", "js/camera/replay-buf.js"])
+    vm.runInContext(src(file), ctx, { filename: file });
+  const { ExtraRigs, ReplayBuf: R } = vm.runInContext("({ExtraRigs, ReplayBuf})", ctx);
+  const c = { s: 0, x: 0, px: 0, py: 0, pz: 0, head: 0, speed: 60 };
+  const G = { cars: [c], track: { total: 10000 }, raceT: 10 };
+  const solve = (snap = false) => {
+    const eye = [], tgt = [];
+    ExtraRigs.solve("drone", G.track, c.s, c.x, c.speed, 0,
+      { dt: 1 / 60, carPos: [c.px, c.pz], carHead: c.head, snap }, eye, tgt);
+    return { eye, tgt };
+  };
+  let cuts = 0;
+  G.snapGameCam = () => { cuts++; ExtraRigs.reset("drone"); solve(true); };
+  const rb = R.create(G);
+  for (let i = 0; i <= 300; i++) { c.s = c.pz = i * 2; rb.sample(i / 30, G.cars); }
+  solve();   // seed the tether on the live car at z=600
+  assert.equal(rb.beginScrub(false), true);
+  assert.equal(c.pz, 300);
+  assert.equal(solve().eye[2], 289, "entry cuts to the replay's opening pose");
+  rb.apply(0);
+  assert.equal(solve().eye[2], -11, "explicit public apply clears the old world-space tether");
+  rb.tickScrub(1 / 60);
+  const moving = solve().eye[2];
+  assert.ok(moving > -11 && moving < c.pz - 11, "continuous playback still eases toward its moving ideal");
+  assert.equal(cuts, 2, "ordinary playback does not reset any camera histories");
+  rb.pushTag("contact", 8, 0);
+  rb.jumpLastTag();
+  assert.equal(solve().eye[2], 469, "LAST is an explicit timeline cut");
+  assert.equal(rb.endScrub(), true);
+  assert.equal(c.pz, 600);
+  assert.equal(solve().eye[2], 589, "exit restores the live timeline's tether");
+  assert.equal(cuts, 4);
+});
+
+test("replay seeks preserve photo and debug-camera ownership", () => {
+  for (const owner of [{ photoMode: true }, { dbgCam: { _resultsCam: true } }, { dbgCam: { director: true } }]) {
+    const R = boot(), field = cars(1);
+    let cuts = 0;
+    const G = { cars: field, ...owner, snapGameCam() { cuts++; } };
+    const api = R.create(G);
+    api.sample(0, field); field[0].s += 10; api.sample(1, field);
+    assert.equal(api.beginScrub(false), true);
+    api.apply(0); api.tickScrub(0.1); api.endScrub();
+    assert.equal(cuts, 0, "an owning camera retains its temporal state");
+    if (owner.dbgCam) assert.equal(G.dbgCam, owner.dbgCam);
+  }
+});
+
 test("injected pose ownership denies sampling, pause-card offering and scrub entry even with a populated ring", () => {
   const button = { hidden: true }, R = boot({ getElementById: id => id === "pm-replay" ? button : null });
   let eligible = true;

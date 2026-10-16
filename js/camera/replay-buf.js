@@ -252,18 +252,26 @@ const ReplayBuf = (function () {
       if (showControls) { showDock(); paintDock(); }
       return true;
     }
-    function apply(t) {
+    function snapCamera() {
+      // Photo/tools and results/director shots own dbgCam; a scrub must not
+      // reseed their camera or clear their look state. The live rig uses the
+      // same complete reset as WATCH seeks (including its outer anchor).
+      if (!G.photoMode && !G.dbgCam && G.snapGameCam) G.snapGameCam();
+    }
+    function apply(t, continuous = false) {
       if (!scrubbing) return false;
       const snap = at(t);
       if (!snap || !G.cars) return false;
       scrubT = snap.t;
       applyPose(G.cars, snap.cars);
+      if (!continuous) snapCamera();   // public apply / slider / LAST are seeks
       return true;
     }
     function endScrub() {
       if (!scrubbing) return false;
       if (liveSnap && G.cars) restoreLive(G.cars, liveSnap);
       scrubbing = false; liveSnap = null; scrubPlaying = true;
+      snapCamera();   // restore the live timeline before the next rendered frame
       hideDock();
       return true;
     }
@@ -284,7 +292,7 @@ const ReplayBuf = (function () {
       if (scrubPlaying && dt > 0) {
         const w = windowInfo();
         scrubT = Math.min(w.t1, scrubT + dt * scrubRate);
-        apply(scrubT);
+        apply(scrubT, true);   // playback retains normal rig damping
         if (scrubT >= w.t1) scrubPlaying = false;
       }
       paintDock();
