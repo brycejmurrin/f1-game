@@ -351,6 +351,7 @@ const FULL = [
   "js/perf/renderer-picker.js",
   "js/render/shared/compatibility-recovery.js",
   "js/perf/gfx-debug-overlay.js",
+  "js/perf/three-inspector.js",   // ThreeInspector: opt-in (?inspector=1) dev panel; lazy import() of vendor addons/inspector, never precached
   "js/ui/scale.js",
   "js/ui/dock-layout.js",
   "js/camera/cockpit-opts.js",

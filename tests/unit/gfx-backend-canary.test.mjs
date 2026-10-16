@@ -5281,7 +5281,7 @@ test("spatial upscale persists once through GameStore at the UI boundary", () =>
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
   const THREE = await import("../../vendor/three-0.186.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
-  let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0;
+  let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0, _inspectorHold = false;
   const _gpuSupported = () => true;
   const body = fnBody(code("js/render/three/tlx.js"), "gpuTimer");
   const timer = eval("(function(on){" + body + "})");
@@ -5506,7 +5506,7 @@ test("TLX defers resize during compilation and applies the latest requested size
 });
 
 test("TLX ignores a timing result after disabling or restarting its measurement session", async () => {
-  let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0;
+  let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0, _inspectorHold = false;
   const pending = [], _gpuSupported = () => true;
   const renderer = { backend: {}, resolveTimestampsAsync: () => new Promise(r => pending.push(r)) };
   const src = code("js/render/three/tlx.js");
