@@ -19,8 +19,7 @@ re-runs. The parent decides and acts; the protocol is
 
 1. `node tools/ci/pr-board.mjs --json` (add `--pr <n>` when the parent names one). Get the header time from `date -u +%FT%TZ` (a separate plain Bash call).
    Exit 3 = no token or API error: return that line and stop, do not guess.
-2. `node tools/ci/ready-full-cap.mjs --json`; if `ok` is false or room is 0, say
-   which PRs hold the slots and that no READY may be recommended.
+2. The board's `cap` is informational (no ready cap since 2026-10-16); report it, never hold a READY on it.
 3. For each row whose `suggest` is READY, run `node tools/ci/ready-gate.mjs --pr <n>`
    and report its exit code; READY is recommended only on exit 0. Batch the gate
    checks in ONE Bash call (`for n in 12 34; do node tools/ci/ready-gate.mjs --pr $n; echo "#$n rc=$?"; done`):

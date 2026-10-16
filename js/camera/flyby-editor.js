@@ -420,6 +420,12 @@ function refreshChips() {
     b.onkeydown = (e) => chipKey(i, e);
     host.appendChild(b);
   });
+  // Keep the shared panel's accessible name aligned with the selected shot.
+  // The tabs are rebuilt after add/delete/reorder, so update this relation here
+  // instead of leaving it pointing at a removed tab.
+  const activeTab = $("fb-tab-" + sel);
+  if (activeTab) host.setAttribute("aria-labelledby", activeTab.id);
+  else host.removeAttribute("aria-labelledby");
   const prof = $("fb-profile");
   if (prof) {
     let sum = 0;

@@ -77,7 +77,7 @@ Settings opens at an index, then pushes one page at a time:
 | Driving | `#pm-open-driving` | `#pm-panel-driving` | DRIVING |
 | Display | `#pm-open-display` | `#pm-panel-display` | DISPLAY |
 | Appearance | `#pm-open-appearance` | `#pm-panel-appearance` | APPEARANCE |
-| Steering & Assists | `#pm-advanced` | `#advanced` | STEERING & ASSISTS |
+| Driving Aids | `#pm-advanced` | `#advanced` | DRIVING AIDS |
 | Music & Sound | `#pm-audio` | `#audioset` | MUSIC & SOUND |
 
 Back pops to the Settings index; Back from the index returns to the title.

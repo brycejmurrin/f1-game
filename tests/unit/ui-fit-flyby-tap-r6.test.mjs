@@ -22,6 +22,14 @@ test("flyby editor compact foot buttons floor at --tap-paint (rail off and on)",
   );
 });
 
+test("flyby compact operations use three readable columns", () => {
+  assert.match(
+    css,
+    /#flyby-inner\[data-density="compact"\]\s+#fb-ops\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s,
+    "compact Flyby operation labels need room for DOWN and NORM",
+  );
+});
+
 test("flyby foot stays on --tap-paint outside compact (portrait 51px vs house 52)", () => {
   assert.match(
     css,

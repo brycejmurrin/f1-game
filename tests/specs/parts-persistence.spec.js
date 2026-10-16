@@ -13,7 +13,7 @@
 // live one, which pinFreePlay + #mb-race now does in place. openSetup() walks
 // back to the title first and starts from forgotten parts, as clearState on a
 // fresh page did. UNVERIFIED IN A BROWSER at conversion time.
-import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { sharedTest as test, expect, BOOT_MS, clickLive } from "../helpers/fixtures.js";
 import { galleryPath } from "../helpers/output-paths.js";
 import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shared-page.js";
 import { waitGarageSheet } from "../helpers/garage-sheet.js";
@@ -45,9 +45,13 @@ async function openSetup(page, team = "mclaren", opts) {
   await toMenu(page);
   await forgetStored(page, ["unlimitedBudget"]);
   await pinFreePlay(page, { team, click: false });   // empty factory sheet; #mb-race re-reads
-  await page.locator("#mb-race").click();
+  // DOM clicks (clickLive), not locator.click(): the title flyby and the select
+  // sheet are rendering, and Playwright's two-stable-frames actionability check
+  // costs 30-110 s there (docs/TESTING.md §A Playwright click costs). Schedule run
+  // 38392542652 timed out 60 s at "locator resolved" on exactly this #mb-race click.
+  await clickLive(page, "mb-race");
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-car").click();
+  await clickLive(page, "sel-car");
   await waitGarageSheet(page);
   await freeBuildOff(page);
   // `draw` opts BACK IN to the render loop. The garage draws a live turntable
@@ -70,9 +74,10 @@ async function pickOpt(page, catId, optId) {
 }
 
 async function reopenSetup(page) {
-  await page.locator("#mb-race").click();
+  // DOM clicks, for the reason given in openSetup().
+  await clickLive(page, "mb-race");
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-car").click();
+  await clickLive(page, "sel-car");
   await waitGarageSheet(page);
   // FREE BUILD ships ON (unlimitedBudget default true). openSetup turns it
   // off; a reload re-reads the default unless the store kept false — and the

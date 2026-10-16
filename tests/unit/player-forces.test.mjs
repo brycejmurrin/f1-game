@@ -22,7 +22,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const DT = 1 / 60;
 
-function load() {
+function load(legacyRearCue = false) {
   const ctx = vm.createContext({
     Math, JSON, Object, Array, Number, isNaN, isFinite, console,
   });
@@ -42,7 +42,9 @@ function load() {
     "js/physics/tyre-model.js",
     "js/physics/player-forces.js",
   ]) {
-    vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
+    let source = fs.readFileSync(path.join(ROOT, f), "utf8");
+    if (legacyRearCue && f.endsWith("player-forces.js")) source = source.replace("pastF = sat / TyreModel.CURVE_PEAK_X_F;", "pastF = sat / TyreModel.CURVE_PEAK_X;");
+    vm.runInContext(source, ctx, { filename: f });
   }
   return {
     ctx,
@@ -209,4 +211,52 @@ test("NaN driverDelta or non-finite dt must not poison car state", () => {
   assert.equal(cSkip.vLat, before.vLat, "non-finite dt must skip the integrate");
   assert.equal(cSkip.yawRateCur, before.yawRateCur);
   assert.equal(cSkip.head, before.head);
+});
+
+test('coach telemetry records the applied wake loss and assistance without changing forces', () => {
+  const { PlayerForces, TyreModel, PhysicsConsts: P } = load();
+  const api = PlayerForces.create({ PLAYER_GRIP: 1.15, FRONT_GRIP: .94, DRIFT: 0, YAW_INERTIA: .58, YAW_DAMP: 1 });
+  const tyres = TyreModel.create({ raceTyreWear: 'off', store: { get: () => 'off', set() {} } });
+  const ctx = { dt: DT, driverDelta: .05, assistDelta: .02, lineDelta: 0, onThrottle: true, throttleLvl: .5,
+    gearMult: 1, deploy: 0, braking: false, surfaceMu: 1, kerbGrip: 1, bankMu: 1, modsCornering: 1,
+    loadF: P.FRONT_WEIGHT, loadR: 1 - P.FRONT_WEIGHT, vertLoad: 0, af: (1 - P.FRONT_WEIGHT) * 3.2,
+    ar: P.FRONT_WEIGHT * 3.2, sp: 1, steer: .2, weatherGrip: 1, aeroDf: 1, dirtyMul: .9,
+    coastCut: 0, vTopNow: 72, tyres };
+  const car = { human: true, isPlayer: false, speed: 40, axEstSm: 0, aeroX: 0, wake: .8,
+    vLat: 0, yawRateCur: 0, head: 0, brakeStab: 1, rearUtil: 0, brakeBias: null, rollBalance: .5,
+    lateralAccel: 0, offroad: false, tread: 0, flatSpot: 0 };
+  api.step(car, ctx);
+  assert.equal(car._dirtyAirMul, .9); assert.equal(car._coachAssisted, true);
+  const grip = car._aeroGrip;
+  ctx.dirtyMul = 1; ctx.assistDelta = 0; api.step(car, ctx);
+  assert.equal(car._dirtyAirMul, 1); assert.equal(car._coachAssisted, false);
+  assert.ok(Math.abs(grip - (1 + P.DOWNFORCE * (40 / 72) ** 2) * .9) < 1e-12, 'telemetry is the multiplier actually used');
+});
+
+
+test("rear cue compares each axle to its own edge without changing any force integration", () => {
+  function run(driverDelta, legacy, modsBraking = 1) {
+    const { ctx, PlayerForces, PhysicsConsts: pc } = load(legacy), events = [];
+    ctx.Input.rumble = (...args) => events.push(args);
+    const car = { human: true, isPlayer: true, speed: 40, axEstSm: 0, aeroX: 0, wake: 0, vLat: 9.8, yawRateCur: 0, head: 0, brakeStab: 1, rearUtil: 0, brakeBias: .56, rollBalance: .5, lateralAccel: 0, offroad: false, tread: 0, flatSpot: 0 };
+    PlayerForces.create({ PLAYER_GRIP: 1.15, FRONT_GRIP: .94, DRIFT: 0, YAW_INERTIA: .58, YAW_DAMP: 1 }).step(car, {
+      dt: DT, driverDelta, assistDelta: 0, lineDelta: 0, onThrottle: false, throttleLvl: 0, gearMult: 1, deploy: 0, braking: false,
+      surfaceMu: 1, kerbGrip: 1, bankMu: 1, modsCornering: 1, modsBraking, loadF: pc.FRONT_WEIGHT, loadR: 1 - pc.FRONT_WEIGHT,
+      vertLoad: 0, af: 3.2 * (1 - pc.FRONT_WEIGHT), ar: 3.2 * pc.FRONT_WEIGHT, sp: 1, steer: .5,
+      weatherGrip: 1, aeroDf: 1, dirtyMul: 1, coastCut: 0, vTopNow: 72, tyres: { gripMul: () => 1, axleSplit: () => ({ f: 1, r: 1 }) },
+    });
+    return { events: events.filter((e) => e[2] === "throttle"), force: [car.forceFront, car.forceRear, car.yawRateCur, car.vLat, car.head], car };
+  }
+  const old = run(.08, true), corrected = run(.08, false);
+  assert.equal(old.events.length, 1, "counterexample exercised the old rear cue");
+  assert.equal(corrected.events.length, 0, "front further beyond its own peak must not trigger the rear discriminator");
+  assert.deepEqual(corrected.force, old.force, "feedback correction changes no force or yaw number");
+  const rear = run(.16, false), oldRear = run(.16, true);
+  assert.equal(rear.events.length, 1, "genuine rear-dominant state retains the cue");
+  assert.deepEqual(rear.events, oldRear.events);
+  assert.deepEqual(rear.force, oldRear.force);
+  assert.equal(corrected.car._cueConditionGrip, 1, "read-only capacity telemetry is neutral in dry fresh conditions");
+  const weakBrakes = run(.16, false, .5);
+  assert.equal(weakBrakes.car._cueBraking, .5);
+  assert.deepEqual(weakBrakes.force, rear.force, "advisory braking-capacity field cannot feed forces");
 });

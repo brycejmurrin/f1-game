@@ -60,7 +60,8 @@ function bootEnsure(opts) {
             _stub: false,
             setEnabled() {}, setMusicVolume() {}, setSfxVolume() {},
             onInterrupted() {}, setCameraMix() {},
-            init() { bag.inits++; },
+            setRadioFocusDb(v) { bag.focusApplied = v; (bag.order ||= []).push("focus"); },
+            init() { bag.inits++; (bag.order ||= []).push("init"); },
           };
           queueMicrotask(() => node.onload());
         },
@@ -71,7 +72,7 @@ function bootEnsure(opts) {
   vm.runInContext(loader + "\n" + bundles + `
     globalThis.__ensure = LazyBundles.create({
       els, loadBackendScripts: ScriptLoader.create().load,
-      getContext: () => ({ store: { get: () => 0.5 }, soundOn: true, camMode: 0 }),
+      getContext: () => ({ store: { get: (k) => k === "radioFocusDb" ? (__bag.focus || 0) : 0.5 }, soundOn: true, camMode: 0 }),
       applyLightTuneIfReady() {},
       bindAgent() {}, createNetwork() { return { wire() {} }; },
       onAudioReady() { __bag.ready++; },
@@ -240,4 +241,16 @@ test("saved volRadio reaches G.radio when the real engine binds, before onAudioR
   assert.equal(radio.volume(), 0.15,
     "restoreOnEngine must apply apex26.volRadio before AudioPanel.init — engineer lines in the gap were loud");
   assert.equal(bag.radioApplied, 0.15);
+});
+
+
+test("lazy engine restores latest focus choice before context init and before native panel binding", async () => {
+  const bag = { ready: 0, yields: [], inits: 0, focus: 4, order: [] };
+  const ctx = bootEnsure({ bag, forbidRic: true, hasBeenActive: true });
+  const pending = ctx.__ensure(); bag.focus = 12;
+  await pending;
+  assert.equal(bag.focusApplied, 12, "choice changed during load reaches real engine");
+  assert.ok(bag.order.indexOf("focus") >= 0);
+  assert.ok(bag.order.indexOf("focus") < bag.order.indexOf("init"), "restore precedes first graph");
+  assert.equal(bag.ready, 1, "panel ready hook still completes once");
 });

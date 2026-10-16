@@ -331,11 +331,14 @@ const PhonePad = (function () {
     // signal — any close but the phone's own "peer" goodbye) gets the SAME code
     // hosted again for the room's own lifetime (nostr HOST_TIMEOUT_MS), and the
     // phone dials it again by itself. A private relay's one mailbox is not reusable.
-    let relink = false;
+    let relink = false, roomTiming = null;
+    const recoveryState = () => ({ phase, reconnecting: relink && ["preparing", "waiting", "connecting"].includes(phase), publicRelay: !deps.usingPrivateRelay(),
+      startedAt: roomTiming ? roomTiming.startedAt : null, deadlineAt: roomTiming ? roomTiming.deadlineAt : null });
+    function recoveryChanged() { if (ui.recovery) { try { ui.recovery(recoveryState()); } catch (e) { /* ui's problem */ } } }
     // A failed pairing takes its dead QR down and releases the pending
     // transport; the page's button stops reading STOP PAIRING (#2198).
     function failed(msg) {
-      phase = "failed"; say(msg, true);
+      phase = "failed"; roomTiming = null; recoveryChanged(); say(msg, true);
       dropRoom();
       if (!active && transport) { try { transport.close(); } catch (e) { /* never opened */ } }
       transport = null;
@@ -347,7 +350,7 @@ const PhonePad = (function () {
     function dropRoom() {
       token.cancelled = true;
       if (room && room.stop) { try { room.stop(); } catch (e) { /* already stopped */ } }
-      room = null;
+      room = null; roomTiming = null; recoveryChanged();
     }
     function cancel() {
       if (phase === "cancelled") return;
@@ -380,7 +383,7 @@ const PhonePad = (function () {
         let accepted = false;
         const roomOptions = {
           code, mine: invite.code, token,
-          onTick: () => { if (phase === "waiting") say("Waiting for your phone… (room code " + code + ")"); },
+          onTick: () => { recoveryChanged(); if (phase === "waiting") say(relink ? "Phone link lost — reconnecting. Use MAKE NEW CODE if needed." : "Waiting for your phone… (room code " + code + ")"); },
           onFail: (r) => {
             if (!r || r.error === "cancelled" || r.error === "stopped" || !["waiting", "connecting"].includes(phase)) return;
             if (r.advisory) { say(r.message, true); return; }
@@ -396,7 +399,12 @@ const PhonePad = (function () {
             say("Phone found — connecting…");
             const acc = await deps.acceptAnswer(transport, answer);
             if (phase !== "connecting") return;
-            if (!acc.ok) { accepted = false; phase = "waiting"; say(acc.message || "That answer could not be read.", true); return; }
+            if (!acc.ok) {
+              const msg = acc.message || "That answer could not be read.";
+              if (deps.usingPrivateRelay()) failed(msg);
+              else { accepted = false; phase = "waiting"; say(msg, true); }
+              return;
+            }
             active = link(transport, {
               hud: ui.hud || null,
               onOpen: () => {
@@ -435,9 +443,8 @@ const PhonePad = (function () {
           if (phase !== "waiting") return;
           if (got.ok) await roomOptions.onJoiner(null, got.payload);
           if (phase === "waiting") {
-            phase = "failed";
-            if (!got.ok) say(got.message || "Could not open a room — check the connection.", true);
-            dropRoom(); transport.close(); transport = null;
+            if (!got.ok) roomOptions.onFail(got);
+            else failed("Could not connect that phone — try a new code.");
           }
           return;
         }
@@ -451,6 +458,9 @@ const PhonePad = (function () {
           return;
         }
         room = sub;
+        roomTiming = Number.isFinite(sub.startedAt) && Number.isFinite(sub.deadlineAt) && sub.deadlineAt >= sub.startedAt
+          ? { startedAt: sub.startedAt, deadlineAt: sub.deadlineAt } : null;
+        recoveryChanged();
       } catch (e) {
         Log.warn("input", "phone pad host failed: " + ((e && e.message) || e));
         if (phase !== "cancelled") {
@@ -462,7 +472,7 @@ const PhonePad = (function () {
     };
     open();
 
-    return { cancel, state: () => ({ phase, code, stats: active ? active.stats() : null }) };
+    return { cancel, state: () => ({ phase, code, recovery: recoveryState(), stats: active ? active.stats() : null }) };
   }
 
   // ── phone: the transport-level half ──────────────────────────────────────
@@ -928,6 +938,7 @@ const PhonePad = (function () {
     }
     if (typeof document !== "undefined") document.addEventListener("visibilitychange", redialNow);
     function cancel() {
+      stopScan();
       stopRedial();
       const old = attempt; attempt = null;
       if (old) old.cancelled = true;
@@ -946,6 +957,7 @@ const PhonePad = (function () {
     async function connect(codeIn) {
       const isRedial = redialing; redialing = false;
       if (connecting || session) return { ok: false, error: "busy" };
+      stopScan();
       if (!isRedial) stopRedial();   // a CONNECT tap replaces any pending retry
       const incoming = pairingFromUrl(codeIn);
       if (incoming) { pairing = incoming; codeIn = incoming.code; if (dom.codeIn) dom.codeIn.value = codeIn; paintCodeInput(); }
@@ -989,7 +1001,7 @@ const PhonePad = (function () {
           // The handshake's own words are for two friends racing; here the
           // other end is the game on the big screen.
           say(why.error === "build_mismatch" ? "The game and this page are on different versions — reload both and try again."
-            : why.error === "expired" ? "The game is not offering that code any more — press STEER THIS GAME WITH A PHONE there for a new one."
+            : why.error === "expired" ? "The game is not offering that code any more — choose MAKE NEW CODE in its phone-controller settings."
             : why.message || "Could not reach the game. Make a new code there and try again.", true);
           try { transport.close(); } catch (e) { /* never opened */ }
           if (isRedial && why.error !== "build_mismatch") {
@@ -1059,20 +1071,26 @@ const PhonePad = (function () {
     // motion-sensor prompt rides the SCAN tap, because the code arrives later,
     // outside any gesture, and iOS asks only inside one.
     const Scan = deps.scan ? deps.scan() : (typeof NetScan !== "undefined" ? NetScan : null);
-    let scanner = null;
+    let scanner = null, scanGeneration = 0, scanPending = false;
     const showScan = (on) => {
       if (dom.scanBox) dom.scanBox.hidden = !on;
       if (dom.scan) dom.scan.textContent = on ? "CANCEL SCAN" : "SCAN QR CODE";
     };
-    function stopScan() { if (scanner) scanner.stop(); showScan(false); }
+    function stopScan() { scanGeneration++; scanPending = false; if (scanner) scanner.stop(); showScan(false); }
     async function scan() {
-      if (scanner && scanner.active()) { stopScan(); say("Type the room code the game shows, then CONNECT."); return { ok: false, error: "cancelled" }; }
+      if (scanPending || (scanner && scanner.active())) { stopScan(); say("Type the room code the game shows, then CONNECT."); return { ok: false, error: "cancelled" }; }
       if (connecting || session) return { ok: false, error: "busy" };
+      const generation = ++scanGeneration;
+      scanPending = true;
+      const current = () => generation === scanGeneration && !connecting && !session &&
+        !(typeof document !== "undefined" && document.hidden);
       await requestSensor();
+      if (!current()) { if (generation === scanGeneration) scanPending = false; return { ok: false, error: "cancelled" }; }
       scanner = scanner || Scan.create();
       showScan(true);
       say("Point the camera at the QR code on the game's screen.");
       const r = await scanner.start(dom.video, (text) => {
+        if (!current()) return;
         showScan(false);
         pairing = pairingFromUrl(text);
         paintCodeInput();
@@ -1080,6 +1098,8 @@ const PhonePad = (function () {
         if (dom.codeIn) dom.codeIn.value = code;
         connect(code);
       });
+      if (generation !== scanGeneration) return { ok: false, error: "cancelled" };
+      scanPending = false;
       if (!r.ok) {
         showScan(false);
         if (r.error !== "cancelled") say(String(r.message || "The camera did not start.").replace(/paste/g, "type"), true);

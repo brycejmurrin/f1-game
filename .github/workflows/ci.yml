@@ -136,13 +136,10 @@ run-name: "${{ (github.event_name == 'pull_request' && github.event.action == 'l
 # conflicted only in meaning, and nothing was running the suite that would have
 # said so. That is exactly the silent class this gate exists for.
 #
-# It is not added yet for one reason: golden images are environment-sensitive,
-# and those six were generated in a dev container. If GitHub's runner renders
-# even slightly differently — a font fallback, a SwiftShader build — the gate
-# goes permanently red and blocks every deploy, which is the failure this
-# workflow already caused once by another route. Add it by first running it on a
-# PR as a non-blocking step and comparing, not by putting it straight into
-# `needs:`.
+# It is now blocking on scheduled and manual runs. The runner and dev container
+# were measured as portable; a mismatch must fail the verdict so stale UI
+# goldens cannot remain green indefinitely. It remains excluded from Pages calls
+# because the release train uses live browser checks rather than dev-captured PNGs.
 
 on:
   # NO PUSH TRIGGER (2026-10-16, the CI/CD review #2333 finding 3). A topic
@@ -379,7 +376,11 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/2
+        # --bail (2026-10-16 CI jobs review): stop STARTING files after the first
+        # failure. A red shard ran a mean 5.9 min after its first failure; files
+        # already in flight finish and the log names each. The local
+        # `npm run test:tooling-fast` stays without it so an author sees every red.
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/2 --bail
       - name: Reused draft
         if: steps.reuse.outputs.reuse == 'true'
         run: echo "SKIPPED tooling A — draft fast-tier already green on this head SHA"
@@ -413,7 +414,7 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
         env:
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/2
+        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/2 --bail
       # RATCHETS, AUDIT, COVERAGE AND BEHIND-SHIP (moved from the `Structural
       # guards` aggregator 2026-10-15): the same tree and node_modules, no
       # second checkout + npm ci, and the aggregator needs no runner time.
@@ -525,7 +526,7 @@ jobs:
         # SIX SLICES (2026-09-30, #508). Pro plan (40 slots) made wall the cost
         # again: vm-a was last to finish in 42 of 56 runs. It now runs as two
         # shards (APEX_CIRCUIT_SHARD=i/2), game-vm-b is two time-balanced
-        # partitions, and vm-page / node-slow stand alone. The ≈ 3 min wall that
+        # partitions, and vm-page-a / vm-page-b / node-slow stand alone. The ≈ 3 min wall that
         # split promised no longer holds: vm-b1 and page are the floor now.
         # The slice names ("Pure-node unit suites (<slice>)") were the deploy
         # branch's REQUIRED CHECKS until 2026-10-15; `CI` alone is required
@@ -709,9 +710,14 @@ jobs:
               npm run test:garage-unit
               fi
               ;;
-            page)
-              if planned test:vm-page; then
-              npm run test:vm-page
+            page-a)
+              if planned test:vm-page-a; then
+              npm run test:vm-page-a
+              fi
+              ;;
+            page-b)
+              if planned test:vm-page-b; then
+              npm run test:vm-page-b
               fi
               ;;
             slow)
@@ -931,8 +937,8 @@ jobs:
           fetch-depth: 0
           filter: blob:none
       - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
-      # STATIC SUITE SLICE (no planner). Contiguous chunk i/N of the same
-      # test:sweeps list the filter just derived. Rewrites package.json's
+      # STATIC SUITE SLICE. Deterministic measured-time packing keeps expensive
+      # fleet checks off the same runner. Rewrites package.json's
       # script ON THE RUNNER ONLY so the pinned `run: npm run test:sweeps`
       # line (circuit-scope.test.mjs) still holds while each matrix leg owns
       # a disjoint slice. Union of the four slices == the committed list.
@@ -954,13 +960,14 @@ jobs:
             console.error("package.json test:sweeps names ZERO suites");
             process.exit(1);
           }
-          const start = Math.floor((shard - 1) * all.length / shards);
-          const end = Math.floor(shard * all.length / shards);
-          const slice = all.slice(start, end);
+          const { execFileSync } = require("child_process");
+          const plan = JSON.parse(execFileSync(process.execPath, [
+            "tools/ci/sweep-shards.mjs", "--shard", String(shard), "--shards", String(shards), "--json",
+          ], { encoding: "utf8" }));
+          const slice = plan.files;
           const temp = process.env.RUNNER_TEMP || ".";
           fs.writeFileSync(`${temp}/sweep-shard-slice.txt`, slice.length ? `${slice.join("\n")}\n` : "");
-          const last = end > start ? end - 1 : start;
-          console.log(`--- suite shard ${shard}of${shards}: ${slice.length}/${all.length} suites (indices ${start}..${last}) ---`);
+          console.log(`--- suite shard ${shard}of${shards}: ${slice.length}/${all.length} suites (~${plan.seconds}s measured) ---`);
           for (const s of slice) console.log(s);
           console.log("--------------------");
           pkg.scripts["test:sweeps"] = "node --test --test-concurrency=1" + (slice.length ? ` ${slice.join(" ")}` : "");
@@ -1128,13 +1135,14 @@ jobs:
     # its retry now meets this cap first: the job reads `cancelled`, which
     # ci-verdict.mjs fails exactly like `failure` — red either way, never green.
     timeout-minutes: ${{ (inputs.concurrency_key == '' && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule')) && 120 || 20 }}
-    # ONE LANE PER SHARD INDEX on pull requests (2026-10-15; same rule as the
-    # selected legs): ready PRs' smoke shards run one at a time fleet-wide and
-    # wait FIFO without a runner; the train / nightly / dispatch keep a group
-    # of their own.
-    concurrency:
-      group: ${{ (github.event_name == 'pull_request' && inputs.concurrency_key == '') && format('smoke-lane-{0}', matrix.shard) || format('smoke-run-{0}-{1}', github.run_id, matrix.shard) }}
-      queue: max
+    # NO JOB-LEVEL CONCURRENCY (2026-10-16, the 2026-10-16 CI/CD review
+    # note (#2333) finding 6). From 2026-10-15 to 10-16 every ready PR's single smoke shard
+    # shared ONE fleet-wide lane group, so a 2.6-minute job that
+    # never failed (0 of 452) waited p50 4.7 / p90 17.5 min behind other PRs'
+    # smoke and ended the critical path of 40 of 210 green ready runs. The
+    # selected legs keep their lanes (they are many per run); this is one job
+    # per run and the runner queue is the only wait it should pay. The
+    # workflow-level per-PR group still replaces a superseded run.
     # The ship filter is ONE job now, not one copy per shard. `needs:` alone does
     # not skip this job — it must still RUN and report, because pages.yml's
     # `deploy: needs: ci` reads the aggregate of the jobs that ran and a skipped
@@ -1474,14 +1482,15 @@ jobs:
     name: Renderer specs on a real GPU (macos-latest, Metal)
     needs: select
     # A job-level `if:` on a `needs:` output is fine HERE, where the sweeps
-    # comment forbids it, because this job is already outside the deploy gate
-    # (renderer-filter is skipped on the Pages call, so this is too). The
+    # comment forbids it, because the selector owns the path decision.
+    # Pages calls now run the filter against the live commit, so a release that
+    # changes renderer bytes also gets the Metal check before publication. The
     # "skipped reads as passed" hazard the sweeps avoid is about a job whose
     # verdict the deploy consumes; nothing consumes this one but the checks list.
     # Nightly, a dispatch that asked for it (`renderer_macos: true`), or a
     # ready PR whose filter said the diff touches the renderer. Never a
     # draft PR or a bare topic-branch push — see the filter's header.
-    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!inputs.concurrency_key && needs.select.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
+    if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (needs.select.outputs.renderer == 'true' && (inputs.concurrency_key != '' || github.event_name == 'schedule' || inputs.renderer_macos == true || (github.event_name == 'pull_request' && !github.event.pull_request.draft))) }}
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is
@@ -2065,17 +2074,20 @@ jobs:
       # fail-safing every PR into the full fleet until 2026-09-22.
       - name: Does this diff touch the renderer?
         id: renderer
-        if: ${{ !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft)) }}
+        if: ${{ inputs.concurrency_key != '' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && !github.event.pull_request.draft) }}
         env:
-          BEFORE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || (github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before) }}
           EVENT: ${{ github.event_name }}
+          CALLED: ${{ inputs.concurrency_key != '' }}
         run: |
           set -u
           run_all() { echo "renderer=true" >> "$GITHUB_OUTPUT"; echo "RUNNING RENDERER SPECS: $1"; exit 0; }
-          case "$EVENT" in
-            push|pull_request) ;;
-            *) run_all "event is '$EVENT', not a push/pull_request" ;;
-          esac
+          if [ "$CALLED" != true ]; then
+            case "$EVENT" in
+              push|pull_request) ;;
+              *) run_all "event is '$EVENT', not a push/pull_request" ;;
+            esac
+          fi
           # A PR diffs against the test commit's first parent (ci-pr-base.sh):
           # the event's base.sha lags one sync behind it.
           [ "$EVENT" = pull_request ] && BEFORE="$(bash tools/ci/ci-pr-base.sh "${BEFORE:-}")"
@@ -2356,9 +2368,8 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # THE GOLDEN-MENU TRIAL. NON-BLOCKING BY CONSTRUCTION — do not add it to any
-  # `needs:`, and do not remove `continue-on-error` without the comparison this
-  # job exists to produce.
+  # THE GOLDEN-MENU CHECK. Blocking on scheduled/manual runs: a mismatch is
+  # evidence that the committed UI baseline is stale or the runner changed.
   #
   # The header above already names `test:baseline` as the group that arguably
   # belongs in the gate and is not in it, and gives the reason: the six goldens
@@ -2374,8 +2385,7 @@ jobs:
   # tolerance (title-phone-landscape 49,499 on the runner vs 49,516 here;
   # garage-phone-landscape 10,318 vs 10,319). Three of the six have simply not
   # been re-blessed since the UI moved, and they fail in a fresh container too.
-  # So the way in is: RE-BLESS the six, keep this job non-blocking for a few
-  # more PRs to confirm they hold, then gate on it as a DOM identity gate.
+  # Its actual/diff artifact remains available for diagnosis when it fails.
   #
   # IT IS NOT A RENDERER GATE AND CANNOT BECOME ONE. The spec calls
   # __apex.headless(true) and hides #game before it shoots, so a dead render
@@ -2528,7 +2538,6 @@ jobs:
     # dispatch answer without a runner slot on every push while 200-290 jobs
     # queue (docs/notes/CI-CAPACITY-2026-09-29.md).
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
-    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

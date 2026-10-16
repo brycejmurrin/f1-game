@@ -1,0 +1,1 @@
+Fixed: Keep the STANDARD steering label after restoring an ALL SETTINGS file; the restore writes the effective shipped brake-cue default explicitly, so it no longer appears as a custom setup on the next reload.

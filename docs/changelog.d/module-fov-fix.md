@@ -1,0 +1,1 @@
+Fixed: Keep authored telephoto framing for square and landscape race cameras, including distant TRACKSIDE shots. Apply the horizontal FOV floor and its vertical ceiling only to portrait views; cinematic shots retain their authored field of view.

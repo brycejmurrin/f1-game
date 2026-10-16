@@ -8,6 +8,14 @@ restated. Tools are the `claude-code-remote` MCP: `send_message`,
 `unsubscribe_pr_activity`, `send_later`, `watch_url`. Users of this file: `steward`
 (`references/ownership.md`), `ci-watch`.
 
+## Contents
+
+- Authority (the rule everything else hangs on)
+- Messaging
+- PR subscription
+- Quota park
+- Claims
+
 ## Authority (the rule everything else hangs on)
 
 - Merge, auto-merge, draft-to-ready flips and any other outward or destructive
@@ -83,10 +91,20 @@ to merge or widen scope; merge conflict = `sync-pr.mjs`, never rebase;
 base recovered (the red was already on the ship tip) = say so, do not fix it;
 closed or merged = unsubscribe and send DONE.
 
+Owners watch their PR with `subscribe_pr_activity` and run no per-PR timer of their own beyond this safety net;
+before any sync they run `needs-sync.mjs`.
 Safety net: `send_later` first check-in about 50 min after a push, then about
 4 h; stop after 3 empty ones or on merge/close. `watch_url` is for non-PR
 external hooks only (a webhook that wakes the session); it ends with the
 session.
+
+## Quota park
+
+A session that hits the usage limit follows `worker.md` §Quota park: fleet
+block `blocked: quota until <reset>`, one `BLOCKED <PR> quota until <reset>`
+line to the parent (if the limit allows a send), no further replies, one
+`send_later` at the reset. A parent seeing that line does not poll or relaunch;
+it waits for the reset wake (#2381).
 
 ## Claims
 

@@ -11,9 +11,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { bootEditor, read, plain, ellipse, design } from "../helpers/editor-vm.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-const SCREEN_FILES = ["js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
@@ -792,6 +793,8 @@ test("FIX chips: only on rows TrackFixes can repair; FIX commits one UNDO entry 
   b.dom.dispatch(chipsIn(fixable[0], "FIX")[0], ev);
   assert.equal(ev.propagationStopped, true, "the chip's click stops at the chip (the row would refocus the canvas)");
   assert.deepEqual(plain(seen), [{ code: "length", built: true }], "apply(design, issue, the current verdict)");
+  assert.equal(b.D.state().undo, u0, "preview does not commit");
+  chipsIn(b.root, "APPLY REPAIR")[0].click();
   assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry");
   assert.deepEqual(plain(b.D.state().design.pts), plain(green.pts));
   assert.equal(msgText(b), "Fixed: lap stretched to 3.2 km — UNDO to revert");
@@ -825,6 +828,8 @@ test("FIX ALL runs fixAll(design, TrackValidate.check) and commits once, naming 
   const u0 = b.D.state().undo, f0 = fits;
   chipsIn(b.root, "FIX ALL")[0].click();
   assert.deepEqual(calls, [true], "handed the validator's own check");
+  assert.equal(b.D.state().undo, u0, "preview does not commit");
+  chipsIn(b.root, "APPLY REPAIR")[0].click();
   assert.equal(b.D.state().undo, u0 + 1, "one UNDO entry for the whole batch");
   assert.equal(b.D.state().sel, 0, "a start remedy selects the new point 0, as START HERE does");
   assert.equal(fits, f0 + 1, "a length remedy rescales the loop, so the view refits");
@@ -843,13 +848,28 @@ test("HOW TO: a third tab lists every HOWTO step, every input and the limits; th
   const tabs = walk(b.root).filter((e) => e.classList.contains("td-tab"));
   assert.deepEqual(tabs.map((t) => t.textContent), ["DESIGN", "MY CIRCUITS", "HOW TO"]);
   for (const t of tabs) assert.equal(t.getAttribute("role"), "tab");
+  assert.equal(b.root.querySelector('[role="tablist"]').getAttribute("aria-label"), "Track Designer workspace");
+  assert.deepEqual(tabs.map((t) => t.getAttribute("aria-controls")), ["td-pane-design", "td-pane-library", "td-pane-howto"]);
+  assert.deepEqual(tabs.map((t) => t.tabIndex), [0, -1, -1]);
   const [design, lib, how] = panes(b);
   assert.equal(how.dataset.pane, "howto"); assert.equal(how.getAttribute("role"), "tabpanel");
+  assert.deepEqual([design.getAttribute("aria-labelledby"), lib.getAttribute("aria-labelledby"), how.getAttribute("aria-labelledby")],
+    [tabs[0].id, tabs[1].id, tabs[2].id]);
   assert.equal(how.hidden, true);
   tabs[2].click();
   assert.deepEqual([design.hidden, lib.hidden, how.hidden], [true, true, false]);
   assert.deepEqual(tabs.map((t) => t.getAttribute("aria-selected")), ["false", "false", "true"]);
+  assert.deepEqual(tabs.map((t) => t.tabIndex), [-1, -1, 0]);
   assert.equal(b.root.dataset.pane, "howto", "phone layout can give the guide its own space");
+  tabs[2].focus();
+  const left = { type: "keydown", key: "ArrowLeft", preventDefault() {}, stopPropagation() {} };
+  b.dom.dispatch(tabs[2], left);
+  assert.equal(b.root.dataset.pane, "library", "ArrowLeft activates the previous designer tab");
+  assert.equal(b.dom.document.activeElement, tabs[1], "tab focus follows activation");
+  const home = { type: "keydown", key: "Home", preventDefault() {}, stopPropagation() {} };
+  b.dom.dispatch(tabs[1], home);
+  assert.equal(b.root.dataset.pane, "design", "Home activates the first designer tab");
+  assert.equal(b.dom.document.activeElement, tabs[0]);
   const H = b.D.HOWTO;
   const tasks = walk(how).filter(e => e.dataset.helpTask);
   assert.deepEqual(tasks.map(e => e.dataset.helpTask), ["selection", "height", "scenery"]);
@@ -1690,7 +1710,8 @@ test("TEST HERE: saves, arms the return, starts a TIME TRIAL on the circuit, dro
   assert.equal(b.G.state, "race");
   assert.equal(b.G.player.s, sTest, "…onto the armed point, not the grid");
   assert.equal(b.G.player.speed, 0);
-  assert.match(read("js/game.js"), /request\.then\(\(r\) => \{ if \(r !== false\) CustomTracks\.afterStart\(\); \}/, "game.js startRace tells CustomTracks a countdown began");
+  assert.match(gameSource(), /request\.outcome\.then\(\(r\) => \{ if \(r\.kind === "committed" && sessionEntry\.owns\(r\)\) CustomTracks\.afterStart\(\); \}/,
+    "game.js starts the custom-track handoff only for its owning committed session");
   // The way back: armed, so quitting reopens the designer on the same point.
   b.D.load(Object.assign({}, b.D.state().design), "library", id);   // as if something reset the selection
   b.D.close();
@@ -2386,6 +2407,8 @@ test("MY CIRCUITS collection controls import atomically and leave the working dr
   assert.deepEqual(walk(b.root).find((e) => e.dataset.role === "library-files").children.map((e) => e.textContent), ["RECOVER PREVIOUS DRAFT", "EXPORT ALL", "IMPORT LIBRARY"]);
   const draft = plain(b.D.state().design), envelope = { format: b.C.COLLECTION_FORMAT, v: 1, items: [draft] };
   assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify(envelope) }), true);
+  assert.match(msgText(b), /Nothing imported yet/); assert.equal(b.C.list().length, 0);
+  assert.equal(b.D.commitLibraryImport(), true);
   assert.match(msgText(b), /Imported 1 circuits/); assert.equal(b.C.list().length, 1);
   assert.deepEqual(plain(b.D.state().design), draft);
   b.ctx.Blob = Blob;
@@ -2395,13 +2418,15 @@ test("MY CIRCUITS collection controls import atomically and leave the working dr
   assert.equal(exported.name, "apex26-circuits.apextracks.json");
   assert.equal(exported.data.format, b.C.COLLECTION_FORMAT); assert.equal(exported.data.items.length, 1);
   assert.equal(await b.D.loadFrom(JSON.stringify(envelope)), true);
+  assert.equal(b.D.commitLibraryImport(), true);
   assert.match(msgText(b), /Imported 0 circuits.*1 duplicates/);
   assert.equal(await b.D.importLibraryFile({ size: 1000, text: async () => JSON.stringify({ ...envelope, items: [draft, { pts: [] }] }) }), false);
   assert.match(msgText(b), /Circuit 2 failed validation.*Nothing imported/); assert.equal(b.C.list().length, 1);
   assert.equal(await b.D.importLibraryFile({ size: 2000000, text: async () => { throw new Error("must not read"); } }), false);
   assert.match(msgText(b), /too large/);
   b.ctx.GameStore.store.write = () => ({ ok: false, durable: false });
-  assert.equal(b.D.loadCollection({ ...envelope, items: [{ ...draft, seed: 17 }] }), false);
+  assert.equal(await b.D.loadCollection({ ...envelope, items: [{ ...draft, seed: 17 }] }), true);
+  assert.equal(b.D.commitLibraryImport(), false);
   assert.match(msgText(b), /Library storage write failed.*Nothing imported/);
   assert.equal(b.C.list().length, 1); assert.deepEqual(plain(b.D.state().design), draft);
   b.D.close();
@@ -2624,6 +2649,140 @@ test("newer imports and manual edits supersede pending decodes", async () => {
   const edited = b.D.loadFrom("edited"); b.D.setName("MANUAL");
   completions.get("edited")({ ok: true, design: design({ name: "STALE" }) }); assert.equal(await edited, false);
   assert.equal(b.D.state().design.name, "MANUAL"); b.D.close();
+});
+
+
+const followupText = (node) => [node, ...walk(node)].map(e => e.textContent || "").join(" ");
+
+test("designer tabs link panels and use one tab stop with wrapping arrows, Home and End", () => {
+  const b = bootScreen(); openGreen(b);
+  const tabs = walk(b.root).filter(e => e.classList.contains("td-tab"));
+  for(const t of tabs) {
+    const panel = walk(b.root).find(e => e.id === t.getAttribute("aria-controls"));
+    assert.ok(panel); assert.equal(panel.getAttribute("aria-labelledby"), t.id);
+  }
+  assert.deepEqual(tabs.map(t => t.tabIndex), [0,-1,-1]);
+  const key = (t,k) => b.dom.dispatch(t,{type:"keydown",key:k,preventDefault(){}});
+  key(tabs[0],"ArrowLeft"); assert.equal(b.dom.document.activeElement,tabs[2]);
+  assert.deepEqual(tabs.map(t => t.tabIndex), [-1,-1,0]);
+  key(tabs[2],"Home"); assert.equal(b.dom.document.activeElement,tabs[0]);
+  key(tabs[0],"End"); assert.equal(b.dom.document.activeElement,tabs[2]);
+  key(tabs[2],"ArrowRight"); assert.equal(b.dom.document.activeElement,tabs[0]);
+  tabs[1].click(); assert.deepEqual(tabs.map(t => t.tabIndex), [-1,0,-1]);
+  b.D.close();
+});
+
+test("imported clearance and copy/move destination labels match effective placement", () => {
+  const b = bootScreen(), d = openGreen(b); d.props = [{kind:"stand",s:0.2,side:1,gap:0}]; b.D.load(d); b.D.setMode("scenery");
+  const list = walk(b.root).find(e=>e.dataset.role==="object-list"); assert.match(followupText(list),/14 m \(stored 0 m\)/);
+  b.root.querySelector('[aria-label="Edit placed stand 1"]').click();
+  const move = chipsIn(b.root,"MOVE · SELECT DESTINATION")[0], copy = chipsIn(b.root,"COPY · SELECT DESTINATION")[0];
+  assert.equal(move.disabled,true); assert.equal(copy.disabled,true); const u=b.D.state().undo;
+  assert.equal(b.D.copyPropAt(0),false); assert.equal(b.D.state().undo,u);
+  b.D.selectRange(3); assert.equal(move.textContent,"MOVE TO POINT 4"); assert.equal(copy.getAttribute("aria-label"),"COPY TO POINT 4");
+  assert.equal(move.disabled,false); assert.equal(copy.disabled,false); b.D.close();
+});
+
+test("recipe preview/cancel preserve history; whole mixed recipe applies and undoes once", () => {
+  const b = bootScreen(); const d = openGreen(b); b.D.setMode("scenery"); b.D.selectRange(3,8);
+  const u = b.D.state().undo; chipsIn(b.root,"PREVIEW MARSHAL + CAMERA")[0].click();
+  assert.equal(b.D.state().undo,u); assert.deepEqual(plain(b.D.state().design),d);
+  assert.match(followupText(walk(b.root).find(e=>e.dataset.role==="scenery-recipes")),/2 objects/);
+  chipsIn(b.root,"CANCEL RECIPE")[0].click(); assert.equal(b.D.state().undo,u);
+  chipsIn(b.root,"PREVIEW MARSHAL + CAMERA")[0].click(); chipsIn(b.root,"APPLY RECIPE")[0].click();
+  assert.deepEqual(plain(b.D.state().design.props.map(p=>p.kind)),["marshal","camera"]); assert.equal(b.D.state().undo,u+1);
+  b.D.undo(); assert.deepEqual(plain(b.D.state().design),d);
+  b.D.selectRange(3,8); chipsIn(b.root,"PREVIEW HEDGE SECTION")[0].click(); chipsIn(b.root,"APPLY RECIPE")[0].click();
+  assert.equal(b.D.state().design.props.length,3); assert.equal(b.D.state().undo,u+1); b.D.undo(); b.D.close();
+});
+
+test("repair comparison cancels without edits and refuses a changed base before apply", () => {
+  const b=bootScreen(); let green;
+  b.ctx.TrackFixes={canFix:it=>it.code==="length",apply:d=>({design:{...d,pts:green.pts},msg:"length"}),fixAll:()=>null};
+  green=shortLoop(b); const d=plain(b.D.state().design),u=b.D.state().undo;
+  const preview=()=>chipsIn(b.root.querySelector('[aria-label="Design checks"]'),"FIX")[0].click();
+  preview(); const panel=walk(b.root).find(e=>e.dataset.role==="repair-preview");
+  assert.equal(panel.hidden,false); assert.match(followupText(panel),/CURRENT · BLOCKED/); assert.match(followupText(panel),/PROPOSED · PASS/);
+  chipsIn(b.root,"CANCEL REPAIR")[0].click(); assert.deepEqual(plain(b.D.state().design),d); assert.equal(b.D.state().undo,u);
+  preview(); b.D.setName("Changed"); chipsIn(b.root,"APPLY REPAIR")[0].click();
+  assert.equal(b.D.state().undo,u); assert.equal(b.D.state().design.name,"CHANGED"); assert.match(followupText(panel),/Design changed/); b.D.close();
+});
+
+test("Spa corner memory cards highlight three apexes and reveal labels without authoring edits", () => {
+  const b=bootScreen(); const d=openGreen(b),u=b.D.state().undo,sel=b.D.state().sel;
+  chipsIn(b.root,"SPA CORNER MEMORY")[0].click(); const panel=walk(b.root).find(e=>e.dataset.role==="corner-memory");
+  assert.equal(walk(panel).filter(e=>e.tagName==="CANVAS").length,3);
+  assert.match(followupText(panel),/T1/); chipsIn(panel,"HIDE LABEL")[0].click();
+  assert.match(followupText(panel),/Recall this turn/); chipsIn(panel,"REVEAL LABEL")[0].click(); assert.match(followupText(panel),/T1/);
+  assert.deepEqual(plain(b.D.state().design),d); assert.equal(b.D.state().undo,u); assert.equal(b.D.state().sel,sel); b.D.close();
+});
+
+
+test("CARD keeps its outline facts name link and native title on one pre-compression snapshot", async () => {
+  const b = bootScreen(); openGreen(b, 11);
+  const texts = [], canvases = []; recordingCanvas(b, texts, canvases);
+  const original = plain(b.D.state().design), encoded = b.ctx.TrackCodec.encode;
+  let release, started;
+  b.ctx.TrackCodec = { ...b.ctx.TrackCodec, encode: (d) => { started = plain(d); return new Promise((resolve) => { release = async () => resolve(await encoded(d)); }); } };
+  const pending = b.D.cardCanvas();
+  b.D.setName("Changed after click"); b.D.setTheme("oasis"); b.D.preview();
+  assert.ok(release); await release(); const card = await pending;
+  assert.equal(card.title, original.name); assert.ok(texts.includes(original.name)); assert.ok(!texts.includes("CHANGED AFTER CLICK"));
+  assert.match(card.name, new RegExp(original.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")));
+  const decoded = await b.ctx.TrackCodec.decode(b.ctx.TrackCodec.fromHash(card.url.slice(card.url.indexOf("#"))));
+  assert.equal(decoded.design.name, original.name); assert.equal(decoded.design.theme, original.theme);
+  assert.deepEqual(started, original);
+  b.D.close();
+});
+
+test("library review is cancellable mid-preflight and on close, and stale approval never writes", async () => {
+  const b = bootScreen(); openGreen(b); const draft = plain(b.D.state().design);
+  const env = { format: b.C.COLLECTION_FORMAT, v: 1, items: [draft, { ...draft, seed: 19 }] };
+  const pending = b.D.loadCollection(env); b.D.cancelLibraryImport(true);
+  assert.equal(await pending, false); assert.equal(b.C.list().length, 0);
+  assert.equal(await b.D.loadCollection(env), true);
+  assert.equal(b.C.list().length, 0, "review makes no write");
+  b.C.upsert({ ...draft, seed: 21 });
+  assert.equal(b.D.commitLibraryImport(), false); assert.match(msgText(b), /changed.*Nothing imported/);
+  assert.equal(b.C.list().length, 1);
+  const closing = b.D.loadCollection(env); b.D.close();
+  assert.equal(await closing, false); assert.equal(b.C.list().length, 1);
+});
+
+
+test("native CARD share title remains captured when the design changes during PNG encoding", async () => {
+  const b = bootScreen(); openGreen(b); const name = b.D.state().design.name;
+  const create = b.dom.document.createElement; let finishPng;
+  b.dom.document.createElement = (tag) => {
+    const e = create(tag);
+    if (tag === "canvas") e.toBlob = (done) => { finishPng = () => done(new Blob(["PNG"], { type: "image/png" })); };
+    return e;
+  };
+  b.ctx.File = File; let shared;
+  b.ctx.navigator = { canShare: () => true, share: async (d) => { shared = d; } };
+  const pending = b.D.shareCard();
+  for (let i = 0; i < 40 && !finishPng; i++) await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(typeof finishPng, "function");
+  b.D.setName("Different after PNG"); finishPng();
+  assert.equal(await pending, true); assert.equal(shared.title, name);
+  assert.equal((await b.CD.decode(b.CD.fromHash(shared.text.slice(shared.text.indexOf("#"))))).design.name, name);
+  b.D.close();
+});
+
+
+test("close cancels pending single-file and decoded imports without blocking a new closed API load", async () => {
+  for (const path of ["file","decode"]) {
+    const b=bootScreen();b.D.init(b.G,{custom:b.C,root:b.root});b.D.open();b.D.load(design({name:"ORIGINAL"}));
+    let finish;const gate=new Promise(resolve=>{finish=resolve;});let pending;
+    if(path==="file")pending=b.D.importFile({size:100,text:()=>gate});
+    else {b.ctx.TrackCodec={...b.ctx.TrackCodec,decode:()=>gate};pending=b.D.loadFrom("held-code");}
+    b.D.close();const before=JSON.stringify(b.D.state().design),draft=JSON.stringify(b.C.draft());
+    finish(path==="file"?JSON.stringify({format:"apex26.track",v:1,design:design({name:"LATE"})}):{ok:true,design:design({name:"LATE"})});
+    assert.equal(await pending,false,path+" loses ownership on close");
+    assert.equal(JSON.stringify(b.D.state().design),before);assert.equal(JSON.stringify(b.C.draft()),draft);assert.equal(b.D.isOpen(),false);
+    assert.equal(await b.D.loadFrom(JSON.stringify({format:"apex26.track",v:1,design:design({name:"EXPLICIT CLOSED"})})),true,"a new intentional closed API import remains supported");
+    assert.equal(b.D.state().design.name,"EXPLICIT CLOSED");assert.equal(b.D.isOpen(),false);
+  }
 });
 
 test("mode workspaces show only their own controls and navigation never edits the circuit", () => {

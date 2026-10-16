@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { makeDom } from "../helpers/mini-dom.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -145,4 +146,100 @@ test("touch INPUTS home clears PAUSE/CAM like #hud-limits (not through the secto
   const pauseStack = /\(8px \+ var\(--tap-hud\) \+ 4px \+ var\(--sat\)\) \/ var\(--hud-z\)/;
   assert.match(limTop[1], pauseStack, "limits pin (control)");
   assert.match(top[1], pauseStack, "inputs must share limits' pause/cam stack");
+});
+
+
+test("input history starts fresh after every suppressed mode, off, player change and session reset", () => {
+  const d = fakeDom(), modes = new Set(); let on = true;
+  d.doc.body.classList.contains = (s) => modes.has(s);
+  const I = load({document:d.doc,window:d.win,HudElements:{isOn:()=>on}});
+  let p = {throttleDemand:1,brakeDemand:0,steerCommand:0.5,gear:4,lap:2};
+  for (const mode of ["hud-prof-minimal","hud-bcam","bc-on"]) {
+    for(let i=0;i<90;i++)I.frame({},p,1000/30);
+    modes.add(mode);for(let i=0;i<120;i++)I.frame({},p,1000/30);
+    assert.equal(I.trace.count,0);modes.clear();p.throttleDemand=0;I.frame({},p,1000/30);
+    assert.deepEqual(Array.from(I.snapshot().samples,(x)=>x.throttle),[0]);p.throttleDemand=1;
+  }
+  on=false;I.frame({},p,1000/30);assert.equal(I.trace.count,0);
+  on=true;I.frame({},p,1000/30);p={...p,throttleDemand:0};I.frame({},p,1000/30);
+  assert.deepEqual(Array.from(I.snapshot().samples,(x)=>x.throttle),[0]);
+  I.reset();assert.equal(I.snapshot().samples.length,0);assert.equal(I.snapshot().gear,null);
+  I.frame({},p,1000/30);I.frame({},p,4000);assert.equal(I.snapshot().samples.length,1,"hitch starts a fresh window");
+});
+
+test("pause review mounts empty, snapshots bounded detached data, and never samples or writes driving", () => {
+  const d=fakeDom(), dom=makeDom();let on=false;
+  const host=dom.document.createElement("div");dom.body.append(host);
+  d.doc.querySelector=()=>host;
+  d.doc.createElement=(tag)=>{const el=dom.document.createElement(tag);if(tag==="canvas")el.getContext=()=>new Proxy({},{get:()=>()=>{},set:()=>true});return el;};
+  const I=load({document:d.doc,window:d.win,HudElements:{isOn:()=>on}});
+  assert.equal(I.mountReview(),true);assert.equal(I.mountReview(),true);assert.equal(host.children.length,1);
+  const fold=host.children[0], note=fold.children[1],canvas=fold.children[2];
+  assert.match(note.textContent,/Enable INPUTS/);assert.equal(canvas.hidden,true);
+  on=true;const p=Object.freeze({throttleDemand:0.6,brakeDemand:0.2,steerCommand:-0.4,gear:3,lap:5});
+  for(let i=0;i<120;i++)I.frame({},p,1000/30);
+  const before=JSON.stringify(I.snapshot()), data=I.snapshot();
+  assert.equal(data.samples.length,90);assert.equal(data.gear,3);assert.equal(data.lap,5);
+  assert.equal(data.samples.at(-1).seconds,0);assert.ok(Math.abs(data.samples[0].seconds+89/30)<1e-9);
+  data.samples[0].throttle=99;assert.equal(JSON.stringify(I.snapshot()),before,"consumer cannot mutate live trace");
+  fold.open=true;dom.dispatch(fold,{type:"toggle"});
+  assert.equal(canvas.hidden,false);assert.match(note.textContent,/lap 5 · gear 3/);assert.match(note.textContent,/T: throttle · B: brake · S: steering/);
+  assert.equal(JSON.stringify(I.snapshot()),before,"review toggle does not sample or change capture");
+  const lookup=d.doc.getElementById;d.doc.getElementById=(id)=>id==="pausemenu"?{hidden:true}:lookup(id);
+  I.frame({},p,1000/30);assert.equal(fold.open,false,"resume closes the still review so reopening takes a fresh snapshot");
+  fold.open=true;dom.dispatch(fold,{type:"toggle"});
+  I.reset();assert.equal(fold.open,false);assert.equal(canvas.hidden,true);assert.match(note.textContent,/No continuous input samples/);
+});
+
+
+test("disabled and suppressed cleared history does not repaint review or rewrite visibility each frame", () => {
+  const d=fakeDom(),dom=makeDom(),host=dom.document.createElement("div");let on=false;const modes=new Set();
+  d.doc.body.classList.contains=(s)=>modes.has(s);d.doc.querySelector=()=>host;
+  d.doc.createElement=(tag)=>{const e=dom.document.createElement(tag);if(tag==="canvas")e.getContext=()=>new Proxy({},{get:()=>()=>{},set:()=>true});return e;};
+  const I=load({document:d.doc,window:d.win,HudElements:{isOn:()=>on}});I.mountReview();
+  const fold=host.children[0],note=fold.children[1],canvas=fold.children[2];let textWrites=0,hiddenWrites=0,rootWrites=0;
+  let text=note.textContent,hidden=canvas.hidden,rootHidden=d.root.hidden;
+  Object.defineProperty(note,"textContent",{configurable:true,get:()=>text,set:v=>{textWrites++;text=v;}});
+  Object.defineProperty(canvas,"hidden",{configurable:true,get:()=>hidden,set:v=>{hiddenWrites++;hidden=v;}});
+  Object.defineProperty(d.root,"hidden",{configurable:true,get:()=>rootHidden,set:v=>{rootWrites++;rootHidden=v;}});
+  const frame=()=>I.frame({}, {throttleDemand:1,gear:2,lap:1},1000/30);
+  for(let i=0;i<120;i++)frame();
+  assert.deepEqual([textWrites,hiddenWrites,rootWrites],[0,0,0],"shipped OFF adds no per-frame DOM work");
+  on=true;const p={throttleDemand:1,gear:2,lap:1};I.frame({},p,1000/30);fold.open=true;dom.dispatch(fold,{type:"toggle"});
+  modes.add("hud-prof-minimal");frame();const cleared=[textWrites,hiddenWrites,rootWrites];
+  assert.equal(canvas.hidden,true);assert.equal(fold.open,false);assert.equal(I.trace.count,0);
+  for(let i=0;i<120;i++)frame();I.reset();
+  assert.deepEqual([textWrites,hiddenWrites,rootWrites],cleared,"suppression and repeated session reset remain idempotent after clearing");
+});
+
+
+test("review draws in visible CSS pixels with readable text and bounded DPR, repainting only while open", () => {
+  const d=fakeDom(),dom=makeDom(),host=dom.document.createElement("div"),listeners={},transforms=[],fills=[];let font="";
+  d.doc.querySelector=()=>host;d.win.devicePixelRatio=4;d.win.addEventListener=(name,fn)=>{listeners[name]=fn;};
+  d.doc.createElement=(tag)=>{const e=dom.document.createElement(tag);if(tag==="canvas") {
+    Object.defineProperty(e,"clientWidth",{configurable:true,writable:true,value:320});
+    e.getContext=()=>new Proxy({setTransform:(...a)=>transforms.push(a),fillRect:(...a)=>fills.push(a)}, {get:(o,k)=>o[k]||(()=>{}),set:(o,k,v)=>{if(k==="font")font=v;o[k]=v;return true;}});
+  }return e;};
+  const I=load({document:d.doc,window:d.win,HudElements:{isOn:()=>true}});I.mountReview();
+  const p={throttleDemand:0.5,gear:3,lap:2};I.frame({},p,1000/30);
+  const fold=host.children[0],canvas=fold.children[2];fold.open=true;dom.dispatch(fold,{type:"toggle"});
+  assert.equal(canvas.width,960);assert.equal(canvas.height,540,"bitmap capped at3xDPR");
+  assert.deepEqual(transforms.at(-1),[3,0,0,3,0,0]);assert.deepEqual(fills.at(-1),[0,0,320,180],"drawing stays within320CSSpixels, not640scaleddown");
+  assert.equal(font,"16px sans-serif","text is16logicalCSSpixels beforeDPR transform");
+  canvas.clientWidth=400;listeners.resize();assert.equal(canvas.width,1200);assert.deepEqual(fills.at(-1),[0,0,400,180]);
+  fold.open=false;const count=transforms.length;listeners.resize();assert.equal(transforms.length,count,"closed review has no resize drawing");
+});
+
+
+test("review T B S legend occupies separated rows even when all channels coincide", () => {
+  const d=fakeDom(),dom=makeDom(),host=dom.document.createElement("div"),labels=[];
+  d.doc.querySelector=()=>host;
+  d.doc.createElement=(tag)=>{const e=dom.document.createElement(tag);if(tag==="canvas")e.getContext=()=>new Proxy({fillText:(text,x,y)=>labels.push({text,x,y})},{get:(o,k)=>o[k]||(()=>{}),set:(o,k,v)=>{o[k]=v;return true;}});return e;};
+  const I=load({document:d.doc,window:d.win,HudElements:{isOn:()=>true}});I.mountReview();
+  I.frame({}, {throttleDemand:0,brakeDemand:0,steerCommand:0,gear:1,lap:1},1000/30);
+  const fold=host.children[0];fold.open=true;dom.dispatch(fold,{type:"toggle"});
+  const legend=labels.filter(p=>["T","B","S"].includes(p.text));
+  assert.deepEqual(legend.map(p=>p.text),["T","B","S"]);
+  assert.equal(new Set(legend.map(p=>p.x)).size,1,"legend stays in reserved right column");
+  assert.ok(legend[1].y-legend[0].y>=20&&legend[2].y-legend[1].y>=20,"16px labels have separate readable rows at equal inputs");
 });

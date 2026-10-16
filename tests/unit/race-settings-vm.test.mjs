@@ -147,6 +147,32 @@ function sheet(o = {}) {
   return { G, rs, disk, at, start, starts: () => starts };
 }
 
+test("settings search reveals tyre wear without staging or normalizing the race draft and returns to search", () => {
+  const h = sheet({ state: "menu", raceLaps: 7, raceWeather: "storm", raceTimeOfDay: "night", raceChangeable: true });
+  const before = JSON.stringify([h.G.raceLaps, h.G.raceWeather, h.G.raceTimeOfDay, h.G.raceChangeable, h.G.wxArcPlan]);
+  let arrived = 0, returned = 0;
+  assert.equal(h.rs.openSettingSearch(() => returned++, () => arrived++), true);
+  assert.equal(arrived, 1);
+  assert.equal(h.G.$("pmsettings").hidden, true);
+  assert.equal(h.G.$("race-settings").hidden, false);
+  assert.equal(JSON.stringify([h.G.raceLaps, h.G.raceWeather, h.G.raceTimeOfDay, h.G.raceChangeable, h.G.wxArcPlan]), before);
+  assert.equal(h.disk.size, 0, "navigation writes no preferences");
+  h.G.$("rs-cancel").onclick();
+  assert.equal(returned, 1);
+  assert.equal(h.G.$("race-settings").hidden, true);
+  assert.equal(h.G.$("pmsettings").hidden, false);
+  assert.equal(h.at("spa"), 3, "ordinary entry still stages its normal draft");
+});
+
+test("settings search cannot reveal race preferences during a live, championship, TT or room session", () => {
+  for (const opts of [{ state: "race" }, { state: "menu", session: "tt" }, { state: "menu", flow: "career" }, { state: "menu", flow: "season" }]) {
+    const h = sheet(opts);
+    assert.equal(h.rs.openSettingSearch(() => assert.fail("unexpected return"), () => assert.fail("unexpected arrival")), false);
+  }
+  const h = sheet({ state: "menu" }); h.rs.setNetRoom(true);
+  assert.equal(h.rs.openSettingSearch(() => {}, () => assert.fail("unexpected arrival")), false);
+});
+
 test("REMEMBER LAST RACE SETUP: START with 10 / rain / night opens the next circuit the same way", () => {
   const h = sheet();
   assert.equal(h.at("spa"), 3, "nothing stored: the default");

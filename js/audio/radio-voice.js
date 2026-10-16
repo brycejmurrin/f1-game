@@ -282,9 +282,12 @@ var RadioVoice = (function () {
   }
 
   /** A live instance's shape, with every method a no-op. */
+  function stopBattleEarcons() {
+    if (typeof BattleEarcon !== "undefined" && BattleEarcon.stopAll) BattleEarcon.stopAll();
+  }
   function inert() {
     return Object.freeze({
-      say: () => false, sayPreRace: () => false, stop: () => {}, halt: () => {}, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
+      say: () => false, sayPreRace: () => false, stop: stopBattleEarcons, halt: stopBattleEarcons, unlock: () => {}, preview: () => false, pack: null, volume: () => 0,
       setPackOn: () => {}, packOn: () => false, prepare: () => {}, busy: () => false, yieldToSpotter: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       recordedVoice: (sp) => PACK_VOICE[sp], recordedPack: (sp) => PACK_VOICE[sp], recordedVoices: () => [], setRecordedVoice: () => false,
@@ -358,6 +361,7 @@ var RadioVoice = (function () {
      * outside. The audio panel prints the verdict; see js/audio/panel.js. */
     let asked = 0, started = 0;
     let lastSquelch = null, squelchOpenT = null, squelchCloseT = null;
+    let squelchEpoch = 0;   // a mute invalidates even a line still waiting for its speech task
     let noiseBuf = null, poolCtx = null, poolDest = null;
     const squelchPool = [];   // reused bandpass+gain; BufferSource is one-shot
     function stopSquelch(cut) {
@@ -411,6 +415,7 @@ var RadioVoice = (function () {
       }
     }
     function playBurst(band, durS) {
+      if (!(volume > 0)) return false;
       const ctx = audioCtx();
       if (!ctx || !band || !(durS > 0)) return false;
       if (ctx.state && ctx.state !== "running" && ctx.state !== "suspended") return false;
@@ -448,12 +453,13 @@ var RadioVoice = (function () {
       } catch (e) { return false; }
       return true;
     }
-    function fireSquelch(lane) {
-      if (!lastSquelch || lastSquelch.cut || !lastSquelch.play) return;
-      lastSquelch.fired.push(lane);
-      playBurst(lastSquelch.band, (lane === "open" ? lastSquelch.openMs : lastSquelch.closeMs) / 1000);
+    function fireSquelch(lane, q) {
+      if (!q || q !== lastSquelch || q.cut || !q.play || !(volume > 0)) return;
+      q.fired.push(lane);
+      playBurst(q.band, (lane === "open" ? q.openMs : q.closeMs) / 1000);
     }
     function armSquelch(p) {
+      if (p.squelchEpoch !== squelchEpoch || !(p.volume > 0)) return;
       stopSquelch(false);
       const q = squelchPlan({
         enabled, soundOn: !!G.soundOn, volume, speaker: p.speaker, kind: activeKind,
@@ -469,9 +475,15 @@ var RadioVoice = (function () {
       // Zero lead is the words starting NOW: fire the key-up in this task.
       // A nested setTimeout(0) after say()'s own deferral lost the race to a
       // 5 ms flush on a loaded CI box (Structural guards B / vm-b1 on #1739).
-      if (leadMs <= 0) fireSquelch("open");
-      else squelchOpenT = setTimeout(() => { squelchOpenT = null; fireSquelch("open"); }, leadMs);
-      squelchCloseT = setTimeout(() => { squelchCloseT = null; fireSquelch("close"); }, leadMs + q.atClose * 1000);
+      if (leadMs <= 0) fireSquelch("open", q);
+      else squelchOpenT = setTimeout(() => {
+        if (q !== lastSquelch) return;
+        squelchOpenT = null; fireSquelch("open", q);
+      }, leadMs);
+      squelchCloseT = setTimeout(() => {
+        if (q !== lastSquelch) return;
+        squelchCloseT = null; fireSquelch("close", q);
+      }, leadMs + q.atClose * 1000);
     }
     /* OFF THE FRAME. speechSynthesis calls are synchronous IPC to the platform
      * speech service, and on real desktops they can stall the main thread —
@@ -593,6 +605,7 @@ var RadioVoice = (function () {
      *  the garage, and the frozen card never ages out to stop them. It calls this. */
     function halt() { stop(); if (pack) pack.stop(); }
     function stop() {
+      stopBattleEarcons();
       stopVoice();
       // The hiss bed belongs to the line, so it goes when the line does —
       // the card-hidden and paused observers below are what stop a
@@ -601,6 +614,7 @@ var RadioVoice = (function () {
     }
     /** The words only: the hiss bed is the CARD's, and may already be the next one's. */
     function stopVoice() {
+      if (current && GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(false, current);
       previewGen++;
       clearPending();
       clearDeadline();
@@ -628,6 +642,7 @@ var RadioVoice = (function () {
       // hiss bed). Not the words' sting — that is already the new card's.
       if (!p.speak) { if (!preRace && (current || pending != null)) stopVoice(); return false; }
       p.preRace = !!preRace;   // speakPlanned re-checks the session at speak time
+      p.squelchEpoch = squelchEpoch;
       ensureVoices();
       stop();
       activeKind = kind || "race";
@@ -685,11 +700,13 @@ var RadioVoice = (function () {
         return false;
       }
       const u = new Utter(p.text);
+      const focusGen = GameAudio && GameAudio.ctxGen ? GameAudio.ctxGen() : null;
       u.voice = voiceFor(p.speaker, true);   // speakPlanned only ever carries a card line (say())
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
       // Only the LIVE line may release the duck and the deadline — see `current`.
       u.onend = u.onerror = () => {
         ours.delete(u);
+        if (GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(false, u);
         if (u !== current) return;
         current = null;
         clearDeadline();
@@ -702,7 +719,12 @@ var RadioVoice = (function () {
       // leave the music down with nothing speaking until the deadline healed it.
       // Down-then-up is also simply the right order for the ear.
       current = u;
-      u.onstart = () => { started++; };
+      u.onstart = () => {
+        started++;
+        if (u === current && p.squelchEpoch === squelchEpoch && enabled && G.soundOn && volume > 0 && u.volume > 0
+            && (!GameAudio.ctxGen || GameAudio.ctxGen() === focusGen)
+            && GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(true, u);
+      };
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       try {
         asked++;
@@ -710,6 +732,7 @@ var RadioVoice = (function () {
         timed("speak", () => synth.speak(u));
       } catch (e) {
         ours.delete(u);
+        if (GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(false, u);
         current = null;
         if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
         Log.info("audio", "RadioVoice speak failed");
@@ -864,6 +887,8 @@ var RadioVoice = (function () {
 
     return {
       say, stop, halt, unlock, preview,
+      previewGeneration: () => previewGen,
+      stopPreviewIfGeneration(generation) { if (generation !== previewGen) return false; stop(); return true; },
       /** THE PRE-RACE RADIO CHECK: one engineer line over the loading flyby's
        *  grid-mine shot. The same plan() as every race line — TEAM RADIO off,
        *  master sound off, or a line that will not fit its budget all refuse it
@@ -919,7 +944,14 @@ var RadioVoice = (function () {
         if (!["info", "coach", "comm"].includes(activeKind)) return false;
         stop(); return true;
       },
-      setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
+      setVolume(v) {
+        volume = Math.max(0, Math.min(1, +v || 0));
+        if (!volume) {
+          squelchEpoch++; stopSquelch(true);
+          if (current && GameAudio && GameAudio.setVoiceFocusHold) GameAudio.setVoiceFocusHold(false, current);
+        }
+        return volume;
+      },
       available: () => true,
       debug: () => ({ available: true, enabled, voices: voicesFor(false).length, voicesAny: voicesFor(true).length, last, asked, started,
         pack: pack ? Object.assign({ on: packOn }, pack.debug()) : null,

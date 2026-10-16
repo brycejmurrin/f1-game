@@ -94,10 +94,17 @@ test.describe("Track designer", () => {
     await page.evaluate(() => { for (const it of CustomTracks.list()) CustomTracks.remove(it.id); TrackDesigner.showPane("library"); });
     const draft = await page.evaluate(() => TrackDesigner.state().design);
     const file = page.locator('input[aria-label="Import a circuit library file"]');
+    // The file opens a REVIEW first; nothing is written until its IMPORT is pressed.
+    const apply = page.locator('#trackdesigner [data-role="library-import-apply"]');
     await file.setInputFiles({ name: "circuits.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(collection)) });
+    await expect(apply).toBeEnabled();
+    expect(await page.evaluate(() => CustomTracks.list().length), "the review makes no write").toBe(0);
+    await apply.click();
     await page.waitForFunction(() => CustomTracks.list().length === 1, null, { polling: 100, timeout: 5000 });
     expect(await page.evaluate(() => TrackDesigner.state().design)).toEqual(draft);
     await file.setInputFiles({ name: "duplicates.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(collection)) });
+    await expect(apply).toBeEnabled();
+    await apply.click();
     await expect(page.locator("#trackdesigner")).toContainText("1 duplicates kept unchanged");
     expect(await page.evaluate(() => CustomTracks.list().length)).toBe(1);
     await expect(page.getByRole("button", { name: "EXPORT ALL", exact: true })).toBeVisible();
@@ -113,6 +120,9 @@ test.describe("Track designer", () => {
     await openDesigner(page);
     // The dialog is named and modal: a <dialog> with the shell's heading as its label.
     await expect(page.locator("#trackdesigner")).toHaveAttribute("aria-labelledby", "td-title");
+    await expect(page.locator("#trackdesigner .td-tabs")).toHaveAttribute("aria-label", "Track Designer workspace");
+    await expect(page.locator("#trackdesigner .td-tab").first()).toHaveAttribute("aria-controls", "td-pane-design");
+    await expect(page.locator("#trackdesigner .td-pane[data-pane=design]")).toHaveAttribute("aria-labelledby", "td-tab-design");
     await expect(page.locator("#trackdesigner .td-tab").first()).toHaveAttribute("aria-selected", "true");
 
     const st = await randomiseGreen(page, 7);
@@ -593,6 +603,11 @@ test.describe("Track designer", () => {
     await page.locator('#trackdesigner [data-mode="test"]').click();
     await expect(fixAll).toBeVisible();
     await fixAll.click();
+    // FIX ALL previews the repair beside the current verdict; only APPLY REPAIR commits it.
+    const applyRepair = page.locator('#trackdesigner [data-role="repair-preview"] button', { hasText: /^APPLY REPAIR$/ });
+    await expect(applyRepair).toBeVisible();
+    expect((await page.evaluate(() => TrackDesigner.state())).undo, "the preview makes no edit").toBe(red.undo);
+    await applyRepair.click();
     await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
     const green = await page.evaluate(() => TrackDesigner.state());
     expect(green.red).toBe(0);

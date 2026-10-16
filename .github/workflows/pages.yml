@@ -387,6 +387,16 @@ jobs:
     permissions:
       issues: write
     steps:
+      # Recreate the exact stamped runtime tree from this deploy commit. The
+      # follow-up probe compares response bytes, not only version metadata.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Recreate the stamped runtime tree
+        env:
+          BUILD: ${{ needs.deploy.outputs.build }}
+        run: node tools/desktop/stage.mjs --out _site --stamp --at "$BUILD" --sha "$GITHUB_SHA"
       - name: Poll the live build and commit
         env:
           PAGE_URL: ${{ needs.deploy.outputs.page_url }}
@@ -423,6 +433,10 @@ jobs:
           done
           echo "::error::live version.json never reached build $BUILD with matching shell commit $GITHUB_SHA within 4 minutes"
           exit 1
+      - name: Verify published runtime bytes and lazy assets
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: node tools/ci/verify-live.mjs "$PAGE_URL" _site
       # A BROKEN-BUT-LIVE BUILD MUST NOT BE SILENT (2026-09-22). deploy-pages
       # succeeded, so the environment records a deployment and the CDN may be
       # serving anything; a red job at the bottom of a run nobody is watching

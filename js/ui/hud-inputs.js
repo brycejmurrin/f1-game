@@ -55,6 +55,8 @@ const HudInputs = (function () {
 
   const trace = createTrace(N);
   let acc = 0, drawT = 0, labelT = 0;
+  let sampledPlayer = null, sampledGear = null, sampledLap = null;
+  let review = null, reviewCanvas = null, reviewNote = null;
 
   // ---- the DOM ------------------------------------------------------------
   const doc = typeof document !== "undefined" ? document : null;
@@ -133,18 +135,88 @@ const HudInputs = (function () {
   }
   const pct = (v) => Math.round(clamp01(v) * 100);
 
+  /** Detached, bounded copy: consumers cannot mutate the live ring or car. */
+  function snapshot() {
+    const samples = [];
+    if (isOn()) for (let i = 0; i < trace.count; i++) samples.push({
+      seconds: (i - trace.count + 1) * STEP_S,
+      throttle: trace.get(trace.thr, i), brake: trace.get(trace.brk, i), steering: trace.get(trace.str, i),
+    });
+    return { stepS: STEP_S, durationS: Math.max(0, samples.length - 1) * STEP_S,
+      gear: samples.length ? sampledGear : null, lap: samples.length ? sampledLap : null, samples };
+  }
+  function paintReview() {
+    if (!reviewCanvas) return;
+    const data = snapshot(), samples = data.samples, c = reviewCanvas.getContext("2d");
+    reviewCanvas.hidden = !samples.length;
+    reviewNote.textContent = samples.length
+      ? "Last continuous " + data.durationS.toFixed(2) + " s · lap " + data.lap + " · gear " + (data.gear > 0 ? data.gear : "N") + ". T: throttle · B: brake · S: steering (+ right). Reading does not resume or change driving."
+      : "No continuous input samples. Enable INPUTS in Settings → Display → HUD and drive in Standard view, then pause to review.";
+    if (!c || !samples.length) return;
+    const w = reviewCanvas.clientWidth || 640, h = 180;
+    const dpr = Math.max(1, Math.min(3, win && win.devicePixelRatio || 1));
+    reviewCanvas.width = Math.round(w * dpr); reviewCanvas.height = Math.round(h * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const left = 36, right = w - 52, top = 28, bottom = h - 28;
+    c.clearRect(0, 0, w, h); c.fillStyle = "#10131b"; c.fillRect(0, 0, w, h);
+    c.font = "16px sans-serif"; c.textBaseline = "middle";
+    const y = (v, channel) => channel === "steering" ? (top + bottom) / 2 - Math.max(-1, Math.min(1,v)) * (bottom-top)/2 : bottom - clamp01(v) * (bottom-top);
+    for (const [channel,label,color,legendY] of [["throttle","T",C_THR,top],["brake","B",C_BRK,top+24],["steering","S",C_STR,top+48]]) {
+      c.strokeStyle = color; c.lineWidth = 2; c.beginPath();
+      samples.forEach((sample,i) => { const x = right + sample.seconds / WINDOW_S * (right-left), py = y(sample[channel],channel); if(i)c.lineTo(x,py);else c.moveTo(x,py); }); c.stroke();
+      c.fillStyle = color; c.fillText(label,right+12,legendY);
+    }
+    c.fillStyle = "#f1f3fa";
+    for (const seconds of [-3,-2,-1,0]) c.fillText(seconds + " s", right + seconds/WINDOW_S*(right-left)-12,h-10);
+    reviewCanvas.setAttribute("aria-label", reviewNote.textContent);
+  }
+  function mountReview() {
+    if (review || !doc || !doc.querySelector) return !!review;
+    const host = doc.querySelector("#pausemenu .sheet-body");
+    if (!host) return false;
+    review = doc.createElement("details"); review.className = "input-review";
+    const summary = doc.createElement("summary"); summary.className = "adv-more-btn"; summary.textContent = "REVIEW INPUTS";
+    reviewNote = doc.createElement("p"); reviewNote.className = "adv-help";
+    reviewCanvas = doc.createElement("canvas"); reviewCanvas.width = 640; reviewCanvas.height = 180; reviewCanvas.className = "input-review-canvas";
+    reviewCanvas.setAttribute("role","img");
+    review.append(summary,reviewNote,reviewCanvas);
+    review.addEventListener("toggle", () => { if (review.open) paintReview(); });
+    if (win && win.addEventListener) win.addEventListener("resize", () => { if (review.open) paintReview(); });
+    const quit = doc.getElementById("pm-quit"); host.insertBefore(review,quit && quit.parentElement === host ? quit : null);
+    paintReview(); return true;
+  }
+  function reset() {
+    const changed = trace.count || acc || drawT || labelT || sampledPlayer !== null
+      || sampledGear !== null || sampledLap !== null || lastGear !== null || review && review.open;
+    if (root && !root.hidden) root.hidden = true;
+    if (!changed) return;
+    trace.clear(); acc = drawT = labelT = 0;
+    sampledPlayer = null; sampledGear = sampledLap = lastGear = null;
+    if (review) { review.open = false; paintReview(); }
+  }
+
   /** js/ui/hud.js, every frame (above the HUD throttle). Reads only. */
   function frame(G, player, dtMs) {
-    if (!doc || !player) return;
+    if (!doc) return;
     if (!root && !bind()) return;
-    if (!isOn()) { if (!root.hidden) { root.hidden = true; trace.clear(); } return; }
+    // A resumed race closes the fold; the next explicit review gets a fresh
+    // snapshot, while an open pause menu keeps its still chart unchanged.
+    if (review && review.open) {
+      const pause = doc.getElementById("pausemenu");
+      if (pause && pause.hidden) review.open = false;
+    }
+    if (!player) { reset(); return; }
     const b = doc.body;
-    if (b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) return;
+    if (!isOn() || b && (b.classList.contains("hud-prof-minimal") || b.classList.contains("hud-bcam") || b.classList.contains("bc-on"))) {
+      reset(); return;
+    }
+    if (sampledPlayer !== player) { reset(); sampledPlayer = player; }
     if (root.hidden) root.hidden = false;
     const dt = Number.isFinite(dtMs) && dtMs > 0 ? dtMs / 1000 : 1 / 60;
     acc += dt;
     if (acc > WINDOW_S) { trace.clear(); acc = STEP_S; }   // a pause or a hitch: start a fresh window
     const thr = clamp01(player.throttleDemand || 0), brk = clamp01(player.brakeDemand || 0), str = player.steerCommand || 0;
+    sampledGear = player.gear || 0; sampledLap = player.lap || 1;
     while (acc >= STEP_S) { trace.push(thr, brk, str); acc -= STEP_S; }
     drawT -= dtMs > 0 ? dtMs : 16.7;
     if (drawT > 0) return;
@@ -161,5 +233,5 @@ const HudInputs = (function () {
     }
   }
 
-  return Object.freeze({ N, STEP_S, WINDOW_S, createTrace, levelY, steerY, frame, trace });
+  return Object.freeze({ N, STEP_S, WINDOW_S, createTrace, levelY, steerY, frame, trace, snapshot, reset, mountReview });
 })();

@@ -85,3 +85,103 @@ test("InputGhost open-loop pack replays identically under one seed", () => {
   // moves under identical inputs — at minimum the digest must be finite.
   assert.ok(JSON.parse(c).s > 10);
 });
+
+test("native TT fixed-tick tape captures lossless pedals, initial state and auxiliary edges without changing input authority", async () => {
+  const A = g.apex, G = g.G, IG = g.sandbox.InputGhost, I = g.sandbox.Input;
+  await A.tt("monza"); A.headless(true); A.reset(0.02, 55, 0, 919);
+  const names = ["steer", "throttle", "throttleLevel", "braking", "brakeLevel", "consumeBoostToggle", "consumeOvertake", "consumeAeroToggle", "consumeShiftUp", "consumeShiftDown"];
+  const saved = Object.fromEntries(names.map(k => [k, I[k]]));
+  let input = {};
+  Object.assign(I, { steer: () => input.steer || 0, throttle: () => !!input.throttle,
+    throttleLevel: () => input.throttleLevel || 0, braking: () => !!input.brake,
+    brakeLevel: () => input.brakeLevel || 0,
+    consumeBoostToggle: () => !!input.boost, consumeOvertake: () => !!input.overtake,
+    consumeAeroToggle: () => !!input.aeroToggle, consumeShiftUp: () => !!input.shiftUp,
+    consumeShiftDown: () => !!input.shiftDown });
+  const trace = () => JSON.stringify({ s: G.player.s, x: G.player.x, speed: G.player.speed,
+    head: G.player.head, gear: G.player.gear, energy: G.player.energy, aeroX: G.player.aeroX });
+  try {
+    A.clearInput();
+    IG.startLap({ seed: 919, physRev: IG.currentPhysRev(), build: IG.currentBuild(), dt: 1 / 60 });
+    const initialS = G.player.s;
+    const expected = [];
+    for (let i = 0; i < 60; i++) {
+      input = { steer: Math.sin(i / 17) * 0.017321, throttle: i < 40,
+        throttleLevel: 0.37123456, brake: i >= 40 && i < 50, brakeLevel: 0.21345678,
+        boost: i === 3 || i === 20, overtake: i === 7, shiftUp: i === 12 };
+      A.step(1 / 60); expected.push(trace());
+    }
+    assert.equal(IG.finishLap(1), true, "ordinary native TT must record a deterministic tape");
+    const tape = IG.snapshot(); assert.equal(tape.v, 3); assert.equal(IG.valid(tape), true);
+    assert.equal(tape.rawThrottle[0], 0.37123456); assert.equal(tape.rawBrake[40], 0.21345678);
+    assert.equal(tape.initialState.car.s, initialS);
+    assert.equal(tape.initialState.seed, 919); assert.ok(Number.isFinite(tape.initialState.rngState));
+    assert.ok(tape.context, "setup/physics/control configuration remains attached");
+    assert.equal(IG.beginReplay(), false, "auxiliary actions require explicit native adapter acknowledgement");
+    assert.equal(IG.beginReplay({ nativeControls: true }), true);
+    const controls = Array.from({ length: IG.steps() }, (_, i) => IG.atStep(i));
+    assert.equal(controls[7].overtake, true); assert.equal(controls[12].shiftUp, true);
+    A.reset(0.02, 55, 0, tape.initialState.seed);
+    Object.assign(G.player, tape.initialState.car);
+    G.simSeed(tape.initialState.seed, tape.initialState.rngState); G.raceT = tape.initialState.raceT;
+    A.clearInput();
+    const actual = [];
+    for (input of controls) { A.step(1 / 60); actual.push(trace()); }
+    assert.deepEqual(actual, expected, "native adapter replay must match every physical tick");
+    for (const bad of [NaN, Infinity, 2]) { const copy = JSON.parse(JSON.stringify(tape)); copy.rawSteer[0] = bad; assert.equal(IG.valid(copy), false); }
+    const bad = JSON.parse(JSON.stringify(tape)); bad.v = 99; assert.equal(IG.valid(bad), false);
+    bad.v = 3; bad.dt = 1000; assert.equal(IG.valid(bad), false, "duration bound");
+  } finally { Object.assign(I, saved); A.headless(false); }
+});
+
+test("native tape starts at the next fixed boundary after a lap crossing and settings changes spoil capture", async () => {
+  const A = g.apex, G = g.G, IG = g.sandbox.InputGhost, I = g.sandbox.Input;
+  await A.tt("monza"); A.headless(true); A.reset(0.999999, 55, 0, 929); A.clearInput();
+  const saved = { steer: I.steer, throttle: I.throttle, throttleLevel: I.throttleLevel, braking: I.braking, brakeLevel: I.brakeLevel };
+  Object.assign(I, { steer: () => 0, throttle: () => true, throttleLevel: () => 0.25, braking: () => false, brakeLevel: () => 0 });
+  try {
+    IG.startLap({ seed: 929, physRev: IG.currentPhysRev(), build: IG.currentBuild(), dt: 1 / 60 });
+    const oldLap = G.player.lap; A.step(1 / 60);
+    assert.ok(G.player.lap > oldLap, "fixture crosses timing line on its first fixed tick");
+    const nextStart = G.player.s;
+    A.step(1 / 60, 35);
+    assert.equal(IG.finishLap(0.5), true);
+    const tape = IG.snapshot(); assert.equal(tape.steer.length, 35, "crossing input belongs to the previous lap");
+    assert.equal(tape.initialState.car.s, nextStart);
+    const originalRecord = IG.record; let count = 0;
+    IG.record = (...args) => { count++; return originalRecord(...args); };
+    const pace = G.PACE;
+    try {
+      A.step(1 / 60); assert.equal(count, 1);
+      G.PACE = pace * 1.01; G.store.write("ghostCaptureProbe", 1);
+      A.step(1 / 60); assert.equal(count, 1, "configuration invalidation prevents input recording just like pose/board acceptance");
+    } finally { IG.record = originalRecord; G.PACE = pace; }
+    const broken = JSON.parse(JSON.stringify(tape)); delete broken.initialState;
+    assert.equal(IG.valid(broken), false, "v3 must carry a replay start");
+  } finally { Object.assign(I, saved); A.headless(false); }
+});
+
+test("real fixed-tick OT never drains on coast or current brake and toggles off without a stale free push", async () => {
+  const A = g.apex, G = g.G, I = g.sandbox.Input, OM = g.sandbox.OvertakeMode;
+  await A.race("monza"); A.reset(0.02, 70, 0, 818); A.clearInput(); A.headless(true);
+  const names = ["throttle", "throttleLevel", "braking", "brakeLevel", "consumeOvertake"];
+  const saved = Object.fromEntries(names.map(k => [k, I[k]]));
+  let gas = false, brake = false, fire = false;
+  Object.assign(I, { throttle: () => gas, throttleLevel: () => gas ? 1 : 0,
+    braking: () => brake, brakeLevel: () => brake ? 1 : 0, consumeOvertake: () => { const p = fire; fire = false; return p; } });
+  try {
+    for (const c of G.cars) { c.lap = 2; c._otLap = 2; c._otS = c.s; }
+    Object.assign(G.player, { otE: OM.energy(), otOn: true, otT: 4, otArmed: true, brakeDemand: 0, boostOn: false });
+    const full = G.player.otE; A.step(1 / 60);
+    assert.equal(G.otEnabled(), true, "fixture is past the opening-lap activation hold");
+    assert.equal(G.player.otE, full, "coasting supplies no thrust and pays no allowance");
+    gas = true; G.player.brakeDemand = 1; A.step(1 / 60);
+    assert.ok(G.player.otE < full, "this tick's throttle spends despite previous braking flag");
+    assert.equal(G.player.deploying, true);
+    brake = true; const held = G.player.otE; A.step(1 / 60);
+    assert.equal(G.player.otE, held, "current braking pauses immediately"); assert.equal(G.player.deploying, false);
+    brake = false; fire = true; A.step(1 / 60);
+    assert.equal(G.player.otOn, false); assert.equal(G.player.otE, held);
+    assert.equal(G.player.deploying, false, "toggle-off cannot inherit last tick's otFree");
+  } finally { Object.assign(I, saved); A.headless(false); }
+});

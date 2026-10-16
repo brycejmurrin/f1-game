@@ -1,5 +1,13 @@
 # Worker
 
+## Contents
+
+- The loop
+- Escalate
+- Waiting (#2385; plan WS4, WS7 row b)
+- Quota park (#2381; plan WS1)
+- Traps that cost real sessions
+
 You own one task and its OWNED globs, from plan to merged. The orchestrator is
 your only escalation path besides the user; ask it instead of guessing.
 
@@ -69,6 +77,39 @@ prompt. Escalate when:
 - you hit a cap (captures, ~400 messages, ~90 min with no OWNED push).
 
 Keep working on anything the blocker does not touch while you wait.
+
+## Waiting (#2385; plan WS4, WS7 row b)
+
+- While a push is held or CI runs: refresh the PR body, arm ONE timer
+  (`send_later`), and end the turn silently. A green per-job event needs no
+  reply; only a red, a review or a merge conflict is work.
+- The harness Stop hook (`~/.claude/stop-hook-git-check.sh`, outside the repo,
+  not changeable here) is answered, not obeyed, when a push is held or the PR
+  merged: `git checkout --detach origin/<deploy>` clears its unpushed count.
+  A user's "don't commit X" beats the hook.
+- One git verb per Bash call for `push`, `fetch` and `worktree add`; chained
+  verbs have hidden a failed push.
+- Before opening a replacement PR, or re-pushing after any wake, re-read
+  `node tools/ci/who-is-on-it.mjs` and the PR's state (open? superseded?). A
+  `STAND DOWN <old PR> superseded by <new PR>` (Merge Desk, #2388) or a
+  `Superseded by #<n>` body line means stop: no push, release the claim, say so.
+- After `SWEEP <PR#>` hand the PR to Merge Desk and stop watching it.
+- Past ~300k context at a verified checkpoint, hand off (PR body current, new
+  small session or Merge Desk watches) instead of idling in the big session:
+  at 677k an idle wake costs $0.26–0.55.
+- `SendMessage` reaches in-session subagents only. A parent `session_…` id
+  needs `mcp__claude-code-remote__send_message`.
+
+## Quota park (#2381; plan WS1)
+
+First usage-limit `api_error` (read the reset time from it or `rate_limit_info`):
+
+1. Fleet block `state: blocked`, `blocker: quota until <reset>`, `needs-orchestrator: no`.
+2. Commit and push every dirty worktree first (`git worktree list`).
+3. Delete your own check-ins and triggers (`delete_trigger`); stop replying to events.
+4. Arm ONE `send_later` at the reset so the user never types "limit has reset".
+5. A Workflow `parallel()` that returned nulls on quota resumes with
+   `resumeFromRunId` (stop the prior run first), not a rerun.
 
 ## Traps that cost real sessions
 

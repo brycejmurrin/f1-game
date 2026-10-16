@@ -1516,7 +1516,7 @@ const Car3D = (function () {
     const aLvl = aeroStyle && aeroStyle.lvl != null
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
     const ws = wingOf(teamStyle);
-    out.flapInfo = { aLvl, style: Object.assign({}, aeroStyle, { wingStyle: ws }), col: wingCol, finish: liv.finish };
+    out.flapInfo = { aLvl, style: Object.assign({}, aeroStyle, { wingStyle: ws }), col: wingCol, finish: liv.finish, surface: wingCarbon ? "carbon" : "paint" };
 
     const nb = numberBoard(aLvl, aeroStyle);
     for (const s of [-1, 1]) {
@@ -2122,26 +2122,27 @@ const Car3D = (function () {
         addWheel(out, s*0.76, AXLES.wheelY, AXLES.rearZ, 0.34, 0.38,
           tyreBand, caliperColor, rimColor, false, tyreStyle, null, brakeStyle, wheelStyle);
       }
-      // 2026 over-wheel deflector above each FRONT wheel (tyre crown y 0.68):
-      // 0 none / 1 single plane on a stalk / 2 biplane + outboard endplate.
-      const wDefl = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.deflector) || 0)));
-      if (wDefl > 0) {
-        for (const s of [-1, 1]) {
+    }
+    // Fixed deflectors belong to the chassis, including the split race body.
+    // 2026 over-wheel deflector above each FRONT wheel (tyre crown y 0.68):
+    // 0 none / 1 single plane on a stalk / 2 biplane + outboard endplate.
+    const wDefl = Math.max(0, Math.min(2, Math.round((wheelStyle && wheelStyle.deflector) || 0)));
+    if (wDefl > 0) {
+      for (const s of [-1, 1]) {
+        addBeveledSpan(out,
+          { z: AXLES.frontZ + 0.20, x: s * 0.79, y: 0.745, w: 0.30, h: 0.012, t: 0.70 },
+          { z: AXLES.frontZ - 0.16, x: s * 0.77, y: 0.775, w: 0.26, h: 0.010, t: 0.70 },
+          0.004, CARBON, null, SURFACES.carbon);
+        addBeamBetween(out, [s * 0.66, 0.46, AXLES.frontZ + 0.17],
+                            [s * 0.72, 0.740, AXLES.frontZ + 0.16], 0.016,
+                       [0.11, 0.11, 0.13], SURFACES.carbon);
+        if (wDefl >= 2) {
           addBeveledSpan(out,
-            { z: AXLES.frontZ + 0.20, x: s * 0.79, y: 0.745, w: 0.30, h: 0.012, t: 0.70 },
-            { z: AXLES.frontZ - 0.16, x: s * 0.77, y: 0.775, w: 0.26, h: 0.010, t: 0.70 },
+            { z: AXLES.frontZ + 0.14, x: s * 0.80, y: 0.805, w: 0.24, h: 0.010, t: 0.70 },
+            { z: AXLES.frontZ - 0.12, x: s * 0.78, y: 0.828, w: 0.20, h: 0.009, t: 0.70 },
             0.004, CARBON, null, SURFACES.carbon);
-          addBeamBetween(out, [s * 0.66, 0.46, AXLES.frontZ + 0.17],
-                              [s * 0.72, 0.740, AXLES.frontZ + 0.16], 0.016,
-                         [0.11, 0.11, 0.13], SURFACES.carbon);
-          if (wDefl >= 2) {
-            addBeveledSpan(out,
-              { z: AXLES.frontZ + 0.14, x: s * 0.80, y: 0.805, w: 0.24, h: 0.010, t: 0.70 },
-              { z: AXLES.frontZ - 0.12, x: s * 0.78, y: 0.828, w: 0.20, h: 0.009, t: 0.70 },
-              0.004, CARBON, null, SURFACES.carbon);
-            addBox(out, s * 0.935, 0.775, AXLES.frontZ + 0.02, 0.012, 0.085, 0.30,
-                   CARBON, SURFACES.carbon);
-          }
+          addBox(out, s * 0.935, 0.775, AXLES.frontZ + 0.02, 0.012, 0.085, 0.30,
+                 CARBON, SURFACES.carbon);
         }
       }
     }
@@ -2178,7 +2179,7 @@ const Car3D = (function () {
       // The livery finish rides flapInfo: build()'s own paint->finish remap
       // runs before these flaps are appended, so without it a satin/chrome
       // car got gloss top flaps from this path.
-      const g = buildFlapGeom(el, info.col, info.finish);
+      const g = buildFlapGeom(el, info.col, info.finish, info.surface);
       const base = out.pos.length / 3;
       for (let i = 0; i < g.pos.length; i += 3) {
         // delta 0: undo only the hinge translation buildFlapGeom applied.
