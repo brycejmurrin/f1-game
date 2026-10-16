@@ -1,1 +1,0 @@
-1792111720	Bryce Murrin	#2317 Career NUMBER full-value parsing and validation: js/career/career-ui.js NUMBER input handler, relevant existing career tests and changelog fragment only. Read-only SOL verification underway; excludes #2308/#2316 merge waiting and other active career/renderer work.  [cursor/career-number-9c42; session b1641f9f2af5a5d13c4438cb]
