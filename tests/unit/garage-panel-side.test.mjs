@@ -136,6 +136,23 @@ test("the GARAGE look rules keep the car's floor and stay out of portrait", () =
   assert.match(css, /:root\[data-look-garage-stats="hide"\] #carsetup #cs-stats-inner \{ display: none; \}/);
 });
 
+test("narrow landscape garage keeps camera and aero controls reachable", () => {
+  const css = read("css/carsetup.css");
+  const start = css.indexOf("@media (max-width: 700px) and (orientation: landscape)");
+  const end = css.indexOf("/* CAMERA / ACTIVE AERO / Z-MODE", start);
+  const media = start >= 0 && end > start ? css.slice(start, end) : "";
+  assert.ok(media, "narrow landscape needs a dedicated compact controls layout");
+  assert.doesNotMatch(media, /#cs-stack\s*\{\s*display:\s*none/,
+    "the only camera/aero controls must not disappear on narrow landscape");
+  assert.match(media, /#cs-stack[\s\S]*display:\s*flex/);
+  assert.match(media, /top:\s*calc\(var\(--safe-t\) \+ var\(--gap\)\)/,
+    "the compact dock needs a definite safe-box position when the panel fills the width");
+  assert.match(media, /z-index:\s*4/,
+    "the compact dock must remain above the full-width garage sheet");
+  assert.match(media, /#cs-bar[\s\S]*flex-direction:\s*column/,
+    "camera and aero controls must reflow vertically in the narrow dock");
+});
+
 test("REAR-WING sits back and slightly above the wing", () => {
   const cam = read("js/garage/setup-camera.js");
   const m = /wingRear:\s*\{[^}]*el:\s*([0-9.]+)[^}]*dist:\s*([0-9.]+)/.exec(cam);
