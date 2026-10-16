@@ -1115,6 +1115,7 @@ body:not(.desktop) {
    on its plate under LIGHT, SYSTEM-light and LIGHT + HIGH CONTRAST. Same move
    as .touchbtn in css/touch-controls.css. */
 :is(#hud, #announce, #game-metrics) {
+  color-scheme: dark;
   --bg: #0c0c14;
   --carbon: #15151E;
   --text: #f6f6f9;
