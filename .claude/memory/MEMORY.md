@@ -26,3 +26,4 @@ code or AGENTS.md is stale: fix or delete it, do not follow it.
 - [MCP allow rules, measured](mcp-allow-rules-measured.md) — read `permission_decision` in list_events; a repo can't approve its own .mcp.json servers (auto mode's classifier does); auto siblings need an auto parent + `source_url`; MDN/BrowserStack prompt regardless (claude.ai connector setting)
 - [Survey PRs merge to assets; cap 5](survey-prs-merge-to-assets-cap5.md) — 2026-10-15: green survey PRs merge into track-survey-assets; full-tier cap 5 while queue ok, 3 on hold
 - [Standing Merge Desk](standing-merge-desk.md) — since 2026-10-15 a Sonnet `[Merge Desk]` sibling (agent merge-desk.md) runs sweeps and spawns Sonnet lane workers, woken hourly; send SWEEP there
+- [Merge one at a time, re-test the tip](merge-one-at-a-time-retest-tip.md) — re-run source-pin-hygiene on the new tip after each merge; two reds on 2026-10-16 came from back-to-back merges
