@@ -118,8 +118,11 @@ test("blocking and preload byte census stay under the post-cut ceilings", () => 
   // B1 (2026-10-10): CAREER skew pad + under-brand flex-start (~140 B).
   // Title footer fit (2026-10-14): rooms 2×2 + desktop icon flex row (~0.7 KiB).
   // Title icons + #1537 phone wrap/clamp (2026-10-14): ~2.7 KiB in menus.css.
-  assert.ok(blocking < 222500, `blocking CSS is ${blocking} B; want < 222500`);
-  assert.ok(preload < 222500, `preload CSS is ${preload} B; want < 222500`);
+  // Destination-group Home (2026-10-16, #2447): css/menu-destinations.css, ~2.7 KiB. It stays blocking on purpose:
+  // the group widths, the compact-desktop grid rows for Garage/Explore/Create and the hidden group labels decide
+  // where the title column sits, and a deferred sheet would move it after first paint. The tip was 222473 B.
+  assert.ok(blocking < 225500, `blocking CSS is ${blocking} B; want < 225500`);
+  assert.ok(preload < 225500, `preload CSS is ${preload} B; want < 225500`);
   const settingsBytes = SETTINGS_FOUC.reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0);
   assert.ok(settingsBytes > 70000, "the dropped preload still exists as print→all bytes");
 });
