@@ -479,6 +479,7 @@ globalThis.document = { getElementById: () => null, addEventListener: () => {} }
 // Three teams so the guest's seat, the host's seat and a bystander's are all
 // distinct. driverId is seasonDriverId's format (js/core/store.js): "team:seat".
 globalThis.Teams = {
+  isReal: (team) => !!team && !team.custom && !team.legends,
   LIST: [
     { id: "alpha", name: "Alpha", drivers: [{ code: "AL1", name: "A One", num: 1 }, { code: "AL2", name: "A Two", num: 2 }] },
     { id: "bravo", name: "Bravo", drivers: [{ code: "BR1", name: "B One", num: 3 }, { code: "BR2", name: "B Two", num: 4 }] },
@@ -499,7 +500,7 @@ function lobbyG() {
   const G = {
     teamIdx: 0, driverIdx: 0,             // the local player holds alpha:0
     trackIdx: 0, raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "day",
-    raceQuali: true, raceGrid: "quali", difficulty: 1, raceChangeable: false, wxArcPlan: null,
+    raceQuali: true, raceGrid: "quali", difficulty: "normal", raceChangeable: false, wxArcPlan: null,
     caughtQuali: [], caughtQLive: [],
     onPeerQuali: (d) => { G.caughtQuali.push(d); },
     onPeerQualiLive: (d) => { G.caughtQLive.push(d); },
@@ -540,6 +541,10 @@ async function lobbyUp(role) {
   // delivers it — so every send is followed by a settle().
   const peerSays = (t, d) => { far.send("event", JSON.stringify({ t, d })); far.pump(performance.now()); };
   const settle = () => sleep(80);
+  if (role === "guest") {
+    peerSays("settings", { track: G.trackIdx, laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay, quali: G.raceQuali, difficulty: G.difficulty });
+    await settle();
+  }
   return { G, lobby, peerSays, settle };
 }
 
@@ -598,7 +603,7 @@ test("LOBBY phase: more than five HELLOs (or READYs) in a second are dropped, pe
   // host; every READY re-renders. Nothing legitimate needs more than a
   // handful a second, so past the fifth in a rolling second the rest are
   // ignored — and a second later the window is open again.
-  const { lobby, peerSays, settle } = await lobbyUp("guest");
+  const { lobby, peerSays, settle } = await lobbyUp("host");
   try {
     for (let i = 0; i < 9; i++) peerSays("hello", { team: "bravo", driver: i % 2, tag: i });
     await settle();
@@ -1197,16 +1202,16 @@ test("the host stops relaying a rival that has gone quiet instead of stamping it
     ss.c.feed(t - 50, 3, lapPose(300 + k), t - 10);
     G.netNow = t; net.tick(t);
   }
-  // c goes silent; a and b keep talking. 1 s later (< STALE_MS 2 s) c is not yet
-  // handed to the local AI, but its frozen pose must not ride the relay.
+  // c goes silent; a and b keep talking. Its frozen pose must not ride
+  // the relay, even after fallback AI crosses and claims the target lap.
   const last = t;
-  for (let k = 0; k < 24; k++, t += 50) {
+  for (let k = 0; k < 64; k++, t += 50) {
     ss.a.feed(t - 30, 1, lapPose(120 + k), t - 10);
     ss.b.feed(t - 70, 2, lapPose(220 + k), t - 10);
     for (const s of Object.values(ss)) s.states.length = 0;
     G.netNow = t; net.tick(t);
     if (t - last >= 700) {
-      assert.ok(t - last < 2000);
+      if (t - last > 2100) { G.cars[3].lap = G.lapsTarget + 1; G.cars[3].s = 5; }
       assert.deepEqual(relayedIds(ss.a), [2], "a hears b, never the silent c");
       assert.deepEqual(relayedIds(ss.b), [1], "b hears a, never the silent c");
     }
@@ -1395,6 +1400,57 @@ test("silence grace: a rival quiet > 2 s is the local AI's, back on the wire whe
   net.stop();
 });
 
+test("temporary fallback cannot finish a connected human or remove it from the result wait", () => {
+  const RaceControl = eval(src("js/race/race-control.js") + ";RaceControl");
+  for (const crossing of [false, true]) {
+    const G = poseG(2), net = NetPlay.create(G), s = stateSession();
+    G.track.total = 5000; G.lapsTarget = 3; G.raceT = 120;
+    net.start({ role: "host", session: s, interpDelayMs: 0 });
+    const rival = G.cars[1];
+    rival.lap = 3; rival.s = 4995; rival._nMid = true;
+    s.feed(10000, 1, { ...lapPose(4995), lap: 3, speed: 0 }, 10000); net.tick(10000);
+    net.tick(12100);
+    assert.equal(net.owns(rival), false);
+    if (crossing) {
+      const cross = RaceControl.lineTransition(rival, 4995, 5, 10, 5000, 3, G.cars, 122.1, 1 / 60);
+      assert.equal(cross.flagged, false, "fallback motion does not raise the race flag");
+      assert.equal(!!rival.finished, false);
+      assert.equal(rival.finishT == null, true);
+      assert.equal(RaceControl.flagOut(G.cars), false);
+    }
+    G.player.finished = true; G.player.finishT = 123;
+    assert.equal(RaceControl.finishDelay(G.cars, 124, 3, 0), 0, "connected owner still racing during silence");
+    s.feed(12200, 1, { ...lapPose(4970), lap: 3, speed: 0 }, 12200); net.tick(12200);
+    assert.equal(rival.lap, 3); assert.equal(!!rival.finished, false);
+    assert.equal(rival.finishT == null, true);
+    assert.equal(RaceControl.finishDelay(G.cars, 124, 3, 0), 0);
+    net.stop();
+    assert.equal(RaceControl.finishDelay(G.cars, 124, 3, 0), 2.2, "a real disconnect releases human membership");
+  }
+});
+
+test("an owner finish arriving during fallback is preserved when its finishing pose resumes", () => {
+  const G = poseG(2), net = NetPlay.create(G), s = stateSession();
+  G.track.total = 5000; G.lapsTarget = 3; G.raceT = 120;
+  net.start({ role: "host", session: s, interpDelayMs: 100 });
+  const rival = G.cars[1];
+  rival.lap = 3; rival.s = 4995; rival._nMid = true;
+  s.feed(10000, 1, { ...lapPose(4995), lap: 3, speed: 0 }, 10000); net.tick(10000);
+  net.tick(12100); G.raceT = 122;
+  // Local fallback crosses first, but cannot supply the owner's lap evidence.
+  const RaceControl = eval(src("js/race/race-control.js") + ";RaceControl");
+  RaceControl.lineTransition(rival, 4995, 5, 10, 5000, 3, G.cars, 122, 1 / 60);
+  s.deliver(NetPlay.EV.LAP, { code: rival.code, driverId: rival.driverId, lap: 4, fin: 121.9, invalid: true });
+  assert.equal(!!rival.finished, false, "owner event waits for owner pose, not fallback lap");
+  s.feed(12200, 1, { ...lapPose(5), lap: 4, speed: 0 }, 12200); net.tick(12200);
+  s.feed(12300, 1, { ...lapPose(6), lap: 4, speed: 0 }, 12300); net.tick(12300);
+  assert.equal(rival.finished, true); assert.equal(rival.finishT, 121.9);
+  net.tick(14400);
+  s.feed(14500, 1, { ...lapPose(10), lap: 4, speed: 0 }, 14500); net.tick(14500);
+  assert.equal(rival.finished, true); assert.equal(rival.finishT, 121.9, "later fallback/resume preserves genuine terminal state");
+  net.stop();
+});
+
 // ---- a rival that left while a guest was still BUILDING (sibling register 8.1) ----
 // The host's race-phase LEFT ({wire}) reached a guest whose session still held the LOBBY's handlers,
 // which read only the lobby phase's `from`: it seated the leaver as a human nobody would move, and
@@ -1484,4 +1540,16 @@ test("a hidden tab keeps pumping the session but publishes no pose; it resumes o
   } finally {
     if (had) Object.defineProperty(globalThis, "document", had); else delete globalThis.document;
   }
+});
+
+
+test("QUALI and QLIVE reject a rival driverId even with the sender's code", () => {
+  const { G, s } = started("host");
+  const code = G.cars[1].code;
+  s.deliver("quali", { driverId: "drv0", code, t: 61 });
+  s.deliver("qlive", { driverId: "drv0", code, t: 62 });
+  assert.deepEqual(G.caughtQuali, []);
+  assert.deepEqual(G.caughtQLive, []);
+  s.deliver("quali", { driverId: "drv1", code, t: 63 });
+  assert.equal(G.caughtQuali.length, 1);
 });

@@ -3564,3 +3564,13 @@ codeLines 1445 → **1476**; tree `cssClasses` 642 → **643** (`body.hud-tyre-s
 dock-top anchor would cover the map or LIMITS-left, STRATEGY under REL, and height-caps the radio
 card above the bottom cluster. Within the 40-line absorb per file; intentional for the measured
 phoneL broadcast @150% overlaps (22 → target 0 on announce/flag/limits/tyre/rel).
+
+## 2026-10-16 — VS FRIEND lobby settings revisions + peer state bursts (#2342, split 6/8 of #1776)
+
+`js/net/lobby.js` lines 2334 → **2400** (+66; a delta, since folded into `tests/data/ratchets.json`).
+Deliberate raise past the 40-line absorb: settings are acknowledged by revision (revisionless peers may only
+confirm the initial rules), READY/GO carry the revision, and the guest-side `rosterEvent` keeps each
+attributed peer's latest hello/ready after a burst (~30 lines of per-peer window + timer state). Extraction
+was weighed and not done in this PR: `rosterEvent` closes over `role`, `id`, `sessions`, `made` and
+`underRate`, so a separate module would need a new manifest entry, a gen-shell change and a many-parameter
+factory for roughly 10 net lines. Revisit when the other net-lobby hunt PRs (#2410, #2420) have landed.

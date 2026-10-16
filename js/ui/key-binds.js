@@ -110,13 +110,14 @@ function create(G) {
       if (!armed) return;
       if (!onScreen()) { disarm(true, false); return; }
       const { id, slot } = armed;
+      const focus = { id, slot };   // profile saves can synchronously re-render/disarm
       const r = dev.set(id, slot, v);
       if (!r.ok) {
         const prefix = r.reason === "reserved" ? `${dev.label(v)} is reserved by the menus — ` : "";
         setNote(`${prefix}press another, or Esc.`);
         return;
       }
-      const focus = clearArmed();
+      clearArmed();
       save();
       tick();
       render(focus);
@@ -153,9 +154,10 @@ function create(G) {
     }
     function unbind() {
       const { id, slot } = armed;
+      const focus = { id, slot };
       const row = dev.list().find((a) => a.id === id);
       dev.clear(id, slot);
-      const focus = clearArmed();
+      clearArmed();
       save();
       tick();
       render(focus);
@@ -474,6 +476,7 @@ function create(G) {
      disarmAll must call this: beginAxisCapture alone zeroes the pad every
      frame until cancelled. */
   let abortWheel = null;
+  let wheelOwner = null;
   const wheelBtn = $("pm-pad-wheel");
   if (wheelBtn && Input.beginAxisCapture) {
     const STEPS = [
@@ -487,6 +490,7 @@ function create(G) {
       clearTimeout(stepTimer);
       if (!running) return;
       running = false;
+      wheelOwner = null;
       Input.beginAxisCapture(null);
       wheelBtn.textContent = "SET UP A WHEEL";
       say("Wheel setup cancelled — nothing changed.");
@@ -497,15 +501,18 @@ function create(G) {
     const finish = (map, msg) => {
       running = false;
       clearTimeout(stepTimer);
-      // A captured rest offset belongs to the axis (and sign) it was measured
-      // on; carried onto a different steering axis it would steer the car on
-      // its own, and it is stored, so across reloads too. Drop it.
-      const was = Input.getPadAxisMap();
-      if (Input.clearPadRest && (was.steer !== map.steer || was.steerInvert !== map.steerInvert)) {
-        Input.clearPadRest();   // this pad's offset only; other pads keep theirs
-        store.set("padRest", Input.padRestStore());
+      // Commit only to the device that supplied steering; the Input boundary
+      // rechecks presence and invalidates only that device's old-axis rest.
+      if (!Input.setPadAxisMap(map, wheelOwner)) {
+        wheelOwner = null;
+        Input.beginAxisCapture(null);
+        wheelBtn.textContent = "SET UP A WHEEL";
+        say("Wheel disconnected — setup cancelled, nothing changed.");
+        return;
       }
-      Input.setPadAxisMap(map);
+      wheelOwner = null;
+      Input.beginAxisCapture(null);
+      store.set("padRest", Input.padRestStore());
       store.set("padAxes", Input.getPadAxisMap());
       wheelBtn.textContent = "SET UP A WHEEL";
       say(msg);
@@ -523,6 +530,7 @@ function create(G) {
       }
       if (!Input.padPresent()) { say("No wheel or controller detected. Turn the wheel or press a button on it first."); return; }
       running = true;
+      wheelOwner = null;
       wheelBtn.textContent = "CANCEL";
       const map = Object.assign(Input.getPadAxisMap(), { throttle: null, brake: null,
         throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null });
@@ -547,6 +555,8 @@ function create(G) {
           .map((s) => map[s.key]).filter((a) => a != null);
         Input.beginAxisCapture((axis, dir, info) => {
           if (!running) return;
+          if (!wheelOwner && info) wheelOwner = info.key;
+          if (wheelOwner && (!info || info.key !== wheelOwner)) return;
           const st = STEPS[i];
           // A combined pedal axis moves with BOTH pedals: it cannot be two controls.
           if (st.key === "brake" && axis === map.throttle) {
@@ -565,11 +575,15 @@ function create(G) {
           tick();
           clearTimeout(stepTimer);
           stepTimer = setTimeout(step, 600);   // let the pedal come back up before listening again
-        }, { exclude: taken });
+        }, { exclude: taken, ownerKey: wheelOwner });
       };
       step();
     };
   }
+  window.addEventListener("gamepaddisconnected", (e) => {
+    const p = e.gamepad;
+    if (wheelOwner && p && wheelOwner === p.index + ":" + p.id && abortWheel) abortWheel();
+  });
   // Opt-in diagnostic under the Controls menu: it reads the same processed
   // controller travel while the menu keeps the driving latches neutral.
   const previewHost = $("pm-pad-section");

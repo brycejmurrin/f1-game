@@ -160,11 +160,13 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `team-identity.js` | `CareerTeamIdentity` | tag | Per-career MY TEAM appearance. |
 | `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
 | `restore-points.js` | `CareerRestorePoints` | tag | CareerRestorePoints — bounded local history at explicit round/import boundaries. |
 | `career-backup.js` | `CareerBackup` | tag | CAREER BACKUP: versioned export/import of all six career slots (plus optional standalone season / badges / daily and the MY TEAM identity). |
 | `regulations.js` | `Regulations` | tag | career regulation eras. |
 | `ai-dev.js` | `CareerAiDev` | tag | AI constructor part development over career winters. |
+| `career-planning.js` | `CareerPlanning` | tag | Career planning: pure projections and bounded choices; never changes Parts legality. |
 | `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
 | `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
 | `badges.js` | `Badges` | tag | LICENCE BADGES: local achievements unlocked from facts the game already computes (a classified result, a pole, a daily streak), persisted at `apex26.badges`. |
@@ -172,6 +174,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `career-ui-boot.js` | `CareerUI` | tag | CAREER screen boot stub (FULL). |
 | `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 | `custom-team.js` | `CustomTeam` | tag | MY TEAM: load/sync, customize dialog, emblem upload. |
+| `career-planning-ui.js` | `CareerPlanningUI` | LAZY_CAREER_UI | Read-only Career planning cards and explicit local save recovery actions. |
 | `career-ui.js` | `CareerScreen` | LAZY_CAREER_UI | the CAREER screen (#career), LAZY_CAREER_UI. |
 
 **`js/ui/`**
@@ -342,6 +345,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `elev-presets.js` | `ElevPresets` | LAZY_EDITOR | ElevPresets: Flat / Rolling / Hilly node-height profiles for the track designer. |
 | `profile.js` | `DesignerProfile` | LAZY_EDITOR | DesignerProfile: the track designer's elevation strip under the main canvas. |
 | `selection-panel.js` | `DesignerSelection` | LAZY_EDITOR | shared point/range selection controls for the map and profile. |
+| `followup-tools.js` | `DesignerFollowup` | LAZY_EDITOR | small designer review tools. |
 | `scenery-panel.js` | `DesignerScenery` | LAZY_EDITOR | DesignerScenery: the track designer's scenery inspector. |
 | `bridge-panel.js` | `DesignerBridges` | LAZY_EDITOR | authored road-overpass controls. |
 | `designer.js` | `TrackDesigner` | LAZY_EDITOR | TrackDesigner: the TRACK DESIGNER screen (#trackdesigner), where the player composes a circuit — drags and inserts control points, stamps straights, corners,… |
@@ -368,6 +372,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `ghost-share.js` | `GhostShare` | tag | GhostShare: portable APXG1 ghost envelopes and one in-memory guest rival. |
 | `input-ghost.js` | `InputGhost` | tag | InputGhost: local deterministic ghosts — record player inputs + seed + physics/build version at the fixed physics timestep, and replay them as a ghost car. |
 | `car-mesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
+| `surface-outline.js` | `GarageSurfaceOutline` | tag | A transient contour of the cover pixels controlled by one livery tint. |
 | `field-lod.js` | `FieldLod` | tag | FieldLod: distance level-of-detail for the RIVAL cars, draw-side only (nothing here reads or writes physics). |
 | `car-draw.js` | `CarDraw` | tag | CarDraw: the car-drawing seam out of js/game.js — the bounded mesh / livery-atlas caches (team, body, player, cockpit, wheel pairs), the player's resolved… |
 
@@ -453,10 +458,13 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `scene-crew.js` | `GarageCrew` | tag | GarageCrew: the pit crew in the garage on an arrival and the RACE! drive-out. |
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
 | `arrival.js` | `GarageArrival` | tag | Pit-work arrival: a render-clock sequence, independent of race simulation. |
+| `surface-inspection.js` | `GarageSurfaceInspection` | tag | Brief steady surface inspection. |
 | `setup-camera.js` | `SetupCamera` | tag | the GARAGE SETUP-PREVIEW CAMERA for js/game.js (#carsetup): the turntable/orbit rig, its presets, pan and zoom, the active-aero demo, the preview mesh cache… |
 | `prebuild.js` | `GaragePrebuild` | tag | the GARAGE pre-built while the title or race settings sits idle. |
 | `pit-signs.js` | `PitSigns` | tag | PitSigns: each team's identity on the OUTSIDE of its pit garage. |
 | `setup-tune.js` | `SetupTune` | tag | the SETUP SHEET: the car's mechanical set-up — anti-roll bars, ride height / rake, brake bias — per team, persisted, folded into the parts contract… |
+| `setup-presets.js` | `SetupPresets` | tag | Named, bounded mechanical sheets. |
+| `setup-experiments.js` | `SetupExperiments` | tag | reversible garage setup experiments and the active-aero bench. |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
 
 **`js/fx/`**

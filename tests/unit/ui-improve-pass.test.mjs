@@ -816,7 +816,7 @@ test("track select + circuit detail: readable selected title, sheet chrome, wrap
   assert.match(menus, /crossing start\/finish/, "a zone past the line names S/F on the wrap");
   assert.match(menus, /z\.wrap \|\| z\.b > 1 \|\| z\.b < z\.a/,
     "wrap is the AeroZones flag, end past 1 lap, or a folded b < a");
-  assert.match(menus, /snapTrackToFilter\(\);\s*\n\s*updateTrackPreview\(\)/,
+  assert.match(menus, /snapTrackToFilter\(id\);\s*\n\s*updateTrackPreview\(\)/,
     "filter snap refreshes the hero before the deferred chip rebuild");
   assert.ok(!/className = "track-group-head"/.test(menus),
     "filter chips name the view; no vertical CLASSICS/SEASON divider");
@@ -1552,7 +1552,7 @@ function bootSettingsNav() {
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
-  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"])
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-advanced", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files"])
     index.appendChild(dom.byId(id));
   const stale = dom.document.createElement("button");
   stale.hidden = true;
@@ -1581,7 +1581,7 @@ function bootSettingsNav() {
 test("backup settings use the same page, focus and BACK behavior as other settings", () => {
   const h = bootSettingsNav();
   h.door("files").click();
-  assert.equal(h.title().textContent, "BACKUP & RESTORE");
+  assert.equal(h.title().textContent, "SETTINGS › BACKUP & RESTORE");
   assert.equal(h.panel("files").hidden, false);
   assert.equal(h.panel("display").hidden, true);
   assert.equal(h.dom.document.activeElement, h.filesFirst);
@@ -1606,7 +1606,7 @@ test("Settings index DRIVING subtitle rebuilds badges once (empty coach select)"
   });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
-  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"])
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-advanced", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files"])
     index.appendChild(dom.byId(id));
   const drv = dom.byId("pm-open-driving");
   const small = dom.document.createElement("small");
@@ -1630,7 +1630,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // SettingsNav BEHAVIOUR: always land on the door index. A stored
   // settingsCategory must not reopen MORE / DISPLAY.
   const h = bootSettingsNav();
-  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "invalidate", "show", "showCurrent"]);
+  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "invalidate", "returnToSearch", "show", "showCurrent"]);
+  assert.equal(h.nav.returnToSearch(), false, "without an active search, returning is a harmless home navigation");
   assert.equal(h.index().hidden, false, "create() shows the door index");
   assert.equal(h.panel("controls").hidden, true);
   assert.equal(h.panel("display").hidden, true);
@@ -1639,7 +1640,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   h.nav.show("controls", true);
   assert.equal(h.panel("controls").hidden, false);
   assert.equal(h.index().hidden, true);
-  assert.equal(h.title().textContent, "CONTROLS");
+  assert.equal(h.title().textContent, "SETTINGS › CONTROLS");
   assert.equal(h.dom.document.activeElement, h.firstControl, "show(id, true) focuses the first visible page control");
   h.dom.document.activeElement = null;
   h.nav.showCurrent();
@@ -1653,14 +1654,14 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(h.dom.document.activeElement, h.door("controls"), "BACK restores the originating door");
   h.nav.show("advanced", false);
   assert.equal(h.panel("advanced").hidden, false);
-  assert.equal(h.title().textContent, "STEERING & ASSISTS");
+  assert.equal(h.title().textContent, "SETTINGS › DRIVING AIDS");
   h.nav.show("audio", true);
   assert.equal(h.panel("audio").hidden, false);
-  assert.equal(h.title().textContent, "MUSIC & SOUND");
+  assert.equal(h.title().textContent, "SETTINGS › MUSIC & SOUND");
   assert.equal(h.dom.document.activeElement, h.audioFirst, "audio can land on its visible disclosure door");
   h.door("driving").click();
   assert.equal(h.panel("driving").hidden, false);
-  assert.equal(h.title().textContent, "DRIVING");
+  assert.equal(h.title().textContent, "SETTINGS › DRIVING");
   assert.equal(h.panel("audio").hidden, true);
   assert.equal(h.dom.document.activeElement, h.drivingFirst, "driving focuses its first visible control");
   h.nav.show("display", false);
@@ -2079,7 +2080,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact garage hides part blurbs so more option rows fit");
   assert.equal(decl(css("css/carsetup.css"), /#cs-options \.cs-tune-editor > \.adv-help:not\(#cs-rake-readout\)/, "display"), "none",
     "compact SETUP hides the long tune note and keeps the rake readout");
-  assert.match(code("js/garage/setup-sheet.js"), /wrap\.className\s*=\s*"cs-tune-editor"/,
+  assert.match(code("js/garage/setup-experiments.js"), /wrap\.className\s*=\s*"cs-tune-editor"/,
     "SETUP must not reuse cs-liv-editor (that class translucents the paint sheet)");
   assert.equal(decl(css("css/carsetup.css"), /#cs-options \.cs-liv-editor > \.adv-help:not\(#cs-rake-readout\)/, "display"), "none",
     "compact paint editor still hides its long help notes");
@@ -2120,7 +2121,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(selectJs, /G\.daily\.select\(/, "daily controls stage a plan on the picker");
   assert.doesNotMatch(selectJs, /onclick\s*=\s*\([^)]*\)\s*=>\s*\{[^}]*G\.daily\.open\(/,
     "a picker chip must never bypass NEXT, Race Settings and RACE!");
-  assert.match(code("js/garage/setup-sheet.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
+  assert.match(code("js/garage/setup-experiments.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
   const resultsJs = code("js/ui/results-sheet.js");
   assert.match(resultsJs, /btn\.id\s*=\s*"res-daily-share"/);
   assert.match(resultsJs, /clrBtn\.id\s*=\s*"res-ghost-clear"/);
@@ -2151,10 +2152,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
   assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
-  assert.match(shell, /id="pm-advanced">STEERING &amp; ASSISTS/, "settings door is STEERING & ASSISTS");
+  assert.match(shell, /id="pm-advanced">DRIVING AIDS/, "settings door is DRIVING AIDS");
   const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
   assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|open-appearance|open-a11y|advanced|audio|open-files))"/g)].map((m) => m[1]),
-    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"],
+    ["pm-open-controls", "pm-open-driving", "pm-advanced", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files"],
     "Settings home has the eight primary doors in order");
   const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
   assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");

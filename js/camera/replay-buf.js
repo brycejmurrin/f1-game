@@ -68,7 +68,7 @@ const ReplayBuf = (function () {
     let tags = [];
     let scrubbing = false, liveSnap = null;
     let scrubT = 0, scrubRate = 1, scrubPlaying = true;
-    let prevStatus = null;
+    let prevStatus = null, sheetBusy = false, sheetGeneration = 0, sheetCancelled = false;
 
     function alloc(n) {
       nCars = Math.max(1, Math.min(MAX_CARS, n | 0));
@@ -81,6 +81,7 @@ const ReplayBuf = (function () {
       prevStatus = new Uint8Array(nCars);
     }
     function clear() {
+      sheetGeneration++; sheetBusy = false;
       head = 0; count = 0; lastSlot = -1; tags = []; breakPending = false;
       scrubbing = false; liveSnap = null; scrubPlaying = true; scrubRate = 1;
       // prevStatus survives: a car already out when the timeline is discarded is not a fresh retirement (alloc() zeroes it).
@@ -252,18 +253,53 @@ const ReplayBuf = (function () {
       if (showControls) { showDock(); paintDock(); }
       return true;
     }
-    function apply(t) {
+    function snapCamera() {
+      // Photo/tools and results/director shots own dbgCam; a scrub must not
+      // reseed their camera or clear their look state. The live rig uses the
+      // same complete reset as WATCH seeks (including its outer anchor).
+      if (!G.photoMode && !G.dbgCam && G.snapGameCam) G.snapGameCam();
+    }
+    function apply(t, continuous = false) {
       if (!scrubbing) return false;
       const snap = at(t);
       if (!snap || !G.cars) return false;
       scrubT = snap.t;
       applyPose(G.cars, snap.cars);
+      if (!continuous) snapCamera();   // public apply / slider / LAST are seeks
       return true;
     }
+    // Pick recorded timestamps, not +/-1/HZ: a slow frame may skip samples.
+    function adjacentFrame(t, direction) {
+      if (!count || (direction !== -1 && direction !== 1)) return null;
+      let found = null;
+      for (let k = 0; k < count; k++) {
+        const time = times[(head + k) % cap];
+        if (direction < 0 ? time < t - 1e-9 : time > t + 1e-9) {
+          if (found === null || (direction < 0 ? time > found : time < found)) found = time;
+        }
+      }
+      return found;
+    }
+    function stepFrame(direction) {
+      if (!scrubbing || sheetBusy || !allowed() || (direction !== -1 && direction !== 1)) return false;
+      scrubPlaying = false;
+      const t = adjacentFrame(scrubT, direction);
+      if (t === null) { paintDock(); return false; }
+      const ok = apply(t);
+      if (ok) {
+        // A seek is a cut; never ease from the unrelated pre-step framing.
+        if (typeof CamFeel !== "undefined") CamFeel.resetFollow();
+        if (typeof GameCams !== "undefined") GameCams.resetSmoothing();
+      }
+      paintDock();
+      return ok;
+    }
     function endScrub() {
+      sheetGeneration++; sheetBusy = false;
       if (!scrubbing) return false;
       if (liveSnap && G.cars) restoreLive(G.cars, liveSnap);
       scrubbing = false; liveSnap = null; scrubPlaying = true;
+      snapCamera();   // restore the live timeline before the next rendered frame
       hideDock();
       return true;
     }
@@ -281,10 +317,10 @@ const ReplayBuf = (function () {
     }
     function tickScrub(dt) {
       if (!scrubbing) return false;
-      if (scrubPlaying && dt > 0) {
+      if (!sheetBusy && scrubPlaying && dt > 0) {
         const w = windowInfo();
         scrubT = Math.min(w.t1, scrubT + dt * scrubRate);
-        apply(scrubT);
+        apply(scrubT, true);   // playback retains normal rig damping
         if (scrubT >= w.t1) scrubPlaying = false;
       }
       paintDock();
@@ -295,6 +331,48 @@ const ReplayBuf = (function () {
         scrubbing, scrubT, scrubRate, scrubPlaying, tags: tags.length,
       }, windowInfo());
     }
+
+    async function contactSheet(tagIndex) {
+      if (sheetBusy || !allowed() || !G.paused || !scrubbing || typeof PhotoStudio === "undefined") return false;
+      const tag = tags[tagIndex], w = windowInfo();
+      if (!tag || tag.t < w.t0 || tag.t > w.t1 || w.t1 - w.t0 < 2 / HZ) return false;
+      const moment = Math.max(w.t0, Math.min(w.t1, tag.t));
+      const times = [Math.max(w.t0, moment - 1), moment, Math.min(w.t1, moment + 1)];
+      const photoPose = () => G.photoCam ? JSON.stringify([G.photoCam.pos, G.photoCam.yaw, G.photoCam.pitch, G.photoCam.fov]) : null;
+      const debugPose = () => G.dbgCam ? JSON.stringify([G.dbgCam.eye, G.dbgCam.target, G.dbgCam.fov, G.dbgCam.roll]) : null;
+      const studioOwner = () => { if (typeof PhotoStudio.state !== "function") return null; const state = PhotoStudio.state(); return JSON.stringify([state.open, state.generation]); };
+      const saved = { t: scrubT, playing: scrubPlaying, rate: scrubRate, paused: G.paused, mode: G.camMode,
+        dbg: G.dbgCam, player: G.player, photo: G.photoCam, photoMode: G.photoMode,
+        photoPose: photoPose(), dbgPose: debugPose(), studio: studioOwner() };
+      let ownedT = scrubT;
+      const generation = ++sheetGeneration; sheetBusy = true; sheetCancelled = false; scrubPlaying = false; paintDock();
+      // Check camera INPUTS/identities, not rendered eye/FOV damping outputs.
+      // A user acquiring a camera or moving the scrub owns the newer state.
+      const owns = () => generation === sheetGeneration && scrubbing && allowed() && G.paused === saved.paused &&
+        G.camMode === saved.mode && (G.dbgCam === saved.dbg || saved.photoMode && debugPose() === saved.dbgPose) && G.player === saved.player && G.photoMode === saved.photoMode &&
+        G.photoCam === saved.photo && photoPose() === saved.photoPose && debugPose() === saved.dbgPose && studioOwner() === saved.studio &&
+        scrubT === ownedT && !scrubPlaying && scrubRate === saved.rate;
+      const cancelled = () => sheetCancelled || !owns();
+      const seek = (t) => {
+        if (!owns()) throw new Error("Contact sheet ownership changed");
+        if (!apply(t)) throw new Error("Replay frame unavailable");
+        ownedT = scrubT;
+        if (typeof CamFeel !== "undefined") { CamFeel.resetFollow(); CamFeel.resetFreeLook(); CamFeel.resetLatch(); }
+        if (typeof GameCams !== "undefined") GameCams.resetSmoothing();
+      };
+      const say = (text) => { if (generation === sheetGeneration && typeof document !== "undefined") { const el = document.getElementById("pm-replay-sheet-status"); if (el) el.textContent = text; } };
+      say("Capturing before, moment and after…");
+      try { const ok = await PhotoStudio.contactSheet(times, seek, cancelled); if (cancelled()) return false; say("Contact sheet PNG download requested."); return ok; }
+      catch (e) { say(sheetCancelled ? "Capture cancelled." : "Contact sheet unavailable. Try again."); Log.warn("ui", "Contact sheet failed", e); return false; }
+      finally {
+        if (owns()) {
+          seek(saved.t); scrubPlaying = saved.playing; scrubRate = saved.rate;
+        }
+        if (generation === sheetGeneration) { sheetBusy = false; paintDock(); }
+      }
+    }
+
+    function cancelContactSheet() { sheetCancelled = true; }
 
     // Pause-card REPLAY + scrub dock (JS-built — no shell-node growth).
     function ensureButton() {
@@ -332,26 +410,39 @@ const ReplayBuf = (function () {
         '<button type="button" id="pm-replay-exit">EXIT</button>' +
         '<button type="button" id="pm-replay-play">PAUSE</button>' +
         '<button type="button" id="pm-replay-last">LAST</button>' +
+        '<button type="button" id="pm-replay-prev" aria-label="Previous recorded frame">← FRAME</button>' +
+        '<button type="button" id="pm-replay-next" aria-label="Next recorded frame">FRAME →</button>' +
         '<button type="button" id="pm-replay-rate">1×</button>' +
         '<input id="pm-replay-scrub" type="range" min="0" max="1000" value="1000" aria-label="Replay position">' +
-        '<span id="pm-replay-label">0.0</span>';
+        '<span id="pm-replay-label">0.0</span>' +
+        '<select id="pm-replay-tag" aria-label="Contact sheet moment"></select>' +
+        '<button type="button" id="pm-replay-sheet">CONTACT SHEET PNG</button>' +
+        '<button type="button" id="pm-replay-sheet-cancel" hidden>CANCEL CAPTURE</button>' +
+        '<span id="pm-replay-sheet-status" role="status"></span>';
       (document.body || document.documentElement).appendChild(dock);
+      dock.querySelector("#pm-replay-sheet-cancel").onclick = cancelContactSheet;
+      dock.querySelector("#pm-replay-sheet").onclick = () => contactSheet(+dock.querySelector("#pm-replay-tag").value);
       dock.querySelector("#pm-replay-exit").onclick = () => {
         endScrub();
         const menu = document.getElementById("pausemenu");
         if (menu && G.paused) menu.hidden = false;
       };
       dock.querySelector("#pm-replay-play").onclick = () => {
+        if (sheetBusy) return;
         scrubPlaying = !scrubPlaying;
         paintDock();
       };
-      dock.querySelector("#pm-replay-last").onclick = () => { jumpLastTag(); paintDock(); };
+      dock.querySelector("#pm-replay-prev").onclick = () => stepFrame(-1);
+      dock.querySelector("#pm-replay-next").onclick = () => stepFrame(1);
+      dock.querySelector("#pm-replay-last").onclick = () => { if (!sheetBusy) { jumpLastTag(); paintDock(); } };
       dock.querySelector("#pm-replay-rate").onclick = () => {
+        if (sheetBusy) return;
         const i = RATES.indexOf(scrubRate);
         scrubRate = RATES[(i + 1) % RATES.length];
         paintDock();
       };
       dock.querySelector("#pm-replay-scrub").oninput = (ev) => {
+        if (sheetBusy) return;
         const w = windowInfo();
         const u = (+ev.target.value || 0) / 1000;
         scrubPlaying = false;
@@ -382,7 +473,21 @@ const ReplayBuf = (function () {
         const u = (scrubT - w.t0) / (w.t1 - w.t0);
         scrub.value = String(Math.round(Math.max(0, Math.min(1, u)) * 1000));
       }
-      if (label) label.textContent = scrubT.toFixed(1) + "s";
+      if (label) label.textContent = scrubT.toFixed(3) + "s";
+      const prevFrame = document.getElementById("pm-replay-prev"), nextFrame = document.getElementById("pm-replay-next");
+      if (prevFrame) prevFrame.disabled = sheetBusy || adjacentFrame(scrubT, -1) === null;
+      if (nextFrame) nextFrame.disabled = sheetBusy || adjacentFrame(scrubT, 1) === null;
+      const picker = document.getElementById("pm-replay-tag"), sheet = document.getElementById("pm-replay-sheet");
+      if (picker && !sheetBusy) {
+        const selected = picker.value; picker.replaceChildren();
+        tags.forEach((tag, i) => { if (tag.t < w.t0 || tag.t > w.t1) return;
+          const option = document.createElement("option"); option.value = String(i); option.textContent = tag.kind + " · " + tag.t.toFixed(1) + "s"; picker.appendChild(option); });
+        if (Array.from(picker.options || picker.children).some((o) => o.value === selected)) picker.value = selected;
+      }
+      const cancel = document.getElementById("pm-replay-sheet-cancel"); if (cancel) cancel.hidden = !sheetBusy;
+      if (picker) picker.disabled = sheetBusy;
+      if (sheet) { sheet.disabled = sheetBusy || !allowed() || !G.paused || !picker || !picker.children.length || w.t1 - w.t0 < 2 / HZ; sheet.textContent = sheetBusy ? "CAPTURING…" : "CONTACT SHEET PNG"; }
+      for (const id of ["pm-replay-play", "pm-replay-last", "pm-replay-rate", "pm-replay-scrub"]) { const el = document.getElementById(id); if (el) el.disabled = sheetBusy; }
     }
     function refreshButton() {
       if (!scrubbing) discardTimeline(G.raceT);
@@ -405,8 +510,8 @@ const ReplayBuf = (function () {
 
     return {
       sample, clear, breakTimeline, reset, pushTag, window: windowInfo, at,
-      beginScrub, apply, endScrub, isScrubbing, lastTag, jumpLastTag, tags: tagsOf,
-      tickScrub, status: statusOf,
+      beginScrub, apply, endScrub, contactSheet, cancelContactSheet, isScrubbing, lastTag, jumpLastTag, tags: tagsOf,
+      tickScrub, stepFrame, adjacentFrame, status: statusOf,
       refreshButton, ensureButton,
       onRaceStart, onTick, onPause,
     };

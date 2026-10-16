@@ -572,7 +572,7 @@
 </div>
 
 <!-- race HUD -->
-<div id="hud" hidden>
+  <div id="hud" role="region" aria-label="Race HUD" aria-live="off" hidden>
   <!-- Each box has its own id: the hide rules (css/hud.css) key on it, never on
        a child position, so adding or re-ordering a box cannot hide the wrong one.
        DELTA is static too (js/ui/hud.js paintHudDelta unhides it): vs the ghost
@@ -806,7 +806,7 @@
 </dialog>
 
 <!-- settings sub-menu — opened from pause or title. Door index, then
-     CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC pages. Lighting and
+     CONTROLS / DRIVING / DISPLAY / MUSIC pages. Lighting and
      camera tuners open from DISPLAY's advanced visuals. -->
 <dialog id="pmsettings" class="screen dim" data-esc-close="pm-settings-close" aria-labelledby="dlg-settings" hidden>
   <div id="pmsettings-inner" class="sheet">
@@ -815,10 +815,10 @@
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
         <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice, strategy &amp; badges</small></button>
+        <button id="pm-advanced">DRIVING AIDS&hellip;<small>Presets, steering feel &amp; assists</small></button>
         <button id="pm-open-display" type="button">DISPLAY&hellip;<small>HUD &amp; graphics</small></button>
         <button id="pm-open-appearance" type="button">APPEARANCE&hellip;<small>Colours, UI size &amp; every screen&rsquo;s look</small></button>
         <button id="pm-open-a11y" type="button">ACCESSIBILITY&hellip;<small>Motion, keyboard focus &amp; colourblind cues</small></button>
-        <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Music, radio, spotter &amp; voices</small></button>
         <button id="pm-open-files" type="button">BACKUP &amp; RESTORE&hellip;<small>Save or load your preferences</small></button>
       </nav>
@@ -3508,6 +3508,7 @@
 <script defer crossorigin="anonymous" src="js/data/teams.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/legends.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/career/team-identity.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/save-migrate.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/settings-defaults.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/garage-defaults.js?v=dev"></script>
@@ -3582,6 +3583,8 @@
 <script defer crossorigin="anonymous" src="js/garage/scene-crew.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/arrival.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/surface-inspection.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/surface-outline.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-camera.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/prebuild.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/pit-signs.js?v=dev"></script>
@@ -3591,6 +3594,7 @@
 <script defer crossorigin="anonymous" src="js/lighting/atmosphere.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/regulations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/ai-dev.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/career/career-planning.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-cal.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/badges.js?v=dev"></script>
@@ -3608,6 +3612,8 @@
 <script defer crossorigin="anonymous" src="js/camera/trackside.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/setup-presets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/setup-experiments.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-ui-boot.js?v=dev"></script>

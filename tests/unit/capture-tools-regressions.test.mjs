@@ -12,8 +12,8 @@ import { parseCssPlayArgs, screenClicks, SCREENS, swapStylesheet } from '../../t
 import { menuReady, previewMapSettled } from '../../tools/ui/menu-readiness.mjs';
 import { parseSurveyTrackArgs } from '../../tools/track/survey-track.mjs';
 import { parseCaptureArgs, pixelEvidence, rendererEvidence, ROOT } from '../../tools/shot/capture-contract.mjs';
-import { pendingWatchCancellation } from '../../tools/check/lifecycle-census.mjs';
-import { recordCapture, stageRace, runBoundedCapture, visibleScreen, waitNextGameRender, captureContextOptions, captureFailureSnapshot, captureOperationBudget, captureOperation } from '../../tools/shot/capture-runtime.mjs';
+import { lifecycleSoak, pendingWatchCancellation } from '../../tools/check/lifecycle-census.mjs';
+import { recordCapture, stageRace, runBoundedCapture, visibleScreen, waitNextGameRender, captureContextOptions, captureFailureSnapshot, captureOperationBudget, captureOperation, parseCaptureProvenance, capturePageProvenance } from '../../tools/shot/capture-runtime.mjs';
 import { parseBenchmarkArgs, summarizeBenchmarkSamples, captureSample } from '../../tools/shot/capture-benchmark.mjs';
 import { registerTeardownResource, shutdown } from '../../tools/lib/harness.mjs';
 import { cameraDelta, loadFixture, exitReplayThroughUi, preflightReplayFixture, cameraOnlyFixture, controlClickGuard, verifiedControlClick } from '../../tools/shot/replay-camera-probe.mjs';
@@ -286,6 +286,20 @@ test('lifecycle pending WATCH cancellation prevents stale trace completion launc
   assert.equal(cancellation.after.pendingRequests, 0);
   assert.equal(cancellation.after.launches, 0);
   assert.equal(cancellation.after.cachedTraces, false);
+});
+
+test('lifecycle soak closes every repeated headless mode cycle', async () => {
+  const soak = await lifecycleSoak({ track: 'monza', seed: 7, cycles: 1 });
+  assert.equal(soak.ok, true);
+  assert.equal(soak.rows.length, 1);
+  assert.equal(soak.rows[0].closed.resources.timers, 0);
+  assert.equal(soak.rows[0].closed.resources.rafFrames, 0);
+  assert.equal(soak.rows[0].closed.resources.rejectionListeners, 0);
+});
+
+test('lifecycle census accepts a bounded repeat count', () => {
+  assert.equal(parseCaptureArgs(['--cycles=3', '--plan'], 'lifecycle-census', ['--cycles']).cycles, 3);
+  assert.throws(() => parseCaptureArgs(['--cycles=13', '--plan'], 'lifecycle-census', ['--cycles']), /cycles bounds/);
 });
 
 test('replay fixture plan is offline and bounded', () => {
@@ -689,6 +703,18 @@ test('GPU diagnostics omit raw command lines and reject explicit fallback capabi
   assert.throws(() => assertCaptureGpuCapability(diagnostics, { gpu: 'hardware', gpuExplicit: true }), /actual renderer/);
   assert.throws(() => assertCaptureGpuCapability({ actual: null, error: 'no info' }, { gpu: 'hardware', gpuExplicit: true }), /cannot verify/);
   assert.doesNotThrow(() => assertCaptureGpuCapability({ actual: null }, { gpuExplicit: false }));
+});
+
+test('capture provenance keeps source and deployed shell SHAs distinct', async () => {
+  const source = 'ABCDEFabcdefABCDEFabcdefABCDEFabcdefABCD';
+  const deployed = '0123456789abcdef0123456789abcdef01234567';
+  const page = { evaluate: async () => ({ deployedSha: deployed, build: 2042, version: '2026.10.16' }) };
+  const evidence = await capturePageProvenance(page, { sourceSha: source, dirty: true });
+  assert.deepEqual(evidence, { sourceSha: source.toLowerCase(), deployedSha: deployed, deployedShaTrusted: true,
+    matches: false, build: '2042', version: '2026.10.16', dirty: true });
+  assert.equal(parseCaptureProvenance({ sourceSha: source, deployedSha: source }).matches, true);
+  assert.equal(parseCaptureProvenance({ sourceSha: source, deployedSha: 'latest' }).deployedShaTrusted, false);
+  assert.equal(parseCaptureProvenance({ sourceSha: source, deployedSha: null }).deployedSha, null);
 });
 
 test('GPU diagnostics clean up sessions created after a timeout without changing returned provenance', async () => {

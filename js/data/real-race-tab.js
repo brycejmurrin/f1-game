@@ -9,7 +9,7 @@ const DataRealRace = (function () {
   // after ~115 sessions and starved every save. Keep the newest few (an LRU index, newest first).
   const CACHE_LRU = "apex26.realrace.lru";
   const CACHE_MAX = 8;
-  const SCRIPT_V = 5;   // 2: stint ages, rain by lap, the complete flag; 3: the passes; 4: real timestamps (t0, lap starts, pass/stop/flag times), where a car went out, the fastest lap, the team radio; 5: per-driver timing coverage
+  const SCRIPT_V = 6;   // 2: stint ages, rain by lap, the complete flag; 3: the passes; 4: real timestamps (t0, lap starts, pass/stop/flag times), where a car went out, the fastest lap, the team radio; 5: per-driver timing coverage; 6: flag ending notices separate from release
   const DATA_CREDIT = "Timing data: OpenF1 (CC BY-NC-SA 4.0) · pace, stops, flags and the grid are the real ones; the racing is yours.";
   const NO_TRACK_MSG = "This circuit is not in Apex 26 yet — pick another Grand Prix.";
   const NO_RACE_MSG = "No race timing published for this weekend yet.";
@@ -101,7 +101,7 @@ const DataRealRace = (function () {
   /** Safety-car / VSC / red windows from the race-control feed, on the leader's lap. */
   function cautionsFor(raceControl, secs) {
     const out = [];
-    let open = null;
+    let open = null, ending = false;
     const at = (m) => (secs ? secs(m && m.date) : null);
     for (const m of arr(raceControl)) {
       const msg = String(m && m.message || "").toUpperCase();
@@ -110,18 +110,22 @@ const DataRealRace = (function () {
       const vsc = msg.indexOf("VIRTUAL SAFETY CAR") >= 0;
       const sc = !vsc && msg.indexOf("SAFETY CAR") >= 0;
       if (msg.indexOf("RED FLAG") >= 0 && (m.flag === "RED" || msg.indexOf("RED FLAG") === 0)) {
-        if (open) { open.to = lap; if (secs) open.tTo = at(m); out.push(open); open = null; }
+        if (open) { if (!ending) open.to = lap; if (secs) open.tTo = at(m); out.push(open); open = null; }
         const red = { level: 4, from: lap, to: lap, cause: "RED FLAG" };
         if (secs) { red.tFrom = at(m); red.tTo = null; }
         out.push(red);
         continue;
       }
       if ((vsc || sc) && msg.indexOf("DEPLOYED") >= 0) {
-        if (open) { open.to = lap; if (secs) open.tTo = at(m); out.push(open); }
+        if (open) { if (!ending) open.to = lap; if (secs) open.tTo = at(m); out.push(open); }
+        ending = false;
         open = { level: vsc ? 2 : 3, from: lap, to: lap, cause: vsc ? "VSC" : "SAFETY CAR" };
         if (secs) { open.tFrom = at(m); open.tTo = null; }
       } else if (open && (vsc || sc) && (msg.indexOf("IN THIS LAP") >= 0 || msg.indexOf("ENDING") >= 0)) {
-        open.to = Math.max(open.from, lap); if (secs) open.tTo = at(m); out.push(open); open = null;
+        ending = true; open.to = Math.max(open.from, lap); if (secs) open.tEnding = at(m);
+      } else if (open && msg.indexOf("TRACK CLEAR") >= 0) {
+        if (!ending) open.to = Math.max(open.from, lap);
+        if (secs) open.tTo = at(m); out.push(open); open = null;
       }
     }
     if (open) out.push(open);
@@ -566,7 +570,8 @@ const DataRealRace = (function () {
     const out = [];
     let last = -Infinity;
     const gap = 1000 / TRACE_HZ - 50;
-    for (const r of arr(rows)) {
+    for (const r of arr(rows).filter((r) => r && r.date != null && isFinite(+r.date) &&
+      typeof r.x === "number" && typeof r.y === "number" && isFinite(r.x) && isFinite(r.y)).sort((a, b) => a.date - b.date)) {
       const t = r && r.date != null ? +r.date : NaN;
       if (!isFinite(t) || t - last < gap || !(isFinite(r.x) && isFinite(r.y))) continue;
       last = t;
@@ -588,7 +593,24 @@ const DataRealRace = (function () {
   }
   function traceFits(traces, script) {
     return !!(traces && traces.v === TRACE_V && traces.sessionKey === script.sessionKey &&
-      traces.coverage === traceCoverage(script));
+      traces.coverage === traceCoverage(script) && (!traces.complete || script.drivers.every((d) => d.dns || usableTrace(traces.cars && traces.cars[d.num], d))));
+  }
+  function usableTrace(car, driver) {
+    let start = Infinity, end = 0;
+    arr(driver.lapStart).forEach((ls, i) => {
+      if (ls != null && Number.isFinite(ls)) {
+        start = Math.min(start, ls);
+        if (driver.laps[i] > 0) end = Math.max(end, ls + driver.laps[i]);
+      }
+    });
+    const minimum = Math.max(2, Math.min(102, Math.floor(end * TRACE_HZ / 2))) * 3;
+    if (!car || car.length < minimum || car.length % 3 || !isFinite(start)) return false;
+    for (let i = 0; i < car.length; i += 3) {
+      if (!Number.isFinite(car[i]) || !Number.isFinite(car[i + 1]) || !Number.isFinite(car[i + 2]) || (i && car[i] <= car[i - 3])) return false;
+    }
+    // Allow positioning dropouts around the line, but a dense minute of a long
+    // race is not full coverage. Retirements use their own last timed lap.
+    return car[0] <= start + 5 && car[car.length - 3] >= end - 5;
   }
   /** The field's positions for a script: cached, else fetched car by car (onProgress(done, total)). */
   function fetchTraces(script, onProgress, previous) {
@@ -603,15 +625,7 @@ const DataRealRace = (function () {
       if (traceFits(previous, script)) {
         for (const k in previous.cars || {}) if (!(previous.failed || []).includes(+k) && previous.cars[k].length >= 6) traces.cars[k] = previous.cars[k];
       }
-      const minimumFloats = (d) => {
-        let seconds = 0;
-        arr(d.lapStart).forEach((start, i) => { if (start != null && d.laps[i] > 0) seconds = Math.max(seconds, start + d.laps[i]); });
-        // Require useful coverage per participating car while allowing an early
-        // retirement's shorter trace. A full-distance peer's two points are not
-        // a loaded race merely because the winner can supply the reference fit.
-        return Math.max(2, Math.min(102, Math.floor(seconds * TRACE_HZ / 2))) * 3;
-      };
-      for (const d of script.drivers) if (traces.cars[d.num] && traces.cars[d.num].length < minimumFloats(d)) delete traces.cars[d.num];
+      for (const d of script.drivers) if (traces.cars[d.num] && !usableTrace(traces.cars[d.num], d)) delete traces.cars[d.num];
       let done = 0;
       const total = script.drivers.length;
       return Promise.all(script.drivers.map((d) => (d.dns
@@ -620,7 +634,7 @@ const DataRealRace = (function () {
         // This layer owns coverage-aware caching. A raw HTTP cache entry may
         // predate the completed timing even when its URL/window is identical.
         ? Promise.resolve() : F1API.locationData(script.sessionKey, d.num, startISO, endISO, { cache: false })
-          .then((rows) => { const car = packTrace(rows, t0); traces.cars[d.num] = car; if (car.length < minimumFloats(d)) { traces.failed.push(d.num); } }, () => { traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0); }))
+          .then((rows) => { const car = packTrace(rows, t0); traces.cars[d.num] = car; if (!usableTrace(car, d)) { traces.failed.push(d.num); } }, () => { traces.failed.push(d.num); traces.cars[d.num] = new Float32Array(0); }))
         .then(() => { done++; if (onProgress) onProgress(done, total, traces); })))
         // A failed request is not "no positions": a hub closed mid-load (F1API.cancelAll) or a dropped
         // connection. Such a set is NEVER cached (it would read as loaded, and every WATCH replay nothing).

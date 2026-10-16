@@ -77,14 +77,18 @@ var SessionRecords = (function () {
     // eligible for the ghost and the board. Practice spoils the session by
     // definition, whatever the session is.
     function invalidate() { if (G.practice) spoiled = true; }
-    function sample(c, inp) {
+    function sampleInput(c, inp) {
+      if (revision !== G.store.rev) { revision = G.store.rev; if (current() !== key) spoiled = true; }
+      if (!spoiled && !c.incidentInvalidLap && typeof InputGhost !== "undefined") InputGhost.record(inp);
+    }
+    function sample(c, inp, inputRecorded) {
       if (revision !== G.store.rev) {
         revision = G.store.rev;
         if (current() !== key) spoiled = true;
       }
       if (!spoiled && !c.incidentInvalidLap) {
         Ghost.record(c.lapTime, c.s, c.x);
-        if (typeof InputGhost !== "undefined" && inp) InputGhost.record(inp);
+        if (!inputRecorded && typeof InputGhost !== "undefined" && inp) InputGhost.record(inp);
       }
     }
     function accept() {
@@ -128,7 +132,7 @@ var SessionRecords = (function () {
       if (line) G.announce(line, record && won ? 2.6 : 2, "info");
     }
     function board(id) { return id === Ghost.track() ? comparableBoard(id) : GameStore.ttBoard(id); }
-    return { begin, current, config, sample, accept, board, invalidate, finish, prepareDaily, restoreDaily, key: () => key };
+    return { begin, current, config, sample, sampleInput, accept, board, invalidate, finish, prepareDaily, restoreDaily, key: () => key };
   }
   return { create, PHYS };
 })();

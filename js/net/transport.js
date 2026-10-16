@@ -166,40 +166,21 @@ const NetTransport = (function () {
   // candidates while STUN works, which is worse than shipping nothing,
   // because it looks like a relay exists and diagnosis chases the wrong thing.
   //
-  // That is why no static CREDENTIALS ship — what ships is a credentials URL
-  // (THE SHIPPED RELAY, next block). iceServers() MERGES every source it has:
+  // That is why no static CREDENTIALS ship — a credentials URL is only used
+  // when an operator explicitly configures one. iceServers() merges every source it has:
   //   apex26.turnApi — your own credentials URL (Metered-style: returns
   //     {iceServers|iceServers:[…]} or a bare array), fetched by prefetchIce()
-  //     when the lobby opens; when set it replaces the shipped URL, so a
-  //     player who configured one is never quietly moved onto another quota.
+  //     when the lobby opens.
   //   apex26.turn — a single static server you run yourself, listed first.
   //   Two free no-account relays, appended LAST so anything
   //   you configured still wins — but OFF unless opted into, and the
   //   free-relays block below says why that is not timidity.
-  // THE SHIPPED RELAY. A Metered free-tier credentials URL on the game owner's
-  // own account — the model the operator actually offers, rather than the
-  // embeddable credentials they retired. It returns a fresh iceServers array
-  // with EXPIRING credentials, so what is published here is a fetch URL and
-  // not a standing password.
-  //
-  // WHY THIS IS NEEDED AT ALL, from a real pair of devices ON ONE WI-FI: the
-  // only host candidate a browser now offers is mDNS-obfuscated
-  // (<uuid>.local), and if the router does client isolation or the OS declines
-  // local-network discovery, that name never resolves. The one remaining pair
-  // is srflx-to-srflx, which needs the router to hairpin its own public
-  // address back at itself, and many will not. Two phones on the same sofa
-  // then fail to connect while each holds a perfectly good address — which is
-  // exactly what "both sides found an address but the direct link was blocked"
-  // was reporting.
-  //
-  // THE KEY IS VISIBLE, and that is inherent rather than sloppy: any
-  // client-side TURN credential is readable in devtools, which is why Metered
-  // documents this exact fetch from the browser. The quota is 50 GB/month and
-  // the owner can rotate the key. Overridable by apex26.turnApi, so a fork
-  // points at its own account by setting one key.
-  const TURN_API =
-    "https://bmurrin-apex.metered.live/api/v1/turn/credentials"
-    + "?apiKey=410aca13505116873c708db45f86cd468871";
+  // No TURN credential ships in the client. A browser-visible API key is
+  // reusable by anyone who downloads the game and can exhaust the relay
+  // account's quota. Operators can still provide their own short-lived
+  // credentials endpoint through apex26.turnApi; the default is honest
+  // STUN-only operation until one is configured.
+  const TURN_API = "";
 
   // How long a credentials endpoint gets before we race without it. Short on
   // purpose: a relay improves the odds of connecting, and waiting for one is
@@ -219,9 +200,7 @@ const NetTransport = (function () {
   function prefetchIce() {
     const jobs = [derivedRelays()];
     let url = null;
-    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): use the shipped URL */ }
-    // Yours first, ours as the default — so a player who configured one is
-    // never quietly moved onto somebody else's quota.
+    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): stay STUN-only */ }
     if (!url) url = TURN_API;
     // Re-fetch when the previous answer is past ICE_CRED_TTL_MS (or never
     // landed). iceServers are fixed at RTCPeerConnection construction, so
@@ -473,7 +452,7 @@ const NetTransport = (function () {
     const EVENT_CRITICAL = {
       go: 1, qgo: 1, start: 1, result: 1, bye: 1,
       armed: 1, left: 1, caution: 1, model: 1,
-      quali: 1, lap: 1, settings: 1, hello: 1, ready: 1,
+      quali: 1, qabort: 1, lap: 1, settings: 1, hello: 1, ready: 1,
     };
     let inbox = [];
     let queuedState = 0;

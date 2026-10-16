@@ -157,6 +157,7 @@ const FULL = [
   // Legends sits with the other driver data and AHEAD of js/car/liveries.js,
   // whose forTeam() appends Legends.liveries() to the picker.
   "js/data/legends.js",
+  "js/career/team-identity.js",
   "js/career/save-migrate.js",
   // Persistence sits ahead of every js/game module: the settings panels, the
   // perf sentinel and the Spotify client go through GameStore.store's raw lane,
@@ -260,6 +261,8 @@ const FULL = [
   "js/garage/scene-crew.js",
   "js/garage/scene.js",
   "js/garage/arrival.js",
+  "js/garage/surface-inspection.js",
+  "js/car/surface-outline.js",
   "js/garage/setup-camera.js",
   "js/garage/prebuild.js",              // GaragePrebuild: the garage built while the title/race settings idle
   "js/garage/pit-signs.js",
@@ -269,6 +272,7 @@ const FULL = [
   "js/lighting/atmosphere.js",
   "js/career/regulations.js",
   "js/career/ai-dev.js",
+  "js/career/career-planning.js", // bounded projections and save protection
   "js/career/career.js",
   "js/career/season-cal.js",
   "js/career/badges.js",       // after season-cal: reads SeasonCal.REAL_2026 (call time)
@@ -287,6 +291,8 @@ const FULL = [
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
   "js/camera/flyby-panel.js",
   "js/garage/setup-tune.js",
+  "js/garage/setup-presets.js",
+  "js/garage/setup-experiments.js", // reversible tune experiments and aero bench
   "js/garage/setup-sheet.js",
   "js/career/experience.js",
   "js/career/career-ui-boot.js", // CareerUI stub; #career body is LAZY_CAREER_UI
@@ -568,6 +574,10 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  ["js/data/teams.js", "js/career/team-identity.js"],
+  ["js/career/team-identity.js", "js/career/save-migrate.js"],
+  ["js/garage/setup-tune.js", "js/garage/setup-presets.js"],
+  ["js/garage/surface-inspection.js", "js/garage/setup-camera.js"],
   ["js/ui/settings-search.js", "js/ui/settings-tabs.js"],
   ["js/input/controller-profiles.js", "js/input/input.js"],
   ["js/core/store.js", "js/career/restore-points.js"],
@@ -740,6 +750,8 @@ const HARD_EDGES = [
   ["js/physics/consts.js", "js/garage/setup-tune.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/career/season-cal.js", "js/career/season-ui.js"], // the screen reads the season rules
   ["js/career/season-ui.js", "js/game.js"],      // game.js calls SeasonUI.create(G) at eval
+  ["js/career/career-planning.js", "js/career/career.js"], // save protection runs during Career evaluation
+  ["js/garage/setup-experiments.js", "js/garage/setup-sheet.js"], // creates the tune experiment controller at evaluation
   ["js/car/parts.js", "js/career/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
   ["js/data/driver-ratings.js", "js/game.js"],   // makeCars reads DriverRatings for every car's skill
   ["js/career/career.js", "js/race/quali-model.js"],    // quali reads Career.rnd/devFor for its spread
@@ -1036,6 +1048,7 @@ const LAZY_EDITOR = [
   "js/editor/elev-presets.js", // ElevPresets: Flat / Rolling / Hilly → per-node heights[] (no DOM)
   "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (per-node height grips → callbacks)
   "js/editor/selection-panel.js", // DesignerSelection: shared point/range controls
+  "js/editor/followup-tools.js", // review proposals, scenery recipes and learning cards
   "js/editor/scenery-panel.js", // DesignerScenery: theme discovery, atmosphere and prop inspector
   "js/editor/bridge-panel.js", // DesignerBridges: authored road-overpass controls
   "js/editor/designer.js",    // TrackDesigner: the #trackdesigner screen — rail, library, SAVE / RACE; last, it reads every module above at init
@@ -1044,8 +1057,9 @@ const LAZY_EDITOR = [
 // same meaning HARD_EDGES carries for FULL, derived so it cannot drift from the
 // roster; designer.js (the screen) must follow every other editor module.
 // elev-presets is pure (optional CustomTracks.LIMITS at call time) — no shape edge.
-const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/bridge-panel.js" && f !== "js/editor/designer.js")
+const LAZY_EDITOR_EDGES = LAZY_EDITOR.filter((f) => f !== "js/editor/followup-tools.js" && f !== "js/editor/shape.js" && f !== "js/editor/scenery-preview.js" && f !== "js/editor/codec.js" && f !== "js/editor/elev-presets.js" && f !== "js/editor/scenery-panel.js" && f !== "js/editor/selection-panel.js" && f !== "js/editor/bridge-panel.js" && f !== "js/editor/designer.js")
   .map((f) => ["js/editor/shape.js", f])
+  .concat([["js/editor/followup-tools.js", "js/editor/scenery-panel.js"]])
   .concat(LAZY_EDITOR.filter((f) => f !== "js/editor/designer.js").map((f) => [f, "js/editor/designer.js"]));
 
 // WEBXR SESSION (js/xr/* minus the boot façade). ~42 KB behind navigator.xr /
@@ -1081,12 +1095,13 @@ const LAZY_CAM_EDITOR_EDGES = [];
 
 // CAREER screen body (~63 KB). Title buttons call CareerUI.openHub/openSlots
 // (FULL stub in career-ui-boot.js); the sheet itself is unreachable until
-// CAREER opens. Dom / Career / CareerBackup stay FULL, so the inject needs
-// no intra-bundle edges.
+// CAREER opens. Dom / Career / CareerBackup stay FULL; planning cards load
+// before the screen that calls them.
 const LAZY_CAREER_UI = [
+  "js/career/career-planning-ui.js", // read-only planning cards and explicit recovery
   "js/career/career-ui.js",   // CareerScreen
 ];
-const LAZY_CAREER_UI_EDGES = [];
+const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/career-ui.js"]];
 
 // TRACK BUILD toolkit (~535 KB raw / ~170 KB gzip). Title never runs a byte of
 // these — only Tracks.build / buildPaced (after ensureScenery) does. Order IS

@@ -89,6 +89,7 @@ const Input = (function () {
   // held Start, so one press fired twice (pause, unpause).
   const padPrevByIndex = new Map();
   let padPrevKey = null;       // padKey of the pad padPrevButtons belongs to
+  let padSnapshotLost = false; // recovery must observe held buttons before accepting new edges
   let padDpadVal = 0;          // ramped d-pad steer, -1..1 (see padDpadSteer)
   let padDpadT = 0;            // last d-pad ramp timestamp, ms
   let padDpadSeq = 0, padDpadLeftSeq = 0, padDpadRightSeq = 0;
@@ -636,6 +637,7 @@ const Input = (function () {
     axisCaptureCb = typeof cb === "function" ? cb : null;
     axisCaptureRest = null;
     axisCaptureSkip = new Set((opts && opts.exclude) || []);
+    axisCaptureOwner = opts && opts.ownerKey || null;
     if (!axisCaptureCb) return;
     axisCaptureRest = snapshotRests(readPads(), new Map());
   }
@@ -646,6 +648,7 @@ const Input = (function () {
     for (let j = 0; j < pads.length; j++) {
       const p = pads[j];
       if (!p || !p.connected) continue;
+      if (axisCaptureOwner && padKey(p, j) !== axisCaptureOwner) continue;
       const rests = axisCaptureRest.get(padKey(p, j));
       if (!rests) { snapshotRests([p], axisCaptureRest); continue; }
       const axes = p.axes || [];
@@ -664,7 +667,16 @@ const Input = (function () {
     axisExt = { key: bestKey, axis: bestI, rest: bestRest, far: bestV, until: nowMs() + AXIS_EXT_MS };
     cb(bestI, Math.sign(bestV - bestRest) || 1, axisExt);
   }
-  function setPadAxisMap(saved) {
+  function setPadAxisMap(saved, ownerKey) {
+    let owner = null;
+    if (ownerKey != null) {
+      const pads = readPads();
+      owner = Array.prototype.find.call(pads, (p, i) => p && p.connected && padKey(p, i) === ownerKey);
+      if (!owner) return null;   // a disconnected wizard cannot change another device
+      const profiles = ensureDeviceProfiles();
+      if (profiles) profiles.activate(owner);
+    }
+    const previous = getPadAxisMap();
     padAxisMap = Object.assign({}, PAD_AXIS_DEF);
     if (saved && typeof saved === "object") {
       for (const k of ["steer", "throttle", "brake"]) {
@@ -680,6 +692,7 @@ const Input = (function () {
       // One axis cannot be both pedals: a combined axis reads brake AND throttle at rest.
       if (padAxisMap.brake != null && padAxisMap.brake === padAxisMap.throttle) padAxisMap.brake = padAxisMap.brakeRest = padAxisMap.brakeFar = null;
     }
+    if (owner) invalidateAxisRest(padIdOf(owner), previous);
     profileChanged();
     return getPadAxisMap();
   }
@@ -702,6 +715,23 @@ const Input = (function () {
       changed: () => { if (typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("apexcontrollerprofilechange")); },
     });
     return deviceProfiles;
+  }
+
+  // Rest belongs to the device AND its steering axis/sign. Profile resets and
+  // completed captures must not reuse an offset measured on a different axis.
+  function invalidateAxisRest(id, previous) {
+    if (previous.steer === padAxisMap.steer && previous.steerInvert === padAxisMap.steerInvert) return;
+    padRestMap.delete(id);
+    padRestLegacy = null; padRestOffset = 0;
+    if (typeof GameStore !== "undefined" && GameStore.store) GameStore.store.set("padRest", padRestStore());
+  }
+  function resetControllerProfile() {
+    const current = deviceProfiles && deviceProfiles.current();
+    if (!current) return false;
+    const previous = getPadAxisMap();
+    if (!deviceProfiles.reset()) return false;
+    invalidateAxisRest(current.id, previous);
+    return true;
   }
 
   function padAxesAreDefault() {
@@ -776,6 +806,7 @@ const Input = (function () {
     throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null };   // pedal travel ends, measured by the wizard
   let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
   let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
+  let axisCaptureOwner = null;   // after first wheel answer, ignore other physical devices
   let axisCaptureSkip = new Set(); // axes the wizard already assigned; capture ignores them
   let axisCaptureRest = null;    // resting snapshot taken when the wizard armed
   function readPadAxis(axes, i) {
@@ -928,6 +959,15 @@ const Input = (function () {
     if (down && e.isTrusted !== false && !(tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable))) {
       kbSeen = true;
       noteInputSource("keyboard");
+    }
+    // Native HUD buttons own their activation keys. Let the browser deliver
+    // their click once; releases still clear keys held before focus moved here.
+    const nativeHudActivation = tag === "BUTTON" && active && active.matches &&
+      active.matches("#btn-cam, #pausebtn, #hud-restore") &&
+      (e.code === "Space" || e.code === "Enter" || e.code === "NumpadEnter");
+    if (nativeHudActivation) {
+      if (!down) { heldKeys.delete(e.code); syncHeldKeys(); }
+      return;
     }
     /* COMMAND EATS THE KEY-UP, so Command going down is a release-all.
        On macOS the OS does not deliver key-up to an application while Command
@@ -1457,6 +1497,10 @@ const Input = (function () {
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
       padIsWheel = false;
+      // A missing browser snapshot is not a release. Reseed on recovery:
+      // even a button pressed during the gap needs
+      // a witnessed release before it can trigger an action.
+      if (padPrevKey !== null) padSnapshotLost = true;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padPrevKey = null;
       padPrevByIndex.clear();
@@ -1470,11 +1514,12 @@ const Input = (function () {
     // a fresh press (a boost, a shift, a camera cut). Reseed from the new
     // pad. Not on first connection: the press that woke a pad is a real one.
     const key = padKey(pad, Array.prototype.indexOf.call(pads, pad));
-    if (padPrevKey !== null && key !== padPrevKey) {
+    if (padSnapshotLost || (padPrevKey !== null && key !== padPrevKey)) {
       const nb = pad.buttons ? pad.buttons.length : 0;
       padPrevButtons.length = nb;
       for (let i = 0; i < nb; i++) padPrevButtons[i] = btnDown(pad, i);
     }
+    padSnapshotLost = false;
     padPrevKey = key;
     const profiles = ensureDeviceProfiles();
     if (profiles) profiles.activate(pad);
@@ -2424,7 +2469,7 @@ const Input = (function () {
     controllerProfile: () => deviceProfiles ? deviceProfiles.current() : null,
     getControllerProfiles: () => ensureDeviceProfiles() ? deviceProfiles.data() : { v: 1, devices: [] },
     setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
-    resetControllerProfile: () => deviceProfiles ? deviceProfiles.reset() : false,
+    resetControllerProfile,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, clearPadRest, padRestStore,
     touchControlsNeeded,
     pickPad,

@@ -28,7 +28,10 @@ import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { lobbyReset, toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
-const EV = { HELLO: "hello", READY: "ready" };
+const EV = { HELLO: "hello", READY: "ready", SETTINGS: "settings" };
+// A guest refuses READY until the host's complete rules (track, laps, weather,
+// tod, quali, difficulty) have arrived, as they do from a real host on join.
+const HOST_RULES = { track: 0, laps: 11, weather: "dry", tod: "day", quali: false, difficulty: "normal" };
 
 // Teams.LIST index of Red Bull, whose two seats every test here fights over.
 const RBR = 3;
@@ -56,6 +59,14 @@ async function enterRoom(page, role = "host") {
 
 const peerSays = (page, type, data) =>
   page.evaluate(([t, d]) => window.__apex.lobbyPeerEvent(t, d), [type, data]);
+
+// The fake host's packet is only delivered on the lobby's own pump, so wait for
+// the room to show the rules before anything (READY, GO) depends on them.
+const hostSays = async (page, extra = {}) => {
+  const rules = { ...HOST_RULES, ...extra };
+  await peerSays(page, EV.SETTINGS, rules);
+  await expect(page.locator("#vs-race-summary")).toContainText(String(rules.laps), { timeout: 5000 });
+};
 
 // A loopback endpoint only delivers on pump(), so a hello sent by the fake peer
 // lands a beat later. Anything that reads the OTHER player's seat — the greyed
@@ -119,6 +130,7 @@ test.describe("seat exclusivity — resolving a clash", () => {
     // answer stale, exactly as changing your own mind does (roomChanged).
     await seatedAs(page, RBR, 0);
     await enterRoom(page, "guest");
+    await hostSays(page);
     await page.click("#vs-ready");
     expect(await page.evaluate(() => window.__apex.lobbyRoom().selfReady)).toBe(true);
 

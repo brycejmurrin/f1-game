@@ -1630,6 +1630,32 @@ test("optional stamped mismatch is omitted without poisoning the successful gene
   assert.equal(h.skipped, 1);
 });
 
+test("optional digest verification expires without caching a late verified response", { timeout: 5000 }, async () => {
+  const body = "body of js/circuits/monza.js", hash = hash12(body), pending = new Map(), digest = deferred();
+  let checked = false;
+  const h = createHarness({ fetchImpl: lazyShellFetch({ "js/circuits/monza.js": hash }), globals: {
+    setTimeout(callback, ms, ...args) {
+      if (ms !== 4000) return setTimeout(callback, ms, ...args);
+      const id = {}; pending.set(id, callback); return id;
+    },
+    clearTimeout(id) { if (!pending.delete(id)) clearTimeout(id); },
+    crypto: { subtle: { digest(algorithm, bytes) {
+      if (Buffer.from(bytes).toString() !== body) return webcrypto.subtle.digest(algorithm, bytes);
+      checked = true;
+      queueMicrotask(() => { for (const expire of pending.values()) expire(); });
+      return digest.promise;
+    } } },
+  } });
+  await h.lifecycleEvent("install").done();
+  assert.equal(checked, true, "the deadline fires during digest work, not during fetch");
+  const store = h.stores.get("apex26-322"), url = `${ORIGIN}/js/circuits/monza.js?v=${hash}`;
+  assert.equal(h.skipped, 1, "optional verification cannot block a healthy installation");
+  assert.equal(store.has(url), false);
+  digest.resolve(await webcrypto.subtle.digest("SHA-256", Buffer.from(body)));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(store.has(url), false, "late verification cannot write after its deadline");
+});
+
 test("required stamped admission fails closed without digest support", async () => {
   for (const crypto of [undefined, { subtle: { digest: async () => { throw new Error("digest unavailable"); } } }]) {
     const h = createHarness({ fetchImpl: lazyShellFetch(null), globals: { crypto } });

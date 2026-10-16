@@ -17,6 +17,36 @@ export function snapshot(game, phase) {
 export function resourceDiff(before, after) {
   return Object.fromEntries(['timers', 'rafFrames', 'rejectionListeners'].map((key) => [key, after.resources[key] - before.resources[key]]));
 }
+/**
+ * Run the same headless mode transition repeatedly.  A single clean close can
+ * hide resources retained by a previous mode, so this deliberately records
+ * both the live and post-close snapshots for every cycle.  The VM is not a
+ * GPU profiler; this catches deterministic timer/rAF/rejection-listener
+ * growth and makes a useful pre-browser soak gate.
+ */
+export async function lifecycleSoak({ track = 'monza', seed = 1, cycles = 1 } = {}) {
+  if (!Number.isInteger(cycles) || cycles < 1 || cycles > 12) throw new Error('cycles bounds: 1..12');
+  const rows = [];
+  for (let cycle = 0; cycle < cycles; cycle++) {
+    let game, row;
+    try {
+      game = await createGame({ search: '?seed=' + ((seed + cycle) >>> 0), carMeshes: false });
+      const before = snapshot(game, `cycle-${cycle}-before`);
+      row = { cycle, before }; rows.push(row);
+      await game.race(track); game.step(2);
+      const entered = snapshot(game, `cycle-${cycle}-entered`);
+      game.apex.reset(0.1, 30, 0, (seed + cycle) >>> 0);
+      const reset = snapshot(game, `cycle-${cycle}-reset`);
+      row.entered = entered; row.reset = reset;
+    } finally {
+      game?.close();
+      if (game && row) row.closed = snapshot(game, `cycle-${cycle}-closed`);
+    }
+  }
+  const clean = (row) => row?.closed?.resources?.closed && row.closed.resources.timers === 0 &&
+    row.closed.resources.rafFrames === 0 && row.closed.resources.rejectionListeners === 0;
+  return { cycles, rows, ok: rows.length === cycles && rows.every(clean) };
+}
 export async function pendingWatchCancellation() {
   let release, pendingRequests = 0, launches = 0;
   const context = vm.createContext({
@@ -51,6 +81,7 @@ export async function lifecycleCensus(opts) {
     game.G.resetEpisodeOwners(); rows.push(snapshot(game, 'owner-reset'));
   } finally { game?.close(); if (game) rows.push(snapshot(game, 'closed')); }
   const cancellation = await pendingWatchCancellation();
+  const soak = await lifecycleSoak({ track: opts.track, seed: opts.seed, cycles: opts.cycles || 1 });
   let failure;
   try { const bad = await createGame({ track: '__census_unknown_track__', carMeshes: false }); bad.close(); failure = { rejected: false }; }
   catch (err) { failure = { rejected: true, error: err.message, resources: err.resources }; }
@@ -59,11 +90,11 @@ export async function lifecycleCensus(opts) {
   const resetClean = seeded?.caution.level === 3 && seeded?.debris.queued === 3 && reset?.caution.level === 0 && reset?.debris.queued === 0 && reset?.incident.count === 0 && reset?.incident.owned === 0;
   const closed = rows.at(-1)?.resources;
   const clean = (r) => r && r.closed && r.timers === 0 && r.rafFrames === 0 && r.rejectionListeners === 0;
-  return { schemaVersion: 1, mode: 'vm-no-renderer', requestedSeed: opts.seed, seed: game.apex.seed(), track: opts.track, ok: resetClean && cancellation.ok && clean(closed) && failure.rejected && clean(failure.resources), snapshots: rows, diffs: rows.slice(1).map((row, i) => ({ from: rows[i].phase, to: row.phase, resources: resourceDiff(rows[i], row) })), resetOwners: { ok: resetClean, incidentPhysicalLaunch: 'not-exercised: optional Rapier unavailable in VM' }, cancellation, failedBoot: failure };
+  return { schemaVersion: 1, mode: 'vm-no-renderer', requestedSeed: opts.seed, seed: game.apex.seed(), track: opts.track, ok: resetClean && cancellation.ok && soak.ok && clean(closed) && failure.rejected && clean(failure.resources), snapshots: rows, diffs: rows.slice(1).map((row, i) => ({ from: rows[i].phase, to: row.phase, resources: resourceDiff(rows[i], row) })), resetOwners: { ok: resetClean, incidentPhysicalLaunch: 'not-exercised: optional Rapier unavailable in VM' }, cancellation, soak, failedBoot: failure };
 }
 if (invoked(import.meta.url)) {
   try {
-    const opts = parseCaptureArgs(process.argv.slice(2), 'lifecycle-census');
+    const opts = parseCaptureArgs(process.argv.slice(2), 'lifecycle-census', ['--cycles']);
     if (opts.help) console.log(usage('lifecycle-census'));
     else if (opts.plan) console.log(JSON.stringify(opts, null, 2));
     else { const report = await lifecycleCensus(opts); mkdirSync(opts.out, { recursive: true }); writeFileSync(resolve(opts.out, 'census.json'), JSON.stringify(report, null, 2) + '\n'); console.log(JSON.stringify(report, null, 2)); if (!report.ok) process.exitCode = 1; }

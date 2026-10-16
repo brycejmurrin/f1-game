@@ -27,15 +27,18 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ADAPTED } from "../../tools/ci/twinned-specs.mjs";
+import { ADAPTED, ADAPTED_PAGE_GROUPS } from "../../tools/ci/twinned-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const specs = Object.keys(ADAPTED).sort();
+const group = process.env.APEX_VM_PAGE_GROUP || "";
+const groupSpecs = group && ADAPTED_PAGE_GROUPS[group];
+if (group && !groupSpecs) throw new Error(`unknown APEX_VM_PAGE_GROUP=${group}`);
+const specs = (groupSpecs || Object.keys(ADAPTED)).slice().sort();
 // Two at a time: a VM boot is CPU-bound and the box has four cores; CI's
 // runners have two. APEX_VM_PAGE_JOBS overrides.
 const JOBS = Math.max(1, Number.parseInt(process.env.APEX_VM_PAGE_JOBS || "2", 10) || 2);
 
-describe("browser specs under the vm-page adapter", { concurrency: JOBS }, () => {
+describe(`browser specs under the vm-page adapter${group ? ` (${group})` : ""}`, { concurrency: JOBS }, () => {
   test("the ADAPTED map is not empty (an empty gate is not a gate)", () => {
     assert.ok(specs.length > 0, "tools/ci/twinned-specs.mjs ADAPTED names no spec — drop test:vm-page or fill it");
   });

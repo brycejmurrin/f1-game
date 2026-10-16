@@ -204,8 +204,70 @@ test("C1: a stamped circuit this build no longer knows is dropped and the round 
   assert.equal(s.calIds.includes("monaco"), false);
   assert.equal(s.round, 7, "one of the eight raced rounds no longer exists");
   assert.deepEqual(Array.from(s.roundPts["haas:0"]), [1, 2, 3, 4, 5, 7, 8]);
-  assert.deepEqual(Array.from(h.Career.data().results, (r) => r.r), [6], "the Monaco row goes, Red Bull Ring's index follows");
+  assert.deepEqual(Array.from(h.Career.data().results, (r) => r.r), [undefined, 6], "removed results cannot impersonate a remaining round");
+  assert.equal(h.Career.data().results[0].archivedCircuit, "monaco");
   assert.equal(raced(h), "silverstone", "the next race is still the circuit after the last one raced");
+});
+
+test("removed raced circuits retain achievements through migration, reload and rollover", () => {
+  const h = started();
+  const c = h.Career.data(), me = c.team + ":" + c.seat;
+  c.season.round = 8;
+  c.season.pts[me] = 40;
+  c.results = [{ r: 5, p: 1, pts: 25 }, { r: 7, p: 3, pts: 15 }];
+  h.Career.save();
+  h.run("Tracks.LIST.splice(5,1); Tracks.SEASON.splice(5,1)");
+  h.Career.load();
+  assert.equal(h.Career.slots("driver")[0].wins, 1);
+  assert.equal(h.Career.data().season.pts[me], 40);
+  const rows = h.Career.data().results;
+  assert.equal(rows.length, 2);
+  assert.equal("r" in rows[0], false);
+  h.ctx.savedForMigration = h.Career.data();
+  h.run("SaveMigrate.migrateCareer(savedForMigration)");
+  assert.equal("r" in rows[0], false, "migration must not coerce an archived round to zero");
+  h.Career.save(); h.Career.load();
+  assert.equal(h.Career.data().results.length, 2, "reload retains archived achievements");
+  h.ctx.document = makeDom().document;
+  for (const f of ["js/ui/dom.js", "js/career/experience.js"]) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), h.ctx);
+  h.ctx.currentCareer = h.Career.data();
+  assert.equal(h.run("CareerExperience.calendar(currentCareer, Career.calendar())[0].result"), null,
+    "archived win must never appear as round zero's result");
+  h.run("Tracks.LIST.splice(6,1); Tracks.SEASON.splice(6,1)");
+  h.Career.save(); h.Career.load();
+  assert.deepEqual(Array.from(h.Career.data().results, (r) => r.archivedCircuit), ["monaco", "redbull"],
+    "a second calendar contraction preserves both historical races");
+  h.Career.data().season.round = h.Career.roundsTotal();
+  h.Career.rollover();
+  assert.equal(h.Career.data().tally.wins, 1);
+  assert.equal(h.Career.data().tally.podiums, 2);
+  assert.equal(h.Career.data().tally.pts, 40);
+  assert.equal(h.Career.data().history.at(-1).wins, 1);
+});
+
+for (const changedAfterRender of [false, true]) test(`unsupported career card keeps the picker and never opens the previous career (foreign change: ${changedAfterRender})`, () => {
+  const h = started(), dom = makeDom(), messages = [];
+  const previous = h.Career.data(), key = "career.driver.1";
+  const future = { v: 999, flavour: "driver", team: "haas" };
+  h.stored.set(key, changedAfterRender ? JSON.parse(JSON.stringify(previous)) : future);
+  h.ctx.GameStore.store.keyRevision = () => "unchanged";
+  h.ctx.document = dom.document;
+  h.ctx.ScrollFade = { refresh() {} };
+  for (const f of ["js/ui/dom.js", "js/career/career-ui.js"]) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), h.ctx);
+  let opened = 0;
+  const ui = h.run("CareerScreen").create({ $: dom.byId, els: { overlay: dom.byId("overlay") },
+    openCareer() { opened++; }, announce: (msg) => messages.push(msg) });
+  ui.openSlots("title");
+  const button = dom.byId("cr-left").querySelectorAll(".cr-slot-main")[1];
+  assert.ok(button, "real slot card is rendered");
+  if (changedAfterRender) h.stored.set(key, future);
+  button.onclick();
+  assert.equal(opened, 0);
+  assert.equal(h.Career.data(), previous);
+  assert.equal(h.Career.slot().i, 0);
+  assert.deepEqual(messages, ["UPDATE REQUIRED"]);
+  ui.build();
+  assert.equal(dom.byId("cr-title").textContent, "CAREER MODES", "failed entry retains picker state");
 });
 
 test("C1: the hub's NEXT RACE card names the circuit Career.trackIndex() will load, after the calendar changed", () => {

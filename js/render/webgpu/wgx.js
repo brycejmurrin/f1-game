@@ -1211,6 +1211,7 @@ const WGX = (function () {
     let matPlaceAlbedoView = null, matPlaceNormalView = null;
     let _matOwnedAlbedo = null, _matOwnedNormal = null;
     let _matBindGen = 0, _matPendingFills = 0, _matPendingBinds = 0;   // P4: async pack fills / binds held back
+    let _matRequested = new Set();
     let matScaleUBO = null, matScaleData = new Float32Array(20);
     let _matAlbedoOn = false, _matNormalOn = false;
     const _matScales = new Float32Array(MAT_TEX_LAYERS);
@@ -4932,7 +4933,15 @@ const WGX = (function () {
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
         });
         const tok = { _wgx: "texarray", texture: tex, view: tex.createView({ dimension: "2d-array" }), layers: n };
+        // The array is only usable when every layer supplied by the pack has
+        // landed.  A GPU readback can resolve with a prefix (for example when
+        // a fence is interrupted by device loss); binding that texture would
+        // make the missing layers look like valid black/grey material pages
+        // and, worse, suppress Assets.load()'s retry path.
+        const expected = [];
+        for (let i = 0; i < n; i++) if (images[i]) expected.push(i);
         let filled = 0;
+        const written = new Set();
         const bpr = size * 4;
         const writeLayer = (i, bytes) => {
           const img = images[i];
@@ -4949,6 +4958,7 @@ const WGX = (function () {
                 { texture: tex, origin: [0, 0, i], premultipliedAlpha: false },
                 [size, size]);
             }
+            written.add(i);
             filled++;
           } catch (_) { /* skip a missing/bad layer; pack still ships */ }
         };
@@ -4964,12 +4974,15 @@ const WGX = (function () {
             _generateMips(tex, n);
             return true;
           };
-          tok.ready = job.then(() => settle(true), () => settle(false));
+          tok.ready = job.then(() => settle(written.size === expected.length), () => settle(false));
           return tok;
         }
         const layerBytes = _matLayerBytes(size, images, n);
         for (let i = 0; i < n; i++) writeLayer(i, layerBytes[i]);
-        if (!filled) { try { tex.destroy(); } catch (_) { /* already invalid */ } return null; }
+        if (!filled || written.size !== expected.length) {
+          try { tex.destroy(); } catch (_) { /* already invalid */ }
+          return null;
+        }
         _generateMips(tex, n);
         return tok;
       } catch (_) {
@@ -5007,6 +5020,7 @@ const WGX = (function () {
     function setMaterialMaps(maps) {
       const gen = ++_matBindGen;
       const toks = maps ? [maps.albedo, maps.normal] : [];
+      _matRequested = new Set(toks);
       const waits = toks.filter((t) => t && t.pending && t.ready).map((t) => t.ready);
       if (!waits.length) { _setMaterialMapsNow(maps); return; }
       _matPendingBinds++;
@@ -5015,7 +5029,7 @@ const WGX = (function () {
         const live = (t) => !!(t && t.view && !t.pending);
         const a = live(maps.albedo) ? maps.albedo : null, nn = live(maps.normal) ? maps.normal : null;
         if (gen !== _matBindGen || !a) {   // superseded, or the albedo never filled: bind nothing, free what filled
-          for (const t of [a, nn]) if (t) freeTexture(t);
+          for (const t of new Set([a, nn])) if (t && (gen === _matBindGen || !_matRequested.has(t))) freeTexture(t);
           return;
         }
         _setMaterialMapsNow({ albedo: a, normal: nn, scales: maps.scales });

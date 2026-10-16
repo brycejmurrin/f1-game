@@ -451,6 +451,10 @@ const HudArrange = (() => {
       host.insertBefore(tip, btn.nextSibling);
     })();
 
+    /* The hidden toolbar exists from boot: it is a UiLayers layer whose data-esc-close
+       (hud-arrange-done) must name a real button before the first edit. */
+    ensureBar();
+
     /* ---- pointers ---- */
     const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
     function onPointerDown(e) {

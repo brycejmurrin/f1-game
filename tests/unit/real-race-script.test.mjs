@@ -26,6 +26,11 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
 const host = (v) => JSON.parse(JSON.stringify(v));
+function positionRows(script, num = script.drivers[0].num) {
+  const d = script.drivers.find((driver) => driver.num === num);
+  const end = Math.max(...d.lapStart.map((start, i) => start != null && d.laps[i] > 0 ? start + d.laps[i] : 0));
+  return Array.from({ length: 102 }, (_, i) => ({ date: script.t0 + end * 1000 * i / 101, x: i * 10, y: i * 10 }));
+}
 
 const TRACKS = [
   { id: "monza", name: "MONZA", country: "Italy" }, { id: "imola", name: "IMOLA", country: "Italy", classic: true },
@@ -334,7 +339,7 @@ async function launchRecoveryHarness(failPositions = false) {
     F1API: { locationData: () => {
       requests++;
       if (failPositions) return Promise.reject(new Error("offline"));
-      return Promise.resolve(Array.from({ length: 102 }, (_, i) => ({ date: script.t0 + i * 1000, x: i * 10, y: i * 10 })));
+      return Promise.resolve(positionRows(script));
     }, cancelAll() {} },
     RealRace: { replay: () => null, launch: (script, opts) => {
       order.push("launch"); launches.push({ script, opts, opened });
@@ -406,7 +411,7 @@ test("pending WATCH snapshots its seat, camera, session and lap before positions
   await h.flush();
   assert.equal(h.requests.length, 1);
   h.tab.setSeat("BBB"); h.tab.setWatchCamera("chase"); h.tab.setStartLap(1);
-  h.requests[0](Array.from({ length: 102 }, (_, i) => ({ date: script.t0 + i * 1000, x: i * 10, y: i * 10 })));
+  h.requests[0](positionRows(script));
   await h.flush();
   assert.equal(h.launches.length, 1);
   const launch = h.launches[0];
@@ -425,10 +430,10 @@ test("cancel/reopen and session replacement discard stale WATCH completions", as
   h.tab.watch(h.script(11), null, 2, false);
   await h.flush();
   assert.equal(h.requests.length, 2);
-  h.requests[0](Array.from({ length: 102 }, (_, i) => ({ date: h.script(10).t0 + i * 1000, x: i * 10, y: i * 10 }))); await h.flush();
+  h.requests[0](positionRows(h.script(10))); await h.flush();
   assert.equal(h.launches.length, 0);
   assert.equal(h.tab.traces(), null, "stale positions must not replace current state");
-  h.requests[1](Array.from({ length: 102 }, (_, i) => ({ date: h.script(11).t0 + i * 1000, x: i * 10, y: i * 10 }))); await h.flush();
+  h.requests[1](positionRows(h.script(11))); await h.flush();
   assert.equal(h.launches.length, 1);
   assert.equal(h.launches[0].script.sessionKey, 11);
   const second = pendingWatchHarness();
@@ -880,7 +885,7 @@ test("reading an old trace cache refreshes recency before capacity eviction", as
   const t0 = 100000;
   const script = (sessionKey) => ({ sessionKey, t0, complete: true, drivers: [{ num: 1, laps: [120], lapStart: [0] }] });
   const { D } = load({ indexedDB, F1API: { locationData: async (key) => {
-    requested.push(key); return Array.from({ length: 102 }, (_, i) => ({ date: t0 + i * 1000, x: i * 10, y: i * 10 }));
+    requested.push(key); return positionRows(script(key));
   } } });
   for (let k = 1; k <= 8; k++) await D.fetchTraces(script(k));
   const old = records.get("1"); await D.fetchTraces(script(1));
@@ -912,7 +917,7 @@ test("a dense winner cannot permanently cache a full-distance peer's sparse posi
   const t0 = 100000, requests = []; let sparse = true;
   const script = { sessionKey: 8, t0, complete: true, drivers: [1, 2].map((num) => ({ num, lapStart: [0], laps: [600] })) };
   const { D } = load({ F1API: { locationData: async (_, num) => {
-    requests.push(num); return Array.from({ length: num === 2 && sparse ? 2 : 102 }, (_, i) => ({ date: t0 + i * 1000, x: i * 10, y: i * 10 }));
+    requests.push(num); return Array.from({ length: num === 2 && sparse ? 2 : 102 }, (_, i) => ({ date: t0 + i * 600000 / 101, x: i * 10, y: i * 10 }));
   } } });
   const partial = await D.fetchTraces(script);
   assert.equal(partial.complete, false); assert.deepEqual(host(partial.failed), [2]);
@@ -929,4 +934,81 @@ test("positions accessible action follows LOAD and failed RETRY", async () => {
   await h.flush();
   assert.equal(button.textContent, "RETRY POSITIONS");
   assert.match(button["aria-label"], /^RETRY POSITIONS/);
+});
+
+test("dense truncated WATCH windows remain retryable, including matching memory records", async () => {
+  const t0 = 100000, script = { sessionKey: 91, t0, complete: true,
+    drivers: [{ num: 1, lapStart: [0], laps: [600] }, { num: 2, lapStart: [0], laps: [30], retired: true }] };
+  let from = 0, until = 600, calls = 0;
+  const { D } = load({ F1API: { locationData: async (_, num) => {
+    calls++;
+    const end = num === 2 ? 30 : until, start = num === 2 ? 0 : from;
+    return Array.from({ length: 102 }, (_, i) => ({ date: t0 + (start + (end - start) * i / 101) * 1000, x: 100 + i, y: 200 + i }));
+  } } });
+  const full = await D.fetchTraces(script);
+  assert.equal(full.complete, true, "a genuine early retirement only needs its own distance");
+  for (const [start, end] of [[0, 101], [100, 600], [100, 201]]) {
+    from = start; until = end;
+    const partial = await D.fetchTraces(script);
+    assert.equal(partial.complete, false);
+    assert.deepEqual(host(partial.failed), [1]);
+    from = 0; until = 600;
+    const before = calls;
+    const repaired = await D.fetchTraces(script, null, partial);
+    assert.equal(repaired.complete, true);
+    assert.equal(calls - before, 1, "only the truncated car is refetched");
+  }
+  const corrupt = { ...full, cars: { ...full.cars, 1: full.cars[1].slice(0, 306) } };
+  // Preserve enough samples to defeat a count-only check, but corrupt its clock.
+  for (let i = 0; i < corrupt.cars[1].length; i += 3) corrupt.cars[1][i] /= 6;
+  const before = calls;
+  assert.equal((await D.fetchTraces(script, null, corrupt)).complete, true);
+  assert.ok(calls > before, "matching coverage metadata cannot bless truncated old memory");
+});
+
+test("a matching complete IndexedDB record still needs actual per-driver temporal coverage", async () => {
+  const records = new Map();
+  const indexedDB = { open() {
+    const rq = {};
+    queueMicrotask(() => { rq.result = { transaction() {
+      const tx = {};
+      const request = (value) => { const r = {}; queueMicrotask(() => { r.result = value; r.onsuccess?.(); }); return r; };
+      tx.objectStore = () => ({ get: (k) => request(records.get(k)), put: (v, k) => { records.set(k, v); return request(k); } });
+      setImmediate(() => tx.oncomplete?.()); return tx;
+    } }; rq.onsuccess(); }); return rq;
+  } };
+  const script = { sessionKey: 93, t0: 100000, complete: true, drivers: [{ num: 1, lapStart: [0], laps: [600] }] };
+  let requests = 0;
+  const { D } = load({ indexedDB, F1API: { locationData: async () => { requests++; return positionRows(script); } } });
+  await D.fetchTraces(script);
+  const saved = records.get("93");
+  for (let i = 0; i < saved.cars[1].length; i += 3) saved.cars[1][i] /= 6;
+  await D.fetchTraces(script);
+  assert.equal(requests, 2, "a legacy count-only complete record is repaired by a real download");
+  await D.fetchTraces(script);
+  assert.equal(requests, 2, "the repaired record is reusable");
+});
+
+test("WATCH packing sorts valid positions and keeps the first valid duplicate timestamp", () => {
+  const { D } = load();
+  const packed = D.packTrace([{ date: 102000, x: 30, y: 40 }, { date: NaN, x: 1, y: 2 },
+    { date: 100000, x: 10, y: 20 }, { date: 101000, x: null, y: 30 },
+    { date: 101000, x: 20, y: 30 }, { date: 101000, x: 999, y: 999 }], 100000);
+  assert.deepEqual(Array.from(packed), [0, 1, 2, 1, 2, 3, 2, 3, 4]);
+});
+
+test("SC ending notice keeps its inclusive lap but releases only at TRACK CLEAR", () => {
+  const { D } = load();
+  const rows = [
+    { lap_number: 31, date: "2026-01-01T11:58:05Z", message: "SAFETY CAR DEPLOYED" },
+    { lap_number: 35, date: "2026-01-01T12:09:15Z", message: "SAFETY CAR IN THIS LAP" },
+    { lap_number: 36, date: "2026-01-01T12:11:14Z", message: "TRACK CLEAR" },
+  ];
+  const secs = (d) => Date.parse(d) / 1000;
+  const [w] = D.cautionsFor(rows, secs);
+  assert.equal(w.to, 35);
+  assert.equal(w.tEnding, secs(rows[1].date));
+  assert.equal(w.tTo - w.tEnding, 119);
+  assert.equal(D.cautionsFor(rows.slice(0, 2), secs)[0].tTo, null, "notice alone has no exact release");
+  assert.equal(D.cautionsFor([rows[0], rows[2]])[0].to, 36, "release without notice retains the last caution lap");
 });

@@ -406,12 +406,12 @@ function collectTtlb() {
 }
 function applyTtlb(bag) {
   if (!bag || typeof bag !== "object" || Array.isArray(bag)) return { applied: 0, skipped: 0, rejected: 0 };
-  if (!GameStore || !GameStore.ttBoardAdd || !GameStore.ttBoard) {
+  if (!GameStore || !GameStore.ttBoardAddResult || !GameStore.ttBoard) {
     return { applied: 0, skipped: 0, rejected: 0 };
   }
   const tracks = Object.keys(bag);
   if (tracks.length > TTLB_TRACKS_MAX) return { applied: 0, skipped: tracks.length, rejected: tracks.length };
-  let applied = 0, skipped = 0, rejected = 0, lapsSeen = 0;
+  let applied = 0, skipped = 0, rejected = 0, failed = 0, lapsSeen = 0;
   for (const trackId of tracks) {
     if (!TTLB_TRACK_RE.test(trackId)) { skipped++; rejected++; continue; }
     const raw = bag[trackId];
@@ -423,13 +423,20 @@ function applyTtlb(bag) {
       if (lapsSeen >= TTLB_LAPS_MAX) { skipped++; continue; }
       lapsSeen++;
       const k = ttlbEntryKey(lap);
-      if (seen.has(k)) { skipped++; continue; }
-      GameStore.ttBoardAdd(trackId, lap);
-      seen.add(k);
-      applied++;
+      if (seen.has(k)) {
+        if (GameStore.store.failedKeys().some((f) => f.key === "ttlb." + trackId)) {
+          try { if (GameStore.ttBoardSaveResult(trackId).durable) applied++; else failed++; } catch (_) { failed++; }
+        } else skipped++;
+        continue;
+      }
+      try {
+        const result = GameStore.ttBoardAddResult(trackId, lap);
+        if (result.ok) seen.add(k);
+        if (result.durable) applied++; else failed++;
+      } catch (_) { failed++; }
     }
   }
-  return { applied, skipped, rejected };
+  return { applied, skipped, rejected, failed };
 }
 
 // THE GARAGE FILE: a SECOND file, deliberately not part of the settings one: the garage is what
@@ -441,7 +448,7 @@ function applyTtlb(bag) {
 // holds career saves, lap records and OAuth tokens under the same namespace,
 // and nothing outside these five shapes is ever read.
 const GARAGE_FORMAT = "apex26-garage-v1";
-const GARAGE_PREFIXES = ["parts.", "livery.", "setup."];   // + ".custom." under livery
+const GARAGE_PREFIXES = ["parts.", "livery.", "setup.", "setupPresets."];   // + ".custom." under livery
 const GARAGE_SINGLES = ["customTeam", "customLogo", "team", "driver"];
 const GARAGE_EXCLUDED = "career and season saves, lap records, ghosts, settings, tuners, control bindings, accounts";
 // A key is a garage key if it is one of the four singles or begins with a
@@ -527,6 +534,7 @@ function applySettings(file, G) {
   const ttlb = applyTtlb(file.ttlb);
   applied += ttlb.applied;
   skipped += ttlb.skipped;
+  failed += ttlb.failed || 0;
   return { ok: true, applied, skipped, failed, rejectedTtlb: ttlb.rejected || 0, reason: null };
 }
 // A FILE IS PLAYER INPUT AND THE GARAGE DOES NOT DEFEND ITSELF. isGarageKey
@@ -599,6 +607,18 @@ function cleanLivery(l) {
 // the lot: the player's other work is not the file's fault.
 function garageValue(k, v) {
   if (v === undefined || v === null) return undefined;
+  if (k.indexOf("setupPresets.") === 0) {
+    if (typeof SetupPresets === "undefined" || typeof SetupTune === "undefined" || !isObj(v) || v.v !== 1
+        || !Array.isArray(v.items) || v.items.length > SetupPresets.MAX
+        || Object.keys(v).some((key) => key !== "v" && key !== "items")) return undefined;
+    if (v.items.some((row) => !isObj(row) || typeof row.name !== "string" || row.name.trim().length > 32
+        || !(row.trackId === null || typeof row.trackId === "string" && row.trackId.length <= 128) || !Number.isFinite(row.at)
+        || Object.keys(row).some((key) => !["id", "name", "tune", "trackId", "at"].includes(key))
+        || !isObj(row.tune) || Object.keys(row.tune).length !== SetupTune.FIELDS.length
+        || Object.keys(row.tune).some((field) => !SetupTune.FIELDS.includes(field)))) return undefined;
+    const clean = SetupPresets.normalize(v);
+    return clean.items.length === v.items.length ? clean : undefined;
+  }
   if (k.indexOf("livery.custom.") === 0) {
     if (!Array.isArray(v)) return undefined;
     return v.slice(0, GARAGE_LIVERIES_MAX).map(cleanLivery).filter(Boolean);
@@ -695,9 +715,9 @@ function resetGarage() {
 
 // THE CAREER FILE: the six championship slots and the live pointer. Same
 // allowlist discipline as the garage — only career.<flavour>.<i> and
-// careerSlot leave or enter the namespace. Every slot value runs through
-// migrateCareer on the way out and on the way in so a hand-edited or
-// older-build file cannot crash Career.load().
+// careerSlot leave or enter the namespace. Supported slots run through
+// migrateCareer on export/import; opaque future saves export verbatim and
+// refuse import so an older build cannot silently discard them.
 const CAREER_FORMAT = "apex26-career-v1";
 const CAREER_FLAVOURS = ["driver", "myteam"];
 const CAREER_SLOT_N = 3;
@@ -715,6 +735,14 @@ function migrateSlot(raw) {
   if (typeof GameStore !== "undefined" && GameStore.migrateCareer) return GameStore.migrateCareer(copy);
   return copy && typeof copy === "object" && !Array.isArray(copy) ? copy : null;
 }
+// Ask the shared authority about opaque future saves before migration can
+// discard them. Check only the version so unrelated legacy coercion, shape
+// and size decisions cannot hide a future discriminator.
+function futureCareerSlot(raw, flavour) {
+  if (typeof CareerBackup === "undefined") return false;
+  return CareerBackup.validate({ format: CareerBackup.FORMAT,
+    slots: [{ flavour, i: 0, data: { v: raw && raw.v } }] }).reason === "newer-version";
+}
 function collectCareer() {
   const out = {};
   let n = 0;
@@ -730,7 +758,7 @@ function collectCareer() {
           if (s != null) raw = JSON.parse(s);
         } catch (_) { raw = null; }
       }
-      const c = migrateSlot(raw);
+      const c = futureCareerSlot(raw, f) ? JSON.parse(JSON.stringify(raw)) : migrateSlot(raw);
       if (!c) continue;
       out[k] = c;
       n++;
@@ -778,9 +806,10 @@ function applyCareer(file, revisions) {
       else skipped++;
       continue;
     }
+    const match = CAREER_SLOT_RE.exec(k);
+    if (futureCareerSlot(bag[k], match[1])) return refused("newer-version");
     const c = migrateSlot(bag[k]);
     if (!c) { skipped++; continue; }
-    const match = CAREER_SLOT_RE.exec(k);
     slots.push({ flavour: match[1], i: Number(match[2]), data: c });
   }
   if (!slots.length && liveSlot == null) return { ok: true, applied: 0, skipped, failed: 0, reason: null };

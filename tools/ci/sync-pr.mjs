@@ -7,6 +7,7 @@
 //   node tools/ci/sync-pr.mjs <branch>          # fetch, merge, verify, leave the result on a local branch
 //   node tools/ci/sync-pr.mjs <branch> --push   # same, then push to origin/<branch>
 //   node tools/ci/sync-pr.mjs <branch> --verify=none|fast|full   # default fast
+//   node tools/ci/sync-pr.mjs <branch> --force-clean-behind     # sync although needs-sync.mjs says `no`
 //   node tools/ci/sync-pr.mjs <branch> --resume --from=<stage>   # re-verify the kept sync-pr-<branch>
 //
 // STAGED, TIMED, DIFF-AWARE VERIFY (#2186, 2026-10-15). It ran tooling-fast at
@@ -52,6 +53,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, plan, preflight, mergeDeployTip, gateNodeSuites, touchedCircuits, changedPaths } from "./deploy.mjs";
 import { plan as nodePlan } from "./node-plan.mjs";
+import { needsSync, verdictLine } from "./needs-sync.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -117,6 +119,7 @@ function usage() {
     "            a push that starts CI waits while queue-depth.mjs holds (APEX_PUSH_HOLD=0 when the user asked for it now)",
     "  --verify  fast (default): tooling-fast --jobs=3 + the node suites node-plan.mjs needs for the branch's own diff;",
     "            full: every ci.yml node suite; none: only after a clean merge that regenerated nothing",
+    "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
   ].join("\n"));
 }
@@ -149,7 +152,7 @@ export function returnTo(startedOn, keptBranch, readGit = git) {
 export function main() {
   if (flag("--help") || flag("-h")) { usage(); return 0; }
   if (!branch) { usage(); return 1; }
-  const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume"].includes(a) && !/^--(verify|from)=/.test(a));
+  const unknown = argv.find((a) => a.startsWith("-") && !["--plan", "--push", "--resume", "--force-clean-behind"].includes(a) && !/^--(verify|from)=/.test(a));
   if (unknown || argv.filter((a) => !a.startsWith("-")).length !== 1) throw new Error(`Invalid arguments${unknown ? ": " + unknown : ""}`);
   if (flag("--plan") && flag("--push")) throw new Error("--plan cannot be combined with --push");
   let verify = opt("--verify") ?? "fast";
@@ -162,6 +165,14 @@ export function main() {
 
   const resume = flag("--resume");
   if (!resume) must(git(["fetch", "--no-tags", REMOTE, branch, DEPLOY_BRANCH]), "fetch");
+  if (!resume && !flag("--force-clean-behind")) {
+    // AGENTS.md "sync only when you must": ask the predicate before any merge or push.
+    const v = needsSync(branch, { fetch: false });
+    if (v.ok) {
+      log(`${verdictLine(v)} (${v.why})`);
+      if (v.verdict === "no") { log("REFUSED: no sync needed; --force-clean-behind overrides (exit 4)"); return 4; }
+    } else log(`needs-sync could not decide (${v.error}); continuing`);
+  }
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
 
@@ -207,17 +218,8 @@ export function main() {
 
   const pushCmd = `git push ${REMOTE} ${localBranch}:${branch}`;
   if (flag("--push")) {
-    // The same queue hold bash-guard.sh applies to a hand push (#2182): this
-    // push runs from a child process the hook never sees.
-    if (process.env.APEX_PUSH_HOLD !== "0") {
-      const q = spawnSync("node", ["tools/ci/queue-depth.mjs", "--push", pushCmd], { cwd: ROOT, encoding: "utf8", timeout: 90e3 });
-      const line = (q.stdout || "").trim();
-      if (q.status === 1) {
-        log(`NOT PUSHED: ${line} — verified on ${localBranch}; publish when queue-depth says ok: ${pushCmd}`);
-        return 2;
-      }
-      if (line) log(line);
-    }
+    // No queue hold (retired 2026-10-16, CI/CD review #2333 finding 7): a
+    // verified sync publishes at once.
     must(git(["push", REMOTE, `${localBranch}:${branch}`]), `push to origin/${branch}`);
     log(`pushed to origin/${branch}`);
     const back = returnTo(startedOn, localBranch);
