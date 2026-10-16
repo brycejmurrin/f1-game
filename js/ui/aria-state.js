@@ -133,7 +133,10 @@ window.AriaState = (function () {
   // formatting already lives — whenever it differs from the bare number.
   function syncValueText(root) {
     for (const input of root.querySelectorAll('input[type="range"][id]')) {
-      const out = document.getElementById(input.id + "-v");
+      // MOVE & SIZE predates the readout-id convention. Only its three
+      // known ranges may borrow the formatted value in their own label.
+      const out = document.getElementById(input.id + "-v") ||
+        (/^pm-hl-[xys]$/.test(input.id) && input.closest("label")?.querySelector(".tune-label")?.querySelector("b"));
       const text = out ? out.textContent.trim() : "";
       if (text && text !== String(input.value)) {
         if (input.getAttribute("aria-valuetext") !== text) input.setAttribute("aria-valuetext", text);

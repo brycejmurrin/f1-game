@@ -223,6 +223,7 @@ const FULL = [
   "js/input/pad-menu.js",
   "js/input/haptics.js",
   "js/input/hold-buttons.js",
+  "js/input/controller-profiles.js",
   "js/input/input.js",
   // AUDIO STUB — the ~449 KB engine/panel/voice stack is LAZY_AUDIO (loaded on
   // first gesture or race start). The stub keeps menus from throwing and is
@@ -303,6 +304,7 @@ const FULL = [
   "js/ui/menu-nav.js",
   "js/ui/aria-state.js",
   "js/ui/setting-row.js",
+  "js/ui/settings-search.js",
   "js/ui/settings-tabs.js",
   "js/ui/key-binds.js",
   "js/ui/settings-export.js",
@@ -411,6 +413,8 @@ const FULL = [
   "js/render/shared/mirror-pass.js",   // HUD rear-view mirror: second camera + rival poses, gfx.mirrorBegin/End (MirrorPass.create(G, deps))
   "js/ui/platform-session.js", // PlatformSession: platform, phone pairing and tab lifecycle wiring
   "js/ui/update-check.js",  // UpdateCheck: in-session version.json re-check + UPDATE READY chip (call-time; script-loader asks it)
+  "js/ui/race-message-history.js",
+  "js/ui/controller-profile-controls.js",
   "js/game.js",
 ];
 
@@ -427,7 +431,7 @@ const CSS = [
   "css/appearance-studio.css", "css/watch-transport.css", "css/career-experience.css",
   "css/garage-experience.css", "css/photo-studio.css", "css/experience.css",
   "css/editor.css",         // the TRACK DESIGNER screen (td-*); deferred like data.css
-  "css/cockpit-preview.css",
+  "css/cockpit-preview.css", "css/player-tools.css",
 ];
 // Title-critical sheets are also <link rel="preload">ed above the stylesheet
 // block. Dialogs/settings load print→all without a competing high-priority
@@ -449,7 +453,7 @@ const CSS_DEFERRED = [
   "css/track-detail.css", "css/career.css", "css/data.css", "css/editor.css",
   "css/appearance-studio.css", "css/watch-transport.css",
   "css/career-experience.css", "css/garage-experience.css",
-  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css",
+  "css/photo-studio.css", "css/experience.css", "css/cockpit-preview.css", "css/player-tools.css",
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",
   "css/dialog-platform.css", "css/save-health.css", "css/select.css", "css/race-setup.css",
 ];
@@ -564,6 +568,8 @@ const TRACK_VM = [
 
 // Eval-time dependencies: [before, after]. Each pair must be ordered in FULL.
 const HARD_EDGES = [
+  ["js/ui/settings-search.js", "js/ui/settings-tabs.js"],
+  ["js/input/controller-profiles.js", "js/input/input.js"],
   ["js/core/store.js", "js/career/restore-points.js"],
   ["js/career/save-migrate.js", "js/career/restore-points.js"],
   ["js/core/store.js", "js/ui/save-health.js"],

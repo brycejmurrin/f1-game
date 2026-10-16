@@ -252,6 +252,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/component-inventory.test.mjs",
   "tests/unit/conflict-cure.test.mjs",
   "tests/unit/contact-geometry.test.mjs",
+  "tests/unit/controller-profiles.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
   // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops
   // mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.
@@ -612,6 +613,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // LobbyCodes.codeFrom / paintQr / canShare (lobby-codes peel). Pure VM.
   "tests/unit/lobby-codes.test.mjs",
   "tests/unit/lobed-trees.test.mjs",
+  // lockup-bench.mjs sweep (speed × pedal × brake bias × weather) pinned on
+  // Monza; VM pins dry/rain shapes for bias- and speed-dependent wheelLock.
+  "tests/unit/lockup-bench-vm.test.mjs",
   "tests/unit/log-namespaces.test.mjs",
   // LoopHealth fault policy: RUN_CAP / TOTAL_CAP / quiet expiry / clean recovery.
   // VM-executed js/perf/loop-health.js (seedLog), controllable clock, ~0.1 s.
@@ -697,6 +701,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/perf-race-entry.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/perf-try.test.mjs",
+  "tests/unit/phone-input-improvements.test.mjs",
   // ...and PHONE AS CONTROLLER: the wire codec, the shared roll math, and a
   // phone sample reaching Input's tilt pipeline over the in-process loopback
   // transport — same VM harness, no browser, ~0.3 s.
@@ -724,6 +729,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/player-collision-side.test.mjs",
   // PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.
   "tests/unit/player-forces.test.mjs",
+  "tests/unit/player-tools-backup.test.mjs",
+  "tests/unit/player-tools-ui.test.mjs",
   // CI Watch board: every open PR with its SUGGESTION, GET-only, cap shared with ready-full-cap.
   "tests/unit/pr-board.test.mjs",
   // test-coverage-audit answers "is this file in SOME topical group"; this one
