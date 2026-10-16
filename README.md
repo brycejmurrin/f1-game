@@ -120,8 +120,8 @@ a corner and the front washes wide (understeer); loosen the rear and it steps ou
 (oversteer). Brake for the corners; the car rewards a tidy line.
 
 **SETTINGS** (from the pause menu or title) opens pages for **CONTROLS**,
-**DRIVING**, **DISPLAY**, **APPEARANCE**, **STEERING & ASSISTS**, **MUSIC &
-SOUND**, and **BACKUP & RESTORE**. **STEERING & ASSISTS** has **RELAX /
+**DRIVING**, **DRIVING AIDS**, **DISPLAY**, **APPEARANCE**, **MUSIC &
+SOUND**, and **BACKUP & RESTORE**. **DRIVING AIDS** has **RELAX /
 STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**, **DRIVING
 HELP**, **RACING LINE**, and **ADAPTIVE BUTTONS** (keys / on-screen arrows;
 default ON) — with lock, speed steer and the rest tucked behind an
