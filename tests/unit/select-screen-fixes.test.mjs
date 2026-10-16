@@ -25,6 +25,7 @@ const src = (p) => fs.readFileSync(path.join(ROOT, p), "utf8").replace(/^const\b
 
 function boot(disk = {}, o = {}) {
   const dom = makeDom();
+  let appearanceApplied = 0;
   dom.body.insertAdjacentHTML = () => {};
   const data = new Map(Object.entries(disk).map(([k, v]) => [k, JSON.stringify(v)]));
   const store = {
@@ -50,6 +51,7 @@ function boot(disk = {}, o = {}) {
     getComputedStyle: () => ({ getPropertyValue: () => "", display: "flex", flexDirection: "row", gridTemplateColumns: "none", paddingTop: "0px", paddingBottom: "0px" }),
     innerWidth: 1000, innerHeight: 600, requestAnimationFrame: () => 0,
     Tracks: { LIST }, Teams: { LIST: TEAMS }, Flags: { svg: () => "" },
+    AppearanceOpts: { applyAll() { appearanceApplied++; } },
     SeasonCal: { canRace: () => true, rounds: () => 0 },
     TrackMaps: {
       corners: () => [], direction: () => "CW", elevRange: () => 0,
@@ -77,7 +79,7 @@ function boot(disk = {}, o = {}) {
   const menus = sb.Menus.create(G);
   menus.buildSelect();
   const tiles = () => selTracks.querySelectorAll(".track-row");
-  return { dom, data, G, menus, tiles, selTeams, built: () => built, LIST,
+  return { dom, data, G, menus, tiles, selTeams, built: () => built, appearanceApplied: () => appearanceApplied, LIST,
     teamPicker: () => dom.byId("teampicker") };
 }
 
@@ -107,6 +109,14 @@ test("G3: picking ANOTHER team still takes the first free seat", () => {
   assert.equal(h.G.teamIdx, 0);
   assert.equal(h.G.driverIdx, 0);
   assert.equal(h.built(), 1);
+});
+
+test("team selection reapplies TEAM appearance accents immediately", () => {
+  const h = boot({}, { teamIdx: 1, driverIdx: 1 });
+  h.menus.setTeamPicker(true);
+  h.selTeams.querySelectorAll(".team-tile")[0].onclick();
+  assert.equal(h.G.teamIdx, 0);
+  assert.equal(h.appearanceApplied(), 1);
 });
 
 test("M3: unstarring the ACTIVE circuit under FAVOURITES keeps it selected and on the strip", () => {

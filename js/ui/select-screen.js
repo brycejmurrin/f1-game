@@ -308,6 +308,12 @@ function buildTeamPicker() {
       // The team-accent skin (--accent) was only ever written by the HUD's
       // first race tick, so the garage kept the LAST race's colours.
       try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
+      // TEAM menu accents are concrete on :root (rather than a CSS var) so
+      // they also work before the HUD exists. Repaint that cached value when
+      // the player changes team in the garage picker; otherwise MENU ACCENT =
+      // TEAM stays on the previously selected team's colour until another
+      // appearance setting is touched.
+      try { if (typeof AppearanceOpts !== "undefined" && AppearanceOpts.applyAll) AppearanceOpts.applyAll(); } catch (_) { /* appearance is optional */ }
       store.set("driver", seat);
       setTeamPicker(false);
       // The garage (the one host) repaints its own 3D car for free —
