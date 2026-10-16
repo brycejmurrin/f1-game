@@ -1,6 +1,8 @@
 # Changelog
 
-Player-facing changes for each shipped build. Add one section per exact `build` number from `version.json` (for example `1695` — not a date range or approximate build).
+Player-facing changes for each shipped build, one section per exact `build` number from `version.json` (for example `1695` — not a date range or approximate build).
+
+Do not edit the build sections in a PR: add a fragment `docs/changelog.d/<slug>.md` (see its README). `node tools/gen/gen-changelog.mjs --fold` writes the sections at release.
 
 Under each build, use only these categories:
 
@@ -53,7 +55,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
 
 - Repeated track and lighting warm-ups reuse their renderer probes and release them with their resources, avoiding retained warm-up meshes.
-- Photo Studio opened from Home no longer lays the white title-art car over the garage you are framing (#1895).
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
