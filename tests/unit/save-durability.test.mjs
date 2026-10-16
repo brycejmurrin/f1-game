@@ -243,3 +243,41 @@ test("legacy failed authored rows without a persisted baseline preserve an exist
   const fresh = boot({ idb: h.idb, initial: [["apex26.setup.ferrari", '{"n":2}']] }); await fresh.store.mirror.ready;
   assert.equal(fresh.store.get("setup.ferrari").n, 2);
 });
+
+test('capture health is per-slot, bounded, separate from primary durability and clears on success', async () => {
+  const h = boot(); await h.store.mirror.ready; const p = points(h);
+  assert.equal(h.store.write('career.driver.0', save(1)).durable, true);
+  h.idb.failNext();
+  assert.equal((await p.capture('driver', 0, save(1), { reason: 'round' })).ok, false);
+  assert.equal(p.health()[0].state, 'unavailable'); assert.equal(p.health()[0].reason, 'history-write-failed');
+  assert.equal(h.store.failedKeys().length, 0, 'history failure does not invent primary save failure');
+  await p.capture('myteam', 1, save(2, 'myteam'), { reason: 'round' });
+  assert.equal(p.health().find(r => r.flavour === 'myteam').state, 'saved');
+  await p.capture('driver', 0, { ...save(3), huge: 'x'.repeat(70000) }, { reason: 'round' });
+  assert.equal(p.health().find(r => r.flavour === 'driver').reason, 'invalid-or-too-large');
+  await p.capture('driver', 0, save(4), { reason: 'round' });
+  const status = p.health().find(r => r.flavour === 'driver'); assert.equal(status.state, 'saved'); assert.equal(status.reason, null);
+  status.state = 'corrupt'; assert.equal(p.health().find(r => r.flavour === 'driver').state, 'saved', 'status returns a detached snapshot');
+  for (let i = 0; i < 20; i++) await p.capture('driver', 999 + i, save(), { reason: 'round' });
+  assert.equal(p.health().length, 2, 'invalid keys cannot expand health storage');
+  vm.runInContext(src('js/ui/save-health.js') + ';globalThis.Health=SaveHealth', h.c);
+  const report = await h.c.Health.inspect({ store: h.store, localStorage: h.storage, restorePoints: p });
+  assert.equal(report.history.length, 2); assert.equal(report.failed.length, 0);
+  await h.store.mirrorFlush();
+});
+
+test('older capture completion cannot overwrite newer failure health, and UI labels history independently', async () => {
+  const h = boot(); await h.store.mirror.ready; const p = points(h);
+  const older = p.capture('driver', 0, save(1), { reason: 'round' });
+  await p.capture('driver', 0, { ...save(2), huge: 'x'.repeat(70000) }, { reason: 'round' });
+  await older;
+  assert.equal(p.health()[0].reason, 'invalid-or-too-large');
+  const dom = makeDom(); h.c.document = dom.document;
+  vm.runInContext(src('js/ui/save-health.js') + ';globalThis.Health=SaveHealth', h.c);
+  const handle = h.c.Health.mount(dom.byId('health-history-owner'), { store: h.store, restorePoints: p });
+  handle.root.children[0].onclick(); await tick();
+  const text = n => n.textContent + [...(n.children || [])].map(text).join(' ');
+  assert.match(text(handle.root), /restore point unavailable \(invalid-or-too-large\)/);
+  assert.match(text(handle.root), /Primary save status is separate/);
+  assert.match(text(handle.root), /No failed primary writes/);
+});
