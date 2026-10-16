@@ -349,6 +349,7 @@ const FULL = [
   "js/perf/race-entry-profile.js",
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
+  "js/render/shared/compatibility-recovery.js",
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
   "js/ui/dock-layout.js",

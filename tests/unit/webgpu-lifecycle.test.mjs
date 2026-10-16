@@ -173,11 +173,12 @@ function makeGpuHarness(opts = {}) {
     // hit its own "a check that cannot be RUN is skipped, never fatal" rule and
     // was inert in every test — the guard that matters most on Safari.
     createShaderModule: () => ({
-      getCompilationInfo: async () => ({
-        messages: opts.shaderError
+      getCompilationInfo: async () => {
+        if (opts.beforeCompilationInfo) await opts.beforeCompilationInfo();
+        return { messages: opts.shaderError
           ? [{ type: "error", message: "injected WGSL compile error", lineNum: 1, linePos: 1 }]
-          : [],
-      }),
+          : [] };
+      },
     }),
     // The DESCRIPTOR is kept, not just the count: a target format or a
     // multisample count that WebGPU rejects is invisible to a harness that
@@ -306,6 +307,7 @@ function makeGpuHarness(opts = {}) {
     // cannot hold the test runner open.
     setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); if (t.unref) t.unref(); return t; },
     clearTimeout: (t) => clearTimeout(t),
+    ...(opts.document ? { document: opts.document } : {}),
     window: {
       devicePixelRatio: 1,
       ...(opts.watchCss ? {
@@ -359,6 +361,7 @@ function makeGpuHarness(opts = {}) {
             // an adapter may advertise a feature and hand back a device without
             // it, and WGX has to re-derive from the device it actually holds.
             device.features = { has: (name) => deviceFeatures.includes(name) };
+            if (opts.beforeDevice) await opts.beforeDevice();
             return device;
           },
         }),
@@ -410,7 +413,7 @@ function makeGpuHarness(opts = {}) {
     WGX: context.window.WGX,
     pipelines,
     deviceRequests,
-    create: () => context.window.WGX.create(canvas),
+    create: (createOpts) => context.window.WGX.create(canvas, createOpts),
     // What the GLX fallback would find: null while the canvas is still free for
     // a webgl2 context, "webgpu" once WGX has claimed it.
     canvasClaimedBy: () => claimedBy,
@@ -3402,4 +3405,115 @@ test("freeTexture destroys at once outside a frame, after the submit inside one;
   gfx.present({});
   h.setPresentViewFail(false);
   assert.equal(bailed.texture.destroyed, true, "a present with no view submitted nothing, so it flushes the retire list");
+});
+
+for (const info of [{ reason: "unknown" }, { reason: "out-of-memory" }]) {
+  test(`queued capture settles on device loss ${info.reason}`, async () => {
+    const h = makeGpuHarness(); const gfx = await h.create();
+    const capture = gfx.capturePixels();
+    const rejection = assert.rejects(capture, /renderer unavailable/);
+    h.loseDevice(info); await rejection;
+    await assert.rejects(gfx.capturePixels(), /device lost/);
+  });
+}
+
+test("queued capture settles at the JS-error strike cap", async () => {
+  const h = makeGpuHarness(); const gfx = await h.create();
+  const rejection = assert.rejects(gfx.capturePixels(), /renderer unavailable/);
+  h.setEncoderFail(true);
+  for (let i = 0; i < 3; i++) gfx.begin({});
+  await rejection;
+});
+
+function isolatedPost(options = {}) {
+  const owned = []; let allocations = 0;
+  const ctx = vm.createContext({ GPUShaderStage: { FRAGMENT: 2 }, localStorage: { getItem: () => null } });
+  seedLog(ctx); vm.runInContext(WGX_POST_SOURCE + "\n;globalThis.PostFactory = WGXPost;", ctx);
+  const core = {
+    Post: { BLOOM_DOWN: "down", BLOOM_UP: "up", SSAO: "ao", SSR: "ssr", GODRAY: "gr", BLUR: "blur", COMPOSITE: "comp", FXAA: "aa", SGSR: "tap", SGSR_GATHER: "gather", SGSR_UNIFORM_BYTES: 64 },
+    UCD: 3, fsPipe: () => ({}), presentFormat: "rgba8unorm", LDR_FORMAT: "rgba8unorm",
+    device: {
+      createSampler: () => ({}), createBindGroupLayout: () => ({}), createShaderModule: () => ({}),
+      createPipelineLayout: () => ({}), createRenderPipeline: () => ({}),
+      createBuffer() {
+        if (++allocations === options.throwAt) throw new Error("allocation " + allocations);
+        const buffer = { destroys: 0, destroy() { this.destroys++; } }; owned.push(buffer); return buffer;
+      },
+    },
+  };
+  return { core, owned, post: ctx.PostFactory.init(core) };
+}
+
+for (let throwAt = 1; throwAt <= 6; throwAt++) test(`optional post rolls back allocation ${throwAt}`, () => {
+  const h = isolatedPost({ throwAt }); h.post.buildPost();
+  assert.equal(h.core.pComposite, null);
+  assert.equal(h.owned.length, throwAt - 1);
+  assert.ok(h.owned.every((b) => b.destroys === 1));
+  for (const key of ["ssaoUBO", "blurUBO", "godrayUBO", "compositeUBO", "fxaaUBO", "ssrUBO"]) assert.equal(h.core[key], undefined);
+});
+
+test("optional post publishes the complete successful buffer set", () => {
+  const h = isolatedPost(); h.post.buildPost();
+  assert.equal(h.owned.length, 6); assert.ok(h.owned.every((b) => b.destroys === 0));
+  assert.ok(h.core.pComposite); assert.equal(h.core.ssrUBO, h.owned[5]);
+});
+
+for (const scoped of [false, true]) test(`exhausted spatial variants retire the UBO (scoped=${scoped})`, async () => {
+  const h = isolatedPost(); h.core.fsPipe = () => { throw new Error("invalid shader"); };
+  if (scoped) { h.core.device.pushErrorScope = () => {}; h.core.device.popErrorScope = async () => ({ message: "invalid" }); }
+  h.post.ensureSpatial();
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  assert.equal(h.owned[0].destroys, 1); assert.equal(h.core.sgsrUBO, null); assert.equal(h.core.pSGSR, null);
+  h.post.ensureSpatial(); assert.equal(h.owned[0].destroys, 1);
+});
+
+test("spatial variant fallback retains its successful UBO", async () => {
+  const h = isolatedPost(); let pops = 0;
+  h.core.device.pushErrorScope = () => {}; h.core.device.popErrorScope = async () => ++pops === 1 ? { message: "gather unsupported" } : null;
+  h.post.ensureSpatial(); for (let i = 0; i < 8; i++) await Promise.resolve();
+  assert.equal(h.owned[0].destroys, 0); assert.equal(h.core.sgsrUBO, h.owned[0]); assert.ok(h.core.pSGSR); assert.equal(h.core._sgsrGather, false);
+});
+
+for (const hidden of [true, false]) test(`queued capture settles on ${hidden ? "hidden" : "recent-visible"} loss`, async () => {
+  const listeners = new Map();
+  const document = { hidden, addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: (type) => listeners.delete(type) };
+  const h = makeGpuHarness({ document }); const gfx = await h.create();
+  if (!hidden) listeners.get("visibilitychange")();
+  const rejection = assert.rejects(gfx.capturePixels(), /renderer unavailable/);
+  h.loseDevice({ reason: "unknown" }); await rejection;
+  await assert.rejects(gfx.capturePixels(), /device lost/);
+});
+
+test("spatial async completion cannot publish onto a replaced device", async () => {
+  const h = isolatedPost(); let settle;
+  h.core.device.pushErrorScope = () => {}; h.core.device.popErrorScope = () => new Promise((r) => { settle = r; });
+  h.post.ensureSpatial(); const retired = h.owned[0]; h.core.device = {};
+  settle(null); for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(retired.destroys, 1); assert.equal(h.core.sgsrUBO, null); assert.equal(h.core.pSGSR, null);
+});
+
+
+test("cancelled WGX init destroys a late device and never claims the canvas", async () => {
+  let finish, destroys=0;
+  const h=makeGpuHarness({beforeDevice:()=>new Promise(resolve=>{finish=resolve;})});
+  h.device.destroy=()=>{destroys++;};
+  const owner={active:true};const pending=h.create({initOwner:owner});
+  for(let i=0;i<5;i++)await Promise.resolve();assert.ok(finish);
+  owner.active=false;finish();assert.equal(await pending,null);
+  assert.equal(destroys,1);assert.equal(h.canvasClaimedBy(),null);assert.equal(h.textureCount(),0);
+});
+
+
+test("revoked WGX late successful self-test preserves successor failure and bound markers", async () => {
+  let finish,destroys=0;
+  const barrier=new Promise(resolve=>{finish=resolve;});
+  const storage=new Map(),session=new Map();
+  const h=makeGpuHarness({storage,session,beforeCompilationInfo:()=>barrier});
+  h.device.destroy=()=>{destroys++;};
+  const owner={active:true};const pending=h.create({initOwner:owner});
+  for(let i=0;i<20;i++)await Promise.resolve();
+  owner.active=false;storage.set("apex26.gfxWgxFail","successor-failure");session.set("apex26.gfxBound","webgl2");
+  finish();assert.equal(await pending,null);
+  assert.equal(storage.get("apex26.gfxWgxFail"),"successor-failure");
+  assert.equal(session.get("apex26.gfxBound"),"webgl2");assert.equal(h.canvasClaimedBy(),null);assert.equal(destroys,1);
 });

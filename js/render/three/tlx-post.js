@@ -52,6 +52,9 @@
 
   function postChain(THREE, TSL, ctx) {
     const renderer = ctx.renderer;
+    // Manual experiment, read once per chain; opt-in takes effect on reload.
+    let sharpenLimit = 0;
+    try { sharpenLimit = localStorage.getItem("apex26.tlxSharpenLimit") === "1" ? 1 : 0; } catch (_) { /* storage unavailable */ }
     // Every resource created by this chain stays owned here, including lazy
     // targets. The renderer keeps GPU-side state after JS references disappear,
     // so runtime degradation and partial construction both need an explicit,
@@ -732,6 +735,7 @@
       C.grain.value = gk("grain");
       C.grainTime.value = F.time || 0;
       C.sharpen.value = gk("sharpen");
+      if (C.sharpenLimit) C.sharpenLimit.value = sharpenLimit;
       C.blackLift.value = gk("blackLift");
       C.whitePoint.value = gk("whitePoint");
       // ACES TONE CURVE knobs (defaults = the shipped Narkowicz coefficients).
