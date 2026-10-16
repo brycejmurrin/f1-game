@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 import { chromiumPath } from "../lib/chromium-path.mjs";
 import { acquireLock, releaseLock } from "./apex-tools-mcp.mjs";
+import { debuggerRequest } from "./js-debugger-http.mjs";
 
 if (process.argv.includes("--help")) {
   process.stdout.write("node tools/mcp/js-debugger-smoke.mjs\nParent only. One native Chromium, debugger MCP stdio and CDP, no GPU test.\n"); process.exit(0);
@@ -37,7 +38,7 @@ const server = createServer((req, res) => {
   res.setHeader("Content-Type", req.url === "/fixture.js" ? "text/javascript" : "text/html");
   res.end(req.url === "/fixture.js" ? source : '<!doctype html><title>Debugger fixture</title><script src="/fixture.js"></script>');
 });
-let chrome, browser, mcp;
+let chrome, browser, mcp, httpDaemon;
 const pending = new Map(), checks = [];
 let id = 0;
 const check = (name, fn) => { fn(); checks.push(name); };
@@ -180,15 +181,64 @@ try {
   const eofExit = once(mcp, "exit"); mcp.stdin.end(); assert.equal((await eofExit)[0], 0); mcp = null;
   check("MCP stdin closure cleans up a paused session", () => {});
   assert.equal(await page.evaluate(() => window.finalResult), 42);
+  // The shell fallback must keep its CDP session after each short-lived caller exits.
+  httpDaemon = spawn("bash", ["tools/mcp/js-debugger-mcp.sh", "serve-http"], {
+    cwd: ROOT, env: { ...process.env, APEX_DEBUGGER_PORT: "0" }, stdio: ["ignore", "pipe", "pipe"],
+  });
+  const daemonUrl = await new Promise((resolve, reject) => {
+    let stderr = "";
+    const timer = setTimeout(() => reject(Error("Debugger daemon startup timeout")), 10000);
+    httpDaemon.stderr.on("data", b => {
+      stderr += b; const match = stderr.match(/listening (http:\/\/127\.0\.0\.1:\d+)/);
+      if (match) { clearTimeout(timer); resolve(match[1]); }
+    });
+    httpDaemon.once("exit", code => { clearTimeout(timer); reject(Error(`Debugger daemon exited${code}: ${stderr}`)); });
+    httpDaemon.once("error", e => { clearTimeout(timer); reject(e); });
+  });
+  const daemonPort = new URL(daemonUrl).port;
+  async function shellCall(name, args = {}) {
+    const child = spawn("bash", ["tools/mcp/js-debugger-mcp.sh", "call", name, JSON.stringify(args)], {
+      cwd: ROOT, env: { ...process.env, APEX_DEBUGGER_PORT: daemonPort }, stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "", stderr = ""; child.stdout.on("data", b => { stdout += b; }); child.stderr.on("data", b => { stderr += b; });
+    assert.equal((await once(child, "exit"))[0], 0, stdout + stderr); return JSON.parse(stdout);
+  }
+  async function httpUntil(predicate) {
+    const end = Date.now() + 8000;
+    while (Date.now() < end) {
+      const r = await debuggerRequest("/mcp", { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "debugger_state" } }, Number(daemonPort));
+      const value = r.result.structuredContent; if (predicate(value)) return value;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw Error("Expected persistent debugger state did not arrive");
+  }
+  await shellCall("debugger_attach", { endpoint, targetId: target.id });
+  await shellCall("debugger_breakpoint", { url: url + "/fixture.js", line: 5 });
+  await shellCall("debugger_run", { expression: "window.wrapperResult = fixture()" });
+  await httpUntil(s => s.paused); state = await shellCall("debugger_state");
+  assert.equal(state.breakpointCount, 1);
+  const local = await shellCall("debugger_evaluate", { pauseToken: state.pause.token, expression: "answer" });
+  check("separate shell processes preserve native attachment, breakpoint and locals", () => assert.equal(local.result.value, 41));
+  const wrapperToken = state.pause.token;
+  await shellCall("debugger_control", { action: "over", pauseToken: wrapperToken });
+  state = await httpUntil(s => s.paused && s.pause.token !== wrapperToken);
+  await shellCall("debugger_control", { action: "resume", pauseToken: state.pause.token });
+  await httpUntil(s => s.operations.at(-1).status === "completed");
+  check("separate shell commands step and resume native execution", () => {});
+  await shellCall("debugger_run", { expression: "window.wrapperResult = fixture()" }); await httpUntil(s => s.paused);
+  const daemonExit = once(httpDaemon, "exit"); httpDaemon.kill("SIGTERM"); assert.equal((await daemonExit)[0], 0); httpDaemon = null;
+  assert.equal(await page.evaluate(() => window.wrapperResult), 42);
+  check("daemon SIGTERM cleans up a native paused target and preserves Chrome", () => assert.equal(browser.contexts()[0].pages().length, 1));
   startMcp();
   await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "native-smoke", version: "1" } });
   await call("debugger_attach", { endpoint, targetId: target.id });
   await page.close(); await until(s => !s.connected);
   check("target closure clears session", () => {});
-  const receipt = { passed: checks.length, checks, browserVersion: browser.version(), protocol: "MCP stdio + native CDP", gpuClaim: false };
+  const receipt = { passed: checks.length, checks, browserVersion: browser.version(), protocol: "MCP stdio + persistent HTTP shell wrapper + native CDP", gpuClaim: false };
   await writeFile(path.join(out, "smoke.json"), JSON.stringify(receipt, null, 2) + "\n");
   process.stdout.write(JSON.stringify(receipt, null, 2) + "\n");
 } finally {
+  if (httpDaemon) { const exit = once(httpDaemon, "exit"); httpDaemon.kill("SIGTERM"); await exit; }
   if (mcp) { const exit = once(mcp, "exit"); mcp.stdin.end(); await exit; }
   for (const p of pending.values()) { clearTimeout(p.timer); p.reject(Error("Smoke closed")); }
   if (browser) await browser.close();

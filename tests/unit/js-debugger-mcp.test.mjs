@@ -7,6 +7,8 @@ import { once } from "node:events";
 import { Cdp, localUrl } from "../../tools/mcp/js-debugger-cdp.mjs";
 import { DebugSession } from "../../tools/mcp/js-debugger-session.mjs";
 import { callTool, handleRpc, TOOLS } from "../../tools/mcp/js-debugger-mcp.mjs";
+import http from "node:http";
+import { startDebuggerHttp, debuggerRequest, debuggerPort, httpRefusal } from "../../tools/mcp/js-debugger-http.mjs";
 
 class FakeCdp extends EventEmitter {
   calls = []; closed = false;
@@ -159,4 +161,84 @@ test("real stdio subprocess discovery and malformed JSON recovery, no browser la
   const [code] = await once(child, "exit"); assert.equal(code, 0, err);
   const rows = out.trim().split("\n").map(JSON.parse); assert.equal(rows.length, 3); assert.equal(rows[0].error.code, -32700);
   assert.equal(rows.find(r => r.id === 2).result.tools.length, 13);
+});
+
+async function shell(command, port) {
+  const child = spawn("bash", [new URL("../../tools/mcp/js-debugger-mcp.sh", import.meta.url).pathname, ...command],
+    { cwd: new URL("..", import.meta.url), env: { ...process.env, APEX_DEBUGGER_PORT: String(port) } });
+  let out = "", err = "";
+  child.stdout.on("data", b => { out += b; }); child.stderr.on("data", b => { err += b; });
+  const [code] = await once(child, "exit"); return { code, body: JSON.parse(out), err };
+}
+test("wrapper shell calls share attachment, breakpoint and pause state across subprocesses", async () => {
+  const { s, c } = await attached();
+  const daemon = await startDebuggerHttp({ session: s, port: 0 });
+  const port = daemon.server.address().port;
+  try {
+    assert.equal((await shell(["status"], port)).body.connected, true);
+    assert.equal((await shell(["call", "debugger_breakpoint", JSON.stringify({ url: frame.url, line: 4 })], port)).code, 0);
+    paused(c); const token = s.pause.token;
+    const snapshot = await shell(["call", "debugger_state", "{}"], port);
+    assert.equal(snapshot.body.breakpointCount, 1); assert.equal(snapshot.body.pause.token, token);
+    c.reply = async method => { if (method === "Debugger.evaluateOnCallFrame") return { result: { type: "number", value: 42 } }; return {}; };
+    assert.equal((await shell(["call", "debugger_evaluate", JSON.stringify({ pauseToken: token, expression: "answer" })], port)).body.result.value, 42);
+    assert.equal((await shell(["call", "debugger_evaluate", JSON.stringify({ pauseToken: "stale", expression: "answer" })], port)).code, 1);
+    assert.equal((await shell(["call", "debugger_detach", "{}"], port)).code, 0);
+    assert.equal((await shell(["status"], port)).body.connected, false);
+  } finally { await daemon.close(); }
+});
+test("HTTP rejects browser origins, rebound hosts, non-JSON, bad versions and oversized requests before dispatch", async () => {
+  const s = new DebugSession(); let dispatched = 0;
+  s.state = () => { dispatched++; return { connected: false }; };
+  const daemon = await startDebuggerHttp({ session: s, port: 0 });
+  const post = (body, headers = {}) => new Promise((resolve, reject) => {
+    const req = http.request(daemon.endpoint + "/mcp", { method: "POST", headers: { "Content-Type": "application/json", ...headers } }, res => {
+      res.resume(); res.on("end", () => resolve(res.statusCode));
+    }); req.on("error", reject); req.end(body);
+  });
+  const body = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "debugger_state" } });
+  try {
+    for (const headers of [{ Origin: "http://evil.test" }, { Origin: "http://localhost:3456" }, { Host: "127.0.0.1.evil.test" }, { "Content-Type": "text/plain" }]) {
+      assert.equal(await post(body, headers), 403);
+    }
+    assert.equal(await post(body, { "MCP-Protocol-Version": "invalid" }), 400);
+    assert.equal(await post("{"), 400);
+    assert.equal(await post(" ".repeat(64001)), 413); assert.equal(dispatched, 0);
+    assert.equal(await post(body), 200); assert.equal(dispatched, 1);
+  } finally { await daemon.close(); }
+});
+test("HTTP notifications return202, unsupported SSE gets405, errors do not poison the daemon", async () => {
+  const daemon = await startDebuggerHttp({ port: 0 });
+  try {
+    assert.equal((await fetch(daemon.endpoint + "/mcp")).status, 405);
+    const headers = { "Content-Type": "application/json" };
+    const notification = await fetch(daemon.endpoint + "/mcp", { method: "POST", headers,
+      body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) });
+    assert.equal(notification.status, 202); assert.equal(await notification.text(), "");
+    const port = daemon.server.address().port;
+    await assert.rejects(debuggerRequest("/mcp", { jsonrpc: "2.0", id: 1, method: "missing" }, port), /Method not found/);
+    assert.equal((await debuggerRequest("/healthz", undefined, port)).name, "js-debugger-mcp");
+    const [a, b] = await Promise.all([daemon.close(), daemon.close()]); assert.equal(a, b);
+  } finally { await daemon.close(); }
+});
+test("wrapper validates port and missing-daemon calls fail without creating a session", async () => {
+  for (const value of ["", "-1", "65536", "3714x"]) assert.throws(() => debuggerPort(value));
+  assert.equal(debuggerPort("3714"), 3714);
+  assert.ok(httpRefusal({ method: "GET", headers: {} }));
+  const daemon = await startDebuggerHttp({ port: 0 }); const port = daemon.server.address().port; await daemon.close();
+  const result = await shell(["call", "debugger_state", "{}"], port);
+  assert.equal(result.code, 1); assert.match(result.body.error, /start js-debugger-mcp.sh serve-http/);
+  assert.equal((await shell(["list-tools"], port)).body.length, 13);
+});
+test("daemon shutdown drops incomplete uploads before cleaning up a paused target", { timeout: 3000 }, async () => {
+  const { s, c } = await attached(); paused(c);
+  const daemon = await startDebuggerHttp({ session: s, port: 0 });
+  const arrived = once(daemon.server, "request");
+  const req = http.request(daemon.endpoint + "/mcp", { method: "POST", headers: { "Content-Type": "application/json" } });
+  req.on("error", () => {}); req.write("{");
+  try {
+    await arrived; const result = await daemon.close();
+    assert.deepEqual(result.cleanupErrors, []); assert.equal(c.closed, true);
+    assert.ok(c.calls.some(x => x.method === "Debugger.resume"));
+  } finally { req.destroy(); await daemon.close(); }
 });

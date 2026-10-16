@@ -2,8 +2,8 @@
   "mcpServers": {
     "js-debugger": {
       "type": "stdio",
-      "command": "node",
-      "args": ["tools/mcp/js-debugger-mcp.mjs"]
+      "command": "bash",
+      "args": ["tools/mcp/js-debugger-mcp.sh", "serve"]
     }
   }
 }

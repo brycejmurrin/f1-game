@@ -8,7 +8,9 @@ closes the browser, starts a test group, or edits application source.
 
 ## Setup
 
-Requires Node 22+ (native WebSocket/fetch); no additional npm package or build.
+Requires Node 22+ (native WebSocket/fetch) and Bash for the shell wrapper; no
+additional npm package or build. The direct Node stdio entrypoint remains
+available on machines without Bash.
 Keep the default three-server project catalog. Merge the **opt-in** entry from
 `tools/mcp/js-debugger-mcp.json` into the MCP client's local configuration when
 debugging. Use an absolute script path if the client's working directory is not
@@ -18,8 +20,8 @@ the repository root. The command is:
 {
   "mcpServers": {
     "js-debugger": {
-      "command": "node",
-      "args": ["/absolute/path/to/f1-game/tools/mcp/js-debugger-mcp.mjs"]
+      "command": "bash",
+      "args": ["/absolute/path/to/f1-game/tools/mcp/js-debugger-mcp.sh", "serve"]
     }
   }
 }
@@ -42,6 +44,56 @@ use the same loopback host/port; redirects and credential-bearing URLs fail.
 This is local stdio, not a hosted ChatGPT connector. Configure/reload the MCP
 client to make its tools available; starting a subprocess alone does not add
 tools to an already-running chat. No account plugin upload is required.
+
+## Separate server with the project wrapper pattern
+
+The debugger is its own server, with its own `debugger_*` namespace. It is not
+embedded in `apex-tools`, and does not change that server's catalog or session.
+The wrapper resolves its repository root so it also works from another working
+directory:
+
+```sh
+./tools/mcp/js-debugger-mcp.sh help
+./tools/mcp/js-debugger-mcp.sh list-tools
+./tools/mcp/js-debugger-mcp.sh serve       # MCP client owns this stdio process
+```
+
+When the host cannot load a custom MCP catalog, shell commands use a persistent
+loopback daemon. Start it in a dedicated terminal and keep it running:
+
+```sh
+./tools/mcp/js-debugger-mcp.sh serve-http
+```
+
+Then make separate calls from the agent's shell:
+
+```sh
+./tools/mcp/js-debugger-mcp.sh status
+./tools/mcp/js-debugger-mcp.sh call debugger_targets '{"endpoint":"http://127.0.0.1:9222"}'
+./tools/mcp/js-debugger-mcp.sh call debugger_attach '{"endpoint":"http://127.0.0.1:9222","targetId":"<returned page id>"}'
+./tools/mcp/js-debugger-mcp.sh call debugger_state '{}'
+./tools/mcp/js-debugger-mcp.sh call debugger_detach '{}'
+```
+
+The daemon owns one `DebugSession`; each `call` is only a client. Attachments,
+breakpoints, pending operations and pause tokens therefore survive the shell
+client exiting. A missing daemon is an error, never an implicit new session.
+`list-tools` is local and needs no daemon; `status` checks the daemon. Tool errors
+produce a nonzero shell exit and JSON error details.
+
+The bridge binds only `127.0.0.1:3714`, leaving the existing project ports alone.
+Set `APEX_DEBUGGER_PORT` consistently on daemon and callers to change it. It
+rejects browser Origin headers, non-loopback Host headers, non-JSON POST bodies
+and oversized requests. `/healthz` reports health; `/mcp` accepts JSON-RPC POSTs.
+No SSE stream or remote hosting is provided. The local agent and daemon share
+one debugger controller; this is not a multi-user service.
+
+Use either stdio or daemon mode for a target; starting both creates independent
+controllers. Neither launches Chrome or acquires ownership of an existing
+browser. Respect the parent's browser lock, detach when finished, then stop the
+daemon with Ctrl-C/SIGTERM. Shutdown attempts breakpoint/exception cleanup and
+resume before closing CDP, and reports failures. Abrupt process termination
+cannot guarantee cleanup.
 
 ## Agent workflow
 
@@ -95,15 +147,17 @@ tools to an already-running chat. No account plugin upload is required.
 
 ```sh
 node --test tests/unit/js-debugger-mcp.test.mjs
-node tools/mcp/js-debugger-mcp.mjs --list-tools
-node tools/mcp/js-debugger-smoke.mjs
+./tools/mcp/js-debugger-mcp.sh list-tools
+./tools/mcp/js-debugger-mcp.sh smoke
 ```
 
 The last command is **parent-only**, acquires the repository browser lock,
 launches one native Chromium and a tiny HTTP fixture, and drives the actual MCP
 subprocess over stdio. It exercises breakpoint/local/property inspection,
 side-effect rejection and opt-in mutation, stepping, reload, exceptions,
-nonblocking evaluation, cleanup and target closure. Receipt:
+nonblocking evaluation, cleanup and target closure. It also checks independent
+shell callers sharing a native attachment and paused frame, step/resume across
+processes, and daemon SIGTERM while paused. Receipt:
 `artifacts/js-debugger/smoke.json`. It is a debugger test, not a graphics gate.
 
 ## Primary contracts consulted
@@ -114,3 +168,4 @@ nonblocking evaluation, cleanup and target closure. Receipt:
 - [MCP stdio transport](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
 - [MCP tools/error results](https://modelcontextprotocol.io/specification/2025-06-18/server/tools)
 - [Chrome debugging profile requirement](https://developer.chrome.com/blog/remote-debugging-port)
+- [Node HTTP server shutdown](https://nodejs.org/api/http.html#serverclosecallback)
