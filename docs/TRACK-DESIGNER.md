@@ -192,8 +192,8 @@ and small furniture; **RACE** or **TIME TRIAL** opens the full 3D circuit.
 A theme sets the scenery, the sky and the ground. The inspector has **THEMES**,
 **ATMOSPHERE**, and **OBJECTS** tabs, so each task has its own controls. Arrow
 keys, Home and End navigate these tabs without changing the circuit.
-Browse 27 themes using
-**ALL**, **NATURE**, **COAST**, **CITY**, **DESERT** or **NIGHT**, or search by
+Browse 30 themes using
+**ALL**, **NATURE**, **COAST**, **MOUNTAIN**, **CITY**, **DESERT** or **NIGHT**, or search by
 name and description. Search and category work together; **CLEAR** resets both.
 Browsing does not change the circuit until you choose a theme. The current
 theme and its description stay above the browser, even when filtered out.
@@ -230,6 +230,9 @@ The mode bar stays above the canvas while the inspector scrolls. Select
 | TROPICAL ISLAND | Turquoise water, palms and bright sand |
 | BLOSSOM PARK | Pink blossom belts, spring grass, pale hills and pastel stands |
 | VOLCANIC COAST | Basalt mountains, sparse scrub and a deep-blue shoreline |
+| NORDIC FJORD | Snowy granite mountains, cold blue water and conifers |
+| RED ROCK BADLANDS | Rust-red buttes, sandstone ridges and dry scrub |
+| REDWOOD VALLEY | Towering evergreen forest, green hills and timber cottages |
 
 **ATMOSPHERE** offers six one-click presets. **THEME DEFAULT** restores the
 original sky and normal trees/crowd; **GOLDEN HOUR** combines dusk, many trees
@@ -251,11 +254,12 @@ changing one makes it a new circuit for time-trial boards.
 ### Trackside props
 
 Open **OBJECTS**. The inspector separates **CHOOSE AN OBJECT**, **PLACE OBJECTS**,
-and **PLACED OBJECTS**. Filter the library by **NATURE** or **RACE VENUE**, or
-browse **ALL**. Each selected object has a description. Pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD**,
+and **PLACED OBJECTS**. Filter the library by **NATURE**, **TERRAIN**, **WATER** or **RACE VENUE**, or
+browse **ALL**. Search by name or description within the selected category. Each selected object has a description. Pick **STAND**, **GANTRY**, **TREES**, **WATER**, **FLOOD**,
 **BOARD**, **PALMS** (three palms), **HEDGE** (a 48 m clipped hedge),
 **PINES** (three tall pines), **BUSHES** (five low shrubs), **MARSHAL**
-(a signal shelter), or **CAMERA** (a broadcast tower), then
+(a signal shelter), or **CAMERA** (a broadcast tower). The terrain, water and
+landscape additions are described above. Then
 select a control point on the map or enter its number. Choose **LEFT**, **RIGHT**
 or **BOTH** in driving
 direction and type a **ROADSIDE GAP** in metres (distance from the road edge),
