@@ -3,7 +3,7 @@
 Unofficial WebGL2 F1 fan game. No build step, no frameworks: pure IIFE modules loaded via `<script>` tags, static
 files on GitHub Pages.
 
-This file holds the rules every session needs and nothing else. Evidence lives in `docs/` (start at `docs/README.md`),
+This file holds the rules every session needs and nothing else. Evidence lives in `docs/` (start at `docs/README.md`, then `docs/VERIFICATION.md`),
 workflows in `.claude/skills/`, enforced rules in `.claude/hooks/`, renderer rules in `.claude/rules/` (they load with
 their files). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
 
@@ -12,7 +12,7 @@ their files). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
 npx serve -l 3456 .                   # serve locally (or: python3 -m http.server 3456)
 node tools/ci/pick-tests.mjs          # 1. which GROUPS does this change need? (the table below; select-specs.mjs: per-SPEC)
 #                                       2. make ALL edits, then verify ONCE (rule 2); a new test file = a tests/groups.json group + a TESTING.md §5 row + `npm run gen`
-node tools/ci/tooling-fast.mjs --jobs=3   # 3. edit-loop check, a SUBSET (rule 3): ~2 min idle; `npm run test:tooling-fast` is --jobs=1, ~9 min
+node tools/ci/tooling-fast.mjs --changed --jobs=3   # 3. diff-aware edit-loop check; `npm run test:tooling-fast` is the full floor before a code push
 node tools/ci/test-bg.mjs <group>     # 4. ONE browser group, in the background → artifacts/logs/<group>.log (rule 5)
 node tools/ci/test-bg.mjs --wait --timeout 45   # 5. the waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
 node tools/ci/deploy.mjs --gate-only  # 6. before a push: the only check that runs what the deploy runs
@@ -63,7 +63,7 @@ Session shape — twelve rules that control wall time, waiting and handoff:
    (`etimes` does not track wall clock here); kill a busy Chrome of yours by a listed PID (`pkill -f` is hook-refused). The MCP servers at 0 % are the harness's.
 8. A timeout on a busy box measures the machine: check `/proc/loadavg` (< 3) and for a live `playwright test` first; re-run alone only when the verdict matters.
    On CI, `cancelled` with zero failures is a timeout until proven otherwise — EXCEPT the designed one: a draft PR's run and its `ready_for_review` run share a group on purpose, so marking it ready cancels the fast run on the same `head_sha` seconds in (dedupe, not a red).
-9. Stopping is allowed: a pushed change that names its unverified groups beats an hour of SwiftShader. Never widen a tolerance (`tools/check/tolerance-diff.mjs` fails it on a PR; excuse a row in `tests/data/tolerance-exceptions.json`) or skip a test to get green (`waitForFunction` polling: `wait-polling-lint.mjs`).
+9. Stopping is allowed: a pushed change that names its unverified groups beats an hour of SwiftShader. Never widen a tolerance or skip a test to get green (`waitForFunction` polling: `wait-polling-lint.mjs`).
    A pass that needed a retry is a red: list the flaky test in the PR like a not-run group, then fix it or quarantine it in `tests/data/flaky-quarantine.json`; `APEX_FAIL_ON_FLAKY=1` makes the runner fail it.
 10. Never hand a subagent a browser run ("report it unverified"; `bash-guard.sh` refuses it inside one). Worktrees start at the session SHA
     (`worktree.baseRef: "head"`); `track-surveyor` edits in its own, so merge its branch into yours before you verify (survey-track §Hand-back).
@@ -112,8 +112,7 @@ tables: `docs/ARCHITECTURE.md`.
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules — pay for every added line. The commit hook
   absorbs ≤ 40 lines of growth (the raise lands in your diff as `tests/data/ratchets.d/<branch>.json`, a conflict-free
-  delta); more blocks until you extract or raise it with a reason (`tools/check/ratchets.mjs --update`; also lowers; on a topic branch it writes a `ratchets.d` delta too, `--absolute`/`--fold` snap ratchets.json). A deliberate TREE-metric raise (cssClasses…)
-  is `--update --fragment --reason="…"`: a delta with a recorded reason, `ratchets.json` untouched.
+  delta); more blocks until you extract or raise it with a reason (`tools/check/ratchets.mjs --update`; also lowers).
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log` (`js/core/log.js`), never bare `console.*`.
 - Coordinates: +Y up, metres, radians, arc `s`, lateral `x` +right; +k = LEFT turn (measured). Never flip a curvature
   sign without a rendered lap.
@@ -153,7 +152,7 @@ wrapped as `apex_*`. Routes: live canvas → skill `mcp-probe`; pre-push or depl
 code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps → skill `ci-watch` + `tools/ci/pr-board.mjs`
 (agent `ci-watcher` returns the board; agent `merge-desk` runs the desk); owning PRs → skill `steward`; messaging, claims and authority between sessions
 → skill `agent-fleet` (spawning siblings: `source_url`, auto mode, the user's quoted grant; `send_message` first lines; measured
-allow-rule shapes in `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`); failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`; a scoped change handed to a subagent you message mid-task → agent `worker`; source debugging → skill `js-debugger` (separate parent-owned MCP `debugger_*`; [Agent JS debugger](docs/research/AGENT-JS-DEBUGGER-MCP.md)).
+allow-rule shapes in `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`); failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`; a scoped change handed to a subagent you message mid-task → agent `worker`.
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence. Bulk or post-deploy web reading goes to agent `deploy-research`.
 

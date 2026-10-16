@@ -430,6 +430,32 @@ test("the crash-sentinel floor still cannot be defeated by pinning the resolutio
   assert.equal(PerfGov.tier(), 4, "the sentinel floor must hold even with the resolution pinned");
 });
 
+test("two crash strikes cap the backend's DPR at 1 at init; one strike or a desktop leaves it alone (#1641)", () => {
+  const boot = (strikes, isMobile) => {
+    globalThis.localStorage = {
+      _s: { "apex26.crashStrikes": String(strikes), "apex26.crashStrikesBuild": "1" },
+      getItem(k) { return this._s[k] ?? null; }, setItem(k, v) { this._s[k] = String(v); },
+      removeItem(k) { delete this._s[k]; },
+    };
+    globalThis.window = { __APEX_BUILD: 1 };
+    const PerfGov = eval(SRC + ";PerfGov");
+    const caps = [];
+    PerfGov.init({ isMobile, getRenderScale: () => 1, setRenderScale: () => false, capDpr: (n) => { caps.push(n); return true; } });
+    return caps;
+  };
+  assert.deepEqual(boot(2, true), [1], "two strikes on a phone cap DPR at 1");
+  assert.deepEqual(boot(3, true), [1]);
+  assert.deepEqual(boot(1, true), [], "one strike sheds features but keeps DPR");
+  assert.deepEqual(boot(0, true), []);
+  assert.deepEqual(boot(2, false), [], "a desktop never enters safe mode");
+});
+
+test("TLX capDpr only ever lowers the cap and re-sizes (#1641)", () => {
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  assert.match(tlx, /let DPR_CAP = mobileTier \? 1\.5 : 2;/, "the cap is mutable");
+  assert.match(tlx, /capDpr\(n\) \{\s*if \(!\(n >= 1\) \|\| n >= DPR_CAP\) return false;\s*DPR_CAP = n; resizeNow\(\); return true;/);
+});
+
 // ── The GRAPHICS preset's user tier (js/perf/quality-preset.js) ────────────────
 // tier() folds three terms with max(): the crash-sentinel floor, the user's
 // preset floor, and the governor's own live tier. That single expression IS the

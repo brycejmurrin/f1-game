@@ -117,11 +117,12 @@ const SceneryStructures = (function () {
       }
     };
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
-    const wall = (s0, s1, side, gap, h, col, thick) => {
+    const wall = (s0, s1, side, gap, h, col, thick, alt) => {
       const a = thick || 0.5;
       if (alreadyLaid("wall", s0, s1, side, gap, `${a}|${h}|${(col || []).join(",")}`)) return;
       ctx.noteSpan("wall", s0, s1, side, gap, { h });
       recordBarrier(s0, s1, side, gap);
+      let n = 0;
       along(s0, s1, 6, (k, spacing) => {
         const p = anchor(k, side, gap);
         if (onTrack(p.c[0], p.c[2], a / 2)) {
@@ -130,11 +131,14 @@ const SceneryStructures = (function () {
         }
         const wallCol = col || [0.78, 0.78, 0.80];
         const capCol = [wallCol[0] * 0.72, wallCol[1] * 0.72, wallCol[2] * 0.74];
-        ctx.instance(`wall|${a}|${h}|${wallCol.join(",")}`,
+        // `alt` (opt-in, metres): every other slab stands `alt` thicker, so slope-overlapped
+        // neighbours never share a side plane (z-fight, coplanar-audit; TrackGeom.MIN_SEP).
+        const t = alt && (n++ & 1) ? a + alt : a;
+        ctx.instance(`wall|${t}|${h}|${wallCol.join(",")}`,
           { o: p.c, r: p.r, u: p.u, t: p.t, s: [1, 1, spacing] },
           (rec) => {
-            rec.box([0, (h - 0.4) / 2, 0], [a, h + 0.4, 1], wallCol);   // slab
-            rec.box([0, h, 0], [a * 1.1, 0.16, 1], capCol);            // coping rail on top
+            rec.box([0, (h - 0.4) / 2, 0], [t, h + 0.4, 1], wallCol);   // slab
+            rec.box([0, h, 0], [t * 1.1, 0.16, 1], capCol);            // coping rail on top
           },
           { kind: "wall", k, side });
       }, `wall|${side}|${gap}|${a}|${h}|${(col || []).join(",")}`);
@@ -324,7 +328,7 @@ const SceneryStructures = (function () {
     };
     const gantry = (s, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("gantry", "box");
-      const k = Math.round(s * n) % n, c = col || [0.16, 0.16, 0.19];
+      const k = ((Math.round(s * n) % n) + n) % n, c = col || [0.16, 0.16, 0.19];
       const aL = anchor(k, -1, 1.5), aR = anchor(k, 1, 1.5), u = aL.u;
       const beam = [px[k] + u[0] * h, py[k] + u[1] * h, pz[k] + u[2] * h];
       const housing = vadd(beam, u, -0.62);   // the lamp housing's centre (below)

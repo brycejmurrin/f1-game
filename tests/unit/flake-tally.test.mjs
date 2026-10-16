@@ -242,6 +242,8 @@ import {
   quarantineSchemaKeys,
   formatIssueBody,
   listAllRuns,
+  listRunJobs,
+  JOBS_PAGE,
   upsertIssue,
   baseRedRows, formatBaseRedBody, syncBaseRedIssue, BASE_RED_MARKER, BASE_RED_TITLE,
   setFlakeTallyTestHooks,
@@ -437,4 +439,34 @@ test("flake-tally.yml runs the daily tally with least privilege, and the flaky l
   assert.match(wf, /node tools\/ci\/flake-tally\.mjs --events all --days "\$DAYS" --propose --issue/);
   const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
   assert.ok(labels.some((l) => l.name === "flaky"), "fleet.yml syncs labels.json; the issue needs the label");
+});
+
+test("#2233: listRunJobs pages 30 at a time (per_page=100 is a 502 on large runs) and keeps what it read when a later page fails", async () => {
+  const calls = [];
+  const job = (id) => ({ id, name: `j${id}` });
+  const serve = (failPage) => async (url) => {
+    calls.push(url);
+    const page = Number(/[?&]page=(\d+)/.exec(url)?.[1]);
+    if (page === failPage) return { status: 502, arrayBuffer: async () => Buffer.from("bad gateway") };
+    const all = Array.from({ length: 70 }, (_, i) => job(i + 1));
+    const slice = all.slice((page - 1) * 30, page * 30);
+    return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify({ total_count: 70, jobs: slice })) };
+  };
+  try {
+    setFlakeTallyTestHooks({ fetch: serve(0), delay: async () => {} });
+    const r = await listRunJobs(123, { token: "t" });
+    assert.equal(r.jobs.length, 70);
+    assert.equal(calls.length, 3, "30 + 30 + 10: the short page ends the listing");
+    assert.ok(calls.every((u) => /jobs\?per_page=30&page=\d+$/.test(u)), calls.join("\n"));
+    assert.ok(!calls.some((u) => /per_page=100/.test(u)));
+    assert.equal(JOBS_PAGE, 30);
+    // a page that keeps failing after the first: the jobs already read are returned, not thrown away
+    calls.length = 0;
+    setFlakeTallyTestHooks({ fetch: serve(2), delay: async () => {} });
+    const partial = await listRunJobs(123, { token: "t" });
+    assert.equal(partial.jobs.length, 30);
+    // the first page failing is an error
+    setFlakeTallyTestHooks({ fetch: serve(1), delay: async () => {} });
+    assert.match((await listRunJobs(123, { token: "t" })).error, /HTTP 502/);
+  } finally { setFlakeTallyTestHooks(); }
 });

@@ -7,7 +7,8 @@ source audits, sharp and typescript for tooling — never shipped). Four vendore
 libraries DO ship, under `vendor/`, each loaded only by the feature that needs
 it: three.js r186 (TLX backend), Rapier (`js/physics/debris-world.js`), Trystero (the
 Nostr room-code rendezvous) and jsQR (the answer-code camera scan). Served as
-static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
+static files (GitHub Pages). Every project runtime JS file under `js/` is an IIFE that
+assigns ONE global; vendored addons may use their upstream module format.
 
 > **New here?** Start with [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) (boot path,
 > layer map, where to edit). This file is the module **contract** — what each
@@ -435,6 +436,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `ai-corridor.js` | `AiCorridor` | tag | AI-only reachable passing lanes. |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
+| `debris-draw.js` | `DebrisDraw` | tag | DebrisDraw: instanced drawing of the DebrisWorld pools (shard / marble / cone / panel). |
 | `debris-world.js` | `DebrisWorld` | tag | Rapier side-world for render-only debris (adoption phases R0+R1, see spike/ADOPTION-PLAN.md Part 2). |
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
 | `contact-geometry.js` | `ContactGeometry` | tag | Physical road boundaries and oriented boxes in the local road plane. |
