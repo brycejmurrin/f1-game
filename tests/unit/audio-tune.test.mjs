@@ -2423,3 +2423,14 @@ test("SFX off silences kerb rumble and wet spray (and unmutes the one-shot gate)
   assert.equal(A.kerbSpray().kerb, 0, "SFX off: setEngine does not open the kerb layer");
   assert.equal(A.kerbSpray().spray, 0, "SFX off: setEngine does not open the spray layer");
 });
+
+
+test("boost activation is quiet when ERS is muted or its trim is zero", async () => {
+  const A = await neutralEngine();
+  A.setLayer("ers", false); A.deployBoost();
+  assert.equal(A.boostState().peak, 0);
+  A.setLayer("ers", true); A.setTune({ boost: 0 }); A.deployBoost();
+  assert.equal(A.boostState().peak, 0);
+  A.setTune({ boost: 1 }); A.deployBoost();
+  assert.ok(A.boostState().peak > 0 && A.boostState().peak <= 0.15, "stock whoosh is below the old 0.3 peak");
+});

@@ -618,11 +618,12 @@ var GameAudio = (function () {
     try {
       if (typeof RivalAudio === "undefined") return;
       if (typeof RivalAudio.attach === "function") {
+        if (RivalAudio.setMix) RivalAudio.setMix(layers.rivals ? tune.rivals : 0);
         if (rivalPassByCtx === ctx) return;
         RivalAudio.attach(ctx, sfxBus);
         rivalPassByCtx = ctx;
       } else {
-        RivalAudio._pendingAttach = { ctx, dest: sfxBus };
+        RivalAudio._pendingAttach = { ctx, dest: sfxBus, mix: layers.rivals ? tune.rivals : 0 };
       }
     } catch (e) { /* stub / mid-teardown */ }
   }
@@ -1143,15 +1144,15 @@ var GameAudio = (function () {
     harvSrc.connect(harvFilter).connect(harvGain).connect(sfxBus);
 
     // ERS deploy whine: electric-motor rise while the battery is actually
-    // deploying. Triangle through a highpass — a different waveform and a
-    // higher register than the turbo sine, so the two never read as one layer.
+    // deploying. A soft lower-register sine also covers the lazy-module fallback.
     ersOsc = ctx.createOscillator();
     ersHp = ctx.createBiquadFilter();
     ersGain = ctx.createGain();
-    ersOsc.type = "triangle";
-    ersOsc.frequency.value = 2400;
-    ersHp.type = "highpass";
-    ersHp.frequency.value = 1600;
+    ersOsc.type = "sine";
+    ersOsc.frequency.value = 720;
+    ersHp.type = "lowpass";
+    ersHp.frequency.value = 1800;
+    ersHp.Q.value = 0.5;
     ersGain.gain.value = 0;
     ersOsc.connect(ersHp).connect(ersGain).connect(sfxBus);
 
@@ -1838,7 +1839,7 @@ var GameAudio = (function () {
       }
     } else {
       const ersLvl = (deploy > 0 && layers.ers)
-        ? (0.012 + 0.026 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias * tune.boost
+        ? (0.005 + 0.010 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias * tune.boost
           * (0.42 + 0.58 * Math.max(s, 0.04))
         : 0;
       if (ersGain._apexErsTgt !== ersLvl) {
@@ -1846,7 +1847,7 @@ var GameAudio = (function () {
         ersGain._apexErsTgt = ersLvl;
       }
       if (deploy > 0)
-        aimParam(ersOsc.frequency, (2600 + rev * 1100 + s * 1500) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
+        aimParam(ersOsc.frequency, (720 + deploy * 600) * (0.88 + 0.12 * low), t, 0.06, 1e-4);
     }
 
     // Part-throttle ICE harvest and full-pack regen clip: a shallow ignition cut.
@@ -2347,6 +2348,7 @@ var GameAudio = (function () {
     // shallow one are different limiters, and one slider cannot express
     // either.) Set once per tune change, not per frame.
     if (limOsc) limOsc.frequency.setTargetAtTime(13 * tune.limRate, t, 0.05);
+    applyRivalMix();
     applyVenue();   // the REVERB trim and its layer switch both land here
   }
 
@@ -2529,6 +2531,22 @@ var GameAudio = (function () {
     }
   }
 
+  function applyRivalMix() {
+    const mix = layers.rivals ? tune.rivals : 0;
+    if (typeof RivalAudio !== "undefined") {
+      if (RivalAudio.setMix) RivalAudio.setMix(mix);
+      else if (RivalAudio._pendingAttach) RivalAudio._pendingAttach.mix = mix;
+    }
+    if (mix > 0 || !ctx) return;
+    const t = now();
+    for (const v of rivalVoices) aimGain(v.gain, 0, t, 0.04);
+    for (const v of contactVoices) {
+      if (v.player) continue;
+      v.gain.gain.cancelScheduledValues(t);
+      v.gain.gain.setTargetAtTime(0, t, 0.04);
+    }
+  }
+
   function setLayer(name, on) {
     if (Object.prototype.hasOwnProperty.call(LAYER_DEF, name)) layers[name] = !!on;
     // Every other layer is gated inside setEngine, so the next frame picks the
@@ -2536,30 +2554,31 @@ var GameAudio = (function () {
     // or the tune changes, so without this the SPACE switch did nothing at all
     // until something else happened to move the tune.
     if (name === "reverb") applyVenue();
+    if (name === "rivals") applyRivalMix();
     return Object.assign({}, layers);
   }
 
-  // whoosh: filtered noise sweeping up + a rising saw underneath
+  // Short, low-register deploy whoosh; avoid stacking a piercing saw with ERS.
   function deployBoost() {
-    if (typeof ErsLayer !== "undefined" && ErsLayer.cueBoost) ErsLayer.cueBoost(now());
-    boostPeak = 0.3 * tune.boost;
+    boostPeak = layers.ers ? 0.14 * tune.boost : 0;
     boostFired++;
     if (!sfxOk() || !(boostPeak > 0)) return;   // BOOST at 0 is a silent deploy, not a zero-height envelope
     const t0 = now();
+    if (typeof ErsLayer !== "undefined" && ErsLayer.cueBoost) ErsLayer.cueBoost(t0, tune.boost);
     const src = ctx.createBufferSource();
     const off = bindNoise(src, 0.7);        // start(t0, off) -> stop(t0 + 0.6)
     const f = ctx.createBiquadFilter();
     f.type = "bandpass";
-    f.Q.value = 1.1;
-    f.frequency.setValueAtTime(320, t0);
-    f.frequency.exponentialRampToValueAtTime(4800, t0 + 0.45);
+    f.Q.value = 0.5;
+    f.frequency.setValueAtTime(240, t0);
+    f.frequency.exponentialRampToValueAtTime(1400, t0 + 0.30);
     const g = ctx.createGain();
-    env(g, t0, boostPeak, 0.03, 0.45);
+    env(g, t0, boostPeak, 0.04, 0.28);
     src.connect(f).connect(g).connect(sfxBus);
     src.start(t0, off);
     src.stop(t0 + 0.6);
     src.onended = () => { try { src.disconnect(); f.disconnect(); g.disconnect(); } catch (e) { /* already disconnected */ } };
-    blip(220, "sawtooth", 0.12 * tune.boost, 0.03, 0.4, 880);
+    blip(180, "sine", 0.035 * tune.boost, 0.025, 0.18, 360);
   }
 
   // Contact. `impact` 0..1 is what collideFx already computes (and used to
@@ -2610,7 +2629,7 @@ var GameAudio = (function () {
       if (!player) contactDeniedGate++;
       return false;
     }
-    if (!player && !fieldArmed) { contactDeniedGate++; return false; }
+    if (!player && (!fieldArmed || !layers.rivals || !(tune.rivals > 0))) { contactDeniedGate++; return false; }
     const t = now();
     let v = null;
     for (let i = 0; i < contactVoices.length; i++) {
@@ -2630,7 +2649,8 @@ var GameAudio = (function () {
       peak = 0.16 + 0.22 * k; attack = 0.005; decay = 0.14 + 0.12 * k;
       freq = 420 + 180 * k; q = 0.9; fType = "lowpass";
     }
-    peak *= clamp01(near != null ? near : 1) * 0.9;
+    peak *= clamp01(near != null ? near : 1) * 0.9 * (player ? 1 : tune.rivals);
+    v.player = !!player;
     if (!(peak > 0.001)) return false;
     v.filt.type = fType;
     v.filt.Q.value = q;
