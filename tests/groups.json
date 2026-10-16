@@ -800,6 +800,7 @@
     "tests/unit/session-entry-vm.test.mjs",
     "tests/unit/session-status.test.mjs",
     "tests/unit/session-stub-surface.test.mjs",
+    "tests/unit/session-transcript.test.mjs",
     "tests/unit/settings-defaults.test.mjs",
     "tests/unit/settings-export.test.mjs",
     "// Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.",

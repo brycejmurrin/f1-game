@@ -1,0 +1,11 @@
+{
+  "files": {
+    "js/game.js": {
+      "codeLines": 1,
+      "lines": 6
+    }
+  },
+  "tree": {
+    "waitForTimeout": -1
+  }
+}

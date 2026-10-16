@@ -379,3 +379,38 @@ test("a driving key released after focus moves into a HUD tap button clears its 
   if (!up.cancelBubble) (listeners.keyup || []).forEach((f) => f(up));
   assert.equal(Input.throttle(), false, "moving focus cannot strand a rebound driving key");
 });
+
+for (const id of ["pausebtn", "btn-cam", "hud-restore"]) {
+  test(id + " leaves native activation keys to the button and preserves movement releases", () => {
+    const { Input, sb, listeners } = boot(), button = sb.document.getElementById(id);
+    let clicks = 0;
+    Object.assign(button, { tagName: "BUTTON", matches: (selector) => selector.split(", ").includes("#" + id),
+      click: () => { clicks++; } });
+    sb.document.activeElement = button;
+    const send = (code, down) => {
+      const event = button.fire(down ? "keydown" : "keyup", {
+        code, key: code === "Space" ? " " : code, repeat: false,
+        target: sb.document.activeElement || { tagName: "BODY" }
+      });
+      (listeners[down ? "keydown" : "keyup"] || []).forEach((f) => f(event));
+      return event;
+    };
+    for (const code of ["Space", "Enter", "NumpadEnter"]) {
+      assert.ok(!send(code, true).defaultPrevented, code + " keydown retains its native default");
+      assert.ok(!send(code, false).defaultPrevented, code + " keyup retains its native default");
+      assert.equal(Input.consumeBoostToggle(), false, "activation cannot also queue BOOST");
+    }
+    assert.equal(clicks, 0, "Input does not synthesize a duplicate click alongside the native default");
+    send("KeyW", true);
+    assert.equal(Input.throttle(), true, "movement still works while a HUD button has focus");
+    send("KeyW", false);
+    assert.equal(Input.throttle(), false);
+    Input.setKeyBinding("throttle", 0, "Space");
+    sb.document.activeElement = null;
+    send("Space", true);
+    assert.equal(Input.throttle(), true, "Space can hold a rebound driving action before focus moves");
+    sb.document.activeElement = button;
+    assert.ok(!send("Space", false).defaultPrevented);
+    assert.equal(Input.throttle(), false, "activation-key release clears the earlier driving latch");
+  });
+}

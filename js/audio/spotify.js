@@ -1345,7 +1345,10 @@ window.SpotifyMusic = (function () {
     on("as-sp-disconnect", "click", () => { disconnect(); });
   }
 
+  let initialized = false;
   function init() {
+    if (initialized) return;
+    initialized = true;
     Log.info("audio", "SpotifyMusic.init");
     // Adopt the stored config FIRST, so the redirect handler and the first
     // render agree about whether the feature exists at all. Note we never
@@ -1358,8 +1361,8 @@ window.SpotifyMusic = (function () {
     try { handleRedirect(); } catch (e) { /* silent — MP3 music continues */ }
   }
 
-  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
-  if (document.readyState !== "complete") {
+  // Lazy scripts can arrive after DOMContentLoaded but before window.load.
+  if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   } else {
     init();

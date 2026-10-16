@@ -234,3 +234,142 @@ test("#2188: GitHub callers default to the proxy-aware fetch; curl carries heade
     assert.doesNotMatch(src.replace(/\/\/.*$/gm, ""), /(^|[^.\w])fetch\(|globalThis\.fetch/m, `${f} has no bare fetch left`);
   }
 });
+
+// ── daily tally (2026-10-16, CI/CD review #2333) ───────────────────────────
+import {
+  proposeRows,
+  quarantineRows,
+  quarantineSchemaKeys,
+  formatIssueBody,
+  listAllRuns,
+  upsertIssue,
+  setFlakeTallyTestHooks,
+  ISSUE_MARKER,
+  ISSUE_TITLE,
+  PROPOSE_FLAKY_RUNS,
+  PROPOSE_FAIL_BRANCHES,
+} from "../../tools/ci/flake-tally.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+test("tallyEvents keeps the distinct branches a test failed on", () => {
+  const rows = tallyEvents([
+    { spec: "tests/specs/hud-layout.spec.js", title: "u", kind: "fail", runId: 3, branch: "cursor/p" },
+    { spec: "tests/specs/hud-layout.spec.js", title: "u", kind: "fail", runId: 4, branch: "cursor/q" },
+    { spec: "tests/specs/hud-layout.spec.js", title: "u", kind: "fail", runId: 5, branch: "cursor/p" },
+  ]);
+  assert.deepEqual(rows[0].branches, ["cursor/p", "cursor/q"]);
+});
+
+test("proposeRows: a pass-on-retry in 2 runs or a first-try fail on 3 branches is proposed; one branch's red is not", () => {
+  assert.equal(PROPOSE_FLAKY_RUNS, 2);
+  assert.equal(PROPOSE_FAIL_BRANCHES, 3);
+  const rows = tallyEvents([
+    { spec: "tests/specs/smoke.spec.js", title: "t", kind: "flaky", runId: 1, branch: "x" },
+    { spec: "tests/specs/smoke.spec.js", title: "t", kind: "flaky", runId: 2, branch: "y" },
+    { spec: "tests/specs/hud-layout.spec.js", title: "u", kind: "fail", runId: 3, branch: "p" },
+    { spec: "tests/specs/hud-layout.spec.js", title: "u", kind: "fail", runId: 4, branch: "q" },
+    { spec: "tests/specs/hud-layout.spec.js", title: "u", kind: "fail", runId: 5, branch: "r" },
+    { spec: "tests/specs/menu-baseline.spec.js", title: "v", kind: "fail", runId: 6, branch: "p" },
+    { spec: "tests/specs/menu-baseline.spec.js", title: "v", kind: "fail", runId: 7, branch: "p" },
+    { spec: "tests/specs/agent-view.spec.js", title: "w", kind: "flaky", runId: 8, branch: "p" },
+  ]);
+  const p = proposeRows(rows);
+  assert.deepEqual(p.map((r) => r.spec).sort(), ["tests/specs/hud-layout.spec.js", "tests/specs/smoke.spec.js"]);
+  assert.match(p.find((r) => r.spec.endsWith("smoke.spec.js")).reason, /passed only on retry in 2 run/);
+  assert.match(p.find((r) => r.spec.endsWith("hud-layout.spec.js")).reason, /3 branches \(p, q, r\)/);
+});
+
+test("quarantineRows follows the ledger's shape: legacy spec rows, or #2280's exact-title rows with evidence and expiry", () => {
+  const p = proposeRows(tallyEvents([
+    { spec: "tests/specs/smoke.spec.js", title: "t", kind: "flaky", runId: 11, branch: "x" },
+    { spec: "tests/specs/smoke.spec.js", title: "t", kind: "flaky", runId: 12, branch: "y" },
+  ]));
+  const today = new Date("2026-10-16T00:00:00Z");
+  const legacy = quarantineRows(p, { today });
+  assert.deepEqual(Object.keys(legacy[0]), ["spec", "since", "owner", "why"]);
+  assert.equal(legacy[0].since, "2026-10-16");
+  assert.match(legacy[0].why, /actions\/runs\/12/);
+  const exact = quarantineRows(p, { today, schemaKeys: ["spec", "since", "owner", "why", "title", "evidence", "expires", "review"] });
+  assert.equal(exact[0].title, "t");
+  assert.equal(exact[0].expires, "2026-11-15");
+  assert.match(exact[0].evidence, /actions\/runs\/12$/);
+  // The shape is read from the committed ledger, so the tool never prints a row its test would refuse.
+  const keys = quarantineSchemaKeys();
+  const ledger = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/flaky-quarantine.json"), "utf8"));
+  assert.deepEqual(keys, Object.keys(ledger.quarantine[0]));
+});
+
+test("formatIssueBody starts with the marker and carries the table, the proposals and the hand recipe", () => {
+  const rows = tallyEvents([{ spec: "tests/specs/smoke.spec.js", title: "t | pipe", kind: "fail", runId: 1, branch: "x" }]);
+  const body = formatIssueBody(rows, { runsExamined: 3, days: 2, proposals: [], quarantine: [], now: new Date("2026-10-16T03:00:00Z") });
+  assert.ok(body.startsWith(ISSUE_MARKER));
+  assert.match(body, /\*\*3\*\* runs/);
+  assert.match(body, /\| t \\\| pipe \| tests\/specs\/smoke\.spec\.js \| 1 \| 0 \| 1 \| 1 \| 1 \|/);
+  assert.match(body, /None: no test passed only on retry/);
+  assert.match(body, /flake-tally\.mjs --events all --days 2 --propose/);
+});
+
+test("listAllRuns pages FAILED ci.yml / pages.yml runs since the window; green, cancelled and other workflows are skipped", async () => {
+  const calls = [];
+  setFlakeTallyTestHooks({
+    fetch: async (url) => {
+      calls.push(url);
+      const page = Number(/[?&]page=(\d+)/.exec(url)?.[1]);
+      const runs = page === 1
+        ? [{ id: 1, path: ".github/workflows/ci.yml", conclusion: "success" },
+          { id: 2, path: ".github/workflows/pages.yml", conclusion: "failure" },
+          { id: 3, path: ".github/workflows/ci.yml", conclusion: "cancelled" },
+          { id: 4, path: ".github/workflows/fleet.yml", conclusion: "failure" },
+          { id: 5, path: ".github/workflows/ci.yml", conclusion: "failure" }]
+        : [];
+      return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify({ workflow_runs: runs })) };
+    },
+    delay: async () => {},
+  });
+  try {
+    const r = await listAllRuns({ days: 2, token: "t", now: new Date("2026-10-16T00:00:00Z") });
+    assert.deepEqual(r.runs.map((x) => x.id), [2, 5]);
+    assert.match(calls[0], /actions\/runs\?status=failure&created=%3E%3D2026-10-14T00%3A00%3A00Z&per_page=100&page=1/);
+    assert.equal(calls.length, 1, "a short page ends the listing");
+    calls.length = 0;
+    const capped = await listAllRuns({ days: 2, token: "t", now: new Date("2026-10-16T00:00:00Z"), maxRuns: 1 });
+    assert.deepEqual(capped.runs.map((x) => x.id), [2], "maxRuns bounds the API budget");
+  } finally { setFlakeTallyTestHooks(); }
+});
+
+test("upsertIssue rewrites the open marker issue, else creates one with the flaky label", async () => {
+  const calls = [];
+  const hook = (issues) => ({
+    fetch: async (url, init) => {
+      calls.push([init.method, url, init.body ? JSON.parse(init.body) : null]);
+      if (init.method === "GET") return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify(issues)) };
+      return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify({ number: 77 })) };
+    },
+    delay: async () => {},
+  });
+  try {
+    setFlakeTallyTestHooks(hook([{ number: 5, body: ISSUE_MARKER + "\nold" }, { number: 6, body: "unrelated" }]));
+    assert.deepEqual(await upsertIssue("new body", { token: "t" }), { number: 5, updated: true });
+    assert.equal(calls[1][0], "PATCH");
+    assert.match(calls[1][1], /issues\/5$/);
+    assert.equal(calls[1][2].body, "new body");
+    calls.length = 0;
+    setFlakeTallyTestHooks(hook([]));
+    assert.deepEqual(await upsertIssue("new body", { token: "t" }), { number: 77, created: true });
+    assert.equal(calls[1][0], "POST");
+    assert.deepEqual(calls[1][2], { title: ISSUE_TITLE, body: "new body", labels: ["flaky"] });
+  } finally { setFlakeTallyTestHooks(); }
+});
+
+test("flake-tally.yml runs the daily tally with least privilege, and the flaky label exists", () => {
+  const wf = fs.readFileSync(path.join(ROOT, ".github/workflows/flake-tally.yml"), "utf8");
+  assert.match(wf, /^\s+- cron: "19 6 \* \* \*"$/m, "daily");
+  assert.match(wf, /^permissions:\n  contents: read\n  actions: read\n  issues: write$/m, "issues: write for the one issue, nothing else");
+  assert.doesNotMatch(wf, /pull-requests: write|contents: write|secrets\./);
+  assert.match(wf, /timeout-minutes: 20/);
+  assert.match(wf, /persist-credentials: false/);
+  assert.match(wf, /node tools\/ci\/flake-tally\.mjs --events all --days "\$DAYS" --propose --issue/);
+  const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
+  assert.ok(labels.some((l) => l.name === "flaky"), "fleet.yml syncs labels.json; the issue needs the label");
+});
