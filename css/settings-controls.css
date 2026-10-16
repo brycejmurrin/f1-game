@@ -657,14 +657,9 @@ button:has(> [data-fold]) {
    the only button in this foot, so nothing needs to out-shout anything.) */
 
 /* ---------- advanced steering ----------
-   A real grid, not the `inline-block; width: calc(50% - 8px)` this used to be.
-   Inline-block items flow on LINE BOXES, so one tall control (a two-line
-   explanation) dragged the next item down to clear it and the second column
-   came out ragged, with holes. auto-fill also means the column COUNT follows
-   the room: two on a landscape phone, three on a tablet or desktop, without
-   naming either width here.
-   The section headings inside the ADVANCED disclosure span the full width so
-   the list still reads as grouped rather than as one undifferentiated field. */
+   Range controls own Left/Right for adjustment. Keep one reading column so
+   Up/Down and the controller D-pad reach every input, including short rows
+   whose neighbours have longer help text. Section headings retain the groups. */
 #pmsettings-inner[data-shape="wide"] #advanced-inner,
 #pmsettings-inner[data-shape="wide"] #audioset-inner {
   grid-column: 1 / -1;
@@ -673,11 +668,7 @@ button:has(> [data-fold]) {
 #pmsettings-inner[data-shape="wide"] #advanced-inner,
 #pmsettings-inner[data-shape="wide"] #advanced-inner #adv-extra {
   display: grid;
-  /* min(...) floor: a bare `minmax(215px, …)` cannot shrink below 215 even
-     when the container is narrower, and overflows it. Shape, not a 620px
-     container guess — fit-cap can shrink local width while the sheet stays
-     wide. See #sel-teams in css/menus.css for the measurement. */
-  grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
   align-content: start;
 }

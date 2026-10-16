@@ -230,8 +230,8 @@ async function openLightingPhotoMode(page) {
   await openPauseSettings(page);
   // Menu clicks stay as locator.click: the pause menu parks the render loop, so
   // Playwright's stability checks are cheap here (lighting-tuner-grade's table).
-  await page.locator("#pm-open-display").click();
-  await page.locator("#pm-visual-tuners > summary").click();
+  await page.locator("#pm-open-visual").click();
+  await expect(page.locator("#pm-visual-tuners")).toHaveAttribute("open", "");
   // openSettings() re-runs syncSettingsAvailability; after go() the door is live.
   await page.waitForFunction(() => {
     const b = document.getElementById("pm-lighting");
@@ -240,6 +240,8 @@ async function openLightingPhotoMode(page) {
   await page.locator("#pm-lighting").click();
   await page.waitForFunction(() => document.body.classList.contains("lt-open"),
     null, { polling: 100, timeout: BOOT_MS });
+  // Free Camera remains on the toolbar even when compact tools are folded.
+  await expect(page.locator("#lighting .ew-toolbar #pc-toggle")).toBeVisible();
   // Opening the tuner starts the live-preview render path — #pc-toggle must
   // use clickLive or the actionability poll pays for SwiftShader frames.
   await clickLive(page, "pc-toggle");
@@ -308,7 +310,7 @@ test.describe("Lighting tuner — pause lifecycle", () => {
   });
 
   // …and pressing it again walks the real route back out, one screen per press.
-  test("Escape walks free cam -> tuner -> display -> settings -> pause -> racing", async ({ page }) => {
+  test("Escape walks free cam -> tuner -> visual studio -> settings -> pause -> racing", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openLightingPhotoMode(page);
@@ -317,22 +319,23 @@ test.describe("Lighting tuner — pause lifecycle", () => {
       return {
         photo: document.body.classList.contains("photo-mode"),
         lighting: !$("lighting").hidden,
-        display: !$("pm-panel-display").hidden,
+        // Tuners hide Settings while preserving their originating page.
+        visual: !$("pmsettings").hidden && !$("pm-panel-visual").hidden,
         settingsHome: !$("pm-settings-index").hidden,
         settings: !$("pmsettings").hidden,
         pause: !$("pausemenu").hidden,
       };
     });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: true, display: false, settingsHome: false, settings: false, pause: false });
+    expect(await where()).toEqual({ photo: false, lighting: true, visual: false, settingsHome: false, settings: false, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: true, settingsHome: false, settings: true, pause: false });
+    expect(await where()).toEqual({ photo: false, lighting: false, visual: true, settingsHome: false, settings: true, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: true, settings: true, pause: false });
+    expect(await where()).toEqual({ photo: false, lighting: false, visual: false, settingsHome: true, settings: true, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: false, settings: false, pause: true });
+    expect(await where()).toEqual({ photo: false, lighting: false, visual: false, settingsHome: false, settings: false, pause: true });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: false, settings: false, pause: false });
+    expect(await where()).toEqual({ photo: false, lighting: false, visual: false, settingsHome: false, settings: false, pause: false });
   });
 
   /* ESCAPE MUST BE ABLE TO PAUSE AT ALL, which is not as obvious as it sounds:
@@ -1434,7 +1437,7 @@ test("HOW TO PLAY names every way to play", async ({ page }) => {
     expect(body).toContain(mode);
   // The title screen's own buttons are the list it has to keep up with.
   const buttons = await page.evaluate(() =>
-    [...document.querySelectorAll("#menu-hero button, #menu-primary button, #menu-explore button")]
+    [...document.querySelectorAll("#menu-hero button, #menu-primary button, #menu-explore button, #menu-create button")]
       .map((b) => b.innerText.trim()).filter(Boolean));
   expect(buttons.length).toBeGreaterThan(3);
   expect(buttons.some((t) => /WATCH/i.test(t))).toBe(true);

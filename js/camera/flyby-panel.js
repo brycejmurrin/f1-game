@@ -307,8 +307,8 @@ function createEditorOpener(G, buttonId, ensure, method) {
   }
   function open(fromUi) {
     cancel();
-    const settings = G.$("pmsettings"), display = G.$("pm-panel-display");
-    const visible = () => !!(settings && !settings.hidden && display && !display.hidden);
+    const settings = G.$("pmsettings"), visual = G.$("pm-panel-visual");
+    const visible = () => !!(settings && !settings.hidden && visual && !visual.hidden);
     if (fromUi && !visible()) return Promise.resolve();
     if (fromUi && _pendingUiOpen) _pendingUiOpen.cancel();
     const request = { cancel, state: G.state, paused: G.paused, observer: null };
@@ -319,7 +319,7 @@ function createEditorOpener(G, buttonId, ensure, method) {
         request.observer = new MutationObserver(() => { if (pending === request) cancel(); });
         // Even hide-then-reopen ends the old visit. Observe only while waiting.
         request.observer.observe(settings, { attributes: true, attributeFilter: ["hidden"] });
-        request.observer.observe(display, { attributes: true, attributeFilter: ["hidden"] });
+        request.observer.observe(visual, { attributes: true, attributeFilter: ["hidden"] });
       }
     }
     return Promise.resolve().then(ensure).then((real) => {

@@ -1,19 +1,7 @@
 @layer components {
 /* Apex 26 — menus styles. Load order: tools/manifest.cjs CSS. */
-/* FOUR TIERS, by how much of your evening the thing costs.
-   HERO is the career — the 24-round game everything else feeds into. PLAY NOW is
-   the four one-sitting modes, 2x2, as dark plates with a red leading edge.
-   EXPLORE is Watch / Practice / Photo Studio / Garage (H3 Home rooms plus the
-   car workshop), also a forced 2x2. SECONDARY is the chrome rooms: half-height,
-   two across, no glow.
-
-   It was two tiers, but the play row had grown to FIVE full-size red buttons, so
-   the flat list the two-tier split existed to break up had quietly come back —
-   and a 24-round career carried exactly the weight of a time trial. Folding the
-   four quick modes into 2x2 pays for the hero's extra height, so the column is
-   no taller than before and still clears a 390px landscape phone. Garage used
-   to sit in the leftover utility strip; promoting it into explore keeps that
-   row even and the rooms row a chrome strip. */
+/* Career retains the hero treatment. Destination groups and compact wrapping
+   live in menu-destinations.css; the shared title scroller contains every group. */
 #menu-buttons { display: grid; gap: calc(var(--gap) * 0.9); justify-items: center; width: 100%; }
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
@@ -390,7 +378,9 @@ html[data-home-live] :where(body[data-shape="tall"]) #overlay #menu-buttons {
 }
 /* Compact Home keeps destination groups in one scrollable buttons column. */
 html[data-home-live] :where(body[data-shape="wide"][data-density="compact"]) #overlay {
-  grid-template-columns: minmax(0, 1fr) min(46%, 400px);
+  /* Reserve room for scaled labels: a 400px cap becomes only 200 CSS px
+     at 200% UI size and wraps the hero until RACE falls below the fold. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
   grid-template-rows: minmax(0, 1fr);
   align-content: stretch; align-items: stretch;
   /* 0.15: cheap 852×344 fold clearance for GARAGE. */

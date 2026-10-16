@@ -36,7 +36,11 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
     const hit = await hitTarget(id);
     await page.mouse.click(hit.x, hit.y);
   };
-  for (const id of ["mb-race", "mb-garage", "mb-settings"]) await hitTarget(id);
+  for (const id of ["mb-race", "mb-garage", "mb-settings"]) {
+    // Destination groups share a scrolling column on short screens.
+    await page.locator("#" + id).scrollIntoViewIfNeeded();
+    await hitTarget(id);
+  }
   await page.evaluate(() => window.__apex.headless(true));
   await page.evaluate(() => window.__apex.race("bahrain"));
   await page.waitForFunction(() => window.__apex.info().track != null, null,

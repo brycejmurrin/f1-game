@@ -150,7 +150,7 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("36 lighting tuner", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page, "singapore", "night", "dry");
-    await clickId(page, "pm-open-display");
+    await clickId(page, "pm-open-visual");
     await openDetails(page, "pm-visual-tuners");
     await clickId(page, "pm-lighting");
     // BOOT_MS, not 8 s — the SECOND tight wait in this file and the one I missed
