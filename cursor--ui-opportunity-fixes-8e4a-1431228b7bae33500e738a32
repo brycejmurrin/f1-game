@@ -1,1 +1,0 @@
-1792171161	Bryce Murrin	Fix responsive UI layout: Garage compact safe-area header/parts collapse and overlapping camera controls; Backup & Restore alignment. Existing uncommitted UI fixes preserved. Own css/carsetup.css css/settings.css and focused existing tests.  [cursor/ui-opportunity-fixes-8e4a; session 1431228b7bae33500e738a32]
