@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFileSync } from "node:child_process";
 import sharp from "sharp";
+import { surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import {
   buildTrackShotSurveyPlan,
   estimateSurveyMs,
@@ -127,12 +128,7 @@ export function createExtras(ctx) {
       sess.child.stdin.write(JSON.stringify({ id, ...cmd }) + "\n");
     });
   }
-  function surveyGlEnv(args = {}) {
-    const env = { ...process.env };
-    const want = args.gl || env.APEX_GL || (fs.existsSync("/usr/lib/x86_64-linux-gnu/dri/swrast_dri.so") ? "llvmpipe" : "");
-    if (want === "llvmpipe" || want === "swiftshader") env.APEX_GL = want;
-    return env;
-  }
+  function surveyGlEnv(args = {}) { return surveyGlEnvironment(process.env, args.gl); }
   async function trackOpen(args) {
     const track = needTrack(args.track || "monza");
     const out = assertSafeOut(args.out || `artifacts/track-session/${track}`);

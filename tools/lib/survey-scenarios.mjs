@@ -1,7 +1,7 @@
 // @doc Named survey locations, camera recipes and bounded reproducible scenario plans.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
 // Racing-space fractions, not authored scenery fractions. Visual verification is separate.
@@ -67,4 +67,12 @@ export function sourceIdentity(root) {
   const untracked = git('ls-files','--others','--exclude-standard','-z','--','js','css','index.html','tools','assets').split('\0').filter(Boolean).sort().map(file=>[file,createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')]);
   return { revision:git('rev-parse','HEAD').trim(), dirty:!!git('status','--porcelain','--untracked-files=no').trim() || untracked.length > 0, untracked,
     diffHash:captureIdentity(git('diff','HEAD','--','js','css','index.html','tools','assets')) };
+}
+
+/** Honor explicit requests; auto-select Mesa only where the capture launcher permits it. */
+export function surveyGlEnvironment(env = process.env, requested = "", exists = existsSync) {
+  const mesa = (exists("/dev/dri") || !!env.GITHUB_ACTIONS) && exists("/usr/lib/x86_64-linux-gnu/dri/swrast_dri.so");
+  const gpu = requested || env.APEX_GPU || env.APEX_GL || env.GL || (mesa ? "llvmpipe" : "swiftshader");
+  if (!["swiftshader", "llvmpipe", "hardware", "lavapipe"].includes(gpu)) throw new Error("Unsupported survey GPU: " + gpu);
+  return { ...env, APEX_GPU: gpu, APEX_GL: gpu };
 }

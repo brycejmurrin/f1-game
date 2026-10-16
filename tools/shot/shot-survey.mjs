@@ -3,7 +3,7 @@
 // @doc Multi-track shot survey CLI (job backend): track-session boots, resume, progress/findings JSON.
 // @skill survey-track
 import fs from "node:fs";
-import { SURVEY_LOCATIONS, CAMERA_RECIPES, captureIdentity, sourceIdentity } from "../lib/survey-scenarios.mjs";
+import { SURVEY_LOCATIONS, CAMERA_RECIPES, captureIdentity, sourceIdentity, surveyGlEnvironment } from "../lib/survey-scenarios.mjs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -47,7 +47,7 @@ const outRoot = path.resolve(ROOT, flag("--out", `artifacts/track-survey/${track
 const resume = has("--resume");
 const wantPanel = !has("--no-panel");
 const wantIndex = !has("--no-index");
-const gl = flag("--gl", process.env.APEX_GL || "");
+const gl = flag("--gl", "");
 const tod = flag("--tod", "");
 const weather = flag("--weather", "");
 const count = flag("--count", "");
@@ -95,19 +95,7 @@ writeSurveyProgress(outRoot, {
   shotsPerTrack: plan.shots.length, estimateMs, trackIndex: 0, shotIndex: 0,
 });
 
-function mesaLikely() {
-  try {
-    return fs.existsSync("/usr/lib/x86_64-linux-gnu/dri/swrast_dri.so")
-      || fs.existsSync("/usr/lib/x86_64-linux-gnu/dri/llvmpipe_dri.so");
-  } catch { return false; }
-}
-
-function sessionEnv() {
-  const env = { ...process.env };
-  const want = gl || (mesaLikely() && !env.APEX_GL ? "llvmpipe" : env.APEX_GL);
-  if (want === "llvmpipe" || want === "swiftshader") env.APEX_GL = want;
-  return env;
-}
+function sessionEnv() { return surveyGlEnvironment(process.env, gl); }
 
 function runSession(track, outDir) {
   return new Promise((resolve, reject) => {
@@ -165,7 +153,7 @@ for (let ti = 0; ti < tracks.length; ti++) {
   const track = tracks[ti];
   const outDir = tracks.length === 1 ? outRoot : path.join(outRoot, track);
   fs.mkdirSync(outDir, { recursive: true });
-  const identityContext = { extension: profile === "preview" ? "jpg" : "png", identities: Object.fromEntries(plan.shots.map(s=>[s.name,captureIdentity({ source, track, shot:s, profile, seed, gl:gl || "default" })])) };
+  const identityContext = { extension: profile === "preview" ? "jpg" : "png", identities: Object.fromEntries(plan.shots.map(s=>[s.name,captureIdentity({ source, track, shot:s, profile, seed, gpu:sessionEnv().APEX_GPU })])) };
   const { pending, resumed } = filterResumeShots(outDir, plan.shots, resume, identityContext);
   for (const s of pending) {
     if (fs.existsSync(path.join(outDir, `${s.name}.${identityContext.extension}`))) throw new Error("Existing capture does not match this plan/revision; choose a new output directory: " + s.name);

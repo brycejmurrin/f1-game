@@ -148,3 +148,12 @@ test('capture identities are key-order independent but change with source or set
  assert.notEqual(captureIdentity({revision:'a',profile:'preview'}),captureIdentity({revision:'a',profile:'comparison'}));
  assert.notEqual(captureIdentity({revision:'a'}),captureIdentity({revision:'b'}));
 });
+
+test('survey GPU auto-selection does not mistake installed Mesa for a usable local device',async()=>{
+ const {surveyGlEnvironment}=await import('../../tools/lib/survey-scenarios.mjs');
+ const librariesOnly=p=>p.endsWith('swrast_dri.so');
+ assert.equal(surveyGlEnvironment({},'',librariesOnly).APEX_GPU,'swiftshader');
+ assert.equal(surveyGlEnvironment({GITHUB_ACTIONS:'true'},'',librariesOnly).APEX_GPU,'llvmpipe');
+ assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'swiftshader',librariesOnly).APEX_GPU,'swiftshader');
+ assert.equal(surveyGlEnvironment({APEX_GPU:'hardware'},'',librariesOnly).APEX_GPU,'hardware');
+});
