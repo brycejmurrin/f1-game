@@ -809,6 +809,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // REJECTION, and index.html turns an unhandled one into a full-screen
   // overlay over the running race. Pure source scan, well under a second.
   "tests/unit/reject-lint.test.mjs",
+  "tests/unit/release-provenance.test.mjs",
   // js/race/reliability.js (random DNFs) had no unit test — only career.spec,
   // over budget and nightly-only. Pure VM with a stub hash, well under a second.
   "tests/unit/reliability.test.mjs",
@@ -862,6 +863,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/session-transcript.test.mjs",
   "tests/unit/settings-defaults.test.mjs",
   "tests/unit/settings-export.test.mjs",
+  "tests/unit/settings-search.test.mjs",
   // Round-2: MUSIC & SOUND asks the audio bundle once per open and reveals the stub page with a note when it cannot load.
   "tests/unit/settings-tabs.test.mjs",
   "tests/unit/settings-ttlb-backup.test.mjs",

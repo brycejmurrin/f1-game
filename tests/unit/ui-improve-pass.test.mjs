@@ -1629,7 +1629,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   // SettingsNav BEHAVIOUR: always land on the door index. A stored
   // settingsCategory must not reopen MORE / DISPLAY.
   const h = bootSettingsNav();
-  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "invalidate", "show", "showCurrent"]);
+  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "invalidate", "returnToSearch", "show", "showCurrent"]);
+  assert.equal(h.nav.returnToSearch(), false, "without an active search, returning is a harmless home navigation");
   assert.equal(h.index().hidden, false, "create() shows the door index");
   assert.equal(h.panel("controls").hidden, true);
   assert.equal(h.panel("display").hidden, true);

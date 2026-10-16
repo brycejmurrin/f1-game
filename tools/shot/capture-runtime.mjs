@@ -5,6 +5,26 @@ import { execFileSync } from 'node:child_process';
 import { launchChromium, startStaticServer, shutdown, registerTeardownResource } from '../lib/harness.mjs';
 import { chromiumArgsForBackend, installProbeInit, gotoGame, awaitCaptureReady, screenshotGameCanvas } from './probe-page.mjs';
 import { ROOT, pixelEvidence, rendererEvidence } from './capture-contract.mjs';
+
+const SHA = /^[0-9a-f]{40}$/i;
+
+/** Preserve the distinction between the source checkout and the shell observed by a capture. */
+export function parseCaptureProvenance({ sourceSha = null, deployedSha = null, build = null, version = null, dirty = false } = {}) {
+  const source = SHA.test(String(sourceSha || '')) ? String(sourceSha).toLowerCase() : null;
+  const deployed = SHA.test(String(deployedSha || '')) ? String(deployedSha).toLowerCase() : null;
+  return { sourceSha: source, deployedSha: deployed, deployedShaTrusted: !!deployed,
+    matches: !!source && !!deployed && source === deployed,
+    build: build == null ? null : String(build), version: version == null ? null : String(version), dirty: !!dirty };
+}
+
+/** Read the stamped shell metadata without treating a local source server as deployed. */
+export async function capturePageProvenance(page, { sourceSha = null, dirty = false } = {}) {
+  const shell = await page.evaluate(() => {
+    const meta = (name) => document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') || null;
+    return { deployedSha: meta('apex-sha'), build: meta('apex-build'), version: meta('apex-version') };
+  });
+  return parseCaptureProvenance({ ...shell, sourceSha, dirty });
+}
 export function visibleScreen() {
   const shown = (element) => {
     if (!element || element.hidden) return false;
@@ -126,7 +146,9 @@ export async function withCapturePage(opts, run) {
     context.phase = "game-boot";
     await gotoGame(page, server.url + '?seed=' + opts.seed, 90000); await checkActive();
     context.bootScreen = await page.evaluate(visibleScreen);
-    context.identity = { url: page.url(), title: await page.title(), commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(), dirty: execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n').filter(Boolean), build: await page.evaluate(() => window.__APEX_BUILD || null), requestedSeed: opts.seed, seed: await page.evaluate(() => window.__apex.seed()), requestedBackend: opts.backend, viewport: opts.viewport };
+    const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: ROOT, encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+    context.identity = { url: page.url(), title: await page.title(), commit, dirty, build: await page.evaluate(() => window.__APEX_BUILD || null), provenance: await capturePageProvenance(page, { sourceSha: commit, dirty: dirty.length > 0 }), requestedSeed: opts.seed, seed: await page.evaluate(() => window.__apex.seed()), requestedBackend: opts.backend, viewport: opts.viewport };
     await checkActive();
     try { return await run(page, context); }
     catch (err) { context.failureSnapshot = await captureFailureSnapshot(page); throw err; }
@@ -143,6 +165,10 @@ export async function recordCapture(page, path, requestedBackend, context) {
   const operationStart = context?.operationTimings?.length || 0;
   if (context) context.phase = phase + ":present";
   await captureOperation(context, 'present', 30000, (budget) => awaitCaptureReady(page, { timeoutMs: budget }));
+  const provenance = await captureOperation(context, 'provenance', 5000, () => capturePageProvenance(page, {
+    sourceSha: context?.identity?.commit || null,
+    dirty: Array.isArray(context?.identity?.dirty) && context.identity.dirty.length > 0,
+  }));
   if (context) context.phase = phase + ":state-snapshot";
   const snapshot = await captureOperation(context, 'state-snapshot', 30000, () => page.evaluate(() => {
     const a = window.__apex, diag = a.diag({ download: false }), cameraState = a.cameraState();
@@ -158,5 +184,5 @@ export async function recordCapture(page, path, requestedBackend, context) {
   const shot = await captureOperation(context, 'canvas-capture', 60000, (budget) => screenshotGameCanvas(page, path, { skipAwait: true, timeout: budget }));
   if (context) context.phase = phase + ":pixel-evidence";
   const pixels = await captureOperation(context, 'pixel-evidence', 30000, () => pixelEvidence(readFileSync(path)));
-  return { ...snapshot, screen, operationTimings: context?.operationTimings?.slice(operationStart) || [], image: { path, bytes: shot.bytes, via: shot.via, pixels }, renderer: rendererEvidence(snapshot.diag, pixels, requestedBackend) };
+  return { ...snapshot, provenance, screen, operationTimings: context?.operationTimings?.slice(operationStart) || [], image: { path, bytes: shot.bytes, via: shot.via, pixels }, renderer: rendererEvidence(snapshot.diag, pixels, requestedBackend) };
 }
