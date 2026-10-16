@@ -182,6 +182,16 @@ const CareerBackup = (function () {
 
   function exportAll() {
     const envelope = build();
+    // Preserve raw future careers for recovery, but never download extras that
+    // this reader would reject or truncate. Export has no destination checks.
+    for (const k of EXTRA_KEYS) {
+      if (envelope[k] == null) continue;
+      const checked = cleanExtra(k, envelope[k]);
+      if (!checked.ok) return Promise.resolve(checked);
+    }
+    if (new Blob([serialize(envelope)]).size > MAX_BYTES) {
+      return Promise.resolve({ ok: false, reason: "too-large" });
+    }
     return download(envelope).then(function (r) {
       return Object.assign({ envelope: envelope }, r || { ok: true });
     });
@@ -189,18 +199,21 @@ const CareerBackup = (function () {
 
   function validate(raw, rawText) {
     if (rawText != null) {
-      const n = typeof rawText === "string" ? rawText.length
+      const n = typeof rawText === "string" ? new Blob([rawText]).size
         : (rawText && rawText.byteLength) || 0;
       if (n > MAX_BYTES) return { ok: false, reason: "too-large" };
     }
     if (raw == null) return { ok: false, reason: "empty" };
     if (typeof raw === "string") {
-      if (raw.length > MAX_BYTES) return { ok: false, reason: "too-large" };
+      if (new Blob([raw]).size > MAX_BYTES) return { ok: false, reason: "too-large" };
       let parsed = null;
       try { parsed = JSON.parse(raw); } catch (e) { return { ok: false, reason: "bad-json" }; }
       return validate(parsed, raw);
     }
     if (!isObj(raw)) return { ok: false, reason: "not-object" };
+    try {
+      if (new Blob([JSON.stringify(raw)]).size > MAX_BYTES) return { ok: false, reason: "too-large" };
+    } catch (_) { return { ok: false, reason: "bad-json" }; }
     if (raw.format !== FORMAT) return { ok: false, reason: "wrong-format" };
     if (!Array.isArray(raw.slots)) return { ok: false, reason: "slots-not-array" };
     if (raw.slots.length > 12) return { ok: false, reason: "too-many-slots" };
@@ -297,7 +310,7 @@ const CareerBackup = (function () {
   // every key it does not know. Each extra now goes through an allowlist cleaner
   // that rebuilds it from the fields its reader uses, bounded in size, and a payload
   // that is oversized or carries an own `__proto__` key is refused outright.
-  const EXTRA_MAX = 256 * 1024;      // serialised bytes, per extra (the file cap is 5 MB for ALL of it)
+  const EXTRA_MAX = 256 * 1024;      // serialised bytes, per small extra; Daily uses its schema + file cap
   const EXTRA_KEYS = Object.freeze(["season", "badges", "daily", "records"]);
   const DAY_RE = /^\d{4}-\d\d-\d\d$/;
   const ID_RE = /^[A-Za-z0-9_.:-]{1,48}$/;
@@ -419,6 +432,7 @@ const CareerBackup = (function () {
     if (own(e, "best")) out.best = cleanBest(e.best);
     if (own(e, "laps")) out.laps = num(e.laps, 0, 1e6) | 0;
     if (!nested && isObj(e.classes)) {
+      if (Object.keys(e.classes).filter(classKey).length > 8) throw new Error("too many daily classes");
       out.classes = idMap(e.classes, 8, (v) => cleanDayEntry(v, true), classKey);
     }
     return out;
@@ -429,8 +443,9 @@ const CareerBackup = (function () {
     if (isObj(r.days)) {
       const src = plain(r.days);
       const days = {};
-      // The newest 120 days: the reader keeps a window and never asks for more.
-      for (const day of Object.keys(src).filter((k) => DAY_RE.test(k)).sort().slice(-120)) {
+      const dates = Object.keys(src).filter((k) => DAY_RE.test(k)).sort();
+      if (dates.length > 120) throw new Error("too many daily days");
+      for (const day of dates) {
         const e = cleanDayEntry(src[day], false);
         if (e) days[day] = e;
       }
@@ -471,9 +486,17 @@ const CareerBackup = (function () {
   // payload (the junk key is what costs the quota), and again on what is kept.
   function cleanExtra(name, raw) {
     try {
-      if (JSON.stringify(raw).length > EXTRA_MAX) return { ok: false, reason: name + "-too-large" };
+      const incoming = new Blob([JSON.stringify(raw)]).size;
+      // Daily context keys contain whole car/tune configs: 61 days × eight
+      // classes legitimately exceeds 256 KiB. Only schema-checked Daily data
+      // gets the file budget; discarded junk retains the original extra cap.
+      const limit = name === "daily" ? MAX_BYTES : EXTRA_MAX;
+      if (incoming > limit) return { ok: false, reason: name + "-too-large" };
       const value = CLEANERS[name](raw);
-      if (JSON.stringify(value).length > EXTRA_MAX) return { ok: false, reason: name + "-too-large" };
+      const kept = new Blob([JSON.stringify(value)]).size;
+      if (kept > limit || (name === "daily" && incoming - kept > EXTRA_MAX)) {
+        return { ok: false, reason: name + "-too-large" };
+      }
       return { ok: true, value: value };
     } catch (e) {
       if (e && e.hostile) return { ok: false, reason: name + "-hostile" };

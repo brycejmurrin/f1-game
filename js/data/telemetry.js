@@ -234,9 +234,8 @@ const DataTelemetry = (function () {
               const at = +s.date;
               return !isFinite(at) || at <= endMs;
             });
-            // never clip away the lap itself — if the timestamps don't line up the
-            // way we assume, the unclipped series is still the better answer
-            return kept.length > 8 ? kept : list;
+            // Coverage and sparsity do not authorize samples from the next lap.
+            return kept;
           }
           return { d: d, lap: lap, car: clipToLap(res[0]), loc: dropStrays(clipToLap(res[1])),
                    stints: res[2] || [], pits: res[3] || [] };
