@@ -3316,6 +3316,26 @@ test("P4: WGX fills the material array as the async readback lands, and never bi
     assert.equal(gfx.begin({}), true); gfx.present({});
     assert.equal(albedo.texture.destroyed, true, "an empty array is retired");
   }
+  // 4b. A readback that resolves only a prefix is also a failed pack.  The
+  // GPU texture must be retired so Assets.load() can clear its promise and
+  // retry after the device/readback recovers.
+  {
+    const assets = makeAssets();
+    assets.readLayerBytesAsync = (sz, imgs, nn, data, onLayer) => {
+      onLayer(1, new Uint8Array(page));
+      return Promise.resolve([1]);
+    };
+    const h = makeGpuHarness({ assets });
+    const gfx = await h.create();
+    const partialImages = []; partialImages[1] = { fill: 1 }; partialImages[4] = { fill: 4 };
+    const albedo = gfx.createTextureArray(size, partialImages, n);
+    gfx.setMaterialMaps({ albedo, normal: null, scales });
+    assert.equal(await albedo.ready, false, "a partial readback never becomes ready");
+    await settle();
+    assert.equal(gfx.materialMapState().albedo, false, "a partial array is never bound");
+    assert.equal(gfx.begin({}), true); gfx.present({});
+    assert.equal(albedo.texture.destroyed, true, "a partial array is retired for retry");
+  }
   // 5. Knob off, or a loader without the async seam (null = "take the sync path now, the images are alive"): the old path.
   for (const [label, opts] of [["apex26.wgxPackAsync=0", { storage: new Map([["apex26.gfxPreset", JSON.stringify("ultra")], ["apex26.wgxPackAsync", "0"]]) }], ["readLayerBytesAsync → null", { nullAsync: true }]]) {
     const assets = makeAssets();

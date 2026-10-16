@@ -624,6 +624,26 @@ test("write(k, undefined) removes the key instead of storing the string \"undefi
   assert.equal(again.store.broken, null);
 });
 
+test("write rejects top-level functions and Symbols without deleting the previous value", () => {
+  const { store, disk } = load();
+  store.write("u", { a: 1 });
+  const before = disk.get("apex26.u");
+
+  const fn = store.write("u", () => 1);
+  assert.equal(fn.ok, false);
+  assert.equal(fn.durable, false);
+  assert.equal(fn.reason, "TypeError");
+  assert.equal(disk.get("apex26.u"), before, "a function must not delete the saved bytes");
+  assert.deepEqual(store.get("u", null), { a: 1 }, "the prior cached value remains usable");
+
+  const symbol = store.write("u", Symbol("unsupported"));
+  assert.equal(symbol.ok, false);
+  assert.equal(symbol.durable, false);
+  assert.equal(symbol.reason, "TypeError");
+  assert.equal(disk.get("apex26.u"), before, "a Symbol must not delete the saved bytes");
+  assert.deepEqual(store.get("u", null), { a: 1 }, "the prior value remains after both rejected writes");
+});
+
 /** store.js over a disk whose setItem throws `fail.name` while it is set, with
  *  Log.warn captured. */
 function bootLogged(fail = { name: null }) {

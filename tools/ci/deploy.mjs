@@ -33,6 +33,10 @@
 //                                       #   preflight: the "is the branch already red, and did
 //                                       #   last night's rotating group find anything" check.
 //   node tools/ci/deploy.mjs --json        # machine verdict on stdout, log on stderr
+//   node tools/ci/deploy.mjs --status      # the last run's verdict marker in artifacts/logs/deploy.log:
+//                                       #   exit 0 passed / 1 failed or died / 124 still running
+//   node tools/ci/deploy.mjs --wait --timeout 45   # block (minutes) until it leaves "running"; run as ONE
+//                                       #   background task. Every deploy run stamps `= deploy start|done`.
 //
 // What it replaces: the prose protocol in the deploy-merge skill — fetch, look,
 // merge, re-bump the union, tooling-fast, sweeps, push; pages.yml verify-live
@@ -62,6 +66,7 @@ import { fileURLToPath } from "node:url";
 import { GEOMETRY_PATHS, targetedSuites } from "./geometry-paths.mjs";
 import { githubToken } from "./github-token.mjs";
 import { resolveGenBlocks, mergePackageJson } from "../lib/conflict-cure.mjs";
+import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -973,6 +978,19 @@ export function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { process.exit(main()); }
-  catch (e) { log("ERROR " + (e && e.message ? e.message : e)); process.exit(1); }
+  const rd = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : (argv.find((a) => a.startsWith(n + "=")) || "").slice(n.length + 1) || undefined; };
+  const logFile = path.resolve(ROOT, rd("--log") || DEFAULT_LOG);
+  if (flag("--status") || flag("--wait")) {
+    const t = rd("--timeout");
+    const s = flag("--wait") ? await waitStatus(logFile, { timeoutMin: t === undefined ? 0 : Number(t) }) : readStatus(logFile);
+    console.log(s.text);
+    process.exit(s.code);
+  }
+  const marks = !["--help", "-h", "--plan", "--train"].some(flag);
+  if (marks) stamp(logFile, `start pid=${process.pid} mode=${argv.filter((a) => a.startsWith("--")).join(",") || "default"}`);
+  let code = 1;
+  try { code = main(); }
+  catch (e) { log("ERROR " + (e && e.message ? e.message : e)); }
+  if (marks) stamp(logFile, `done exit=${code}`);
+  process.exit(code);
 }
