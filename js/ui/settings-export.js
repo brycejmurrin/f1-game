@@ -163,6 +163,7 @@ const SPEC = [
   { k: "touchCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "padCurve", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js curveTrimFromSlider" },
   { k: "touchRange", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js touchRangeFromSlider (0.12 of the long edge at 5)" },
+  { k: "touchDragSpeed", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js touchSpeedFromSlider (1 = off, the default; 10 = full ADAPTIVE BUTTONS shed on drag range)" },
   { k: "dragSmooth", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js dragCutoffFromSlider (1 = filter off)" },
   { k: "digitalRate", lane: "json", group: "driving", def: 5, src: "js/input/steer-tuning.js steerRateFromSlider (KEY_RAMP_IN)" },
   { k: "analogSpeedSteer", lane: "json", group: "driving", def: 1, src: "js/input/steer-tuning.js analogSpeedFromSlider (1 = off)" },

@@ -71,7 +71,7 @@ export const RENDER_HEAVY_SPEC_IDS = [
   "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard", "photo-studio",
   "webgl-probes", "camera", "smoke", "season", "time-trial",
   "material-shimmer", "instanced-draw",
-  "menu-baseline",
+  "menu-baseline", "track-designer",
 ];
 
 /** Which software GL stack env asks for. */

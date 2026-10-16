@@ -519,6 +519,7 @@
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
     "js/editor/scenery-panel.js",
+    "js/editor/bridge-panel.js",
     "js/editor/designer.js"
   ],
     LAZY_EDITOR_EDGES: [
@@ -600,6 +601,10 @@
     ],
     [
       "js/editor/scenery-panel.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/bridge-panel.js",
       "js/editor/designer.js"
     ]
   ],

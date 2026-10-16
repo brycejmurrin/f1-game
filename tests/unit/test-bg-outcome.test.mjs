@@ -64,12 +64,18 @@ test("a zombie supervisor is not a live run (#1921)", async () => {
      Z: kill(pid, 0) succeeds and its start time still matches, so the run read
      as live — `--wait` hung to 124 and the one-group cap refused the next
      group although the log already ended `= bg exit 0`. Build a real zombie:
-     `sleep 0` exits under an exec'd parent that never waits on it. */
+     Wait until the parent has exec'd sleep before terminating its child: an
+     immediately exiting child can be reaped by sh before that exec. */
   const { spawn } = await import("node:child_process");
   const fs = await import("node:fs");
-  const parent = spawn("sh", ["-c", "sleep 0 & echo $!; exec sleep 30"], { stdio: ["ignore", "pipe", "ignore"] });
+  const parent = spawn("sh", ["-c", "sleep 30 & echo $!; exec sleep 30"], { stdio: ["ignore", "pipe", "ignore"] });
+  let pid;
   try {
-    const pid = Number(await new Promise((res) => parent.stdout.once("data", (b) => res(String(b).trim()))));
+    pid = Number(await new Promise((res) => parent.stdout.once("data", (b) => res(String(b).trim()))));
+    const parentExeced = () => { try { return fs.readFileSync(`/proc/${parent.pid}/comm`, "utf8").trim() === "sleep"; } catch (_) { return false; } };
+    for (let i = 0; i < 100 && !parentExeced(); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(parentExeced(), true, "the parent cannot reap children after exec");
+    process.kill(pid, "SIGKILL");
     const stateOf = () => { try { return fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(")").pop().trim()[0]; } catch (_) { return null; } };
     for (let i = 0; i < 100 && stateOf() !== "Z"; i++) await new Promise((r) => setTimeout(r, 20));
     assert.equal(stateOf(), "Z", "the fixture is a real zombie");
@@ -78,7 +84,10 @@ test("a zombie supervisor is not a live run (#1921)", async () => {
     assert.equal(aliveRun({ pid, starttime: st }), false, "a zombie with a matching start time is not live");
     assert.equal(aliveRun({ pid }), false, "nor is a legacy record");
     assert.notEqual(outcome({ pid, starttime: st, log: "/nonexistent/test-bg-zombie.log" }), "running");
-  } finally { parent.kill("SIGKILL"); }
+  } finally {
+    if (pid) { try { process.kill(pid, "SIGKILL"); } catch (_) { /* already gone */ } }
+    parent.kill("SIGKILL");
+  }
   // Injected: dead states refuse, every other state keeps the identity checks.
   const me = process.pid, st = procStart(me);
   for (const s of ["Z", "X", "x"]) assert.equal(aliveRun({ pid: me, starttime: st }, { state: () => s }), false, `state ${s}`);
