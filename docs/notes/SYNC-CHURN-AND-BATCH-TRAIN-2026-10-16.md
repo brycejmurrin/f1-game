@@ -1,6 +1,7 @@
 # Sync churn and the batch train (2026-10-16)
 
-Design lane for the Merge Desk. Question: agents keep merging the deploy tip into
+Design lane for the Merge Desk. **Status: Phase 0 and the Phase 1 skill text have
+landed; see §6 for what changed and the new CI-speed evidence.** Question: agents keep merging the deploy tip into
 PR branches; is there a better process? Docs only; nothing here changes a
 workflow. Method and caveats are at the end. Raw scripts were run from
 `scratch/` (not committed); every number below is recomputable from the
@@ -174,6 +175,61 @@ green-to-green runs on sync heads); success is syncs per merge under 0.4 (now
 - Option B can create a PR whose `CI` is red and whose fresh status is green:
   confusing to readers and to `ready-gate.mjs`; define one arbiter before
   building it.
+
+## 6. Update: what landed, and the CI-speed findings (2026-10-16, tip `4f46b113`)
+
+Landed since this note was written (shas on the deploy branch):
+
+| item | landed | where |
+|---|---|---|
+| Phase 0: `needs-sync` predicate (`conflict` \| `stale-red` \| `no`); `sync-pr.mjs` refuses `no` (exit 4) without `--force-clean-behind` | `1f922339`, merged as #2458 (`ba6fa87f`) | `needs-sync.mjs` (new, in `tools/ci`), `tools/ci/sync-pr.mjs` |
+| Phase 1 skill text: steward runs `needs-sync` first and does not sync on a tip move; `ci-watch` SYNC row; fleet launch policy names ONE conflict-only resync lane that takes only `conflict`/`stale-red` | `1f922339`, `2d78fe14` | `.claude/skills/steward/SKILL.md`, `ci-watch/SKILL.md`, `agent-fleet/references/{launch-policy,orchestrator,comms}.md` |
+| Phase 2 (`ratchets.d`-shape for other registries, `overlap-order`) | not started | tracked on #2449 |
+| Phase 3 (fresh-check status, option B) | not started | needs the throwaway-PR test first |
+
+Differences from the design above: the shipped `stale-red` rule is "newest `ci.yml` run on
+the head failed AND the tip gained a commit after that run started" (a heuristic; a flake
+looks the same), so it does not name the failing test the way §4 proposed; the Desk names
+the job in the PR. Predicate only; nothing yet forbids a push over a live full tier (see
+finding 1 below).
+
+Throughput, recomputed with `git log origin/claude/f1-game-project-26h3ng --first-parent`
+bucketed by committer-date string: 3 / 37 / 139 / 211 / 91 first-parent commits for
+10-12 / 10-13 / 10-14 / 10-15 / 10-16 (to 10:27 -07:00); 30 of today's were merged after
+the predicate's own merge (`ba6fa87f`). That is too few and too recent to re-run §1(b)-(d):
+the success test in §4 (syncs per merge under 0.4, green-to-green runs on sync heads)
+needs about a day of post-landing history. **Not re-measured**, so no claim yet that the
+predicate moved the 1.2 syncs per merge.
+
+CI-speed findings posted on #2449 by read-only lanes (figures are theirs; sources are the
+linked comments, not re-run here):
+
+- Duplicates lane ([comment](https://github.com/brycejmurrin/f1-game/issues/2449#issuecomment-6213860608)):
+  4.7 PR runs per merged PR; 41 runs killed by a newer push or same-SHA event, about 4.1k
+  job-minutes in the window; `reuse-draft-fast.sh` reuse fired 0 of 45 sampled (the base
+  moves every ~7 min). Its ranked change 1 pairs this note's Phase 0 with a
+  `sync-pr.mjs` refusal while a full tier is live on the head. That is the one item this
+  note's plan lacks; it belongs in Phase 0's follow-up.
+- Job-timing lane ([comment](https://github.com/brycejmurrin/f1-game/issues/2449#issuecomment-6213676519)):
+  ready/full wall median 13.1 min, p90 28.1; 11.2 of the 13.1 median minutes are queue and
+  dependency wait, so fewer runs beat faster runs; its own conclusion is that the 175
+  green-to-green sync runs of §1(d) remove more pool demand than any workflow edit.
+- Flake/shard lane ([comment](https://github.com/brycejmurrin/f1-game/issues/2449#issuecomment-6214205263)):
+  42 failed Tooling-fast jobs (about 261 job-minutes in 3 days) are mostly the stale-base
+  `source-pin-hygiene` red of §1(e), "bigger than every browser flake combined".
+- Diff-aware lane ([comment](https://github.com/brycejmurrin/f1-game/issues/2449#issuecomment-6218856383)):
+  guards run all 629 tooling-fast files on every ready run; `--changed` would skip about
+  28 % of guard runner-minutes (about 3.4 a PR) but guards are never the tail, so wall
+  saving is about 0, and its pin index is heuristic (`indexPathKey` indexes a path under
+  every ancestor, so any `js/` edit pins ~400 files); a missed pin would look exactly like
+  the stale-base red this note is about. Verdict there: do not adopt. Ratchet-only diffs
+  (`tests/data/` is `TRACKED`) force the full run on 17 of 150 PRs (11 %), about 2 runner-
+  minutes a PR; safe only with a reader allow-list, because about 20 files read
+  `ratchets.json`.
+
+Effect on the plan: the order stands (Phase 0 landed, Phase 1 text landed). Add to the
+Phase 0 follow-up: `sync-pr.mjs` (or the steward rule) refuses a push over a live full tier,
+and a clean-behind carry-forward of a green verdict stays in Phase 3 behind a throwaway-PR test.
 
 ## Method and caveats
 
