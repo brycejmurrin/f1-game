@@ -17,7 +17,7 @@ E = estimated. Per-day figures scale 40 h of history by 0.6, or one day of merge
 - [ ] **now:** P3 — Draft tier: no Pure-node unit suites (D1) + P6 train trims (D2), one PR
 - [ ] P4 — Browser routing: `hud` group, `js/editor/`, CSS + unit pin (§4 P4)
 - [ ] P5 — Local tooling-fast receipt checked before CI spends a run (§4 P5)
-- [ ] P6 — Train: spec legs wait for guards; zero-catch legs move to the nightly (D2)
+- [ ] P6 — Train: zero-catch legs (node suites, driving model) leave the train (D2; legs-wait-for-guards declined)
 - [ ] P7 — Merge only on a completed full tier (D3)
 - [ ] P8 — Sweeps: manifest edits that change no fleet-read key do not trigger the fleet (§4 P8)
 - [ ] P9 — Recall sampling from the nightly rotation; per-spec coverage map after it (§4 P9)
@@ -155,9 +155,11 @@ Implementation notes:
 - The Parts census stays on the train: its filter diffs live..tip (the PR runs see only their own diff, the
   documented hole in ci.yml's `sweeps-parts` comment), it costs ≈ 1 job-min per train, and the geometry sweeps
   share its step-level gating. Dropping it saves ≈ 60 job-min/day for that hole.
-- "Spec legs wait for guards" cannot be train-only: `needs:` is static, so `selected` would wait for guards on
-  ready PRs too (+≈ 8 min idle wall; also saves the legs of guard-red ready runs, ≈ 1,800 job-min/day E). Put back to
-  Bryce as a separate choice.
+- "Spec legs wait for guards" — DECLINED (Bryce, 2026-10-16, after a correction). It cannot be train-only (`needs:`
+  is static, so ready PRs would wait too), and the legs would queue only AFTER guards instead of alongside them:
+  +≈ 6–8 min idle, +≈ 15–20 min with the pool full, on every green ready run and train. ci.yml took exactly this
+  edge out on 2026-10-10 (R3-CI-HEALTH-2: the 30 s aggregator alone queued 26–37 min in a burst). P2 (base reds)
+  attacks most guard-red runs at the source instead.
 - D3 is a ruleset setting (the token here cannot read or write branch protection): add `CI` as a required status
   check in "Deploy Ruleset". ci.yml has no `pull_request` path filter, so `CI` always reports; a draft without run-ci
   reports `CI draft (opted out)` instead, and drafts cannot merge anyway.
