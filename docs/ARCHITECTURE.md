@@ -627,6 +627,7 @@ _Module index over 31 directories, in load order. `tag` = a `<script>` in index.
 | `transport.js` | `NetTransport` | LAZY_NET | NetTransport — the wire under multiplayer, and the seam that keeps the netcode testable. |
 | `handshake.js` | `NetHandshake` | LAZY_NET | NetHandshake — getting two browsers connected with NO server of ours. |
 | `lobby-codes.js` | `LobbyCodes` | LAZY_NET | lobby invite/answer paste, copy, share, scan, and QR helpers. |
+| `lobby-roster.js` | `LobbyRoster` | LAZY_NET | LobbyRoster: the stateless leaves of the VS FRIEND room's roster DOM (team lookup, css colour, span/replace/summaryRow helpers, driver/team labels, the seat… |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |

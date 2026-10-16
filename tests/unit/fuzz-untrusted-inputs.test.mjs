@@ -146,6 +146,7 @@ function bootLobbyAndHandshake() {
   const lobbyCtx = vm.createContext(lobbySb);
   seedClipboard(lobbyCtx);
   vm.runInContext(read("js/net/lobby-codes.js").replace(/^const\b/gm, "var"), lobbyCtx, { filename: "lobby-codes.js" });
+  vm.runInContext(read("js/net/lobby-roster.js").replace(/^const\b/gm, "var"), lobbyCtx, { filename: "lobby-roster.js" });
   const LobbyCodes = vm.runInContext("LobbyCodes", lobbyCtx);
   return { LobbyCodes, NetHandshake, NetSdp, NetBytes };
 }
