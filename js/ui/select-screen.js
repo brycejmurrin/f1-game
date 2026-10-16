@@ -463,8 +463,7 @@ function trackInFilter(t, filter, favs) {
 // hero still read Tracks.LIST[G.trackIdx], so Bahrain stayed in the detail
 // panel with nothing highlighted (apex10). Snap to the first tile that the
 // chip actually shows.
-function snapTrackToFilter() {
-  const filter = visibleTrackFilter();
+function snapTrackToFilter(filter = visibleTrackFilter()) {
   const favs = favList();
   const cur = Tracks.LIST[G.trackIdx];
   if (keepActiveId && !pinnedActive(cur)) keepActiveId = null;
@@ -482,7 +481,9 @@ function setTrackFilter(id, focus, keepDaily) {
   if (id !== "daily-open") store.set("trackFilter", id);
   if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
   if (G.soundOn && (typeof GameAudio !== "undefined")) GameAudio.uiSelect();
-  snapTrackToFilter();
+  // Explicit choices leave a custom circuit too. The passive-entry fallback
+  // keeps a designer's custom pick visible, but must not override this click.
+  snapTrackToFilter(id);
   // The chip rebuild is deferred through view transitions; the hero must not
   // keep describing the circuit the filter just hid (FINDINGS tracks-ui #1).
   updateTrackPreview();
