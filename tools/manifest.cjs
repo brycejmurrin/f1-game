@@ -1169,6 +1169,7 @@ const LAZY_NET = [
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/lobby-codes.js",  // LobbyCodes: paste/copy/share/scan/QR for invite+answer (before lobby)
+  "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
   "js/net/snapshot.js",
   "js/net/session.js",
   "js/net/netplay.js",
@@ -1232,6 +1233,7 @@ const LAZY_NET_EDGES = [
   ["js/net/scan.js", "js/net/lobby.js"],
   ["js/net/handshake.js", "js/net/lobby-codes.js"],
   ["js/net/lobby-codes.js", "js/net/lobby.js"],
+  ["js/net/lobby-roster.js", "js/net/lobby.js"],   // lobby destructures LobbyRoster inside create(), which game.js evals
 ];
 
 const DEFERRED_EDGES = [
