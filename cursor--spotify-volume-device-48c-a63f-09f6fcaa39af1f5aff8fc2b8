@@ -1,1 +1,0 @@
-1792168092	Bryce Murrin	Spotify remote volume commands only: js/audio/spotify.js per-device latest values, tests/unit/spotify-refresh.test.mjs and own changelog. Fresh base48c after canonical2468 camera coverage repair; parent owns browser, full gate and publication. No other audio paths.  [cursor/spotify-volume-device-48c-a63f; session 09f6fcaa39af1f5aff8fc2b8]
