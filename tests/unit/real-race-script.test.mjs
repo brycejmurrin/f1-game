@@ -909,3 +909,19 @@ test("a dense winner cannot permanently cache a full-distance peer's sparse posi
   sparse = false; const full = await D.fetchTraces(script, null, partial);
   assert.equal(full.complete, true); assert.deepEqual(requests, [1, 2, 2]);
 });
+
+test("SC ending notice keeps its inclusive lap but releases only at TRACK CLEAR", () => {
+  const { D } = load();
+  const rows = [
+    { lap_number: 31, date: "2026-01-01T11:58:05Z", message: "SAFETY CAR DEPLOYED" },
+    { lap_number: 35, date: "2026-01-01T12:09:15Z", message: "SAFETY CAR IN THIS LAP" },
+    { lap_number: 36, date: "2026-01-01T12:11:14Z", message: "TRACK CLEAR" },
+  ];
+  const secs = (d) => Date.parse(d) / 1000;
+  const [w] = D.cautionsFor(rows, secs);
+  assert.equal(w.to, 35);
+  assert.equal(w.tEnding, secs(rows[1].date));
+  assert.equal(w.tTo - w.tEnding, 119);
+  assert.equal(D.cautionsFor(rows.slice(0, 2), secs)[0].tTo, null, "notice alone has no exact release");
+  assert.equal(D.cautionsFor([rows[0], rows[2]])[0].to, 36, "release without notice retains the last caution lap");
+});

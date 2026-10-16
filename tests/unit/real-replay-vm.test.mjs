@@ -1394,8 +1394,8 @@ test("WATCH unavailable driver selection stays honest and never locks the previo
   replay.stop();
 });
 
-async function watchEnvironment(startLap = 1) {
-  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+async function watchEnvironment(startLap = 1, duration = 350, tyreWear = "real") {
+  const g = await createGame({ track: "baku", storage: { tyreWear } });
   const { script } = scriptIn(g), RR = vm.runInContext("RealRace", g.ctx);
   for (const d of script.drivers) {
     d.lapStart = Array.from({ length: 51 }, (_, i) => i * 10);
@@ -1405,7 +1405,7 @@ async function watchEnvironment(startLap = 1) {
     { from: 5, to: 7, level: 4, tFrom: 42, tTo: 69, cause: "RED FLAG" }];
   script.rain = Array.from({ length: 52 }, (_, lap) => lap >= 2 && lap <= 30);
   const v = g.G.track.total / 10;
-  const traces = { frame: "track", cars: { 63: line(1, v, 0, 0, 350), 16: line(-20, v, 1, 0, 350) } };
+  const traces = { frame: "track", cars: { 63: line(1, v, 0, 0, duration), 16: line(-20, v, 1, 0, duration) } };
   const previousCar = g.G.cars[0];
   RR.launch(script, { seat: "RUS", watch: true, camera: "heli", traces, startLap });
   await g.settle(() => g.G.cars[0] !== previousCar && g.G.state === "count", 8000);
@@ -1475,6 +1475,42 @@ test("WATCH takes its recorded flag ownership through the normal starting countd
     }
     replay.seek(35); assert.equal(g.apex.caution().level, 0);
     g.step(60); assert.equal(g.apex.caution().level, 0);
+    G.quitToMenu();
+  } finally { g.close(); }
+});
+
+test("HIGHLIGHTS rejects missing and ended subject footage before nearby pass suppression", () => {
+  const { replay, options } = transportReplay();
+  options.script.passes = [{ t: 12, by: 2, over: 1 }, { t: 13, by: 1, over: 2 }];
+  for (const subject of [undefined, line(0, 45, 0, 0, 10), line(0, 45, 0, 15, 30)]) {
+    if (subject) options.traces.cars[2] = subject;
+    else delete options.traces.cars[2];
+    replay.start({ ...options, reel: true });
+    assert.deepEqual(Array.from(replay.describe().events, (e) => e.num), [1]);
+    assert.equal(replay.status().follow, "AAA");
+  }
+  options.traces.cars[2] = line(0, 45, 0, 0, 30);
+  replay.start({ ...options, reel: true });
+  assert.deepEqual(Array.from(replay.describe().events, (e) => e.num), [2]);
+  assert.equal(replay.status().follow, "BBB", "restored subject footage restores the first pass");
+  replay.stop();
+});
+
+test("WATCH seeks and playing show recorded sets including a same-compound restop", async () => {
+  const { g, G, replay, script } = await watchEnvironment(1, 400, "off");
+  try {
+    const d = script.drivers.find((d) => d.code === "RUS");
+    d.stints = [{ from: 1, to: 31, c: "MEDIUM" }, { from: 32, to: 36, c: "SOFT" }, { from: 37, to: 51, c: "SOFT" }];
+    g.apex.go(); replay.setPaused(true);
+    const c = G.cars.find((c) => c.code === "RUS");
+    replay.seek(315); assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 2);
+    const log = c.tyreLog;
+    replay.seek(316); assert.equal(c.tyreLog, log, "same stint preserves metadata identity");
+    replay.seek(365); assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 3); assert.equal(c.pitStops, 2);
+    assert.notEqual(c.tyreLog, log);
+    replay.seek(305); assert.equal(c.tyre.code, "M"); assert.equal(c.tyreStints, 1); assert.equal(c.pitStops, 0);
+    replay.seek(309.9); replay.setPaused(false); replay.tick(0.2);
+    assert.equal(c.tyre.code, "S"); assert.equal(c.tyreStints, 2);
     G.quitToMenu();
   } finally { g.close(); }
 });

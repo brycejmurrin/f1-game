@@ -9,7 +9,7 @@ const DataRealRace = (function () {
   // after ~115 sessions and starved every save. Keep the newest few (an LRU index, newest first).
   const CACHE_LRU = "apex26.realrace.lru";
   const CACHE_MAX = 8;
-  const SCRIPT_V = 5;   // 2: stint ages, rain by lap, the complete flag; 3: the passes; 4: real timestamps (t0, lap starts, pass/stop/flag times), where a car went out, the fastest lap, the team radio; 5: per-driver timing coverage
+  const SCRIPT_V = 6;   // 2: stint ages, rain by lap, the complete flag; 3: the passes; 4: real timestamps (t0, lap starts, pass/stop/flag times), where a car went out, the fastest lap, the team radio; 5: per-driver timing coverage; 6: flag ending notices separate from release
   const DATA_CREDIT = "Timing data: OpenF1 (CC BY-NC-SA 4.0) · pace, stops, flags and the grid are the real ones; the racing is yours.";
   const NO_TRACK_MSG = "This circuit is not in Apex 26 yet — pick another Grand Prix.";
   const NO_RACE_MSG = "No race timing published for this weekend yet.";
@@ -101,7 +101,7 @@ const DataRealRace = (function () {
   /** Safety-car / VSC / red windows from the race-control feed, on the leader's lap. */
   function cautionsFor(raceControl, secs) {
     const out = [];
-    let open = null;
+    let open = null, ending = false;
     const at = (m) => (secs ? secs(m && m.date) : null);
     for (const m of arr(raceControl)) {
       const msg = String(m && m.message || "").toUpperCase();
@@ -110,18 +110,22 @@ const DataRealRace = (function () {
       const vsc = msg.indexOf("VIRTUAL SAFETY CAR") >= 0;
       const sc = !vsc && msg.indexOf("SAFETY CAR") >= 0;
       if (msg.indexOf("RED FLAG") >= 0 && (m.flag === "RED" || msg.indexOf("RED FLAG") === 0)) {
-        if (open) { open.to = lap; if (secs) open.tTo = at(m); out.push(open); open = null; }
+        if (open) { if (!ending) open.to = lap; if (secs) open.tTo = at(m); out.push(open); open = null; }
         const red = { level: 4, from: lap, to: lap, cause: "RED FLAG" };
         if (secs) { red.tFrom = at(m); red.tTo = null; }
         out.push(red);
         continue;
       }
       if ((vsc || sc) && msg.indexOf("DEPLOYED") >= 0) {
-        if (open) { open.to = lap; if (secs) open.tTo = at(m); out.push(open); }
+        if (open) { if (!ending) open.to = lap; if (secs) open.tTo = at(m); out.push(open); }
+        ending = false;
         open = { level: vsc ? 2 : 3, from: lap, to: lap, cause: vsc ? "VSC" : "SAFETY CAR" };
         if (secs) { open.tFrom = at(m); open.tTo = null; }
       } else if (open && (vsc || sc) && (msg.indexOf("IN THIS LAP") >= 0 || msg.indexOf("ENDING") >= 0)) {
-        open.to = Math.max(open.from, lap); if (secs) open.tTo = at(m); out.push(open); open = null;
+        ending = true; open.to = Math.max(open.from, lap); if (secs) open.tEnding = at(m);
+      } else if (open && msg.indexOf("TRACK CLEAR") >= 0) {
+        if (!ending) open.to = Math.max(open.from, lap);
+        if (secs) open.tTo = at(m); out.push(open); open = null;
       }
     }
     if (open) out.push(open);
