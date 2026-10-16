@@ -850,6 +850,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
+  "tests/unit/road-position-checks.test.mjs",
   // PERF-HUNT-2 S8: caution/coach/radio once per frame (_audioParamStep + G._s8Stamp).
   "tests/unit/s8-once-per-frame.test.mjs",
   "tests/unit/save-durability.test.mjs",
