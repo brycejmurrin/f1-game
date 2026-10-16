@@ -251,6 +251,7 @@ const Collide = (() => {
     let track = null, player = null, netPlay = null;   // bound at resolveCollisions entry
     let motion = new WeakMap(), motionTrack = null, motionTime = -1;
     let sweepGeneration = 0;
+    const _fxStep = new WeakMap();   // car → sweepGeneration its rear-end contact last fired FX / debris / notify
     const _swP = [];   // sweepContacts: motion.get(ranked[i]), read ONCE per car per step
     const geom = {}, swept = {}, impulse = {}, bodyA = {}, bodyB = {};
     function deltaS(d) { const L = track.total; return ((d + L / 2) % L + L) % L - L / 2; }
@@ -604,14 +605,20 @@ const Collide = (() => {
             }
           }
           if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }   // see the side branch: settled pairs must let it decay
-          if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
+          // The FIRST closing pass per pair per step carries the severity: the
+          // restitution impulse above leaves the pair separating, so a `last`-pass
+          // gate never saw relV > 0 and a 73 m/s shunt fired no FX, debris or
+          // incident candidate (live debugger, 2026-10-16).
+          const fx = _fxStep.get(a) !== sweepGeneration || _fxStep.get(b) !== sweepGeneration;
+          if (fx) { _fxStep.set(a, sweepGeneration); _fxStep.set(b, sweepGeneration); }
+          if (fx) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
           // Debris hook (render-only side-world): closing speed = severity.
-          if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
+          if (fx && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
           // Incident sim (R3/C3 + C1): a hard closing contact queues a
           // candidate. Only clears the R3 threshold for a real shunt (see
           // incidentsim); below it the cheap (prog,x) plane above stays the
           // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
-          if (last && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
+          if (fx && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
         }
       }
     }
