@@ -1,6 +1,8 @@
 // @doc Named survey locations, camera recipes and bounded reproducible scenario plans.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 // Racing-space fractions, not authored scenery fractions. Visual verification is separate.
 export const SURVEY_LOCATIONS = [
@@ -62,6 +64,7 @@ export function captureIdentity(value) {
 }
 export function sourceIdentity(root) {
   const git=(...args)=>execFileSync('git',args,{cwd:root,encoding:'utf8',maxBuffer:32*1024*1024});
-  return { revision:git('rev-parse','HEAD').trim(), dirty:!!git('status','--porcelain','--untracked-files=no').trim(),
+  const untracked = git('ls-files','--others','--exclude-standard','-z','--','js','css','index.html','tools','assets').split('\0').filter(Boolean).sort().map(file=>[file,createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')]);
+  return { revision:git('rev-parse','HEAD').trim(), dirty:!!git('status','--porcelain','--untracked-files=no').trim() || untracked.length > 0, untracked,
     diffHash:captureIdentity(git('diff','HEAD','--','js','css','index.html','tools','assets')) };
 }

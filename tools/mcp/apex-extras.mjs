@@ -202,7 +202,7 @@ export function createExtras(ctx) {
     const wantIndex = args.index !== false;
     const resume = !!args.resume;
     const estimateMs = estimateSurveyMs(plan.shots.length, tracks.length);
-    const asJob = !!(args.location || args.profile || args.resume) || shouldSurveyAsync(args, plan, tracks.length);
+    const asJob = !!(args.location || args.profile || args.seed != null || args.resume) || shouldSurveyAsync(args, plan, tracks.length);
 
     if (args.dryRun) {
       return toolResult({

@@ -510,7 +510,7 @@ const CATALOG = [
         panel: { type: "boolean", description: "Build contact sheet PNG (default true)." },
         index: { type: "boolean", description: "Write index.html gallery (default true)." },
         resume: { type: "boolean", description: "Resume only matching source/settings receipts; uses the async runner." },
-        async: { type: "boolean", description: "true=jobId via shot_survey; false=sync; default=job when estimate≥60s or multi-track." },
+        async: { type: "boolean", description: "true=jobId via shot_survey; legacy false=sync; named/profile/seed/resume surveys always use jobs for reproducible capture." },
         gl: { type: "string", enum: ["llvmpipe", "swiftshader"], description: "Software GL stack. llvmpipe needs /dev/dri (CI only); use swiftshader in a cloud container." },
         closeSession: { type: "boolean", description: "Free browser lock when done (default true; sync path)." },
         keepSession: { type: "boolean", description: "When true, leave session open (implies closeSession false)." },
