@@ -6,7 +6,7 @@ also probed over raw CDP. Build under test: 1695 (dev host, `?v=dev` tags).
 Prior art not re-reported: `docs/BUGS.md`, `DEFECT-LEDGER.md`, `BUG-HUNT*.md`.
 
 **Verdict: no new defect in the five areas. No source change, so no fix and no new
-unit test.** Two design gaps are filed below as observations (O1, O2). The static read
+unit test.** Design gaps are listed as observations (O1, O2, O3); §6 is the follow-up round that closed the first pass's not-run list. The static read
 of `sw.js` 255-1075 and `store.js` 395-767 (never read before) found nothing the live
 runs contradicted.
 
@@ -14,10 +14,10 @@ runs contradicted.
 
 | Area | Verdict | Evidence |
 |---|---|---|
-| 1 Boot / script-loader / lazy bundles | CONFIRMED-LIVE clean degrade; O1 open | failure paths resolve `false` in ~40 ms, tags removed |
-| 2 Service worker | CONFIRMED-LIVE (first install, offline reload, pack-missing); update + two-tab NOT RUN; O2 open | §2 table |
+| 1 Boot / script-loader / lazy bundles | CONFIRMED-LIVE clean degrade; O1 measured (63.6 s static loading card on a hung file), deadline proposed | failure paths resolve `false` in ~40 ms, tags removed |
+| 2 Service worker | CONFIRMED-LIVE (first install, offline reload, pack-missing, mid-session update, two tabs on different shell versions); O2, O3 open | §2, §6 |
 | 3 Storage / mirror | CONFIRMED-LIVE (corrupt keys, quota refusal, restore); mid-restore `getItem` throw BY-DESIGN edge | §3 table |
-| 4 Asset pack | CONFIRMED-LIVE degrade (`no-pack`); track switch during a pending load NOT RUN | §4 |
+| 4 Asset pack | CONFIRMED-LIVE degrade (`no-pack`); track switch during a pending load CONFIRMED-LIVE | §4, §6 |
 | 5 Caught-exception pauses | BY-DESIGN (`parseStored` x2); remainder not stepped | §1, §5 |
 
 No finding was REFUTED; no defect was CONFIRMED.
@@ -56,7 +56,7 @@ issue, not a 20-line fix.
 | asset pack and voice entries deleted from the cache, then offline reload | pack `error:"no-pack"`, `tier:"off"`; menu fine; `Assets.modelsReady()` resolved in 19 ms |
 | quota on `cache.put` | covered by `tests/unit/service-worker.test.mjs` (`noteCacheWriteFail`); a raw-CDP probe of it is invalid because a worker's own `fetch` never reaches its fetch handler |
 | 206 / partial | `assets/music/` Range requests bypass the handler; other 206s fail `cache.put` into `noteCacheWriteFail`; install never sees a 206 because it sends no Range |
-| two tabs on different shell versions, mid-session `version.json` change | not run live: the guard is a `gen-shell` block in `index.html`, `version.json` may not be edited, and the worker cannot be given a second build without a deploy. Static read: the generation handshake (`apex-cache-generation` over a MessageChannel, `localGeneration` falling back to the newest SETTLED cache) is local-first and bounded to 300 ms |
+| two tabs on different shell versions, mid-session `version.json` change | run live in the follow-up round, see §6 (first pass could not: no way to serve a second build; solved with a scratch server outside the repo) |
 
 Static notes on `sw.js` 255-745: install ordering (shell put, required pool, marker,
 critical pool, background pool, status record, SETTLED, `skipWaiting`) matches the
@@ -87,16 +87,56 @@ key); the restore `getAll` has no timeout, which only parks the mirror, never th
 ## 4. Asset pack
 
 Pack unreachable: `__apex.assets()` reports `pack:false, error:"no-pack"`, the build
-does not wait, the procedural look renders. A switch of tracks during a slow load was not
-exercised; the wait is `js/render/shared` / `game.js` territory (forbidden here).
+does not wait, the procedural look renders. A track switch during a pending load is in §6.
 
 ## 5. Pauses
 
 See §1. Caught-exception pauses seen: `parseStored` x2 (by design). Uncaught: none across
 every scenario above.
 
+## 6. Follow-up round (the not-run list)
+
+Setup: a scratch static server outside the repo (it serves the repo's files, answers
+`/version.json` with a chosen build, can rewrite the shell's `apex-build` meta and append a
+comment to `sw.js` so its bytes change, and can delay or 404 `assets/pack/` and chosen
+files). The page ran on `127.0.0.2:3457`, a secure loopback origin that the worker's
+dev-host regex (`127.0.0.1` only) does not match, so the production fetch paths ran.
+The debugger only attaches to a page on `127.0.0.1`/`localhost`, so each run attached
+there and then navigated.
+
+| Scenario | Verdict | Evidence |
+|---|---|---|
+| Mid-session `version.json` ahead of the shell (CDN-skew stage) | CONFIRMED-LIVE | broke in the guard (`index.html:255`): `loaded 1695`, `v.build 1696`; one `?b=1696` navigation, then `apex26.shellReloadedTo=1696` stops a second reload; the URL is cleaned |
+| Same window, runtime cache write | BY-DESIGN | a plain fetch created `apex26-1696` holding build-1695 content with no install markers; `computeCacheOrder` ranks an unfinished generation last and `sweepStaleCaches` refuses to sweep below an unsettled one, so the finished 1695 still answers. Stray unversioned entries (pack, fonts) written in that window stay in 1696 until the network-first path refreshes them (O3) |
+| Full simulated deploy (version.json 1696 + shell meta + `sw.js` bytes), tab A left open on 1695, tab B opened after | CONFIRMED-LIVE | new worker installed and claimed within ~20 s; `apex26-1695` swept; tab A (old shell): `UpdateCheck.blocksLazyLoad()` true, a lazy `load()` resolved `false` in 2 ms, banner `UPDATE READY · RELOAD TO CONTINUE`; reloading it gave build 1696, `blocks` false, lazy load true, no `?b=` loop |
+| Track switch while the pack is pending (15 s per request, uncached) | CONFIRMED-LIVE | `race('bahrain')` finished in 18 s with the pack still `false`; `Assets.modelsReady()` returned `-1` after 4.003 s (the cap) while Monaco built procedurally in 5.5 s; of two overlapping `race()` calls the first rejected (superseded) and the second won, final track monza, no stuck state |
+
+**O1, measured.** With the worker's cache entry for `js/race/pit-lane.js` removed and the
+server holding that file for 70 s, `race('bahrain')` kept the loading card on screen for
+63.6 s: the same static track card at 6, 20, 40 and 60 s (no stall message, no timeout, no
+way back), and the race then started normally. A warm returning player is protected
+because the worker answers lazy files cache-first; the exposure is a cold first visit while
+the precache is still filling, a swept or evicted cache, or a browser without the worker.
+*Proposal, not implemented:* `inject()` in `js/core/script-loader.js` gets a deadline
+(about 25 s) that removes the tag and resolves `false`, so a strict bundle fails to the
+existing "did not load" path and the menu instead of waiting out the browser's own network
+timeout; with a stall line on the loading card ("SLOW CONNECTION") at about 10 s. Not made
+here because the number is a product call (a slow 2G first visit may legitimately take
+longer), and a deadline turns a slow success into a failure.
+
+**O3 (observation).** See the second row above: during a version skew the worker writes
+runtime entries into a not-yet-installed generation. Safe for hashed `?v=` keys; only the
+unversioned ones (pack, voice, fonts) can carry old-build bytes into the new generation
+until refreshed.
+
 ## Tool observations (js-debugger MCP, recorded not patched)
 
+- `debugger_attach` refuses any page whose URL host is not `127.0.0.1`, `localhost` or `[::1]`
+  (`js-debugger-session.mjs:71`), so a page served from another loopback address or a
+  custom hostname cannot be attached; attach first, then navigate.
+- A probe in a background tab (`visibilityState hidden`) never gets frames, so `race()`
+  waits forever: bring the tab to the front or close the others.
+- `debugger_scripts` with a `filter` returned every script (the filter did not narrow it).
 - `debugger_targets` lists page targets only; the `service_worker` target in
   `/json/list` cannot be attached. Workaround: a ~12-line raw-CDP script.
 - `debugger_attach` needs `endpoint` as well as `targetId`; `debugger_evaluate` needs a
@@ -109,4 +149,6 @@ every scenario above.
 ## Not run
 
 `npm run test:service-worker`, the pwa/sw browser specs and `offline-precache-check` were
-not run: no source changed, so `pick-tests` selects nothing for this diff.
+not run: no source changed, and `pick-tests` selects only `test:tooling-fast` (docs
+integrity) for this diff. Everything in §6 was a live probe of unchanged code.
+Nothing from the first pass's not-run list remains open; O1's deadline is a proposal.
