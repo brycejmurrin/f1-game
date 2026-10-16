@@ -113,6 +113,9 @@ test.describe("Track designer", () => {
     await openDesigner(page);
     // The dialog is named and modal: a <dialog> with the shell's heading as its label.
     await expect(page.locator("#trackdesigner")).toHaveAttribute("aria-labelledby", "td-title");
+    await expect(page.locator("#trackdesigner .td-tabs")).toHaveAttribute("aria-label", "Track Designer workspace");
+    await expect(page.locator("#trackdesigner .td-tab").first()).toHaveAttribute("aria-controls", "td-pane-design");
+    await expect(page.locator("#trackdesigner .td-pane[data-pane=design]")).toHaveAttribute("aria-labelledby", "td-tab-design");
     await expect(page.locator("#trackdesigner .td-tab").first()).toHaveAttribute("aria-selected", "true");
 
     const st = await randomiseGreen(page, 7);
