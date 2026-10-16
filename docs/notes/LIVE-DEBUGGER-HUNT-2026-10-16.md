@@ -19,17 +19,26 @@ create-throw listener leak, game.js passHunger alloc).
 
 ## Scenario matrix
 
-| scenario | vegas | monaco | spa | singapore | + 2 more |
-|---|---|---|---|---|---|
-| race+go+300 steps | no pause | no pause | | | |
-| pit stop | | | | | |
-| restart | | | | | |
-| circuit switch | | | | | |
-| WATCH/replay | | | | | |
-| garage open/close | | | | | |
-| career quick race | | | | | |
-| GLX vs TLX | | | | | |
-| tab hidden/visible | | | | | |
+All runs: `debugger_exceptions all`, the NaN trap armed, `LoopHealth.state()` and warn/error `__apex.logs()` read after
+each scenario. Result for every cell below: **no NaN/Infinity trap hit, no caught or uncaught exception pause,
+`LoopHealth` faults 0 and not stopped, no new warn/error log** other than the benign `scenery:<id>: suppressed …`
+warnings. Software renderer (SwiftShader), `headless(true)` stepping, 844×390 window — a clean run is evidence about
+the logic paths exercised, not about a player's GPU.
+
+| scenario | circuits | result |
+|---|---|---|
+| race + `go()` + 300–400 `step()` with throttle/steer changes (TLX) | vegas, monaco, spa, singapore, monza, suzuka (6) | clean; `physState` all finite |
+| race + `go()` + 300 steps on the GLX load (`?gfx=glx`, page href confirmed) | vegas, monaco, spa | clean; backend identity NOT positively confirmed (no hook names it; `Gfx` exposes only `create`) |
+| circuit switch mid-session | 6 sequential `race()` calls on one page, then a reload to GLX and 3 more | clean |
+| pit: `pit({arm:true})`, 3900 steps (65 s) | monaco | clean, but the throttle-only car never entered the lane (`state:"none"`, `stops:0`) — **pit entry/box/exit not exercised** |
+| finish + restart | monaco (`finishRace()` → results, then `race()` again) | clean; fresh grid `prog −150.6` |
+| tab hidden → visible (`visibilitychange`, 1.5 s each) | singapore | clean; player resumed, `prog` continuous |
+| career: `career({})` + `careerState()` + `garageStep` ×90 | (career save, haas) | clean; no DOM garage open (menu was not on screen) |
+| WATCH/replay | — | **not exercised** (no `__apex` entry; needs the Data Hub UI) |
+| garage open/close via `#mb-garage` | — | **not exercised** (button exists; race screen was up, only `garageStep` ran) |
+
+Checked and consistent (not bugs): `prog` is negative before the start line (`prog = s − L` on the grid, e.g. vegas
+−6088 at s 83); a post-finish `info().track` is `null` in the results state.
 
 ## Findings
 
@@ -43,6 +52,22 @@ create-throw listener leak, game.js passHunger alloc).
 - T3. `debugger_run` is refused while paused (`Use debugger_evaluate while paused`) — correct, but means a step-driven
   repro must be started before the breakpoint is armed.
 
+- T4. Changing a breakpoint's condition by `debugger_remove_breakpoint` + `debugger_breakpoint` (same url/line) after
+  its `locations` had gone `[]` (T1) left the OLD condition armed in Chrome: with the new condition
+  `!isFinite(c.speed)||…` it still paused on every step with all values finite (`c.speed` 33.1 m/s, matching the
+  previous `c.speed > 25`). `debugger_detach` then re-attach cleared it (`cleanupErrors: []`). Workaround: detach and
+  re-attach to change a condition. Likely cause: the tool's registry no longer holds the Chrome breakpoint id once
+  `locations` empties, so the remove is a registry-only no-op.
+
 ### Faults
 
-_(none confirmed yet)_
+None in game code. Six circuits × the driven scenarios above produced no NaN, no exception pause and no LoopHealth
+fault. The honest gaps are the cells marked **not exercised** (pit entry/stop, WATCH/replay, garage UI open/close, a
+confirmed GLX backend) and prog/lap-inconsistency traps (`c.prog < (c.lap-1)*L - 1`), tyre/fuel/ERS, camera matrix and
+HUD gap-format breakpoints, which were not armed. No fix and no unit test were warranted, so no `tests/unit/**`
+change; no GitHub issues filed (T1–T4 belong to the debugger tool, owned by #2534 — summarised for the orchestrator).
+
+### Cleanup
+
+`debugger_detach` ×3 (`cleanupErrors: []`), debug Chrome (`:9222`) and `http.server :3456` killed by PID, no stray
+`chrome` left.
