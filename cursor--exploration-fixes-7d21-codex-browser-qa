@@ -1,0 +1,1 @@
+#2317 #2318 browser exploration corrections. Own js/career/career-ui.js, existing career unit/spec tests; tools/mcp/probe-mcp.py and existing probe unit tests; one unique changelog fragment. No UI CSS/editor/physics/CI policy edits. User: Fix use plugins more to find more bugs. Root owns all browsers, serialized. No workflow dispatch.
