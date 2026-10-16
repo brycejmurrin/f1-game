@@ -1,6 +1,7 @@
 // @doc Pure helpers for shot.mjs: CLI/batch job parse, output format, track grouping.
 import { readFileSync } from "node:fs";
 import { resolve, extname } from "node:path";
+import { makeFlags } from "../lib/cli-args.mjs";
 import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs";
 
 import { parseCaptureOptions, captureViewport, captureScreenshotOptions } from "./capture-options.mjs";
@@ -113,6 +114,9 @@ export function loadBatchFile(path) {
 export function parseShotArgv(argv, ROOT) {
   const capture = parseCaptureOptions(argv);
   argv = capture.positionals;
+  // An unknown bare flag used to be skipped as a "value-taking" flag and the shot ran on defaults.
+  makeFlags(argv, ["--batch", "--raster", "--jpeg", "--team", "--wait", "--backend", "--az", "--el", "--dist",
+    "--side", "--tod", "--weather", "--hud", "--clear"]);
   const batchPath = flag(argv, "--batch", null);
   const raster = has(argv, "--raster");
   const jpeg = has(argv, "--jpeg");
