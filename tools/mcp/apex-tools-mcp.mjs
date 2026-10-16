@@ -425,6 +425,7 @@ const CATALOG = [
         dist: { type: "number" },
         side: { type: "number" },
         hud: { type: "boolean" },
+        clear: { type: "boolean", description: "orbit/cinematic/trackside: re-site the eye out of scenery; the result reports clear {T, tries, blocked?}." },
         image: { type: "boolean", description: "Attach a JPEG thumbnail (default true)." },
         tod: { type: "string" },
         weather: { type: "string", enum: ["dry", "wet", "rain", "overcast", "fog"], description: "Weather after tod (default dry)." },
@@ -1574,6 +1575,7 @@ function buildArgv(name, args) {
       if (args.tod) argv.push("--tod", String(args.tod));
       if (args.weather) argv.push("--weather", String(args.weather));
       if (args.hud) argv.push("--hud");
+      if (args.clear) argv.push("--clear");
       return argv;
     }
     case "apex_agent": {
