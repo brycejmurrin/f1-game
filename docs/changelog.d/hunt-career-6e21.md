@@ -1,1 +1,1 @@
-Career save selection now keeps the save picker open and announces UPDATE REQUIRED when a slot belongs to a newer build, rather than opening the previously loaded career. When a saved season loses a circuit from the catalogue, its scored race remains in career achievements without taking another circuit's round index; wins, podiums and season rollover retain the result.
+Fixed: Selecting a newer-build career save keeps the picker open with UPDATE REQUIRED. Circuit removal preserves scored career achievements, wins and podiums without changing another circuit's round index.

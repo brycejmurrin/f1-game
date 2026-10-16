@@ -1,2 +1,2 @@
-- Controller polling gaps neutralize axes immediately and require a fresh button release before camera, shift, or boost actions can fire again; the first connection still accepts its wake press.
-- Garage camera hold buttons keep their owning pointer until its release or cancellation, lost capture, or window blur; another finger lifting no longer stops the camera.
+Fixed: Controller polling gaps neutralize axes without repeating held camera, shift or boost actions when the pad returns. The first connection still accepts its wake press.
+Fixed: Garage camera holds remain active when another finger lifts, and release safely when their own pointer ends, loses capture or the window blurs.
