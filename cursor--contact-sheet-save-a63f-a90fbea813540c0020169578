@@ -1,0 +1,1 @@
+1792168038	Bryce Murrin	Replay contact sheet native-save completion only: js/ui/photo-studio.js contactSheet awaited download, tests/unit/photo-studio.test.mjs deferred native result regression, own changelog. Parent owns gates, browser and publication. No replay-buf/native-download edits.  [cursor/contact-sheet-save-a63f; session a90fbea813540c0020169578]
