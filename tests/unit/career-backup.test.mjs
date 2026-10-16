@@ -735,6 +735,25 @@ test("malformed history / offers / moves / roster rows import without crashing c
   assert.doesNotThrow(() => h.Career.settleRound([{ team: { id: "haas" } }], { team: { id: "haas" } }));
 });
 
+test("career imports keep only catalog part IDs and fitted category options", () => {
+  const h = loadHarness();
+  h.ctx.Parts.CATALOG = [
+    { id: "engine", options: [{ id: "engine-stock" }, { id: "engine-race" }] },
+    { id: "tyres", options: [{ id: "tyres-soft" }] },
+  ];
+  const incoming = Object.assign(save(), {
+    owned: ["engine-race", "engine-race", "future-part", 7, "tyres-soft"],
+    fitted: { engine: "engine-race", tyres: "future-tyres", future: "engine-race", __proto__: { bad: true } },
+  });
+  const r = h.CareerBackup.apply({ format: "apex26-career-backup-v1", slots: [
+    { flavour: "driver", i: 0, data: incoming },
+  ] }, { otherFlavourConfirmed: true });
+  assert.equal(r.ok, true);
+  const stored = JSON.parse(h.disk.get("apex26.career.driver.0"));
+  assert.deepEqual(stored.owned, ["engine-race", "tyres-soft"]);
+  assert.deepEqual(stored.fitted, { engine: "engine-race" });
+});
+
 /* ── MY TEAM identity (global garage keys a myteam save only points at) ── */
 
 const LOGO = "data:image/png;base64,iVBORw0KGgo=";

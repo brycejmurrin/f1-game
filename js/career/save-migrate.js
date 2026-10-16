@@ -222,6 +222,41 @@ const SaveMigrate = (function () {
     return Math.max(0, Math.min(n - 1, i));
   }
 
+  // Part ownership and fitted setup entries are player input too.  Keeping an
+  // arbitrary string here used to be harmless until a catalog lookup changed:
+  // an imported `owned: ["future-part"]` could never be bought again, while a
+  // fitted `category: "future-part"` was handed to Parts.resolveSetup as if it
+  // were a real option.  Normalize against the live catalog once it is loaded;
+  // early schema validation can run before Parts, so leave the arrays alone in
+  // that narrow case and let the boot-time Career.load pass do the filtering.
+  function cleanParts(career) {
+    if (typeof Parts === "undefined" || !Array.isArray(Parts.CATALOG) || !Parts.CATALOG.length) return;
+    const byCategory = new Map();
+    const all = new Set();
+    for (const cat of Parts.CATALOG) {
+      if (!cat || typeof cat.id !== "string" || !Array.isArray(cat.options)) continue;
+      const ids = new Set();
+      for (const opt of cat.options) {
+        if (!opt || typeof opt.id !== "string") continue;
+        ids.add(opt.id); all.add(opt.id);
+      }
+      byCategory.set(cat.id, ids);
+    }
+    if (Array.isArray(career.owned)) {
+      career.owned = career.owned.filter((id, i, a) =>
+        typeof id === "string" && all.has(id) && a.indexOf(id) === i);
+    } else career.owned = [];
+    const fitted = {};
+    if (career.fitted && typeof career.fitted === "object" && !Array.isArray(career.fitted)) {
+      for (const cat of Object.keys(career.fitted)) {
+        if (cat === "__proto__" || !byCategory.has(cat)) continue;
+        const id = career.fitted[cat];
+        if (typeof id === "string" && byCategory.get(cat).has(id)) fitted[cat] = id;
+      }
+    }
+    career.fitted = fitted;
+  }
+
   // Fill in every optional key so the rest of the code never guards for undefined,
   // and climb the migration ladder.
   //
@@ -268,6 +303,7 @@ const SaveMigrate = (function () {
     delete career.season.config;
     career.owned = Array.isArray(career.owned) ? career.owned : [];
     career.fitted = career.fitted && typeof career.fitted === "object" ? career.fitted : {};
+    cleanParts(career);
     // Only object rows: a null or a number in the ledger threw on the first
     // `r.round` read in the history screen (and history on the title screen's
     // Career.slots(); offers and moves the same way).
