@@ -2334,7 +2334,8 @@ test("menu range sliders share a painted-size token that cancels UI SIZE zoom", 
       if (!/input\[type=["']range["']\]/.test(r.selector)) continue;
       for (const prop of ["height", "min-height"]) {
         const v = r.decls.get(prop);
-        if (v) assert.match(v, /--slider/, `${r.selector} ${prop} in ${file} must use --slider, not ${v}`);
+        // --tap-paint is the coarse-pointer hit floor (#2158): also a painted size divided by --ui-scale.
+        if (v) assert.match(v, /--slider|--tap-paint/, `${r.selector} ${prop} in ${file} must use --slider (or the touch --tap-paint), not ${v}`);
       }
     }
   }

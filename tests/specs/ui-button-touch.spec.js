@@ -11,6 +11,84 @@ import { galleryPath } from "../helpers/output-paths.js";
 const PORTRAIT  = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
+test.describe("Garage categories — touch scrolling", () => {
+  test.use({ viewport: LANDSCAPE, hasTouch: true, isMobile: true });
+
+  async function garage(page, scale) {
+    await page.addInitScript((pct) => localStorage.setItem("apex26.uiScale", String(pct)), scale);
+    await page.goto("/");
+    await waitReady(page);
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#mb-garage").tap();
+    await page.waitForFunction(() => document.querySelectorAll('#cs-tabs [role="tab"]').length > 0,
+      null, { polling: 100, timeout: BOOT_MS });
+  }
+
+  async function swipe(context, page, axis, distance, group) {
+    const point = await page.locator("#cs-tabs").evaluate((rail, group) => {
+      const r = rail.getBoundingClientRect();
+      const row = [...rail.querySelectorAll('[role="group"]')].find((el) => el.getAttribute("aria-label") === group);
+      if (!row) throw new Error(`missing category group: ${group}`);
+      const visible = [...row.querySelectorAll(".cs-tab")].map((tab) => tab.getBoundingClientRect())
+        .filter((b) => b.left >= r.left && b.right <= r.right && b.top >= r.top && b.bottom <= r.bottom);
+      const b = visible[Math.max(0, visible.length - 2)];
+      if (!b) throw new Error("no category button inside the scrollport");
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    }, group);
+    const cdp = await context.newCDPSession(page);
+    try {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [point] });
+      for (let step = 1; step <= 12; step++) {
+        const moved = { ...point, [axis]: point[axis] + distance * step / 12 };
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [moved] });
+        // Give each sample a compositor frame, as a real moving finger does.
+        await page.evaluate(() => new Promise(requestAnimationFrame));
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } finally { await cdp.detach(); }
+  }
+
+  test("vertical category buttons scroll both groups and still activate on a tap", async ({ page, context }) => {
+    await garage(page, 75);
+    await expect(page.locator("#cs-inner")).toHaveAttribute("data-pair", "on");
+    const rail = page.locator("#cs-tabs");
+    // Keep the pan axis consistent through both DOM groups, including the
+    // display:contents wrappers whose touch policy differs between engines.
+    const blocked = await rail.locator(".cs-tab").evaluateAll((tabs) => tabs.flatMap((tab) => {
+      const denied = [];
+      for (let e = tab; e && e.id !== "cs-tabs"; e = e.parentElement) {
+        const action = getComputedStyle(e).touchAction;
+        if (action !== "auto" && action !== "manipulation" && !action.split(/\s+/).includes("pan-y")) {
+          denied.push({ category: tab.getAttribute("data-cs-cat"), action });
+        }
+      }
+      return denied;
+    }));
+    expect(blocked, "every category permits the vertical rail's pan gesture").toEqual([]);
+    const selected = await rail.locator('[aria-selected="true"]').getAttribute("data-cs-cat");
+    await swipe(context, page, "y", -90, "Performance categories");
+    await expect.poll(() => rail.evaluate((el) => el.scrollTop)).toBeGreaterThan(20);
+    await expect(rail.locator('[aria-selected="true"]')).toHaveAttribute("data-cs-cat", selected);
+    // Start the next gesture on a finishing/setup button, away from the thumb.
+    const end = await rail.evaluate((el) => { el.scrollTop = el.scrollHeight; return el.scrollTop; });
+    await swipe(context, page, "y", 90, "Finishing and setup categories");
+    await expect.poll(() => rail.evaluate((el) => el.scrollTop)).toBeLessThan(end - 20);
+    await rail.locator('[data-cs-cat="livery"]').tap();
+    await expect(page.locator("#cs-options")).toHaveAttribute("aria-labelledby", "cs-tab-livery");
+  });
+
+  test("the portrait category strip still scrolls horizontally over its buttons", async ({ page, context }) => {
+    await page.setViewportSize(PORTRAIT);
+    await garage(page, 115);
+    await expect(page.locator("#cs-inner")).toHaveAttribute("data-pair", "off");
+    const rail = page.locator("#cs-tabs");
+    await swipe(context, page, "x", -140, "Performance categories");
+    await expect.poll(() => rail.evaluate((el) => el.scrollLeft)).toBeGreaterThan(20);
+    await rail.locator('[data-cs-cat="aero"]').tap();
+    await expect(page.locator("#cs-options")).toHaveAttribute("aria-labelledby", "cs-tab-aero");
+  });
+});
+
 test("CAM touch long-press keeps the picker open after normal capture release", async ({ page, context }) => {
   await page.setViewportSize(LANDSCAPE);
   await page.goto("/");
@@ -207,6 +285,26 @@ test.describe("Lighting tuner — pause lifecycle", () => {
     await expect(page.locator("body")).toHaveClass(/lt-open/);
     expect(await page.evaluate(() => document.getElementById("lighting").hidden)).toBe(false);
     expect(await page.evaluate(() => document.getElementById("photo-controls").hidden)).toBe(true);
+  });
+
+  // #2159: with phone insets the fly-cam bar ran 59px into the docked panel and
+  // a tap on FREE CAMERA landed on the bar (a Chromium calc mis-resolution of
+  // `--dock-px / --ui-scale`). The bar must end left of the panel.
+  test("fly-cam bar stays clear of the docked tuner panel with phone insets", async ({ page }) => {
+    await page.goto("/");
+    await waitReady(page);
+    await openLightingPhotoMode(page);
+    const geo = await page.evaluate(async () => {
+      for (const [k, v] of [["--sal", "47px"], ["--sar", "47px"], ["--sab", "21px"]]) document.documentElement.style.setProperty(k, v);
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const bar = document.getElementById("pc-bar").getBoundingClientRect();
+      const panel = document.getElementById("lighting-inner").getBoundingClientRect();
+      const t = document.getElementById("pc-toggle").getBoundingClientRect();
+      const hit = document.elementFromPoint(t.x + t.width / 2, t.y + t.height / 2);
+      return { barRight: bar.right, panelLeft: panel.left, hit: hit && hit.closest("#pc-toggle") ? "pc-toggle" : hit && hit.id };
+    });
+    expect(geo.barRight, JSON.stringify(geo)).toBeLessThan(geo.panelLeft);
+    expect(geo.hit).toBe("pc-toggle");
   });
 
   // …and pressing it again walks the real route back out, one screen per press.

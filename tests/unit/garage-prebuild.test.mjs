@@ -405,6 +405,16 @@ test("the A/B switch: apex26.garagePrewarm=\"off\" at boot, or setEnabled(false)
   assert.equal(h.pre.state().last.result, "ready");
 });
 
+test("a denied global storage getter keeps GaragePrebuild.create on its default", () => {
+  const { GP, ctx } = loadModule();
+  vm.runInContext('Object.defineProperty(globalThis, "localStorage", { get() { throw Object.assign(new Error("blocked"), { name: "SecurityError" }); } });', ctx);
+  assert.throws(() => vm.runInContext("typeof localStorage", ctx), { name: "SecurityError" });
+  const pre = GP.create({ $: () => null }, {
+    gate: {}, setupCam: {}, ui: () => null, studio: () => false,
+  });
+  assert.equal(pre.setEnabled(), true, "blocked storage uses the shipped prewarm default");
+});
+
 // RACE START RELEASES THE GARAGE (~12.5 MB GPU + ~5 MB canvases had stayed resident
 // through every race after the first visit): the prebuild forgets readiness, so the
 // next idle title builds it again; an open garage (drive-out studio, pit visit) is kept.

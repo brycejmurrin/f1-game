@@ -715,7 +715,7 @@ test("--targeted prints the suites for a change list, and nothing for a game.js-
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   assert.match(yml, /node tools\/ci\/geometry-paths\.mjs --targeted "\$CHANGED_FILE"/,
     "ci.yml's sweeps filter must read the targeted table, not retype it");
-  assert.match(yml, /- name: Targeted sweeps \(the suites that read this diff, no fleet rebuild\)\n\s+if: steps\.filter\.outputs\.geometry != 'true' && steps\.filter\.outputs\.targeted != ''/,
+  assert.match(yml, /- name: Targeted sweeps \(the suites that read this diff, no fleet rebuild\)\n\s+if: needs\.select\.outputs\.geometry == 'false' && needs\.select\.outputs\.geometry_targeted != ''/,
     "the targeted step runs exactly when the fleet does not and a suite was named");
   assert.equal(notCovered(false, ["tests/unit/car-front-wing-width.test.mjs"])[1],
     "test:sweeps (nothing in this union can move geometry; the targeted sweeps that read it ran: car-front-wing-width.test.mjs)");
@@ -755,18 +755,26 @@ test("--train reports the nightly rota, and reads its jobs rather than the rollu
     "nightlyHealth must name the jobs that actually FAILED, whatever the rollup says");
 });
 
-test("--train answers without preflight, and names all three signals", () => {
-  const r = spawnSync("node", ["tools/ci/deploy.mjs", "--train"], { cwd: ROOT, encoding: "utf8" });
-  assert.equal(r.status, 0, r.stderr);
-  const out = r.stdout + r.stderr;
-  // Network-independent: with no API answer each line still prints "unknown".
-  for (const label of ["train ci:", "train pages:", "train nightly:"]) {
-    assert.ok(out.includes(label), `--train printed no "${label}" line:\n${out}`);
-  }
-  // BEFORE preflight, deliberately — "was the train already red?" is the
-  // question you ask while a browser run is pinning loadavg above the refusal,
-  // and preflight() returns 3 there.
-  assert.ok(!/REFUSED:/.test(out), `--train must not run preflight:\n${out}`);
+test("--train answers without Git planning or preflight, and names all three signals offline", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-train-offline-"));
+  const gitCalls = path.join(dir, "git-calls");
+  try {
+    // Fail every Git operation, including fetch/merge-tree. The real command
+    // must still report health; stub only external transports, never main().
+    fs.writeFileSync(path.join(dir, "git"), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$APEX_TRAIN_GIT_CALLS"\nexit 97\n', { mode: 0o755 });
+    for (const cmd of ["curl", "gh"]) fs.writeFileSync(path.join(dir, cmd), "#!/bin/sh\nexit 7\n", { mode: 0o755 });
+    const r = spawnSync(process.execPath, ["tools/ci/deploy.mjs", "--train"], {
+      cwd: ROOT, encoding: "utf8", timeout: 15000,
+      env: { ...process.env, PATH: dir, APEX_TRAIN_GIT_CALLS: gitCalls },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    const out = r.stdout + r.stderr;
+    for (const label of ["train ci:", "train pages:", "train nightly:"]) {
+      assert.ok(out.includes(label + " unknown"), `--train printed no offline "${label}" line:\n${out}`);
+    }
+    assert.equal(fs.existsSync(gitCalls), false, "advisory health must not invoke Git planning");
+    assert.ok(!/REFUSED:/.test(out), `--train must not run preflight:\n${out}`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 /* trainHealth / nightlyHealth used three bare curls, drawing on the 60/h
