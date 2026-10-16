@@ -555,7 +555,7 @@ window.SpotifyMusic = (function () {
     stopPolling();
     pollBusy = false;
     if (volTimer !== null) { clearTimeout(volTimer); volTimer = null; }
-    volPend = null;
+    volPend.clear();
     if (searchT !== null) { clearTimeout(searchT); searchT = null; }
     for (const timer of commandTimers) clearTimeout(timer);
     commandTimers.clear();
@@ -872,22 +872,22 @@ window.SpotifyMusic = (function () {
   // Coalesce on the trailing edge: the last value inside the window is the one
   // the user let go on, and it is the only one worth a request.
   const VOL_PUT_MS = 250;
-  let volTimer = null, volPend = null;
+  let volTimer = null;
+  const volPend = new Map();   // captured device -> its latest gesture's value
   function putDeviceVolume(pct) {
-    volPend = Math.max(0, Math.min(100, Math.round(pct)));
+    volPend.set(deviceId2(), Math.max(0, Math.min(100, Math.round(pct))));
     if (volTimer !== null) return;
     const gen = sessionGen;
-    // Bind the device when the trailing-edge request is scheduled. The user can
-    // switch devices while the debounce window is open; sending this volume to
-    // the newly selected device would apply an old slider gesture to the wrong
-    // speaker.
-    const targetDevice = deviceId2();
+    // Gestures on different speakers retain their own values, even if the
+    // player switches away and back before this batch is sent.
     volTimer = setTimeout(() => {
       volTimer = null;
-      const v = volPend; volPend = null;
-      if (gen !== sessionGen || v === null) return;
-      api("/me/player/volume?volume_percent=" + v +
-          (targetDevice ? "&device_id=" + encodeURIComponent(targetDevice) : ""), { method: "PUT" });
+      const pending = Array.from(volPend); volPend.clear();
+      if (gen !== sessionGen) return;
+      for (const [targetDevice, v] of pending) {
+        api("/me/player/volume?volume_percent=" + v +
+            (targetDevice ? "&device_id=" + encodeURIComponent(targetDevice) : ""), { method: "PUT" });
+      }
     }, VOL_PUT_MS);
   }
   function setDeviceVolume(pct) {
