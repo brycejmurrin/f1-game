@@ -31,7 +31,7 @@ Gaps: no per-subsystem budget, no A/B, nothing over MCP, GPU timing is frame-lev
    of each stat and the spread (max−min). `--base <ref>` runs the identical scenario on an ephemeral `git worktree` at `<ref>` and
    prints a delta table. **Noise rule** (`tools/perf/lib.mjs`): a delta no larger than the larger spread is `noise`; with
    `--repeat 1` every verdict is `unproven`. A base predating `PerfSpans` only has the `raf` cadence row (recorded in-page on every ref).
-3. **MCP** — see the apex-tools section below.
+
 
 ## Caveats
 
@@ -58,3 +58,31 @@ Not done (needs real hardware, software probes are no evidence): per-pass `times
 (`querySet` → `resolveQuerySet` → buffer → `mapAsync`), and per-pass GLX queries (GLX exposes one `TIME_ELAPSED_EXT` per frame;
 nested elapsed queries are not allowed in WebGL2, so per-pass there means sequential non-overlapping queries per pass).
 Verdict path: dispatch `gpu-census.yml` on `macos-latest` and read its Verdict step.
+
+## MCP surface (as shipped)
+
+- `apex_job_start {kind:"profile", track, mode, frames, repeat, base}` — the browser run, a background job behind the already-guarded
+  `apex_job_start` door (poll `apex_job_status`). It reuses the browser lock the other job kinds take.
+- `apex_profile_query {file, compare?, top?, fn?, fileFilter?}` — tree kind: summarise a saved spans JSON or `.cpuprofile`, or
+  compare two spans JSONs. Artifacts under `artifacts/` or `scratch/` only; never a raw profile.
+- A standalone `apex_profile` browser tool was built and dropped: `bash-guard-hardening.test.mjs` requires every browser-kind
+  MCP tool in the `.claude/settings.json` matcher, `mcp-browser-guard.sh` and `shellparse.py` `APEX_BROWSER`, which this lane may not edit.
+  Follow-up (needs a `.claude` owner): add `profile` to those three lists, then promote `apex_profile` to a direct tool.
+
+## Measured on this container (SwiftShader), 2026-10-16
+
+- Rendered frames cost 3–9 s of wall time (the GPU process rasterises; main-thread `tickBody` is a few ms), so the scenario runs at
+  320x180 (`profile.mjs` VIEWPORT) with the headless soft-blit readback off (`apex26.wgxCapture=0`, as `frame-hitch.mjs` does;
+  `--capture` restores it) and a 40-frame default: ~3 s a frame, ~2.5 min per repeat plus a ~1 min boot.
+- vegas, 40 frames x 2 repeats, TLX default backend (ms): physics p50 6.25 / p95 14.4; ai p50 0.95 / p95 3.3 (per `updateCar` loop);
+  hud p50 0.65 / p95 14; input 0.1; collide 0.05. `render` (p50 8, p95 2968) is dominated by the synchronous software-raster wait
+  in the slow frames: do not read it as a CPU cost. `raf` cadence is the compositor and is reported but never judged.
+- Two repeats are not a noise floor: a first A/B printed a "WIN" on `raf` inside its own spread. The verdict rule now needs
+  3+ repeats on both sides (`MIN_REPEATS`), and `raf` is `info`.
+- The deploy branch predates `PerfSpans`, so `--base origin/claude/f1-game-project-26h3ng` only carries the `raf` row; per-span deltas
+  need a base that includes this PR.
+
+## Overlap
+
+Another session (`cursor/three-inspector-*`) is vendoring the three.js Inspector addon as an opt-in TLX dev panel and will add a
+`gpuTimer` interlock in `tlx.js` (both use `backend.trackTimestamp`). This PR does not touch `tlx.js`; link that PR here once it exists.

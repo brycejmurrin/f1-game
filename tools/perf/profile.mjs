@@ -14,8 +14,9 @@
 // trace  CDP Tracing → artifacts/profiles/*.json, open in ui.perfetto.dev (spans show as User Timing "apex:*").
 // --repeat N    N fresh pages; reports the median of each stat and the spread (max-min) across repeats.
 // --base <ref>  same scenario on an ephemeral git worktree at <ref>; prints a delta table. A delta inside the
-//               spread is "noise", never a win; with --repeat 1 every verdict is "unproven".
-// SwiftShader caveat: CPU JS cost is meaningful, GPU/fill numbers are not (docs/notes/PROFILER-DESIGN-2026-10-16.md).
+//               spread is "noise", never a win; with fewer than 3 repeats every verdict is "unproven"; the raf row is cadence, informational only.
+// SwiftShader caveat: CPU JS cost is meaningful, GPU/fill numbers are not (the "render" span includes the synchronous
+// software-raster wait; physics/ai/collide/hud are the reliable rows) (docs/notes/PROFILER-DESIGN-2026-10-16.md).
 import { writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,7 +32,7 @@ exitIfHelp(argv, `profile — spans | cpu | hitch | trace, with --repeat and --b
 
   node tools/perf/profile.mjs <track> [--mode spans|cpu|hitch|trace] [--frames N] [--repeat N] [--base <ref>] [--json] [--capture]
 
-Default track vegas, mode spans, frames 120, repeat 1. Output: artifacts/profiles/.`);
+Default track vegas, mode spans, frames 40, repeat 1. Output: artifacts/profiles/.`);
 parseFlags(argv, ["--mode", "--frames", "--repeat", "--base", "--json", "--capture", "--help"]);
 
 function flag(name, dflt) {
@@ -45,14 +46,16 @@ const VALUED = new Set(["--mode", "--frames", "--repeat", "--base"]);
 const positional = argv.filter((a, i) => !a.startsWith("--") && !VALUED.has(argv[i - 1]));
 const track = positional[0] || "vegas";
 const mode = flag("--mode", "spans");
-const frames = Math.max(10, +flag("--frames", 120) || 120);
+const frames = Math.max(10, +flag("--frames", 40) || 40);
 const repeat = Math.max(1, +flag("--repeat", 1) || 1);
 const baseRef = flag("--base", null);
 const asJson = argv.includes("--json");
 // Headless TLX blits every frame to #game-soft (a readback: ~8 s a frame on SwiftShader). Timing wants it OFF, as
 // frame-hitch.mjs does; --capture puts it back. The backend itself stays the default (TLX).
+// 320x180: spans time main-thread JS, and SwiftShader rasterisation scales with pixels (844x390: ~9 s a frame, 320x180: ~3 s).
+const VIEWPORT = { width: 320, height: 180 };
 const noBlit = () => { try { sessionStorage.setItem("apex26.wgxCapture", "0"); } catch (_) { /* blocked */ } };
-const newPage = async (browser) => { const ctx = await browser.newContext({ viewport: { width: 844, height: 390 } }); if (!argv.includes("--capture")) await ctx.addInitScript(noBlit); return [ctx, await ctx.newPage()]; };
+const newPage = async (browser) => { const ctx = await browser.newContext({ viewport: VIEWPORT }); if (!argv.includes("--capture")) await ctx.addInitScript(noBlit); return [ctx, await ctx.newPage()]; };
 const log = (...a) => console.error(...a);
 
 /** The deterministic scenario, evaluated in the page: same track, same start, same inputs on every ref. */

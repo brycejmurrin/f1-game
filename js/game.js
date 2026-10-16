@@ -8601,8 +8601,9 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 PerfGov.init(gfx);
 const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/consts.js
 function tick(now) {
+  PerfSpans.begin("frame");
   try {
-    PerfSpans.begin("frame"); tickBody(now); PerfSpans.end("frame"); LoopHealth.clean();
+    tickBody(now); LoopHealth.clean();
     XrBoot.afterTick(tick);   // no-op while immersive-vr owns session.rAF; deduped on EXIT
   }
   catch (e) {
@@ -8623,6 +8624,7 @@ function tick(now) {
     if (_backendBound && !_backendProved) armBackendProbe();
     throw e;
   }
+  finally { PerfSpans.end("frame"); }
 }
 function tickBody(now) {
   let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp

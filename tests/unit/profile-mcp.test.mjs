@@ -1,4 +1,5 @@
-/* profile-mcp.test.mjs — apex_profile / apex_profile_query pin their argv (dryRun, no browser).
+/* profile-mcp.test.mjs — the profiler's MCP surface pins its argv (dryRun, no browser): the run is
+ * apex_job_start kind "profile" (the guarded door); apex_profile_query reads saved artifacts only.
  * Run: node --test tests/unit/profile-mcp.test.mjs */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -14,21 +15,26 @@ function call(name, args) {
 }
 const argvOf = (r) => JSON.parse(r.out).argv;
 
-test("apex_profile dryRun: profile.mjs argv with mode, repeat and base", () => {
-  const argv = argvOf(call("apex_profile", { dryRun: true, track: "monza", repeat: 3, frames: 90, base: "origin/main" }));
+test("there is no standalone apex_profile browser tool (needs a .claude guard entry); the job kind is listed", () => {
+  const names = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout).map((t) => t.name);
+  assert.ok(!names.includes("apex_profile")); assert.ok(names.includes("apex_profile_query"));
+  const js = JSON.parse(spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT }).stdout).find((t) => t.name === "apex_job_start");
+  assert.ok(js.inputSchema.properties.kind.enum.includes("profile"));
+});
+
+test("apex_job_start kind profile dryRun: profile.mjs argv with mode, repeat and base", () => {
+  const argv = argvOf(call("apex_job_start", { kind: "profile", dryRun: true, track: "monza", repeat: 3, frames: 90, base: "origin/main" }));
   assert.ok(argv.some((a) => a.endsWith("perf/profile.mjs")));
   assert.deepEqual(argv.slice(argv.indexOf("monza")), ["monza", "--mode", "spans", "--frames", "90", "--repeat", "3", "--base", "origin/main"]);
 });
 
-test("apex_profile refuses a base that looks like a flag", () => {
-  const r = call("apex_profile", { dryRun: true, base: "--upload-pack=x" });
-  assert.match(r.out + r.err, /base must be a git ref|bad_args|not match/);
+test("profile job refuses a base that looks like a flag and an unknown mode", () => {
+  assert.match(call("apex_job_start", { kind: "profile", dryRun: true, base: "--upload-pack=x" }).out, /base may not start|base must be a git ref/);
+  assert.match(call("apex_job_start", { kind: "profile", dryRun: true, mode: "bogus" }).out + "", /mode|enum|bad_args/);
 });
 
 test("apex_profile_query dryRun: query.mjs, artifacts-only path", () => {
   const argv = argvOf(call("apex_profile_query", { dryRun: true, file: "artifacts/profiles/vegas-spans.json", top: 5 }));
-  assert.ok(argv.some((a) => a.endsWith("perf/query.mjs")));
-  assert.ok(argv.includes("--top"));
-  const bad = call("apex_profile_query", { dryRun: true, file: "package.json" });
-  assert.doesNotMatch(bad.out, /"ok":\s*true/);
+  assert.ok(argv.some((a) => a.endsWith("perf/query.mjs"))); assert.ok(argv.includes("--top"));
+  assert.doesNotMatch(call("apex_profile_query", { dryRun: true, file: "package.json" }).out, /"ok":\s*true/);
 });

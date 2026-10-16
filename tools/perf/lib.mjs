@@ -29,12 +29,15 @@ export function aggregate(runs) {
   return out;
 }
 
+export const MIN_REPEATS = 3;   // two samples give a spread of one difference: not a noise floor
 /** The rule: a delta no larger than the larger of the two spreads is NOISE, never a win or a regression.
- *  With a single repeat there is no spread, so every verdict is "unproven (--repeat 1)". */
-export function verdict(base, head, key = "p50") {
+ *  Fewer than MIN_REPEATS repeats on either side leaves no trustworthy spread, so the verdict is "unproven".
+ *  The "raf" row is the compositor cadence (SwiftShader, not the code under test): shown, never judged. */
+export function verdict(base, head, key = "p50", name = "") {
   const sk = key === "p95" ? "spread95" : "spread50";
   if (!base || !head) return "n/a";
-  if (base.runs < 2 || head.runs < 2) return "unproven";
+  if (name === "raf") return "info";
+  if (base.runs < MIN_REPEATS || head.runs < MIN_REPEATS) return "unproven";
   const d = head[key] - base[key], floor = Math.max(base[sk], head[sk]);
   if (Math.abs(d) <= floor) return "noise";
   return d < 0 ? "WIN" : "REGRESS";
@@ -45,7 +48,7 @@ export function diff(baseAgg, headAgg) {
   return names.map((name) => {
     const b = baseAgg[name], h = headAgg[name];
     const dp50 = b && h ? r2(h.p50 - b.p50) : null, dp95 = b && h ? r2(h.p95 - b.p95) : null;
-    return { name, base: b || null, head: h || null, dp50, dp95, pct50: b && h && b.p50 ? r2(((h.p50 - b.p50) / b.p50) * 100) : null, verdict: verdict(b, h, "p50"), verdict95: verdict(b, h, "p95") };
+    return { name, base: b || null, head: h || null, dp50, dp95, pct50: b && h && b.p50 ? r2(((h.p50 - b.p50) / b.p50) * 100) : null, verdict: verdict(b, h, "p50", name), verdict95: verdict(b, h, "p95", name) };
   });
 }
 

@@ -22,9 +22,11 @@ test("a delta inside the spread is noise, outside it is a WIN / REGRESS", () => 
   assert.equal(diff(base, slower)[0].verdict, "REGRESS");
 });
 
-test("a single repeat proves nothing; a span on one side only is n/a", () => {
-  const one = aggregate([run(1)]), other = aggregate([run(0.1)]);
+test("fewer than 3 repeats prove nothing; raf is info; a span on one side only is n/a", () => {
+  const one = aggregate([run(1), run(1.1)]), other = aggregate([run(0.1), run(0.1)]);
   assert.equal(diff(one, other)[0].verdict, "unproven");
+  const raf = (x) => aggregate([1, 2, 3].map(() => ({ spans: { raf: { p50: x, p95: x, p99: x, max: x, n: 9 } } })));
+  assert.equal(diff(raf(10), raf(1))[0].verdict, "info");
   assert.equal(verdict(null, one.physics), "n/a");
   const d = diff({}, one); assert.equal(d[0].dp50, null); assert.equal(d[0].verdict, "n/a");
 });
