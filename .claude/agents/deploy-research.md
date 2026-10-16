@@ -46,10 +46,10 @@ return a short summary with citations (URLs + live vs local build numbers).
    ancestor of it; **UNKNOWN** when `LIVE` is empty (site unreadable, meta
    missing) or not in this clone's history (`git cat-file -e <live sha>` fails on a
    shallow clone; `git fetch --depth=200 origin claude/f1-game-project-26h3ng`
-   once, then say UNKNOWN if still absent). Never guess STALE from an empty read. Pages is a RELEASE TRAIN (poked by each green fast-tier
-   `ci.yml` run, ~6 min after the push, then a ~10-15 min gate unless the tree
-   was already gated; the :07/:27/:47 cron is only a backstop and GitHub runs
-   it hours late on this repo), so a tip under ~25 min old not being live yet
+   once, then say UNKNOWN if still absent). Never guess STALE from an empty read. Pages is a RELEASE TRAIN (started by the push itself since 2026-10-16,
+   one running + one pending, then a ~20 min gate unless the tree was already
+   gated; the hourly cron is only a backstop and GitHub runs it hours late on
+   this repo), so a tip under ~25 min old not being live yet
    is the train, not a miss; past that, read `pages.yml`'s latest run. A behind
    WORKING TREE is not a Pages miss — compare to the tip, not to disk.
 

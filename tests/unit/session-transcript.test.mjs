@@ -1,0 +1,98 @@
+// session-transcript — the digest of a saved claude-code-remote `list_events` page. The fixture is a
+// hand-built page in the shape measured on 2026-10-16 (a 100-event page of a live session): the untrusted
+// envelope around `{"ccr":…}`, a `control_response` blob to drop, a Bash call answered by its tool_result,
+// an MCP call, a subagent whose inner steps carry the Agent call's id as parent_tool_use_id, a user-rejected
+// call, a failed hook, a harness-injected turn and a turn result. Pure functions only; under a second.
+import test from "node:test";
+import assert from "node:assert/strict";
+import { extractPage, normalize, render, describeCall } from "../../tools/ci/session-transcript.mjs";
+
+const at = (s) => `2026-10-16T07:00:${String(s).padStart(2, "0")}.000Z`;
+let n = 0;
+const wrap = (k, s, body) => ({ created_at: at(s), [k]: { uuid: `u${n++}`, internal_anthropic_catchall: body } });
+const say = (s, content, parent = null) => wrap("assistant", s, { parent_tool_use_id: parent, message: { role: "assistant", content } });
+const hear = (s, content, extra = {}) => wrap("user", s, { parent_tool_use_id: null, message: { role: "user", content }, ...extra });
+const use = (id, name, input) => ({ type: "tool_use", id, name, input });
+const res = (id, text, is_error = false) => ({ type: "tool_result", tool_use_id: id, content: text, is_error });
+
+const EVENTS = [
+  wrap("control_response", 0, { response: { subtype: "success", response: { agents: ["x".repeat(5000)] } } }),
+  hear(1, "Check the CI watch"),
+  say(2, [{ type: "thinking", thinking: "", signature: "AAAA" }, use("t1", "Bash", { command: "git status --short", description: "Look at the tree" })]),
+  hear(3, [res("t1", " M ci.yml")], { tool_result_meta: [{ id: "t1", permission_decision: { decision: "accept", reason_type: "classifier" } }] }),
+  say(4, [use("t2", "mcp__github__pull_request_read", { method: "get", pullNumber: 7 })]),
+  hear(5, [res("t2", "boom", true)]),
+  say(6, [use("t3", "Agent", { subagent_type: "Explore", description: "Find the watcher", prompt: "…" })]),
+  wrap("user", 7, { parent_tool_use_id: "t3", message: { role: "user", content: [{ type: "text", text: "Find the watcher" }] } }),
+  say(8, [use("s1", "Grep", { pattern: "watch", path: "tools/ci" })], "t3"),
+  wrap("user", 9, { parent_tool_use_id: "t3", message: { role: "user", content: [res("s1", "tools/ci/ci-watch.mjs")] } }),
+  hear(10, [res("t3", "report delivered")]),
+  say(11, [use("t4", "Edit", { file_path: "js/game.js" })]),
+  hear(12, [res("t4", "The user doesn't want to proceed", true)], { tool_result_meta: [{ id: "t4", non_execution_kind: "user-rejected" }] }),
+  wrap("system", 13, { subtype: "hook_response", hook_name: "Stop", outcome: "error", exit_code: 2, stderr: "uncommitted changes", output: "" }),
+  wrap("system", 13, { subtype: "hook_response", hook_name: "UserPromptSubmit", outcome: "success", exit_code: 0, output: "Skill check" }),
+  hear(14, "Stop hook feedback: uncommitted changes"),
+  say(15, [{ type: "text", text: "Holding for your call." }]),
+  wrap("result", 16, { subtype: "success", is_error: false, num_turns: 9, duration_ms: 42000, total_cost_usd: 1.5, subagent_stats: { spawned: 1, completed: 1, failed: 0 } }),
+];
+const PAGE = `<other-session nonce="n" untrusted="true">\nAnother Claude session's record…:\n    ${JSON.stringify({ ccr: { data: EVENTS, has_more: true, first_id: "f1", last_id: "l1" } })}\n</other-session nonce="n">`;
+
+test("a saved page parses out of its untrusted envelope, with the cursor for the next page", () => {
+  const p = extractPage(PAGE);
+  assert.equal(p.events.length, EVENTS.length);
+  assert.equal(p.hasMore, true);
+  assert.equal(p.firstId, "f1");
+  assert.throws(() => extractPage("no json here"), /no JSON/);
+});
+
+test("calls fold their results; MCP, Bash, Agent and the subagent's own steps each get a row", () => {
+  const rows = normalize(extractPage(PAGE).events);
+  const calls = rows.filter((r) => r.kind === "call");
+  assert.deepEqual(calls.map((c) => c.tag), ["BASH", "MCP", "AGENT", "GREP", "EDIT"]);
+  assert.equal(calls[0].text, "git status --short");
+  assert.equal(calls[0].result.out, "M ci.yml");
+  assert.equal(calls[0].result.by, "accept/classifier");
+  assert.match(calls[1].text, /^github\.pull_request_read /);
+  assert.equal(calls[1].err, true, "an MCP error marks the row");
+  assert.equal(calls[2].text, "Explore: Find the watcher");
+  assert.equal(calls[3].sub, "t3", "the subagent's Grep hangs off the Agent call");
+  assert.equal(calls[4].result.denied, "user-rejected");
+});
+
+test("noise drops: control blobs, empty thinking, successful hooks; injected turns are not user prompts", () => {
+  const rows = normalize(extractPage(PAGE).events);
+  assert.equal(rows.filter((r) => r.kind === "user" && !r.sub).length, 1, "only the typed prompt counts");
+  assert.ok(rows.some((r) => r.tag === "INJECT"), "Stop hook feedback is tagged INJECT");
+  const hooks = rows.filter((r) => r.kind === "hook");
+  assert.equal(hooks.find((h) => /Stop/.test(h.text)).err, true);
+  assert.equal(hooks.find((h) => /UserPromptSubmit/.test(h.text)).quiet, true);
+  assert.ok(!rows.some((r) => /x{100}/.test(r.text)), "no control_response payload leaks");
+});
+
+test("events across pages dedupe by uuid and sort by time", () => {
+  const evs = extractPage(PAGE).events;
+  const rows = normalize([...evs.slice(9), ...evs, ...evs.slice(0, 4)]);
+  assert.equal(rows.filter((r) => r.kind === "call").length, 5);
+  assert.deepEqual(rows.map((r) => r.t), [...rows.map((r) => r.t)].sort());
+});
+
+test("render: --only errors keeps the failures; the footer tallies and names the next cursor", () => {
+  const p = extractPage(PAGE);
+  const rows = normalize(p.events);
+  const errs = render(rows, p, { only: ["errors"] });
+  assert.match(errs, /MCP/);
+  assert.match(errs, /DENIED \(user-rejected\)/);
+  assert.match(errs, /HOOK +Stop error exit 2/);
+  assert.doesNotMatch(errs, /^\S+ BASH/m, "a clean Bash call is not an error");
+  const all = render(rows, p, {});
+  assert.match(all, /^= .* 5 calls .* 2 failed\/denied · 1 user prompts · 2 subagent rows$/m);
+  assert.match(all, /before_id f1/);
+  assert.match(all, /TURN +success · 9 steps · 42 s · \$1\.50 cumulative · subagents 1/);
+  assert.match(render(rows, p, { grep: /watch/i }), /GREP/);
+});
+
+test("describeCall shows the part a reader wants", () => {
+  assert.equal(describeCall("Bash", { command: "npm  test\n", run_in_background: true }), "npm test  [bg]");
+  assert.equal(describeCall("Read", { file_path: "a.js" }), "a.js");
+  assert.equal(describeCall("mcp__x__y", { a: 1 }), '{"a":1}');
+});

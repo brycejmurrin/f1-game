@@ -2529,12 +2529,10 @@ await __apex.turnProbe();
 //     summary:"No TURN relay is configured — only STUN. …" }
 ```
 
-**A relay ships by default** — a Metered free-tier credentials URL. Not a
-luxury for hard networks: without one, two devices on the *same Wi-Fi* often
-cannot connect at all, because the only host candidate a browser offers is
-mDNS-obfuscated and, when that name will not resolve, the sole remaining pair
-is srflx↔srflx needing router hairpinning that many routers do not do.
-`apex26.turnApi` overrides it outright.
+**No relay credential ships by default.** Browser-visible provider keys are
+reusable by anyone who downloads the game, so the default is honest STUN-only
+operation. Configure a player-owned, short-lived credentials endpoint through
+`apex26.turnApi` when relay service is needed.
 
 The two free no-signup relays are **measured dead** and stay off behind
 `localStorage.setItem("apex26.freeTurn", "true")`: trickle-ICE gathers from two

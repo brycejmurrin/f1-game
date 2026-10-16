@@ -200,3 +200,18 @@ test("aim uses setTargetAtTime with a tau, never a raw per-frame value poke", ()
   collect(me);
   assert.ok(live.gain.gain.targets >= 2, "a moved car re-aims, it does not assign .value");
 });
+
+
+test("pass-by hiss is softer alongside and follows relative motion", () => {
+  const me = car({ s: 500, speed: 50 });
+  const rival = car({ s: 500, x: 3, speed: 50 });
+  const { R, collect, state } = boot([me, rival]);
+  collect(me);
+  const steady = state().find(v => v.gain > 0);
+  assert.ok(steady.gain < 0.01, "holding station must not sustain a loud fly-by");
+  rival.speed = 95; collect(me);
+  const passing = state().find(v => v.slot === steady.slot);
+  assert.ok(passing.gain > steady.gain * 5 && passing.gain <= 0.07);
+  const voice = R.passByVoices()[steady.slot];
+  assert.ok(voice.filt.frequency.value <= 2400 && voice.filt.Q.value <= 0.5, "no 12 kHz resonant hiss");
+});

@@ -662,6 +662,7 @@ test("writeFailed() names a failed write until that key is written durably again
 // first write, and failed localStorage writes give Career no storage event.
 function loadCareerMirrored(options = {}) {
   const h = loadMirrored(options);
+  h.ctx.Blob = Blob; // CareerBackup measures UTF-8 file bytes with the browser Blob API.
   h.ctx.Teams = {
     LIST: [{ id: "haas", tier: 4, drivers: [
       { name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 },
@@ -687,7 +688,7 @@ test("an explicit backup import before mirror restore survives Career.load migra
   h.Career.load();
   const result = h.CareerBackup.apply({ format: h.CareerBackup.FORMAT,
     slots: [{ flavour: "driver", i: 0, data: JSON.parse(savedCareer(300)) }] });
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(h.Career.data().money, 300);
   await h.store.mirror.ready;
   await h.store.mirrorFlush();

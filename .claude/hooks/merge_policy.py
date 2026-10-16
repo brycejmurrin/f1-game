@@ -7,8 +7,7 @@ shellparse.gh_issues), so the two doors refuse with the same words
 """
 import json
 
-GATE = ("run `node tools/ci/ready-gate.mjs --pr <n>` (must exit 0 on the tip) and `node tools/ci/ready-full-cap.mjs` "
-        "(must find a free full-tier slot) first")
+GATE = "run `node tools/ci/ready-gate.mjs --pr <n>` (must exit 0 on the tip) first"
 DENY_METHOD = ("MERGE-COMMIT-ONLY (AGENTS.md §Concurrent PRs): every PR lands as a merge commit; "
                "use the merge method, never squash or rebase.")
 ASK_MERGE = ("Only Merge Desk arms auto-merge and only Merge Desk / Grok Bot merge (AGENTS.md "

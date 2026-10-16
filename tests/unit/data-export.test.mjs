@@ -400,3 +400,32 @@ test("a failed OpenF1 response leaves Download disabled and records the error", 
   assert.equal(out.download.textContent, "Download");
   assert.match(out.status, /ERROR: not found/);
 });
+
+for (const defect of ["start", "end", "middle"]) {
+  test(`export rejects a timestamp-${defect} partial trace despite sufficient samples`, async () => {
+    const out = await runExport(openF1Fetch((url) => {
+      if (!url.includes("/location")) return;
+      const rows = openF1Fixture(url);
+      return { body: rows.filter((_, i) => defect === "start" ? i >= 38 :
+        defect === "end" ? i < 102 : i < 45 || i >= 83) };
+    }));
+    const parsed = JSON.parse(jsonFiles(unzip(await out.blob.arrayBuffer()))[0].data.toString("utf8"));
+    assert.deepEqual(parsed.circuits, {});
+  });
+}
+
+test("export tries the next driver after a partial trace, independent of coordinate scale", async () => {
+  const out = await runExport(openF1Fetch((url) => {
+    if (!url.includes("/location")) return;
+    const rows = openF1Fixture(url);
+    return { body: new URL(url).searchParams.get("driver_number") === "1" ? rows.slice(38) :
+      rows.map((p) => ({ ...p, x: p.x * 10, y: p.y * 10 })) };
+  }));
+  const parsed = JSON.parse(jsonFiles(unzip(await out.blob.arrayBuffer()))[0].data.toString("utf8"));
+  assert.ok(Object.keys(parsed.circuits).length > 0);
+  const rows = openF1Fixture("https://api.openf1.org/v1/location");
+  for (const circuit of Object.values(parsed.circuits)) {
+    assert.deepEqual(circuit.sf, [rows[0].x * 10, rows[0].y * 10]);
+    assert.equal(circuit.nLoc, rows.length);
+  }
+});
