@@ -79,7 +79,7 @@ function load(hooks = {}) {
     },
     postLimits() {},
   };
-  for (const f of ["js/core/mat4.js", "js/physics/contact-geometry.js", "js/physics/wall-clamp.js"]) {
+  for (const f of ["js/core/mat4.js", "js/physics/contact-geometry.js", "js/physics/wall-end-face.js", "js/physics/wall-clamp.js"]) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return {

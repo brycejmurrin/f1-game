@@ -1150,6 +1150,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/wait-for.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/wall-clamp.test.mjs",
+  "tests/unit/wall-end-face-vm.test.mjs",
   // The falling rain follows WETNESS through a weather arc: shown at 0.25, the
   // storm tier and rain loop at 0.72, hidden again when a drying arc drops below
   // 0.25 — six arcs sampled at 10 points each. VM-executed weather-arc.js, ~1 s.
