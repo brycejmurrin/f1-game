@@ -384,6 +384,85 @@ function beforeQualifying(season) {
   return copy;
 }
 
+function scoredWeekend({ sprint = true, completedLaps = 1, seedBeforeExport = false, previousRound = false } = {}) {
+  const h = loadHarness();
+  vm.runInContext(src("js/race/race-control.js"), h.ctx);
+  h.SeasonCal.engage("season");
+  const season = h.SeasonCal.applyConfig({ trackIds: ["t0", "t1"], sprint, sprintIds: ["t0", "t1"], laps: 10 }).season;
+  const cars = [
+    { driverId: "haas:0", team: { id: "haas" }, code: "YOU", human: true, retired: true, lap: 1 },
+    { driverId: "haas:1", team: { id: "haas" }, code: "BBB", retired: false, lap: completedLaps + 1 },
+  ];
+  if (previousRound) {
+    const finishers = cars.map(car => ({ ...car, retired: false, finished: true }));
+    if (sprint) assert.equal(h.SeasonCal.award(season, finishers, null), "sprint");
+    assert.equal(h.SeasonCal.award(season, finishers, null), "race");
+  }
+  if (seedBeforeExport) h.SeasonCal.luckSeed(season, 77);
+  const envelope = JSON.parse(h.CareerBackup.serialize(h.CareerBackup.build()));
+  h.SeasonCal.luckSeed(season, 77);
+  const run = h.ctx.RaceControl.shortRun(cars, 3);
+  assert.equal(h.SeasonCal.award(season, cars, null, run), sprint ? "sprint" : "race");
+  assert.equal(h.SeasonCal.save(season).ok, true);
+  return { h, envelope, season };
+}
+
+test("older backup keeps the Grand Prix stage after a zero-point sprint", () => {
+  for (const sprint of [true, "rounds"]) for (const seedBeforeExport of [false, true]) for (const previousRound of [false, true]) {
+    const { h, envelope, season } = scoredWeekend({ sprint, seedBeforeExport, previousRound });
+    const total = points => Object.values(points).reduce((sum, pts) => sum + pts, 0);
+    assert.equal(total(season.pts), total(envelope.season.pts));
+    assert.equal(season.round, previousRound ? 1 : 0);
+    assert.equal(h.SeasonCal.stage(season), "race");
+    const revision = h.store.keyRevision("season");
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
+    const result = h.CareerBackup.apply(envelope);
+    assert.equal(result.ok, true);
+    assert.equal(result.applied.includes("season"), false);
+    assert.equal(h.store.keyRevision("season"), revision);
+    assert.equal(h.SeasonCal.stage(h.SeasonCal.load()), "race");
+  }
+});
+
+test("sprint-stage preservation keeps paid-sprint and zero-point Grand Prix protection", () => {
+  for (const options of [{ completedLaps: 2 }, { sprint: false }]) {
+    const { h, envelope } = scoredWeekend(options);
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: keep newer local progress"));
+    assert.equal(h.CareerBackup.apply(envelope).applied.includes("season"), false);
+  }
+});
+
+test("sprint-stage protection does not retain an unrelated weekend or replace incoming progress", () => {
+  const changes = [
+    ["another championship seed", (local, incoming) => { incoming.seed = 99; }],
+    ["missing local seed", local => { delete local.seed; }],
+    ["invalid local seed", local => { local.seed = "77"; }],
+    ["changed calendar", (local, incoming) => { incoming.config.trackIds = ["t0", "t2"]; }],
+    ["changed rules", (local, incoming) => { incoming.config.laps = 5; }],
+    ["different round", (local, incoming) => { incoming.round = 1; }],
+    ["different driver points", (local, incoming) => { incoming.pts["haas:0"] = 1; }],
+    ["different team points", (local, incoming) => { incoming.teamPts.haas = 1; }],
+    ["different countback", (local, incoming) => { incoming.finishes["haas:0"] = [1]; }],
+    ["different round ledger", (local, incoming) => { incoming.roundPts["haas:0"] = [1]; }],
+    ["different driver identity", (local, incoming) => { incoming.driverCodes["haas:0"] = "OTHER"; }],
+    ["incoming GP stage", (local, incoming) => { incoming.stage = "race"; }],
+    ["non-sprint round", (local, incoming) => {
+      local.config.sprint = incoming.config.sprint = "rounds";
+      local.config.sprintIds = incoming.config.sprintIds = ["t1"];
+    }],
+  ];
+  for (const [name, change] of changes) {
+    const { h, envelope, season } = scoredWeekend({ seedBeforeExport: true });
+    season.config = JSON.parse(JSON.stringify(season.config));
+    change(season, envelope.season);
+    h.SeasonCal.save(season);
+    assert.ok(h.CareerBackup.preview(envelope).extras.includes("Standalone season: restore backup progress"), name);
+    const result = h.CareerBackup.apply(envelope);
+    assert.equal(result.ok, true, name);
+    assert.equal(result.applied.includes("season"), true, name);
+  }
+});
+
 test("older backup preserves completed local qualifying, including the first racing seed", () => {
   for (const seed of [undefined, 77]) {
     const h = loadHarness(), weekend = qualifyingWeekend();
@@ -853,7 +932,7 @@ function bootBackupUi(options = {}) {
     DriverRatings: { get: () => ({ pace: 70, craft: 60 }), AXES: ["pace"] },
     Parts: { CATALOG: [], getCost: () => 0 },
     Tracks: { SEASON: [{ name: "Bahrain", country: "BHR" }] },
-    GameStore: { seasonDriverId: (t, i) => t + ":" + i },
+    GameStore: { seasonDriverId: (t, i) => t + ":" + i, store: options.store },
     SeasonCal: { hasProgress: () => false, rounds: () => 24, load: () => null },
     Reliability: { REASONS: ["engine"], TIER_RISK: [0.02] },
     PhysicsConsts: { DIFF: { EASY: 1 } },
@@ -1351,6 +1430,56 @@ test("C8: a restored standalone season re-arms SeasonCal, so its next save is no
   assert.equal(JSON.parse(h.disk.get("apex26.season")).round, 4);
   const res = h.SeasonCal.save(stale);
   assert.notEqual(res.reason, "conflict", "SeasonCal still holds the pre-import revision");
+});
+
+// Recovery exports deliberately restore only a reviewed destination, with the
+// same revision/durability gates as ordinary backups; never adopt its slot.
+test('portable recovery adapter reviews one chosen slot, restores offline, and leaves selection alone', () => {
+  const h = loadHarness();
+  const raw = { format: 'apex26-recovery-v1', career: save({money:123}), season: {round:2,pts:{'haas:0':25}}, persistence:{durable:false,reason:'quota'} };
+  const before=Array.from(h.disk.entries()), original=JSON.stringify(raw);
+  const adapted=h.CareerBackup.recoveryEnvelope(raw,{flavour:'driver',i:2});assert.equal(adapted.ok,true);
+  const preview=h.CareerBackup.preview(adapted.envelope);assert.equal(preview.slots[0].i,2);
+  assert.deepEqual(Array.from(h.disk.entries()),before);assert.equal(JSON.stringify(raw),original);
+  const selected=h.store.get('careerSlot',null);
+  const result=h.CareerBackup.apply(adapted.envelope,{recovery:true,expectedRevisions:{'driver:2':h.CareerBackup.revisionOf('driver',2)},expectedSeasonRevision:h.store.keyRevision('season')});
+  assert.equal(result.ok,true);assert.equal(result.durable,true);assert.equal(h.store.get('career.driver.2').money,123);assert.equal(h.store.get('season').round,2);assert.equal(h.store.get('careerSlot',null),selected);
+});
+test('recovery future, unknown or lossy calendars and malformed files are refused without changing raw or disk',()=>{
+  const h=loadHarness(),target={flavour:'driver',i:1};
+  const cases=[{format:'apex26-recovery-v2',career:save()}, {format:'apex26-recovery-v1',career:save({v:999})}, {format:'apex26-recovery-v1',career:save({season:{round:1,config:{trackIds:['removed']}}})}, {format:'apex26-recovery-v1',season:{round:1,config:{trackIds:['t0','t0']}}}, {format:'apex26-recovery-v1',season:{round:-1}}, {format:'apex26-recovery-v1',season:{round:1,futureRules:{}}}, {format:'apex26-recovery-v1',career:save({flavour:'myteam'})}];
+  for(const raw of cases){const before=JSON.stringify(raw),disk=Array.from(h.disk.entries());assert.equal(h.CareerBackup.recoveryEnvelope(raw,target).ok,false);assert.equal(JSON.stringify(raw),before);assert.deepEqual(Array.from(h.disk.entries()),disk)}
+  assert.equal(h.CareerBackup.recoveryEnvelope('{',target).reason,'bad-json');assert.equal(h.CareerBackup.recoveryEnvelope('x'.repeat(h.CareerBackup.MAX_BYTES+1),target).reason,'too-large');
+});
+test('recovery checks standalone revision before any career write and preserves newer local season',()=>{
+ const h=loadHarness(),raw={format:'apex26-recovery-v1',career:save({money:111}),season:{round:2,pts:{}}};
+ const envelope=h.CareerBackup.recoveryEnvelope(raw,{flavour:'driver',i:1}).envelope;
+ const reviewed=h.store.keyRevision('season');h.store.set('season',{round:4,pts:{}});const before=Array.from(h.disk.entries());
+ const refused=h.CareerBackup.apply(envelope,{recovery:true,expectedSeasonRevision:reviewed});assert.equal(refused.reason,'conflict');assert.deepEqual(Array.from(h.disk.entries()),before);
+ const result=h.CareerBackup.apply(envelope,{recovery:true,expectedSeasonRevision:h.store.keyRevision('season')});assert.equal(result.ok,true);assert.equal(h.store.get('season').round,4);
+});
+test('recovery qualifying uses the merged PR1517 validator without losing ownership stamps',()=>{
+ const h=loadHarness(),season={round:0,pts:{},qualiOrder:[{id:'haas:0',t:71.2,human:true}],qualiTrack:'t0',qualiMode:'season',qualiSeat:'haas:0|haas'};
+ const adapted=h.CareerBackup.recoveryEnvelope({format:'apex26-recovery-v1',season},{flavour:'driver',i:0});assert.equal(adapted.ok,true);assert.equal(h.CareerBackup.apply(adapted.envelope,{recovery:true}).ok,true);
+ const restored=h.store.get('season');for(const key of ['qualiOrder','qualiTrack','qualiMode','qualiSeat'])assert.deepEqual(JSON.parse(JSON.stringify(restored[key])),season[key]);
+});
+async function chooseRecovery(ui, raw) {
+ const button=ui.G.$('cr-left').querySelectorAll('[data-cr-act="import"]')[1];
+ ui.G.$('cr-left').replaceChildren();ui.G.$('cr-right').replaceChildren();button.onclick({stopPropagation(){}});
+ const picker=ui.dom.document.body.querySelector('input'),text=JSON.stringify(raw);
+ picker.files=[{size:text.length,text:async()=>text}];picker.onchange();await Promise.resolve();await Promise.resolve();
+}
+test('recovery file UI previews its chosen destination and Cancel leaves every save untouched',async()=>{
+ const h=loadHarness();h.Career.start({teamId:'haas',seed:1});
+ const ui=bootBackupUi({Career:h.Career,CareerBackup:h.CareerBackup,store:h.store});const before=Array.from(h.disk.entries());
+ await chooseRecovery(ui,{format:'apex26-recovery-v1',career:save({money:777,round:3}),season:{round:2,pts:{}}});
+ const notes=ui.G.$('cr-left').querySelectorAll('.cr-note').map(n=>n.textContent).join(' ');assert.match(notes,/Destination slot 2/);assert.match(notes,/Standalone season: current 0 rounds completed; recovery 2/);assert.deepEqual(Array.from(h.disk.entries()),before);
+ const cancel=ui.G.$('cr-left').querySelector('[data-cr-act="import-cancel"]');assert.ok(cancel);cancel.onclick({stopPropagation(){}});assert.deepEqual(Array.from(h.disk.entries()),before);
+});
+test('recovery file UI confirms only its reviewed card and reports durable completion',async()=>{
+ const h=loadHarness();h.Career.start({teamId:'haas',seed:1});const ui=bootBackupUi({Career:h.Career,CareerBackup:h.CareerBackup,store:h.store});
+ await chooseRecovery(ui,{format:'apex26-recovery-v1',career:save({money:777})});ui.G.$('cr-left').querySelectorAll('[data-cr-act="import"]')[1].onclick({stopPropagation(){}});
+ assert.equal(h.store.get('career.driver.1').money,777);assert.notEqual(h.store.get('career.driver.0').money,777);assert.equal(ui.notices.at(-1),'CAREER RESTORED');
 });
 
 for (const flavour of ["driver", "myteam"]) for (let i = 0; i < 3; i++) {

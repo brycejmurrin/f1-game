@@ -115,12 +115,13 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/extract-module.mjs** | Reorg helper for `game.js` extractions: free-reference analysis of a line range, rewritten against `G.<name>` (`--out`). | slim-bloat |
 | **check/font-digits.py** | Measure every shipped font's DIGIT ADVANCES and OpenType figure features | — |
 | **check/lifecycle-census.mjs** | Offline VM lifecycle census: typed resource snapshots and diffs across entry, reset, cancellation and failed boot. | check-changes |
+| **check/lockup-bench.mjs** | Straight-line brake sweep: peak axFracF / afF, wheelLock, flat-spot growth. | tune-physics |
 | **check/merge-hygiene.mjs** | Keep ratchets.json + groups.json one-entry-per-line and stably sorted; `--check` (default) / `--fix`. | check-changes |
 | **check/occlusion-estimate.mjs** | How much would occlusion culling save? Exact software visibility per 72 m cell, no GPU. | renderer-debug |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
-| **check/ratchets.mjs** | Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update`, `--json`, `--base <ref>` (names raises). | — |
+| **check/ratchets.mjs** | Size ratchets: ratchets.json + per-branch ratchets.d/ deltas. `--check`, `--update`, `--fold`, `--json`, `--base <ref>`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/skill-routing-eval.py** | Routes realistic requests through the REAL skill set via `claude -p` and scores which skill fired (correct/wrong/none). | agent-config |
@@ -142,7 +143,9 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/bake-flyby.mjs** | Bakes a copied `window.FlybyShots = [...]` blob into js/camera/flyby-seq.js's DEFAULT shot list. | playwright-probe |
 | **gen/garage-defaults.mjs** | Apply an exported GARAGE file to the shipped defaults in `js/data/garage-defaults.js`; `--check` reports drift. | — |
 | **gen/gen-arch-table.mjs** | Generates the module index block of `docs/ARCHITECTURE.md` from the manifest + each file's header; `--check` drift. | check-changes |
+| **gen/gen-changelog.mjs** | Validates `docs/changelog.d` fragments (`--check`); `--fold` writes them into `CHANGELOG.md` under the build. | check-changes |
 | **gen/gen-circuit-meta.mjs** | Extracts circuit picker metadata into js/track/circuit-meta.js (LAZY_CIRCUIT hydrates). | check-changes |
+| **gen/gen-flags-table.mjs** | Regenerates the DevFlags table in `docs/DEBUG-HOOKS.md` from `js/core/dev-flags.js`; `--check`. | check-changes |
 | **gen/gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
 | **gen/gen-ladder-figures.mjs** | Prints the gate-ladder sizes (unit files per rung) from tests/groups.json; --json / --table. Writes nothing. | check-changes |
 | **gen/gen-lib.mjs** | Shared writer for the `gen-*.mjs` generators: `--check` vs write, marker-block replacement. | check-changes |
@@ -219,6 +222,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | renderer-debug |
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
+| **gfx/knob-ab.mjs** | Visual knob A/B: same frame with a lightTune knob ON twice (noise floor) and OFF; fails unless ON vs OFF beats noise. | renderer-debug |
 | **gfx/mem-census.mjs** | Memory census: heap after GC, live tracks, three render objects and decoded audio per track load (picker or race path). | mcp-probe / check-changes |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
@@ -291,6 +295,12 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 |---|---|---|
 | **ui/circuit-axis.mjs** | The `--circuits` axis for the two menu screens that draw a circuit (#select preview, #track-detail) in the fit tools. | survey-ui-matrix |
 | **ui/css-play.mjs** | One-screen CSS edit loop: host the tree, open a menu, dump structured DOM, hot-swap a stylesheet, screenshot. | css-play |
+| **ui/explorer.mjs** | UI exploration: missions, navigation atlas, filmstrips, phone/fault/a11y probes, replay reduction, scene reports. | survey-ui-matrix |
+| **ui/explorer/browser.mjs** | UI explorer browser adapter: real actions, bounded DOM evidence, fault injection and Chromium traces. | — |
+| **ui/explorer/catalog.mjs** | UI explorer mission recipes and independent-browser task briefs. | — |
+| **ui/explorer/core.mjs** | Validated UI replay data, semantic atlas states and bounded delta debugging without executable input. | — |
+| **ui/explorer/modes.mjs** | Eight UI exploration modes sharing bounded evidence, replay and a real navigation graph. | — |
+| **ui/explorer/report.mjs** | Offline UI explorer HTML evidence report with filters, linked state graph and safe local artifacts. | — |
 | **ui/fit-audit.mjs** | The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll. | ui-menu-a11y |
 | **ui/layout-audit.mjs** | ONE CLI for menu geometry + PNG/DOM capture: clip/tap/overflow matrix, `--gallery`, `--screen=ID`, `--survey`. | survey-ui-matrix |
 | **ui/menu-capture.mjs** | Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`. | survey-ui-matrix |
@@ -314,6 +324,7 @@ The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign 
 | **lighting/campaign/tune.mjs** | lighting-campaign: candidate values, sensitivity classification, and the minimal per-condition tune profile. | lighting-tuner |
 | **lighting/lighting-tuner-sweep.mjs** | Does each LIGHTING TUNER slider change the image? Sharded, resumable, paired A→B→A' sampling per (condition, knob). | lighting-tuner |
 | **lighting/look-survey-sheet.py** | 4×5 tod×weather contact sheet from `artifacts/lighting/shots/<id>/` → `docs/look-survey/<id>_grid.png`; `--ready`. | mcp-probe |
+| **lighting/pit-canopy-evidence.mjs** | Bahrain pit night A/B: canopy lamps on vs patched off; PNGs + lightState under artifacts/pit-canopy-night/. | — |
 | **lighting/preset-validation.mjs** | Shared lighting snapshot/proposal validation: profile keys, knob bounds and slider grid; deterministic change receipts. | lighting-tuner |
 | **lighting/slider-effect-live.mjs** | The `--live` harness imported by `slider-effect.mjs`: chase+park recipes, restores the pre-push live value on exit. | lighting-tuner |
 | **lighting/slider-effect-view.py** | Visual filter for a slider A/B: `filter.png`, `heat.png`, `sheet.png`, MAD/p99/max stats. | lighting-tuner |
@@ -395,6 +406,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/behind-ship.mjs** | Print how many commits a PR head is behind the ship branch; warn over 10, never fail. |
 | **ci/ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |
 | **ci/ci-pr-base.sh** | The base a pull_request checkout diffs against: the test commit's FIRST PARENT, else the fallback given. |
+| **ci/ci-rerun.mjs** | Guarded CI re-run: refuses a superseded run (head_sha ≠ PR head), a live run, or a second re-run. |
 | **ci/ci-resolve-before.sh** | Resolves the selected-specs CI base (`EVENT`/`PUSH_BEFORE`/`PR_BASE`); a Pages call with no base selects all. |
 | **ci/ci-select-specs-step.sh** | The CI "select specs for this change" step body: base via `ci-resolve-before.sh`, then `select-specs.mjs --since`. |
 | **ci/ci-verdict.mjs** | Aggregate GitHub Actions `needs` results into one required-check verdict. |
@@ -419,7 +431,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/select-budget.mjs** | Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else 7.5 s/test (llvmpipe). |
 | **ci/select-recall.mjs** | Would the selector have caught it? Replays `select-specs` against real past regressions and asserts recall. |
 | **ci/select-specs.mjs** | Per-SPEC change-aware selection for the blocking CI job: cuts at `select-budget` capacity and names every skip. |
-| **ci/selected-gate-verdict.mjs** | Selected-specs gate verdict: cancel/red with clean junit is infra-retry, not a hard fail. |
+| **ci/selected-gate-verdict.mjs** | Selected-specs gate verdict: failed or cancelled shards require a successful rerun. |
 | **ci/spec-staleness.mjs** | Replays select-specs over recent history to rank tests/specs/*.spec.js by how long since CI last selected one. |
 | **ci/spec-timings.mjs** | Merges junit/reporter durations into `tests/data/spec-timings.json` (bounded, per env); `--check` flags 2x growth. |
 | **ci/test-bg.mjs** | Starts test groups in the BACKGROUND and hands back a log to tail; sequential by default (`--parallel`, `--wait`). |
@@ -430,6 +442,7 @@ Electron desktop packaging: stage the Pages allow-list into a site folder the sh
 | **ci/tooling-fast.mjs** | Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list. |
 | **ci/verify-change.mjs** | ONE command: fast gate (verify-track, graph-parity, tooling-fast, shell check) + `test-bg` batches → one verdict. |
 | **lib/circuit-scope.cjs** | `scope(ids)` keeps the circuits APEX_CIRCUITS names (all when unset); audit `--all` and sweep loops read it. |
+| **lib/stale-rows.mjs** | Which stale baseline rows a fleet sweep fails: all locally, a PR's own circuits on a PR, none on the train (#2183). |
 
 ## Data files
 
@@ -440,7 +453,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
 | **gen/voice-corpus.json** | `gen/voice-corpus.mjs`, `gen/voicepack.mjs`, `tests/unit/voice-pack.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
-| **track/clip-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
+| **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |
 | **track/osm-circuits.json** | `gen/bake-elevation.mjs`, `manifest.cjs`, `tests/specs/f1-track-accuracy.spec.js`, `tests/unit/circuit-def-fields.test.mjs`, `tests/unit/shared-track-foundation-characterization.test.cjs`, `track/stitch-osm-ring.mjs` |

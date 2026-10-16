@@ -2296,11 +2296,8 @@ jobs:
       - name: Mesa llvmpipe + Xvfb
         if: inputs.gl != 'swiftshader'
         uses: ./.github/actions/mesa-xvfb
-      # RUN-STEP MARKER (15-F2, 2026-10-10). selected-verdict reads "failed or
-      # cancelled shard, no junit failures" as infra noise ONLY for a shard that
-      # never got here (checkout / install / apt died). A shard that did reach
-      # the run step and left no junit with testcases (cap kill, crash, a spec
-      # that fails to load) is a red: this marker is how the verdict tells.
+      # Marker and JUnit artifacts diagnose which planned shards ran. A failed
+      # or cancelled shard remains red even when it failed before this marker.
       - name: Mark the run step reached
         run: mkdir -p .selected-started && echo "${{ matrix.name }}" > .selected-started/marker.txt
       - name: Upload the run-step marker
@@ -2439,20 +2436,12 @@ jobs:
     # on the same sha seconds in — reported `selected specs cancelled` as a
     # RED verdict on the superseded run (#510). A cancelled run has no verdict.
     #
-    # CANCEL + CLEAN JUNIT IS INFRA-RETRY, NOT A HARD FAIL (2026-10-06). A
-    # matrix shard killed by its job cap after `= run passed` (PR #1109 run
-    # 37493213168: oversize-image-grade-visual-1of2 during junit upload)
-    # reports `needs.selected.result=cancelled` while sibling junit has zero
-    # failures. tools/ci/selected-gate-verdict.mjs reads every shard's junit
-    # BEFORE deciding: failures in junit stay a hard fail; clean junit marks
-    # infra-retry and exits 0. ci-verdict defers `selected` to this job when
-    # this job is green, so the aggregator does not re-fail on the rollup.
+    # A failed/cancelled selected matrix is red, including setup failures before
+    # its marker. Clean sibling JUnit cannot prove every planned test ran.
     if: ${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci')) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (!cancelled() && (github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '')) }}
     steps:
-      # Junit must land BEFORE the verdict: cancel/red with clean junit is
-      # infra-retry (selected-gate-verdict.mjs). Carry-forward still uses the
-      # same staged tree. Checkout is required for the decision too (not only
-      # carry-forward), so it is not continue-on-error when selected ran.
+      # Collect JUnit before the verdict for diagnostics and carry-forward.
+      # Missing execution evidence never authorizes a failed selected matrix.
       - name: Checkout the gate verdict scripts
         if: ${{ needs.selected.result != 'skipped' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

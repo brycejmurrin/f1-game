@@ -125,6 +125,8 @@ const expectedSha = "a".repeat(40);
 const goodHtml = `<meta name="apex-build" content="4242"><meta name="apex-sha" content="${expectedSha}">`;
 
 function pollFixture(attempts) {
+  // scratch/ is gitignored, so a fresh CI checkout has none unless an earlier test in the same shard made it.
+  fs.mkdirSync(path.join(ROOT, "scratch"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "scratch", "live-poll-"));
   try {
     fs.writeFileSync(path.join(dir, "attempts.json"), JSON.stringify(attempts));

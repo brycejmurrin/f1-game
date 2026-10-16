@@ -293,3 +293,56 @@ test("probe-mcp help documents the persistent daemon commands", () => {
   assert.match(r.stdout, /test-bg\.mjs|Playwright/);
 });
 
+
+// The pinned 1.7 catalog scopes navigate/evaluate to the selected page; newer
+// catalogs declare pageId explicitly. Exercise the real backend, not mock mode.
+test("ChromeBackend follows each tool schema when supplying pageId", () => {
+  const code = `import importlib.util, os
+spec = importlib.util.spec_from_file_location("probe", ${JSON.stringify(PROBE)})
+p = importlib.util.module_from_spec(spec); spec.loader.exec_module(p)
+p._mock = lambda: False
+text = lambda value: {"content": [{"type": "text", "text": value}]}
+class Client:
+    def __init__(self, scoped):
+        self.scoped = scoped; self.calls = []
+    def call(self, name, args):
+        self.calls.append((name, dict(args)))
+        if name in ("navigate_page", "evaluate_script") and not self.scoped:
+            assert "pageId" not in args, "selected-page tool rejects injected pageId"
+        if name == "list_pages": return text("0: about:blank\\n4: game [selected]")
+        if name == "new_page": return text("8: new [selected]")
+        return text("ok")
+for scoped in (False, True):
+    b = p.ChromeBackend(use_daemon=False); c = b._client = Client(scoped)
+    # These old navigate/evaluate properties match the captured 1.7 tools/list;
+    # the local/new-server variant additionally declares pageId.
+    shapes = {"navigate_page": {"url": {}, "type": {}}, "evaluate_script": {"function": {}},
+              "list_pages": {}, "new_page": {"url": {}}, "select_page": {"pageId": {}}, "close_page": {"pageId": {}}}
+    if scoped:
+        for name in ("navigate_page", "evaluate_script"): shapes[name]["pageId"] = {"type": "number"}
+    b._tools = [{"name": name, "inputSchema": {"type": "object", "properties": props}} for name, props in shapes.items()]
+    original = {"url": "about:blank"}
+    b.call("navigate_page", original)
+    assert original == {"url": "about:blank"}, "caller args changed"
+    assert c.calls[-1][1] == ({"url": "about:blank", "type": "url", "pageId": 4} if scoped else {"url": "about:blank", "type": "url"})
+    assert [n for n, a in c.calls] == (["list_pages", "navigate_page"] if scoped else ["navigate_page"])
+    b.call("evaluate_script", {"function": "() => 1"})
+    assert ("pageId" in c.calls[-1][1]) == scoped
+    b.call("list_pages", {}); assert c.calls[-1] == ("list_pages", {})
+    b.call("new_page", {"url": "about:blank"}); assert c.calls[-1][1] == {"url": "about:blank"}
+    if scoped:
+        b.call("evaluate_script", {"function": "() => 8"}); assert c.calls[-1][1]["pageId"] == 8
+    b.call("select_page", {"pageId": 12}); assert c.calls[-1] == ("select_page", {"pageId": 12})
+    if scoped:
+        b.call("evaluate_script", {"function": "() => 2", "pageId": 99}); assert c.calls[-1][1]["pageId"] == 99
+        b.call("evaluate_script", {"function": "() => 3"}); assert c.calls[-1][1]["pageId"] == 12
+    b.call("close_page", {"pageId": 12}); assert b._selected_page_id is None
+    if scoped:
+        c.calls.clear(); b.call("evaluate_script", {"function": "() => 4"})
+        assert c.calls == [("list_pages", {}), ("evaluate_script", {"function": "() => 4", "pageId": 4})]
+print("schema compatibility passed")
+`;
+  const r = spawnSync("python3", ["-c", code], { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /schema compatibility passed/);
+});

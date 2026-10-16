@@ -334,6 +334,17 @@ window.TopModal = (function () {
   function wireLayer(el) {
     if (!el || wired.has(el) || typeof el.showModal === "function") return;
     wired.add(el);
+    // Tabbing past a non-dialog's last control can focus browser chrome,
+    // which emits no document focus event. Wrap at the boundary before that happens.
+    el.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab" || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (!window.UiLayers || window.UiLayers.top() !== el) return;
+      const stops = Array.from(el.querySelectorAll(focusableSel())).filter((n) => usable(n) && n.tabIndex >= 0);
+      const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
+      if (!edge || document.activeElement !== edge) return;
+      e.preventDefault();
+      focusQuiet(e.shiftKey ? stops[stops.length - 1] : stops[0]);
+    });
     new MutationObserver(() => {
       // Hide: un-inert the title BEFORE onLayerHide refocuses the opener there
       // (focus() on an inert node is a no-op). Show: record the opener first —

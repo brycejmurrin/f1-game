@@ -198,6 +198,7 @@ export const RULES = [
   [/^js\/audio\/announcer\.js/, ["audio-unit", "ui"], "the pre-race announcer: its own script+voice suite, and the loading screen and settings sheet that drive it"],
   [/^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
   [/^js\/audio\/rivals\.js/, ["audio-unit"], "rival-audio.test.mjs and the pass-by voice pool"],
+  [/^js\/audio\/crowd\.js/, ["audio-unit"], "trackside crowd ambience bed + silence gates"],
   [/^js\/audio\/engine\.js/, ["audio-unit"], "GameAudio init attach of the rival pass-by pool"],
   [/^js\/audio\/ers-layer\.js/, ["audio-unit"], "MGU-K electric deploy/harvest + overtake/boost cue"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
@@ -208,6 +209,7 @@ export const RULES = [
   [/^tests\/data\/perf-frametime-baseline\.json/, ["perf-frametime"], "committed frametime baseline — regen via APEX_UPDATE_BASELINE"],
   [/^js\/perf\//, ["ui"], "the quality preset, renderer picker and the overlays — DOM screens"],
   [/^js\/input\//, ["input"], ""],
+  [/^js\/input\/controller-profiles\.js$/, ["steering-unit"], "controller-profiles.test.mjs — per-device maps, legacy migration and input-owner release"],
   // PHONE AS CONTROLLER: its node suite (phone-pad.test.mjs) is in steering-unit,
   // and the roll math it shares with input.js is asserted there too.
   [/^js\/input\/(phone-pad|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],

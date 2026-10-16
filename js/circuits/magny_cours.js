@@ -22,6 +22,12 @@
     dressingExclusions: [
       { kinds: ["foliage"], s0: 0.93, s1: 0.08 },
       { kind: "foliage", s0: 0.40, s1: 0.50 },
+      // Vault stands (scenery vaultStand): Lycée 0.902-0.942 and Adelaide 0.556-0.606 (side -1),
+      // Estoril 0.152-0.194 (side +1).
+      // The generic roadside scatter put crowns through their back rows (clip 19 + 2 pairs).
+      { kind: "foliage", side: -1, s0: 0.895, s1: 0.95 },
+      { kind: "foliage", side: -1, s0: 0.55, s1: 0.64 },
+      { kind: "foliage", side: 1, s0: 0.148, s1: 0.20 },       // Estoril vault stand 0.152-0.194
     ],
     // Central-French farmland: soft, cool, slightly overcast light over green
     // fields — Magny-Cours never looked exotic and shouldn't here.

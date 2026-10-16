@@ -143,7 +143,7 @@ const RealReplay = (function () {
     for (const p of script.passes || []) if (p.t != null) out.push({ t: p.t, lap: p.lap, kind: "pass", num: p.by, over: p.over, pos: p.pos, text: code(p.by) + " PASSES " + code(p.over) + (p.pos ? " FOR P" + p.pos : "") });
     for (const d of script.drivers || []) {
       (d.pits || []).forEach((lap, i) => { const t = d.pitT && d.pitT[i]; if (t != null) { const c = compoundAfter(d, lap); out.push({ t, lap, kind: "pit", num: d.num, pos: d.pos, text: d.code + " PITS" + (c ? " · " + c : "") }); } });
-      if (d.dnf && !d.dns && d.outT != null) out.push({ t: d.outT, lap: (d.lapsDone | 0) + 1, kind: "out", num: d.num, text: d.code + " OUT" + (d.outWhere ? " · " + d.outWhere : "") });
+      if (d.dnf && !d.dns && !d.dsq && d.outT != null) out.push({ t: d.outT, lap: (d.lapsDone | 0) + 1, kind: "out", num: d.num, text: d.code + " OUT" + (d.outWhere ? " · " + d.outWhere : "") });
     }
     for (const w of script.cautions || []) {
       const cause = w.cause || (w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VIRTUAL SAFETY CAR");
@@ -246,7 +246,7 @@ const RealReplay = (function () {
       if (reel && reel.length) T = reel[0].t - LEAD_S;
       T = clamp(T, startT, duration);
       run = { script, cars, T, speed: o.rate > 0 ? o.rate : 1, paused: false, follow: null, reel, reelIdx: 0, list, fired: new Set(), fit: built.fit, finished: false, onKey: null, audio: null };
-      run.startT = startT; run.duration = duration; run.events = events;
+      run.startT = startT; run.duration = duration; run.events = events; run.onTimeline = o.onTimeline;
       run.savedCamera = G.camMode;
       const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : [];
       const auto = o.camera === "auto";   // the TV director cuts the shots (Broadcast)
@@ -254,6 +254,7 @@ const RealReplay = (function () {
       if (camera >= 0 && G.setCamMode) G.setCamMode(camera, { persist: false });
       // Pose before snapping: a mid-race start must frame the new position, not the grid.
       pose(true);
+      if (run.onTimeline) run.onTimeline(run.T);
       // Every car is a puppet — the seat too: the camera and HUD follow it, nobody drives it.
       let follow = null;
       for (const [c, f] of cars) if (f.tr && f.d && f.d.code === o.follow) follow = c;
@@ -330,7 +331,14 @@ const RealReplay = (function () {
     function seekTo(t, highlight) {
       if (!run || !Number.isFinite(t)) return;
       const T = clamp(t, run.startT, run.duration);
-      if (run.reel) { const i = run.reel.findIndex((h) => h.t + HOLD_S >= T); run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i; }
+      if (run.reel) {
+        // NEXT/PREV names its item: findIndex would land on an earlier one still in its hold, and its skip() rewinds.
+        const k = highlight ? run.reel.indexOf(highlight) : -1;
+        const i = k >= 0 ? k : run.reel.findIndex((h) => h.t + HOLD_S >= T);
+        run.reelIdx = i < 0 ? Math.max(0, run.reel.length - 1) : i;
+        // A scrub keeps its clock but cuts to the item ahead, so its event is on camera (#2196).
+        if (!highlight && i >= 0) highlight = run.reel[i];
+      }
       reposition(T, highlight, true);
     }
     // Scrubbing and reel cuts cross the same timeline boundary. Release all
@@ -342,6 +350,7 @@ const RealReplay = (function () {
       stopRadioClip();
       pose(true);
       if (G.raceT != null) G.raceT = Math.max(0, run.T);
+      if (run.onTimeline) run.onTimeline(run.T);
       if (bc) bc.resetTiming();
       if (highlight) {
         const c = carOfNum(highlight.num);
@@ -582,6 +591,7 @@ const RealReplay = (function () {
       if (run.paused) { for (const [c, f] of run.cars) if (f.tr && !c.retired) c.speed = 0; return; }
       if (G.state === "race") run.T += dt * run.speed;
       pose();
+      if (run.onTimeline) run.onTimeline(run.T);
       if (G.state !== "race") return;
       fire();
       if (bc) bc.tick(dt, bcState);
