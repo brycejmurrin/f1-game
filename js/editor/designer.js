@@ -856,9 +856,12 @@ const TrackDesigner = (function () {
     const tabs = el("div", "td-tabs"); tabs.setAttribute("role", "tablist");
     ui.tabDesign = tabBtn("DESIGN", "design"); ui.tabLib = tabBtn("MY CIRCUITS", "library"); ui.tabHow = tabBtn("HOW TO", "howto");
     tabs.append(ui.tabDesign, ui.tabLib, ui.tabHow);
-    ui.paneDesign = el("section", "td-pane"); ui.paneDesign.setAttribute("role", "tabpanel"); ui.paneDesign.dataset.pane = "design";
-    ui.paneLib = el("section", "td-pane"); ui.paneLib.setAttribute("role", "tabpanel"); ui.paneLib.dataset.pane = "library"; ui.paneLib.hidden = true;
-    ui.paneHow = el("section", "td-pane"); ui.paneHow.setAttribute("role", "tabpanel"); ui.paneHow.dataset.pane = "howto"; ui.paneHow.hidden = true;
+    ui.paneDesign = el("section", "td-pane"); ui.paneDesign.id = "td-pane-design"; ui.paneDesign.setAttribute("role", "tabpanel"); ui.paneDesign.dataset.pane = "design";
+    ui.paneLib = el("section", "td-pane"); ui.paneLib.id = "td-pane-library"; ui.paneLib.setAttribute("role", "tabpanel"); ui.paneLib.dataset.pane = "library"; ui.paneLib.hidden = true;
+    ui.paneHow = el("section", "td-pane"); ui.paneHow.id = "td-pane-howto"; ui.paneHow.setAttribute("role", "tabpanel"); ui.paneHow.dataset.pane = "howto"; ui.paneHow.hidden = true;
+    ui.paneDesign.setAttribute("aria-labelledby", "td-tab-design");
+    ui.paneLib.setAttribute("aria-labelledby", "td-tab-library");
+    ui.paneHow.setAttribute("aria-labelledby", "td-tab-howto");
     ui.paneHow.setAttribute("aria-label", "How to build a circuit");
     rail.append(tabs, ui.paneDesign, ui.paneLib, ui.paneHow);
     buildDesignPane(ui.paneDesign);
@@ -936,6 +939,8 @@ const TrackDesigner = (function () {
   function tabBtn(label, pane) {
     const b = btn(label, "sel-chip td-tab", () => showPane(pane));
     b.setAttribute("role", "tab");
+    b.id = "td-tab-" + pane;
+    b.setAttribute("aria-controls", "td-pane-" + pane);
     return b;
   }
   function showPane(pane) {

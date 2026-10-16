@@ -845,6 +845,16 @@ test("HOW TO: a third tab lists every HOWTO step, every input and the limits; th
   for (const t of tabs) assert.equal(t.getAttribute("role"), "tab");
   const [design, lib, how] = panes(b);
   assert.equal(how.dataset.pane, "howto"); assert.equal(how.getAttribute("role"), "tabpanel");
+  assert.deepEqual(tabs.map((t) => [t.id, t.getAttribute("aria-controls")]), [
+    ["td-tab-design", "td-pane-design"],
+    ["td-tab-library", "td-pane-library"],
+    ["td-tab-howto", "td-pane-howto"],
+  ], "tabs identify and control their panels");
+  assert.deepEqual([design, lib, how].map((p) => [p.id, p.getAttribute("aria-labelledby")]), [
+    ["td-pane-design", "td-tab-design"],
+    ["td-pane-library", "td-tab-library"],
+    ["td-pane-howto", "td-tab-howto"],
+  ], "panels are named by their owning tabs");
   assert.equal(how.hidden, true);
   tabs[2].click();
   assert.deepEqual([design.hidden, lib.hidden, how.hidden], [true, true, false]);
