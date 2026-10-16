@@ -174,6 +174,14 @@ test("Undo restores the last visual batch; current-screen preset preserves other
   studio.reset("screen"); assert.equal(values.homeScene, "photo"); assert.equal(values.uiTheme, "light");
 });
 
+test("HUD screen scope does not rewrite the global HUD profile", () => {
+  assert.equal(studioForScope().includes("hudProfile"), false);
+});
+
+function studioForScope() {
+  return load({ hudProfile: "minimal" }).studio.SCREEN_KEYS.hud;
+}
+
 test("Named profiles can be updated and deleted without changing the live visual state", () => {
   const { studio, values } = load(); studio.saveProfile("Desktop paddock"); studio.applyPreset("sunlight");
   studio.saveProfile("Sunlight desktop", "profile-1"); assert.equal(studio.profiles().length, 1);
@@ -356,4 +364,19 @@ test("mounted Studio exposes percentage units and explains system reduced motion
   studio.applySnapshot({ ...studio.snapshot(), uiScale: 125, hudScale: 90, motion: "reduce" });
   assert.equal(note.hidden, true); assert.equal(values.motion, "reduce");
   for (const input of ranges) assert.equal(input.getAttribute("aria-valuetext"), input.value + "%");
+});
+
+test("Studio range controls keep Undo working for keyboard adjustments", () => {
+  const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const { studio, values } = load({}, true, false, dom.document);
+  const descendants = el => [el, ...el.children.flatMap(descendants)];
+  const input = descendants(panel).find(el => el.getAttribute("aria-label") === "UI size");
+  assert.ok(input);
+  dom.dispatch(input, { type: "keydown", key: "ArrowRight" });
+  input.value = "125";
+  dom.dispatch(input, { type: "input" });
+  dom.dispatch(input, { type: "change" });
+  assert.equal(values.uiScale, 125);
+  assert.equal(studio.undo(), true);
+  assert.equal(values.uiScale, null, "Undo restores the unset shipped default after a keyboard edit");
 });

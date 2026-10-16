@@ -38,15 +38,25 @@ const Assets = (function () {
     if (_manifest !== null) return Promise.resolve(_manifest);
     // Material arrays and the first circuit's models can ask together. Cache
     // the pending request too, so they share both the fetch and its JSON parse.
-    if (!_manifestPromise) _manifestPromise = _fetchManifest().finally(() => { _manifestPromise = null; });
+    // Capture the generation: unload() may happen while the request is in
+    // flight, and an old response must not repopulate the next pack.
+    if (!_manifestPromise) {
+      const generation = _loadGeneration;
+      const request = _fetchManifest(generation);
+      const tracked = request.finally(() => {
+        if (_manifestPromise === tracked) _manifestPromise = null;
+      });
+      _manifestPromise = tracked;
+    }
     return _manifestPromise;
   }
 
-  async function _fetchManifest() {
+  async function _fetchManifest(generation) {
     try {
       const res = await fetch(MANIFEST);
       if (!res.ok) { _err = "no-pack"; return false; }
       const j = await res.json();
+      if (generation !== _loadGeneration) return false;
       if (!j || typeof j !== "object") { _err = "bad-manifest"; return false; }
       _manifest = j;
       return j;
@@ -58,10 +68,11 @@ const Assets = (function () {
 
   // ── material arrays ────────────────────────────────────────────────────────
 
-  async function _fetchStrip(file) {
+  async function _fetchStrip(file, generation) {
     const res = await fetch(PACK_DIR + file);
     if (!res.ok) throw new Error("fetch " + file);
     const blob = await res.blob();
+    if (generation !== _loadGeneration) return null;
     _bytes += blob.size;
     return blob;
   }
@@ -412,10 +423,10 @@ const Assets = (function () {
       // (normal = null, albedo still ships) — sharing the albedo's Promise.all
       // let a missing normal strip discard the whole pack (_tier "off").
       const [albedoBlob, normalBlob] = await Promise.all([
-        _fetchStrip(variant.albedo),
-        variant.normal ? _fetchStrip(variant.normal).catch(() => null) : null,
+        _fetchStrip(variant.albedo, generation),
+        variant.normal ? _fetchStrip(variant.normal, generation).catch(() => null) : null,
       ]);
-      if (generation !== _loadGeneration) return false;
+      if (generation !== _loadGeneration || !albedoBlob) return false;
       albedo = await _decodeStrip(albedoBlob, size, present);
       if (generation !== _loadGeneration) {
         _discardLoad(albedo, normal, albedoTex, normalTex);
@@ -504,6 +515,16 @@ const Assets = (function () {
     _loadGeneration++;
     _retried = true;   // an explicit off (__apex.assetLoad(false)) is never undone behind its back
     if (_gfx && _gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
+    // Drop all pack-owned CPU state as well as the GPU maps. In particular,
+    // model() promises can otherwise retain decoded Float32Arrays across a
+    // pack switch, and a late manifest response can make the old pack visible
+    // again after this explicit unload.
+    _manifest = null;
+    _manifestPromise = null;
+    _modelsPromise = null;
+    for (const id of Object.keys(_models)) delete _models[id];
+    for (const id of Object.keys(_modelPromises)) delete _modelPromises[id];
+    _bytes = 0;
     _uploaded = false;
     _tier = "off";
     _loadPromise = null;
@@ -573,23 +594,26 @@ const Assets = (function () {
   function model(id) {
     if (id in _models) return Promise.resolve(_models[id]);
     if (_modelPromises[id]) return _modelPromises[id];
-    _modelPromises[id] = (async () => {
+    const generation = _loadGeneration;
+    const promise = (async () => {
       try {
         const m = await manifest();
+        if (generation !== _loadGeneration) return null;
         const rec = m && m.models && m.models[id];
         if (!rec || !rec.file) { if (m) _models[id] = null; return null; }
         const res = await fetch(PACK_DIR + rec.file);
-        if (!res.ok) return null;
+        if (!res.ok || generation !== _loadGeneration) return null;
         const parsed = _parseModel(await res.arrayBuffer());
-        if (parsed) _models[id] = parsed;
+        if (parsed && generation === _loadGeneration) _models[id] = parsed;
         return parsed;
       } catch (_) {
         return null;
       } finally {
-        delete _modelPromises[id];
+        if (_modelPromises[id] === promise) delete _modelPromises[id];
       }
     })();
-    return _modelPromises[id];
+    _modelPromises[id] = promise;
+    return promise;
   }
 
   // Ids of every baked model in the pack (empty without a pack).

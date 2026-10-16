@@ -5,15 +5,16 @@ description: "Use for brycejmurrin/f1-game (Apex 26) scene reproduction, camera 
 
 # F1 Dev Tools
 
-Use the game's existing Apex tools and camera tuner. This plugin supplies a workflow and executable helpers, not a hosted game or a new renderer. All five workflows are described in [workflows.md](references/workflows.md).
+Use the game's existing Apex tools and camera tuner. This plugin supplies a workflow and executable helpers, not a hosted game or a new renderer. All five workflows are described in [workflows.md](references/workflows.md). The plugin advertises the checkout's three configured MCP servers; their names and commands remain owned by `.mcp.json`, `.cursor/mcp.json` and `.codex/config.toml`.
 
 ## Start
 
 1. Locate the requested `brycejmurrin/f1-game` checkout. Read its `AGENTS.md`, `docs/AGENT-SURFACE.md`, `docs/DEBUG-HOOKS.md` and applicable local skills. Check overlapping work before editing game source. Use the existing animation/camera skill for an implementation change.
-2. Query the existing `apex_status`, `apex_catalog` and `apex_doctor` tools, or from the checkout run `bash tools/mcp/apex-tools-mcp.sh call apex_status '{}'` (and likewise for catalog/doctor). A missing attached MCP is not a reason to rebuild it: preserve the repo's three-server catalog and use its documented CLI fallbacks.
-3. Serve the working checkout at localhost. Use one disposable browser profile and one browser process at a time. Read `.claude/skills/mcp-probe/SKILL.md` for live browser work or `playwright-probe` for batch capture. Prefer the available browser tools; use the repo harness when they are absent. Do not start a browser alongside a running Playwright suite.
-4. On the actual game page call `__apex.agentHelp()` once and establish page/build identity. Read `scripts/browser.js` from this skill and evaluate its source on that page. The helper creates `globalThis.F1Dev`; it does not modify game source. Keep the same page for multi-step probes.
-5. Save JSON and screenshots under the checkout's `artifacts/` or `scratch/`. Record commit, renderer, viewport, real versus synthetic replay data, and reduced-motion setting with each run. Do not store credentials or career saves in reports.
+2. If the checkout is local, run `bash tools/env/ensure-mcp-ready.sh` once before the first probe. This is idempotent and verifies the wrappers, MCP smoke path and Chromium discovery; add `--strict` when missing local dependencies should fail the workflow. It cannot attach host MCPs or change trust/global settings.
+3. Query the existing `apex-tools` MCP (`apex_status`, `apex_catalog` and `apex_doctor`), or from the checkout run `bash tools/mcp/apex-tools-mcp.sh call apex_status '{}'` (and likewise for catalog/doctor). A missing attached MCP is not a reason to rebuild it: preserve the repo's three-server catalog and use its documented CLI fallbacks.
+4. Serve the working checkout at localhost. Use `playwright-official` for navigation, DOM checks and screenshots, or `chrome-devtools` for live console, network, heap and performance inspection. Use one browser MCP, one disposable browser profile and one browser process at a time. Read `.claude/skills/mcp-probe/SKILL.md` for live browser work or `playwright-probe` for batch capture. Prefer the available browser tools; use the repo harness when they are absent. Do not start a browser alongside a running Playwright suite.
+5. On the actual game page call `__apex.agentHelp()` once and establish page/build identity. Read `scripts/browser.js` from this skill and evaluate its source on that page. The helper creates `globalThis.F1Dev`; it does not modify game source. Keep the same page for multi-step probes.
+6. Save JSON and screenshots under the checkout's `artifacts/` or `scratch/`. Record commit, renderer, viewport, real versus synthetic replay data, and reduced-motion setting with each run. Do not store credentials or career saves in reports. If a browser MCP is unavailable, use the documented local Playwright/Chrome harness; do not start a duplicate MCP server.
 
 ## Choose a workflow
 

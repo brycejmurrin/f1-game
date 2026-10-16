@@ -1284,6 +1284,8 @@ what it covers.
 
 | Spec | What it covers |
 |---|---|
+| `followup-platform.test.mjs` | Native install guidance, desktop single-instance/crash recovery and bounded mobile file/share handling; tooling-fast, desktop-unit and mobile-unit. |
+| `followup-update-check.test.mjs` | Hung update fetch/body recovery, abort fallback and stale-result isolation; tooling-fast and lifecycle-unit. |
 | `player-tools-backup.test.mjs` | Real SettingsExport and ControllerProfiles/SetupPresets: authored defaults, ALL/CHANGED profile round-trips, bounded controller maps, strict named-setup imports, malformed-file preservation, and the reload-based import contract. |
 | `phone-input-improvements.test.mjs` | Age-bounded phone actions, semantic activation, pointer release, input ACK freshness and negotiated touch steering. |
 | `controller-profiles.test.mjs` | Per-device axes/buttons, bounded legacy adoption and source-owned remote input release. |
@@ -1803,6 +1805,7 @@ what it covers.
 | `track-build-wait.test.mjs` | the loadTrack fixture waits for a track build on PROGRESS, not a 45 s deadline: it keeps waiting while the Log ring grows, fails with a STALL message when it stops, and a hard cap ends the wait even if the stall check is broken — the fake page is bounded so a never-ending wait reads as a red test rather than a hung worker; with `raceFlag` (the shared page's loadTrack) a reused page's OLD world is not ready until this `race()` settles, and a rejected start fails with its reason |
 | `deploy-stamp.test.mjs` | the deploy-stamped shell generation: pages.yml stamps `2000 + commit count` on a full-depth checkout, `verify-live` polls the CDN for it, ci.yml no longer demands a committed generation newer than live, and `node tools/ci/bump-cache.mjs --apply` --at N --root` stamps a staged copy without touching the repo |
 | `deploy-tool.test.mjs` | `tools/ci/deploy.mjs` offline: same deploy branch as pick-tests, `--help`, the circuit-touch detector, preflight refusals, and a real merge where both sides add a unit file coming out clean with nothing to regenerate (no doc commits the ladder sizes); prose docs are never auto-cured |
+| `wait-for.test.mjs` | `tools/ci/wait-for.mjs` (`--load-below` / `--file-nonempty` / `--pid-gone`, exit 0 / 124 / 1, unknown-flag errors) and `tools/lib/deploy-status.mjs` (the `= deploy start/done` markers behind `deploy.mjs --status` / `--wait`: none / running / done / died, last verdict wins) on a fake clock, plus the CLIs end to end |
 | `tooling-fast-runner.test.mjs` | `tools/ci/tooling-fast.mjs` itself: longest-first scheduling from `tests/data/tooling-fast-timings.json` (local runs override it), a hung FILE failing by name at the per-file wall with its process group killed, a hung TEST failing via `--test-timeout` |
 | `game-vm.test.mjs` | `tools/lib/game-vm.cjs` boots js/game.js in a Node VM (~300 ms, DOM/GLX/audio stubbed, feature-detected GLX optionals ABSENT so every subsystem takes its degrade path): race, go, step, a finite physState under throttle, a lap-line crossing |
 | `physics-characterization-vm.test.mjs` | the driving-model gate in Node: the four baseline scenarios of `physics-characterization.spec.js` against `tests/data/physics-baseline.json`, EXACT equality at the spec's 1e-4 rounding (measured 2026-09-01) — the browser spec stays as the cross-check |

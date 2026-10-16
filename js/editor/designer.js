@@ -855,7 +855,7 @@ const TrackDesigner = (function () {
     const rail = el("div", "td-rail"); ui.rail = rail;
     const tabs = el("div", "td-tabs");
     tabs.setAttribute("role", "tablist");
-    tabs.setAttribute("aria-label", "Track Designer sections");
+    tabs.setAttribute("aria-label", "Track Designer workspace");
     ui.tabDesign = tabBtn("DESIGN", "design"); ui.tabLib = tabBtn("MY CIRCUITS", "library"); ui.tabHow = tabBtn("HOW TO", "howto");
     tabs.append(ui.tabDesign, ui.tabLib, ui.tabHow);
     ui.paneDesign = el("section", "td-pane"); ui.paneDesign.id = "td-pane-design"; ui.paneDesign.setAttribute("role", "tabpanel"); ui.paneDesign.dataset.pane = "design";
@@ -943,13 +943,13 @@ const TrackDesigner = (function () {
     b.setAttribute("aria-controls", "td-pane-" + pane);
     b.tabIndex = -1;
     b.addEventListener("keydown", (e) => {
-      const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
+      const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
       if (!keys.includes(e.key)) return;
       const tabs = [ui.tabDesign, ui.tabLib, ui.tabHow];
       const at = tabs.indexOf(b);
       if (at < 0) return;
       const next = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1
-        : (at + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+        : (at + ((e.key === "ArrowRight" || e.key === "ArrowDown") ? 1 : -1) + tabs.length) % tabs.length;
       e.preventDefault(); e.stopPropagation();
       const target = tabs[next];
       showPane(target.dataset.pane);
@@ -980,7 +980,7 @@ const TrackDesigner = (function () {
       details.appendChild(el("summary", "td-label", task.title));
       const steps = el("ol");
       for (const text of task.steps) steps.appendChild(el("li", "td-hint", text));
-      details.append(steps, el("p", "td-hint", task.note), btn("OPEN " + task.mode.toUpperCase(), "sel-chip", () => { setMode(task.mode); showPane("design"); }));
+      details.append(steps, el("p", "td-hint", task.note), btn("OPEN " + task.mode.toUpperCase(), "sel-chip", () => { setMode(task.mode); showPane("design"); if (ui.tabDesign) ui.tabDesign.focus(); }));
       pane.appendChild(details);
     }
     const list = (label, rows) => {
