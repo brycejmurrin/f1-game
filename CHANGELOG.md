@@ -30,6 +30,7 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - The game still opens when the browser blocks access to saved data at startup.
 - Increasing BUTTON SIZE keeps phone controls consistent; the default broadcast map clears the pedals and stays put when first edited.
 - Data Hub cancels superseded telemetry selections, clears old session content when a Grand Prix or year has no data, and keeps keyboard navigation inside telemetry dialogs.
+- Telemetry comparison gaps stay at their finish values when the reference lap ends before playback.
 - Rotating a phone while editing the HUD keeps Settings accessible afterward.
 - Spotify now-playing updates recover when a response body stalls.
 - Share-code imports preserve a durable recovery copy and show persistent feedback with Undo guidance.
@@ -44,8 +45,6 @@ Do not list internal refactors, agent workflows, CI, or tooling. Older history l
 - Returning tabs refuse changed lazy scripts after a release, preventing mixed-version audio, race and multiplayer code.
 - Cached phone-controller links keep their own page offline, and updates preserve working offline Career access when its UI cannot be installed.
 - Career saves from a newer game version stay protected until the game is updated or the slot is explicitly deleted.
-
-- Telemetry comparison gaps stay at their finish values when the reference lap ends before playback.
 
 ### Gameplay
 - Low-speed full-lock steering no longer chatters the yaw (#1497)
