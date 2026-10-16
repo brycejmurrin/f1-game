@@ -85,6 +85,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ai-band.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/ai-drive.test.mjs",
+  // Pass-completion: passHunger / coverConcede / tow+fire+latch extras. Permanent
+  // only; streets stay at the prior baselines. No VM. < 0.1 s.
+  "tests/unit/ai-pass-complete.test.mjs",
   // Pure Pearson / style-zero-mean helpers for ai-ratings.mjs — the personality
   // dial census. No VM. Failing-first pin: craft-cluster |r| is still >0.85.
   "tests/unit/ai-ratings-math.test.mjs",
@@ -1121,6 +1124,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/vm-page-lifecycle.test.mjs",
   "tests/unit/voice-pack.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
+  "tests/unit/wait-for.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/wall-clamp.test.mjs",
   // The falling rain follows WETNESS through a weather arc: shown at 0.25, the

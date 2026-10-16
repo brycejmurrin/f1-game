@@ -133,6 +133,16 @@ const GameStore = (function () {
         _writeFails.set(key, { name: (e && e.name) || "Error", k, lane: "json", v });
         return { ok: false, durable: false, reason: this.broken || (e && e.name) || "Error" };
       }
+      // JSON.stringify returns undefined for a top-level function or Symbol.
+      // That is different from an explicit undefined, whose public contract is
+      // to remove the key. Refuse the unsupported value before touching either
+      // disk or cache; treating it as a delete silently discarded the old save.
+      if (v !== undefined && json === undefined) {
+        const e = new TypeError("value is not JSON-serializable");
+        noteBroken(e, "write " + k);
+        _writeFails.set(key, { name: e.name, k, lane: "json", v });
+        return { ok: false, durable: false, reason: this.broken || e.name };
+      }
       let durable = true;
       try {
         if (json === undefined) localStorage.removeItem(key);
