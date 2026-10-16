@@ -399,6 +399,62 @@ test("profile application obeys selected screen scope and undo restores the affe
   assert.equal(values.uiTheme, "light"); assert.equal(values.motion, "reduce");
 });
 
+function photoPickerHarness(album, setBackground = () => true) {
+  const dom = makeDom(), panel = dom.byId("pm-panel-appearance");
+  panel.prepend = node => panel.insertBefore(node, panel.firstChild);
+  const observers = [];
+  const result = load({}, true, false, dom.document, {
+    PhotoStudio: { album, setBackground },
+    ScreenLooks: { endPeek() {}, normalize: (_id, value) => value, apply() {}, refresh() {} },
+    MutationObserver: class { constructor(cb) { observers.push(cb); } observe() {} },
+  });
+  const descendants = node => [node, ...node.children.flatMap(descendants)];
+  const nodes = descendants(panel), find = text => nodes.find(node => node.textContent === text);
+  return { ...result, dom, panel, observers, select: nodes.find(node => node.getAttribute("aria-label") === "Saved photo"),
+    preview: nodes.find(node => node.dataset.as === "photo-preview"), box: nodes.find(node => node.dataset.as === "photo-picker"),
+    note: nodes.find(node => node.dataset.as === "photo-picker").children.at(-1), choose: find("CHOOSE PHOTO"), refresh: find("REFRESH PHOTOS") };
+}
+const photoTick = () => new Promise(resolve => setImmediate(resolve));
+
+test("saved photo picker previews only on selection and persists only on explicit Choose", async () => {
+  const saved = [], rows = Array.from({ length: 8 }, (_, i) => ({ id: String(i), title: "Photo " + i, thumb: "data:image/jpeg;base64,AAAA" }));
+  const h = photoPickerHarness(async () => rows, thumb => { saved.push(thumb); return true; });
+  await photoTick();
+  assert.equal(h.select.tagName, "SELECT"); assert.equal(h.select.children.length, 7, "six photos plus prompt");
+  assert.equal(h.choose.disabled, true); assert.equal(h.preview.hidden, true); assert.deepEqual(saved, []);
+  h.select.value = "2"; h.dom.dispatch(h.select, { type: "change" });
+  assert.equal(h.preview.src, rows[2].thumb); assert.equal(h.preview.alt, "Preview: Photo 2");
+  assert.equal(h.choose.disabled, false); assert.deepEqual(saved, []);
+  h.choose.click(); assert.deepEqual(saved, [rows[2].thumb]); assert.equal(h.studio.scene().mode, "photo");
+  assert.match(h.note.textContent, /Photo 2 chosen/);
+  assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "PHOTO STUDIO & MY BACKGROUND"), "import door retained");
+  assert.ok(h.panel.querySelectorAll("button").some(button => button.textContent === "RESET SCOPE"), "reset retained");
+});
+
+test("saved photo empty, failed load and failed background writes are recoverable", async () => {
+  let mode = "empty", writes = 0;
+  const h = photoPickerHarness(async () => {
+    if (mode === "failure") throw new Error("Unavailable");
+    return mode === "empty" ? [] : [{ id: "safe", title: "Safe", thumb: "data:image/png;base64,AAAA" }, { id: "unsafe", thumb: "https://invalid.test/photo" }];
+  }, () => { writes++; return false; });
+  await photoTick(); assert.match(h.note.textContent, /No saved photos/); assert.equal(h.select.disabled, true);
+  mode = "failure"; h.refresh.click(); await photoTick(); assert.match(h.note.textContent, /could not load.*Refresh/); assert.equal(h.choose.disabled, true);
+  mode = "saved"; h.refresh.click(); await photoTick(); assert.equal(h.select.children.length, 2); assert.equal(h.select.disabled, false);
+  h.select.value = "safe"; h.dom.dispatch(h.select, { type: "change" }); h.choose.click();
+  assert.equal(writes, 1); assert.match(h.note.textContent, /could not be saved/); assert.equal(h.studio.scene().mode, "photo");
+});
+
+test("saved photo refresh ignores superseded responses and responses after Appearance closes", async () => {
+  const pending = [], h = photoPickerHarness(() => new Promise(resolve => pending.push(resolve)));
+  h.refresh.click();
+  pending[1]([{ id: "new", title: "New", thumb: "data:image/jpeg;base64,BBBB" }]); await photoTick();
+  pending[0]([{ id: "old", title: "Old", thumb: "data:image/jpeg;base64,AAAA" }]); await photoTick();
+  assert.equal(h.select.children[1].value, "new");
+  h.refresh.click(); h.panel.hidden = true; h.observers[0]();
+  pending[2]([{ id: "closed", title: "Closed", thumb: "data:image/jpeg;base64,CCCC" }]); await photoTick();
+  assert.equal(h.select.children[1].value, "new"); assert.equal(h.box.hasAttribute("aria-busy"), false);
+});
+
 test("Studio range controls keep Undo working for keyboard adjustments", () => {
   const dom = makeDom(), panel = dom.byId("pm-panel-appearance"); panel.prepend = node => panel.insertBefore(node, panel.firstChild);
   const { studio, values } = load({}, true, false, dom.document);

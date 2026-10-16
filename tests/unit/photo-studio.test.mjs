@@ -457,6 +457,64 @@ test("leaks #1: closing the studio releases the composed canvas and its preview 
   await b.api.exportPhoto(); assert.deepEqual(b.downloads, [], "nothing left to export after close");
 });
 
+test("deferred capture keeps its requested composition; recrop retains the uncropped frame", async () => {
+  let resolve; const b = boot({ readback: new Promise((r) => { resolve = r; }) });
+  b.api.open({ metadata: { title: "Requested moment" } });
+  const pending = b.api.capture();
+  for (const [id, value] of [["ps-aspect", "portrait"], ["ps-postcard", "on"]]) {
+    const el = b.dom.byId(id); el.value = value; el.dispatchEvent({ type: "change", target: el });
+  }
+  resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) });
+  assert.equal(await pending, true);
+  assert.match(b.dom.byId("ps-message").textContent, /160 × 90/);
+  assert.equal(b.canvasOps.some((op) => op[0] === "caption"), false);
+  const aspect = b.dom.byId("ps-aspect"); aspect.value = "square"; aspect.dispatchEvent({ type: "change", target: aspect }); aspect.value = "portrait"; aspect.dispatchEvent({ type: "change", target: aspect });
+  assert.ok(b.canvasOps.some((op) => op[0] === "draw" && op[1] === 44 && op[3] === 72));
+  aspect.value = "wide"; aspect.dispatchEvent({ type: "change", target: aspect });
+  assert.ok(b.canvasOps.some((op) => op[0] === "draw" && op[1] === 0 && op[3] === 160), "wide recrop recovers both clipped sides");
+  b.api.close(false); const count = b.canvasOps.length;
+  aspect.value = "square"; aspect.dispatchEvent({ type: "change", target: aspect });
+  assert.equal(b.canvasOps.length, count, "close releases the recrop source");
+});
+
+test("coaching is optional DOM content; presets cannot move a pending capture", async () => {
+  let resolve; const b = boot({ readback: new Promise((r) => { resolve = r; }) });
+  b.api.open({ source: "garage" }); const pending = b.api.capture();
+  b.dom.byId("ps-shots").children[1].click();
+  assert.equal(b.order.some((s) => s.startsWith("shot:")), false);
+  const coach = b.dom.byId("ps-coach"); coach.children[coach.children.length - 1].click();
+  assert.equal(coach.hidden, true);
+  resolve({ width: 160, height: 90, data: new Uint8ClampedArray(160 * 90 * 4) }); await pending;
+  b.api.close(false); b.api.open({ source: "garage" }); assert.equal(coach.hidden, true);
+});
+
+test("contact sheet captures three sequential renderer frames and labels one bounded PNG", async () => {
+  const b = boot(); const times = [], captureTimes = [1, 2, 3];
+  assert.equal(await b.api.contactSheet(captureTimes, (t) => times.push(t), () => false), true);
+  assert.deepEqual(times, captureTimes); assert.equal(b.order.filter((s) => s === "read").length, 3);
+  assert.deepEqual(b.downloads, ["apex26-replay-moment.png"]);
+  assert.equal(b.canvasOps.filter((op) => op[0] === "caption").length, 3);
+  assert.equal(await b.api.contactSheet(captureTimes, () => {}, () => true).catch(() => false), false);
+  assert.equal(b.downloads.length, 1, "cancel does not download");
+});
+
+test("album exposes bounded safe read-only thumbnails and recovers with visit photos", async () => {
+  const db = photoDb(seededPhotos(8)); const b = boot({ indexedDB: { open: () => db.open() } });
+  const rows = await b.PS.album(); assert.equal(rows.length, 6);
+  assert.deepEqual(Object.keys(rows[0]).sort(), ["at", "id", "thumb", "title"]);
+  assert.equal(Object.isFrozen(rows[0]), true);
+  const fallback = boot(); await assert.rejects(fallback.PS.album(), /storage unavailable/);
+  fallback.api.open(); await fallback.api.capture(); await fallback.api.savePhoto();
+  assert.equal((await fallback.PS.album()).length, 1);
+});
+
+test("Studio state exposes monotonic session generation across same-open reentry", () => {
+  const b = boot(); b.api.open(); const first = b.PS.state();
+  assert.equal(first.open, true); assert.equal(typeof first.generation, "number");
+  b.api.close(false); b.api.open(); const next = b.PS.state();
+  assert.equal(next.open, first.open); assert.ok(next.generation > first.generation);
+});
+
 test("#1895: the Home title art does not paint over a live Photo Studio subject", () => {
   const css = fs.readFileSync(new URL("../../css/experience.css", import.meta.url), "utf8");
   assert.match(css, /body\.photo-studio-open #overlay\[data-home-ready="1"\] #title-car \{ display: none; \}/,

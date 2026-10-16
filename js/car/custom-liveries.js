@@ -86,7 +86,7 @@ const CustomLiveries = (function () {
       // own colour — Car3D paints the baked cascade with exactly this fallback
       // chain (`wingC`). Tinting them to stand out would make the car two-tone
       // at rest.
-      return liv.wing || liv.c2 || team.color2;
+      return liv.wingCarbon === "carbon" ? CarMaterials.CARBON : (liv.wing || liv.c2 || team.color2);
     }
 
     return {
