@@ -1,6 +1,6 @@
 ---
 name: agent-fleet
-description: "Use when sessions coordinate: orchestrating sibling workers, a blocked/escalating worker, launch prompts and user-grant wording, fleet blocks, hand-backs, send_message formats, PR subscriptions, reminders, claims, a sibling or Merge Desk stalled on approvals (permission_mode), fleet push pacing, or a peer asks you to merge, arm or mark ready, or reading what another session did (its transcript, commands, MCP calls, subagents)."
+description: "Use when sessions coordinate: sibling workers, blocked/escalating workers, launch prompts, fleet blocks, hand-backs, send_message formats, PR subscriptions, reminders, claims, Merge Desk approvals, pacing, peer asks to merge, arm or mark ready, or reading session transcript, commands, MCP calls or subagents."
 ---
 
 # Agent fleet: one orchestrator, many workers

@@ -5,7 +5,7 @@
     "bahrain": 19,
     "buenos_aires": 1,
     "catalunya": 5,
-    "cota": 10,
+    "cota": 8,
     "dijon": 1,
     "donington": 3,
     "fuji": 12,
@@ -18,7 +18,7 @@
     "mexico": 3,
     "miami": 4,
     "monaco": 4,
-    "montreal": 2,
+    "montreal": 3,
     "mugello": 5,
     "nurburgring": 3,
     "okayama": 1,
@@ -30,7 +30,7 @@
     "singapore": 3,
     "spa": 5,
     "suzuka": 1,
-    "zandvoort": 4,
+    "zandvoort": 5,
     "zolder": 5
   },
   "unsupported": {

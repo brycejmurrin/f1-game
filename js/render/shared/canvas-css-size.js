@@ -22,7 +22,7 @@ const CanvasCssSize = (() => {
     if (typeof ResizeObserver === "function" && canvas) {
       try {
         observer = new ResizeObserver(markDirty);
-        observer.observe(canvas);
+        observer.observe(canvas.__element || canvas);
         watched = true;
       } catch (_) { observer = null; /* optional browser signal */ }
     }
