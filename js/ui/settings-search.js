@@ -22,6 +22,10 @@ const SettingsSearch = (function () {
     ["line", "Racing line", "advanced", "pm-line", "driving guide"],
     ["music", "Music volume", "audio", "as-mvol", "sound songs soundtrack"],
     ["effects", "Sound effects volume", "audio", "as-svol", "engine tyres tires sounds"],
+    ["rivals-mute", "Rivals sound on/off", "audio", "as-l-rivals", "mute other cars opponents engines"],
+    ["rivals-level", "Rivals engine level", "audio", "as-t-rivals", "volume sound other cars opponents"],
+    ["boost-level", "Boost sound level", "audio", "as-t-boost", "ers deploy volume electric whine whoosh"],
+    ["boost-pitch", "Boost pitch / rev lift", "audio", "as-t-boostlift", "ers deploy engine tone high ringy"],
     ["radio", "Team radio", "audio", "as-radio-sel", "voice engineer speech"],
   ].map((r) => Object.freeze({ id: r[0], label: r[1], page: r[2], target: r[3], aliases: r[4] })));
   function find(query) {
