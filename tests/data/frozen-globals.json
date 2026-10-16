@@ -48,6 +48,7 @@
     "DebrisOpts",
     "DesignerCanvas",
     "DesignerProfile",
+    "DesignerWorkspace",
     "Dom",
     "DriveBroadcast",
     "DriveChase",

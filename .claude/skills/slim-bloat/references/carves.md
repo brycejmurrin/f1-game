@@ -20,7 +20,7 @@ before/after counts (`bloat-scan.mjs --json`).
    roster site.
 4. Lockstep the same commit: file + `index.html` `<script>` position +
    `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time destructure) + lower
-   the ceilings: `node tools/check/ratchets.mjs --update` (tests/data/ratchets.json).
+   the ceilings: `node tools/check/ratchets.mjs --update` (a delta in tests/data/ratchets.d on a topic branch).
 5. `grep` every removed symbol. Then `npm run test:tooling-fast`. Near
    `game.js`: `physics-characterization` is the master gate — parent names
    leftover browser groups as not-run.

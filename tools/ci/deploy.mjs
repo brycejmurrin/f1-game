@@ -359,7 +359,7 @@ export function ratchetOverruns(base, ours, theirs, got) {
 function cureRatchets() {
   const base = ratchetStage(1), ours = ratchetStage(2), theirs = ratchetStage(3);
   must(git(["checkout", "--theirs", "--", RATCHETS]), `checkout --theirs ${RATCHETS}`);
-  run("node", ["tools/check/ratchets.mjs", "--update"], "snap the ratchets to the merged tree");
+  run("node", ["tools/check/ratchets.mjs", "--update", "--absolute"], "snap the ratchets to the merged tree");
   if (!base || !ours || !theirs) return "ratchets re-measured (no three-way stages to bound it)";
   let got;
   try { got = ratchetMetrics(JSON.parse(fs.readFileSync(path.join(ROOT, RATCHETS), "utf8"))); }

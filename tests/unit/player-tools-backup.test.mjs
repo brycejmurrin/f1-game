@@ -37,6 +37,39 @@ function boot() {
 const profile = (claimed = false) => ({ v: 1, devices: [{ id: 'Wheel A', axes: { steer: 0, throttle: 2, brake: 3 }, buttons: { pause: [9, null] } }], legacyClaimed: claimed });
 const library = (h) => ({ v: 1, items: [{ id: 'wet', name: 'Wet race', trackId: 'monza', at: 1234, tune: h.tune }] });
 
+test('new settings export canonical defaults and strict authored lanes', () => {
+  const h = boot(), all = plain(h.api.collect('all', h.G)), changes = plain(h.api.collect('changes', h.G));
+  assert.equal(all.settings.driving.conditionCues, false);
+  assert.deepEqual(all.settings.driving.padProfiles, { v: 1, devices: [], legacyClaimed: false });
+  assert.equal(all.settings.display.xrInput, 'controllers');
+  for (const key of ['driving.conditionCues','driving.padProfiles','display.xrInput']) assert.ok(!changes.changed.includes(key));
+  const result = h.settings({ conditionCues: true, padProfiles: profile() }, { xrInput: 'existing' });
+  assert.equal(result.applied, 3); assert.equal(result.skipped, 0);
+  assert.equal(h.store.get('conditionCues'), true);
+  assert.equal(h.store.raw('xrInput'), 'existing');
+  assert.deepEqual(plain(h.store.get('padProfiles')), profile());
+  const bad = h.settings({ conditionCues: 'true' }, { xrInput: 'wheel' });
+  assert.equal(bad.applied, 0); assert.equal(bad.skipped, 2);
+  assert.equal(h.store.get('conditionCues'), true); assert.equal(h.store.raw('xrInput'), 'existing');
+});
+
+test('ALL and CHANGED round-trip physical profiles without immediate input reapplication', () => {
+  for (const mode of ['all','changes']) for (const claimed of [true, false]) {
+    const a = boot(), b = boot();
+    a.store.set('padProfiles', profile(claimed)); a.store.set('conditionCues', true); a.store.rawSet('xrInput', 'existing');
+    const file = plain(a.api.collect(mode, a.G));
+    assert.equal(b.api.applySettings(file, b.G).failed, 0);
+    assert.deepEqual(plain(b.store.get('padProfiles')), profile(claimed), mode + ' preserves version and explicit legacy state');
+    assert.equal(b.store.get('conditionCues'), true); assert.equal(b.store.raw('xrInput'), 'existing');
+  }
+  const h = boot();
+  h.store.set('padProfiles', { v: 1, devices: [], legacyClaimed: true });
+  const changed = plain(h.api.collect('changes', h.G));
+  assert.deepEqual(changed.settings.driving.padProfiles, { legacyClaimed: true });
+  const fresh = boot(); fresh.api.applySettings(changed, fresh.G);
+  assert.deepEqual(plain(fresh.store.get('padProfiles')), { v: 1, devices: [], legacyClaimed: true });
+});
+
 test('profile imports reject unsupported or malformed containers and enforce 16-device cap', () => {
   const h = boot(); h.store.set('padProfiles', profile());
   const invalid = [null, [], {}, { v: 2, devices: [] }, { v: 1 }, { devices: 'not array' }, { devices: [], legacyClaimed: 'false' },
