@@ -1,1 +1,0 @@
-1792045589	Bryce Murrin	Publish verified menu-audit visibility fix1ab4e8066. OWNED tools/ui/menu-mock.mjs tests/unit/hud-survey.test.mjs only. User explicitly overrides push queue hold; final deploy --gate-only running before draftPR. No product/camera/audio source edits.  [cursor/menu-visibility-c82e; session 9706e01ce894fb8d207c1e0a]
