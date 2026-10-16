@@ -1016,6 +1016,8 @@ test("the rail: per-tool hint under 1 SHAPE (the stage copy is hidden on a phone
   assert.match(css, /\.td-rail \{[^}]*overflow-x:\s*hidden/, "rail clips horizontal overflow");
   assert.match(css, /\.td-rail \{[^}]*scrollbar-gutter:\s*stable/, "rail reserves scrollbar gutter");
   assert.match(css, /\.td-tab \{[^}]*flex:\s*1 1 0/, "equal-width tabs (no jump)");
+  assert.match(css, /\.td-card > strong \{[^}]*min-width:\s*0[^}]*overflow-wrap:\s*anywhere/, "saved circuit names wrap inside narrow cards");
+  assert.match(css, /\.td-issue \{[^}]*overflow-wrap:\s*anywhere/, "validation messages wrap beside FIX on narrow rails");
   assert.match(css, /\.td-empty \{[^}]*grid-column:\s*1\s*\/\s*-1/, "empty MY CIRCUITS spans the full grid");
   // Phone short: elevation strip stays reachable (not display:none).
   assert.match(css, /max-height: 500px[\s\S]*?data-role="profile"[\s\S]*?display:\s*block/, "profile strip kept on short phones");

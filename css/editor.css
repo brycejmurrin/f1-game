@@ -149,6 +149,7 @@
   /* CHECKS rows are full-width taps on phone (layout-audit ~33px tall). */
   min-height: var(--tap-paint);
   box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 .td-issue[data-level="red"] { border-left-color: var(--slower); }
 .td-issue[data-level="amber"] { border-left-color: var(--sec-slow); }
@@ -183,6 +184,10 @@
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
   min-width: 0;
+}
+.td-card > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .td-card canvas { width: 100%; aspect-ratio: 16 / 11; background: var(--surf-1); border-radius: var(--r-sm); }
 /* Empty MY CIRCUITS lives inside .td-grid: without a full-row span it sat in
