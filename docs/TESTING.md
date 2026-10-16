@@ -1294,6 +1294,8 @@ comment saying why they are not one.
 | `cli-args.test.mjs` | CLI argument parsing and validation behavior for project tooling. |
 | `js-debugger-mcp.test.mjs` | js-debugger MCP transport and source-debugger contract checks. |
 | `stuck-census.test.mjs` | Stuck-state census tooling and bounded diagnostic output. |
+| `render-final-contracts.test.mjs` | Final render contract invariants across the renderer output surface. |
+| `tolerance-diff.test.mjs` | Tolerance-diff comparison helpers and stable mismatch reporting. |
 
 
 Every file below is asserted present in this table by
