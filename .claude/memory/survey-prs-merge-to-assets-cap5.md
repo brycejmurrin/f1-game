@@ -5,13 +5,14 @@ metadata:
   node_type: memory
   type: project
   originSessionId: ef12c769-9941-5fd4-8a7f-d488dee68ee2
-  modified: 2026-10-15T14:49:58.859Z
+  modified: 2026-10-15T21:39:30.450Z
 ---
 
 Bryce, 2026-10-15 ~14:50Z (Merge Desk orchestrator session), answering "We still have tons of open prs":
 - Survey PRs (base `track-survey-assets`, 53 open) MERGE INTO `track-survey-assets` with merge commits once green and stripped to their own images; they still never go to the deploy branch. Lane: `[Merge Desk] survey PRs → track-survey-assets`.
 - Full-tier ready cap: `ready-full-cap.mjs --cap 5` while `queue-depth.mjs` says ok; back to the default 3 when it says hold.
 - Old never-CI drafts (#1545 #1776 #1800 #1947): sync and add `run-ci`, not close.
+- ~21:42Z: DRAFT pushes may go through during a queue hold (a draft without `run-ci` starts no CI); ready-PR pushes and adding `run-ci` still wait for `= queue ok`. Also approved: CHANGELOG fragments (one tooling PR), and merging survey #2090 keeping the base's copy of the conflicting file.
 
 **Why:** the open-PR count stayed high: survey PRs had no merge path, and the cap of 3 full-tier runs limited merges to about 5 or 6 an hour.
 

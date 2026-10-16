@@ -1350,3 +1350,88 @@ test("WATCH unavailable driver selection stays honest and never locks the previo
   assert.equal(replay.status().paused, true);
   replay.stop();
 });
+
+async function watchEnvironment(startLap = 1) {
+  const g = await createGame({ track: "baku", storage: { tyreWear: "real" } });
+  const { script } = scriptIn(g), RR = vm.runInContext("RealRace", g.ctx);
+  for (const d of script.drivers) {
+    d.lapStart = Array.from({ length: 51 }, (_, i) => i * 10);
+    d.laps = Array(51).fill(10);
+  }
+  script.cautions = [{ from: 2, to: 3, level: 3, tFrom: 12, tTo: 27, cause: "SAFETY CAR" },
+    { from: 5, to: 7, level: 4, tFrom: 42, tTo: 69, cause: "RED FLAG" }];
+  script.rain = Array.from({ length: 52 }, (_, lap) => lap >= 2 && lap <= 30);
+  const v = g.G.track.total / 10;
+  const traces = { frame: "track", cars: { 63: line(1, v, 0, 0, 350), 16: line(-20, v, 1, 0, 350) } };
+  const previousCar = g.G.cars[0];
+  RR.launch(script, { seat: "RUS", watch: true, camera: "heli", traces, startLap });
+  await g.settle(() => g.G.cars[0] !== previousCar && g.G.state === "count", 8000);
+  g.step(2);
+  return { g, G: g.G, RR, script, traces, replay: RR.replay() };
+}
+
+test("WATCH seeks restore recorded flags immediately, and a paused red never restarts the puppet field", async () => {
+  const { g, G, RR, replay } = await watchEnvironment();
+  try {
+    g.apex.go(); replay.setPaused(true);
+    replay.seek(15); assert.equal(g.apex.caution().level, 3);
+    replay.seek(35); assert.equal(g.apex.caution().level, 0);
+    replay.seek(15); assert.equal(g.apex.caution().level, 3, "rewind restores the passed safety car before a frame");
+    replay.seek(28); assert.equal(g.apex.caution().level, 0, "recorded end time wins over the inclusive lap window");
+    replay.seek(45); assert.equal(g.apex.caution().level, 4);
+    const car = G.player, pose = [car.prog, car.lap, car.px, car.pz], clock = replay.status().T;
+    g.step(15 * 60);
+    assert.equal(G.state, "race", "recorded red has no live-drive countdown");
+    assert.equal(replay.status().T, clock); assert.equal(replay.status().paused, true);
+    assert.deepEqual([car.prog, car.lap, car.px, car.pz], pose, "pause preserves the recorded pose past the live red timeout");
+    assert.equal(g.apex.caution().level, 4);
+    replay.seek(75); assert.equal(g.apex.caution().level, 0);
+    replay.seek(45); assert.equal(g.apex.caution().level, 4, "a recorded red can be watched twice");
+    G.quitToMenu(); assert.equal(g.apex.caution().level, 0, "leaving WATCH releases its flag owner");
+  } finally { g.close(); }
+});
+
+test("WATCH entry and paused seeks take weather from the recording, independent of completed future rain", async () => {
+  for (const startLap of [1, 20]) {
+    const { g, G, replay } = await watchEnvironment(startLap);
+    try {
+      assert.ok(Math.abs(replay.status().T - (startLap - 1) * 10) < 0.05);
+      assert.equal(G.raceWeather, startLap === 1 ? "dry" : "rain", "entry already has the recorded weather");
+      g.apex.go(); replay.setPaused(true);
+      const weather = () => ({ chip: G.raceWeather, wetness: G.trackWetness(), rendered: G.frame.wetness });
+      replay.seek(15); const first = weather();
+      assert.equal(first.chip, "rain"); assert.equal(first.wetness, 1);
+      replay.seek(200); g.step(1);
+      replay.seek(15); assert.deepEqual(weather(), first, "future footage cannot change the earlier snapshot");
+      replay.seek(5); assert.equal(G.raceWeather, "dry"); assert.equal(G.trackWetness(), 0);
+      assert.equal(G.frame.wetness, 0, "road presentation is restored before the seek paints");
+      replay.seek(15); assert.deepEqual(weather(), first);
+      assert.equal(G.weatherArc, null, "live weather arcs do not own a recorded sky");
+      assert.equal(replay.status().paused, true);
+      G.quitToMenu();
+    } finally { g.close(); }
+  }
+});
+
+
+test("WATCH takes its recorded flag ownership through the normal starting countdown", async () => {
+  const { g, G, RR, script, traces, replay } = await watchEnvironment(3);
+  try {
+    for (let entry = 0; entry < 2; entry++) {
+      if (entry) {
+        const previousCar = G.cars[0];
+        RR.launch(script, { seat: "RUS", watch: true, camera: "heli", traces, startLap: 3 });
+        await g.settle(() => G.cars[0] !== previousCar && G.state === "count", 8000);
+        g.step(2);
+      }
+      assert.equal(G.state, "count"); assert.equal(g.apex.caution().level, 3, "a repeated launch takes flag ownership afresh");
+      replay.setPaused(true); const clock = replay.status().T;
+      g.step(10 * 60);   // let the real starting lights finish, without go()
+      assert.equal(G.state, "race"); assert.equal(replay.status().T, clock);
+      assert.equal(g.apex.caution().level, 3);
+    }
+    replay.seek(35); assert.equal(g.apex.caution().level, 0);
+    g.step(60); assert.equal(g.apex.caution().level, 0);
+    G.quitToMenu();
+  } finally { g.close(); }
+});

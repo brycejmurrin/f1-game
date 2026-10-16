@@ -223,6 +223,15 @@ test("#2266: a run in status `waiting` is listed too (its queued jobs count)", (
   assert.equal(v.queued, 3);
 });
 
+test("an old queued job with half the slots running is a released lane leg, not starvation", () => {
+  // 2026-10-15 23:27Z: one leg queued for seconds after 113 min `pending` read as 115 min starved, 36 running.
+  const now = Date.parse("2026-10-15T23:27:00Z");
+  const leg = { ...job("queued"), created_at: new Date(now - 115 * 60e3).toISOString() };
+  const v = evaluate(countJobs([...many(36, "in_progress"), leg]), { now });
+  assert.equal(v.verdict, "ok", v.reasons.join("|"));
+  assert.equal(v.linux.oldestQueuedMin, 115, "the age is still reported");
+});
+
 test("a `pending` job waits in a CI lane, not for a runner: counted apart, never a hold", () => {
   // 2026-10-15 22:23Z: 30 lane-waiting legs since 20:42 read as starved runners while 7 of 40 ran.
   const old = Date.parse("2026-10-15T20:42:00Z"), now = Date.parse("2026-10-15T22:23:00Z");

@@ -20,6 +20,8 @@
 //   coplanar  tools/track/coplanar-audit.cjs <id>           same-facing coplanar spots ≤ tools/track/coplanar-baseline.json
 //   props     tools/track/props-tris.cjs <id> --json        the hidden-face compaction is render-identical
 //   ground    tools/track/ground-audit.cjs <id> --json      buried / unsupported / flatCoplanar ≤ tests/data/scenery-audit-baseline.json
+//             Footprint advisories are retained in JSON and shown as WARN;
+//             they do not change the existing baseline verdict or exit code.
 // A circuit missing from a baseline reads as cap 0 for every check (clip /
 // coplanar / float / ground) — same as each audit's own --gate mode.
 
@@ -103,8 +105,18 @@ const CHECKS = {
         if (row.counts[k] > cap) over.push(`${k} ${row.counts[k]} > ${cap}`);
       }
     }
-    return { ok: r.status === 0 && !!row && !over.length, ms: r.ms, counts: row ? row.counts : null, over,
-      summary: row ? (over.length ? over.join(", ") : Object.entries(row.counts).map(([k, v]) => `${k} ${v}`).join(", ") + " (within baseline)") : "no JSON from ground-audit" };
+    const findings = row && row.advisory ? row.advisory.footprintSupport : [];
+    const warnings = findings.length;
+    // Keep the one-call health/API response bounded. The detailed ground CLI
+    // retains every sample of every finding, which can be hundreds per circuit.
+    const advisory = row && row.advisory ? Object.assign({}, row.advisory, {
+      footprintSupport: findings.slice(0, 3).map(({ samples, shots, ...finding }) => finding),
+      total: warnings, omitted: Math.max(0, warnings - 3),
+      detailCommand: `node tools/track/ground-audit.cjs ${row.id} --why --json`,
+    }) : null;
+    return { ok: r.status === 0 && !!row && !over.length, ms: r.ms, counts: row ? row.counts : null, over, advisory, warnings,
+      summary: row ? (over.length ? over.join(", ") : Object.entries(row.counts).map(([k, v]) => `${k} ${v}`).join(", ") + " (within baseline)") +
+        `; footprint warnings ${warnings}, unjudged samples ${advisory ? advisory.unknownSamples : "?"} (advisory)` : "no JSON from ground-audit" };
   },
 };
 
@@ -125,7 +137,7 @@ function main(argv) {
   const out = { id, ok, ms: Date.now() - t0, checks };
   if (json) console.log(JSON.stringify(out, null, 1));
   else {
-    for (const [name, c] of Object.entries(checks)) console.log(`${c.ok ? "ok  " : "FAIL"} ${name.padEnd(9)} ${String(c.ms).padStart(5)} ms  ${c.summary}`);
+    for (const [name, c] of Object.entries(checks)) console.log(`${!c.ok ? "FAIL" : c.warnings ? "WARN" : "ok  "} ${name.padEnd(9)} ${String(c.ms).padStart(5)} ms  ${c.summary}`);
     console.log(`= audit-circuit ${id}: ${ok ? "ok" : "FAIL"} (${Object.keys(checks).length} checks, ${out.ms} ms)`);
   }
   return ok ? 0 : 1;
