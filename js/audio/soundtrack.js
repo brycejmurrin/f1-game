@@ -15,6 +15,7 @@ var GameAudioSoundtrack = (function () {
     const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
     let _decodeTail = Promise.resolve();
     const _musicLoads = {};                  // url -> in-flight fetch+decode (see playIndex)
+    const _musicLoadControllers = {};        // url -> AbortController for in-flight loads
     const _bufKeys = [];                     // insertion order of cached urls (bound: MUSIC_CACHE)
     // Decoded PCM is ~90 MB per four-minute track at a 48 kHz context. Desktop
     // keeps the 2 most recent so a two-track playlist alternates without a
@@ -482,6 +483,11 @@ var GameAudioSoundtrack = (function () {
     function stopInternal() {
       musicOn = false;
       musicToken++;                                // cancel any in-flight load
+      for (const url in _musicLoadControllers) {
+        try { _musicLoadControllers[url].abort(); } catch (e) { /* already settled */ }
+        delete _musicLoadControllers[url];
+        delete _musicLoads[url];
+      }
       // stop() and disconnect() get their OWN try each. Sharing one meant a throw
       // from stop() (stop-before-start is the documented case) skipped the
       // disconnect, stranding a BufferSource that keeps rendering AND pins its

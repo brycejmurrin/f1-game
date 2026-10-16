@@ -140,8 +140,61 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
   DataHub.init(root);
   const content = () => root.find((n) => n.id === "dh-panel");
   const tab = (id) => root.find((n) => n.id === "dh-tab-" + id).dispatch("click");
-  return { DataHub, root, content, tab, settle, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, setEmptyMeeting: (v) => { emptyMeeting = v; }, drain, flush, pending, resultKeys, fastestKeys, scrolls, document, byId, place, meetingYears };
+  return { DataHub, root, content, tab, settle, api: F1API, get cancels() { return cancels; }, get scheduleCalls() { return scheduleCalls; }, setOnline: (v) => { scheduleOnline = v; }, setEmptyMeeting: (v) => { emptyMeeting = v; }, drain, flush, pending, resultKeys, fastestKeys, scrolls, document, byId, place, meetingYears };
 }
+
+function lateResults(h, cached) {
+  const url = "https://api.openf1.org/v1/session_result?session_key=500";
+  const data = [{ pos: 1, num: 44, laps: 70, points: 25, duration: 6000, gap: 0 }];
+  const at = Date.now() - 4 * 3600000;
+  const store = new Map(cached ? [["apex26.api." + url, JSON.stringify({ t: at, data })]] : []);
+  let rejectBody, requests = 0;
+  const ctx = vm.createContext({ Date, AbortController, setTimeout, clearTimeout, Log: { info() {}, warn() {} },
+    fetch: async () => ({ ok: true, status: 200, headers: { get: () => null }, json: () => {
+      requests++;
+      return requests === 1 ? new Promise((_, reject) => { rejectBody = reject; }) : Promise.resolve(data);
+    } }),
+    localStorage: { get length() { return store.size; }, key: (i) => [...store.keys()][i],
+      getItem: (k) => store.get(k) || null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) }
+  });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/api-transport.js"), "utf8"), ctx);
+  const transport = vm.runInContext("F1Transport", ctx).create("https://api.openf1.org/v1", 7 * 86400000);
+  let finished;
+  Object.assign(h.api, { sessionResult: () => (finished = transport.request(url, 60000)),
+    staleMark: transport.staleMark, staleSince: transport.staleSince });
+  return { fail: () => rejectBody(new Error("body disconnected after headers")), get finished() { return finished; }, get requests() { return requests; }, at };
+}
+
+test("Results dates a late body-failure fallback when the nested request settles", async () => {
+  const h = harness(), transport = lateResults(h, true);
+  h.DataHub.open("results"); await h.flush(); await h.settle("latestSession");
+  assert.match(h.content().textContent, /LOADING/);
+  assert.equal(h.content().querySelector(".dh-footnote"), null, "a pending classification has no freshness claim");
+  transport.fail(); await h.drain();
+  assert.match(h.content().textContent, /offline copy/i);
+  assert.doesNotMatch(h.content().textContent, /updated just now/);
+  assert.match(h.content().textContent, /Car 44/);
+  h.tab("schedule"); await h.drain(); h.tab("results"); await h.flush();
+  assert.match(h.content().textContent, /offline copy/i, "provenance survives tab reuse");
+  h.DataHub.close();
+});
+
+test("Results offers a working RETRY after a nested body failure, including tab reentry", async () => {
+  const h = harness(), transport = lateResults(h, false);
+  h.DataHub.open("results"); await h.flush(); await h.settle("latestSession");
+  transport.fail(); await h.drain();
+  assert.ok(h.content().querySelector(".dh-retry"));
+  assert.doesNotMatch(h.content().textContent, /CACHED|updated just now/);
+  h.tab("schedule"); await h.drain(); h.tab("results"); await h.flush();
+  assert.ok(h.content().querySelector(".dh-retry"));
+  h.content().querySelector(".dh-retry").dispatch("click"); await h.drain();
+  await transport.finished; await h.flush();
+  assert.equal(transport.requests, 2);
+  assert.match(h.content().textContent, /Car 44/);
+  assert.equal(h.content().querySelector(".dh-retry"), null);
+  assert.match(h.content().textContent, /updated just now/);
+  h.DataHub.close();
+});
 
 // LIVE booted on the latest session, the player has just picked "Picked GP"
 // (sessions(40) queued) — the shared opening of both interleavings below.
