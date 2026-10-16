@@ -1,6 +1,6 @@
 ---
 name: mcp-probe
-description: "Use when driving the LIVE working-tree canvas interactively with the Chrome DevTools MCP (chrome_*) or the probe-mcp.py chrome daemon — poke __apex live, heap/perf/console during an interactive repro. Deployed site / version.json → deploy-research. Batch screenshots / scripted profiles → playwright-probe. Scripted hooks → agent-view. UI-layout matrix → survey-ui-matrix."
+description: "Use when probing the live canvas: Chrome MCP/daemon, __apex, console/network, heap/perf. Batch profiles → playwright-probe; source breakpoints → js-debugger."
 ---
 
 # Probing the live game with the Chrome MCP

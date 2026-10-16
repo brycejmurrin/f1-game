@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Cdp, localUrl, targets } from "./js-debugger-cdp.mjs";
 
 const clip = (s, max = 2000) => String(s || "").slice(0, max);
+const sourceLocation = p => ({ scriptId: p.scriptId, line: p.lineNumber + 1, column: (p.columnNumber ?? 0) + 1 });
 function operationResult(result) {
   const size = JSON.stringify(result).length;
   return size <= 4000 ? result : { truncated: true, originalCharacters: size,
@@ -33,6 +34,22 @@ export class DebugSession {
     if (value.objectId) this.objects.add(value.objectId);
     return { ...value, description: clip(value.description, 200), preview: undefined };
   }
+  clearScripts() {
+    this.scripts.clear();
+    for (const bp of this.breakpoints.values()) bp.locations = [];
+  }
+  forgetScript(id) {
+    this.scripts.delete(id);
+    for (const bp of this.breakpoints.values()) bp.locations = bp.locations.filter(p => p.scriptId !== id);
+  }
+  resolveBreakpoint(id, location) {
+    const bp = this.breakpoints.get(id);
+    if (!bp || !location || !this.scripts.has(location.scriptId)) return;
+    const p = sourceLocation(location);
+    if (bp.locations.some(q => q.scriptId === p.scriptId && q.line === p.line && q.column === p.column)) return;
+    bp.locations.push(p);
+    if (bp.locations.length > 5) bp.locations.shift();
+  }
   state() {
     return { connected: !!this.cdp && !this.cdp.closed, target: this.target || null,
       paused: !!this.pause, pause: this.pause,
@@ -58,9 +75,11 @@ export class DebugSession {
       this.target = { id: target.id, url: clip(target.url, 1000), title: clip(target.title, 200) };
       this.generation = randomUUID(); this.operations.clear(); this.scripts.clear();
       client.on("Debugger.scriptParsed", s => {
-        if (this.scripts.size >= 2000) this.scripts.delete(this.scripts.keys().next().value);
+        if (this.scripts.size >= 2000 && !this.scripts.has(s.scriptId)) this.forgetScript(this.scripts.keys().next().value);
         this.scripts.set(s.scriptId, { scriptId: s.scriptId, url: clip(s.url), startLine: s.startLine + 1, endLine: s.endLine + 1, executionContextId: s.executionContextId });
+        for (const b of s.resolvedBreakpoints || []) this.resolveBreakpoint(b.breakpointId, b.location);
       });
+      client.on("Debugger.breakpointResolved", b => this.resolveBreakpoint(b.breakpointId, b.location));
       client.on("Debugger.paused", event => {
         this.resetPause();
         this.pause = { token: `${this.generation}:${++this.sequence}`, reason: event.reason,
@@ -71,18 +90,18 @@ export class DebugSession {
             scopes: f.scopeChain.slice(0, 6).map(s => ({ type: s.type, name: clip(s.name, 100), object: this.remember(s.object) })) })) };
       });
       client.on("Debugger.resumed", () => this.resetPause());
-      client.on("Runtime.executionContextsCleared", () => { this.resetPause(); this.scripts.clear(); });
+      client.on("Runtime.executionContextsCleared", () => { this.resetPause(); this.clearScripts(); });
       client.on("Runtime.executionContextDestroyed", event => {
         const wasPaused = !!this.pause;
         this.resetPause();
-        for (const [id, script] of this.scripts) if (script.executionContextId === event.executionContextId) this.scripts.delete(id);
+        for (const [id, script] of this.scripts) if (script.executionContextId === event.executionContextId) this.forgetScript(id);
         // An iframe can be removed by a paused evaluation while the main
         // context remains stopped. Invalidate handles, but retain a resumable
         // pause instead of falsely reporting that execution is running.
         if (wasPaused) this.pause = { token: `${this.generation}:${++this.sequence}`,
           reason: "executionContextDestroyed", hitBreakpoints: [], frames: [] };
       });
-      client.on("Debugger.globalObjectCleared", () => { this.resetPause(); this.scripts.clear(); });
+      client.on("Debugger.globalObjectCleared", () => { this.resetPause(); this.clearScripts(); });
       client.on("disconnect", () => {
         this.resetPause(); this.scripts.clear(); this.breakpoints.clear();
         if (this.cdp === client) { this.cdp = null; this.target = null; }
@@ -131,9 +150,10 @@ export class DebugSession {
     if (this.breakpoints.size >= 100) throw Error("Breakpoint limit100 reached; remove unused breakpoints");
     const r = await this.connected().send("Debugger.setBreakpointByUrl", { url, lineNumber: line - 1,
       columnNumber: column - 1, condition });
-    const bp = { id: r.breakpointId, url, line, column,
-      locations: (r.locations || []).slice(0, 5).map(p => ({ scriptId: p.scriptId, line: p.lineNumber + 1, column: (p.columnNumber ?? 0) + 1 })) };
-    this.breakpoints.set(bp.id, bp); return bp;
+    const bp = { id: r.breakpointId, url, line, column, locations: [] };
+    this.breakpoints.set(bp.id, bp);
+    for (const p of (r.locations || []).slice(0, 5)) this.resolveBreakpoint(bp.id, p);
+    return bp;
   }
   async removeBreakpoint(id) {
     if (!this.breakpoints.has(id)) throw Error("Breakpoint is not owned by this session");

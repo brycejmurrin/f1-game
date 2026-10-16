@@ -72,6 +72,7 @@ test("URL breakpoint survives context clearing while scripts/frame handles expir
 });
 test("resolved breakpoint coordinates use the same one-based units as source and paused frames", async () => {
   const { s, c } = await attached();
+  for (const scriptId of ["s1", "s2"]) c.emit("Debugger.scriptParsed", { scriptId, url: frame.url, startLine: 0, endLine: 9 });
   c.reply = async () => ({ breakpointId: "bp1", locations: [{ scriptId: "s1", lineNumber: 3, columnNumber: 2 }, { scriptId: "s2", lineNumber: 0 }] });
   const bp = await s.setBreakpoint(frame.url, 4, 3);
   assert.deepEqual(bp.locations, [{ scriptId: "s1", line: 4, column: 3 }, { scriptId: "s2", line: 1, column: 1 }]);
@@ -79,6 +80,40 @@ test("resolved breakpoint coordinates use the same one-based units as source and
   assert.equal(bp.locations[0].line, s.pause.frames[0].line);
   assert.equal(bp.locations[0].column, s.pause.frames[0].column);
   assert.deepEqual(s.state().breakpoints[0].locations, bp.locations);
+});
+test("URL breakpoint resolutions follow scriptParsed, legacy events and reload", async () => {
+  const { s, c } = await attached();
+  const bp = await s.setBreakpoint(frame.url, 4, 3);
+  const location = { scriptId: "s1", lineNumber: 3, columnNumber: 2 };
+  c.emit("Debugger.scriptParsed", { scriptId: "s1", url: frame.url, startLine: 0, endLine: 9,
+    resolvedBreakpoints: [{ breakpointId: bp.id, location }] });
+  c.emit("Debugger.breakpointResolved", { breakpointId: bp.id, location });
+  assert.deepEqual(bp.locations, [{ scriptId: "s1", line: 4, column: 3 }], "equivalent CDP paths must not duplicate a location");
+  c.emit("Debugger.globalObjectCleared");
+  assert.deepEqual(bp.locations, []);
+  c.emit("Debugger.breakpointResolved", { breakpointId: bp.id, location });
+  assert.deepEqual(bp.locations, [], "late events for an expired script must not restore it");
+  c.emit("Debugger.scriptParsed", { scriptId: "s2", url: frame.url, startLine: 0, endLine: 9 });
+  c.emit("Debugger.breakpointResolved", { breakpointId: bp.id, location: { ...location, scriptId: "s2" } });
+  assert.deepEqual(bp.locations, [{ scriptId: "s2", line: 4, column: 3 }]);
+  c.emit("Runtime.executionContextsCleared");
+  assert.deepEqual(bp.locations, []);
+  assert.equal(s.breakpoints.size, 1, "URL ownership survives while resolution handles expire");
+});
+test("breakpoint resolutions are bounded, owned and pruned with individual script contexts", async () => {
+  const { s, c } = await attached(); const bp = await s.setBreakpoint(frame.url, 4);
+  for (let i = 0; i < 8; i++) {
+    c.emit("Debugger.scriptParsed", { scriptId: "s" + i, url: frame.url, startLine: 0, endLine: 9, executionContextId: i });
+    c.emit("Debugger.breakpointResolved", { breakpointId: bp.id, location: { scriptId: "s" + i, lineNumber: 3 } });
+  }
+  assert.equal(bp.locations.length, 5);
+  c.emit("Debugger.breakpointResolved", { breakpointId: "foreign", location: { scriptId: "s7", lineNumber: 8 } });
+  assert.equal(s.breakpoints.size, 1); assert.equal(bp.locations.length, 5);
+  c.emit("Runtime.executionContextDestroyed", { executionContextId: 7 });
+  assert.deepEqual(bp.locations.map(p => p.scriptId), ["s3", "s4", "s5", "s6"]);
+  await s.removeBreakpoint(bp.id);
+  c.emit("Debugger.breakpointResolved", { breakpointId: bp.id, location: { scriptId: "s6", lineNumber: 3 } });
+  assert.equal(s.breakpoints.size, 0);
 });
 test("evaluation rejects side effects by default and reports JavaScript exceptions", async () => {
   const { s, c } = await attached(); paused(c); const token = s.pause.token;

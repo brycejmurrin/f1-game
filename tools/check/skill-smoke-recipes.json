@@ -945,6 +945,33 @@
         }
       ],
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
+    },
+    {
+      "skill": "js-debugger",
+      "task": "Inspect pause generation, one-based positions and nonblocking execution without launching a browser",
+      "fixture": "tests/unit/js-debugger-mcp.test.mjs",
+      "pattern": "pause generation invalidates|step acknowledgment alone|resolved breakpoint coordinates|pending Runtime evaluation|URL breakpoint resolutions follow",
+      "expected": {
+        "minPass": 5,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node22+, npm install and the repository debugger fixtures; no Chrome or daemon required"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Parent-owned serialized native Chrome; real-page breakpoint/local/step/reload/cleanup flow in SKILL.md"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Actual target GPU/device required for performance or physical-input claims; debugger contracts do not establish them"
+        }
+      ],
+      "evidenceScope": "Offline debugger pause/position/concurrency contracts only; excludes game behavior and target-device verification"
     }
   ]
 }

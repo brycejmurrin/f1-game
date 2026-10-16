@@ -131,6 +131,9 @@ that depend on the page's event loop while it is paused.
 
 ## Agent workflow
 
+For the task workflow and measured traps, load the project skill
+[JavaScript debugger](../../.claude/skills/js-debugger/SKILL.md).
+
 1. `debugger_targets {endpoint:"http://127.0.0.1:9222"}`; then
    `debugger_attach {endpoint:"http://127.0.0.1:9222",targetId:"<id>"}`.
 2. `debugger_scripts {filter:"game.js"}` and `debugger_source` identify a
@@ -170,6 +173,9 @@ that depend on the page's event loop while it is paused.
   prepares another command; `headless(true)` suppresses drawing, not simulation.
 - After reload, discover scripts again and obtain fresh pause/object handles.
   Exact-URL breakpoints persist; script IDs and scoped handles do not.
+  Breakpoint resolutions clear with expired scripts and update from Chrome's
+  `scriptParsed.resolvedBreakpoints` or legacy `breakpointResolved` events.
+  A still-unloaded matching script has no current resolved location.
 - Use real game functions with explicit synthetic inputs for branch inspection,
   and label that evidence separately from a physical device or user interaction.
 

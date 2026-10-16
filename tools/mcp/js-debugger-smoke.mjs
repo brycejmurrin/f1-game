@@ -135,6 +135,11 @@ try {
   await call("debugger_run", { expression: "window.finalResult = fixture()" });
   state = await until(s => s.paused);
   check("URL breakpoint survives reload; old handles expire", () => assert.ok(state.pause.hitBreakpoints.includes(bp.id)));
+  check("reloaded breakpoint reports the current parsed script instead of an expired ID", () => {
+    const locations = state.breakpoints.find(b => b.id === bp.id).locations;
+    assert.ok(locations.some(p => p.scriptId === state.pause.frames[0].scriptId && p.line === state.pause.frames[0].line));
+    assert.ok(locations.every(p => p.scriptId !== script.scriptId));
+  });
   await call("debugger_remove_breakpoint", { id: bp.id });
   await call("debugger_control", { action: "resume", pauseToken: state.pause.token });
   await until(s => s.operations.at(-1).status === "completed");

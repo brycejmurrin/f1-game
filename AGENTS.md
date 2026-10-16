@@ -153,7 +153,7 @@ code / fat skill → skill `slim-bloat` and agent `bloat-auditor`; PR sweeps →
 (agent `ci-watcher` returns the board; agent `merge-desk` runs the desk); owning PRs → skill `steward`; messaging, claims and authority between sessions
 → skill `agent-fleet` (spawning siblings: `source_url`, auto mode, the user's quoted grant; `send_message` first lines; measured
 allow-rule shapes in `docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md`); failed-CI triage → agent `ci-red-triage`; PR-driving overrides → skill `steward`; a scoped change handed to a subagent you message mid-task → agent `worker`.
-Source debugging → `js-debugger` (`debugger_*`, parent-only): attach to existing local Chrome, inspect breakpoints/locals, step and resume; wrapper commands and tool reference: [Agent JS debugger](docs/research/AGENT-JS-DEBUGGER-MCP.md).
+Source debugging → skill `js-debugger` and its separate MCP (`debugger_*`, parent-only): attach to existing local Chrome, inspect breakpoints/locals, step and resume; wrapper commands and tool reference: [Agent JS debugger](docs/research/AGENT-JS-DEBUGGER-MCP.md).
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence. Bulk or post-deploy web reading goes to agent `deploy-research`.
 
