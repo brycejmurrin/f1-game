@@ -522,7 +522,7 @@ jobs:
         # SIX SLICES (2026-09-30, #508). Pro plan (40 slots) made wall the cost
         # again: vm-a was last to finish in 42 of 56 runs. It now runs as two
         # shards (APEX_CIRCUIT_SHARD=i/2), game-vm-b is two time-balanced
-        # partitions, and vm-page / node-slow stand alone. The ≈ 3 min wall that
+        # partitions, and vm-page-a / vm-page-b / node-slow stand alone. The ≈ 3 min wall that
         # split promised no longer holds: vm-b1 and page are the floor now.
         # The slice names ("Pure-node unit suites (<slice>)") were the deploy
         # branch's REQUIRED CHECKS until 2026-10-15; `CI` alone is required
@@ -706,9 +706,14 @@ jobs:
               npm run test:garage-unit
               fi
               ;;
-            page)
-              if planned test:vm-page; then
-              npm run test:vm-page
+            page-a)
+              if planned test:vm-page-a; then
+              npm run test:vm-page-a
+              fi
+              ;;
+            page-b)
+              if planned test:vm-page-b; then
+              npm run test:vm-page-b
               fi
               ;;
             slow)

@@ -244,9 +244,12 @@ const PRESETS = {
   // install reads CUSTOM the moment they disagree. The shipped profile is a
   // long, lazy rack (RATE 2) with little smoothing, more lock and a later speed
   // taper.
+  // brakeCue 1 is the shipped fallback in applySteerTuning(). Keep the
+  // STANDARD bundle aligned with that effective value: SAVE ALL materializes
+  // missing keys, and an explicit default must still read as STANDARD.
   standard: { tiltDeg: 8, steerSmooth: 3, steerRate: 2,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
-              adaptiveButtons: 5, brakeCue: 4, audioCues: 1, gripSteer: 1 },
+              adaptiveButtons: 5, brakeCue: 1, audioCues: 1, gripSteer: 1 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
               adaptiveButtons: 4, brakeCue: 4, audioCues: 1, gripSteer: 1 },

@@ -33,7 +33,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pick, stripSpecOwner } from "./pick-tests.mjs";
 import { TRACKED, circuitsOf, circuitsTouched, dropBootFallback, specsOf } from "./select-specs.mjs";
-import { ADAPTED } from "./twinned-specs.mjs";
+import { ADAPTED, ADAPTED_PAGE_GROUPS, ADAPTED_RUNNER, adaptedPageGroupFor } from "./twinned-specs.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
 import { TOOLING_FAST_FILES } from "./tooling-fast.mjs";
 
@@ -58,7 +58,8 @@ export const SCOPED = {
   "test:game-vm-b1": VM_B_GROUPS,
   "test:game-vm-b2": VM_B_GROUPS,
   "test:node-slow": ["node-slow", "car", "circuits", "gfx", "input"],
-  "test:vm-page": null,   // derived: adaptedGroups()
+  "test:vm-page-a": null, // derived: adaptedGroups()
+  "test:vm-page-b": null, // derived: adaptedGroups()
 };
 
 /** Always-on riders on the vm-a1 / vm-a2 / slow arms (ci.yml; on vm-b1 until
@@ -108,11 +109,30 @@ export const RUN_ALL_PATHS = [
 
 /** The browser groups the ADAPTED specs belong to, read from package.json's
  *  generated scripts so a regroup moves the trigger with the spec. */
-export function adaptedGroups(scripts = pkgScripts()) {
-  const out = new Set();
+export function adaptedGroupsByRunner(scripts = pkgScripts()) {
   const browser = Object.keys(scripts).filter((s) => s.startsWith("test:") && scripts[s].includes("run-playwright"));
-  for (const spec of Object.keys(ADAPTED))
-    for (const s of browser) if (specsOf([s], scripts).includes(spec)) out.add(s.slice("test:".length));
+  const out = {};
+  for (const [group, members] of Object.entries(ADAPTED_PAGE_GROUPS)) {
+    const needs = new Set();
+    for (const s of browser) {
+      const covered = specsOf([s], scripts);
+      if (members.some((spec) => covered.includes(spec))) needs.add(s.slice("test:".length));
+    }
+    out[group] = [...needs].sort();
+  }
+  return out;
+}
+
+/** Browser groups containing the adapted specs; retained as the public planner
+ * helper used by coverage tests and callers that need the aggregate. */
+export function adaptedGroups(scripts = pkgScripts()) {
+  const split = adaptedGroupsByRunner(scripts);
+  const out = new Set(Object.values(split).flat());
+  if (!out.size && !Object.keys(scripts).some((s) => s === "test:vm-page-a" || s === "test:vm-page-b")) {
+    const browser = Object.keys(scripts).filter((s) => s.startsWith("test:") && scripts[s].includes("run-playwright"));
+    for (const spec of Object.keys(ADAPTED)) for (const s of browser)
+      if (specsOf([s], scripts).includes(spec)) out.add(s.slice("test:".length));
+  }
   return [...out].sort();
 }
 
@@ -126,8 +146,8 @@ export { circuitsOf };
 /** Does any file of `script` build one of `circuits`? Unknown script or an
  *  unreadable file reads as yes. */
 export function scriptBuilds(script, circuits, groups = groupsJson()) {
-  const files = groups[script]?.files;
-  if (!files) return true;
+  const files = groups[script]?.files?.filter((f) => f !== ADAPTED_RUNNER);
+  if (!files?.length) return true;
   for (const f of files) {
     const ids = circuitsOf(f);
     if (ids === null || circuits.some((c) => ids.has(c))) return true;
@@ -139,7 +159,12 @@ const groupsJson = () => JSON.parse(fs.readFileSync(path.join(ROOT, "tests/group
 /** The plan for a changed-file list. `ref` is the diff base (for the
  *  per-circuit data files); empty keeps those files TRACKED. */
 export function plan(changed, ref = "", scripts = pkgScripts()) {
-  const scoped = { ...SCOPED, "test:vm-page": adaptedGroups(scripts) };
+  const scoped = { ...SCOPED };
+  const adaptedNeeds = adaptedGroupsByRunner(scripts);
+  for (const [group, needs] of Object.entries(adaptedNeeds)) {
+    const runner = `test:vm-page-${group}`;
+    if (runner in scoped) scoped[runner] = needs;
+  }
   // skipTf / skipTfFiles: PR matched plans drop tooling-fast overlap from the
   // always-on topical riders (see ALWAYS_ON_TOPICAL). Fail-safe `all` plans
   // and --all keep every file — deploy / Pages / nightly must not thin out.
@@ -172,7 +197,12 @@ export function plan(changed, ref = "", scripts = pkgScripts()) {
   const run = [], skip = [], why = {};
   const circuits = circ.scoped ? circ.ids : [];
   for (const [script, needs] of Object.entries(scoped)) {
-    if (script === "test:vm-page" && editedAdapted.length) { run.push(script); continue; }
+    if (editedAdapted.length && (script === "test:vm-page" || script === "test:vm-page-a" || script === "test:vm-page-b")) {
+      const target = new Set(editedAdapted.map(adaptedPageGroupFor).filter(Boolean).map((g) => `test:vm-page-${g}`));
+      if (target.has(script) || (script === "test:vm-page" && target.size === 0)) run.push(script);
+      else { skip.push(script); why[script] = "edited ADAPTED spec is in another vm-page partition"; }
+      continue;
+    }
     if (!needs.some((n) => g.has(n))) { skip.push(script); why[script] = "no routed group"; continue; }
     // A circuit-only diff: a script whose files never build the touched
     // circuit cannot see the change (circuitsOf reads the files).
