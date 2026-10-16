@@ -4,7 +4,7 @@ import vm from "node:vm";
 import fs from "node:fs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 
-function boot(withRail = false, withNested = false, withActions = false) {
+function boot(withRail = false, withNested = false, withActions = false, withEntry = false) {
   const { document: doc, dispatch } = makeDom();
   const original = doc.createElement;
   doc.createElement = (tag) => {
@@ -26,6 +26,7 @@ function boot(withRail = false, withNested = false, withActions = false) {
   launcher.isConnected = true;
   const restored = []; const nav = { current: () => "visual-studio", show: (page) => restored.push(page) };
   if (withRail) { const rail = doc.getElementById("ct-rail"); sheet.append(rail); }
+  if (withEntry) { const entry = doc.getElementById("pc-toggle"); doc.getElementById("ct-rail").append(entry); }
   let foot, action;
   if (withActions) {
     foot = doc.createElement("div"); foot.className = "sheet-foot";
@@ -35,7 +36,7 @@ function boot(withRail = false, withNested = false, withActions = false) {
   }
   const ctx = vm.createContext({ document: doc });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/editor-workspace.js", import.meta.url), "utf8") + "\nglobalThis.api = EditorWorkspace;", ctx);
-  const api = ctx.api.attach(root, { title: "Camera", note: "Per camera", done: withActions ? "ct-close" : null, rail: withRail ? "ct-rail" : null, launcher: "pm-camera", nav, nested: withNested ? "freecam" : null });
+  const api = ctx.api.attach(root, { entry: withEntry ? "pc-toggle" : null, title: "Camera", note: "Per camera", done: withActions ? "ct-close" : null, rail: withRail ? "ct-rail" : null, launcher: "pm-camera", nav, nested: withNested ? "freecam" : null });
   return { foot, action, nested, doc, settings, launcher, restored, click: () => dispatch(launcher, { type: "click" }), root, sheet, api, workspace: ctx.api, observe: () => observe(), resize: () => resize(), media };
 }
 
@@ -133,4 +134,17 @@ test("secondary editor actions keep their handlers inside tools while Done stays
   let calls = 0; h.action.onclick = () => calls++;
   tools.open = true; h.action.onclick();
   assert.equal(calls, 1);
+});
+
+
+test("Free Camera stays on the toolbar when compact tools collapse", () => {
+  const h = boot(true, false, false, true);
+  const tools = h.sheet.querySelector("details");
+  const entry = h.doc.getElementById("pc-toggle");
+  assert.equal(tools.open, false);
+  assert.equal(entry.parentNode, h.sheet.querySelector(".ew-toolbar"));
+  assert.equal(tools.contains(entry), false);
+  h.media.matches = false; h.resize();
+  h.media.matches = true; h.resize();
+  assert.equal(entry.parentNode, h.sheet.querySelector(".ew-toolbar"));
 });

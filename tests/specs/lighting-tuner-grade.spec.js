@@ -64,7 +64,7 @@ test.describe.configure({ timeout: 300_000 });
 // enabled and hit-testable. That is not this file's subject (grading and COPY
 // ALL semantics are), and it is already covered by real Playwright clicks on
 // the SAME route in tests/specs/ui-button-touch.spec.js (openLightingPhotoMode:
-// #pm-settings, #pm-open-display, ADVANCED VISUALS, #pm-lighting) and by menu-survey. The dispatched
+// #pm-settings, #pm-open-visual, #pm-lighting) and by menu-survey. The dispatched
 // form here is the one tests/specs/ui-redesign.spec.js already uses for this
 // exact walk, so it is the established idiom for this path, not a new one.
 const walkToImageTuner = async (page) => {

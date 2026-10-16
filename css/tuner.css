@@ -1457,9 +1457,9 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
   display: flex; flex-direction: column; gap: calc(var(--gap) * .5);
   --ew-tap: max(44px, calc(44px / var(--sheet-eff-scale, var(--ui-scale, 1))));
 }
-.editor-workspace .ew-toolbar { display: flex; align-items: center; gap: calc(var(--gap) * .7); flex: 0 0 auto; }
+.editor-workspace .ew-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * .7); flex: 0 0 auto; }
 .editor-workspace :is(#ct-head, #ga-head, #lt-head h2, #fb-head h2) { display: none; }
-.editor-workspace .ew-title { font: inherit; font-weight: 800; margin: 0; flex: 1; }
+.editor-workspace .ew-title { font: inherit; font-weight: 800; margin: 0; flex: 1; min-width: 0; }
 .editor-workspace .ew-toolbar button, .editor-workspace .ew-tools > summary {
   min-height: var(--ew-tap); min-width: var(--ew-tap); touch-action: manipulation;
 }
