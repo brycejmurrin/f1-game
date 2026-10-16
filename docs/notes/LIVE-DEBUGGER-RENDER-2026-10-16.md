@@ -11,10 +11,11 @@ matrix below.
 
 | id | file:line | severity | verdict | debugger evidence | fix commit | test | issue# |
 |---|---|---|---|---|---|---|---|
-| F1 | `js/render/shared/canvas-css-size.js:25` (from `tlx.js:3666`, lease in `gfx.js:236`) | medium | CONFIRMED-LIVE | caught-exception pause in `CanvasCssSize.create`, frame 1 `TlxCreate`; `canvas` is the init-owner Proxy; in-page `new ResizeObserver(cb).observe(new Proxy(canvas,…))` throws `parameter 1 is not of type 'Element'`; `watched` stays true so only window events invalidate the CSS box | fc1926e9 | `tests/unit/init-owner-resize-observer.test.mjs` (failed 1/2 → 2/2) | — |
+| F1 | `js/render/shared/canvas-css-size.js:25` (from `tlx.js:3666`, lease in `gfx.js:236`) | medium | CONFIRMED-LIVE | caught-exception pause in `CanvasCssSize.create`, frame 1 `TlxCreate`; `canvas` is the init-owner Proxy; in-page `new ResizeObserver(cb).observe(new Proxy(canvas,…))` throws `parameter 1 is not of type 'Element'`; `watched` stays true so only window events invalidate the CSS box | fc1926e9 | `tests/unit/init-owner-resize-observer.test.mjs` (failed 1/2 → 2/2); fix re-verified live on TLX: breakpoint at `canvas-css-size.js:25`, step over lands on line 26 (not the `catch`), `observer` is a live object | — |
 | O1 | `js/render/renderer-boot.js:153` | info | BY-DESIGN | unset default boots GLX when `navigator.gpu.requestAdapter()` is null: `diag().env.backend = "webgl2 (pick: three)"`, `backendFallback = null` | — | — | — |
 | O2 | `js/render/webgpu/wgx.js:958` | low | CONFIRMED-LIVE, DevTools-only | after `device.destroy()` (device captured via a `createCommandEncoder` wrapper): `mirror().drawn` frozen at 3998, `gpuErrors` 0, no error event, no reload, `state` stays `race`, `device.lost` pending 10 s | none proposed | — | — |
 | O3 | WGX mirror pass | info | BY-DESIGN | first `mirror("on")` allocates 4 textures, later off/on adds nothing: cached for the session, not leaked | — | — | — |
+| O5 | `js/render/glx/glx.js:757` (TLX equivalent) | info | BY-DESIGN, CONFIRMED-LIVE clean | `WEBGL_lose_context.loseContext()` 300 ms into `race()` (state `race`, track null) on GLX and on TLX: `race()` rejects `Race start did not reach the grid` ~1 s later, no `error`/`unhandledrejection`, `pagehide` reload ~1.2 s after the loss, `apex26.ctxLostReloads=1`, the new page boots healthy; `envProbeOff` and `perChunkOff` latches written (persist in the profile) | — | — | — |
 | O4 | `__apex.race()` | info | VM-ONLY (harness) | `silverstone` rejected `Race start did not reach the grid` while the GPU process was pegged; next build fine | — | — | — |
 
 ## Clean areas (do not re-hunt)
@@ -23,6 +24,8 @@ matrix below.
 - GLX create/delete balance on resize, `createMesh`/`freeMesh`, lost context (mock); forced all-shader failure refuses
   cleanly and frees the program once.
 - TLX `renderer.info.memory` over 13 builds: no monotonic growth (weak: SwiftShader, partly headless).
+- GLX scenario sweep (night race, mirror, `renderScale`, box resize, hidden/pageshow, `matTex`, day rebuild): `gpuErrors` 0, no JS error, live counts flat after warm-up.
+- Context loss mid-build on GLX and TLX: clean reject + single bounded reload (no stuck black frame).
 - Boot-canary revert after a killed Chrome is designed (`apex26.gfxProbeStrikes`, reason string in `backendFallback`).
 
 ## Not run, and why
@@ -39,11 +42,13 @@ create-throw break (a sibling owns that fix).
   a new attach worked once the page drained. The container reset between turns killed Chrome and the daemon each time.
 - With `debugger_exceptions all`, the probe's own caught exceptions pause the page and read as findings; and an
   `evaluate` of `ResizeObserver.observe` is blocked as a side effect and returns the paused frame's EvalError text.
+- `debugger_detach` removes the debugger's own breakpoints AND resumes a pause you have not read: inspect first, detach last.
+- `evaluate` of `canvas.__element` on the init-owner Proxy is blocked as a possible side effect (the get trap); step over and read a local instead.
 - `debugger_run` results are only readable through `debugger_state` (two calls per read).
 
 ## Next step
 
-Fill #2572 on a runner that can draw; read `tooling-fast` and the draft fast tier on the pushed head, then `ready-gate`.
+Fill the TLX drawn rows of #2572 on a runner that can draw; `ready-gate` on the pushed head.
 
 ## Method
 
@@ -59,20 +64,21 @@ from `?three-devtools=1` (`renderer.info`) on TLX.
 
 | scenario | TLX | GLX | WGX |
 |---|---|---|---|
-| boot | live (F1) | live (default boot, diag) | live (adapter via SwiftShader Vulkan), gpuErrors 0 |
-| circuit rebuild ≥ 5 | live: 7 headless flat, 6 drawn bounded | mock: mesh create/free balanced | live: same-circuit A/B x3 identical |
-| backend switch mid-session | live: GLX → TLX → WGX by pin + reload, no stale state | same | same |
-| resize / orientation | — (F1 is the finding) | mock: 6 sizes x3 rounds flat | live: resize events x3 flat |
-| tab hidden / visible | — | — | read: `wgx.js:950-1010` (hidden loss defers reload) |
-| context loss / device.lost | — | mock: lost ctx creates nothing | live: `destroy()` freezes canvas (observation) |
-| PerfGov quality tiers | — | — | live: `renderScale` 0.5/0.75/1 balanced |
-| night + floodlights | — | — | — |
-| mirror on/off | — | — | live: retained, not leaked |
-| asset pack on/off (`matTex`) | — | — | live: flat live count |
+| boot | live (F1, fix re-verified) | live (default boot, diag) | live (SwiftShader Vulkan), gpuErrors 0 |
+| circuit rebuild ≥ 5 | live: 7 headless flat, 6 drawn bounded | live+mock: night→day rebuild buffers 192→178, balanced | live: same-circuit A/B x3 identical |
+| backend switch mid-session | live: GLX → TLX → WGX by pin + reload | same | same |
+| resize / orientation | — (box-resize needs a drawing TLX frame) | live: CSS box 844→400 px with NO window event is picked up after the next draw, back to 844 on restore; mock: 6 sizes x3 flat | live: resize events x3 flat |
+| tab hidden / visible | live: `hidden`, `visibilitychange`, `pageshow(persisted)` — no errors | live: same, counts flat, no reload | read: `wgx.js:950-1010` |
+| context loss | live: lost 300 ms into a build → clean reject + reload | live: same; mock: lost ctx creates nothing | live: `destroy()` freezes canvas (observation) |
+| quality tier (`renderScale`) | live (headless): 0.5 releases 7 textures (52→45) | live: 3 cycles 0.5↔1 identical (Te 22/23, Fr 1/2); canvas 844→422 px | live: balanced |
+| night + floodlights | live (headless): `lightState.floodEmit` 0.23 | live: 40 light records once drawing, no GPU errors | — |
+| mirror on/off | live (headless, state only) | live: on/off adds nothing, `drawn` increments | live: retained, not leaked |
+| asset pack on/off (`matTex`) | — | live: flat, no churn | live: flat live count |
 | forced shader failure | — | mock: `GLX.init` refuses, program freed once | — |
 
-Not run, and why: TLX/GLX drawing under SwiftShader pins the GPU process (one drawing build took 47 s), so the TLX
-resize/hidden/quality/night/mirror/matTex rows need a real-GPU or llvmpipe runner; filed as an issue (see PR).
+Not run, and why: a drawing TLX frame under SwiftShader pins the GPU process (one drawing `race()` took 47 s), so TLX
+drawn rows (box-resize, mirror drawn, matTex, NaN-conditional breakpoints on uniform uploads) still need a real-GPU or
+llvmpipe runner (issue #2572). TLX `renderer.info` rows above are headless, i.e. weak for resources.
 
 ## Not a bug (environment)
 
