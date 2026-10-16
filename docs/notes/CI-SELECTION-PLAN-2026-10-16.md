@@ -14,10 +14,11 @@ E = estimated. Per-day figures scale 40 h of history by 0.6, or one day of merge
 - [x] Bryce's decisions (2026-10-16): D1 drop now, D2 both parts, D3 required check (§6)
 - [ ] P1 — Node tier: drop fail-safes no node script reads; thin the tooling-fast overlap on every run (§4 P1)
 - [ ] P2 — Base reds: mark inherited reds, regenerate global-consistency artifacts on the train (§4 P2)
-- [ ] **now:** P3 — Draft tier: no Pure-node unit suites (D1) + P6 train trims (D2), one PR
+- [x] P3 — Draft tier: no Pure-node unit suites (D1) + P6 train trims (D2), one PR — #2575, merged e8e63be0; draft run 38970130088 skipped the node slices; trains 38976643629 and 38979081338 skipped `Pure-node unit suites` and `Driving model`
 - [ ] P4 — Browser routing: `hud` group, `js/editor/`, CSS + unit pin (§4 P4)
 - [ ] P5 — Local tooling-fast receipt checked before CI spends a run (§4 P5)
-- [ ] P6 — Train: zero-catch legs (node suites, driving model) leave the train (D2; legs-wait-for-guards declined)
+- [x] P6 — Train: zero-catch legs (node suites, driving model) leave the train (D2; legs-wait-for-guards declined) — landed with P3 in #2575
+- [ ] **now:** D3 — `CI` as a required check in "Deploy Ruleset" (Bryce's setting); then P1 (node fail-safes + overlap)
 - [ ] P7 — Merge only on a completed full tier (D3)
 - [ ] P8 — Sweeps: manifest edits that change no fleet-read key do not trigger the fleet (§4 P8)
 - [ ] P9 — Recall sampling from the nightly rotation; per-spec coverage map after it (§4 P9)
