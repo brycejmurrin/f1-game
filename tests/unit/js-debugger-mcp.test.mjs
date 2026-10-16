@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { Cdp, localUrl } from "../../tools/mcp/js-debugger-cdp.mjs";
@@ -13,8 +13,8 @@ import { startDebuggerHttp, debuggerRequest, debuggerPort, httpRefusal } from ".
 
 class FakeCdp extends EventEmitter {
   calls = []; closed = false;
-  async send(method, params) {
-    this.calls.push({ method, params });
+  async send(method, params, timeout) {
+    this.calls.push({ method, params, timeout });
     if (this.reply) return this.reply(method, params);
     if (method === "Debugger.setBreakpointByUrl") return { breakpointId: "bp1", locations: [] };
     return {};
@@ -178,7 +178,46 @@ test("async expression can await its promise without blocking MCP control", asyn
   c.reply = async () => ({ result: { value: 42 } });
   s.run("Promise.resolve(42)", true); await new Promise(setImmediate);
   assert.equal(c.calls.find(x => x.method === "Runtime.evaluate").params.awaitPromise, true);
-  assert.equal(s.state().operations[0].result.result.value, 42);
+  assert.equal(s.state(true).operations[0].result.result.value, 42);
+});
+test("tool responses carry only the latest operation result, not the last ten", async () => {
+  const { s, c } = await attached(); c.reply = async () => ({ result: { type: "string", value: "x".repeat(3000) } });
+  for (let i = 0; i < 4; i++) { s.run(`op${i}()`); await new Promise(setImmediate); }
+  const ops = (await callTool(s, "debugger_state")).structuredContent.operations;
+  assert.equal(ops.length, 4); assert.deepEqual(ops.slice(0, 3).map(o => Object.keys(o).sort()), Array(3).fill(["id", "status"]));
+  assert.ok(ops[3].result);
+  assert.ok(!JSON.stringify(s.state()).includes("xxxx"), "attach/control responses carry no results");
+});
+test("a run paused on a breakpoint reports paused, then pending after resume, never unknown", async () => {
+  const { s, c } = await attached(); let finish;
+  c.reply = async method => {
+    if (method === "Runtime.evaluate") { paused(c); return new Promise(r => { finish = r; }); }
+    return {};
+  };
+  s.run("fixture()"); await new Promise(setImmediate);
+  assert.equal(s.state().operations[0].status, "paused");
+  assert.equal(c.calls.find(x => x.method === "Runtime.evaluate").timeout, 600000);
+  c.emit("Debugger.resumed"); assert.equal(s.state().operations[0].status, "pending");
+  finish({ result: { value: 1 } }); await new Promise(setImmediate); assert.equal(s.state().operations[0].status, "completed");
+});
+test("a slow Debugger.disable on detach is a warning, not a failed cleanup", async () => {
+  const { s, c } = await attached();
+  c.reply = async method => { if (method === "Debugger.disable") throw Error("Debugger.disable response timed out; execution may still be active"); return {}; };
+  const r = await callTool(s, "debugger_detach");
+  assert.equal(r.isError, false); assert.deepEqual(r.structuredContent.cleanupErrors, []);
+  assert.match(r.structuredContent.cleanupWarnings[0], /Debugger\.disable/); assert.equal(r.structuredContent.detached, true);
+});
+test("a failed breakpoint removal on detach stays an error", async () => {
+  const { s, c } = await attached(); await s.setBreakpoint(frame.url, 4);
+  c.reply = async method => { if (method === "Debugger.removeBreakpoint") throw Error("timed out"); return { breakpointId: "bp1", locations: [] }; };
+  assert.equal((await callTool(s, "debugger_detach")).isError, true);
+});
+test("dead endpoint and missing tool name give actionable messages", async () => {
+  const { targets } = await import("../../tools/mcp/js-debugger-cdp.mjs");
+  await assert.rejects(targets("http://127.0.0.1:1"), /Cannot reach Chrome at http:\/\/127\.0\.0\.1:1/);
+  const r = spawnSync(process.execPath, ["tools/mcp/js-debugger-cli.mjs", "call"], { encoding: "utf8" });
+  assert.match(r.stdout, /call needs a tool name/);
+  await assert.rejects(debuggerRequest("/healthz", null, 1), /on port 1|nothing listening on 127\.0\.0\.1:1/);
 });
 test("unknown timed-out execution blocks subsequent run until detach", async () => {
   const { s, c } = await attached(); c.reply = async () => { throw Error("response timed out; execution may still be active"); };
