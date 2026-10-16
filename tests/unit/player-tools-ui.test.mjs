@@ -47,13 +47,13 @@ test("setting search recognizes player terms and never changes target values", (
   assert.equal(api.reveal(control), true); assert.equal(fold.open, true); assert.equal(h.dom.document.activeElement, control); assert.equal(control.value, "auto");
 });
 test("settings result navigation and BACK restore the query and selected result focus", () => {
-  const h = host(), index = h.el("div", "pm-settings-index"), page = h.el("section", "pm-panel-controls");
+  const h = host(), index = h.el("div", "pm-settings-index"), page = h.el("section", "pm-panel-driving");
   const fold = h.el("details", "", page), target = h.el("select", "pm-gears-sel", fold); target.value = "auto";
   const api = h.run("js/ui/settings-search.js", "SettingsSearch"), calls = [];
   const ui = api.create({ host: index, show(id, focus, after) { calls.push(id); index.hidden = true; page.hidden = false; assert.equal(after(), true); } });
   ui.input.value = "manual gears"; ui.input.oninput();
   const button = index.querySelector("button"); button.focus(); button.onclick();
-  assert.deepEqual(calls, ["controls"]); assert.equal(h.dom.document.activeElement, target); assert.equal(target.value, "auto");
+  assert.deepEqual(calls, ["driving"]); assert.equal(h.dom.document.activeElement, target); assert.equal(target.value, "auto");
   index.hidden = false; page.hidden = true; assert.equal(ui.restore(), true); assert.equal(h.dom.document.activeElement, button); assert.equal(ui.input.value, "manual gears");
 });
 test("race transcript includes delivered race/count cards only, bounds20 and clears a session", () => {
@@ -74,7 +74,7 @@ test("controller profile UI resets only through Input and refreshes via its devi
 test("SettingsNav keeps a search-result target focus and BACK restores the chosen result", () => {
   const h = host(), settings = h.el("section", "pmsettings"), body = h.el("div", "pm-settings-body", settings), index = h.el("div", "pm-settings-index", body);
   h.el("h2", "dlg-settings", settings);
-  const controls = h.el("section", "pm-panel-controls", body), fold = h.el("details", "", controls), target = h.el("select", "pm-gears-sel", fold);
+  const controls = h.el("section", "pm-panel-driving", body), fold = h.el("details", "", controls), target = h.el("select", "pm-gears-sel", fold);
   target.value = "auto";
   h.run("js/ui/settings-search.js", "SettingsSearch"); const nav = h.run("js/ui/settings-tabs.js", "SettingsNav").create(null, () => {});
   const input = index.querySelector("input"); input.value = "manual gears"; input.oninput(); const result = index.querySelector("button"); result.focus(); result.onclick();
@@ -118,4 +118,51 @@ test("unavailable search feedback is visible on the destination page and clears 
   ui.input.value = "steering input"; ui.input.oninput(); index.querySelector("button").onclick();
   const visibleStatus = panel.querySelector('[role="status"]'); assert.ok(visibleStatus); assert.match(visibleStatus.textContent, /Steering input is unavailable/); assert.equal(visibleStatus.closest("[hidden]"), null);
   leaves[0](); assert.equal(panel.querySelector('[role="status"]'), null); index.hidden = false; ui.restore(); assert.equal(ui.input.value, "steering input");
+});
+
+test("settings search distinguishes steering bias, visual guide and relocated tools", () => {
+  const h = host(), api = h.run("js/ui/settings-search.js", "SettingsSearch");
+  for (const [query, page, target] of [
+    ["steering line bias", "advanced", "pm-line"],
+    ["driving line colour", "display", "pm-linecolor-sel"],
+    ["resolution", "graphics", "pm-res-sel"],
+    ["camera tuner", "visual", "pm-camtune"],
+    ["garage arrival", "visual", "pm-garrival"],
+    ["practice goals", "practice", "pm-practice-panel"],
+    ["pit strategy", "strategy", "pm-pit-panel"],
+    ["next pit-stop tyres", "strategy", "pm-pit-choice-sel"],
+    ["session review", "review", "pm-session-review"],
+    ["driving badges", "progress", "pm-badges-panel"],
+    ["stick dead zone", "advanced", "pm-paddz"],
+    ["phone controller pairing", "controls", "pm-phonepad"],
+  ]) {
+    const result = api.find(query).find((row) => row.target === target);
+    assert.ok(result, query); assert.equal(result.page, page, query);
+  }
+  assert.equal(new Set(api.CATALOG.map((row) => row.id)).size, api.CATALOG.length);
+  const shell = read("index.html");
+  for (const target of ["pm-res-sel", "pm-camtune", "pm-garrival", "pm-paddz", "pm-phonepad"]) {
+    assert.ok(shell.includes('id="' + target + '"'), target + " exists in shell");
+  }
+});
+
+test("relocated search destinations show unavailable feedback in their own page", () => {
+  for (const [query, page] of [["resolution", "graphics"], ["camera tuner", "visual"], ["practice goals", "practice"], ["pit strategy", "strategy"], ["session review", "review"], ["driving badges", "progress"]]) {
+    const h = host(), index = h.el("div", "pm-settings-index"), panel = h.el("section", "pm-panel-" + page);
+    const api = h.run("js/ui/settings-search.js", "SettingsSearch");
+    const ui = api.create({ host: index, show(id, _focus, after) { assert.equal(id, page); assert.equal(after(), false); } });
+    ui.input.value = query; ui.input.oninput(); index.querySelector("button").onclick();
+    assert.match(panel.querySelector('[role="status"]').textContent, /unavailable in the current session/);
+  }
+});
+
+test("search unavailable feedback uses the shared route panel lookup", () => {
+  const h = host(), index = h.el("div", "pm-settings-index"), panel = h.el("section", "custom-route-panel"), calls = [];
+  h.sb.SettingsNav = { panel: (id) => { calls.push(id); return panel; } };
+  const api = h.run("js/ui/settings-search.js", "SettingsSearch");
+  assert.equal(api.find("tilt sensitivity")[0].page, "controls");
+  const ui = api.create({ host: index, show(_id, _focus, after) { after(); } });
+  ui.input.value = "camera tuner"; ui.input.oninput(); index.querySelector("button").onclick();
+  assert.deepEqual(calls, ["visual"]);
+  assert.match(panel.querySelector('[role="status"]').textContent, /Camera tuner is unavailable/);
 });

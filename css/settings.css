@@ -100,7 +100,7 @@
 }
 /* Driving actions carry complete instructions at narrow widths and high zoom.
    The shared preference rows retain their own compact control geometry. */
-#pmsettings-inner #pm-panel-driving :is(#pm-practice-set, #pm-practice-retry, #pm-driving-trace) {
+#pmsettings-inner :is(#pm-practice-set, #pm-practice-retry, #pm-practice-rewind, #pm-practice-arm, #pm-driving-trace) {
   height: auto;
   min-height: var(--tap);
   white-space: normal;
@@ -109,6 +109,7 @@
 }
 /* Driving has one coach readout and optional tasks. Full-width folds retain
    native disclosure visibility; only their content gets vertical spacing. */
+:is(#pm-panel-practice, #pm-panel-strategy, #pm-panel-review, #pm-panel-progress) > details,
 #pm-panel-driving > :is(details, #pm-coach-status, #pm-coach-tip) {
   grid-column: 1 / -1;
   min-width: 0;
@@ -118,14 +119,18 @@
    chevrons + gaps (~120px), so #pm-coach-next sat 28px past the pane
    (time-trial Driving zoom matrix). Wrap the cluster; do not lower the 4rem
    value floor (that clips MANUAL / DEFAULT on other pages). */
+:is(#pm-panel-practice, #pm-panel-strategy) .set-row > div,
 #pm-panel-driving .set-row > div { flex-wrap: wrap; }
+:is(#pm-panel-practice, #pm-panel-strategy, #pm-panel-review, #pm-panel-progress) details > :not(summary),
 #pm-panel-driving details > :not(summary) { margin-block: calc(var(--gap) * 0.5); }
+:is(#pm-panel-review, #pm-panel-progress) :is(#pm-incident-log, #pm-ai-decisions, #pm-badges-list),
 #pm-panel-driving :is(#pm-coach-tip, #pm-incident-log, #pm-ai-decisions, #pm-badges-list) {
   font-size: var(--fs-micro);
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 #pm-coach-tip { color: var(--text); padding-bottom: calc(var(--gap) * 0.5); }
+#pm-panel-review :is(#pm-incident-log, #pm-ai-decisions),
 #pm-panel-driving :is(#pm-incident-log, #pm-ai-decisions) { padding-inline-start: 1.5em; }
 #pm-badges-list { list-style: none; padding-inline-start: 0; }
 

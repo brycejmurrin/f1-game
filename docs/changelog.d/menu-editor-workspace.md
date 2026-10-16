@@ -1,0 +1,1 @@
+Improved: Camera, lighting, flyby and garage-arrival editors share compact Preview/Edit controls, expandable secondary actions and caller-aware navigation. Short phone layouts retain editable space and a reachable Done action.

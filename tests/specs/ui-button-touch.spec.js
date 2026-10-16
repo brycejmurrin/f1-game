@@ -584,7 +584,7 @@ test.describe("Pause settings — stable layout", () => {
     await cycleToPauseSteerMode(page, "tilt");
     await page.waitForTimeout(200);
 
-    const ids = ["pm-steer", "pm-calib", "pm-gears", "pm-aero", "pm-settings-close"];
+    const ids = ["pm-steer", "pm-calib", "adv-feel-details", "pm-advanced", "pm-settings-close"];
     const grab = () => page.evaluate((ids) => {
       const out = {};
       for (const id of ids) {
@@ -604,8 +604,8 @@ test.describe("Pause settings — stable layout", () => {
     // replaces the old SOUND toggle here: it is a same-grid setting row, so it
     // still proves the tap landed on the control the thumb was aimed at.
     await page.locator("#pm-settings-close").click();
-    await page.locator("#pm-open-display").click();
-    await page.locator("#pm-display-adv > summary").click();
+    await page.locator("#pm-open-graphics").click();
+    await expect(page.locator("#pm-display-adv")).toHaveAttribute("open", "");
     const resBefore = await page.locator("#pm-res-sel").inputValue();
     await page.locator("#pm-res-next").click();
     await expect(page.locator("#pm-res-sel")).not.toHaveValue(resBefore);

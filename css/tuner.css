@@ -1432,3 +1432,40 @@ body:has(#garrival:not([hidden])) #overlay { opacity: 0; pointer-events: none; }
    selector, the chosen eye lit. currentColor so it follows the panel's ink. */
 #ga-angle-map { display: block; width: 100%; max-width: 168px; margin-top: var(--gap); color: var(--text); }
 }
+
+@layer components {
+/* Shared workspace furniture: domain previews and Escape remain unchanged. */
+:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] {
+  display: flex; flex-direction: column; gap: calc(var(--gap) * .5);
+  --ew-tap: max(44px, calc(44px / var(--sheet-eff-scale, var(--ui-scale, 1))));
+}
+.editor-workspace .ew-toolbar { display: flex; align-items: center; gap: calc(var(--gap) * .7); flex: 0 0 auto; }
+.editor-workspace :is(#ct-head, #ga-head, #lt-head h2, #fb-head h2) { display: none; }
+.editor-workspace .ew-title { font: inherit; font-weight: 800; margin: 0; flex: 1; }
+.editor-workspace .ew-toolbar button, .editor-workspace .ew-tools > summary {
+  min-height: var(--ew-tap); min-width: var(--ew-tap); touch-action: manipulation;
+}
+.editor-workspace .ew-note { margin: 0; color: var(--dim); font-size: var(--fs-micro); flex: 0 0 auto; }
+.editor-workspace .ew-tools { display: contents; }
+.editor-workspace .ew-tools > summary { display: none; cursor: pointer; align-content: center; }
+:is(#lighting-inner, #camtune-inner, #flyby-inner).editor-workspace[data-editor-view] :is(#lt-rail, #ct-rail, #fb-rail) {
+  display: flex; flex-direction: column; max-height: none; overflow: visible;
+}
+:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view="preview"] {
+  bottom: auto; max-height: calc(100% - var(--sat) - var(--sab) - 16px);
+}
+:is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view="preview"] > :not(.ew-toolbar):not(.sheet-foot) { display: none; }
+.editor-workspace[data-editor-view="preview"] > .sheet-foot > :not(#lt-close):not(#ct-close):not(#fb-close):not(#ga-close) { display: none; }
+@media (max-height: 620px), (max-width: 600px) {
+  :is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] { overflow: hidden; }
+  .editor-workspace .ew-tools { display: block; flex: 0 0 auto; }
+  .editor-workspace .ew-tools > summary { display: list-item; list-style: disclosure-closed inside; }
+  .editor-workspace .ew-tools[open] > summary { list-style-type: disclosure-open; }
+  .editor-workspace .ew-tools[open] { max-height: 35%; overflow-y: auto; overscroll-behavior-y: contain; }
+  :is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] :is(#lt-rows, #ct-rows, #fb-rows, #ga-rows) {
+    flex: 1 1 auto; min-height: var(--ew-tap); max-height: none; overflow-y: auto; overscroll-behavior-y: contain;
+  }
+  :is(#lighting-inner, #camtune-inner, #flyby-inner, #garrival-inner).editor-workspace[data-editor-view] :is(button, select, summary, input:not([type="hidden"])) { min-height: var(--ew-tap); }
+  .editor-workspace > .sheet-foot { background: var(--plate); }
+}
+}

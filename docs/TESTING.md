@@ -1299,6 +1299,7 @@ what it covers.
 | `skill-routing-eval.test.mjs` | `tools/check/skill-routing-eval.py` against a fake `claude` first on PATH (canned stream-json, no model calls): strict first-tool verdict, `--grace` late Skill detection, `--alias` rescoring, `--runs` majority + k/N agreement, `--only`, `--root` cwd, the version/model header and the `--compare` base→head table (legacy bare-list input too). |
 | `skill-smoke.test.mjs` | Every canonical skill has a bounded recipe with expected results and prerequisites; skipped browser or credential work never reports as tested. |
 | `capture-tools-regressions.test.mjs` | Capture option and path bounds, plan immutability, black-scene rejection, renderer identity, and lifecycle evidence through actual cancellation and cleanup. |
+| `editor-workspace.test.mjs` | Shared tuner Preview/Edit controls, compact toolbar and caller restoration |
 | `appearance-studio.test.mjs` | Visual-only preset/profile scopes, undo, normalization, durability and reduced motion. |
 | `appearance-sunlight-chrome.test.mjs` | Sunlight/Broadcast Appearance chrome CSS pins: preset label wrap + selected ring, theme-stable sunlight/broadcast art (not `--text`/`--dim`), light `--gold` for Sound ON contrast, light `.sheet-foot`, race-chrome gold restatement. |
 | `career-experience.test.mjs` | Career facility/achievement context, calendar and canonical result story. |

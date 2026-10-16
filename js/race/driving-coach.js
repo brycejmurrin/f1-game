@@ -748,6 +748,9 @@ const DrivingCoach = (function () {
       observer.observe(menu, { attributes: true, attributeFilter: ["hidden"] });
       observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
     }
+    if (typeof SettingsNav !== "undefined") SettingsNav.onEnter((id) => {
+      if (["driving", "practice", "strategy", "review"].includes(id)) paint();
+    });
     // ARM PRACTICE in a session that is not a Time Trial. Declaring the session
     // unscored is the player's call and it is ONE WAY: there is no disarm,
     // because a session that has already been rewound cannot become scored

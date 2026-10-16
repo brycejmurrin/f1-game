@@ -575,19 +575,20 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-strategy", "pm-review", "pm-practice", "pm-photo", "pm-howto", "pm-checkpoint-save", "pm-checkpoint-retry", "pm-checkpoint-rewind", "pm-standings", "pm-skip-results", "pm-quit"]);
   const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
   const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files"],
-    "SETTINGS has the seven top-level doors in task order");
-  assert.match(settingsIndex, /id="pm-advanced"[^>]*>STEERING &amp; ASSISTS/);
+  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress"],
+    "SETTINGS has the ten top-level doors in task order");
+  assert.doesNotMatch(settingsIndex, /id="pm-advanced"/);
+  assert.match(html, /id="pm-panel-controls"[\s\S]*id="pm-advanced"[^>]*>ADVANCED INPUT &amp; HANDLING/);
   const driving = html.slice(html.indexOf('id="pm-panel-driving"'), html.indexOf("</section>", html.indexOf('id="pm-panel-driving"')));
-  const practiceIds = ["pm-coach", "pm-practice-panel", "pm-practice-set", "pm-practice-retry", "pm-session-review"];
+  const practiceIds = ["pm-coach", "pm-gears", "pm-aero", "adv-aids-details", "pm-preset-pro"];
   for (const id of practiceIds) {
     assert.match(driving, new RegExp(`id="${id}"`), `${id} lives on the dedicated DRIVING sheet`);
     assert.doesNotMatch(pause, new RegExp(`id="${id}"`), `${id} is not a pause-menu action`);
   }
   assert.doesNotMatch(pause, /id="pm-driving"/, "pause opens SETTINGS; it has no DRIVING shortcut");
-  const display = html.slice(html.indexOf('id="pm-panel-display"'), html.indexOf("</section>", html.indexOf('id="pm-panel-display"')));
+  const display = html.slice(html.indexOf('id="pm-panel-visual"'), html.indexOf("</section>", html.indexOf('id="pm-panel-visual"')));
   for (const id of ["pm-visual-tuners", "pm-lighting", "pm-camtune"])
-    assert.match(display, new RegExp(`id="${id}"`), `${id} is nested under DISPLAY`);
+    assert.match(display, new RegExp(`id="${id}"`), `${id} is nested under VISUAL STUDIO`);
   assert.match(pause, /<div id="pm-now-card" class="as-now-card" hidden>/, "the pause NOW PLAYING card starts hidden; panel.js shows it while music plays");
   assert.match(pause, /id="pm-resume" autofocus/);
 });

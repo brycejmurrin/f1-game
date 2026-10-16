@@ -1308,3 +1308,73 @@ test("future preflight retains legacy migration, scope and slot/selection revisi
     assert.deepEqual([...h.disk.entries()], before);
   }
 });
+
+
+test("leaving backup settings clears overwrite confirmation without duplicating lifecycle handlers", () => {
+  const leave = [];
+  const b = bootImportUI({ globals: { SettingsNav: { onLeave: fn => leave.push(fn) } } });
+  assert.equal(leave.length, 1);
+  b.SettingsExport.ensureMounted();
+  b.SettingsExport.create(b.G);
+  assert.equal(leave.length, 1);
+  b.button.click();
+  assert.match(b.button.textContent, /OVERWRITE SETTINGS/);
+  leave[0]("audio");
+  assert.match(b.button.textContent, /OVERWRITE SETTINGS/, "unrelated page leaves do not affect confirmation");
+  leave[0]("files");
+  assert.equal(b.button.textContent, "LOAD SETTINGS FILE");
+  b.button.click();
+  assert.match(b.button.textContent, /OVERWRITE SETTINGS/, "reopening requires fresh confirmation");
+  assert.equal(b.dom.document.querySelector("input"), null, "first click after returning does not open a file chooser");
+  leave[0]("files");
+  b.flushTimers();
+  assert.equal(b.button.textContent, "LOAD SETTINGS FILE");
+});
+
+
+test("Saves and Data explains separate backup scopes and reuses storage health", () => {
+  const mounts = [];
+  const b = bootImportUI({ globals: { SaveHealth: { mount: host => mounts.push(host) } } });
+  const scope = b.dom.byId("pm-settings-file-scope");
+  assert.equal(scope.getAttribute("data-help"), "keep");
+  assert.match(scope.textContent, /Both files also include saved time-trial leaderboards/);
+  assert.match(scope.textContent, /loading merges those boards/);
+  for (const excluded of ["career", "season", "photos", "personal background images", "ghosts", "replays", "accounts", "network credentials"]) assert.ok(scope.textContent.includes(excluded));
+  const other = b.dom.byId("pm-other-save-files");
+  assert.match(other.textContent, /GARAGE → TEAM → SAVE GARAGE FILE/);
+  assert.match(other.textContent, /CAREER → CAREER MODES → SAVE CAREER FILE/);
+  assert.match(other.textContent, /local history is not an exported backup/);
+  assert.equal(mounts.length, 1); assert.equal(mounts[0].id, "pm-panel-files");
+  b.SettingsExport.ensureMounted(); assert.equal(mounts.length, 1);
+});
+
+
+for (const fileReader of [false, true]) test(`leaving Saves and Data invalidates a pending import (${fileReader ? "FileReader" : "File.text"})`, async () => {
+  const leave = [];
+  const b = bootImportUI({ fileReader, globals: { SettingsNav: { onLeave: fn => leave.push(fn) } } });
+  let finish;
+  b.choose(new Promise(resolve => { finish = resolve; }));
+  leave[0]("files");
+  finish(volumeFile(0.2)); await Promise.resolve();
+  assert.equal(b.disk.has("apex26.volMusic"), false);
+  b.flushReloads(); assert.equal(b.reloads(), 0);
+});
+
+test("Saves and Data exposes independent garage and career loaders without duplicate IDs", async () => {
+  const b = bootImportUI({ career: true });
+  b.dom.body.append(b.SettingsExport.garageRow(), b.SettingsExport.careerRow());
+  for (const id of ["pm-garage-save", "pm-garage-load", "pm-career-save", "pm-career-load", "cs-garage-save", "cr-career-save"]) {
+    assert.equal(b.dom.document.querySelectorAll("#" + id).length, 1);
+  }
+  for (const [id, format, scope] of [["pm-garage-load", "apex26-settings-v1", "THE GARAGE"], ["pm-career-load", "apex26-settings-v1", "CAREER SAVES"]]) {
+    const button = b.dom.byId(id);
+    button.click(); assert.ok(button.textContent.includes("OVERWRITE " + scope));
+    button.click();
+    const picker = b.dom.document.querySelector("input");
+    picker.files = [{ text: () => Promise.resolve(JSON.stringify({ format, settings: { audio: { volMusic: 0.2 } } })) }];
+    picker.onchange(); await Promise.resolve();
+    assert.equal(b.disk.has("apex26.volMusic"), false, "domain loaders refuse settings files");
+    assert.doesNotMatch(button.textContent, /RELOADING/);
+  }
+  b.flushReloads(); assert.equal(b.reloads(), 0);
+});

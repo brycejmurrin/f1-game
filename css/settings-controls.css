@@ -303,9 +303,7 @@
   grid-template-areas:
     "hudopts hudopts"
     "metrics metrics"
-    "renopts renopts"
-    "cockpit cockpit"
-    "visual visual";
+    "cockpit cockpit";
   grid-auto-flow: dense;
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
@@ -320,15 +318,7 @@
   align-self: start;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv {
-  grid-area: renopts;
-}
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-cockpit { grid-area: cockpit; margin: 0; min-width: 0; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-visual-tuners {
-  grid-area: visual;
-  margin: 0;
-  min-width: 0;
-}
 /* DISPLAY sliders (and APPEARANCE's UI SIZE) are settings rows, not tuner
    rows: steel label, text value (tuner red is the loud bit), no extra
    tap-height padding around a track that is already --slider. */
@@ -487,12 +477,12 @@
    made HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
 /* Rule on the fold, not a fading --grad-rule on the summary: DISPLAY
    (and the same disclosure family) stopped ~150px short of the sheet. */
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details {
+:is(#pmsettings-inner .pm-group, #rs-body) details {
   width: 100%;
   border-bottom: 1px solid var(--card-line);
 }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary,
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving, #rs-body) details > summary:active {
+:is(#pmsettings-inner .pm-group, #rs-body) details > summary,
+:is(#pmsettings-inner .pm-group, #rs-body) details > summary:active {
   /* --text, not --steel: steel italic on --surf-1 is the low-contrast
      accordion complaint. ON/OFF readout chips keep gold/red below. */
   color: var(--text);
@@ -507,7 +497,7 @@
   box-sizing: border-box;
 }
 @media (hover: hover) and (pointer: fine) {
-  :is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary:hover,
+  :is(#pmsettings-inner .pm-group) details > summary:hover,
   #rs-body details > summary:hover {
     color: var(--text);
     background-color: transparent;
@@ -516,13 +506,13 @@
     box-shadow: none;
   }
 }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary::after,
+:is(#pmsettings-inner .pm-group) details > summary::after,
 #rs-body details > summary::after { content: none; }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary::before,
+:is(#pmsettings-inner .pm-group) details > summary::before,
 #rs-body details > summary::before { content: "\25BE"; }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details[open] > summary::before,
+:is(#pmsettings-inner .pm-group) details[open] > summary::before,
 #rs-body details[open] > summary::before { content: "\25B4"; }
-:is(#pm-panel-display, #pm-panel-appearance, #advanced-inner, #pm-panel-driving) details > summary,
+:is(#pmsettings-inner .pm-group) details > summary,
 #rs-body details > summary {
   height: auto;
   min-height: var(--chip-h);
@@ -692,6 +682,7 @@ button:has(> [data-fold]) {
   align-content: start;
 }
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-driving .preset-row,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner details,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-sec { grid-column: 1 / -1; }

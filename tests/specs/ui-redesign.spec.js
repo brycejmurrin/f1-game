@@ -378,11 +378,12 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // pages were consolidated — the unit list in ui-sheets-audit.test.mjs has it.
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-open-appearance", "pm-open-a11y", "pm-advanced", "pm-audio", "pm-open-files",
+    "pm-open-appearance", "pm-open-a11y", "pm-audio", "pm-open-files", "pm-open-graphics", "pm-open-visual", "pm-open-progress",
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
   await page.evaluate(() => {
+    document.getElementById("pm-open-controls").click();
     document.getElementById("pm-advanced").click();
   });
   await page.waitForSelector("#advanced:not([hidden])");
@@ -395,6 +396,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(advanced.fit, "settings 200% short landscape").toBe("on");
   expect(advanced.h).toBeGreaterThan(80);
   await page.evaluate(() => {
+    document.getElementById("pm-settings-close").click();
     document.getElementById("pm-settings-close").click();
     document.getElementById("pm-settings-close").click();
   });
@@ -905,28 +907,20 @@ test("balanced control rows derive their shape from local room", async ({ page }
     };
   }, selector);
 
-  // Runtime visibility changes the title group: STANDINGS unhidden here, and on
-  // this hasTouch page USE AS CONTROLLER (#mb-phonepad) is shown too — a coarse
-  // pointer is the device that can BE the controller (js/game.js syncPointerKind).
+  // Utilities includes the controller door on this touch-capable page.
   await page.setViewportSize({ width: 860, height: 560 });
-  await page.evaluate(() => { document.getElementById("mb-standings").hidden = false; });
   const title = await report("#menu-secondary");
   expect(title.display).toBe("flex");
-  // Six rooms: DATA HUB, TRACK DESIGNER, SETTINGS, HOW TO PLAY, STANDINGS,
-  // USE AS CONTROLLER. Garage lives in #menu-explore with Watch / Practice /
-  // Photo (H3), so it never inflates this secondary count. What this guards
-  // is no leftover sliver: every visible door is present, and a lone last
-  // row fills the track.
-  const shownTitleDoors = await page.evaluate(() => ["mb-standings", "mb-data", "mb-designer", "mb-settings", "mb-phonepad", "mb-help"]
+  const shownTitleDoors = await page.evaluate(() => ["mb-settings", "mb-phonepad", "mb-help", "mb-saves"]
     .filter((id) => !document.getElementById(id).hidden).length);
-  expect(shownTitleDoors, "the touch page shows the controller door").toBe(6);
+  expect(shownTitleDoors, "the touch page shows the controller door").toBe(4);
   expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(shownTitleDoors);
   expect(title.lastFill).toBeGreaterThan(0.9);
 
-  // Explore is a forced 2x2: Watch / Practice / Photo / Garage.
+  // Watch and Data Hub share the Explore group.
   const explore = await report("#menu-explore");
   expect(explore.display).toBe("flex");
-  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(4);
+  expect(explore.rowCounts.reduce((n, c) => n + c, 0)).toBe(2);
   expect(explore.lastFill).toBeGreaterThan(0.9);
 
   // Settings home is a .pm-doors list. The guard this test keeps is full

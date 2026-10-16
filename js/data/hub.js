@@ -44,7 +44,7 @@ const DataHub = (function () {
     { id: "live", label: "LIVE", load: function () { return loadLive(); } },
     { id: "telemetry", label: "TELEMETRY", load: function () { return loadTelemetry(); } },
     { id: "race", label: "WATCH & DRIVE", load: function () { return loadRealRace(); } },
-    { id: "export", label: "EXPORT", load: function () { return loadExport(); } }
+    { id: "export", label: "GPS TRACE EXPORT", developer: true, load: function () { return loadExport(); } }
   ];
 
   let root = null;
@@ -53,6 +53,7 @@ const DataHub = (function () {
   let openFlag = false;
   let active = "schedule";
   let returnFocus = null;
+  let developerTools = null;
   // Title sheets that own the top layer. Late ensureDataHub().then(open)
   // must not unhide the hub over them (How to Play was the measured case:
   // both are dialog.screen, last showModal wins). #overlay is the title
@@ -186,19 +187,23 @@ const DataHub = (function () {
     const tabs = el("div", "dh-tabs");
     tabs.setAttribute("role", "tablist");
     tabs.setAttribute("aria-label", "Data hub sections");
+    developerTools = el("details", "dh-developer-tools");
+    const developerLabel = el("summary", "", "Developer tools");
+    developerTools.appendChild(developerLabel);
     TABS.forEach(function (t) {
       const b = el("button", "dh-tab", t.label);
       b.type = "button";
       b.id = "dh-tab-" + t.id;
-      b.setAttribute("role", "tab");
+      if (!t.developer) b.setAttribute("role", "tab");
       b.setAttribute("aria-controls", "dh-panel");
-      b.setAttribute("aria-selected", "false");
-      b.tabIndex = -1;
+      if (!t.developer) b.setAttribute("aria-selected", "false");
+      b.tabIndex = t.developer ? 0 : -1;
       b.addEventListener("click", function () { showTab(t.id); });
       tabButtons[t.id] = b;
-      tabs.appendChild(b);
+      (t.developer ? developerTools : tabs).appendChild(b);
     });
     card.appendChild(tabs);
+    card.appendChild(developerTools);
 
     // content
     contentEl = el("div", "dh-content");
@@ -232,7 +237,7 @@ const DataHub = (function () {
       if (!openFlag) return;
       const target = ev.target;
       if (target && target.getAttribute && target.getAttribute("role") === "tab") {
-        const ids = TABS.map(function (t) { return t.id; });
+        const ids = TABS.filter(function (t) { return !t.developer; }).map(function (t) { return t.id; });
         let idx = ids.indexOf(active);
         if (ev.key === "ArrowRight") idx = (idx + 1) % ids.length;
         else if (ev.key === "ArrowLeft") idx = (idx + ids.length - 1) % ids.length;
@@ -333,9 +338,14 @@ const DataHub = (function () {
     active = id;
     for (const k in tabButtons) {
       tabButtons[k].classList.toggle("active", k === id);
-      tabButtons[k].setAttribute("aria-selected", k === id ? "true" : "false");
-      tabButtons[k].tabIndex = k === id ? 0 : -1;
+      if (k !== "export") {
+        tabButtons[k].setAttribute("aria-selected", k === id ? "true" : "false");
+        tabButtons[k].tabIndex = k === id || (id === "export" && k === "schedule") ? 0 : -1;
+      }
+
     }
+    if (developerTools && id === "export") developerTools.open = true;
+    if (contentEl) contentEl.setAttribute("role", id === "export" ? "region" : "tabpanel");
     // Scroll the active tab into view only when the strip actually overflows
     // and the button is clipped — a wrap row (desktop) or a fully-visible
     // chip must not pan SCHEDULE off the left edge.

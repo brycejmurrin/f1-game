@@ -233,13 +233,14 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await leaves(page, "race-settings", async () => { await toTitle(page); await open(); }, seed);
   });
 
-  for (const [name, door] of [["CONTROLS", "#pm-open-controls"], ["DISPLAY", "#pm-open-display"], ["STEERING & ASSISTS", "#pm-advanced"], ["MUSIC & SOUND", "#pm-audio"]]) {
+  for (const [name, door] of [["CONTROLS", "#pm-open-controls"], ["DISPLAY", "#pm-open-display"], ["ADVANCED INPUT & HANDLING", "#pm-advanced"], ["MUSIC & SOUND", "#pm-audio"]]) {
     test(`settings › ${name}, every fold open`, async ({ page }) => {
       await boot(page);
       const open = async () => {
         await click(page, "#mb-settings");
         await page.waitForFunction(() => window.__aud.top() === "pmsettings" || !document.getElementById("pmsettings")?.hidden,
           null, { polling: 100, timeout: BOOT_MS });
+        if (door === "#pm-advanced") await click(page, "#pm-open-controls");
         await click(page, door);
         await page.waitForFunction(() => window.__aud.top() === "pmsettings", null, { polling: 100, timeout: BOOT_MS });
         // LAZY_AUDIO: #pm-audio may reveal async after ensureAudio; wait for the

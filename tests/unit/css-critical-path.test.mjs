@@ -22,7 +22,7 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 
 const TITLE_CRITICAL = [
   "css/tokens.css", "css/components.css", "css/title.css", "css/menus.css",
-  "css/responsive.css",
+  "css/responsive.css", "css/menu-destinations.css",
 ];
 const SETTINGS_FOUC = [
   "css/dialogs.css", "css/settings.css", "css/settings-controls.css",

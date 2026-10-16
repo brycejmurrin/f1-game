@@ -100,7 +100,10 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("33 settings menu — GEARS MANUAL (tilt)", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page);
+    await clickId(page, "pm-open-controls");
     expect(await cycleTo(page, "pm-steer", "TILT")).toContain("TILT"); // GEARS only active in tilt
+    await clickId(page, "pm-settings-close");
+    await clickId(page, "pm-open-driving");
     expect(await cycleTo(page, "pm-gears", "MANUAL")).toContain("MANUAL");
     await shot(page, "portrait-33-settings-gears-manual");
   });

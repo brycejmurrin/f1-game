@@ -39,8 +39,8 @@ test("flyby pose selects floor at --tap-paint (#fb-in-ease / #fb-in-eye*-at)", (
 });
 
 test("r6 overrides stay flyby-only (no camtune / lighting retarget in the block)", () => {
-  const m = css.match(/UI Fit r6: flyby editor compact tap floor[\s\S]*?\}\s*$/);
-  assert.ok(m, "r6 flyby block present at end of tuner.css");
+  const m = css.match(/UI Fit r6: flyby editor compact tap floor[\s\S]*?(?=\/\* GARAGE ANGLE)/);
+  assert.ok(m, "r6 flyby block present before garage-angle and shared workspace styles");
   assert.doesNotMatch(m[0], /#camtune-inner/, "must not retarget camera in the r6 carve");
   assert.doesNotMatch(m[0], /#lighting-inner/, "must not retarget lighting in the r6 carve");
   assert.doesNotMatch(m[0], /#ct-/, "must not retarget #ct-* camera selectors");

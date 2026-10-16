@@ -637,3 +637,20 @@ test("tray mutation invalidation preserves a driver's cross-session comparison w
   assert.match(popup.textContent, /A One R vs A One Q/);
   h.DataHub.close();
 });
+
+
+test("developer export stays directly reachable outside player tab navigation", async () => {
+  const h = harness();
+  const exp = h.root.find((n) => n.id === "dh-tab-export");
+  assert.equal(exp.parentNode.tagName, "DETAILS");
+  assert.equal(exp.getAttribute("role"), null);
+  const strip = h.root.find((n) => n.classList.contains("dh-tabs"));
+  assert.equal(strip.children.length, 6);
+  assert.ok(strip.children.every((n) => n.getAttribute("role") === "tab"));
+  h.DataHub.open("export"); await h.drain();
+  assert.equal(exp.parentNode.open, true);
+  assert.equal(h.content().getAttribute("role"), "region");
+  assert.equal(h.content().getAttribute("aria-labelledby"), exp.id);
+  h.tab("schedule"); await h.drain();
+  assert.equal(h.content().getAttribute("role"), "tabpanel");
+});

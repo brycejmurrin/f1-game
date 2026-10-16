@@ -219,6 +219,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       });
       await clickLive(page, "pm-settings");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#pmsettings").waitFor({ state: "visible" });
+      await clickLive(page, "pm-open-controls");
       await clickLive(page, "pm-advanced");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#advanced").waitFor({ state: "visible" });
       await shot(page, `${orient}-14-advanced-steering`);
@@ -327,6 +328,7 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       });
       await clickLive(page, "pm-settings");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#pmsettings").waitFor({ state: "visible" });
+      await clickLive(page, "pm-open-controls");
       await clickLive(page, "pm-advanced");   // a race is live: locator.click() waits on frames SwiftShader starves
       await page.locator("#advanced").waitFor({ state: "visible" });
       await clickLive(page, "adv-more");   // a race is live: locator.click() waits on frames SwiftShader starves
