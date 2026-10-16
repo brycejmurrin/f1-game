@@ -36,24 +36,40 @@ test("nothing ships the inspector eagerly: sw.js, index.html preloads, ApexRoste
   assert.ok(!/inspector/i.test(read("js/core/lazy-bundles.js")));
 });
 
-function load(search) {
-  const dom = [];
+function load(search, { hostname = "localhost", protocol = "http:", webdriver = false, store = {} } = {}) {
+  const disk = new Map(Object.entries(store));
   const sb = {
-    location: { search },
+    location: { search, hostname, protocol },
+    navigator: { webdriver },
+    localStorage: { getItem: (k) => (disk.has(k) ? disk.get(k) : null), setItem: (k, v) => disk.set(k, String(v)) },
     Log: { info() {} },
-    document: { body: { appendChild: (e) => dom.push(e) }, createElement: () => ({ style: {}, setAttribute() {}, addEventListener() {}, parentNode: null }) },
+    document: { body: { appendChild() {} }, createElement: () => ({ style: {}, setAttribute() {}, addEventListener() {}, parentNode: null }) },
     window: {},
   };
   vm.createContext(sb);
   vm.runInContext(read("js/perf/three-inspector.js") + "\nthis.TI = ThreeInspector;", sb);
-  return sb.TI;
+  sb.disk = disk;
+  return sb;
 }
 
-test("off by default and on a backend without a three renderer: no import, clear reason", () => {
-  const TI = load("");
+test("host matrix: dev hosts default ON, deployed site and automation OFF, URL and storage override", () => {
+  const on = (search, o) => load(search, o).TI.wanted();
+  for (const hostname of ["localhost", "127.0.0.1", "::1"]) assert.equal(on("", { hostname }), true, hostname);
+  assert.equal(on("", { hostname: "", protocol: "file:" }), true, "file: origin");
+  assert.equal(on("", { hostname: "brycejmurrin.github.io", protocol: "https:" }), false, "deployed site");
+  assert.equal(on("", { webdriver: true }), false, "Playwright on 127.0.0.1 stays off (zero test churn)");
+  assert.equal(on("?inspector=0"), false);
+  assert.equal(on("?inspector=1", { hostname: "brycejmurrin.github.io", protocol: "https:" }), true);
+  assert.equal(on("?inspector=1", { webdriver: true }), true);
+  assert.equal(on("", { store: { "apex26.inspector": "0" } }), false, "stored 0 beats the dev default");
+  assert.equal(on("", { hostname: "x.github.io", store: { "apex26.inspector": "1" } }), true, "stored 1 beats the deployed default");
+  const sb = load("?inspector=0"); sb.TI.wanted();
+  assert.equal(sb.disk.get("apex26.inspector"), "0", "an explicit URL choice is remembered");
+});
+
+test("off by default under automation and on a backend without a three renderer: no import, clear reason", () => {
+  const TI = load("", { webdriver: true }).TI;
   assert.equal(TI.wanted(), false);
-  assert.equal(load("?inspector=1").wanted(), true);
-  assert.equal(load("?inspector=0").wanted(), false);
   const r = TI.set({}, true);   // GLX/WGX façade: no inspectorHost
   assert.equal(r.on, false);
   assert.match(r.reason, /TLX only/);

@@ -1931,7 +1931,7 @@ const api = {
     const ms = gfx.gpuMs ? gfx.gpuMs() : -1, b = gfx.backendState ? gfx.backendState() : null;
     return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null };
   },
-  // inspector(on?) — the opt-in three.js Inspector dev panel (js/perf/three-inspector.js), TLX only; ?inspector=1 boots it.
+  // inspector(on?) — the opt-in three.js Inspector dev panel (js/perf/three-inspector.js), TLX only; default ON on localhost/file: (not under webdriver), OFF on the deployed site; ?inspector=0|1 overrides.
   // inspector(true|false) toggles, inspector() reads { on, supported, reason, loading }. GPU timings need WebGPU
   // timestamp-query; the WebGL2 path still gets CPU/Memory/Timeline/Viewer. While on, gpuTimer() reports off.
   inspector: (on) => typeof ThreeInspector === "undefined"

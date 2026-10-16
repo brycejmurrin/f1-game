@@ -1,5 +1,5 @@
 /* Apex 26 — ThreeInspector: OPT-IN dev panel, the official three.js Inspector (Performance / Memory / Timeline /
-   Viewer / Parameters / Console) on the TLX renderer. `?inspector=1` or __apex.inspector(true).
+   Viewer / Parameters / Console) on the TLX renderer. `?inspector=1` or __apex.inspector(true); default ON on dev hosts (localhost/127.0.0.1/::1/file:), OFF on the deployed site and under navigator.webdriver; remembered in apex26.inspector.
    Costs nothing when off: this file is a few closures, and the vendored addons/inspector/ files are fetched by a
    dynamic import() only on enable — they are not in sw.js PRECACHE, any modulepreload or ApexRoster.DEFERRED
    (tests/unit/three-inspector.test.mjs). GPU timings need the WebGPU backend with timestamp-query; on TLX's WebGL2
@@ -20,9 +20,23 @@ const ThreeInspector = (function () {
   let token = 0;          // bumps on every on/off so a slow import cannot resurrect a disabled panel
   let last = { on: false, supported: false, reason: "off" };
 
-  // URL only (no DevFlags entry: a dev tool should not be stickied in storage).
+  const KEY = "apex26.inspector";
+  function devHost() {
+    const h = location.hostname, pr = location.protocol;
+    return h === "localhost" || h === "127.0.0.1" || h === "::1" || h === "[::1]" || pr === "file:";
+  }
+  function store(v) { try { localStorage.setItem(KEY, v ? "1" : "0"); } catch (_) { /* private mode: not remembered */ } }
+  // Precedence: ?inspector=0|1 (remembered) > stored apex26.inspector > default. Default is ON only on dev/agent
+  // hosts (localhost, 127.0.0.1, ::1, file:) and OFF on the deployed site and under automation (navigator.webdriver:
+  // the Playwright harness serves on 127.0.0.1 and must not pay for 17 extra requests + an overlay).
   function wanted() {
-    try { return /[?&]inspector=1(&|$)/.test(location.search); } catch (_) { return false; }
+    try {
+      const m = /[?&]inspector=([01])(&|$)/.exec(location.search);
+      if (m) { store(m[1] === "1"); return m[1] === "1"; }
+      const v = localStorage.getItem(KEY);
+      if (v === "1" || v === "0") return v === "1";
+      return devHost() && !(typeof navigator !== "undefined" && navigator.webdriver);
+    } catch (_) { return false; }
   }
 
   function say(msg) { try { Log.info("gfx", "[inspector] " + msg); } catch (_) { /* Log may not be up */ } }
@@ -67,7 +81,7 @@ const ThreeInspector = (function () {
       closeBtn.textContent = "×";
       closeBtn.setAttribute("aria-label", "Close three.js Inspector");
       closeBtn.style.cssText = CLOSE_CSS;
-      closeBtn.addEventListener("click", () => teardown(), { once: true });
+      closeBtn.addEventListener("click", () => { store(false); teardown(); last = { on: false, supported: true, reason: "off" }; }, { once: true });
       document.body.appendChild(closeBtn);
       last = { on: true, supported: true, reason: "on" };
       say("on (" + (h.renderer.backend && h.renderer.backend.isWebGPUBackend ? "WebGPU" : "WebGL2") + ")");
@@ -80,8 +94,8 @@ const ThreeInspector = (function () {
 
   // set(gfx, on): on===undefined reads. enable() settles later (dynamic import), so `loading` marks the gap.
   function set(gfx, on) {
-    if (on === true) enable(gfx);
-    else if (on === false) { teardown(); last = { on: false, supported: last.supported, reason: "off" }; }
+    if (on === true) { store(true); enable(gfx); }
+    else if (on === false) { store(false); teardown(); last = { on: false, supported: last.supported, reason: "off" }; }
     return status();
   }
   function status() { return { on: !!inspector, supported: last.supported, reason: last.reason, loading: !inspector && last.on }; }

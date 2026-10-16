@@ -6,7 +6,7 @@ Goal: the official `three/addons/inspector` dev panel on TLX, costing nothing un
   `examples/jsm/inspector/` (~320 KB, hashes in `vendor/three-0.186.1/MANIFEST.json`). `extensions/` (color-grading,
   tsl-graph) is NOT vendored: `Settings.js` imports it lazily on a click and Inspector.js never imports it. The
   generator now preserves the hand-written `PATCHES.md` across its wipe, so two runs leave no diff.
-- **Toggle**: `js/perf/three-inspector.js` (`?inspector=1`, `__apex.inspector(on)`). Dynamic `import("three/addons/inspector/Inspector.js")`
+- **Toggle**: `js/perf/three-inspector.js` (`?inspector=0|1`, `__apex.inspector(on)`). Default ON on localhost/127.0.0.1/::1/file:, OFF on the deployed site and when `navigator.webdriver` (zero churn for the Playwright harness, which serves on 127.0.0.1); precedence URL > stored `apex26.inspector` > default (Bryce 2026-10-16). Dynamic `import("three/addons/inspector/Inspector.js")`
   through the existing importmap, then `renderer.inspector = new Inspector()` (three's setter calls `setRenderer`).
   TLX only: `tlx.js` `inspectorHost()` hands over the renderer; GLX/WGX have none, so the hook answers with a reason.
 - **Never shipped eagerly**: not in `sw.js`, no modulepreload, not in `ApexRoster.DEFERRED`
