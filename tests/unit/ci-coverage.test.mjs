@@ -674,7 +674,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     ["CI", "success"], ["Per-circuit geometry sweeps", "success"], ["Selected specs (verdict)", "success"],
     ["Smoke (page boots, __apex responds) (1)", "success"], ["Structural guards", "success"],
     ["Structural guards (tooling A)", "success"], ["Structural guards (tooling B)", "success"],
-    ["Pure-node unit suites (vm-a1)", "success"], ["Pure-node unit suites (page)", "success"], ["Driving model (characterization traces)", "skipped"],
+    ["Pure-node unit suites (vm-a1)", "success"], ["Pure-node unit suites (page-a)", "success"], ["Pure-node unit suites (page-b)", "success"], ["Driving model (characterization traces)", "skipped"],
   ].map(([name, conclusion]) => ({ name: prefix + name, status: "completed", conclusion: name in over ? over[name] : conclusion }));
   const fullJobs = {
     7: gateJobs(),
@@ -691,7 +691,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     20: gateJobs("", { CI: null, "Per-circuit geometry sweeps": "skipped", "Smoke (page boots, __apex responds) (1)": "skipped" })
       .map((j) => (j.name === "CI" ? { ...j, status: "queued" } : j)),
     // A fast tier still running its node suites: not reusable yet.
-    21: gateJobs("", { "Pure-node unit suites (page)": null }).map((j) => (j.conclusion === null ? { ...j, status: "in_progress" } : j)),
+    21: gateJobs("", { "Pure-node unit suites (page-a)": null, "Pure-node unit suites (page-b)": null }).map((j) => (j.conclusion === null ? { ...j, status: "in_progress" } : j)),
     // A fast tier whose aggregator has not been created yet (its halves still run).
     22: gateJobs("").filter((j) => j.name !== "Structural guards"),
   };
