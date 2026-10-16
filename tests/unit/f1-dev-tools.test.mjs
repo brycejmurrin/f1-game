@@ -160,8 +160,8 @@ test('comparison detects mismatches, rejects non-rendering and non-finite traces
 test('plugin advertises the checkout MCP catalog without owning server startup', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'plugins/f1-dev-tools/plugin.json'), 'utf8'));
   const advertised = manifest.extensions?.['com.openai']?.interface?.capabilities;
-  assert.deepEqual(advertised, ['apex-tools', 'playwright-official', 'chrome-devtools']);
-  assert.equal(manifest.version, '0.3.0');
+  assert.deepEqual(advertised, ['apex-tools', 'playwright-official', 'chrome-devtools', 'js-debugger']);
+  assert.equal(manifest.version, '0.3.1');
 
   const checkout = JSON.parse(fs.readFileSync(path.join(root, '.mcp.json'), 'utf8'));
   assert.deepEqual(Object.keys(checkout.mcpServers).sort(), [...advertised].sort());
@@ -182,4 +182,7 @@ test('plugin advertises the checkout MCP catalog without owning server startup',
   assert.match(skill, /one browser MCP/);
   assert.match(skill, /tools\/env\/ensure-mcp-ready\.sh/);
   assert.match(skill, /cannot attach host MCPs/);
+  assert.match(skill, /pause token after each step/);
+  assert.match(readme, /debugger-mcp\.sh serve-http/);
+  assert.match(manifest.extensions['com.openai'].interface.defaultPrompt, /js-debugger.*existing local Chrome page/);
 });
