@@ -242,12 +242,12 @@ test("unsupported: a prop outside the terrain does not certify its neighbour (#1
   // The ratcheted count keeps its legacy meaning (unjudged A still seeds); B is reported
   // separately so the rescue is visible instead of silent.
   assert.equal(both.counts.unsupported, 0);
-  assert.equal(both.counts.unknownSupport, 1);
+  assert.equal(both.unknownSupport.length, 1, "advisory list, never a ratcheted count");
   assert.equal(both.unknownSupport[0].p.maxY, 6, "B, not the unjudged A");
   // a really grounded neighbour still propagates support
   const C = [[0.5, 0.5, 2.5], [1, 1, 1]];
   const grounded = audit([C]);
-  assert.equal(grounded.counts.unsupported + grounded.counts.unknownSupport, 0);
+  assert.equal(grounded.counts.unsupported + grounded.unknownSupport.length, 0);
 });
 
 test("partial footprint: missing terrain is explicitly unjudged", () => {

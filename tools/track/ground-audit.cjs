@@ -220,7 +220,7 @@ function analyse(env, track, prims, opt) {
   return {
     props: props.length,
     buried, unsupported, unknownSupport, flat, partial,
-    counts: { buried: buried.length, unsupported: unsupported.length, unknownSupport: unknownSupport.length,
+    counts: { buried: buried.length, unsupported: unsupported.length,
               flatCoplanar: flat ? flat.spots : 0 },
   };
 }
@@ -292,7 +292,7 @@ function main() {
     results.push(r);
     if (!asJson) console.log(`${id.padEnd(14)} props ${String(r.props).padStart(6)}  buried ${String(r.counts.buried).padStart(4)}` +
       `  unsupported ${String(r.counts.unsupported).padStart(4)}  flatCoplanar ${String(r.counts.flatCoplanar).padStart(3)} spot(s)` +
-      `  unknownSupport ${String(r.counts.unknownSupport).padStart(3)} (advisory)` +
+      `  unknownSupport ${String(r.unknownSupport.length).padStart(3)} (advisory)` +
       `  footprintSupport ${r.partial.findings.length} warning(s), ${r.partial.unknownSamples} unjudged sample(s)`);
   }
 
@@ -339,7 +339,7 @@ function main() {
     fs.writeFileSync(shotsPath, JSON.stringify({ jobs }, null, 2) + "\n");
   }
   if (asJson) fs.writeSync(1, JSON.stringify(results.map((r) => ({ id: r.id, props: r.props, counts: r.counts,
-    advisory: { candidates: r.partial.candidates, unknownSamples: r.partial.unknownSamples,
+    advisory: { unknownSupport: r.unknownSupport.length, candidates: r.partial.candidates, unknownSamples: r.partial.unknownSamples,
       footprintSupport: r.partial.findings.map((f) => f.report) } })), null, 1) + "\n");
   else console.log(`\n${results.length} circuit(s) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 
