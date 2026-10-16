@@ -279,8 +279,17 @@ const SaveMigrate = (function () {
     career.year = career.year | 0 || 2026;
     career.money = finiteNumber(career.money);
     career.rep = Math.max(0, Math.min(100, Number(career.rep) || 0));
-    career.driver = career.driver && typeof career.driver === "object"
-      ? career.driver : { name: "Your Name", code: "YOU", num: 99 };
+    // Driver identity is read by title/cards and by rating lookups. Keep a
+    // malformed existing slot recoverable: JSON can persist objects/functions'
+    // JSON-safe cousins in these leaves, and a later template interpolation
+    // would throw before the player could reach the import/recovery controls.
+    const driver = career.driver && typeof career.driver === "object" && !Array.isArray(career.driver)
+      ? career.driver : {};
+    driver.name = typeof driver.name === "string" && driver.name ? driver.name : "Your Name";
+    driver.code = typeof driver.code === "string" && driver.code ? driver.code : "YOU";
+    driver.num = typeof driver.num === "number" && Number.isFinite(driver.num)
+      ? Math.max(0, Math.min(999, Math.trunc(driver.num))) : 99;
+    career.driver = driver;
     // A missing team defaults as Career.start does: a null here threw on the title
     // screen's `.toUpperCase()` at boot, from an imported row like {"money":100}
     // (slotPayloadOk does not look at the team).

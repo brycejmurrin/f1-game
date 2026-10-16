@@ -96,3 +96,72 @@ test("describeCall shows the part a reader wants", () => {
   assert.equal(describeCall("Read", { file_path: "a.js" }), "a.js");
   assert.equal(describeCall("mcp__x__y", { a: 1 }), '{"a":1}');
 });
+
+// ── quota-parked sessions (#2382): the retry run folds to one row, the state flags, --summary is one line ──
+import { foldQuota, quotaState, summarize, summaryLine } from "../../tools/ci/session-transcript.mjs";
+
+const LIMIT_SAY = "You've hit your weekly limit · resets Oct 20, 3pm (UTC)";
+const retry = (s) => [
+  say(s, [{ type: "text", text: LIMIT_SAY }]),
+  wrap("result", s, { subtype: "success", is_error: false, num_turns: 1, duration_ms: 1000, total_cost_usd: 818.99, terminal_reason: "api_error" }),
+];
+const wake = (s) => hear(s, "[SYSTEM NOTIFICATION - NOT USER INPUT] check-in");
+const PARKED = [
+  hear(1, "Fix the flaky spec"),
+  say(2, [use("p1", "Bash", { command: "git status" })]),
+  hear(3, [res("p1", "clean")]),
+  wrap("system", 4, { subtype: "hook_response", hook_name: "Stop", outcome: "error", exit_code: 2, stderr: "dirty" }),
+  wrap("result", 5, { subtype: "success", is_error: false, num_turns: 4, duration_ms: 9000, total_cost_usd: 800.5 }),
+  ...retry(10), wake(11), ...retry(12), wake(13), ...retry(14),
+];
+
+test("quota retries fold into one ×N row; wakes between them are counted, not listed", () => {
+  const rows = foldQuota(normalize(PARKED));
+  const q = rows.filter((r) => r.kind === "quota");
+  assert.equal(q.length, 1);
+  assert.equal(q[0].n, 3);
+  assert.equal(q[0].wakes, 2);
+  assert.match(q[0].text, /^×3 quota retries \(first 07:00:10 last 07:00:14\) · 2 wake messages · resets Oct 20, 3pm/);
+  assert.ok(!rows.some((r) => r.kind === "turn" && /api_error/.test(r.text)), "no api_error turn row survives");
+  assert.equal(rows.filter((r) => r.tag === "INJECT").length, 0);
+});
+
+test("a real turn or a typed prompt between retries splits the fold", () => {
+  const evs = [...retry(1), hear(2, "are you there?"), ...retry(3), say(4, [{ type: "text", text: "Back." }]), ...retry(5)];
+  assert.equal(foldQuota(normalize(evs)).filter((r) => r.kind === "quota").length, 3);
+});
+
+test("quota-parked only when the newest real turn is a limit error", () => {
+  assert.deepEqual(
+    (({ parked, reset, retries }) => ({ parked, reset, retries }))(quotaState(foldQuota(normalize(PARKED)))),
+    { parked: true, reset: "Oct 20, 3pm", retries: 3 });
+  const recovered = quotaState(foldQuota(normalize([...retry(1), say(2, [{ type: "text", text: "Resumed." }])])));
+  assert.equal(recovered.parked, false);
+  assert.equal(quotaState(foldQuota(normalize(EVENTS))).parked, false, "the ordinary fixture is not parked");
+});
+
+test("render folds by default, prints the state line, and --raw keeps every retry", () => {
+  const page = { hasMore: true, firstId: "f9" };
+  const rows = normalize(PARKED);
+  const out = render(rows, page, {});
+  assert.match(out, /QUOTA +×3 quota retries/);
+  assert.match(out, /^= state: quota-parked until Oct 20, 3pm \(×3 retries; newest real turn: 07:00:05 TURN\)/m);
+  assert.equal((out.match(/api_error/g) || []).length, 0);
+  assert.match(render(normalize(EVENTS), extractPage(PAGE), {}), /^(?!.*quota-parked)/s);
+  const raw = render(rows, page, { raw: true });
+  assert.equal((raw.match(/api_error/g) || []).length, 3);
+  assert.match(raw, /= state: quota-parked/, "the state line does not depend on folding");
+});
+
+test("--summary is one line: title, cost, last real turn, quota state, hook errors", () => {
+  const s = summarize(normalize(PARKED));
+  assert.deepEqual(s, { title: "Fix the flaky spec", cost: 818.99, lastRealTurn: "07:00:05", quota: "quota-parked",
+    resets: "Oct 20, 3pm", retries: 3, hookErrors: 1 });
+  const line = summaryLine(s);
+  assert.equal(line.split("\n").length, 1);
+  assert.equal(line, "Fix the flaky spec | $818.99 | last real turn 07:00:05 | quota-parked until Oct 20, 3pm (×3) | 1 hook errors");
+  const ok = summarize(normalize(extractPage(PAGE).events), { title: "CI watch" });
+  assert.equal(ok.quota, "active");
+  assert.equal(ok.title, "CI watch");
+  assert.equal(ok.hookErrors, 1);
+});

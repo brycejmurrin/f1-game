@@ -25,8 +25,8 @@ failure. (Dispatch/schedule use `run_id`; deploy-branch pushes queue in
 pages.yml's `pages-train-*` group: the train in progress finishes, only the
 newest waiting push stays pending; `ci-watch.mjs --sha` says `superseded`.) Before marking ready, run
 `node tools/ci/ready-gate.mjs` (exit 0 = Structural guards / tooling-fast green
-on the tip) **and** `node tools/ci/ready-full-cap.mjs` (exit 1 = wait — ≥3 ready
-PRs already hold full-tier CI; draft fast-tier is uncapped).
+on the tip). There is no ready cap since 2026-10-16: ci.yml's lanes bound the
+browser legs inside GitHub.
 
 The other two look identical from the conclusion alone:
 
@@ -63,8 +63,8 @@ reports a conflict, or when a required check is red on the tip and the fix
 is already there. A green PR merges as it stands. **Red AND conflicting:** fix the red on the branch first, then sync once, then ONE push (two pushes cancel the live run — AGENTS.md rule 4).
 Bare `sync-pr <branch>` (no flag) does the real merge and pushes nothing.
 
-Every base merge conflicts on `tests/data/ratchets.json` and the generated
-files; `sync-pr` cures both and a hand merge does not. It leaves you ON
+A base merge can conflict on generated files (`ratchets.json` conflicts ended
+with #2295's per-branch deltas); `sync-pr` cures those and hands back the rest. It leaves you ON
 `sync-pr-<branch>` and pushes nothing without `--push` — publish already verified output using its printed manual push command, or
 inspect/rename an existing temp branch before a fresh sync. Recovery is in
 `check-changes` SKILL.md §After `sync-pr.mjs` (not references/deploy.md).
@@ -93,8 +93,8 @@ is AGENTS.md Session shape rule 11.
     node tools/ci/who-is-on-it.mjs --claim "<text>" # before you start
     node tools/ci/who-is-on-it.mjs --release        # after
 
-Other sessions develop directly on the deploy branch, so they all see one red at
-once. **This overrides "port the fix now and push":** a fix already pushed, a
+Every session's PR lands on the same deploy branch, so one red there is seen
+by all at once. **This overrides "port the fix now and push":** a fix already pushed, a
 live claim, or a live host session on it means STAND DOWN and say so. Three
 sessions fixed one bug on 2026-09-18 and the result was a revert
 (`docs/notes/SHARED-BRANCH-COORDINATION.md`).
@@ -137,7 +137,7 @@ hand-edit `tests/data/ratchets.json`.
 A green PR does not prove Pages. Poll by `head_sha` — `node tools/ci/ci-watch.mjs
 --sha <sha> [--pages]` under a `Monitor` is the poller (one event per job, a red's
 failing step and annotations inline; AGENTS.md rule 12); `pages.yml` gates the tip
-once and publishes exactly that commit (dispatch = "deploy now", ≤ ~25 min).
+once and publishes exactly that commit (dispatch = "deploy now"; median 23 min, p90 73).
 **Live means your commit is an ANCESTOR of the live `apex-sha`** — ask
 `deploy-research` for it. Do not conflate PR CI, ship-push CI and Pages
 (`pages.yml`, workflow id `295002043`), and never curl github.io from the main

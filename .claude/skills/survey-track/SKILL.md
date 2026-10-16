@@ -85,6 +85,17 @@ hands over to **new-track**, not dressing; routing is in the description.
 Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey
 before re-applying that fix.
 
+## Parent brief and commit recipe (plan WS6; #2399)
+
+- Brief checklist: every frame incl. storm weather; a "Code & scenery deep-dive"
+  section (emitter counts with verified file:line); the branch name; PR base
+  `track-survey-assets` (never the deploy branch).
+- Commit recipe: survey paths are gitignored, so `git add -f <paths>` ALONE in
+  one Bash call, then `git commit` in the next.
+- Shots: more than 3 go through `apex_shot_survey` / `apex_track op survey`, not
+  a loop of `apex_shot` (a 52-shot serial survey took 56 min).
+- **Image budget** (plan WS4; #2399): `Read` at most 8 images, then compact; never re-`Read` an old shot; JPEG ≤ 800 px wide for anything a model will look at. A request over 32 MB kills the session and `/compact` with it.
+
 ## Load on demand
 
 - Probe flags, Montreal worked example, gotchas, and the PARENT-only steps

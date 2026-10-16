@@ -574,7 +574,7 @@
 </div>
 
 <!-- race HUD -->
-<div id="hud" hidden>
+  <div id="hud" role="region" aria-label="Race HUD" aria-live="off" hidden>
   <!-- Each box has its own id: the hide rules (css/hud.css) key on it, never on
        a child position, so adding or re-ordering a box cannot hide the wrong one.
        DELTA is static too (js/ui/hud.js paintHudDelta unhides it): vs the ghost
@@ -808,7 +808,7 @@
 </dialog>
 
 <!-- settings sub-menu — opened from pause or title. Door index, then
-     CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC pages. Lighting and
+     CONTROLS / DRIVING / DISPLAY / MUSIC pages. Lighting and
      camera tuners open from DISPLAY's advanced visuals. -->
 <dialog id="pmsettings" class="screen dim" data-esc-close="pm-settings-close" aria-labelledby="dlg-settings" hidden>
   <div id="pmsettings-inner" class="sheet">

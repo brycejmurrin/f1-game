@@ -75,6 +75,14 @@ test("onLeave(fn) is called with the page id when back() / show() hides a page",
   assert.deepEqual(left, ["controls", "driving"], "re-showing the same page leaves nothing");
 });
 
+test("settings title acts as a breadcrumb on the page stack", () => {
+  const h = boot({ ensure: () => Promise.resolve(true), stub: false });
+  h.nav.show("advanced", false);
+  assert.equal(h.dom.byId("dlg-settings").textContent, "SETTINGS › ADVANCED INPUT & HANDLING");
+  h.nav.back();
+  assert.equal(h.dom.byId("dlg-settings").textContent, "SETTINGS");
+});
+
 
 test("late audio completion cannot supersede newer navigation or a closed session", async () => {
   for (const next of [h => h.nav.show("display", true), h => h.nav.back(), h => h.nav.showCurrent(), h => h.ctx.SettingsNav.invalidate(), h => { h.dom.byId("pmsettings").hidden = true; }, h => { h.dom.byId("pmsettings").hidden = true; h.nav.showCurrent(); h.dom.byId("pmsettings").hidden = false; }]) {

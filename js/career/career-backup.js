@@ -58,6 +58,24 @@ const CareerBackup = (function () {
     if (data.driver != null && (typeof data.driver !== "object" || Array.isArray(data.driver))) {
       return { ok: false, reason: "driver-not-object" };
     }
+    // Driver identity is rendered in title/cards and used as a rating key. A
+    // JSON object in `code` (or a non-string name) survives JSON.parse but
+    // throws during template interpolation, after apply() has already written
+    // the slot. Validate the scalar leaves before any persistence instead of
+    // allowing an import to brick the career screen.
+    if (data.driver != null) {
+      const d = data.driver;
+      if (Object.prototype.hasOwnProperty.call(d, "name") && typeof d.name !== "string") {
+        return { ok: false, reason: "driver-name" };
+      }
+      if (Object.prototype.hasOwnProperty.call(d, "code") && typeof d.code !== "string") {
+        return { ok: false, reason: "driver-code" };
+      }
+      if (Object.prototype.hasOwnProperty.call(d, "num")
+          && (typeof d.num !== "number" || !Number.isFinite(d.num))) {
+        return { ok: false, reason: "driver-num" };
+      }
+    }
     if (data.fitted != null && (typeof data.fitted !== "object" || Array.isArray(data.fitted))) {
       return { ok: false, reason: "fitted-not-object" };
     }

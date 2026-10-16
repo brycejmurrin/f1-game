@@ -2115,6 +2115,20 @@ const TLX = (function () {
         if (mat) pushRec(null, null, mat, drawEm(opts), drawAl(opts), 0, null, batch);
       }
 
+      // THREE.InstancedMesh owns a dispose() method, but the attribute-backed
+      // mirror path deliberately uses a plain Mesh. Mesh has no dispose()
+      // method; its render-object cache is released by the documented
+      // Object3D dispose event. Keep this distinction in one helper so a
+      // track switch cannot leave a plain mirror's render object pinned (or
+      // hide the TypeError from calling a nonexistent Mesh.dispose()).
+      function disposeInstancedObject(mesh) {
+        if (!mesh) return;
+        try {
+          if (mesh.isInstancedMesh && typeof mesh.dispose === "function") mesh.dispose();
+          else if (typeof mesh.dispatchEvent === "function") mesh.dispatchEvent({ type: "dispose" });
+        } catch (_) { /* best-effort: the renderer may already be tearing down */ }
+      }
+
       function freeInstancedBatch(batch) {
         if (!batch) return;
         if (shadowSys && shadowSys.freeInstanced) shadowSys.freeInstanced(batch);   // its keyed shadow caster
@@ -2124,7 +2138,7 @@ const TLX = (function () {
           const ix = _instRegistry.indexOf(mv.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
           try { scene.remove(mv.imesh); } catch (_) { /* */ }
-          try { mv.imesh.dispose(); } catch (_) { /* */ }
+          disposeInstancedObject(mv.imesh);
           try { mv.imesh.geometry.dispose(); } catch (_) { /* */ }
           mv.imesh = null; mv.cells = null; mv.srcMatrices = mv.srcColors = mv.packMatrices = mv.packColors = null;
         }
@@ -2132,7 +2146,7 @@ const TLX = (function () {
           const ix = _instRegistry.indexOf(batch.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
           try { scene.remove(batch.imesh); } catch (_) { /* */ }
-          try { batch.imesh.dispose(); } catch (_) { /* */ }
+          disposeInstancedObject(batch.imesh);
           batch.imesh = null;
         }
         if (batch.geo) {
@@ -3572,6 +3586,8 @@ const TLX = (function () {
        * WebGL2 readback could not write (better a colour-shifted pack than
        * none). Returns the number of layers written. */
       function readbackTextureLayers(size, images, n, data) {
+        const expected = [];
+        for (let i = 0; i < n; i++) if (images[i]) expected.push(i);
         let done = [];
         try {
           if (typeof Assets !== "undefined" && Assets.readLayerBytes) done = Assets.readLayerBytes(size, images, n, data);
@@ -3584,7 +3600,11 @@ const TLX = (function () {
           if (r < 0) return filled;
           filled += r;
         }
-        return filled;
+        // A partially readable pack is not a usable pack.  Returning a
+        // texture with zero-filled pages makes missing materials look valid
+        // and prevents Assets.load() from clearing its in-flight promise so a
+        // later retry can recover after a transient readback failure.
+        return filled === expected.length ? filled : 0;
       }
       // The 2d round-trip for one layer the WebGL2 readback refused: 1 written, 0 a bad layer, -1 no 2d context.
       function fill2dLayer(c2d, size, img, i, data) {
