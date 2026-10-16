@@ -41,6 +41,7 @@ function boot(options = {}) {
     localStorage: { getItem: (k) => storage.get(k), setItem: (k, v) => { if (options.storageFull) throw new Error("Quota"); storage.set(k, v); }, removeItem: (k) => storage.delete(k) },
     CustomEvent: class {}, URL: { createObjectURL: () => "blob:photo", revokeObjectURL: () => {} },
     Log: { warn: () => {} }, setTimeout: () => 0, queueMicrotask, requestAnimationFrame: options.requestAnimationFrame || ((fn) => fn()), Blob, Uint8ClampedArray, indexedDB: options.indexedDB,
+    NativeDownload: options.nativeDownload,
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
   ctx.SettingRow = ctx.window.SettingRow;
@@ -124,6 +125,64 @@ test("capture draws before reading a live backbuffer, omits DOM overlays and dow
   assert.equal(b.api.state().captured, true);
   await b.api.exportPhoto(); assert.deepEqual(b.downloads, ["apex26-photo.png"]);
   b.api.close(true); assert.equal(b.closed(), 1); assert.equal(b.G.photoMode, false);
+});
+test("native photo export awaits the share outcome and reports a cancelled or failed download", async () => {
+  for (const outcome of ["success", "cancel", "failure"]) {
+    let resolve, reject, saved, calls = 0;
+    const held = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const b = boot({ nativeDownload: { viable: () => true, saveBlob: (blob, name) => { calls++; saved = { blob, name }; return calls === 1 ? held : Promise.resolve(); } } });
+    b.api.open(); await b.api.capture();
+    const pending = b.api.exportPhoto();
+    await b.api.exportPhoto();
+    await new Promise(setImmediate);
+    assert.equal(saved.name, "apex26-photo.png");
+    assert.equal(await saved.blob.text(), "photo");
+    assert.doesNotMatch(b.dom.byId("ps-message").textContent, /download requested/i);
+    assert.deepEqual(b.downloads, []);
+    assert.equal(calls, 1, "a second tap must not overlap the native chooser");
+    assert.equal(b.api.state().busy, false, "download does not take ownership of capture/close busy state");
+    assert.equal(b.dom.byId("ps-close").disabled, false);
+    if (outcome === "success") resolve(); else reject(new Error(outcome === "cancel" ? "Share canceled" : "disk full"));
+    await pending;
+    assert.match(b.dom.byId("ps-message").textContent, outcome === "success" ? /PNG download requested/ : outcome === "cancel" ? /Download failed: Share canceled/ : /Download failed: disk full/);
+    await b.api.exportPhoto();
+    assert.equal(calls, 2, "settlement allows a later export after success, cancellation, or failure");
+  }
+});
+
+test("library DOWNLOAD shares the in-flight guard with PNG export and permits retry after a cancelled share", async () => {
+  let reject, calls = 0;
+  const held = new Promise((resolve, no) => { reject = no; });
+  const b = boot({ nativeDownload: { viable: () => true, saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
+  b.api.open({ source: "garage" }); await b.api.capture(); await b.api.savePhoto();
+  const row = b.dom.byId("ps-library").children[0];
+  const download = row.children.find((child) => child.textContent === "DOWNLOAD");
+  download.click(); download.click();
+  await b.api.exportPhoto();
+  assert.equal(calls, 1, "library double taps and the PNG action cannot overlap native sharing");
+  assert.equal(b.dom.byId("ps-close").disabled, false);
+  reject(new Error("Share canceled")); await turn();
+  assert.match(b.dom.byId("ps-message").textContent, /Download failed: Share canceled/);
+  download.click(); await turn();
+  assert.equal(calls, 2);
+  assert.match(b.dom.byId("ps-message").textContent, /Photo download requested/);
+});
+
+test("closing and reopening during a photo export stays usable and ignores stale completion feedback", async () => {
+  let finish, calls = 0;
+  const held = new Promise((resolve) => { finish = resolve; });
+  const b = boot({ nativeDownload: { viable: () => true, saveBlob: () => { calls++; return calls === 1 ? held : Promise.resolve(); } } });
+  b.api.open({ source: "garage" }); await b.api.capture();
+  const pending = b.api.exportPhoto(); await turn();
+  b.api.close(false); b.api.open({ source: "garage" }); await b.api.capture();
+  const message = b.dom.byId("ps-message").textContent;
+  await b.api.exportPhoto();
+  assert.equal(calls, 1, "the original chooser remains the in-flight download across reopen");
+  finish(); await pending;
+  assert.equal(b.dom.byId("ps-message").textContent, message);
+  assert.equal(b.api.state().busy, false);
+  await b.api.exportPhoto();
+  assert.equal(calls, 2);
 });
 test("software presentation is awaited while raw pixels are captured before compositing", async () => {
   const b = boot(); let present;
@@ -421,4 +480,10 @@ test("Studio state exposes monotonic session generation across same-open reentry
   assert.equal(first.open, true); assert.equal(typeof first.generation, "number");
   b.api.close(false); b.api.open(); const next = b.PS.state();
   assert.equal(next.open, first.open); assert.ok(next.generation > first.generation);
+});
+
+test("#1895: the Home title art does not paint over a live Photo Studio subject", () => {
+  const css = fs.readFileSync(new URL("../../css/experience.css", import.meta.url), "utf8");
+  assert.match(css, /body\.photo-studio-open #overlay\[data-home-ready="1"\] #title-car \{ display: none; \}/,
+    "once the garage/track subject has painted, #title-car must be hidden while the studio is open");
 });

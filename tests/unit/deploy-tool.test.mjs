@@ -755,18 +755,26 @@ test("--train reports the nightly rota, and reads its jobs rather than the rollu
     "nightlyHealth must name the jobs that actually FAILED, whatever the rollup says");
 });
 
-test("--train answers without preflight, and names all three signals", () => {
-  const r = spawnSync("node", ["tools/ci/deploy.mjs", "--train"], { cwd: ROOT, encoding: "utf8" });
-  assert.equal(r.status, 0, r.stderr);
-  const out = r.stdout + r.stderr;
-  // Network-independent: with no API answer each line still prints "unknown".
-  for (const label of ["train ci:", "train pages:", "train nightly:"]) {
-    assert.ok(out.includes(label), `--train printed no "${label}" line:\n${out}`);
-  }
-  // BEFORE preflight, deliberately — "was the train already red?" is the
-  // question you ask while a browser run is pinning loadavg above the refusal,
-  // and preflight() returns 3 there.
-  assert.ok(!/REFUSED:/.test(out), `--train must not run preflight:\n${out}`);
+test("--train answers without Git planning or preflight, and names all three signals offline", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-train-offline-"));
+  const gitCalls = path.join(dir, "git-calls");
+  try {
+    // Fail every Git operation, including fetch/merge-tree. The real command
+    // must still report health; stub only external transports, never main().
+    fs.writeFileSync(path.join(dir, "git"), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$APEX_TRAIN_GIT_CALLS"\nexit 97\n', { mode: 0o755 });
+    for (const cmd of ["curl", "gh"]) fs.writeFileSync(path.join(dir, cmd), "#!/bin/sh\nexit 7\n", { mode: 0o755 });
+    const r = spawnSync(process.execPath, ["tools/ci/deploy.mjs", "--train"], {
+      cwd: ROOT, encoding: "utf8", timeout: 15000,
+      env: { ...process.env, PATH: dir, APEX_TRAIN_GIT_CALLS: gitCalls },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    const out = r.stdout + r.stderr;
+    for (const label of ["train ci:", "train pages:", "train nightly:"]) {
+      assert.ok(out.includes(label + " unknown"), `--train printed no offline "${label}" line:\n${out}`);
+    }
+    assert.equal(fs.existsSync(gitCalls), false, "advisory health must not invoke Git planning");
+    assert.ok(!/REFUSED:/.test(out), `--train must not run preflight:\n${out}`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 /* trainHealth / nightlyHealth used three bare curls, drawing on the 60/h

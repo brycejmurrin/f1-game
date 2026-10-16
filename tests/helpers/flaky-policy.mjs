@@ -17,10 +17,16 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 export const QUARANTINE = path.join(ROOT, "tests/data/flaky-quarantine.json");
 
 /** Specs under quarantine, as repo-relative paths (the reporter's key().spec shape). */
-export function loadQuarantine(file = QUARANTINE) {
+export function loadQuarantine(file = QUARANTINE, now = new Date()) {
   try {
     const q = JSON.parse(fs.readFileSync(file, "utf8")).quarantine || [];
-    return new Set(q.map((e) => e.spec));
+    const active = q.filter((e) => e.title && e.owner && e.review && e.evidence &&
+      /^\d{4}-\d{2}-\d{2}$/.test(e.expires || "") && Number.isFinite(Date.parse(e.expires + "T00:00:00Z")) &&
+      now.toISOString().slice(0, 10) <= e.expires);
+    // Keep spec membership for shard scheduling, exact identities for verdicts.
+    const specs = new Set(active.map((e) => e.spec));
+    specs.policies = active;
+    return specs;
   } catch {
     return new Set();
   }
@@ -33,7 +39,12 @@ export function loadQuarantine(file = QUARANTINE) {
  */
 export function flakyVerdict(flaky, quarantine) {
   const blocking = [], quarantined = [];
-  for (const t of flaky) (quarantine.has(t.spec) ? quarantined : blocking).push(t);
+  for (const t of flaky) {
+    const known = quarantine.policies
+      ? quarantine.policies.some((row) => row.spec === t.spec && row.title === t.title)
+      : false;
+    (known ? quarantined : blocking).push(t);
+  }
   return { blocking, quarantined, fail: blocking.length > 0 };
 }
 

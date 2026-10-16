@@ -74,12 +74,13 @@ if (process.env.APEX_GL === "llvmpipe") {
 const RENDER_SPECS = [
   "dev-tools", "f1-track-accuracy", "hud-audit", "image-grade-visual",
   "lighting-ab", "lighting-tuner-grade",
+  "garage-first-frame",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
   "parts-liveries",
   "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard", "photo-studio",
   "webgl-probes", "camera", "smoke", "season", "time-trial",
   "material-shimmer", "instanced-draw",
-  "menu-baseline",
+  "menu-baseline", "track-designer",
 ].map((n) => `**/${n}.spec.js`);
 
 // WebXR IWER suite — own project so failures are attributable and so the

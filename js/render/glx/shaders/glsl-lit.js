@@ -206,6 +206,7 @@ uniform float uFogTint;     // −1 cool .. +1 warm white-balance on the distanc
 uniform float uMistHeight;  // ground-mist layer height band (world m scale, def 0.30)
 uniform float uShadowTintAmt; // 0..1 cool-blue tint on shadowed / ambient-only areas
 uniform float uWetDark;     // wet-asphalt darkening multiplier (def 1.0)
+uniform float uPuddles;     // PUDDLES knob: standing-water growth (def 1.0, 0 = none) — js/render/shared/puddles.js
 uniform float uLampNearClamp;  // near-field distance floor on lamp 1/d² falloff (m, def 4.0) — tames close-by wall blow-out (dual: WGSL F.params7.w)
 uniform float uWindowSunFlash; // glossy-glass dry sun-flash reflection strength (def 1.0 = shipped 0.6)
 uniform float uSkyRimGlow;     // grazing-angle atmospheric sky-rim brightening strength (def 1.0 = shipped 0.18)
@@ -1232,11 +1233,16 @@ void main() {
     int wmid = int(vMat + 0.5);
     float porous = (wmid == 9 || wmid == 6 || wmid == 10 || wmid == 8 || wmid == 11) ? 1.0 : 0.0;
     wet = uWetness * upFace;
-    float pn = vnoise(vWorldPos.xz * 0.13 + 4.7);
+    // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
+    // reference (constants K, mask()); TLX tsl-lit.js and WGX wgsl-chunks.js
+    // mirror it constant for constant. Two octaves of world-space surface
+    // noise (~7.7 m, ~3.4 m): fixed real locations, never screen-space (GT7
+    // keeps puddles where they are, https://traxion.gg/gran-turismo-7-features-detailed-dynamic-weather-but-not-at-every-track/).
+    float pn = vnoise(vWorldPos.xz * 0.13 + 4.7) * 0.70 + vnoise(vWorldPos.xz * 0.29 + 11.3) * 0.30;
     // PUDDLES FOLLOW THE ROAD SHAPE (2026-10-01). On the road ribbon (vTrk.z is
     // the half-width, > 0 only there) the noise is weighted by where water
-    // actually stands: the crown drains to the gutters (0.7 at the centre,
-    // 1.2 at the edges), and the LOW side of a banked turn holds it. The
+    // actually stands: the crown drains to the gutters (0.75 at the centre,
+    // 1.25 at the edges), and the LOW side of a banked turn holds it. The
     // lateral downhill is read from the geometry — the world direction of
     // increasing lateral x, from the screen-space derivatives of vTrk.y and
     // vWorldPos.xz, dotted with the geometric normal's tilt — so a camber
@@ -1249,11 +1255,19 @@ void main() {
       float lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
       float rl = length(trkRightXZ);   // derivatives hoisted next to N (uniform control flow)
       float downhill = rl > 1e-6 ? -dot(trkRightXZ / rl, Ngeo.xz) : 0.0;   // +: the +x side lies lower
-      pool = mix(0.7, 1.2, abs(lat)) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+      // The gutters and kerb hollows hold the water (rough edges fill first —
+      // iRacing Tempest, https://www.iracing.com/?p=272386): weight 0.75 on
+      // the crown → 1.25 from |lat| 0.95 out. No curvature, no racing line.
+      pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
     }
-    // Wide, soft puddle edges so pools BLEND into the wet sheet rather than reading
-    // as hard painted ovals.
-    puddle = smoothstep(0.48, 0.88, pn * pool) * wet;        // only low spots pool
+    // GROWTH: nothing below road wetness 0.6 (a "wet" road is damp, not
+    // flooded); from 0.6 to 1.0 the threshold falls 1.0 → 0.62 so pools spread
+    // out of the deepest spots, and the amount fades in. Drying runs it
+    // backwards: puddles shrink to their deepest spots first, then vanish.
+    // Wide, soft edges (0.20) so pools BLEND into the wet sheet.
+    float pg = clamp(smoothstep(0.6, 1.0, uWetness) * uPuddles, 0.0, 1.0);
+    float plo = 1.0 - 0.38 * pg;
+    puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace;
     // Porous ground cannot hold standing water — no pooling, and no sheen below.
     puddle *= 1.0 - porous;
     // RAIN RIPPLES (2026-10-01): expanding rings from drop impacts, keyed to the
@@ -1304,7 +1318,7 @@ void main() {
     float absorbRoad = clamp(1.0 - 0.58 * uWetDark, 0.0, 1.0);
     float absorb = mix(absorbRoad, absorbRoad * 0.66, porous);
     albedo *= mix(1.0, absorb, wet);
-    albedo *= mix(1.0, 0.50, puddle);
+    albedo *= mix(1.0, 0.40, puddle);   // standing water: darker than the wet sheet
     // Polish: damp sheen → mirror in the puddles. A wet sheet is glossy but not
     // a perfect mirror except where water actually pools, so the general wet
     // roughness stays moderate (keeps the sun specular a streak, not a flare).
@@ -1312,7 +1326,7 @@ void main() {
     // keeps visible texture between the pools. Porous ground stays fully matte.
     wetSheen = wet * (1.0 - porous);
     rough = mix(rough, 0.30, wetSheen);
-    rough = mix(rough, 0.06, puddle);
+    rough = mix(rough, 0.02, puddle);   // near-mirror inside the pool
     a = rough * rough;
     // Thin water film is a dielectric (~0.03 reflectance) — raise f0 toward it.
     // Only where a film can actually form.
@@ -1757,7 +1771,7 @@ void main() {
   // Wetness forces the surface glossy, so this kicks in hard on rainy roads —
   // the sky/horizon mirrors in the tarmac and the sun smears a bright streak.
   float envBlend = clamp((0.40 - rough) / 0.30, 0.0, 1.0) * specular;
-  envBlend = max(envBlend, wetSheen * 0.55);   // smooth analytic wet mirror: this is the COHERENT reflective base the road shows wherever the screen-space SSR march misses (grazing cockpit views miss a lot). Was 0.15 (a whisper, "SSR owns it") — but SSR is patchy at grazing angles, so the analytic sky mirror carries the wet look and SSR just adds crisp on-screen detail on top.
+  envBlend = max(envBlend, max(wetSheen * 0.55, puddle * 0.90));   // PUDDLES: a standing pool is a strong mirror even where SSR is shed (phones) — the analytic sky/probe carries it. Smooth analytic wet mirror: this is the COHERENT reflective base the road shows wherever the screen-space SSR march misses (grazing cockpit views miss a lot). Was 0.15 (a whisper, "SSR owns it") — but SSR is patchy at grazing angles, so the analytic sky mirror carries the wet look and SSR just adds crisp on-screen detail on top.
   if (envBlend > 0.001) {
     // reflect() computed here, not at the top: envBlend is ~0 for the matte
     // majority of the scene (road/terrain/walls), where Rv was pure waste.
@@ -1799,7 +1813,7 @@ void main() {
     // as the sky it mirrors).
     float envFresnel = F_Schlick(max(dot(N, V), 0.0), vec3(0.04), 1.0).x;
     envFresnel = mix(envFresnel, envFresnel * envFresnel, wetSheen * 0.35);   // was full square when wet, which shoved the sky sheen into the far grazing band only and left near/mid road dark (SSR was meant to cover it). Soften the squaring so the smooth analytic reflection spreads across the whole wet road — a coherent mirror everywhere, not a thin far strip.
-    vec3 envWet = envColor * (1.0 - wetSheen * 0.45);   // keep ~55% of the sky colour on a wet road (was 10%): the analytic mirror now has to read as a real reflection, since it's the smooth base under the patchy SSR. Soft-clip below still stops it blowing to white.
+    vec3 envWet = envColor * (1.0 - wetSheen * 0.45 * (1.0 - puddle * 0.5));   // a puddle keeps more of the sky than the wet sheet   // keep ~55% of the sky colour on a wet road (was 10%): the analytic mirror now has to read as a real reflection, since it's the smooth base under the patchy SSR. Soft-clip below still stops it blowing to white.
     // Soft-clip the reflection so a wet road can never blow out to a white sheet
     // (a low dusk/dawn sun + bright twilight sky otherwise push this past 1). A
     // Reinhard shoulder on the brightest channel keeps it bright where the scene

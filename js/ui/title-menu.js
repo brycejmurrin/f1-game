@@ -37,7 +37,7 @@ const TitleMenu = (function () {
         cont._apexContinue = hint || null;
         if (hint) {
           if (hint.kind === "career" && c && !hint.sub) {
-            // stamped career calendar (not the build's Tracks.SEASON)
+            // ShareCode absent: the same stamped-calendar line continueHint builds
             const next = cal[Math.min(c.season.round, cal.length - 1)];
             contSub.textContent = c.year + " · ROUND " + Math.min(c.season.round + 1, cal.length)
               + (next ? " · " + next.name : "");

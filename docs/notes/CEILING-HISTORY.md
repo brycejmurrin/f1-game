@@ -1,5 +1,23 @@
 # Ceiling history — the module-size ratchet, 2026-08 → 2026-09-03
 
+## 2026-10-15 — PR #1922 (cursor/host-remove-guest-7951): host removes a guest from VS Friend
+
+`js/net/lobby.js` lines 2194 → **2306** (+112). Deliberate raise past the 40-line absorb. The growth is
+the feature: the seat roster (`rosterSeatRow`, player count, ready dot with `role="img"`), the host's
+single Remove button (`hostRemoveRow`; `verifyRow` no longer adds a second one), the evict path that keeps
+the host in the waiting room and rotates the room code (`rotateRoomAfterEvict`), and the ack-before-close
+eviction (`LEFT { evicted }`, the guest closes its own end, `EVICT_GRACE_MS` fallback) so the guest reads
+"The host removed you" rather than "The host left". Tree `cssClasses` / `rawColor` / `shellNodes` move with
+the roster markup; the dead `.vs-ready` and `[data-verify-remove]` rules are deleted against it.
+## 2026-10-15 — PR #1928 ship merge `e8f052304`: HUD caps catch-up (footprint audit)
+
+Merge `claude/f1-game-project-26h3ng` into `cursor/footprint-audit-7c2d` to refresh the
+branch before ready; no OWNED footprint/tool edits in the HUD files. `css/hud.css` codeLines
+2122 → **2165** (+43), lines 2346 → **2393** (+47); `js/ui/hud.js` codeLines 1594 → **1596**
+(+2), lines 2652 → **2654** (+2); `js/game.js` codeLines 5137 → **5138** (+1). Deliberate
+`tests/data/ratchets.json` remeasure on the merged tree so Structural guards `--base` clears;
+the footprint feature commit `62005ca73` is unchanged.
+
 ## 2026-10-14 — sync #1501 onto ship tip `151cc6569`: absorb game.js +1
 
 `js/game.js` codeLines 5099 → **5100**, lines 9376 → **9377**. Sync of `cursor/hud-announce-stack-577d` onto ship after #1462/#1469/#1486/#1497; ship tip alone grew past both ceilings by 1. Deliberate sync absorb (`ratchets.mjs --update`) — not an OWNED extraction. Also took ship lower on `js/lighting/presets.js` lines 8341 → **8251**.

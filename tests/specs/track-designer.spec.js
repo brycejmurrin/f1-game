@@ -8,6 +8,9 @@ import { test, expect, BOOT_MS, RACE_BUILD_MS, awaitTrackBuild, clickLive } from
 
 /** __apex.race(id) on a loaded CI runner — stall-aware build wait, not TRACK_MS. */
 async function raceAndBuild(page, id) {
+  // Reload restores live rendering. These checks inspect registry/build state,
+  // so keep expensive software frames paused while the browser reads it.
+  await page.evaluate(() => window.__apex.headless(true));
   await page.evaluate((tid) => window.__apex.race(tid), id);
   await awaitTrackBuild(page);
   await expect.poll(() => page.evaluate(() => window.__apex.info().track), { timeout: 15_000 }).toBe(id);
@@ -46,6 +49,41 @@ async function randomiseGreen(page, seed) {
 
 test.describe("Track designer", () => {
   test.use({ viewport: LANDSCAPE });
+
+  for (const viewport of [LANDSCAPE, { width: 390, height: 844 }]) {
+    test(`draft recovery and saved identity survive reload at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+      await page.getByRole("button", { name: "SAVE", exact: true }).click();
+      await page.evaluate(() => TrackDesigner.setTheme("alpine"));
+      await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("apex26.customTrackDraft") || "null")?.theme)).toBe("alpine");
+      await page.getByRole("button", { name: "SAVE", exact: true }).click();
+      const savedId = await page.evaluate(() => TrackDesigner.state().design.originId);
+      await page.reload();
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.headless(true));
+      await openDesigner(page);
+      expect(await page.evaluate(() => TrackDesigner.state().design.originId)).toBe(savedId);
+      await page.evaluate(() => { TrackDesigner.setTheme("oasis"); TrackDesigner.preview(); });
+      await page.getByRole("button", { name: "SAVE", exact: true }).click();
+      expect(await page.evaluate(() => CustomTracks.list().length)).toBe(1);
+      await page.evaluate(() => {
+        TrackDesigner.setName("Recover Me"); TrackDesigner.setTheme("alpine");
+        const other = CustomTracks.list()[0]; TrackDesigner.load(other, "library", other.id);
+        TrackDesigner.close();
+      });
+      await page.reload();
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.headless(true));
+      await openDesigner(page);
+      await page.getByRole("tab", { name: "MY CIRCUITS", exact: true }).click();
+      await page.getByRole("button", { name: "RECOVER PREVIOUS DRAFT", exact: true }).click();
+      expect(await page.evaluate(() => TrackDesigner.state().design.name)).toBe("RECOVER ME");
+      expect(await page.evaluate(() => TrackDesigner.state().design.theme)).toBe("alpine");
+      await expect(page.getByRole("tab", { name: "DESIGN", exact: true })).toHaveAttribute("aria-selected", "true");
+      await page.screenshot({ path: test.info().outputPath("recovered-draft.png") });
+    });
+  }
 
   test("library collection file imports atomically and preserves the open draft", async ({ page }) => {
     await bootClean(page);
@@ -552,6 +590,7 @@ test.describe("Track designer", () => {
     const save = page.locator("#trackdesigner .td-foot button", { hasText: /^SAVE$/ });
     await expect(save).toBeDisabled();
     const fixAll = page.locator("#trackdesigner button", { hasText: /^FIX ALL$/ });
+    await page.locator('#trackdesigner [data-mode="test"]').click();
     await expect(fixAll).toBeVisible();
     await fixAll.click();
     await page.waitForFunction(() => { const s = TrackDesigner.state(); return !s.pending && s.ok; }, null, { polling: 100, timeout: 15_000 });
@@ -570,6 +609,7 @@ test.describe("Track designer", () => {
     await openDesigner(page);
     await randomiseGreen(page, 7);
     const pane = page.locator('#trackdesigner .td-pane[data-pane="design"]');
+    await page.locator('#trackdesigner [data-mode="draw"]').click();
     const tech = pane.locator("button", { hasText: /^TECHNICAL$/ });
     // The cards are the design pane's second .td-grid (START FROM's is the first, hidden).
     const grid = pane.locator(".td-grid").nth(1);
@@ -605,6 +645,7 @@ test.describe("Track designer", () => {
       return TrackDesigner.state().sel;
     });
     expect(sel).toBe(12);
+    await page.locator('#trackdesigner [data-mode="test"]').click();
     // Where the car should land: the node of the engine's own build nearest control 12.
     const want = await page.evaluate(() => {
       const st = TrackDesigner.state(), tr = TrackValidate.check(st.design).tr, p = st.design.pts[12];
@@ -638,4 +679,58 @@ test.describe("Track designer", () => {
     expect(back.sel).toBe(12);
     expect(back.msg).toContain("Back from the test drive");
   });
+});
+
+test("designer workspaces author bridges and water on desktop and phone", async ({ page }, testInfo) => {
+  const errors = []; page.on("pageerror", (e) => errors.push(String(e)));
+  await bootClean(page); await openDesigner(page); await randomiseGreen(page, 7);
+  for (const [size, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 390, height: 844 }]]) {
+    await page.setViewportSize(viewport);
+    const mode = (id) => page.locator('#trackdesigner [data-mode="' + id + '"]');
+    await mode("draw").click();
+    await expect(page.getByRole("button", { name: "RANDOMISE", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "REVERSE", exact: true })).toBeHidden();
+    await mode("edit").click();
+    await expect(page.getByRole("button", { name: "RANDOMISE", exact: true })).toBeHidden();
+    await expect(page.getByRole("button", { name: "REVERSE", exact: true })).toBeVisible();
+    await mode("elevation").click();
+    await page.getByRole("spinbutton", { name: "Selected point number", exact: true }).fill("11");
+    await page.getByRole("spinbutton", { name: "Selected point number", exact: true }).press("Enter");
+    const bridges = page.locator('#trackdesigner [data-role="bridges"]');
+    await bridges.locator('[data-role="add-bridge"]').click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.bridges.length)).toBe(1);
+    await expect(bridges.getByRole("button", { name: "Remove road bridge 1", exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(size + "-bridge.png") });
+    await bridges.getByRole("button", { name: "Remove road bridge 1", exact: true }).click();
+    await mode("scenery").click();
+    await page.locator('[data-scenery-section="objects"]').click();
+    await page.locator('[data-object-category="water"]').click();
+    for (const kind of ["water", "pond", "lake", "river"]) await expect(page.locator('[data-prop="' + kind + '"]')).toBeVisible();
+    await expect(page.locator('[data-prop="stand"]')).toBeHidden();
+    await page.locator('[data-prop="pond"]').click();
+    await page.getByRole("button", { name: "Place the selected prop at the selected control point", exact: true }).click();
+    expect(await page.evaluate(() => TrackDesigner.state().design.props.filter((p) => p.kind === "pond").length)).toBe(size === "desktop" ? 1 : 2);
+    for (const role of ["prop-side", "prop-gap", "object-filters"]) {
+      const fits = await page.locator('[data-role="' + role + '"]').evaluate((row) => {
+        const outer = row.getBoundingClientRect();
+        return [...row.querySelectorAll("button,input")].every((control) => {
+          const r = control.getBoundingClientRect();
+          return r.left >= outer.left - 1 && r.right <= outer.right + 1;
+        });
+      });
+      expect(fits, role + " controls fit the sidebar at " + size).toBe(true);
+    }
+    const waterFootprints = await page.evaluate(() => {
+      const d = TrackDesigner.state().design, tr = TrackValidate.build(d).tr;
+      return DesignerSceneryPreview.plan(d, tr).ground.filter((p) => p.kind === "water").length;
+    });
+    expect(waterFootprints, "authored water reaches the map preview").toBeGreaterThan(0);
+    await page.screenshot({ path: testInfo.outputPath(size + "-water.png") });
+    await mode("test").click();
+    await expect(page.getByRole("textbox", { name: "Circuit name", exact: true })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Design checks", exact: true })).toBeVisible();
+    await expect(bridges).toBeHidden();
+    expect(await page.locator("#trackdesigner").evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+  }
+  expect(errors).toEqual([]);
 });

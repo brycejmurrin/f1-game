@@ -44,6 +44,7 @@ const SRC = {
   mir: fnSource(TLX, "function _mirOf(batch) {"),
   r1: slice("      let _coOn = true;", "      function ensureStream(slot, verts) {"),
   streams: slice("      function ensureStream(slot, verts) {", "      const skidStream = {"),
+  drop: slice("      const _dropQueue = [];", "      // Caller frees are ownership boundaries"),
 };
 
 async function rig(t, ls = {}) {
@@ -82,13 +83,16 @@ async function rig(t, ls = {}) {
     }
     function disposeGeometry(g) { g.dispose(); }
     let _mirActive = false; const _instPerPass = true;
+    let _warmPending = null;
+    ${SRC.drop}
     ${SRC.range0}
     ${SRC.batch}
     ${SRC.mir}
     ${SRC.r1}
     ${SRC.streams}
     return { createInstancedBatch, updateInstances, _mirOf, _coAppend, _coRuns, ensureStream, wrapStream, uploadStream,
-      materialFor, resetRecs, drawList, usage: _instUsage, usageOf: _instUsageOf, aiOn: _aiInst };`);
+      materialFor, resetRecs, drawList, usage: _instUsage, usageOf: _instUsageOf, aiOn: _aiInst,
+      _coDrop, _dropQueue, flushDropped, warm: (p) => { _warmPending = p; } };`);
   const R = mk(THREE, TSL, scene, renderer, camera, { getItem: (k) => (k in ls ? ls[k] : null) }, lit, globalThis);
   const bytes = (fn) => { fg.reset(); fn(); return fg.bytes.bufferSubData; };
   const render = () => renderer.render(scene, camera);
@@ -211,6 +215,52 @@ function buildTri() {
   return g;
 }
 
+// #2150: _coDrop freed a coalesced run with scene.remove + geometry.dispose() only. In three r186 a geometry's
+// "dispose" just nulls the attribute mirror; only the OBJECT's "dispose" runs RenderObject.dispose(), so every
+// RenderObject that drew the run stayed a listener on the long-lived shared run material — pinning the mesh, its
+// view geometry and the CO_CAP x 19-float buffer. Measured here on the real renderer: the material's "dispose"
+// listener count, one per RenderObject (main pass and mirror alike), must come back down when the source is freed.
+test("#2150: freeing a coalesced source releases its run's RenderObjects (and queues the drop while a warm holds it)", async (t) => {
+  const h = await rig(t);
+  const o = { roughness: 0.55, coalesce: true, emissive: 0 };
+  const W = (i) => Float32Array.from(new THREE.Matrix4().setPosition(i, 0, -i).elements);
+  const listeners = (m) => ((m._listeners && m._listeners.dispose) || []).length;
+  const drawRun = (geo) => {
+    h.R.resetRecs();
+    for (let i = 0; i < 3; i++) assert.equal(h.R._coAppend(geo, W(i), o), true);
+    const rec = h.R.drawList[h.R.drawList.n - 1];
+    rec.instanced.imesh.material = rec.mat; rec.instanced.imesh.count = rec.instanced.visible; rec.instanced.imesh.visible = true;
+    return rec;
+  };
+  const geo = buildTri();
+  const rec = drawRun(geo), run = rec.instanced, mat = rec.mat, view = run.imesh.geometry;
+  const before = listeners(mat);
+  h.render();
+  const drawn = listeners(mat);
+  assert.ok(drawn > before, "the render made a RenderObject listening on the shared run material");
+  let objDisposed = 0, viewDisposed = 0;
+  run.imesh.addEventListener("dispose", () => objDisposed++);
+  view.addEventListener("dispose", () => viewDisposed++);
+  h.R._coDrop(geo);
+  assert.equal(objDisposed, 1, "the run mesh got the object 'dispose' three's RenderObject listens for");
+  assert.equal(viewDisposed, 1, "the run's view geometry is disposed too");
+  assert.equal(listeners(mat), before, "every RenderObject of the run left the shared material (none leaked)");
+  assert.equal(run.imesh.parent, null); assert.equal(h.R._coRuns.has(geo), false);
+
+  // While a warm is compiling, the drop waits for flushDropped (a compile may still hold the mesh), view included.
+  const geo2 = buildTri();
+  const rec2 = drawRun(geo2), run2 = rec2.instanced, view2 = run2.imesh.geometry;
+  h.render();
+  let ob2 = 0, vw2 = 0;
+  run2.imesh.addEventListener("dispose", () => ob2++); view2.addEventListener("dispose", () => vw2++);
+  h.R.warm(Promise.resolve());
+  h.R._coDrop(geo2);
+  assert.equal(h.R._dropQueue.includes(run2.imesh), true, "queued while the warm is pending");
+  assert.equal(ob2 + vw2, 0, "nothing disposed under a live compile");
+  h.R.warm(null); h.R.flushDropped();
+  assert.equal(ob2, 1); assert.equal(vw2, 1); assert.equal(listeners(rec2.mat), before);
+});
+
 test("A-H1: the InstancedMesh families keep Dynamic — the real caster, redrawn by one pass after a rewrite, still reaches the GPU", async (t) => {
   // The tlxAttrInst=0 fallback batch is a padded InstancedMesh: Dynamic matrices, Stream tint (a named attribute).
   const fb = await rig(t, { "apex26.tlxAttrInst": "0" });
@@ -283,4 +333,87 @@ test("A-H1: tlx.js wiring — every plain-Mesh family on _instUsage, every Insta
   assert.match(wim, /setRange0\(im, nf\);\s*im\.needsUpdate = true;/);
   assert.match(fnSource(TLX, "function _coAppend(geo, w, opts) {"), /setRange0\(b\.ib, b\.visible \* CO_STRIDE\); b\.ib\.needsUpdate = true;/);
   assert.match(fnSource(TLX, "function uploadStream(slot, floats) {"), /setRange0\(slot\.ib, floats\);[^\n]*\n\s*slot\.ib\.needsUpdate = true;/);
+});
+
+// Warm-only meshes must keep the compiled pipeline without retaining another RenderObject per race.
+// Real vendored renderer + fake GL: listener and program counts are state evidence, never rendered pixels.
+async function warmProbeRig(t) {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera();
+  camera.position.z = 5; camera.updateMatrixWorld();
+  const geos = Array.from({ length: 5 }, () => buildTri());
+  const materials = geos.map(() => new THREE.MeshBasicNodeMaterial());
+  t.after(() => { for (const g of geos) g.dispose(); for (const m of materials) m.dispose(); });
+  const calls = [], compile = renderer.compileAsync.bind(renderer);
+  let reject = false, hold = null;
+  renderer.compileAsync = async (mesh, ...args) => {
+    calls.push(mesh);
+    await compile(mesh, ...args);
+    if (hold) await hold;
+    if (reject) throw new Error("injected rejected compile");
+  };
+  // The empty baseline span lets these behavioral regressions run against the old warm function too.
+  const at = TLX.indexOf("      const _warmProbes = new WeakMap();");
+  const helper = at < 0 ? "" : TLX.slice(at, TLX.indexOf("      async function warmFxPrograms() {", at));
+  const warm = new Function("THREE", "renderer", "scene", "camera", "geos", "materials", `
+    const _warmFx = true, fx = { skidMat: materials[0], particleMats: [materials[1], materials[2]], glowMat: materials[3], lineMat: materials[4] };
+    const [skidStream, a, b, glowStream, lineStream] = geos.map(geo => ({ geo })), partStreams = [a, b];
+    const ensureStream = () => {}, _blob = null, _decalRuns = new Map(), _coWarm = async () => {};
+    ${helper}
+    ${fnSource(TLX, "async function warmFxPrograms() {")}
+    return warmFxPrograms;
+  `)(THREE, renderer, scene, camera, geos, materials);
+  return { fg, renderer, geos, materials, calls, warm,
+    reject: (on) => { reject = on; }, hold: (p) => { hold = p; },
+    listeners: () => materials.map(m => m._listeners?.dispose?.length || 0) };
+}
+
+test("warm probes: repeated actual FX compilation keeps five owned meshes and the warmed programs", async (t) => {
+  const h = await warmProbeRig(t);
+  await h.warm();
+  const programs = h.fg.counts.createProgram;
+  assert.ok(programs > 0, "the first warm really compiles programs");
+  const listeners = h.listeners();
+  for (let i = 0; i < 4; i++) await h.warm();
+  assert.equal(new Set(h.calls).size, 5, "one probe per live stream/material, reused across five warms");
+  assert.deepEqual(h.listeners(), listeners, "the material listener counts plateau after the first warm");
+  assert.equal(h.fg.counts.createProgram, programs, "keeping ownership preserves warmed programs");
+  for (const geo of h.geos) geo.dispose();
+  assert.deepEqual(h.listeners(), [0, 0, 0, 0, 0], "releasing stream geometries releases every probe/render object");
+});
+
+test("warm probes: rejected compile retries reuse the probe; material disposal releases it", async (t) => {
+  const h = await warmProbeRig(t);
+  h.reject(true);
+  for (let i = 0; i < 3; i++) await assert.rejects(h.warm(), /injected rejected compile/);
+  assert.equal(new Set(h.calls).size, 1, "failed warm retries own one probe instead of leaking another");
+  const geometryListeners = h.geos[0]._listeners?.dispose?.length || 0;
+  h.materials[0].dispose();
+  assert.ok((h.geos[0]._listeners?.dispose?.length || 0) < geometryListeners,
+    "an evicted material removes probe ownership listeners (three keeps a geometry observer)");
+  assert.equal(h.calls[0].geometry, null, "the retired probe releases its geometry reference");
+  h.reject(false);
+  await h.warm();
+  assert.equal(new Set(h.calls).size, 6, "a later warm can create a fresh probe after material retirement");
+});
+
+test("warm probes: geometry disposal during a pending compile defers object release through rejection", async (t) => {
+  const h = await warmProbeRig(t);
+  let release;
+  h.hold(new Promise(resolve => { release = resolve; })); h.reject(true);
+  const pending = h.warm();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.length, 1);
+  const mesh = h.calls[0];
+  let disposed = 0; mesh.addEventListener("dispose", () => disposed++);
+  h.geos[0].dispose();
+  assert.equal(disposed, 0, "the in-flight compiler still owns its probe");
+  release();
+  await assert.rejects(pending, /injected rejected compile/);
+  assert.equal(disposed, 1, "the rejected compiler releases its retired probe exactly once");
+  assert.equal(mesh.geometry, null);
+  assert.equal(h.listeners()[0], 0);
 });

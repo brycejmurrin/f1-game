@@ -123,7 +123,7 @@ const ShareCode = (function () {
   }
 
   function shareUrl(code) {
-    try { return location.origin + location.pathname + "#share=" + code; }
+    try { return (typeof Native !== "undefined" && Native.shareBase ? Native.shareBase() : location.origin + location.pathname) + "#share=" + code; }
     catch (_) { return null; }
   }
 
@@ -398,31 +398,27 @@ const ShareCode = (function () {
     };
   }
 
-  /** Continue-card priority after career: daily streak / unfinished, else lastSession. */
+  /** Continue-card priority after career: today's daily streak, else lastSession.
+      No past-day card: every Daily door (picker chip, share codes) replays only
+      today, so a YESTERDAY card opened a different circuit than it named (#2155). */
   function continueHint(G) {
     if (!G) return null;
     if (typeof Career !== "undefined") {
       const c = Career.data ? (Career.data() || (Career.load && Career.load())) : null;
       if (c) {
-        const next = typeof Tracks !== "undefined" && Tracks.SEASON
-          ? Tracks.SEASON[Math.min(c.season.round, Tracks.SEASON.length - 1)] : null;
+        // The save's stamped calendar, as the career hub reads it — not this build's (#2160).
+        const cal = Career.calendar ? Career.calendar()
+          : (typeof Tracks !== "undefined" && Tracks.SEASON) || [];
+        const next = cal.length ? cal[Math.min(c.season.round, cal.length - 1)] : null;
         return {
           kind: "career",
-          sub: c.year + " · ROUND " + Math.min(c.season.round + 1, Tracks.SEASON.length)
+          sub: c.year + " · ROUND " + Math.min(c.season.round + 1, cal.length)
             + (next ? " · " + next.name : ""),
         };
       }
     }
     if (G.daily && typeof DailyChallenge !== "undefined") {
       const day = G.daily.dayKey();
-      const y = DailyChallenge.prevDay(day);
-      const data = G.daily.data();
-      const yDay = data.days && data.days[y];
-      const yUnfinished = !!(yDay && (yDay.laps > 0) && yDay.best == null);
-      if (yUnfinished) {
-        const p = DailyChallenge.plan(y);
-        return { kind: "daily", day: y, sub: "YESTERDAY · " + p.trackName.toUpperCase() };
-      }
       const streak = G.daily.liveStreak ? G.daily.liveStreak() : 0;
       const today = G.daily.today ? G.daily.today() : null;
       const todayDone = !!(today && today.best != null);

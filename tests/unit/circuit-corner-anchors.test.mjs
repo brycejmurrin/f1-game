@@ -2,6 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 const require = createRequire(import.meta.url);
 const Tracks = require("../../tools/track/verify-track.cjs").buildContext();
 
@@ -72,5 +73,25 @@ test("Monaco bank zones peak on Massenet and Mirabeau, not Ste Devote", () => {
   for (const t of [1, 4]) {
     const k = Math.round(def.turns[t - 1] * n) % n;
     assert.equal(lift[k], 0, `T${t} (where the old fracs landed) carries no authored bank`);
+  }
+});
+
+
+test("Bahrain scenery landmarks track the current arc-length origin", () => {
+  const { def, track } = circuit("bahrain");
+  const source = readFileSync(new URL("../../js/circuits/scenery/bahrain.js", import.meta.url), "utf8");
+  // Evaluate the callback's actual anchor declarations without emitting meshes.
+  const begin = source.indexOf("      const wrapFrac");
+  const end = source.indexOf("      if (circuitKit)", begin);
+  assert.ok(begin > 0 && end > begin, "scenery anchor prelude exists");
+  const anchors = new Function("def", source.slice(begin, end) + "return { SF, T1F, FC };");
+  const wrap = f => ((f % 1) + 1) % 1;
+  for (const shift of [def._sceneryShift, def._sceneryShift + 0.01]) {
+    const a = anchors({ ...def, _sceneryShift: shift });
+    for (const [name, target] of [["SF", 0], ["T1F", def.turns[0]], ["FC", def.turns.at(-1)]]) {
+      const racing = wrap(a[name] + shift);
+      const error = Math.min(wrap(racing - target), wrap(target - racing)) * track.total;
+      assert.ok(error < 0.01, `${name}: ${error} m from its racing anchor`);
+    }
   }
 });

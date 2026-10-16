@@ -847,7 +847,10 @@
                    { livery: "concrete", roof: "truss", endWalls: true });
       grandstandEx(0.8375, -1, 12, 52, null, [0.12, 0.58, 0.30],
                    { livery: "orange", tiers: 2, roof: "cantilever", suites: true });
-      grandstandEx(0.849,  -1, 11, 46, null, [0.96, 0.82, 0.16],
+      // 0.852 x 44 m, not 0.849 x 46: the stand is one straight 46 m box on the
+      // climbing Subida bend, and its uphill end ran into the bank (12 crowd
+      // bodies buried up to 5.6 m, ground-audit). Measured clear from 0.8515.
+      grandstandEx(0.852,  -1, 11, 44, null, [0.96, 0.82, 0.16],
                    { livery: "sandstone", roof: "flat", endWalls: true, h: 9 });
       // 0.885, not 0.86: at 0.86 the outside of the climb falls 15 m in 36 m,
       // so a terrace anchored 16 m out stood in the hollow with its top row
