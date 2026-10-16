@@ -173,3 +173,43 @@ test("--update --absolute snaps ratchets.json in place; a detached HEAD does too
   assert.equal(JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8")).files["js/ui/hud.js"].lines, 140);
   assert.equal(lines().ceiling, 140);
 });
+
+// #2337: a deliberate tree-metric raise (`--update --fragment --reason`) lands as the branch's own
+// delta, so two PRs that both add bare catches (the cssClasses shape) never share a ratchets.json hunk.
+test("two PRs raising the same TREE metric as fragments merge clean in either order, leaving ratchets.json alone", (t) => {
+  const r = repo();
+  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(r.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(r.dir, rel), text); };
+  for (const rel of ["tools/check/tree-counts.mjs", "tools/lib/css-source.mjs"]) write(rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
+  const cur = JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8"));
+  write("tests/data/ratchets.json", JSON.stringify({ ...cur, tree: { bareCatches: 0 } }));
+  r.tool("--update", "--absolute");
+  r.git("add", "-A"); r.git("commit", "-qm", "tree metric");
+  const prTree = (name, file, at, n) => {
+    r.git("checkout", "-q", "-b", name, "ship");
+    const lines = fs.readFileSync(path.join(r.dir, file), "utf8").split("\n");
+    lines.splice(at, 0, ...Array.from({ length: n }, (_, i) => `try { x(); } catch (e) {} // ${name}${i}`.replace("catch (e) {} //", "catch (e) {}\n//")));
+    fs.writeFileSync(path.join(r.dir, file), lines.join("\n"));
+    assert.throws(() => r.tool("--auto-raise"), /./, "the auto path never raises a tree metric");
+    assert.throws(() => r.tool("--update", "--fragment"), /reason/, "a deliberate raise names its reason");
+    r.tool("--update", "--fragment", "--reason=fixture: adds bare catches");
+    r.git("add", "-A"); r.git("commit", "-qm", name);
+    const touched = r.git("diff", "--name-only", "ship", name).split("\n");
+    assert.ok(!touched.includes("tests/data/ratchets.json"), `ratchets.json untouched: ${touched}`);
+    assert.ok(touched.some((f) => f.startsWith("tests/data/ratchets.d/")), "the delta lands as a fragment");
+    r.git("checkout", "-q", "ship");
+  };
+  prTree("cursor/t-1111", "js/ui/hud.js", 50, 2);
+  prTree("cursor/t-2222", "js/car/car3d.js", 60, 3);
+  assert.deepEqual(r.conflicts("cursor/t-1111", "cursor/t-2222"), []);
+  r.git("merge", "-q", "--no-ff", "-m", "land 1", "cursor/t-1111");
+  assert.deepEqual(r.conflicts("ship", "cursor/t-2222"), []);
+  r.git("merge", "-q", "--no-ff", "-m", "land 2", "cursor/t-2222");
+  const v = JSON.parse(r.tool("--json"));
+  assert.equal(v.ok, true, JSON.stringify(v.over));
+  const row = v.rows.find((x) => x.tree && x.metric === "bareCatches");
+  assert.equal(row.value, 5);
+  assert.equal(row.ceiling, 5, "the merged tip's effective tree ceiling is the sum of both deltas");
+  r.tool("--fold");
+  assert.equal(JSON.parse(r.tool("--json")).rows.find((x) => x.tree && x.metric === "bareCatches").ceiling, 5, "fold keeps the tree ceiling");
+});

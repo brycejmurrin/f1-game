@@ -22,6 +22,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -263,3 +265,42 @@ test("every grid slot of every circuit sits on a straight, or is allowlisted wit
   assert.deepEqual(bad, [],
     "a grid slot (or the line) in a corner: fix the startFrac with a rendered lap, or allowlist it WITH a reason in startline-probe.cjs");
 });
+
+// Run the entire CLI with a tiny track provider. The real probe, metrics,
+// allowlist, formatter and exit-code branch execute; no scenery build is needed.
+for (const curvature of [0, 0.01]) {
+  for (const asJson of [false, true]) {
+    test(`startline CLI ${asJson ? "JSON" : "human"} preserves ${curvature ? "failure" : "success"} verdict`, () => {
+      const tracks = {
+        LIST: [{ id: "monza", points: [[0, 0], [1, 0], [1, 1]] }],
+        buildCenterline: () => ({ total: 1000 }),
+        curvature: () => curvature,
+        _vmContext: { TrackMesh: { gridSlot: (_track, i) => ({ s: 1000 - 14 - i * 8 }) } },
+      };
+      const file = path.join(ROOT, "tools", "track", "startline-probe.cjs");
+      const cliRequire = createRequire(file);
+      const mod = { exports: {} }, output = [];
+      const load = (id) => id === "./verify-track.cjs"
+        ? { buildContext: () => tracks } : cliRequire(id);
+      load.main = mod;
+      const proc = { argv: [process.execPath, file, "monza", ...(asJson ? ["--json"] : [])],
+        exit(code) { assert.fail(`CLI forced exit ${code} before stdout could drain`); } };
+      vm.runInNewContext(readFileSync(file, "utf8"), {
+        require: load, module: mod, __dirname: path.dirname(file), process: proc,
+        console: { log: (line) => output.push(line) },
+      }, { filename: file });
+      assert.equal(proc.exitCode || 0, curvature ? 1 : 0);
+      if (asJson) {
+        assert.equal(output.length, 1, "JSON stdout contains only the structured report");
+        const rows = JSON.parse(output[0]);
+        assert.equal(rows.length, 1);
+        assert.equal(rows[0].id, "monza");
+        assert.equal(rows[0].unexcused.length, curvature ? 2 : 0);
+        assert.equal(rows[0].now.ok, !curvature);
+        assert.equal(rows[0].now.grid.ok, !curvature);
+      } else {
+        assert.match(output.join("\n"), curvature ? /FAIL monza:/ : /0\/1 start lines in a corner/);
+      }
+    });
+  }
+}

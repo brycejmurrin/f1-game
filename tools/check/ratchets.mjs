@@ -8,6 +8,7 @@
 //   node tools/check/ratchets.mjs --fold     # sum tests/data/ratchets.d/*.json into ratchets.json, delete them
 //   node tools/check/ratchets.mjs --auto-raise[=40]   # the commit hook's form: on a topic branch it writes
 //                                      #   tests/data/ratchets.d/<branch>.json (a delta), never ratchets.json
+//   node tools/check/ratchets.mjs --update --fragment --reason="<why>"   # a deliberate tree-metric raise as this branch's delta
 //   node tools/check/ratchets.mjs --json     # {ok, rows:[{file, metric, value, ceiling, over, slack}]}
 //   node tools/check/ratchets.mjs --base <ref> [--max-raise=40] [--advisory]   # --advisory: a raise past the absorb
 //                                      #   annotates instead of failing — for PUSH runs, where no PR body can carry the reason
@@ -303,6 +304,18 @@ export async function updateCli({ dryRun = false, lowerOnly = false, absolute = 
   return { rows, fragment: `${FRAG_REL}/${name}` };
 }
 
+/** `--update --fragment` (#2337): snap to the measured values, but as this branch's
+ *  fragment (a delta) instead of absolutes in ratchets.json, so a deliberate raise
+ *  of a tree-wide metric (cssClasses, rawColor …) conflicts with no other PR. The
+ *  caller owns the reason; the auto path still never raises a tree metric. */
+export async function updateFragment(data = load(), { branch } = {}) {
+  const name = fragmentName(branch === undefined ? currentBranch() : branch);
+  if (!name) throw new Error("--fragment needs a topic branch (not the deploy branch or a detached HEAD)");
+  const rows = await measure(data);
+  await writeFragment(name, updateReceipt(rows).changes);
+  return rows;
+}
+
 /** The commit hook's form (2026-09-16). One commit in five on the deploy branch
  *  hand-edited ratchets.json: `--update` writes the ceiling AT the value, so
  *  every commit that adds a line to game.js or apex.js failed `test:guards`,
@@ -540,7 +553,12 @@ async function main() {
   }
   if (argv.includes("--update") || argv.includes("--preview") || argv.includes("--lower-only")) {
     const dryRun = argv.includes("--preview"), lowerOnly = argv.includes("--lower-only");
-    const { rows, fragment } = await updateCli({ dryRun, lowerOnly, absolute: argv.includes("--absolute") });
+    const asFragment = argv.includes("--fragment");
+    const reason = (argv.find((x) => x.startsWith("--reason=")) || "").slice("--reason=".length).trim();
+    if (asFragment && (dryRun || lowerOnly)) { console.error("--fragment goes with --update only"); process.exitCode = 2; return; }
+    if (asFragment && !reason) { console.error('--fragment raises a ceiling deliberately: pass --reason="<why>" and repeat it in the commit message'); process.exitCode = 2; return; }
+    const { rows, fragment } = asFragment ? { rows: await updateFragment(load()), fragment: null } : await updateCli({ dryRun, lowerOnly, absolute: argv.includes("--absolute") });
+    if (asFragment) console.log(`ratchets --update --fragment: wrote this branch's delta to tests/data/ratchets.d/ (ratchets.json untouched); reason: ${reason}`);
     const receipt = updateReceipt(rows, { lowerOnly });
     if (argv.includes("--json")) console.log(JSON.stringify({ ok: receipt.missing.length === 0, dryRun, lowerOnly, ...receipt }, null, 2));
     else {
