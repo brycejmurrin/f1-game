@@ -1,1 +1,0 @@
-1792104691	Bryce Murrin	Telemetry #2273 inherited CI red: deterministic real-zombie fixture in tests/unit/test-bg-outcome.test.mjs only. Separate focused CI-test PR; no production/test-bg changes.  [cursor/zombie-fixture-7e91; session 8b18b263c2d1588d4cc2d5cf]
