@@ -7,7 +7,7 @@ description: >-
 ---
 # Apex CI and Pages watch
 
-Repo: `brycejmurrin/f1-game`. Ship / deploy branch: `claude/f1-game-project-26h3ng`. Prefer GitHub MCP (`user-GitHub-xai`) over a broken local `gh` token.
+Repo: `brycejmurrin/f1-game`. Current local gate meanings: [`docs/VERIFICATION.md`](../../../docs/VERIFICATION.md). Ship / deploy branch: `claude/f1-game-project-26h3ng`. Prefer GitHub MCP (`user-GitHub-xai`) over a broken local `gh` token.
 
 **Merge pacing:** only Merge Desk arms auto-merge (MERGE commit only) on ready PRs; agents/sessions/tools never arm or merge — mark ready at tip-green. Disable any foreign MERGE/REBASE arm and tell CI Watch + Grok Bot. When a draft tip is green, mark ready within 15 min (CI Watch flips otherwise). Keep ~6 or fewer ready.
 

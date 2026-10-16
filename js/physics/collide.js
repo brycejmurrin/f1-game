@@ -163,6 +163,13 @@ const Collide = (() => {
   };
   // Born Double, values kept: a 0 literal is a Smi field, and the first fractional store split the map mid-race (PERF-HUNT-5).
   _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0.5; _traf.sep = _traf.alongDx = _traf.alongDprog = _traf.BACK = 0;
+  // Forward reach (m) at which a slower car ahead is reported as the BLOCKER: the
+  // stop distance from the closing speed at HALF the physical braking (the AI does
+  // not brake at the limit) plus a margin. Below ~23 m/s closing this is < 34 m.
+  const _brakePlan = 0.5 * (PC.BRAKE || 22), _blockerMargin = 10, _blockerReachMax = 160;
+  function blockerReach(closing) {
+    return closing > 0 ? Math.min(_blockerReachMax, _blockerMargin + closing * closing / (2 * _brakePlan)) : 0;
+  }
   function _onTrafO(o) {
     const s = _traf, c = s.c;
     // A finisher coasting past the line is still a car on the road: it blocks,
@@ -173,7 +180,15 @@ const Collide = (() => {
     const ad = dprog < 0 ? -dprog : dprog, L = s.L, REJ = s.REJ;
     if (ad > REJ && ad < L - REJ) return;
     dprog = ((dprog + L / 2) % L + L) % L - L / 2;
-    if (dprog < -s.BACK || dprog > 34) return;
+    if (dprog < -s.BACK) return;
+    if (dprog > 34) {
+      // BLOCKER ONLY, and only for a car we close on faster than we can stop
+      // inside the gap (#2565: a flat 34 m never reported a parked car to an AI
+      // at 50+ m/s). Tow, chaser, along and room stay at 34. At pack closing
+      // speeds blockerReach() < 34, so racing is unchanged.
+      if (dprog < s.blockerGap && dprog < blockerReach(c.speed - (o._snapSpeed || 0)) && Math.abs(o._snapX - c.x) < _blockerHalfW) { s.blocker = o; s.blockerGap = dprog; }
+      return;
+    }
     const dx = o._snapX - c.x;
     const adp = dprog < 0 ? -dprog : dprog;
     if (adp < 5.5) {
@@ -199,7 +214,9 @@ const Collide = (() => {
     s.blocker = null; s.blockerGap = Infinity; s.towCar = null; s.towGap = Infinity;
     s.chaser = null; s.chaserGap = Infinity;
     s.alongO = null; s.alongDx = 0; s.alongDprog = 0; s.alongAdx = Infinity;
-    forArcNear(c, L, REJ, _onTrafO, _liveProg);
+    const reach = Math.max(REJ, blockerReach(c.speed));
+    s.REJ = reach;
+    forArcNear(c, L, reach, _onTrafO, _liveProg);
     s.roomL = Math.max(0, s.roomL); s.roomR = Math.max(0, s.roomR);
     return s;
   }
@@ -251,6 +268,7 @@ const Collide = (() => {
     let track = null, player = null, netPlay = null;   // bound at resolveCollisions entry
     let motion = new WeakMap(), motionTrack = null, motionTime = -1;
     let sweepGeneration = 0;
+    const _fxStep = new WeakMap();   // car → sweepGeneration its rear-end contact last fired FX / debris / notify
     const _swP = [];   // sweepContacts: motion.get(ranked[i]), read ONCE per car per step
     const geom = {}, swept = {}, impulse = {}, bodyA = {}, bodyB = {};
     function deltaS(d) { const L = track.total; return ((d + L / 2) % L + L) % L - L / 2; }
@@ -590,6 +608,11 @@ const Collide = (() => {
             const relV0 = sgn >= 0 ? bSp0 - aSp0 : aSp0 - bSp0;
             const e = AiDrive.bumpRestitution(relV0 > 0 ? relV0 : relV);
             const jImp = (1 + e) * relV / iSum;
+            // BY DESIGN (#2565): an AI striker into a parked human sheds ~all its
+            // closing speed in ONE tick (54 -> ~0 m/s) while the human gains only
+            // the capped punt below. Momentum is not conserved on purpose: the AI
+            // behind pays its whole share, the human is never launched. With the
+            // incident layer active a hard hit goes to Rapier instead.
             // The car in front takes the punt in full — that is the kick you feel
             // and see. A HUMAN in front is capped: an AI misjudging a braking zone
             // must not launch the player down the road (the cap is a closing speed,
@@ -604,14 +627,20 @@ const Collide = (() => {
             }
           }
           if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }   // see the side branch: settled pairs must let it decay
-          if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
+          // The FIRST closing pass per pair per step carries the severity: the
+          // restitution impulse above leaves the pair separating, so a `last`-pass
+          // gate never saw relV > 0 and a 73 m/s shunt fired no FX, debris or
+          // incident candidate (live debugger, 2026-10-16).
+          const fx = _fxStep.get(a) !== sweepGeneration || _fxStep.get(b) !== sweepGeneration;
+          if (fx) { _fxStep.set(a, sweepGeneration); _fxStep.set(b, sweepGeneration); }
+          if (fx) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
           // Debris hook (render-only side-world): closing speed = severity.
-          if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
+          if (fx && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
           // Incident sim (R3/C3 + C1): a hard closing contact queues a
           // candidate. Only clears the R3 threshold for a real shunt (see
           // incidentsim); below it the cheap (prog,x) plane above stays the
           // resolver — THAT event-scoping is C3. Self-guarding no-op otherwise.
-          if (last && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
+          if (fx && !netPlay.owns(a) && !netPlay.owns(b) && !a.retired && !b.retired) incidentSim.notifyCar(a, b, relV);   // as the oriented path: a rival is POSED, never simulated here
         }
       }
     }
