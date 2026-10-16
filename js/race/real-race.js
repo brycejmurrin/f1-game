@@ -824,6 +824,26 @@ const RealRace = (function () {
       const starts = tables.watchStarts;
       let lap = starts.length ? 1 : Math.max(1, leaderLap());
       for (let i = 1; i < starts.length; i++) if (starts[i] != null && starts[i] <= T) lap = i + 1;
+      // Recorded sets are presentation metadata, with stint identity independent
+      // of compound (two consecutive soft sets are still different stints).
+      for (const [c, f] of field) {
+        const d = f.d; if (!d) continue;
+        const stints = d.stints || [], row = d.lapStart || [];
+        let driverLap = 1;
+        for (let i = 1; i < row.length; i++) if (row[i] != null && row[i] <= T) driverLap = i + 1;
+        let idx = -1;
+        for (let i = 0; i < stints.length; i++) if (stints[i].from <= driverLap) idx = i;
+        if (idx < 0 || f.watchStint === idx) continue;
+        const cls = classOf(stints[idx]);
+        if (!cls || !G.tyres.classRecord) continue;
+        c.tyre = G.tyres.classRecord(cls);
+        c.tyreClass = cls; c.pitStops = idx; c.tyreStints = idx + 1; c.tyreLap0 = stints[idx].from;
+        c.tyreLog = stints.slice(0, idx + 1).map((st, i) => {
+          const rec = G.tyres.classRecord(classOf(st));
+          return { code: rec.code, id: rec.id, colour: rec.colour, lap0: st.from, lap1: i < idx ? stints[i + 1].from : null };
+        });
+        f.watchStint = idx;
+      }
       let level = 0, cause = "";
       for (const w of tables.watchCautions) {
         if (!w || !(w.level >= 2)) continue;

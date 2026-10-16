@@ -148,7 +148,7 @@ const RealReplay = (function () {
     for (const w of script.cautions || []) {
       const cause = w.cause || (w.level >= 4 ? "RED FLAG" : w.level === 3 ? "SAFETY CAR" : "VIRTUAL SAFETY CAR");
       if (w.tFrom != null) out.push({ t: w.tFrom, lap: w.from, kind: "sc", num: null, level: w.level, text: cause });
-      if (w.tTo != null) out.push({ t: w.tTo, lap: w.to, kind: "green", num: null, text: cause + " IN THIS LAP" });
+      if (w.tEnding != null || w.tTo != null) out.push({ t: w.tEnding != null ? w.tEnding : w.tTo, lap: w.to, kind: "green", num: null, text: cause + " IN THIS LAP" });
     }
     if (script.fastest && script.fastest.t != null) out.push({ t: script.fastest.t, lap: script.fastest.lap, kind: "fastest", num: script.fastest.num, dur: script.fastest.dur, text: "FASTEST LAP · " + code(script.fastest.num) + " " + fmtLap(script.fastest.dur) });
     for (const r of script.radio || []) if (r.t != null) out.push({ t: r.t, lap: r.lap || 0, kind: "radio", num: r.num, url: r.url, text: "RADIO · " + code(r.num) });
@@ -238,7 +238,12 @@ const RealReplay = (function () {
       const duration = Math.max(0, ...traces.map((tr) => tr.end));
       // The script can outlast a partial positions download. Only offer moments
       // whose footage exists, before nearby-event suppression chooses the cuts.
-      const list = highlightsFor(script).filter((h) => h.t >= startT && h.t <= duration);
+      const list = highlightsFor(script).filter((h) => {
+        if (h.t < startT || h.t > duration) return false;
+        if (h.num == null) return true;
+        const tr = built.byNum.get(h.num);
+        return !!(tr && tr.n && h.t >= tr.t[0] && h.t <= tr.end);
+      });
       const events = reelFor(list), reel = o.reel && events.length ? events : null;
       let T = 0;
       const lead = (script.drivers || []).find((d) => d.pos === 1) || (script.drivers || [])[0];

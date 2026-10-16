@@ -5119,7 +5119,13 @@ function updateCar(c, dt, ranked) {
   // allowance (AI fire / spend). Seed the crossing trackers the same way
   // OvertakeMode.lines does. Profiled Monza 22-car: the walk was ~17 % of
   // updateCar positionTicks and dragged inLane to ~2.6 % of all JS self-time.
-  let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * c.speed + 1;
+  // Keep the ahead-search radius meaningful while reversing. A held allowance
+  // can outlive a forward pass, so c.speed may be negative even though this
+  // scan is still requested; a negative arc reach makes the bucket walker skip
+  // the adjacent bucket and can hide the car ahead. Reverse has no closing
+  // speed for OT timing, but it still needs a finite, non-negative search.
+  const otSpeed = Math.max(0, c.speed);
+  let ahead = null, gapAhead = Infinity; const otL = track.total, otW = OT_GAP * otSpeed + 1;
   if (c._otLap == null || c._otS == null) { c._otLap = c.lap | 0; c._otS = c.s; }
   const otOpen = raceCtl.otDetectOpen();
   const otNeedAhead = (c.otE > 0 || c.otOn) ||
@@ -7884,7 +7890,7 @@ function render(dt) {
     // field is the SUBJECT rather than the leftovers the guard above describes.
     // Still nothing after quitToMenu: that leaves the loading screen inactive,
     // which is the same break as before.
-    if (state === "menu" && !loadingScreen.active()) break;
+    if (state === "menu" && !loadingScreen.active() && !(photoStudio && photoStudio.hasCar())) break;
     if (!c.isPlayer && player && !dbgCam) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
@@ -8852,7 +8858,15 @@ SettingsNav.onEnter((page) => {
 // the same rule the mode-dependent driving controls follow, so the grid never
 // reflows under a thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
-photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0), garage: {
+photoStudio = PhotoStudio.create(G, { freeCam: photomode.freeCam, renderFrame: () => render(0),
+  borrowCar: () => {
+    // A fresh photo subject, never the last race's live car or seeded stream.
+    const before = { cars, player }, rng = _simRngState;
+    try { makeCars(); cars = player ? [player] : []; }
+    catch (e) { cars = before.cars; player = before.player; throw e; }
+    finally { _simRngState = rng; }
+    return () => { cars = before.cars; player = before.player; };
+  }, garage: {
   snapshot: () => setupCam.captureCamera(), restore: (v) => setupCam.restoreCamera(v), shot: (id) => setupCam.setSetupView(id), } });
 function openExperiencePhoto(source) { return UiExperience.openPhoto(G, { source, photoStudio, setPaused,
   trackHome: state === "menu" && uiExperience && ["track", "pitlane"].includes(uiExperience.state().scene.mode), trackReady: menuWorld(),
@@ -8866,7 +8880,7 @@ uiExperience = UiExperience.create(G, { setupCam, coach, openPhoto: openExperien
   openSettingsPage: (page, fold) => { openSettings(); settingsNav.show(page, true); const f = fold && $(fold); if (f) { if (f.tagName === "DETAILS") f.open = true; else if (f.parentElement.tagName === "DETAILS") f.parentElement.open = true; f.scrollIntoView({ block: "start" }); f.focus(); } },
 });
 AppearanceStudio.attach({ previewScene: (s) => uiExperience.previewScene(s), openPhoto: () => openExperiencePhoto(state === "menu" ? "home" : "race"), openDisplay: () => settingsNav.show("display", true),
-  applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
+  applyVisuals: (v) => { uiScale.applyUiScale(); uiScale.applyHudScale(); uiScale.applyBtnScale(); uiScale.applyBtnOpacity(); uiScale.applyPanelOpacity(); G.hudProfile = v.hudProfile; G.hudMetricsLayout = v.hudMetricsLayout; G.hudMapVis = v.hudMapVis; G.hudGapsVis = v.hudGapsVis; if (v.hudMirror) mirrorPass.setMode(v.hudMirror); paintHudDetailsSummary(); syncMetricsOverlayCompact(); },
 });
 function syncSettingsAvailability() {
   const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }
