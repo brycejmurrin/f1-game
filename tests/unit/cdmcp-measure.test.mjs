@@ -202,3 +202,35 @@ print("ok")
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.stdout, /ok/);
 });
+
+test("lamps tuner fatal navigation keeps exit, terminal marker and report failed", () => {
+  const script = `
+import importlib.util,json,tempfile,types
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("lamps", ${JSON.stringify(LAMPS_TUNE)})
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+with tempfile.TemporaryDirectory(dir=${JSON.stringify(path.join(ROOT, "scratch"))}) as d:
+    root=Path(d)
+    (root/"version.json").write_text('{"build":1}')
+    m.ROOT=root;m.OUT=root/"out";m.STATUS_PATH=root/"status";m.JSON_PATH=root/"report.json"
+    class Client:
+        def __init__(self,**kw):pass
+        def start(self):pass
+        def call(self,*a):return "ERR_CONNECTION_REFUSED"
+        def close(self):pass
+    class Log:
+        def log(self,*a):pass
+        def terminal(self,status):self.status=status
+    m.load_cdmcp=lambda:types.SimpleNamespace(McpClient=Client,text_result=lambda r:r)
+    log=Log()
+    code=m.run(log,"http://127.0.0.1:1",shots=False)
+    print(json.dumps({"exit":code,"terminal":log.status,"status":m.STATUS_PATH.read_text().splitlines()[0],"failures":json.loads(m.JSON_PATH.read_text())["failures"]}))
+`;
+  const r = spawnSync("python3", ["-c", script], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
+  assert.equal(r.status, 0, r.stderr);
+  const result = JSON.parse(r.stdout);
+  assert.equal(result.exit, 1);
+  assert.equal(result.terminal, "failed");
+  assert.equal(result.status, "failed");
+  assert.match(result.failures.join("\n"), /navigation failed: ERR_CONNECTION_REFUSED/);
+});

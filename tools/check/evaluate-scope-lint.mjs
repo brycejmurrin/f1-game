@@ -26,9 +26,10 @@
  * callback's own parameters — which is how a value is SUPPOSED to cross the
  * boundary. Anything else declared in the module is an error.
  *
- * Deliberately narrow: it only inspects the first argument of `.evaluate(`,
+ * Deliberately narrow: it only inspects the callback of `.evaluate(`,
  * `.evaluateHandle(`, `.waitForFunction(` and `.$$eval(`/`.$eval(` when that
- * argument is a function expression. A callback passed by reference cannot be
+ * argument is a function expression. The selector evals take it second.
+ * A callback passed by reference cannot be
  * checked this way and is skipped rather than guessed at.
  */
 import fs from "node:fs";
@@ -86,7 +87,9 @@ export function lintSource(source) {
         !node.callee.computed &&
         node.callee.property.type === "Identifier" &&
         EVAL_METHODS.has(node.callee.property.name)) {
-      const cb = node.arguments[0];
+      // https://playwright.dev/docs/api/class-page#page-eval-on-selector
+      const method = node.callee.property.name;
+      const cb = node.arguments[method === "$eval" || method === "$$eval" ? 1 : 0];
       if (cb && (cb.type === "ArrowFunctionExpression" || cb.type === "FunctionExpression")) {
         const scope = scopeManager.acquire(cb, true);
         if (scope) {

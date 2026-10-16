@@ -30,6 +30,7 @@
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { parseArgs } = require("node:util");
 
 const ROOT = path.resolve(__dirname, "../..");
 const ORDER = ["verify", "float", "clip", "coplanar", "props", "ground"];
@@ -122,12 +123,21 @@ const CHECKS = {
 
 function main(argv) {
   if (!argv.length || argv.includes("--help") || argv.includes("-h")) { console.log(USAGE); return argv.length ? 0 : 2; }
-  const id = argv.find((a) => !a.startsWith("--"));
-  const json = argv.includes("--json");
-  const i = argv.indexOf("--checks");
-  const want = i >= 0 ? String(argv[i + 1] || "").split(",").map((s) => s.trim()).filter(Boolean) : ORDER;
-  const unknown = want.filter((c) => !CHECKS[c]);
-  if (!id || unknown.length) {
+  // https://nodejs.org/api/util.html#utilparseargsconfig
+  // Validate before launching an audit: an empty/typo'd selection must never
+  // produce the vacuous success { ok: true, checks: {} }.
+  let parsed;
+  try {
+    parsed = parseArgs({ args: argv, allowPositionals: true, options: {
+      json: { type: "boolean" }, checks: { type: "string" },
+    } });
+  } catch (e) { console.error(`audit-circuit: ${e.message}\n${USAGE}`); return 2; }
+  const [id] = parsed.positionals;
+  const json = parsed.values.json;
+  const want = parsed.values.checks === undefined ? ORDER
+    : parsed.values.checks.split(",").map((s) => s.trim()).filter(Boolean);
+  const unknown = want.filter((c) => !Object.hasOwn(CHECKS, c));
+  if (parsed.positionals.length !== 1 || !want.length || unknown.length) {
     console.error(unknown.length ? `audit-circuit: unknown check ${unknown.join(", ")} — one of ${ORDER.join(", ")}` : USAGE);
     return 2;
   }
