@@ -97,6 +97,23 @@ null / -1 (they use `find`, not property lookup); every legend's era has a PERIO
 both `BASE` and `HIRES`; `DriverRatings.get` on prototype keys and on tier `NaN/undefined/"x"/-5/99/Infinity` is
 finite on all seven axes. One defect found (F1 below).
 
+## Round 2 (orchestrator follow-up, 22:00Z)
+
+Fixture router: `window.fetch` answers OpenF1 `/sessions /meetings /drivers /laps /car_data /location` with three
+synthetic laps (AAA 80 s, BBB 70 s, CCC 85 s; CCC has a 30-38 s pit-stop speed dip of ~60 km/h, a 2 s run of `null`
+speed and one `"NaN"` string speed). Debug Chrome held at 844x390 (mobile, touch) by a CDP session kept open in a
+node process (`scratch/data-hunt/emulate.mjs`); `innerWidth x innerHeight` confirmed `844x390`.
+
+| item | result |
+|---|---|
+| (1) compare, unequal lengths (AAA 80 s vs BBB 70 s) | popup builds through the real UI (chips -> COMPARE 2 LAPS); sector rows and lap times read right (`1:20.000` / `1:10.000`); no NaN text, 0 page errors |
+| (1) compare with the pit-stop / `null` / `"NaN"` lap (AAA vs CCC) | popup builds, PLAY runs 1.5 s without error, delta reads `+0.00s` at the start, braking duel answers "Distance must increase through both lanes." (the lane is rejected, not computed) |
+| (2) export -> import round trip with malformed input | no such path: `js/data/export.js` only gathers and zips, and no module reads a telemetry file back (the file-reading modules are settings, photo studio, handshake, track designer, custom team, career, ghost share). Nothing to feed malformed input to |
+| (3) WATCH/HIGHLIGHTS driver/race after a mid-load picker change | **not run**. WATCH needs a whole race script (laps, stints, pits, positions, traces) behind the fixture, and `js/data/real-race-tab.js` is outside this lane's OWNED files. Existing coverage: `tests/specs/real-race.spec.js` |
+| (4) Data Hub layout at 844x390 | **inconclusive**: after the compare popup opened, `getBoundingClientRect` returned 0x0 for the popup body, canvases and transport (the dialog was not laid out in this headless session, although its text content existed), so no fit claim is made. Needs `survey-ui-matrix` / the playwright route, not this session |
+
+Not a finding: the sample with speed `"NaN"` is coerced by `num()` in api.js (not a number -> `null`), same path as a missing sample.
+
 ## Pause triage (caught-exception pauses)
 
 One session, `debugger_exceptions all`, `reject` mode, RESULTS opened (the path every fault mode shares):
